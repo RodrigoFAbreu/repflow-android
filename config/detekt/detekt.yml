@@ -1,0 +1,39 @@
+build:
+  maxIssues: 0
+
+config:
+  validation: true
+  warningsAsErrors: false
+
+comments:
+  active: true
+
+complexity:
+  active: true
+
+coroutines:
+  active: true
+
+empty-blocks:
+  active: true
+
+exceptions:
+  active: true
+
+naming:
+  active: true
+  FunctionNaming:
+    ignoreAnnotated: ['Composable']
+
+performance:
+  active: true
+
+potential-bugs:
+  active: true
+
+style:
+  active: true
+  # Formatting (indentation, wildcard imports, trailing commas, etc.) is
+  # handled by Spotless/ktlint, not Detekt, to avoid the two tools disagreeing.
+  MaxLineLength:
+    active: false
