@@ -2,7 +2,7 @@
 
 ## Milestone
 
-Milestone 2 — Training Plans (complete, pending commit)
+Milestone 2 — Training Plans (complete and committed)
 
 ## Goal
 
