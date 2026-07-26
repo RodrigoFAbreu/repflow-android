@@ -43,7 +43,6 @@ fun RecoveryFutsalScreen(
     onSessionRpeChanged: (String) -> Unit,
     onSaveFutsal: () -> Unit,
     onMessageShown: () -> Unit,
-    onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val savedText = stringResource(R.string.recovery_futsal_saved)
@@ -70,11 +69,6 @@ fun RecoveryFutsalScreen(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.recovery_futsal_title)) },
-                navigationIcon = {
-                    TextButton(onClick = onBackClick) {
-                        Text(stringResource(R.string.recovery_futsal_back_content_description))
-                    }
-                },
             )
         },
     ) { padding ->

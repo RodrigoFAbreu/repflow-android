@@ -161,7 +161,14 @@ implementation-review gate explicit.
     (full suite), `assembleDebug`, `assembleRelease`; re-run
     `ActiveWorkoutViewModelTest` in isolation several times to
     characterize the reported flakiness one way or the other (record the
-    outcome, don't assume from one run). Update `docs/ACTIVE_MILESTONE.md`.
+    outcome, don't assume from one run). **Also** characterize
+    `ExerciseListViewModelTest`'s `undo archive restores the exercise via
+    RestoreExercise"` test, found genuinely flaky during CP1 (failed 2 of
+    ~7 reruns with `TurbineAssertionError: No value produced in 3s`,
+    unrelated to CP1's own changes — `ExerciseListViewModel.kt` was not
+    touched by CP1). Root-cause or document as a known flake with
+    evidence; do not silently ignore it. Update
+    `docs/ACTIVE_MILESTONE.md`.
 17. **External implementation review**: run
     `scripts/prepare-ai-review.sh <base-sha> implementation`, stop at
     `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` per

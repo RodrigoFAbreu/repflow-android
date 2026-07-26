@@ -27,8 +27,11 @@ class MainActivityNavHostSmokeTest {
 
     @Test
     fun mainActivityRendersTheExerciseListAsTheStartDestination() {
+        // "Exercises" itself is ambiguous once the bottom nav bar is on screen (its
+        // own "Exercises" label plus the destination's TopAppBar title) - assert on
+        // the search field, which only exists on the exercise list screen.
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.exercise_list_title))
+            .onNodeWithText(composeRule.activity.getString(R.string.exercise_list_search_hint))
             .assertIsDisplayed()
     }
 
@@ -38,8 +41,11 @@ class MainActivityNavHostSmokeTest {
             .onNodeWithContentDescription(
                 composeRule.activity.getString(R.string.exercise_list_recovery_content_description),
             ).performClick()
+        // The bottom nav bar's own "Recovery" label stays on screen alongside the
+        // destination, so asserting on that ambiguous shared text would match two
+        // nodes - assert on content unique to the Recovery screen instead.
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.recovery_futsal_title))
+            .onNodeWithText(composeRule.activity.getString(R.string.recovery_futsal_recovery_section_title))
             .assertIsDisplayed()
     }
 
@@ -50,7 +56,7 @@ class MainActivityNavHostSmokeTest {
                 composeRule.activity.getString(R.string.exercise_list_history_content_description),
             ).performClick()
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.history_title))
+            .onNodeWithText(composeRule.activity.getString(R.string.history_empty))
             .assertIsDisplayed()
     }
 
@@ -61,7 +67,7 @@ class MainActivityNavHostSmokeTest {
                 composeRule.activity.getString(R.string.exercise_list_backup_content_description),
             ).performClick()
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.backup_title))
+            .onNodeWithText(composeRule.activity.getString(R.string.backup_export_action))
             .assertIsDisplayed()
     }
 }

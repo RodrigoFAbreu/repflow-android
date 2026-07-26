@@ -14,11 +14,6 @@ import com.repflow.app.domain.exercise.ExerciseId
 fun ExerciseListRoute(
     onExerciseClick: (ExerciseId) -> Unit,
     onCreateClick: () -> Unit,
-    onPlansClick: () -> Unit,
-    onWorkoutClick: () -> Unit,
-    onRecoveryClick: () -> Unit,
-    onHistoryClick: () -> Unit,
-    onBackupClick: () -> Unit,
     viewModel: ExerciseListViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -29,11 +24,6 @@ fun ExerciseListRoute(
         onRetry = viewModel::onRetry,
         onExerciseClick = onExerciseClick,
         onCreateClick = onCreateClick,
-        onPlansClick = onPlansClick,
-        onWorkoutClick = onWorkoutClick,
-        onRecoveryClick = onRecoveryClick,
-        onHistoryClick = onHistoryClick,
-        onBackupClick = onBackupClick,
         onArchiveClicked = viewModel::onArchiveClicked,
         onRestoreClicked = viewModel::onRestoreClicked,
         onUndoArchiveClicked = viewModel::onRestoreClicked,

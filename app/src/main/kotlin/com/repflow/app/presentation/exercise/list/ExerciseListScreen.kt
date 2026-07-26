@@ -61,11 +61,6 @@ fun ExerciseListScreen(
     onRetry: () -> Unit,
     onExerciseClick: (ExerciseId) -> Unit,
     onCreateClick: () -> Unit,
-    onPlansClick: () -> Unit,
-    onWorkoutClick: () -> Unit,
-    onRecoveryClick: () -> Unit,
-    onHistoryClick: () -> Unit,
-    onBackupClick: () -> Unit,
     onArchiveClicked: (ExerciseId) -> Unit,
     onRestoreClicked: (ExerciseId) -> Unit,
     onUndoArchiveClicked: (ExerciseId) -> Unit,
@@ -98,43 +93,6 @@ fun ExerciseListScreen(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.exercise_list_title)) },
-                actions = {
-                    val workoutContentDescription = stringResource(R.string.exercise_list_workout_content_description)
-                    TextButton(
-                        onClick = onWorkoutClick,
-                        modifier = Modifier.semantics { contentDescription = workoutContentDescription },
-                    ) {
-                        Text(stringResource(R.string.workout_active_title))
-                    }
-                    val plansContentDescription = stringResource(R.string.exercise_list_plans_content_description)
-                    TextButton(
-                        onClick = onPlansClick,
-                        modifier = Modifier.semantics { contentDescription = plansContentDescription },
-                    ) {
-                        Text(stringResource(R.string.training_plan_list_title))
-                    }
-                    val recoveryContentDescription = stringResource(R.string.exercise_list_recovery_content_description)
-                    TextButton(
-                        onClick = onRecoveryClick,
-                        modifier = Modifier.semantics { contentDescription = recoveryContentDescription },
-                    ) {
-                        Text(stringResource(R.string.recovery_futsal_title))
-                    }
-                    val historyContentDescription = stringResource(R.string.exercise_list_history_content_description)
-                    TextButton(
-                        onClick = onHistoryClick,
-                        modifier = Modifier.semantics { contentDescription = historyContentDescription },
-                    ) {
-                        Text(stringResource(R.string.history_title))
-                    }
-                    val backupContentDescription = stringResource(R.string.exercise_list_backup_content_description)
-                    TextButton(
-                        onClick = onBackupClick,
-                        modifier = Modifier.semantics { contentDescription = backupContentDescription },
-                    ) {
-                        Text(stringResource(R.string.backup_title))
-                    }
-                },
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },

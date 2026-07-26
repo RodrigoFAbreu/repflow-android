@@ -2,6 +2,7 @@
     <string name="app_name">RepFlow</string>
 
     <string name="exercise_list_title">Exercises</string>
+    <string name="exercise_list_content_description">Go to exercises</string>
     <string name="exercise_list_search_hint">Search exercises</string>
     <string name="exercise_list_filter_active">Active</string>
     <string name="exercise_list_filter_archived">Archived</string>
@@ -128,7 +129,6 @@
 
     <string name="exercise_list_recovery_content_description">Go to recovery and futsal</string>
     <string name="recovery_futsal_title">Recovery</string>
-    <string name="recovery_futsal_back_content_description">Back</string>
     <string name="recovery_futsal_recovery_section_title">Recovery entry (today)</string>
     <string name="recovery_futsal_sleep_quality">Sleep quality</string>
     <string name="recovery_futsal_energy">Energy</string>
@@ -153,7 +153,6 @@
     <string name="exercise_list_backup_content_description">Backup and restore</string>
 
     <string name="history_title">History</string>
-    <string name="history_back_content_description">Back</string>
     <string name="history_empty">No completed workouts yet.</string>
     <string name="history_session_summary">%1$d exercises, %2$s</string>
     <string name="history_detail_back">Back</string>

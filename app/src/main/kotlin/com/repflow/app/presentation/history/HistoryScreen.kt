@@ -13,7 +13,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -36,7 +35,6 @@ fun HistoryScreen(
     uiState: HistoryUiState,
     onSessionClick: (WorkoutSessionId) -> Unit,
     onDetailDismissed: () -> Unit,
-    onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val selectedSession = uiState.selectedSession
@@ -50,11 +48,6 @@ fun HistoryScreen(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.history_title)) },
-                navigationIcon = {
-                    TextButton(onClick = onBackClick) {
-                        Text(stringResource(R.string.history_back_content_description))
-                    }
-                },
             )
         },
     ) { padding ->

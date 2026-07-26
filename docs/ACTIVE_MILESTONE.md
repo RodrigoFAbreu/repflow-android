@@ -22,14 +22,15 @@ user functional-review checklist. `docs/improvements/IMPROVEMENT_ROADMAP.md`
 
 ## Current checkpoint
 
-**Implementing.** P0 and CP0 committed. Next: CP1 (bottom navigation
-redesign).
+**Implementing.** P0, CP0, CP1 committed. Next: CP2 (save-feedback
+hardening).
 
 ## Checkpoint checklist (Milestone 8, revised round 3)
 
 - [x] P0 — Crash fix: add missing `@HiltViewModel` (Recovery/History/Backup) — `80ec209`. Verified on a real connected device (uninstall/reinstall, tapped all six destinations, no crash) and via 3 new instrumented regression tests (`connectedDebugAndroidTest`, `MainActivityNavHostSmokeTest`, 4/4 passed on `SM-S928B`).
 - [x] CP0 — Audit doc + this doc set + roadmap update — `0fb165f`.
-- [ ] CP1 — Bottom navigation redesign (user-approved Material 3 `NavigationBar`)
+- [x] CP1 — Bottom navigation redesign. Material 3 `NavigationBar` with the 6 top-level destinations, single source of truth (`RepFlowDestinations.TOP_LEVEL_DESTINATIONS`), `launchSingleTop`/`popUpTo`/`restoreState` (no duplicate back-stack entries, per-tab state preserved), removed the old ad-hoc `TextButton`s and the incorrect Up-arrow on Recovery/History. Verified on a real device: all 6 destinations tap through with no crash, correct selected-state, and (at 1.3x font scale) labels ellipsize instead of wrapping/overflowing. Full instrumented suite (113 tests) and unit suite green. Found and noted (not fixed here, out of CP1's scope): `ExerciseListViewModelTest`'s "undo archive" test is genuinely flaky (Turbine timeout, ~1-2 of 7 reruns), unrelated to CP1 — flagged for CP15.
+- [ ] CP2 — Save-feedback hardening (exercise-archive + Recovery/futsal snackbars)
 - [ ] CP2 — Save-feedback hardening (exercise-archive + Recovery/futsal snackbars)
 - [ ] CP3 — Recovery/futsal: 0-5 scale, past-date entry
 - [ ] CP4 — Recovery/futsal history screen
