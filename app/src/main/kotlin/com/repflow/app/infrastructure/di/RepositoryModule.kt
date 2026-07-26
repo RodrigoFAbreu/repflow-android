@@ -2,8 +2,10 @@ package com.repflow.app.infrastructure.di
 
 import com.repflow.app.application.exercise.ExerciseRepository
 import com.repflow.app.application.trainingplan.TrainingPlanRepository
+import com.repflow.app.application.workout.WorkoutRepository
 import com.repflow.app.data.exercise.LocalExerciseRepository
 import com.repflow.app.data.trainingplan.LocalTrainingPlanRepository
+import com.repflow.app.data.workout.LocalWorkoutRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -21,4 +23,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindTrainingPlanRepository(impl: LocalTrainingPlanRepository): TrainingPlanRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindWorkoutRepository(impl: LocalWorkoutRepository): WorkoutRepository
 }

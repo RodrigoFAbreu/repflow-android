@@ -100,3 +100,110 @@ val MIGRATION_1_2: Migration =
             )
         }
     }
+
+/**
+ * The real, additive 2-to-3 migration introducing the active-workout tables
+ * (see `docs/milestones/active/milestone-3-reference.md`'s data model
+ * section). Nothing about the existing tables changes. No
+ * `fallbackToDestructiveMigration` call exists anywhere (see
+ * [RepFlowDatabase]'s KDoc).
+ */
+@Suppress("MagicNumber")
+val MIGRATION_2_3: Migration =
+    object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            createWorkoutSessionsTable(db)
+            createWorkoutExercisesTable(db)
+            createWorkoutSetsTable(db)
+        }
+
+        private fun createWorkoutSessionsTable(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `workout_sessions` (
+                    `id` TEXT NOT NULL,
+                    `training_plan_version_id` TEXT,
+                    `status` TEXT NOT NULL,
+                    `started_at` INTEGER NOT NULL,
+                    `ended_at` INTEGER,
+                    PRIMARY KEY(`id`),
+                    FOREIGN KEY(`training_plan_version_id`) REFERENCES `training_plan_versions`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS `index_workout_sessions_training_plan_version_id`
+                ON `workout_sessions` (`training_plan_version_id`)
+                """.trimIndent(),
+            )
+        }
+
+        private fun createWorkoutExercisesTable(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `workout_exercises` (
+                    `id` TEXT NOT NULL,
+                    `session_id` TEXT NOT NULL,
+                    `exercise_id` TEXT NOT NULL,
+                    `sort_order` INTEGER NOT NULL,
+                    `exercise_name_snapshot` TEXT NOT NULL,
+                    `tracking_type` TEXT NOT NULL,
+                    `planned_exercise_id` TEXT,
+                    PRIMARY KEY(`id`),
+                    FOREIGN KEY(`session_id`) REFERENCES `workout_sessions`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                    FOREIGN KEY(`exercise_id`) REFERENCES `exercises`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION,
+                    FOREIGN KEY(`planned_exercise_id`) REFERENCES `planned_exercises`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS `index_workout_exercises_session_order`
+                ON `workout_exercises` (`session_id`, `sort_order`)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_workout_exercises_session_id` ON `workout_exercises` (`session_id`)",
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_workout_exercises_exercise_id` ON `workout_exercises` (`exercise_id`)",
+            )
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS `index_workout_exercises_planned_exercise_id`
+                ON `workout_exercises` (`planned_exercise_id`)
+                """.trimIndent(),
+            )
+        }
+
+        private fun createWorkoutSetsTable(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `workout_sets` (
+                    `id` TEXT NOT NULL,
+                    `workout_exercise_id` TEXT NOT NULL,
+                    `sort_order` INTEGER NOT NULL,
+                    `load` REAL,
+                    `reps` INTEGER,
+                    `duration_seconds` INTEGER,
+                    `rpe` REAL,
+                    `is_warmup` INTEGER NOT NULL,
+                    `created_at` INTEGER NOT NULL,
+                    `updated_at` INTEGER NOT NULL,
+                    PRIMARY KEY(`id`),
+                    FOREIGN KEY(`workout_exercise_id`) REFERENCES `workout_exercises`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS `index_workout_sets_exercise_order`
+                ON `workout_sets` (`workout_exercise_id`, `sort_order`)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_workout_sets_exercise_id` ON `workout_sets` (`workout_exercise_id`)",
+            )
+        }
+    }

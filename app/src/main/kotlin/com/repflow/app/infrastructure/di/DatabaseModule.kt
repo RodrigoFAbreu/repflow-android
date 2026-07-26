@@ -3,11 +3,15 @@ package com.repflow.app.infrastructure.di
 import android.content.Context
 import androidx.room.Room
 import com.repflow.app.infrastructure.database.MIGRATION_1_2
+import com.repflow.app.infrastructure.database.MIGRATION_2_3
 import com.repflow.app.infrastructure.database.RepFlowDatabase
 import com.repflow.app.infrastructure.database.exercise.ExerciseDao
 import com.repflow.app.infrastructure.database.trainingplan.PlannedExerciseDao
 import com.repflow.app.infrastructure.database.trainingplan.TrainingPlanDao
 import com.repflow.app.infrastructure.database.trainingplan.TrainingPlanVersionDao
+import com.repflow.app.infrastructure.database.workout.WorkoutExerciseDao
+import com.repflow.app.infrastructure.database.workout.WorkoutSessionDao
+import com.repflow.app.infrastructure.database.workout.WorkoutSetDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -32,7 +36,7 @@ object DatabaseModule {
     ): RepFlowDatabase =
         Room
             .databaseBuilder(context, RepFlowDatabase::class.java, DATABASE_NAME)
-            .addMigrations(MIGRATION_1_2)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
             .build()
 
     @Provides
@@ -46,4 +50,13 @@ object DatabaseModule {
 
     @Provides
     fun providePlannedExerciseDao(database: RepFlowDatabase): PlannedExerciseDao = database.plannedExerciseDao()
+
+    @Provides
+    fun provideWorkoutSessionDao(database: RepFlowDatabase): WorkoutSessionDao = database.workoutSessionDao()
+
+    @Provides
+    fun provideWorkoutExerciseDao(database: RepFlowDatabase): WorkoutExerciseDao = database.workoutExerciseDao()
+
+    @Provides
+    fun provideWorkoutSetDao(database: RepFlowDatabase): WorkoutSetDao = database.workoutSetDao()
 }

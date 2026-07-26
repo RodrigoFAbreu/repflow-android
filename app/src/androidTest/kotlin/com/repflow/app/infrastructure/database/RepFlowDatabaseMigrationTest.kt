@@ -79,6 +79,58 @@ class RepFlowDatabaseMigrationTest {
         cursor.close()
     }
 
+    @Test
+    fun migrate2To3_preservesExistingTablesAndAddsTheWorkoutTables() {
+        helper.createDatabase(TEST_DB, 1).apply {
+            insertV1Exercise(this)
+            close()
+        }
+        helper.runMigrationsAndValidate(TEST_DB, 2, true, MIGRATION_1_2).close()
+
+        val migratedDb = helper.runMigrationsAndValidate(TEST_DB, 3, true, MIGRATION_2_3)
+
+        val exercisesCursor = migratedDb.query("SELECT COUNT(*) FROM exercises")
+        exercisesCursor.moveToFirst()
+        assertEquals(1, exercisesCursor.getInt(0))
+        exercisesCursor.close()
+
+        val sessionsCursor = migratedDb.query("SELECT COUNT(*) FROM workout_sessions")
+        sessionsCursor.moveToFirst()
+        assertEquals(0, sessionsCursor.getInt(0))
+        sessionsCursor.close()
+    }
+
+    @Test
+    fun migrate2To3_allowsInsertingAnAdHocWorkoutSessionWithAnExerciseAndASet() {
+        helper.createDatabase(TEST_DB, 1).apply {
+            insertV1Exercise(this)
+            close()
+        }
+        helper.runMigrationsAndValidate(TEST_DB, 2, true, MIGRATION_1_2).close()
+
+        val migratedDb = helper.runMigrationsAndValidate(TEST_DB, 3, true, MIGRATION_2_3)
+
+        migratedDb.execSQL(
+            "INSERT INTO workout_sessions (id, training_plan_version_id, status, started_at, ended_at) " +
+                "VALUES ('session-1', NULL, 'ACTIVE', 1000, NULL)",
+        )
+        migratedDb.execSQL(
+            "INSERT INTO workout_exercises (id, session_id, exercise_id, sort_order, exercise_name_snapshot, " +
+                "tracking_type, planned_exercise_id) " +
+                "VALUES ('we-1', 'session-1', 'exercise-1', 0, 'Bench Press', 'WEIGHT_AND_REPS', NULL)",
+        )
+        migratedDb.execSQL(
+            "INSERT INTO workout_sets (id, workout_exercise_id, sort_order, load, reps, duration_seconds, rpe, " +
+                "is_warmup, created_at, updated_at) " +
+                "VALUES ('set-1', 'we-1', 0, 60.0, 8, NULL, NULL, 0, 1000, 1000)",
+        )
+
+        val cursor = migratedDb.query("SELECT COUNT(*) FROM workout_sets WHERE workout_exercise_id = 'we-1'")
+        cursor.moveToFirst()
+        assertEquals(1, cursor.getInt(0))
+        cursor.close()
+    }
+
     private fun insertV1Exercise(db: SupportSQLiteDatabase) {
         db.execSQL(
             "INSERT INTO exercises (id, name, name_key, tracking_type, instructions, " +

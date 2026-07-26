@@ -10,10 +10,17 @@ import com.repflow.app.infrastructure.database.trainingplan.TrainingPlanDao
 import com.repflow.app.infrastructure.database.trainingplan.TrainingPlanEntity
 import com.repflow.app.infrastructure.database.trainingplan.TrainingPlanVersionDao
 import com.repflow.app.infrastructure.database.trainingplan.TrainingPlanVersionEntity
+import com.repflow.app.infrastructure.database.workout.WorkoutExerciseDao
+import com.repflow.app.infrastructure.database.workout.WorkoutExerciseEntity
+import com.repflow.app.infrastructure.database.workout.WorkoutSessionDao
+import com.repflow.app.infrastructure.database.workout.WorkoutSessionEntity
+import com.repflow.app.infrastructure.database.workout.WorkoutSetDao
+import com.repflow.app.infrastructure.database.workout.WorkoutSetEntity
 
 /**
- * RepFlow's single Room database. Version 2 adds the training-plan tables
- * via a real, additive [MIGRATION_1_2] - there is deliberately no
+ * RepFlow's single Room database. Version 2 added the training-plan tables
+ * via [MIGRATION_1_2]; version 3 adds the active-workout tables via
+ * [MIGRATION_2_3]. There is deliberately no
  * `fallbackToDestructiveMigration` anywhere in this codebase (see plan.md
  * section G and additional implementation correction 14).
  */
@@ -23,8 +30,11 @@ import com.repflow.app.infrastructure.database.trainingplan.TrainingPlanVersionE
         TrainingPlanEntity::class,
         TrainingPlanVersionEntity::class,
         PlannedExerciseEntity::class,
+        WorkoutSessionEntity::class,
+        WorkoutExerciseEntity::class,
+        WorkoutSetEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class RepFlowDatabase : RoomDatabase() {
@@ -35,4 +45,10 @@ abstract class RepFlowDatabase : RoomDatabase() {
     abstract fun trainingPlanVersionDao(): TrainingPlanVersionDao
 
     abstract fun plannedExerciseDao(): PlannedExerciseDao
+
+    abstract fun workoutSessionDao(): WorkoutSessionDao
+
+    abstract fun workoutExerciseDao(): WorkoutExerciseDao
+
+    abstract fun workoutSetDao(): WorkoutSetDao
 }
