@@ -12,11 +12,13 @@ recently recorded set, as the third complete vertical slice.
 
 ## Current checkpoint
 
-CP1 complete: domain model for active workouts
-(`domain/workout/WorkoutSession`, `WorkoutExercise`, `WorkoutSet`, ids,
-`WorkoutSessionStatus`, `WorkoutValidationError`), pure Kotlin, with JVM
-unit tests (`WorkoutSessionTest`, `WorkoutExerciseTest`, `WorkoutSetTest`).
-CP2 (application layer) not started yet.
+CP2 complete: application layer for active workouts
+(`application/workout/WorkoutRepository` port, `WorkoutOperationError`,
+`WorkoutPersistenceError`, and use cases `StartWorkoutSession`,
+`ObserveActiveWorkoutSession`, `AddWorkoutExercise`, `RecordWorkoutSet`,
+`CompleteWorkoutSession`, `AbandonWorkoutSession`), with unit tests using an
+`InMemoryWorkoutRepository` fake, mirroring the training-plan application
+layer's conventions. CP3 (Room persistence) not started yet.
 
 Milestone 2 (Training Plans) remains complete and committed; see
 `docs/milestones/completed/milestone-2-execution.md` and
@@ -25,7 +27,7 @@ Milestone 2 (Training Plans) remains complete and committed; see
 ## Checkpoint checklist (Milestone 3)
 
 - [x] CP1 — Domain model + pure JVM tests
-- [ ] CP2 — Application contracts + use cases + tests
+- [x] CP2 — Application contracts + use cases + tests
 - [ ] CP3 — Room entities, DAOs, mapper, migration 2→3, repository
 - [ ] CP4 — DAO + repository + migration instrumented tests on device
 - [ ] CP5 — Hilt bindings
@@ -46,8 +48,9 @@ Milestone 2 (Training Plans) remains complete and committed; see
 
 ## Current blockers
 
-None. Milestone 3 CP1 (domain model) is complete and verified. CP2
-(application contracts + use cases) is the next unstarted checkpoint.
+None. Milestone 3 CP1–CP2 (domain model + application layer) are complete
+and verified. CP3 (Room persistence + migration 2→3) is the next unstarted
+checkpoint.
 
 ## Active plan
 
