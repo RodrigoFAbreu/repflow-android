@@ -11,13 +11,16 @@ how it is tracked, and its default configuration.
 
 Defines the values recorded for an exercise.
 
-Initial tracking types may include:
+Milestone 1 supports:
 
-- Weight and repetitions
-- Repetitions only
-- Duration
-- Distance and duration
-- Bodyweight with optional added load
+- Weight and repetitions (`WEIGHT_AND_REPS`)
+- Repetitions only (`REPS_ONLY`)
+- Duration (`DURATION`)
+
+Planned but deferred (not yet implemented):
+
+- Distance and duration (`DISTANCE_AND_DURATION`)
+- Bodyweight with optional added load (`BODYWEIGHT_WITH_OPTIONAL_LOAD`)
 
 ## Training plan
 

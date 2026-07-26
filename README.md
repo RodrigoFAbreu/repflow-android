@@ -6,7 +6,7 @@ progressive-overload recommendations.
 
 ## Status
 
-Early development / project foundation.
+Milestone 1 — Exercise Library in progress. See [Active milestone](docs/ACTIVE_MILESTONE.md).
 
 ## Technology
 
@@ -20,7 +20,7 @@ Early development / project foundation.
 
 ## Documentation
 
-- [Product and architecture](docs/PRODUCT_AND_ARCHITECTURE.md)
+- [Project brief](docs/PROJECT_BRIEF.md)
 - [UX flows](docs/UX_FLOWS.md)
 - [Domain glossary](docs/DOMAIN_GLOSSARY.md)
 - [Technical decisions](docs/TECHNICAL_DECISIONS.md)
@@ -38,15 +38,8 @@ minSdk 28
 compileSdk 37
 targetSdk 37
 
----
+## Architecture decision records
 
-## Ordem que recomendo agora
-
-Adiciona primeiro:
-
-```text
-AGENTS.md
-docs/UX_FLOWS.md
-docs/DOMAIN_GLOSSARY.md
-docs/TECHNICAL_DECISIONS.md
-README.md
+- [ADR 0001: Native Android with Kotlin and Jetpack Compose](docs/adr/0001-stack.md)
+- [ADR 0002: Offline-first, local database as source of truth](docs/adr/0002-offline-first-local-database-source-of-truth.md)
+- [ADR 0003: Layered modular architecture](docs/adr/0003-layered-modular-architecture.md)

@@ -1,68 +1,66 @@
-# AGENTS.md
-
-## Repository purpose
+# RepFlow Agent Instructions
 
 RepFlow is a native, offline-first Android workout tracker.
 
-Before substantial work, read:
+## Always read
 
-- `.github/copilot-instructions.md`
-- `docs/PRODUCT_AND_ARCHITECTURE.md`
-- `docs/TECHNICAL_DECISIONS.md`
-- `docs/DOMAIN_GLOSSARY.md`
-- `docs/UX_FLOWS.md`
+Before non-trivial work, read only:
+
+- `docs/ACTIVE_MILESTONE.md`
 - `docs/ROADMAP.md`
+- the active milestone execution guide referenced by
+  `docs/ACTIVE_MILESTONE.md`
 
-## Required workflow
+Follow `.github/copilot-instructions.md`.
 
-For non-trivial tasks:
+## Read conditionally
 
-1. Inspect the current repository.
-2. Identify the relevant documentation and existing code.
-3. State assumptions.
-4. Present a small ordered plan.
-5. Wait for approval when architecture, dependencies, persistence, migrations,
-   or broad multi-module changes are involved.
-6. Implement only the approved scope.
-7. Run relevant checks.
-8. Summarize changed files and results.
+Read only the documentation relevant to the task:
 
-## Scope control
+- Full decision text, invariants, or test details not in the execution file:
+  `docs/milestones/active/milestone-1-reference.md`
+- Domain models or business rules:
+  `docs/DOMAIN_GLOSSARY.md`
+- UI, navigation or user interaction:
+  `docs/UX_FLOWS.md`
+- Architecture, boundaries or modularization:
+  `docs/adr/0003-layered-modular-architecture.md`
+- Room, persistence, migrations or backup:
+  `docs/adr/0002-offline-first-local-database-source-of-truth.md`
+- Toolchain or dependency decisions:
+  `docs/TECHNICAL_DECISIONS.md`
+- Product-scope ambiguity:
+  `docs/PROJECT_BRIEF.md`
 
-Do not:
+Do not read every document by default.
 
-- Implement future roadmap milestones without being asked.
-- Generate large amounts of empty scaffolding.
-- Introduce a backend or authentication.
-- Add dependencies merely because they are popular.
-- Change architectural decisions silently.
-- Commit, push, rebase, or force-push without explicit approval.
-- Delete or overwrite unrelated local changes.
-- Use destructive Room migrations.
+## Workflow
 
-## Definition of done
+For the active milestone:
 
-A change is complete when:
+1. Inspect only the files relevant to the next incomplete checkpoint.
+2. Implement that checkpoint.
+3. Run its narrowest relevant checks.
+4. Review the resulting diff.
+5. Update `docs/ACTIVE_MILESTONE.md`.
+6. Continue unless there is a blocker.
 
-- It matches the requested behavior.
-- Layer boundaries remain valid.
-- Relevant tests are present and passing.
-- Formatting and static checks pass.
-- Failure and interruption behavior has been considered.
-- Documentation is updated when a decision or public behavior changes.
-- No unrelated files were modified.
+Stop for:
 
-## Commands
+- ambiguous product behavior;
+- architecture changes;
+- new dependency categories;
+- schema migrations;
+- destructive data operations;
+- repeated verification failures;
+- unrelated working-tree changes.
 
-Prefer the Gradle wrapper:
+Never use destructive Room migrations.
+Never claim a test passed unless it actually ran.
 
-```bash
-./gradlew tasks
-./gradlew build
-./gradlew test
-./gradlew lint
-````
+Commits are normally prohibited.
 
-Use narrower module-specific tasks when practical.
+An active milestone prompt may explicitly authorize one completion commit after
+all Definition of Done requirements and verification gates pass.
 
-Do not assume a command passed. Report its actual result.
+Never push, merge, rebase, force-push, or create a pull request.
