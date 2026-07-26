@@ -2,74 +2,74 @@
 
 ## Milestone
 
-All roadmap milestones (0-7) are **complete**. RepFlow's MVP feature set per
-`docs/ROADMAP.md` is fully implemented, verified, and committed.
+Roadmap milestones 0-7 (`docs/ROADMAP.md`) are complete. The post-MVP
+engineering review (`docs/improvements/POST_MVP_ENGINEERING_REVIEW.md`,
+`IMPROVEMENT_ROADMAP.md`) is also complete and committed (`48da0b0`).
+**Milestone 8 - Post-MVP functional usability stabilization** is now
+active, created from the user's own hands-on functional findings after
+Milestone 7 (not a resumption of any prior work — none existed).
 
 ## Goal
 
-Milestone 7 - History and backup - let the user browse completed workout
-history and provide a versioned, explicit backup export/import (plus CSV
-export), per `docs/milestones/completed/milestone-7-reference.md`.
+Close the specific functional/usability gaps in
+`docs/milestones/active/milestone-8-reference.md`'s "Goals" section:
+Recovery/futsal date/scale/history/save-feedback fixes, workout/plan
+set-classification and start-from-plan wiring, History filtering and safe
+accidental-workout removal, training-plan archive/restore, navigation
+consistency, and backup hardening — then a full verification pass and a
+user functional-review checklist. `docs/improvements/IMPROVEMENT_ROADMAP.md`
+§2.1 (`ReturnCount` tuning) is deferred until this milestone is accepted.
 
 ## Current checkpoint
 
-Milestone 7 complete. All six checkpoints implemented, narrow- and
-full-verified, and committed:
+**Plan approved (round 4, `APPROVE`)** —
+`docs/milestones/active/milestone-8-{execution,reference}.md` finalized
+with round-4 implementation guardrails folded in. No checkpoint
+implemented yet; ready for `/milestone-implement`.
 
-- CP1 (domain): `BackupSnapshot`, `BackupValidationError`, repository
-  "read all" methods - `3edb4f7`.
-- CP2 (application): `ObserveWorkoutHistory`, `ExportBackup`,
-  `RestoreBackup`, `ExportWorkoutHistoryCsv` - `1f3379f`.
-- CP3 (data): `BackupJsonMapper`, `LocalBackupRepository` - `7795bad`.
-- CP4 (instrumented): `replaceAll` atomicity test on a real Room
-  database - `2c56d27`.
-- CP5 (presentation): History screen + Backup screen with SAF
-  (Storage Access Framework) wiring - `52556c8`.
-- CP6 (verification): export -> restore smoke test on a real database,
-  full unit + instrumented suites, static checks - `160e65a`.
+## Checkpoint checklist (Milestone 8, revised round 3)
 
-## Checkpoint checklist (Milestone 7)
-
-- [x] CP1 — Domain: `BackupSnapshot`, `BackupValidationError` + tests
-- [x] CP2 — Application: history/backup use cases + tests
-- [x] CP3 — Data: JSON mapper, `LocalBackupRepository.replaceAll`, CSV formatter
-- [x] CP4 — Instrumented: `replaceAll` atomicity test
-- [x] CP5 — Presentation: History screen + Backup screen with SAF wiring
-- [x] CP6 — Full verification, manual smoke test, docs + archival
-
-## Verification actually run at completion
-
-- `./gradlew testDebugUnitTest` - full suite passed.
-- `./gradlew connectedDebugAndroidTest` - full suite passed on
-  `emulator-5554` (Pixel 9 Pro XL AVD), including the new
-  `LocalBackupRepositoryAtomicityTest` (3 tests: persist-on-success,
-  roll-back-on-failure, export-then-restore round trip through real
-  JSON and a real Room database).
-- `./gradlew spotlessApply detekt lintDebug` - clean.
-- One real defect was found and fixed during CP6: the smoke test's
-  helper originally gave every seeded exercise the same name, which
-  collided with the `exercises.name_key` UNIQUE constraint - a test
-  bug, not a production bug. Root-caused via temporary logcat
-  instrumentation of `LocalBackupRepository`'s catch block, then
-  reverted; the fix was to give each fixture a distinct name.
+- [ ] P0 — Crash fix: add missing `@HiltViewModel` (Recovery/History/Backup)
+- [ ] CP0 — Audit doc + this doc set + roadmap update
+- [ ] CP1 — Bottom navigation redesign (user-approved Material 3 `NavigationBar`)
+- [ ] CP2 — Save-feedback hardening (exercise-archive + Recovery/futsal snackbars)
+- [ ] CP3 — Recovery/futsal: 0-5 scale, past-date entry
+- [ ] CP4 — Recovery/futsal history screen
+- [ ] CP5 — Precise progression reasons (3 detectable conditions)
+- [ ] CP6 — Start-from-plan
+- [ ] CP7 — Warm-up toggle + RPE/duration entry UI
+- [ ] CP8 — Consolidated schema migration (`MIGRATION_6_7`, 5 new columns)
+- [ ] CP9 — WorkoutSet pain + technique-quality UI
+- [ ] CP10 — Planned warm-up/working structure UI
+- [ ] CP11 — Completed-workout invalidation UI
+- [ ] CP12 — Training-plan archive/restore UI
+- [ ] CP13 — History field-consistency + filtering/sorting (incl. plan)
+- [ ] CP14 — Backup hardening + v1-backward-compatibility
+- [ ] CP15 — Full verification
+- [ ] External implementation review (`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`)
+- [ ] CP16 — Functional-review checklist prep
 
 ## Current blockers
 
-None. The roadmap has no further milestones.
+None for planning. Plan is approved; implementation has not started.
+Round 3 (`REVISE`) added a P0 crash fix (missing `@HiltViewModel` on 3
+ViewModels, verified directly against the code) and — after the user was
+asked directly and approved it themselves — a full bottom-navigation
+redesign; consolidated four planned migrations into one; and broadened
+several checkpoints (snackbar coverage, recommendation reasons, History
+filters, backup backward-compatibility). Round 4 (`APPROVE`) added
+implementation guardrails (exhaustive `@HiltViewModel` re-check, Room
+schema-export commit discipline, explicit commit policy, living
+functional-audit discipline) — all folded into
+`milestone-8-execution.md`. Nothing is deliberately left open.
 
 ## Active plan
 
-None active. Milestone 7's plans are archived at
-`docs/milestones/completed/milestone-7-{execution,reference}.md`.
-
-All of Milestones 1-7 are complete and committed; see
+`docs/milestones/active/milestone-8-execution.md` and
+`milestone-8-reference.md`. Milestones 1-7 remain archived at
 `docs/milestones/completed/`.
 
 ## Next action
 
-Per the user's explicit instructions for "after all roadmap milestones are
-complete": conduct the post-MVP engineering review and produce
-`docs/improvements/POST_MVP_ENGINEERING_REVIEW.md` and
-`docs/improvements/IMPROVEMENT_ROADMAP.md`, then commit them as a single
-documentation commit. Do not perform broad refactoring during that review
-unless a small correction is necessary to complete or accurately assess it.
+Plan is approved. Waiting for the user to invoke `/milestone-implement`
+when ready — implementation does not start automatically.

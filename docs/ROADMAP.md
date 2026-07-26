@@ -1,7 +1,8 @@
 # RepFlow Roadmap
 
-Every roadmap milestone (0-7) is complete. See [status](ACTIVE_MILESTONE.md)
-for the current post-MVP review state.
+Every roadmap milestone (0-7) is complete. Milestone 8 (post-MVP functional
+usability stabilization, created from the user's own hands-on findings) is
+in progress. See [status](ACTIVE_MILESTONE.md) for the current state.
 
 ## Milestone 0 — Project foundation
 
@@ -63,3 +64,18 @@ for the current post-MVP review state.
 - [x] Versioned JSON backups
 - [x] CSV exports
 - [x] Restore validation and safety snapshots
+
+## Milestone 8 — Post-MVP functional usability stabilization (in progress)
+
+Created from the user's own hands-on functional findings after Milestone 7,
+not from the original MVP goal list. See
+`docs/milestones/active/milestone-8-reference.md` for full scope.
+
+- [ ] P0 crash fix: missing `@HiltViewModel` on 3 ViewModels
+- [ ] Navigation: bottom-navigation redesign (user-approved)
+- [ ] Recovery/futsal: past-date entry, 0-5 scale, history visibility, save feedback
+- [ ] Workout/plans: start-from-plan, warm-up/working classification, RPE/duration/pain/technique entry
+- [ ] History: filtering/sorting (exercise, date, plan), safe accidental-workout removal, detail consistency
+- [ ] Plans/exercises: training-plan archive/restore, exercise archive-snackbar fix
+- [ ] Backup: edge-case hardening + new-field schema coverage + v1-backward-compatibility
+- [ ] Full verification + external implementation review + user functional review
