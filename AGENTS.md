@@ -18,7 +18,8 @@ Follow `.github/copilot-instructions.md`.
 Read only the documentation relevant to the task:
 
 - Full decision text, invariants, or test details not in the execution file:
-  `docs/milestones/active/milestone-1-reference.md`
+  the reference file linked from the "Active plan" section of
+  `docs/ACTIVE_MILESTONE.md`
 - Domain models or business rules:
   `docs/DOMAIN_GLOSSARY.md`
 - UI, navigation or user interaction:
