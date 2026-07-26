@@ -52,19 +52,21 @@ class LocalBackupRepositoryAtomicityTest {
         database.close()
     }
 
-    private fun exercise(id: String) =
-        (
-            Exercise.create(
-                id = ExerciseId(id),
-                name = (ExerciseName.create("Bench Press") as DomainResult.Success).value,
-                trackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
-                instructions = null,
-                defaultLoadIncrement = null,
-                defaultRestDuration = null,
-                origin = ExerciseOrigin.BUILT_IN,
-                createdAt = Instant.parse("2026-01-01T00:00:00Z"),
-            ) as DomainResult.Success
-        ).value
+    private fun exercise(
+        id: String,
+        name: String = "Bench Press $id",
+    ) = (
+        Exercise.create(
+            id = ExerciseId(id),
+            name = (ExerciseName.create(name) as DomainResult.Success).value,
+            trackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
+            instructions = null,
+            defaultLoadIncrement = null,
+            defaultRestDuration = null,
+            origin = ExerciseOrigin.BUILT_IN,
+            createdAt = Instant.parse("2026-01-01T00:00:00Z"),
+        ) as DomainResult.Success
+    ).value
 
     @Test
     fun replaceAll_persistsEveryRowOnSuccess() =
@@ -86,6 +88,61 @@ class LocalBackupRepositoryAtomicityTest {
 
             assertTrue(result is DomainResult.Success)
             assertEquals(listOf("ex-1"), database.exerciseDao().findAll().map { it.id })
+        }
+
+    /**
+     * Manual-smoke-test surrogate for the milestone 7 DoD's "export -> wipe
+     * -> restore -> data intact" workflow: exercises the full
+     * serialize -> parse -> replaceAll pipeline through real JSON text and a
+     * real Room database, exactly as [com.repflow.app.application.backup.ExportBackup]
+     * and [com.repflow.app.application.backup.RestoreBackup] would.
+     */
+    @Test
+    fun exportThenRestoreRoundTripsThroughRealJsonAndARealDatabase() =
+        runBlocking {
+            // Simulates data already on-device before a restore replaces it.
+            database.exerciseDao().insert(
+                ExerciseEntity(
+                    id = "old-1",
+                    name = "Deadlift",
+                    nameKey = "deadlift",
+                    trackingType = "WEIGHT_AND_REPS",
+                    instructions = null,
+                    defaultLoadIncrementGrams = null,
+                    defaultRestSeconds = null,
+                    origin = "BUILT_IN",
+                    archivedAt = null,
+                    createdAt = 1L,
+                    updatedAt = 1L,
+                ),
+            )
+
+            val original =
+                (
+                    BackupSnapshot.create(
+                        schemaVersion = BackupSnapshot.CURRENT_SCHEMA_VERSION,
+                        exercises = listOf(exercise("ex-1"), exercise("ex-2")),
+                        trainingPlans = emptyList(),
+                        workoutSessions = emptyList(),
+                        recoveryEntries = emptyList(),
+                        futsalSessions = emptyList(),
+                        progressionRecommendations = emptyList(),
+                    ) as DomainResult.Success
+                ).value
+
+            val json = repository.serializeSnapshot(original)
+            val parsed = (repository.parseSnapshot(json) as DomainResult.Success).value
+            val restoreResult = repository.replaceAll(parsed)
+
+            check(restoreResult is DomainResult.Success) { "replaceAll failed: $restoreResult" }
+            assertEquals(
+                listOf("ex-1", "ex-2"),
+                database
+                    .exerciseDao()
+                    .findAll()
+                    .map { it.id }
+                    .sorted(),
+            )
         }
 
     @Test
