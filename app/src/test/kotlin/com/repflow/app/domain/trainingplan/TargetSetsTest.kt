@@ -25,6 +25,26 @@ class TargetSetsTest {
         assertEquals(TargetSets.MAX, requireSuccess(TargetSets.create(TargetSets.MAX)).value)
     }
 
+    @Test
+    fun `validateWarmupSets accepts null as no guidance`() {
+        assertEquals(null, TargetSets.validateWarmupSets(null))
+    }
+
+    @Test
+    fun `validateWarmupSets accepts zero`() {
+        assertEquals(null, TargetSets.validateWarmupSets(0))
+    }
+
+    @Test
+    fun `validateWarmupSets rejects a negative value`() {
+        assertEquals(TrainingPlanValidationError.TargetWarmupSetsOutOfRange, TargetSets.validateWarmupSets(-1))
+    }
+
+    @Test
+    fun `validateWarmupSets rejects a value above the maximum`() {
+        assertEquals(TrainingPlanValidationError.TargetWarmupSetsOutOfRange, TargetSets.validateWarmupSets(TargetSets.MAX + 1))
+    }
+
     private fun <T> requireSuccess(result: DomainResult<T, *>): T =
         when (result) {
             is DomainResult.Success -> result.value

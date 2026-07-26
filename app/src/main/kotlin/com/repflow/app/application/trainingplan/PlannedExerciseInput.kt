@@ -25,4 +25,5 @@ data class PlannedExerciseInput(
     val durationMaxSeconds: Long?,
     val restSeconds: Long?,
     val isOptional: Boolean,
+    val targetWarmupSets: Int? = null,
 )

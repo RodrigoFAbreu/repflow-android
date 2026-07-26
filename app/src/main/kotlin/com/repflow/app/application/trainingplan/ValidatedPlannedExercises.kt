@@ -69,6 +69,7 @@ internal suspend fun validatePlannedExercises(
                 target = target,
                 restDuration = row.restDuration,
                 isOptional = input.isOptional,
+                targetWarmupSets = input.targetWarmupSets,
             )
     }
 
@@ -101,12 +102,14 @@ private fun buildPlannedExerciseTargetSetsAndErrors(
         input.restSeconds?.let { seconds ->
             RestDuration.create(seconds).mapFailure { TrainingPlanValidationError.RestDurationOutOfRange }
         } ?: DomainResult.Success(null)
+    val warmupSetsError = TargetSets.validateWarmupSets(input.targetWarmupSets)
 
     domainErrors +=
         listOfNotNull(
             (targetSetsResult as? DomainResult.Failure)?.error,
             (targetResult as? DomainResult.Failure)?.error,
             (restResult as? DomainResult.Failure)?.error,
+            warmupSetsError,
         )
 
     return RowFields(

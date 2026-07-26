@@ -176,6 +176,41 @@ class TrainingPlanEditorViewModelTest {
         }
 
     @Test
+    fun `saving a plan with target warmup sets persists the value and loading it back populates the field`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            val exerciseId = seedExercise()
+            val vm = viewModel()
+            advanceUntilIdle()
+
+            vm.onNameChanged("Push Pull Legs")
+            vm.onAddRowClicked()
+            val rowId =
+                vm.uiState.value.rows
+                    .single()
+                    .rowId
+            vm.onRowExerciseSelected(rowId, exerciseId.value)
+            vm.onRowTargetSetsChanged(rowId, "3")
+            vm.onRowRepMinChanged(rowId, "8")
+            vm.onRowRepMaxChanged(rowId, "12")
+            vm.onRowTargetWarmupSetsChanged(rowId, "2")
+            assertTrue(vm.uiState.value.isSaveEnabled)
+
+            vm.onSaveClicked()
+            advanceUntilIdle()
+            val planId = requireNotNull(vm.uiState.value.savedPlanId)
+
+            val editVm = viewModel(planId = planId.value)
+            advanceUntilIdle()
+            assertEquals(
+                "2",
+                editVm.uiState.value.rows
+                    .single()
+                    .targetWarmupSetsText,
+            )
+        }
+
+    @Test
     fun `a duplicate plan name reports the DUPLICATE_NAME submit error`() =
         runTest {
             Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))

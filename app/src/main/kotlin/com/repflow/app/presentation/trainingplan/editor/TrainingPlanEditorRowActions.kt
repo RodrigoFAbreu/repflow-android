@@ -10,6 +10,7 @@ package com.repflow.app.presentation.trainingplan.editor
 data class TrainingPlanEditorRowActions(
     val onExerciseSelected: (rowId: Long, exerciseId: String) -> Unit,
     val onTargetSetsChanged: (rowId: Long, value: String) -> Unit,
+    val onTargetWarmupSetsChanged: (rowId: Long, value: String) -> Unit,
     val onRepMinChanged: (rowId: Long, value: String) -> Unit,
     val onRepMaxChanged: (rowId: Long, value: String) -> Unit,
     val onDurationMinChanged: (rowId: Long, value: String) -> Unit,

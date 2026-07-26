@@ -70,6 +70,7 @@ object TrainingPlanEntityMapper {
             durationMaxSeconds = (target as? PlannedExerciseTarget.Duration)?.range?.maxSeconds,
             restSeconds = plannedExercise.restDuration?.seconds,
             isOptional = plannedExercise.isOptional,
+            targetWarmupSets = plannedExercise.targetWarmupSets,
         )
     }
 
@@ -134,6 +135,8 @@ object TrainingPlanEntityMapper {
         val restDurationResult = row.restSeconds?.let(RestDuration::create)
         if (restDurationResult is DomainResult.Failure) fieldErrors += TrainingPlanValidationError.RestDurationOutOfRange
 
+        TargetSets.validateWarmupSets(row.targetWarmupSets)?.let { fieldErrors += it }
+
         val target =
             when (row.targetKind) {
                 TARGET_KIND_REPS -> buildRepsTarget(row, fieldErrors)
@@ -154,6 +157,7 @@ object TrainingPlanEntityMapper {
                 target = target,
                 restDuration = (restDurationResult as? DomainResult.Success)?.value,
                 isOptional = row.isOptional,
+                targetWarmupSets = row.targetWarmupSets,
             ),
         )
     }

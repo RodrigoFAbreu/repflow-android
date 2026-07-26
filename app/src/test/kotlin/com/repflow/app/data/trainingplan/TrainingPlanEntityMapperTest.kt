@@ -41,6 +41,7 @@ class TrainingPlanEntityMapperTest {
             durationMaxSeconds = null,
             restSeconds = 90,
             isOptional = false,
+            targetWarmupSets = 1,
         )
 
     private val durationRow =
@@ -100,6 +101,21 @@ class TrainingPlanEntityMapperTest {
     @Test
     fun `an out-of-range target sets count fails the mapping`() {
         val result = TrainingPlanEntityMapper.toDomain(versionEntity, listOf(repsRow.copy(targetSets = 0)))
+
+        val error = requireFailure(result)
+        assertTrue(error is TrainingPlanMappingError.InvalidFields)
+    }
+
+    @Test
+    fun `a null target warmup sets row maps to a plan with no warm-up guidance`() {
+        val version = requireSuccess(TrainingPlanEntityMapper.toDomain(versionEntity, listOf(repsRow.copy(targetWarmupSets = null))))
+
+        assertEquals(null, version.plannedExercises.single().targetWarmupSets)
+    }
+
+    @Test
+    fun `a negative target warmup sets count fails the mapping`() {
+        val result = TrainingPlanEntityMapper.toDomain(versionEntity, listOf(repsRow.copy(targetWarmupSets = -1)))
 
         val error = requireFailure(result)
         assertTrue(error is TrainingPlanMappingError.InvalidFields)

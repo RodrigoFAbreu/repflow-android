@@ -136,6 +136,16 @@ private fun PlannedExerciseRow(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+            OutlinedTextField(
+                value = row.targetWarmupSetsText,
+                onValueChange = { actions.onTargetWarmupSetsChanged(row.rowId, it) },
+                label = { Text(stringResource(R.string.training_plan_editor_row_target_warmup_sets_label)) },
+                isError = row.targetWarmupSetsError != null,
+                supportingText = { fieldErrorText(row.targetWarmupSetsError)?.let { Text(it) } },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
             TargetRangeFields(row, actions)
             OutlinedTextField(
                 value = row.restSecondsText,

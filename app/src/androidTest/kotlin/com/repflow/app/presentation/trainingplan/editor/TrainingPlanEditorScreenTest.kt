@@ -56,6 +56,7 @@ class TrainingPlanEditorScreenTest {
         TrainingPlanEditorRowActions(
             onExerciseSelected = { _, _ -> },
             onTargetSetsChanged = { _, _ -> },
+            onTargetWarmupSetsChanged = { _, _ -> },
             onRepMinChanged = { _, _ -> },
             onRepMaxChanged = { _, _ -> },
             onDurationMinChanged = { _, _ -> },

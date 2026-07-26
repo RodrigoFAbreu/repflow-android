@@ -25,6 +25,9 @@ sealed interface TrainingPlanValidationError {
     /** The target sets count is outside [TargetSets]'s supported range. */
     data object TargetSetsOutOfRange : TrainingPlanValidationError
 
+    /** A planned exercise's target warm-up sets count is negative or exceeds [TargetSets.MAX]. */
+    data object TargetWarmupSetsOutOfRange : TrainingPlanValidationError
+
     /** A repetition range's bounds violate [RepRange]'s invariants. */
     data object RepRangeInvalid : TrainingPlanValidationError
 

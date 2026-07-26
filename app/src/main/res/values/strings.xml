@@ -109,6 +109,7 @@
     <string name="training_plan_editor_no_exercises">No exercises yet. Tap \"Add exercise\" to add one.</string>
     <string name="training_plan_editor_row_exercise_label">Exercise</string>
     <string name="training_plan_editor_row_target_sets_label">Sets</string>
+    <string name="training_plan_editor_row_target_warmup_sets_label">Warm-up sets (optional)</string>
     <string name="training_plan_editor_row_rep_min_label">Min reps</string>
     <string name="training_plan_editor_row_rep_max_label">Max reps</string>
     <string name="training_plan_editor_row_duration_min_label">Min duration (s)</string>

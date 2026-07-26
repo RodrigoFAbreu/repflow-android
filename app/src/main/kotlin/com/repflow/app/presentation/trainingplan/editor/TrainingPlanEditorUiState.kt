@@ -69,13 +69,20 @@ data class PlannedExerciseRowUiState(
     val durationMaxText: String = "",
     val restSecondsText: String = "",
     val isOptional: Boolean = false,
+    val targetWarmupSetsText: String = "",
     val exerciseError: TrainingPlanEditorFieldError? = null,
     val targetSetsError: TrainingPlanEditorFieldError? = null,
     val targetRangeError: TrainingPlanEditorFieldError? = null,
     val restError: TrainingPlanEditorFieldError? = null,
+    val targetWarmupSetsError: TrainingPlanEditorFieldError? = null,
 ) {
     val hasNoErrors: Boolean
-        get() = exerciseError == null && targetSetsError == null && targetRangeError == null && restError == null
+        get() =
+            exerciseError == null &&
+                targetSetsError == null &&
+                targetRangeError == null &&
+                restError == null &&
+                targetWarmupSetsError == null
 }
 
 /**

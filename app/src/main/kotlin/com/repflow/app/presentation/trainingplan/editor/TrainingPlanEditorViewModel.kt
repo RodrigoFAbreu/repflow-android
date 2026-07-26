@@ -119,6 +119,7 @@ class TrainingPlanEditorViewModel
                 durationMaxText = (exercise.target as? PlannedExerciseTarget.Duration)?.range?.maxSeconds?.toString() ?: "",
                 restSecondsText = exercise.restDuration?.seconds?.toString() ?: "",
                 isOptional = exercise.isOptional,
+                targetWarmupSetsText = exercise.targetWarmupSets?.toString() ?: "",
             )
 
         fun onNameChanged(value: String) {
@@ -179,6 +180,11 @@ class TrainingPlanEditorViewModel
             rowId: Long,
             value: String,
         ) = updateRow(rowId) { it.copy(targetSetsText = value) }
+
+        fun onRowTargetWarmupSetsChanged(
+            rowId: Long,
+            value: String,
+        ) = updateRow(rowId) { it.copy(targetWarmupSetsText = value) }
 
         fun onRowRepMinChanged(
             rowId: Long,
@@ -300,6 +306,7 @@ class TrainingPlanEditorViewModel
             durationMaxSeconds = row.durationMaxText.toLongOrNull(),
             restSeconds = row.restSecondsText.toLongOrNull(),
             isOptional = row.isOptional,
+            targetWarmupSets = row.targetWarmupSetsText.toIntOrNull(),
         )
 
         private fun isDirty(state: TrainingPlanEditorUiState): Boolean =
@@ -355,12 +362,20 @@ class TrainingPlanEditorViewModel
                 targetSetsError = validateTargetSets(row.targetSetsText),
                 targetRangeError = validateTargetRange(row),
                 restError = validateRest(row.restSecondsText),
+                targetWarmupSetsError = validateTargetWarmupSets(row.targetWarmupSetsText),
             )
 
         private fun validateTargetSets(text: String): TrainingPlanEditorFieldError? {
             if (text.isBlank()) return TrainingPlanEditorFieldError.Required
             val value = text.toIntOrNull() ?: return TrainingPlanEditorFieldError.InvalidNumber
             return (TargetSets.create(value) as? DomainResult.Failure)?.error?.let(TrainingPlanEditorFieldError::Domain)
+        }
+
+        /** Unlike [validateTargetSets], blank is valid here - `null` means "no warm-up guidance", not an error. */
+        private fun validateTargetWarmupSets(text: String): TrainingPlanEditorFieldError? {
+            if (text.isBlank()) return null
+            val value = text.toIntOrNull() ?: return TrainingPlanEditorFieldError.InvalidNumber
+            return TargetSets.validateWarmupSets(value)?.let { TrainingPlanEditorFieldError.Domain(it) }
         }
 
         private fun validateTargetRange(row: PlannedExerciseRowUiState): TrainingPlanEditorFieldError? =

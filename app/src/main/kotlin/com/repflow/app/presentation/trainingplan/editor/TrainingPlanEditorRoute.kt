@@ -38,6 +38,7 @@ fun TrainingPlanEditorRoute(
         TrainingPlanEditorRowActions(
             onExerciseSelected = viewModel::onRowExerciseSelected,
             onTargetSetsChanged = viewModel::onRowTargetSetsChanged,
+            onTargetWarmupSetsChanged = viewModel::onRowTargetWarmupSetsChanged,
             onRepMinChanged = viewModel::onRowRepMinChanged,
             onRepMaxChanged = viewModel::onRowRepMaxChanged,
             onDurationMinChanged = viewModel::onRowDurationMinChanged,

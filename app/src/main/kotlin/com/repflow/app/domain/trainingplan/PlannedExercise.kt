@@ -22,4 +22,5 @@ data class PlannedExercise(
     val target: PlannedExerciseTarget,
     val restDuration: RestDuration?,
     val isOptional: Boolean,
+    val targetWarmupSets: Int? = null,
 )

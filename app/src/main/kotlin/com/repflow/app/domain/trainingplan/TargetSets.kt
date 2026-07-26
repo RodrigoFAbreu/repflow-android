@@ -17,5 +17,18 @@ value class TargetSets private constructor(
             }
             return DomainResult.Success(TargetSets(value))
         }
+
+        /**
+         * Validates a [PlannedExercise.targetWarmupSets] value: `null` ("no warm-up
+         * guidance") is always valid; a non-null value must be a non-negative int up
+         * to [MAX] (unlike [create]'s working-sets range, 0 is a legal value here -
+         * "planned zero warm-up sets" is meaningful, `null` means "unspecified").
+         */
+        fun validateWarmupSets(value: Int?): TrainingPlanValidationError? {
+            if (value != null && (value < 0 || value > MAX)) {
+                return TrainingPlanValidationError.TargetWarmupSetsOutOfRange
+            }
+            return null
+        }
     }
 }

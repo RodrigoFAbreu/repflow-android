@@ -79,6 +79,44 @@ class CreateTrainingPlanTest {
         }
 
     @Test
+    fun `creates a plan with a planned exercise carrying target warmup sets`() =
+        runTest {
+            val exerciseId = seedExercise()
+
+            val result =
+                createTrainingPlan(
+                    CreateTrainingPlanCommand("Push Day", listOf(repsRow(exerciseId.value).copy(targetWarmupSets = 2))),
+                )
+
+            val planId = requireSuccess(result)
+            val overview = requireNotNull(planRepository.findOverviewByPlanId(planId))
+            assertEquals(
+                2,
+                overview.latestVersion.plannedExercises
+                    .single()
+                    .targetWarmupSets,
+            )
+        }
+
+    @Test
+    fun `rejects a negative target warmup sets value`() =
+        runTest {
+            val exerciseId = seedExercise()
+
+            val result =
+                createTrainingPlan(
+                    CreateTrainingPlanCommand("Push Day", listOf(repsRow(exerciseId.value).copy(targetWarmupSets = -1))),
+                )
+
+            val error = requireFailure(result)
+            assertTrue(error is TrainingPlanOperationError.ValidationFailed)
+            assertEquals(
+                listOf(TrainingPlanValidationError.TargetWarmupSetsOutOfRange),
+                (error as TrainingPlanOperationError.ValidationFailed).errors,
+            )
+        }
+
+    @Test
     fun `rejects a duplicate plan name detected by the precheck`() =
         runTest {
             val exerciseId = seedExercise()
