@@ -1,10 +1,8 @@
 # RepFlow Roadmap
 
-Active milestone: **Milestone 3 — Active Workout (planning complete)** → [status](ACTIVE_MILESTONE.md)
+Active milestone: **Milestone 5 — Recovery and futsal (not yet planned)** → [status](ACTIVE_MILESTONE.md)
 
-Completed plan: [milestones/completed/milestone-2-execution.md](milestones/completed/milestone-2-execution.md)
-
-Milestone 3 plan: [milestones/active/milestone-3-execution.md](milestones/active/milestone-3-execution.md)
+Completed plan: [milestones/completed/milestone-4-execution.md](milestones/completed/milestone-4-execution.md)
 
 ## Milestone 0 — Project foundation
 
@@ -38,12 +36,12 @@ Milestone 3 plan: [milestones/active/milestone-3-execution.md](milestones/active
 - [x] Immediate persistence
 - [x] Editing and undo
 
-## Milestone 4 — Rest timer
+## Milestone 4 — Rest timer ✓ complete
 
-- [ ] Absolute end timestamps
-- [ ] Background and process recovery
-- [ ] Notifications and haptics
-- [ ] Timer-related tests
+- [x] Absolute end timestamps
+- [x] Background and process recovery
+- [x] Notifications and haptics
+- [x] Timer-related tests
 
 ## Milestone 5 — Recovery and futsal
 

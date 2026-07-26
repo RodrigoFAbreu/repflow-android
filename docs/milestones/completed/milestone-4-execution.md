@@ -1,6 +1,6 @@
 # Milestone 4 Execution — Rest Timer
 
-Reference: `docs/milestones/active/milestone-4-reference.md`
+Reference: `docs/milestones/completed/milestone-4-reference.md`
 
 ## Checkpoints
 
