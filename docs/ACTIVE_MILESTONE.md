@@ -22,15 +22,13 @@ user functional-review checklist. `docs/improvements/IMPROVEMENT_ROADMAP.md`
 
 ## Current checkpoint
 
-**Plan approved (round 4, `APPROVE`)** —
-`docs/milestones/active/milestone-8-{execution,reference}.md` finalized
-with round-4 implementation guardrails folded in. No checkpoint
-implemented yet; ready for `/milestone-implement`.
+**Implementing.** P0 and CP0 committed. Next: CP1 (bottom navigation
+redesign).
 
 ## Checkpoint checklist (Milestone 8, revised round 3)
 
-- [ ] P0 — Crash fix: add missing `@HiltViewModel` (Recovery/History/Backup)
-- [ ] CP0 — Audit doc + this doc set + roadmap update
+- [x] P0 — Crash fix: add missing `@HiltViewModel` (Recovery/History/Backup) — `80ec209`. Verified on a real connected device (uninstall/reinstall, tapped all six destinations, no crash) and via 3 new instrumented regression tests (`connectedDebugAndroidTest`, `MainActivityNavHostSmokeTest`, 4/4 passed on `SM-S928B`).
+- [x] CP0 — Audit doc + this doc set + roadmap update — `0fb165f`.
 - [ ] CP1 — Bottom navigation redesign (user-approved Material 3 `NavigationBar`)
 - [ ] CP2 — Save-feedback hardening (exercise-archive + Recovery/futsal snackbars)
 - [ ] CP3 — Recovery/futsal: 0-5 scale, past-date entry
