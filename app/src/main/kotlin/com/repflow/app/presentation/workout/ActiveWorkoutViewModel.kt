@@ -3,10 +3,13 @@ package com.repflow.app.presentation.workout
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.repflow.app.application.exercise.ExerciseStatusFilter
+import com.repflow.app.application.exercise.GetExercise
 import com.repflow.app.application.exercise.ObserveExercises
 import com.repflow.app.application.progression.ProgressionRecommendationRepository
 import com.repflow.app.application.progression.RecordManualOverride
 import com.repflow.app.application.recovery.GetWorkoutDayContext
+import com.repflow.app.application.trainingplan.ObserveTrainingPlans
+import com.repflow.app.application.trainingplan.TrainingPlanOverview
 import com.repflow.app.application.workout.AbandonWorkoutSession
 import com.repflow.app.application.workout.AddWorkoutExercise
 import com.repflow.app.application.workout.AddWorkoutExerciseCommand
@@ -28,6 +31,7 @@ import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.exercise.Exercise
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.progression.ProgressionResult
+import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
 import com.repflow.app.domain.workout.RestTimer
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSession
@@ -59,6 +63,8 @@ class ActiveWorkoutViewModel
     constructor(
         observeActiveWorkoutSession: ObserveActiveWorkoutSession,
         observeExercises: ObserveExercises,
+        observeTrainingPlans: ObserveTrainingPlans,
+        private val getExercise: GetExercise,
         private val getWorkoutDayContext: GetWorkoutDayContext,
         private val progressionRecommendationRepository: ProgressionRecommendationRepository,
         private val recordManualOverride: RecordManualOverride,
@@ -78,6 +84,18 @@ class ActiveWorkoutViewModel
         val dayContext: StateFlow<WorkoutDayContextUi?> = _dayContext
         private val recommendationRefreshTrigger = MutableStateFlow(0)
 
+        /**
+         * Milestone 8, CP6: a plain `MutableStateFlow` eagerly kept in sync from
+         * `init`, mirroring [_dayContext] - not a nested `stateIn`, since a
+         * second independent `WhileSubscribed` `stateIn` racing the outer
+         * [uiState] combine's own subscription can start observing before this
+         * one's upstream collection has produced its first value, making
+         * [onStartWorkout]'s synchronous `.value` lookup see a stale/empty list
+         * right after construction. Collecting eagerly here means it's always
+         * caught up by the time a caller reads `.value`.
+         */
+        private val trainingPlanOverviewsFlow = MutableStateFlow<List<TrainingPlanOverview>>(emptyList())
+
         init {
             viewModelScope.launch {
                 val context = getWorkoutDayContext()
@@ -87,6 +105,11 @@ class ActiveWorkoutViewModel
                         legDoms = context.latestRecoveryEntry?.legDoms,
                         futsalLoad = context.recentFutsalSession?.load,
                     )
+            }
+            viewModelScope.launch {
+                observeTrainingPlans()
+                    .catch { failure -> if (failure is CancellationException) throw failure }
+                    .collect { overviews -> trainingPlanOverviewsFlow.value = overviews }
             }
         }
 
@@ -110,17 +133,57 @@ class ActiveWorkoutViewModel
                     emit(emptyList())
                 }
 
+        private val availablePlans =
+            trainingPlanOverviewsFlow.map { overviews ->
+                overviews.map { overview -> TrainingPlanPickerItem(overview.latestVersion.id, overview.plan.name.value) }
+            }
+
         val uiState =
-            combine(content, availableExercises, error) { observed, exercises, err ->
-                ActiveWorkoutUiState(observed, exercises, err)
+            combine(content, availableExercises, availablePlans, error) { observed, exercises, plans, err ->
+                ActiveWorkoutUiState(observed, exercises, plans, err)
             }.stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
                 initialValue = ActiveWorkoutUiState(),
             )
 
-        fun onStartWorkout() {
-            launchAction { startWorkoutSession(StartWorkoutSessionCommand(trainingPlanVersionId = null)) }
+        /**
+         * Starts a new session, optionally from [planVersionId]. Ad-hoc
+         * (`null`) remains fully supported - it's the only path this used to
+         * have. When a plan is chosen, every one of its planned exercises is
+         * added right after the session starts, each carrying its
+         * [com.repflow.app.domain.trainingplan.PlannedExercise.id] so
+         * [com.repflow.app.application.workout.CompleteWorkoutSession] can
+         * later resolve a planned rep range for progression (Milestone 8, CP6).
+         */
+        fun onStartWorkout(planVersionId: TrainingPlanVersionId? = null) {
+            val overview = planVersionId?.let { id -> trainingPlanOverviewsFlow.value.find { it.latestVersion.id == id } }
+            launchAction {
+                val result = startWorkoutSession(StartWorkoutSessionCommand(trainingPlanVersionId = planVersionId))
+                if (result is DomainResult.Success && overview != null) {
+                    seedPlannedExercises(result.value, overview)
+                }
+                result
+            }
+        }
+
+        private suspend fun seedPlannedExercises(
+            sessionId: WorkoutSessionId,
+            overview: TrainingPlanOverview,
+        ) {
+            for (plannedExercise in overview.latestVersion.plannedExercises.sortedBy { it.order }) {
+                val exercise =
+                    (getExercise(plannedExercise.exerciseId) as? DomainResult.Success)?.value ?: continue
+                addWorkoutExercise(
+                    AddWorkoutExerciseCommand(
+                        sessionId = sessionId,
+                        exerciseId = exercise.id,
+                        exerciseNameSnapshot = exercise.name.value,
+                        trackingType = exercise.trackingType,
+                        plannedExerciseId = plannedExercise.id,
+                    ),
+                )
+            }
         }
 
         fun onAddExercise(exercise: ExercisePickerItem) {

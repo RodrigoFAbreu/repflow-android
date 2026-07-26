@@ -32,6 +32,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.repflow.app.R
 import com.repflow.app.domain.exercise.ExerciseId
+import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSessionId
 
@@ -46,7 +47,7 @@ import com.repflow.app.domain.workout.WorkoutSessionId
 fun ActiveWorkoutScreen(
     uiState: ActiveWorkoutUiState,
     dayContext: WorkoutDayContextUi?,
-    onStartWorkout: () -> Unit,
+    onStartWorkout: (TrainingPlanVersionId?) -> Unit,
     onAddExercise: (ExercisePickerItem) -> Unit,
     onOverrideRecommendation: (ExerciseId, ProgressionResultUi) -> Unit,
     onRecordSet: (WorkoutExerciseId, Double?, Int?) -> Unit,
@@ -71,7 +72,7 @@ fun ActiveWorkoutScreen(
                 }
 
                 is ActiveWorkoutContent.NoActiveSession -> {
-                    NoActiveSessionState(onStartWorkout)
+                    NoActiveSessionState(uiState.availablePlans, onStartWorkout)
                 }
 
                 is ActiveWorkoutContent.Active -> {
@@ -108,14 +109,38 @@ private fun LoadingIndicator() {
 }
 
 @Composable
-private fun NoActiveSessionState(onStartWorkout: () -> Unit) {
+private fun NoActiveSessionState(
+    availablePlans: List<TrainingPlanPickerItem>,
+    onStartWorkout: (TrainingPlanVersionId?) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(stringResource(R.string.workout_active_no_session))
-        Button(onClick = onStartWorkout) {
-            Text(stringResource(R.string.workout_active_start))
+        Box {
+            Button(onClick = { expanded = true }) {
+                Text(stringResource(R.string.workout_active_start))
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.workout_active_start_ad_hoc)) },
+                    onClick = {
+                        expanded = false
+                        onStartWorkout(null)
+                    },
+                )
+                availablePlans.forEach { plan ->
+                    DropdownMenuItem(
+                        text = { Text(plan.planName) },
+                        onClick = {
+                            expanded = false
+                            onStartWorkout(plan.versionId)
+                        },
+                    )
+                }
+            }
         }
     }
 }

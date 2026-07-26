@@ -2,6 +2,7 @@ package com.repflow.app.presentation.workout
 
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseTrackingType
+import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.domain.workout.WorkoutSetId
@@ -11,12 +12,20 @@ import java.time.Instant
  * Stable UI state for the current-workout screen (Milestone 3 CP6+CP7).
  * [availableExercises] powers the "add exercise" picker; it is populated
  * independently of [content] so it stays available even before a session is
- * started.
+ * started. [availablePlans] powers the start-workout plan picker (Milestone
+ * 8, CP6) - also independent of [content], for the same reason.
  */
 data class ActiveWorkoutUiState(
     val content: ActiveWorkoutContent = ActiveWorkoutContent.Loading,
     val availableExercises: List<ExercisePickerItem> = emptyList(),
+    val availablePlans: List<TrainingPlanPickerItem> = emptyList(),
     val errorMessage: ActiveWorkoutErrorReason? = null,
+)
+
+/** One selectable entry in the start-workout plan picker (Milestone 8, CP6). */
+data class TrainingPlanPickerItem(
+    val versionId: TrainingPlanVersionId,
+    val planName: String,
 )
 
 /** A read-only summary of recovery/futsal context for the active workout screen, per [com.repflow.app.application.recovery.WorkoutDayContext]. */
