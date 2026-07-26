@@ -51,10 +51,10 @@ object ProgressionPolicyV1 {
 
         val recoveryReasons = mutableListOf<String>()
         if ((input.latestPainWhileWalking ?: 0) >= PAIN_THRESHOLD) {
-            recoveryReasons += "Pain while walking is elevated (${input.latestPainWhileWalking}/4)"
+            recoveryReasons += "Pain while walking is elevated (${input.latestPainWhileWalking}/5)"
         }
         if ((input.latestHeavyLegs ?: 0) >= HEAVY_LEGS_THRESHOLD) {
-            recoveryReasons += "Heavy legs is elevated (${input.latestHeavyLegs}/4)"
+            recoveryReasons += "Heavy legs is elevated (${input.latestHeavyLegs}/5)"
         }
         if (input.hasRecentFutsalSession) {
             recoveryReasons += "Futsal session recorded in the last 24h"

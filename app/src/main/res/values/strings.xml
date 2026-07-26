@@ -129,7 +129,10 @@
 
     <string name="exercise_list_recovery_content_description">Go to recovery and futsal</string>
     <string name="recovery_futsal_title">Recovery</string>
-    <string name="recovery_futsal_recovery_section_title">Recovery entry (today)</string>
+    <string name="recovery_futsal_recovery_section_title">Recovery entry</string>
+    <string name="recovery_futsal_change_date">Change date</string>
+    <string name="recovery_futsal_date_picker_confirm">OK</string>
+    <string name="recovery_futsal_date_picker_dismiss">Cancel</string>
     <string name="recovery_futsal_sleep_quality">Sleep quality</string>
     <string name="recovery_futsal_energy">Energy</string>
     <string name="recovery_futsal_leg_doms">Leg DOMS</string>
@@ -140,7 +143,7 @@
     <string name="recovery_futsal_futsal_next_24h">Futsal expected in next 24h</string>
     <string name="recovery_futsal_notes">Notes (optional)</string>
     <string name="recovery_futsal_save_recovery">Save recovery entry</string>
-    <string name="recovery_futsal_futsal_section_title">Futsal session (today)</string>
+    <string name="recovery_futsal_futsal_section_title">Futsal session</string>
     <string name="recovery_futsal_duration_minutes">Duration (minutes)</string>
     <string name="recovery_futsal_session_rpe">Session RPE (0-10)</string>
     <string name="recovery_futsal_load">Load: %1$s</string>

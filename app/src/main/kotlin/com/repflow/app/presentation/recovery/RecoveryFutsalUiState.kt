@@ -1,6 +1,8 @@
 package com.repflow.app.presentation.recovery
 
-/** Identifies which 0-4 recovery scale field a stepper change applies to. */
+import java.time.LocalDate
+
+/** Identifies which 0-5 recovery scale field a stepper change applies to. */
 enum class RecoveryScaleField {
     SLEEP_QUALITY,
     ENERGY,
@@ -10,9 +12,17 @@ enum class RecoveryScaleField {
     HEAVY_LEGS,
 }
 
-/** UI state for the combined recovery-entry / futsal-session screen, both scoped to "today". */
+/**
+ * UI state for the combined recovery-entry / futsal-session screen.
+ *
+ * [date] defaults to the wall-clock "now" only as a placeholder before the
+ * ViewModel's `init` overwrites it with its injected [com.repflow.app.application.common.Clock]'s
+ * value (Milestone 8, CP3) - mirrors how [isLoading] starts `true` and is
+ * immediately corrected once real data loads.
+ */
 data class RecoveryFutsalUiState(
     val isLoading: Boolean = true,
+    val date: LocalDate = LocalDate.now(),
     val sleepQuality: Int = DEFAULT_SCALE_VALUE,
     val energy: Int = DEFAULT_SCALE_VALUE,
     val legDoms: Int = DEFAULT_SCALE_VALUE,
@@ -40,6 +50,8 @@ data class RecoveryFutsalUiState(
     companion object {
         const val DEFAULT_SCALE_VALUE = 2
         const val SCALE_MIN = 0
-        const val SCALE_MAX = 4
+
+        /** Milestone 8, CP3: widened from 4 to match [com.repflow.app.domain.recovery.RecoveryEntry]'s 0..5 range. */
+        const val SCALE_MAX = 5
     }
 }

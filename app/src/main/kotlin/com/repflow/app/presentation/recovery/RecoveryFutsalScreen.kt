@@ -7,24 +7,36 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.repflow.app.R
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 
 /**
  * Stateless screen for recording today's recovery entry and futsal session
@@ -34,6 +46,7 @@ import com.repflow.app.R
 @Composable
 fun RecoveryFutsalScreen(
     uiState: RecoveryFutsalUiState,
+    onDateChanged: (LocalDate) -> Unit,
     onScaleFieldChanged: (RecoveryScaleField, Int) -> Unit,
     onFutsalPreviousToggled: (Boolean) -> Unit,
     onFutsalNextToggled: (Boolean) -> Unit,
@@ -81,6 +94,8 @@ fun RecoveryFutsalScreen(
             modifier = Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            DateRow(date = uiState.date, onDateChanged = onDateChanged)
+
             Text(stringResource(R.string.recovery_futsal_recovery_section_title))
             ScaleStepperRow(
                 R.string.recovery_futsal_sleep_quality,
@@ -142,6 +157,63 @@ fun RecoveryFutsalScreen(
             TextButton(onClick = onSaveFutsal, enabled = !uiState.isSavingFutsal) {
                 Text(stringResource(R.string.recovery_futsal_save_futsal))
             }
+        }
+    }
+}
+
+private val dateRowFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy")
+
+/**
+ * Shows the entry's [date] and a button to change it (Milestone 8, CP3).
+ * Only today or earlier is selectable - a recovery/futsal entry records
+ * something that already happened, so a future date would never be a real
+ * value.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DateRow(
+    date: LocalDate,
+    onDateChanged: (LocalDate) -> Unit,
+) {
+    var showPicker by rememberSaveable { mutableStateOf(false) }
+    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Text(date.format(dateRowFormatter), modifier = Modifier.weight(1f))
+        TextButton(onClick = { showPicker = true }) {
+            Text(stringResource(R.string.recovery_futsal_change_date))
+        }
+    }
+    if (showPicker) {
+        val initialMillis = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+        val pickerState =
+            rememberDatePickerState(
+                initialSelectedDateMillis = initialMillis,
+                selectableDates =
+                    object : SelectableDates {
+                        override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis <= System.currentTimeMillis()
+                    },
+            )
+        DatePickerDialog(
+            onDismissRequest = { showPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    val selectedMillis = pickerState.selectedDateMillis
+                    if (selectedMillis != null) {
+                        val selectedDate =
+                            Instant.ofEpochMilli(selectedMillis).atZone(ZoneOffset.UTC).toLocalDate()
+                        onDateChanged(selectedDate)
+                    }
+                    showPicker = false
+                }) {
+                    Text(stringResource(R.string.recovery_futsal_date_picker_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPicker = false }) {
+                    Text(stringResource(R.string.recovery_futsal_date_picker_dismiss))
+                }
+            },
+        ) {
+            DatePicker(state = pickerState)
         }
     }
 }

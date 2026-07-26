@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import java.time.ZoneId
 import javax.inject.Inject
 
@@ -43,27 +44,37 @@ class RecoveryFutsalViewModel
         val uiState = _uiState.asStateFlow()
 
         init {
-            viewModelScope.launch {
-                val today = clock.now().atZone(ZoneId.systemDefault()).toLocalDate()
-                val recovery = recoveryRepository.findForDate(today)
-                val futsal = futsalRepository.findForDate(today)
-                _uiState.update { state ->
-                    state.copy(
-                        isLoading = false,
-                        sleepQuality = recovery?.sleepQuality ?: state.sleepQuality,
-                        energy = recovery?.energy ?: state.energy,
-                        legDoms = recovery?.legDoms ?: state.legDoms,
-                        heelStiffness = recovery?.heelStiffness ?: state.heelStiffness,
-                        painWhileWalking = recovery?.painWhileWalking ?: state.painWhileWalking,
-                        heavyLegs = recovery?.heavyLegs ?: state.heavyLegs,
-                        futsalInPrevious24h = recovery?.futsalInPrevious24h ?: state.futsalInPrevious24h,
-                        futsalExpectedNext24h = recovery?.futsalExpectedNext24h ?: state.futsalExpectedNext24h,
-                        notes = recovery?.notes.orEmpty(),
-                        durationMinutesInput = futsal?.durationMinutes?.toString().orEmpty(),
-                        sessionRpeInput = futsal?.sessionRpe?.toString().orEmpty(),
-                    )
-                }
+            val today = clock.now().atZone(ZoneId.systemDefault()).toLocalDate()
+            viewModelScope.launch { loadForDate(today) }
+        }
+
+        /** Loads (or resets to blank) the recovery/futsal fields for [date] (Milestone 8, CP3). */
+        private suspend fun loadForDate(date: LocalDate) {
+            val recovery = recoveryRepository.findForDate(date)
+            val futsal = futsalRepository.findForDate(date)
+            _uiState.update {
+                RecoveryFutsalUiState(
+                    isLoading = false,
+                    date = date,
+                    sleepQuality = recovery?.sleepQuality ?: RecoveryFutsalUiState.DEFAULT_SCALE_VALUE,
+                    energy = recovery?.energy ?: RecoveryFutsalUiState.DEFAULT_SCALE_VALUE,
+                    legDoms = recovery?.legDoms ?: RecoveryFutsalUiState.DEFAULT_SCALE_VALUE,
+                    heelStiffness = recovery?.heelStiffness ?: RecoveryFutsalUiState.DEFAULT_SCALE_VALUE,
+                    painWhileWalking = recovery?.painWhileWalking ?: RecoveryFutsalUiState.DEFAULT_SCALE_VALUE,
+                    heavyLegs = recovery?.heavyLegs ?: RecoveryFutsalUiState.DEFAULT_SCALE_VALUE,
+                    futsalInPrevious24h = recovery?.futsalInPrevious24h ?: false,
+                    futsalExpectedNext24h = recovery?.futsalExpectedNext24h ?: false,
+                    notes = recovery?.notes.orEmpty(),
+                    durationMinutesInput = futsal?.durationMinutes?.toString().orEmpty(),
+                    sessionRpeInput = futsal?.sessionRpe?.toString().orEmpty(),
+                )
             }
+        }
+
+        /** Switches the screen to a different date (Milestone 8, CP3), reloading any entry already saved for it. */
+        fun onDateChanged(date: LocalDate) {
+            _uiState.update { it.copy(isLoading = true, date = date) }
+            viewModelScope.launch { loadForDate(date) }
         }
 
         fun onScaleFieldChanged(
@@ -108,11 +119,10 @@ class RecoveryFutsalViewModel
             val state = _uiState.value
             _uiState.update { it.copy(isSavingRecovery = true) }
             viewModelScope.launch {
-                val today = clock.now().atZone(ZoneId.systemDefault()).toLocalDate()
                 val result =
                     recordRecoveryEntry(
                         RecordRecoveryEntryCommand(
-                            date = today,
+                            date = state.date,
                             sleepQuality = state.sleepQuality,
                             energy = state.energy,
                             legDoms = state.legDoms,
@@ -147,10 +157,9 @@ class RecoveryFutsalViewModel
             }
             _uiState.update { it.copy(isSavingFutsal = true) }
             viewModelScope.launch {
-                val today = clock.now().atZone(ZoneId.systemDefault()).toLocalDate()
                 val result =
                     recordFutsalSession(
-                        RecordFutsalSessionCommand(date = today, durationMinutes = durationMinutes, sessionRpe = sessionRpe),
+                        RecordFutsalSessionCommand(date = state.date, durationMinutes = durationMinutes, sessionRpe = sessionRpe),
                     )
                 when (result) {
                     is DomainResult.Success -> {

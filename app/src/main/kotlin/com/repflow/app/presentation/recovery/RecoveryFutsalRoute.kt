@@ -11,6 +11,7 @@ fun RecoveryFutsalRoute(viewModel: RecoveryFutsalViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     RecoveryFutsalScreen(
         uiState = uiState,
+        onDateChanged = viewModel::onDateChanged,
         onScaleFieldChanged = viewModel::onScaleFieldChanged,
         onFutsalPreviousToggled = viewModel::onFutsalPreviousToggled,
         onFutsalNextToggled = viewModel::onFutsalNextToggled,

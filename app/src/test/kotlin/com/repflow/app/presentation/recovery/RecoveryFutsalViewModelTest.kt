@@ -18,6 +18,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class RecoveryFutsalViewModelTest {
@@ -121,6 +123,58 @@ class RecoveryFutsalViewModelTest {
 
             assertEquals(false, viewModel.uiState.value.isSavingFutsal)
             assertEquals("saved", viewModel.uiState.value.futsalSavedMessage)
+        }
+
+    @Test
+    fun `onDateChanged loads a previously saved entry for a past date`() =
+        runTest {
+            val today = clock.now().atZone(ZoneId.systemDefault()).toLocalDate()
+            val yesterday = today.minusDays(1)
+            val setupViewModel = createViewModel()
+            dispatcher.scheduler.advanceUntilIdle()
+            setupViewModel.onDateChanged(yesterday)
+            dispatcher.scheduler.advanceUntilIdle()
+            setupViewModel.onScaleFieldChanged(RecoveryScaleField.ENERGY, 5)
+            setupViewModel.onSaveRecovery()
+            dispatcher.scheduler.advanceUntilIdle()
+
+            val viewModel = createViewModel()
+            dispatcher.scheduler.advanceUntilIdle()
+            viewModel.onDateChanged(yesterday)
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(yesterday, viewModel.uiState.value.date)
+            assertEquals(5, viewModel.uiState.value.energy)
+        }
+
+    @Test
+    fun `onDateChanged resets fields to defaults for a date with no saved entry`() =
+        runTest {
+            val viewModel = createViewModel()
+            dispatcher.scheduler.advanceUntilIdle()
+            viewModel.onScaleFieldChanged(RecoveryScaleField.ENERGY, 5)
+            viewModel.onSaveRecovery()
+            dispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.onDateChanged(LocalDate.of(2020, 1, 1))
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(RecoveryFutsalUiState.DEFAULT_SCALE_VALUE, viewModel.uiState.value.energy)
+        }
+
+    @Test
+    fun `onSaveRecovery persists a scale value up to the widened maximum of 5`() =
+        runTest {
+            val viewModel = createViewModel()
+            dispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.onScaleFieldChanged(RecoveryScaleField.SLEEP_QUALITY, 5)
+            assertEquals(5, viewModel.uiState.value.sleepQuality)
+            viewModel.onSaveRecovery()
+            dispatcher.scheduler.advanceUntilIdle()
+
+            val stored = recoveryRepository.findForDate(clock.now().atZone(ZoneId.systemDefault()).toLocalDate())
+            assertEquals(5, stored?.sleepQuality)
         }
 
     @Test

@@ -60,7 +60,9 @@ data class RecoveryEntry private constructor(
 
     companion object {
         const val NOTES_MAX_LENGTH = 500
-        private val SCALE_RANGE = 0..4
+
+        /** Milestone 8, CP3: widened from 0..4 - existing stored values (all ≤ 4) remain valid. */
+        private val SCALE_RANGE = 0..5
 
         @Suppress("LongParameterList", "ReturnCount")
         fun create(

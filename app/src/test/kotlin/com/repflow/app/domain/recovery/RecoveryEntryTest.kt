@@ -39,12 +39,12 @@ class RecoveryEntryTest {
     }
 
     @Test
-    fun `create rejects a scale value outside 0 to 4`() {
+    fun `create rejects a scale value outside 0 to 5`() {
         val result =
             RecoveryEntry.create(
                 id = id,
                 date = date,
-                sleepQuality = 5,
+                sleepQuality = 6,
                 energy = 2,
                 legDoms = 1,
                 heelStiffness = 0,
