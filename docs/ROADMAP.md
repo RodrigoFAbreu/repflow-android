@@ -1,8 +1,8 @@
 # RepFlow Roadmap
 
-Active milestone: **Milestone 7 — History and backup (not started)** → [status](ACTIVE_MILESTONE.md)
+Active milestone: **Milestone 7 — History and backup (planning complete)** → [status](ACTIVE_MILESTONE.md)
 
-Active plan: none yet.
+Active plan: [milestones/active/milestone-7-execution.md](milestones/active/milestone-7-execution.md)
 
 ## Milestone 0 — Project foundation
 
