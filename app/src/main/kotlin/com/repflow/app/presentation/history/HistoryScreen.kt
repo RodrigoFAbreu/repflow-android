@@ -1,17 +1,15 @@
 package com.repflow.app.presentation.history
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
@@ -219,32 +217,31 @@ private fun HistoryFiltersBar(
     onShowInvalidatedChanged: (Boolean) -> Unit,
     onSortOrderChanged: (HistorySortOrder) -> Unit,
 ) {
-    Row(
+    // A FlowRow (not a horizontally-scrolling Row) so every control stays reachable by a plain
+    // tap on a phone-width screen - six filter controls don't all fit on one line, and an
+    // instrumented test caught that a control scrolled off-screen in a horizontalScroll Row
+    // couldn't actually be tapped on a real device.
+    FlowRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         ExerciseFilterButton(uiState.filters.exerciseId, uiState.availableExerciseOptions, onExerciseFilterChanged)
-        Spacer(Modifier.width(8.dp))
         PlanFilterButton(uiState.filters.plan, uiState.availablePlanOptions, onPlanFilterChanged)
-        Spacer(Modifier.width(8.dp))
         DateFilterButton(
             date = uiState.filters.startDate,
             unsetLabelRes = R.string.history_filter_start_date_unset,
             onDateChanged = onStartDateChanged,
         )
-        Spacer(Modifier.width(8.dp))
         DateFilterButton(
             date = uiState.filters.endDate,
             unsetLabelRes = R.string.history_filter_end_date_unset,
             onDateChanged = onEndDateChanged,
         )
-        Spacer(Modifier.width(8.dp))
         SortOrderButton(uiState.filters.sortOrder, onSortOrderChanged)
-        Spacer(Modifier.width(8.dp))
         FilterChip(
             selected = uiState.filters.showInvalidated,
             onClick = { onShowInvalidatedChanged(!uiState.filters.showInvalidated) },

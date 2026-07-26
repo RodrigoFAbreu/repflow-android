@@ -190,6 +190,9 @@
     <string name="history_detail_set_row">Set %1$d: %2$s kg x %3$s</string>
     <string name="history_detail_set_pain">Pain during set: %1$d/5</string>
     <string name="history_detail_set_technique_quality">Technique quality: %1$d/5</string>
+    <string name="history_detail_set_warmup_suffix">(warm-up)</string>
+    <string name="history_detail_set_duration">Duration: %1$ds</string>
+    <string name="history_detail_set_rpe">RPE: %1$s</string>
     <string name="history_session_invalidate_action">Invalidate</string>
     <string name="history_invalidate_dialog_title">Invalidate this workout?</string>
     <string name="history_invalidate_dialog_message">It will be removed from History and progression recommendations, but its recorded data is kept, not deleted.</string>

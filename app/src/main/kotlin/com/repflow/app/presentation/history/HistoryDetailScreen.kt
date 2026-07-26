@@ -54,6 +54,8 @@ fun HistoryDetailScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 for (set in exercise.sets) {
+                    val warmupSuffix =
+                        if (set.isWarmup) " " + stringResource(R.string.history_detail_set_warmup_suffix) else ""
                     Text(
                         text =
                             stringResource(
@@ -61,9 +63,21 @@ fun HistoryDetailScreen(
                                 set.order,
                                 set.load?.toString().orEmpty(),
                                 set.reps?.toString().orEmpty(),
-                            ),
+                            ) + warmupSuffix,
                         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, bottom = 4.dp),
                     )
+                    set.durationSeconds?.let { durationSeconds ->
+                        Text(
+                            text = stringResource(R.string.history_detail_set_duration, durationSeconds),
+                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, bottom = 4.dp),
+                        )
+                    }
+                    set.rpe?.let { rpe ->
+                        Text(
+                            text = stringResource(R.string.history_detail_set_rpe, rpe.toString()),
+                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, bottom = 4.dp),
+                        )
+                    }
                     set.pain?.let { pain ->
                         Text(
                             text = stringResource(R.string.history_detail_set_pain, pain),
