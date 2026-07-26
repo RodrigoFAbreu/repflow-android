@@ -1,8 +1,8 @@
 # RepFlow Roadmap
 
-Active milestone: **Milestone 5 — Recovery and futsal (not yet planned)** → [status](ACTIVE_MILESTONE.md)
+Active milestone: **Milestone 6 — Progression recommendations (not yet planned)** → [status](ACTIVE_MILESTONE.md)
 
-Completed plan: [milestones/completed/milestone-4-execution.md](milestones/completed/milestone-4-execution.md)
+Completed plan: [milestones/completed/milestone-5-execution.md](milestones/completed/milestone-5-execution.md)
 
 ## Milestone 0 — Project foundation
 
@@ -43,11 +43,11 @@ Completed plan: [milestones/completed/milestone-4-execution.md](milestones/compl
 - [x] Notifications and haptics
 - [x] Timer-related tests
 
-## Milestone 5 — Recovery and futsal
+## Milestone 5 — Recovery and futsal ✓ complete
 
-- [ ] Recovery entry
-- [ ] Futsal load
-- [ ] Workout-day context
+- [x] Recovery entry
+- [x] Futsal load
+- [x] Workout-day context
 
 ## Milestone 6 — Progression recommendations
 

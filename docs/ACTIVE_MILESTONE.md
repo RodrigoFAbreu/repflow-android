@@ -2,93 +2,103 @@
 
 ## Milestone
 
-Milestone 4 — Rest Timer — **COMPLETE**
+Milestone 5 — Recovery and Futsal — **COMPLETE**
 
 ## Goal
 
-After a working set is recorded, start a rest timer with a configured
-duration, storing an absolute end timestamp so it survives backgrounding
-and full process death. Allow adding/removing time and skipping, and
-notify the user when rest ends where OS permission allows.
+Let a user record daily recovery signals (sleep quality, energy, leg
+DOMS, heel stiffness, pain while walking, heavy legs — each 0-4) and
+futsal sessions (duration + session RPE, with a derived load), and
+surface a read-only summary of that context on the active-workout
+screen. Recovery/futsal entries are independent, date-scoped records
+(not tied to a workout session) with at most one row per calendar date.
 
 ## Current checkpoint
 
-CP7 complete: Milestone 4 is fully implemented, verified and documented.
-Full verification suite passed (`testDebugUnitTest`, `spotlessCheck`,
-`detekt`, `lintDebug`, `assembleDebug`, `connectedDebugAndroidTest` — full
-instrumented suite, 98 total test methods, 0 failures/errors). Manual
-smoke test on `emulator-5554` confirmed start/abandon workout works with
-the new rest-timer code paths active and no crashes. Room schema
-`app/schemas/.../4.json` is exported and tracked.
+CP7 complete: Milestone 5 is fully implemented, verified and documented.
+Full verification suite passed: `testDebugUnitTest` (full suite, 249
+tests — see "Known pre-existing flaky test" below), `spotlessCheck`,
+`detekt`, `lintDebug`, `connectedDebugAndroidTest` (full instrumented
+suite on `emulator-5554`, 0 failures). Manual smoke test: installed APK,
+launched app, ran a 300-event `monkey` fuzz pass over the UI (covering
+the new Recovery/Futsal screen and the active-workout banner) with no
+crashes in logcat. Room schema `5.json` is exported and tracked.
 
-Milestone 3 (Active Workout) remains complete and committed; see
-`docs/milestones/completed/milestone-3-execution.md` and `-reference.md`.
+Milestones 3 and 4 remain complete and committed; see
+`docs/milestones/completed/`.
 
-## Checkpoint checklist (Milestone 4)
+## Checkpoint checklist (Milestone 5)
 
-- [x] CP1 — Domain: `RestTimer` + `WorkoutSession` integration + tests
-- [x] CP2 — Application: `StartRestTimer`/`AdjustRestTimer`/`SkipRestTimer` + tests
-- [x] CP3 — Room persistence: migration 3→4, entity/mapper
+- [x] CP1 — Domain: `RecoveryEntry` + `FutsalSession` + tests
+- [x] CP2 — Application: `RecordRecoveryEntry`/`RecordFutsalSession`/`GetWorkoutDayContext` + tests
+- [x] CP3 — Room persistence: migration 4→5, entities/DAOs/mappers/repositories
 - [x] CP4 — Instrumented migration + DAO tests on device
-- [x] CP5 — Presentation: countdown UI (rest-timer bar, +15s/-15s, skip)
-- [x] CP6 — Notifications: AlarmManager + BroadcastReceiver + runtime permission
-- [x] CP7 — Docs + final architectural review
+- [x] CP5 — Presentation: combined recovery/futsal entry screen
+- [x] CP6 — Workout-day context banner on the active-workout screen
+- [x] CP7 — Full verification, manual smoke test, docs + archival
 
-## Approved decisions (quick reference, Milestone 4)
+## Approved decisions (quick reference, Milestone 5)
 
-- Default rest duration: 90 seconds (a placeholder constant,
-  `DEFAULT_REST_TIMER_SECONDS`; no per-exercise configuration UI yet -
-  documented as an assumption, not a hard product decision)
-- Notification behavior when `POST_NOTIFICATIONS` is denied: **silently
-  degrade to an in-app-only timer** - this resolves the previously "Open"
-  decision in `docs/TECHNICAL_DECISIONS.md` for this milestone
-- Rest timer scheduling/notifications live entirely in the presentation
-  layer (`ActiveWorkoutRoute`, `RestTimerAlarmScheduler`,
-  `RestTimerExpiredReceiver`); domain/application layers only track the
-  absolute end timestamp, preserving dependency direction
-- Completing/abandoning a session implicitly clears any running rest timer
+- Recovery scale fields (`sleepQuality`, `energy`, `legDoms`,
+  `heelStiffness`, `painWhileWalking`, `heavyLegs`) are `Int` in `0..4` —
+  an assumption since `docs/UX_FLOWS.md` doesn't specify exact bounds;
+  low-risk, easily revisited
+- `FutsalSession.load` is a derived property (`durationMinutes *
+  sessionRpe`), never stored independently — same pattern as
+  `RestTimer.remainingSeconds`
+- At most one `RecoveryEntry`/`FutsalSession` per calendar date;
+  re-recording the same date replaces it via `update()`, enforced by a
+  unique Room index on `entry_date` plus `OnConflictStrategy.REPLACE`
+- Recovery-entry and futsal-session flows were combined into a single
+  screen/ViewModel/route (`RecoveryFutsalScreen`) rather than two
+  destinations, as a deliberate cost-reduction measure
+- `GetWorkoutDayContext` returns the latest recovery entry (any age) and
+  any futsal session from the last 24h, as a literal read-only summary —
+  it does **not** infer "warnings"; that's explicitly Milestone 6 scope
+- The workout-day-context banner is exposed as its own `StateFlow` on
+  `ActiveWorkoutViewModel` (not folded into the reactive `uiState`
+  combine), to avoid a one-shot async update racing with the session
+  observation stream
 
 ## Current blockers
 
-None. Milestone 4 is complete, verified and committed.
+None. Milestone 5 is complete, verified and committed.
+
+## Known pre-existing flaky test (not caused by Milestone 5)
+
+`ActiveWorkoutViewModelTest.adding an exercise then recording, editing
+and undoing a set updates the active session` intermittently fails when
+run in isolation or occasionally in the full suite (turbine/
+`UnconfinedTestDispatcher` timing race, unrelated to CP6's changes).
+Confirmed present, identically, on commit `52efdae` (Milestone 4
+completion, before any Milestone 5 work) — this predates this milestone
+and is not a regression from it. Recommended follow-up: investigate
+`ActiveWorkoutViewModelTest`'s turbine/dispatcher setup for a real fix
+(out of scope for Milestone 5; flagged for a future maintenance pass or
+the post-MVP review).
 
 ## Active plan
 
-Milestone 4 plan docs have been archived:
-`docs/milestones/completed/milestone-4-execution.md`,
-`docs/milestones/completed/milestone-4-reference.md`.
+Milestone 5 plan docs have been archived:
+`docs/milestones/completed/milestone-5-execution.md`,
+`docs/milestones/completed/milestone-5-reference.md`.
 
-## Last verified state (Milestone 4, full CP1–CP7)
+## Last verified state (Milestone 5, full CP1–CP7)
 
-- Unit tests: `./gradlew testDebugUnitTest` (full suite) — all pass,
-  including new `RestTimerTest`, `RestTimerUseCasesTest`, expanded
-  `WorkoutSessionTest`/`WorkoutEntityMapperTest`/`ActiveWorkoutViewModelTest`
+- Unit tests: `./gradlew testDebugUnitTest` (full suite) — 249 tests,
+  passes cleanly in most runs; one known pre-existing flaky test (see
+  above)
 - Static checks: `./gradlew spotlessCheck detekt lintDebug` — all pass
-  (one `ScheduleExactAlarm` lint error fixed by checking
-  `AlarmManager.canScheduleExactAlarms()` and falling back to an inexact
-  alarm rather than crashing)
-- Build: `./gradlew assembleDebug` — succeeds
-- Instrumented tests: `./gradlew connectedDebugAndroidTest` (full suite,
-  not filtered) on the `Pixel_9_Pro_XL` (API 37) emulator — 98 total test
-  methods, 0 failures/errors, including new `migrate3To4_*` cases
-- Manual verification: installed the latest debug APK on `emulator-5554`;
-  started and abandoned a workout with the new rest-timer code paths
-  active (schedule/cancel on the presentation layer), no crashes in
-  logcat. The full record-set → rest-timer-appears → add/remove time →
-  skip → notification-fires flow was **not** additionally clicked through
-  manually (it requires first creating an exercise via the exercise
-  editor); confidence for that flow rests on the automated
-  `RestTimerTest`/`RestTimerUseCasesTest`/`ActiveWorkoutViewModelTest`
-  suites plus the migration/DAO instrumented tests - a fuller manual
-  click-through (create an exercise, start a workout, add it, record a
-  set, observe the rest-timer bar and its buttons, let it expire) is
-  recommended as a follow-up smoke test before this feature reaches real
-  users
-- Schema: `app/schemas/com.repflow.app.infrastructure.database.RepFlowDatabase/4.json` generated and tracked
+- Instrumented tests: `./gradlew connectedDebugAndroidTest` (full suite)
+  on `emulator-5554` — 0 failures/errors
+- Manual verification: installed latest debug APK, launched app, ran
+  `adb shell monkey` fuzz test (300 events) with no crashes in logcat
+- Schema: `app/schemas/com.repflow.app.infrastructure.database.RepFlowDatabase/5.json` generated and tracked
 
 ## Known deferred scope (documented, not a defect)
 
-- No per-exercise/per-set configurable rest duration UI (fixed 90s
-  default only)
-- Set-entry UI still only exposes load + reps (carried over from
-  Milestone 3; unrelated to rest timer scope)
+- No inference of recovery "warnings"/recommendations from recorded
+  values — deferred to Milestone 6 (progression recommendations)
+- Recovery/futsal entry combined into a single screen rather than two
+  separate destinations (cost-reduction decision, revisit if UX flows
+  demand separation)
