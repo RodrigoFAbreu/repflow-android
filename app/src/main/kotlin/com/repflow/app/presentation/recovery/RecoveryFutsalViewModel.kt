@@ -12,6 +12,7 @@ import com.repflow.app.application.recovery.RecordRecoveryEntryCommand
 import com.repflow.app.application.recovery.RecoveryOperationError
 import com.repflow.app.application.recovery.RecoveryRepository
 import com.repflow.app.domain.common.DomainResult
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -28,6 +29,7 @@ import javax.inject.Inject
  * `docs/UX_FLOWS.md`'s "Recovery entry" section.
  */
 @Suppress("TooManyFunctions")
+@HiltViewModel
 class RecoveryFutsalViewModel
     @Inject
     constructor(

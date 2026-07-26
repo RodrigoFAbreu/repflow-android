@@ -7,6 +7,7 @@ import com.repflow.app.application.backup.ExportBackup
 import com.repflow.app.application.backup.ExportWorkoutHistoryCsv
 import com.repflow.app.application.backup.RestoreBackup
 import com.repflow.app.domain.common.DomainResult
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -19,6 +20,7 @@ import javax.inject.Inject
  * launchers and passes already-opened text content in/out - this ViewModel
  * never touches `Uri`, `ContentResolver` or any Android I/O type directly.
  */
+@HiltViewModel
 class BackupViewModel
     @Inject
     constructor(

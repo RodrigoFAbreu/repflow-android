@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.repflow.app.application.history.ObserveWorkoutHistory
 import com.repflow.app.domain.workout.WorkoutSessionId
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -11,6 +12,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /** Owns the history list + read-only detail selection state. */
+@HiltViewModel
 class HistoryViewModel
     @Inject
     constructor(
