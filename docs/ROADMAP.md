@@ -30,13 +30,13 @@ Milestone 3 plan: [milestones/active/milestone-3-execution.md](milestones/active
 - [x] Ordered exercises and targets
 - [x] Historical version preservation
 
-## Milestone 3 — Active workout
+## Milestone 3 — Active workout ✓ complete
 
-- [ ] Start and resume workouts
-- [ ] Exercise progression
-- [ ] Fast set entry
-- [ ] Immediate persistence
-- [ ] Editing and undo
+- [x] Start and resume workouts
+- [x] Exercise progression
+- [x] Fast set entry
+- [x] Immediate persistence
+- [x] Editing and undo
 
 ## Milestone 4 — Rest timer
 

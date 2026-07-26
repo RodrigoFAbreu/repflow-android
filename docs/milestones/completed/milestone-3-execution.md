@@ -1,6 +1,6 @@
 # Milestone 3 Execution — Active Workout
 
-Reference: `docs/milestones/active/milestone-3-reference.md`
+Reference: `docs/milestones/completed/milestone-3-reference.md`
 
 ## Checkpoints
 
