@@ -20,6 +20,7 @@ import java.time.Instant
  * here (this type only knows about itself).
  */
 @ConsistentCopyVisibility
+@Suppress("TooManyFunctions")
 data class WorkoutSession private constructor(
     val id: WorkoutSessionId,
     val trainingPlanVersionId: TrainingPlanVersionId?,
@@ -28,6 +29,7 @@ data class WorkoutSession private constructor(
     val endedAt: Instant?,
     val exercises: List<WorkoutExercise>,
     val restTimer: RestTimer?,
+    val invalidatedAt: Instant?,
 ) {
     companion object {
         /** Starts a new [WorkoutSessionStatus.ACTIVE] session with no exercises yet. */
@@ -44,6 +46,7 @@ data class WorkoutSession private constructor(
                 endedAt = null,
                 exercises = emptyList(),
                 restTimer = null,
+                invalidatedAt = null,
             )
 
         /** Rebuilds a session from persisted state, re-validating its invariants. */
@@ -56,6 +59,7 @@ data class WorkoutSession private constructor(
             endedAt: Instant?,
             exercises: List<WorkoutExercise>,
             restTimer: RestTimer? = null,
+            invalidatedAt: Instant? = null,
         ): DomainResult<WorkoutSession, WorkoutValidationError> {
             if (endedAt != null && endedAt < startedAt) {
                 return DomainResult.Failure(WorkoutValidationError.EndedBeforeStarted)
@@ -66,6 +70,14 @@ data class WorkoutSession private constructor(
             }
             if (!isTerminal && endedAt != null) {
                 return DomainResult.Failure(WorkoutValidationError.EndedAtNotAllowedForActiveSession)
+            }
+            if (invalidatedAt != null) {
+                if (status != WorkoutSessionStatus.COMPLETED) {
+                    return DomainResult.Failure(WorkoutValidationError.InvalidatedAtNotAllowedForIncompleteSession)
+                }
+                if (endedAt != null && invalidatedAt < endedAt) {
+                    return DomainResult.Failure(WorkoutValidationError.InvalidatedBeforeEnded)
+                }
             }
             val exerciseOrders = exercises.map { it.order }
             if (exerciseOrders.toSet().size != exerciseOrders.size) {
@@ -80,6 +92,7 @@ data class WorkoutSession private constructor(
                     endedAt = endedAt,
                     exercises = exercises.sortedBy { it.order },
                     restTimer = if (isTerminal) null else restTimer,
+                    invalidatedAt = invalidatedAt,
                 ),
             )
         }
@@ -148,4 +161,24 @@ data class WorkoutSession private constructor(
 
     private fun requireActive(): WorkoutValidationError? =
         if (status != WorkoutSessionStatus.ACTIVE) WorkoutValidationError.SessionNotActive else null
+
+    /** Whether this session has been marked invalid (see [invalidate]). */
+    val isInvalidated: Boolean get() = invalidatedAt != null
+
+    /**
+     * Marks a [WorkoutSessionStatus.COMPLETED] session invalidated at [at] -
+     * a correction for a wrongly recorded workout, excluding it from history
+     * and future progression input without a destructive delete. Mirrors
+     * [com.repflow.app.domain.exercise.Exercise.archive]'s
+     * "excluded, never deleted" shape.
+     */
+    fun invalidate(at: Instant): DomainResult<WorkoutSession, WorkoutValidationError> {
+        if (status != WorkoutSessionStatus.COMPLETED) {
+            return DomainResult.Failure(WorkoutValidationError.InvalidatedAtNotAllowedForIncompleteSession)
+        }
+        if (endedAt != null && at < endedAt) {
+            return DomainResult.Failure(WorkoutValidationError.InvalidatedBeforeEnded)
+        }
+        return DomainResult.Success(copy(invalidatedAt = at))
+    }
 }

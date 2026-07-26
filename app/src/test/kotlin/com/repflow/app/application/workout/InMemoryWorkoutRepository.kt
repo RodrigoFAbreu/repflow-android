@@ -30,7 +30,7 @@ class InMemoryWorkoutRepository : WorkoutRepository {
     override fun observeCompletedSessions(): Flow<List<WorkoutSession>> =
         sessions.map { byId ->
             byId.values
-                .filter { it.status == WorkoutSessionStatus.COMPLETED }
+                .filter { it.status == WorkoutSessionStatus.COMPLETED && !it.isInvalidated }
                 .sortedByDescending { it.endedAt }
         }
 

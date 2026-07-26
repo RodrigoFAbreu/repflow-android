@@ -35,6 +35,7 @@ object WorkoutEntityMapper {
             endedAt = session.endedAt?.toEpochMilli(),
             restTimerEndAtEpochMs = session.restTimer?.endAt?.toEpochMilli(),
             restTimerTotalDurationSeconds = session.restTimer?.totalDurationSeconds,
+            invalidatedAt = session.invalidatedAt?.toEpochMilli(),
         )
 
     fun toExerciseEntities(session: WorkoutSession): List<WorkoutExerciseEntity> =
@@ -104,6 +105,7 @@ object WorkoutEntityMapper {
                 endedAt = session.endedAt?.let(Instant::ofEpochMilli),
                 exercises = exercises,
                 restTimer = toRestTimer(session),
+                invalidatedAt = session.invalidatedAt?.let(Instant::ofEpochMilli),
             ).mapFailure { error -> WorkoutMappingError.InvalidFields(session.id, listOf(error)) }
     }
 

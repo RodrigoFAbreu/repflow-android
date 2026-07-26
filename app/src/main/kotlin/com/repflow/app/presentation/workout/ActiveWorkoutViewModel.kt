@@ -396,7 +396,14 @@ private fun ProgressionResultUi.toDomain(): ProgressionResult =
 private fun WorkoutOperationError.toReason(): ActiveWorkoutErrorReason =
     when (this) {
         WorkoutOperationError.ActiveSessionAlreadyExists -> ActiveWorkoutErrorReason.ALREADY_ACTIVE
+
         WorkoutOperationError.NotFound -> ActiveWorkoutErrorReason.NOT_FOUND
+
         is WorkoutOperationError.ValidationFailed -> ActiveWorkoutErrorReason.VALIDATION_FAILED
+
         WorkoutOperationError.PersistenceUnavailable -> ActiveWorkoutErrorReason.PERSISTENCE_UNAVAILABLE
+
+        // Never returned by any use case this ViewModel calls (only InvalidateWorkoutSession
+        // returns it, which is History's concern) - mapped for `when` exhaustiveness.
+        WorkoutOperationError.AlreadyInvalidated -> ActiveWorkoutErrorReason.UNKNOWN
     }

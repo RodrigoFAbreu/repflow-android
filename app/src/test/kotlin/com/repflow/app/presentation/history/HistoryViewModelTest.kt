@@ -1,8 +1,10 @@
 package com.repflow.app.presentation.history
 
 import app.cash.turbine.test
+import com.repflow.app.application.exercise.FixedClock
 import com.repflow.app.application.history.ObserveWorkoutHistory
 import com.repflow.app.application.workout.InMemoryWorkoutRepository
+import com.repflow.app.application.workout.InvalidateWorkoutSession
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.workout.WorkoutSession
 import com.repflow.app.domain.workout.WorkoutSessionId
@@ -22,6 +24,9 @@ import java.time.Instant
 @OptIn(ExperimentalCoroutinesApi::class)
 class HistoryViewModelTest {
     private val workoutRepository = InMemoryWorkoutRepository()
+    private val clock = FixedClock(Instant.parse("2026-01-02T00:00:00Z"))
+
+    private fun viewModel() = HistoryViewModel(ObserveWorkoutHistory(workoutRepository), InvalidateWorkoutSession(workoutRepository, clock))
 
     @Before
     fun setUp() {
@@ -55,7 +60,7 @@ class HistoryViewModelTest {
     fun `shows the seeded completed sessions`() =
         runTest {
             seedCompletedSession("session-1")
-            val viewModel = HistoryViewModel(ObserveWorkoutHistory(workoutRepository))
+            val viewModel = viewModel()
 
             viewModel.uiState.test {
                 val loaded = awaitItem()
@@ -68,7 +73,7 @@ class HistoryViewModelTest {
     fun `onSessionClick selects the session and onDetailDismissed clears it`() =
         runTest {
             val sessionId = seedCompletedSession("session-1")
-            val viewModel = HistoryViewModel(ObserveWorkoutHistory(workoutRepository))
+            val viewModel = viewModel()
 
             viewModel.uiState.test {
                 awaitItem() // loaded
@@ -78,6 +83,95 @@ class HistoryViewModelTest {
 
                 viewModel.onDetailDismissed()
                 assertNull(awaitItem().selectedSessionId)
+            }
+        }
+
+    @Test
+    fun `onInvalidateClicked removes the session from history and queues a message`() =
+        runTest {
+            val sessionId = seedCompletedSession("session-1")
+            val viewModel = viewModel()
+
+            viewModel.uiState.test {
+                awaitItem() // loaded with session-1
+
+                viewModel.onInvalidateClicked(sessionId)
+                var state = awaitItem()
+                while (state.sessions.isNotEmpty() || state.messages.isEmpty()) {
+                    state = awaitItem()
+                }
+                assertEquals(emptyList<String>(), state.sessions.map { it.id.value })
+                assertEquals(1, state.messages.size)
+                assertEquals(true, state.messages.single() is HistoryMessage.Invalidated)
+            }
+        }
+
+    @Test
+    fun `onInvalidateClicked dismisses an open detail view for the invalidated session`() =
+        runTest {
+            val sessionId = seedCompletedSession("session-1")
+            val viewModel = viewModel()
+
+            viewModel.uiState.test {
+                awaitItem() // loaded
+
+                viewModel.onSessionClick(sessionId)
+                assertEquals(sessionId, awaitItem().selectedSessionId)
+
+                viewModel.onInvalidateClicked(sessionId)
+                var state = awaitItem()
+                while (state.selectedSessionId != null || state.messages.isEmpty()) {
+                    state = awaitItem()
+                }
+                assertNull(state.selectedSessionId)
+            }
+        }
+
+    @Test
+    fun `onInvalidateClicked on an already-invalidated session queues an operation-failed message`() =
+        runTest {
+            val sessionId = seedCompletedSession("session-1")
+            val viewModel = viewModel()
+
+            viewModel.uiState.test {
+                awaitItem() // loaded
+
+                viewModel.onInvalidateClicked(sessionId)
+                var state = awaitItem()
+                while (state.messages.isEmpty()) {
+                    state = awaitItem()
+                }
+                viewModel.onInvalidateClicked(sessionId)
+                var failed = awaitItem()
+                while (failed.messages.size < 2) {
+                    failed = awaitItem()
+                }
+                assertEquals(true, failed.messages.last() is HistoryMessage.OperationFailed)
+            }
+        }
+
+    @Test
+    fun `onMessageShown dequeues the message`() =
+        runTest {
+            val sessionId = seedCompletedSession("session-1")
+            val viewModel = viewModel()
+
+            viewModel.uiState.test {
+                awaitItem() // loaded
+
+                viewModel.onInvalidateClicked(sessionId)
+                var state = awaitItem()
+                while (state.messages.isEmpty()) {
+                    state = awaitItem()
+                }
+                val messageId = state.messages.single().id
+
+                viewModel.onMessageShown(messageId)
+                var afterShown = awaitItem()
+                while (afterShown.messages.isNotEmpty()) {
+                    afterShown = awaitItem()
+                }
+                assertEquals(emptyList<HistoryMessage>(), afterShown.messages)
             }
         }
 }

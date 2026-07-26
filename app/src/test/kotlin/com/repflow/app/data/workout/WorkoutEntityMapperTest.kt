@@ -92,4 +92,23 @@ class WorkoutEntityMapperTest {
 
         assertEquals(withTimer.restTimer, rebuilt.restTimer)
     }
+
+    @Test
+    fun `round-trips a completed session's invalidatedAt`() {
+        val session = WorkoutSession.start(WorkoutSessionId("session-1"), null, startedAt)
+        val completed = requireSuccess(session.complete(startedAt.plusSeconds(60))) as WorkoutSession
+        val invalidatedAt = startedAt.plusSeconds(120)
+        val invalidated = requireSuccess(completed.invalidate(invalidatedAt)) as WorkoutSession
+
+        val sessionEntity = WorkoutEntityMapper.toSessionEntity(invalidated)
+        assertEquals(invalidatedAt.toEpochMilli(), sessionEntity.invalidatedAt)
+
+        val rebuilt =
+            requireSuccess(
+                WorkoutEntityMapper.toDomain(sessionEntity, emptyList(), emptyMap()),
+            ) as WorkoutSession
+
+        assertEquals(invalidatedAt, rebuilt.invalidatedAt)
+        assertEquals(true, rebuilt.isInvalidated)
+    }
 }

@@ -188,6 +188,73 @@ class WorkoutSessionTest {
     }
 
     @Test
+    fun `invalidate marks a completed session invalidated`() {
+        val session = WorkoutSession.start(WorkoutSessionId("s1"), null, startedAt)
+        val completed = requireSuccess(session.complete(startedAt.plusSeconds(30)))
+        val invalidatedAt = startedAt.plusSeconds(60)
+
+        val invalidated = requireSuccess(completed.invalidate(invalidatedAt))
+
+        assertEquals(invalidatedAt, invalidated.invalidatedAt)
+        assertEquals(true, invalidated.isInvalidated)
+    }
+
+    @Test
+    fun `invalidate rejects a non-completed session`() {
+        val session = WorkoutSession.start(WorkoutSessionId("s1"), null, startedAt)
+
+        val result = session.invalidate(startedAt.plusSeconds(1))
+
+        assertEquals(DomainResult.Failure(WorkoutValidationError.InvalidatedAtNotAllowedForIncompleteSession), result)
+    }
+
+    @Test
+    fun `invalidate rejects an invalidatedAt before endedAt`() {
+        val session = WorkoutSession.start(WorkoutSessionId("s1"), null, startedAt)
+        val completed = requireSuccess(session.complete(startedAt.plusSeconds(30)))
+
+        val result = completed.invalidate(startedAt.plusSeconds(1))
+
+        assertEquals(DomainResult.Failure(WorkoutValidationError.InvalidatedBeforeEnded), result)
+    }
+
+    @Test
+    fun `reconstruct rejects an invalidatedAt on a non-completed session`() {
+        val result =
+            WorkoutSession.reconstruct(
+                id = WorkoutSessionId("s1"),
+                trainingPlanVersionId = null,
+                status = WorkoutSessionStatus.ACTIVE,
+                startedAt = startedAt,
+                endedAt = null,
+                exercises = emptyList(),
+                invalidatedAt = startedAt.plusSeconds(1),
+            )
+
+        assertEquals(DomainResult.Failure(WorkoutValidationError.InvalidatedAtNotAllowedForIncompleteSession), result)
+    }
+
+    @Test
+    fun `reconstruct preserves a stored invalidatedAt`() {
+        val invalidatedAt = startedAt.plusSeconds(120)
+
+        val session =
+            requireSuccess(
+                WorkoutSession.reconstruct(
+                    id = WorkoutSessionId("s1"),
+                    trainingPlanVersionId = null,
+                    status = WorkoutSessionStatus.COMPLETED,
+                    startedAt = startedAt,
+                    endedAt = startedAt.plusSeconds(30),
+                    exercises = emptyList(),
+                    invalidatedAt = invalidatedAt,
+                ),
+            )
+
+        assertEquals(invalidatedAt, session.invalidatedAt)
+    }
+
+    @Test
     fun `rest timer methods reject a non-active session`() {
         val session = WorkoutSession.start(WorkoutSessionId("s1"), null, startedAt)
         val completed = requireSuccess(session.complete(startedAt.plusSeconds(30)))

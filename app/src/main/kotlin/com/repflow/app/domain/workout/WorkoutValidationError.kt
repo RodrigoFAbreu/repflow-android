@@ -68,4 +68,10 @@ sealed interface WorkoutValidationError {
 
     /** An operation referenced a [WorkoutExerciseId] that is not part of the session. */
     data object ExerciseNotFound : WorkoutValidationError
+
+    /** A [WorkoutSession] not [WorkoutSessionStatus.COMPLETED] carries an `invalidatedAt`, which does not apply to it. */
+    data object InvalidatedAtNotAllowedForIncompleteSession : WorkoutValidationError
+
+    /** A [WorkoutSession]'s `invalidatedAt` is before its `endedAt`. */
+    data object InvalidatedBeforeEnded : WorkoutValidationError
 }

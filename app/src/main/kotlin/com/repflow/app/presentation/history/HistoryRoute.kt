@@ -13,5 +13,7 @@ fun HistoryRoute(viewModel: HistoryViewModel = hiltViewModel()) {
         uiState = uiState,
         onSessionClick = viewModel::onSessionClick,
         onDetailDismissed = viewModel::onDetailDismissed,
+        onInvalidateClicked = viewModel::onInvalidateClicked,
+        onMessageShown = viewModel::onMessageShown,
     )
 }
