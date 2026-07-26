@@ -14,6 +14,12 @@ fun HistoryRoute(viewModel: HistoryViewModel = hiltViewModel()) {
         onSessionClick = viewModel::onSessionClick,
         onDetailDismissed = viewModel::onDetailDismissed,
         onInvalidateClicked = viewModel::onInvalidateClicked,
+        onExerciseFilterChanged = viewModel::onExerciseFilterChanged,
+        onPlanFilterChanged = viewModel::onPlanFilterChanged,
+        onStartDateChanged = viewModel::onStartDateChanged,
+        onEndDateChanged = viewModel::onEndDateChanged,
+        onShowInvalidatedChanged = viewModel::onShowInvalidatedChanged,
+        onSortOrderChanged = viewModel::onSortOrderChanged,
         onMessageShown = viewModel::onMessageShown,
     )
 }

@@ -17,7 +17,11 @@ class ExportWorkoutHistoryCsv
         private val workoutRepository: WorkoutRepository,
     ) {
         suspend operator fun invoke(): String {
-            val sessions = workoutRepository.observeCompletedSessions().first()
+            // includeInvalidated = true: an export must never silently drop an
+            // invalidated session's data (Milestone 8, CP11's "never physically
+            // deleted" invariant) - the is_invalidated column below is how a reader
+            // tells such a row apart from a normal one.
+            val sessions = workoutRepository.observeCompletedSessions(includeInvalidated = true).first()
             val builder = StringBuilder(HEADER)
             for (session in sessions) {
                 appendSessionRows(builder, session)
@@ -51,6 +55,8 @@ class ExportWorkoutHistoryCsv
                         .append(csvField(set.rpe?.toString().orEmpty()))
                         .append(',')
                         .append(set.isWarmup)
+                        .append(',')
+                        .append(session.isInvalidated)
                         .append('\n')
                 }
             }
@@ -60,6 +66,7 @@ class ExportWorkoutHistoryCsv
         private fun csvField(value: String): String = "\"" + value.replace("\"", "\"\"") + "\""
 
         private companion object {
-            const val HEADER = "session_id,started_at,ended_at,exercise_name,set_order,reps,load_kg,duration_seconds,rpe,is_warmup\n"
+            const val HEADER =
+                "session_id,started_at,ended_at,exercise_name,set_order,reps,load_kg,duration_seconds,rpe,is_warmup,is_invalidated\n"
         }
     }

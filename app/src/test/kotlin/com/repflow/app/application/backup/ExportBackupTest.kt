@@ -12,8 +12,11 @@ import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseName
 import com.repflow.app.domain.exercise.ExerciseOrigin
 import com.repflow.app.domain.exercise.ExerciseTrackingType
+import com.repflow.app.domain.workout.WorkoutSession
+import com.repflow.app.domain.workout.WorkoutSessionId
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
 
@@ -65,5 +68,30 @@ class ExportBackupTest {
             assertEquals(0, snapshot.recoveryEntries.size)
             assertEquals(0, snapshot.futsalSessions.size)
             assertEquals(0, snapshot.progressionRecommendations.size)
+        }
+
+    /**
+     * Regression test (Milestone 8, CP13): CP11's `observeCompletedSessions`
+     * exclusion of invalidated sessions was originally hard-coded and
+     * unintentionally applied to this backup export too, silently dropping
+     * an invalidated session's data entirely - a real violation of the
+     * "never physically deleted" invariant. `ExportBackup` now explicitly
+     * requests `includeInvalidated = true`.
+     */
+    @Test
+    fun `includes an invalidated session in the snapshot rather than silently dropping it`() =
+        runTest {
+            val started = WorkoutSession.start(WorkoutSessionId("session-1"), null, Instant.parse("2026-01-01T00:00:00Z"))
+            val completed =
+                (started.complete(Instant.parse("2026-01-01T01:00:00Z")) as DomainResult.Success).value
+            workoutRepository.insert(completed)
+            val invalidated = (completed.invalidate(Instant.parse("2026-01-02T00:00:00Z")) as DomainResult.Success).value
+            workoutRepository.update(invalidated)
+
+            val token = useCase()
+            val snapshot = (backupRepository.parseSnapshot(token) as DomainResult.Success).value
+
+            assertEquals(1, snapshot.workoutSessions.size)
+            assertTrue(snapshot.workoutSessions.single().isInvalidated)
         }
 }

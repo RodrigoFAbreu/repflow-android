@@ -36,7 +36,11 @@ class ExportBackup
                     schemaVersion = BackupSnapshot.CURRENT_SCHEMA_VERSION,
                     exercises = exerciseRepository.findAll(),
                     trainingPlans = trainingPlanRepository.findAllForBackup(),
-                    workoutSessions = workoutRepository.observeCompletedSessions().first(),
+                    // includeInvalidated = true: a backup must never silently drop an
+                    // invalidated session's data (Milestone 8, CP11's "never physically
+                    // deleted" invariant) - its invalidatedAt round-trips via CP14's
+                    // BackupJsonMapper wiring.
+                    workoutSessions = workoutRepository.observeCompletedSessions(includeInvalidated = true).first(),
                     recoveryEntries = recoveryRepository.findAll(),
                     futsalSessions = futsalRepository.findAll(),
                     progressionRecommendations = progressionRepository.findAll(),

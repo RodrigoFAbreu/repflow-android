@@ -3,6 +3,8 @@ package com.repflow.app.presentation.history
 import app.cash.turbine.test
 import com.repflow.app.application.exercise.FixedClock
 import com.repflow.app.application.history.ObserveWorkoutHistory
+import com.repflow.app.application.trainingplan.InMemoryTrainingPlanRepository
+import com.repflow.app.application.trainingplan.ObserveTrainingPlanVersionLabels
 import com.repflow.app.application.workout.InMemoryWorkoutRepository
 import com.repflow.app.application.workout.InvalidateWorkoutSession
 import com.repflow.app.domain.common.DomainResult
@@ -24,9 +26,15 @@ import java.time.Instant
 @OptIn(ExperimentalCoroutinesApi::class)
 class HistoryViewModelTest {
     private val workoutRepository = InMemoryWorkoutRepository()
+    private val trainingPlanRepository = InMemoryTrainingPlanRepository()
     private val clock = FixedClock(Instant.parse("2026-01-02T00:00:00Z"))
 
-    private fun viewModel() = HistoryViewModel(ObserveWorkoutHistory(workoutRepository), InvalidateWorkoutSession(workoutRepository, clock))
+    private fun viewModel() =
+        HistoryViewModel(
+            ObserveWorkoutHistory(workoutRepository),
+            ObserveTrainingPlanVersionLabels(trainingPlanRepository),
+            InvalidateWorkoutSession(workoutRepository, clock),
+        )
 
     @Before
     fun setUp() {
@@ -87,7 +95,7 @@ class HistoryViewModelTest {
         }
 
     @Test
-    fun `onInvalidateClicked removes the session from history and queues a message`() =
+    fun `onInvalidateClicked removes the session from the default view and queues a message`() =
         runTest {
             val sessionId = seedCompletedSession("session-1")
             val viewModel = viewModel()
@@ -97,12 +105,36 @@ class HistoryViewModelTest {
 
                 viewModel.onInvalidateClicked(sessionId)
                 var state = awaitItem()
-                while (state.sessions.isNotEmpty() || state.messages.isEmpty()) {
+                while (state.visibleSessions.isNotEmpty() || state.messages.isEmpty()) {
                     state = awaitItem()
                 }
-                assertEquals(emptyList<String>(), state.sessions.map { it.id.value })
+                assertEquals(emptyList<String>(), state.visibleSessions.map { it.id.value })
+                // The row and its data are never deleted - it stays in the raw list.
+                assertEquals(listOf("session-1"), state.sessions.map { it.id.value })
                 assertEquals(1, state.messages.size)
                 assertEquals(true, state.messages.single() is HistoryMessage.Invalidated)
+            }
+        }
+
+    @Test
+    fun `onShowInvalidatedChanged reveals an invalidated session again`() =
+        runTest {
+            val sessionId = seedCompletedSession("session-1")
+            val viewModel = viewModel()
+
+            viewModel.uiState.test {
+                awaitItem() // loaded
+
+                viewModel.onInvalidateClicked(sessionId)
+                var state = awaitItem()
+                while (state.visibleSessions.isNotEmpty() || state.messages.isEmpty()) {
+                    state = awaitItem()
+                }
+
+                viewModel.onShowInvalidatedChanged(true)
+                val revealed = awaitItem()
+                assertEquals(listOf("session-1"), revealed.visibleSessions.map { it.id.value })
+                assertEquals(true, revealed.visibleSessions.single().isInvalidated)
             }
         }
 

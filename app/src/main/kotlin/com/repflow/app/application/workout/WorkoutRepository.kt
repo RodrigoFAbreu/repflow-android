@@ -23,8 +23,14 @@ interface WorkoutRepository {
 
     suspend fun findById(id: WorkoutSessionId): WorkoutSession?
 
-    /** Every completed session, most recently ended first, for history browsing and backup export. */
-    fun observeCompletedSessions(): Flow<List<WorkoutSession>>
+    /**
+     * Every completed session, most recently ended first, for history
+     * browsing and backup/CSV export. [includeInvalidated] controls whether
+     * an invalidated session (Milestone 8, CP11) is included - exports must
+     * pass `true` so a correction is never silently dropped from a user's
+     * data; History defaults its own show/hide filter to `false`.
+     */
+    fun observeCompletedSessions(includeInvalidated: Boolean): Flow<List<WorkoutSession>>
 
     /** Inserts a brand-new session. Fails with [WorkoutPersistenceError.ActiveSessionAlreadyExists] if one is already active. */
     suspend fun insert(session: WorkoutSession): DomainResult<Unit, WorkoutPersistenceError>

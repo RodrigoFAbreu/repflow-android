@@ -24,14 +24,23 @@ interface WorkoutSessionDao {
     suspend fun findById(id: String): WorkoutSessionEntity?
 
     /**
-     * Every non-invalidated completed session, most recently ended first,
-     * for history browsing and backup export. `invalidated_at` marks a
-     * completed session as a wrongly recorded correction (Milestone 8,
-     * CP11) - excluded here exactly like `ABANDONED` is excluded by the
-     * `status` filter, but the row itself is never deleted.
+     * Every completed session, most recently ended first, for history
+     * browsing and backup/CSV export. `invalidated_at` marks a completed
+     * session as a wrongly recorded correction (Milestone 8, CP11) - the row
+     * itself is never deleted, so [includeInvalidated] lets a caller choose
+     * whether to see it (History's default-hidden show/hide filter, and
+     * backup/CSV export, which must never silently drop data - CP13 fixed a
+     * real bug here where both exports had started excluding invalidated
+     * sessions entirely once CP11 added this filter for History's benefit).
      */
-    @Query("SELECT * FROM workout_sessions WHERE status = 'COMPLETED' AND invalidated_at IS NULL ORDER BY ended_at DESC")
-    fun observeCompleted(): Flow<List<WorkoutSessionEntity>>
+    @Query(
+        """
+        SELECT * FROM workout_sessions
+        WHERE status = 'COMPLETED' AND (:includeInvalidated = 1 OR invalidated_at IS NULL)
+        ORDER BY ended_at DESC
+        """,
+    )
+    fun observeCompleted(includeInvalidated: Boolean): Flow<List<WorkoutSessionEntity>>
 
     @Insert
     suspend fun insert(entity: WorkoutSessionEntity)

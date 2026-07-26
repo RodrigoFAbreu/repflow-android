@@ -197,6 +197,19 @@
     <string name="history_invalidate_dialog_cancel">Cancel</string>
     <string name="history_message_invalidated">Workout invalidated.</string>
     <string name="history_message_operation_failed">Something went wrong. Try again.</string>
+    <string name="history_session_headline_invalidated">%1$s (invalidated)</string>
+    <string name="history_empty_no_matches">No workouts match the current filters.</string>
+    <string name="history_filter_exercise_all">All exercises</string>
+    <string name="history_filter_plan_any">Any plan</string>
+    <string name="history_filter_plan_ad_hoc">Ad-hoc (no plan)</string>
+    <string name="history_filter_start_date_unset">From: any</string>
+    <string name="history_filter_end_date_unset">To: any</string>
+    <string name="history_filter_sort_newest">Newest first</string>
+    <string name="history_filter_sort_oldest">Oldest first</string>
+    <string name="history_filter_show_invalidated">Show invalidated</string>
+    <string name="history_date_picker_confirm">OK</string>
+    <string name="history_date_picker_clear">Clear</string>
+    <string name="history_date_picker_dismiss">Cancel</string>
 
     <string name="backup_title">Backup</string>
     <string name="backup_export_action">Export backup</string>

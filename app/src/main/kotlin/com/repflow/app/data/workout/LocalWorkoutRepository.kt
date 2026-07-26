@@ -48,8 +48,8 @@ class LocalWorkoutRepository
 
         override suspend fun findById(id: WorkoutSessionId): WorkoutSession? = sessionDao.findById(id.value)?.let { toSessionOrThrow(it) }
 
-        override fun observeCompletedSessions(): Flow<List<WorkoutSession>> =
-            sessionDao.observeCompleted().map { entities -> entities.map { toSessionOrThrow(it) } }
+        override fun observeCompletedSessions(includeInvalidated: Boolean): Flow<List<WorkoutSession>> =
+            sessionDao.observeCompleted(includeInvalidated).map { entities -> entities.map { toSessionOrThrow(it) } }
 
         @Suppress("ReturnCount")
         override suspend fun insert(session: WorkoutSession): DomainResult<Unit, WorkoutPersistenceError> {

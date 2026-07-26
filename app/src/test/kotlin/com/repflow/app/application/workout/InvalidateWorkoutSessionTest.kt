@@ -45,13 +45,29 @@ class InvalidateWorkoutSessionTest {
         }
 
     @Test
-    fun `excludes the invalidated session from observeCompletedSessions`() =
+    fun `excludes the invalidated session from observeCompletedSessions by default`() =
         runTest {
             val sessionId = seedCompletedSession()
 
             invalidateWorkoutSession(sessionId)
 
-            assertEquals(emptyList<WorkoutSession>(), repository.observeCompletedSessions().first())
+            assertEquals(
+                emptyList<WorkoutSession>(),
+                repository.observeCompletedSessions(includeInvalidated = false).first(),
+            )
+        }
+
+    @Test
+    fun `includes the invalidated session from observeCompletedSessions when explicitly requested`() =
+        runTest {
+            val sessionId = seedCompletedSession()
+
+            invalidateWorkoutSession(sessionId)
+
+            assertEquals(
+                listOf(sessionId),
+                repository.observeCompletedSessions(includeInvalidated = true).first().map { it.id },
+            )
         }
 
     @Test

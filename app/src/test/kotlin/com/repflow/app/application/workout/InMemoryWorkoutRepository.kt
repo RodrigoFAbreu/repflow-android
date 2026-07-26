@@ -27,10 +27,10 @@ class InMemoryWorkoutRepository : WorkoutRepository {
 
     override suspend fun findById(id: WorkoutSessionId): WorkoutSession? = sessions.value[id]
 
-    override fun observeCompletedSessions(): Flow<List<WorkoutSession>> =
+    override fun observeCompletedSessions(includeInvalidated: Boolean): Flow<List<WorkoutSession>> =
         sessions.map { byId ->
             byId.values
-                .filter { it.status == WorkoutSessionStatus.COMPLETED && !it.isInvalidated }
+                .filter { it.status == WorkoutSessionStatus.COMPLETED && (includeInvalidated || !it.isInvalidated) }
                 .sortedByDescending { it.endedAt }
         }
 
