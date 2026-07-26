@@ -62,6 +62,7 @@ fun ExerciseListScreen(
     onExerciseClick: (ExerciseId) -> Unit,
     onCreateClick: () -> Unit,
     onPlansClick: () -> Unit,
+    onWorkoutClick: () -> Unit,
     onArchiveClicked: (ExerciseId) -> Unit,
     onRestoreClicked: (ExerciseId) -> Unit,
     onUndoArchiveClicked: (ExerciseId) -> Unit,
@@ -95,6 +96,13 @@ fun ExerciseListScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.exercise_list_title)) },
                 actions = {
+                    val workoutContentDescription = stringResource(R.string.exercise_list_workout_content_description)
+                    TextButton(
+                        onClick = onWorkoutClick,
+                        modifier = Modifier.semantics { contentDescription = workoutContentDescription },
+                    ) {
+                        Text(stringResource(R.string.workout_active_title))
+                    }
                     val plansContentDescription = stringResource(R.string.exercise_list_plans_content_description)
                     TextButton(
                         onClick = onPlansClick,

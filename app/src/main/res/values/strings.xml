@@ -59,6 +59,17 @@
     <string name="training_plan_list_retry">Retry</string>
     <string name="training_plan_list_exercise_count">%1$d exercises</string>
 
+    <string name="workout_active_title">Workout</string>
+    <string name="exercise_list_workout_content_description">Go to current workout</string>
+    <string name="workout_active_no_session">No active workout.</string>
+    <string name="workout_active_start">Start workout</string>
+    <string name="workout_active_exercise_count">%1$d exercises</string>
+    <string name="workout_active_set_count">%1$d sets</string>
+    <string name="workout_active_complete">Finish workout</string>
+    <string name="workout_active_abandon">Abandon workout</string>
+    <string name="workout_active_observation_failed">Couldn\'t load the workout.</string>
+    <string name="workout_active_retry">Retry</string>
+
     <string name="training_plan_editor_title_create">New plan</string>
     <string name="training_plan_editor_title_edit">Edit plan</string>
     <string name="training_plan_editor_not_found">This training plan no longer exists.</string>

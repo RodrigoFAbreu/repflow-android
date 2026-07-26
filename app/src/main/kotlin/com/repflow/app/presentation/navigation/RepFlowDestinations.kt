@@ -22,4 +22,6 @@ object RepFlowDestinations {
     const val PLAN_EDIT_PATTERN = "plans/{$PLAN_EDIT_ARG}"
 
     fun planEditRoute(planId: String): String = "plans/$planId"
+
+    const val WORKOUT = "workout"
 }

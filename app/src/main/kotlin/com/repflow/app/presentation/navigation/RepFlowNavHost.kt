@@ -11,6 +11,7 @@ import com.repflow.app.presentation.exercise.editor.ExerciseEditorRoute
 import com.repflow.app.presentation.exercise.list.ExerciseListRoute
 import com.repflow.app.presentation.trainingplan.editor.TrainingPlanEditorRoute
 import com.repflow.app.presentation.trainingplan.list.TrainingPlanListRoute
+import com.repflow.app.presentation.workout.ActiveWorkoutRoute
 
 /**
  * The app's single [NavHost] (D-1): the exercise list (start destination),
@@ -27,6 +28,7 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
                 onExerciseClick = { id -> navController.navigate(RepFlowDestinations.exerciseEditRoute(id.value)) },
                 onCreateClick = { navController.navigate(RepFlowDestinations.EXERCISE_NEW) },
                 onPlansClick = { navController.navigate(RepFlowDestinations.PLANS) },
+                onWorkoutClick = { navController.navigate(RepFlowDestinations.WORKOUT) },
             )
         }
         composable(RepFlowDestinations.EXERCISE_NEW) {
@@ -64,6 +66,9 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
                 onSaved = { navController.popBackStack() },
                 onDismissed = { navController.popBackStack() },
             )
+        }
+        composable(RepFlowDestinations.WORKOUT) {
+            ActiveWorkoutRoute()
         }
     }
 }
