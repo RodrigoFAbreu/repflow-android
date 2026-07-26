@@ -69,6 +69,13 @@
     <string name="workout_active_abandon">Abandon workout</string>
     <string name="workout_active_observation_failed">Couldn\'t load the workout.</string>
     <string name="workout_active_retry">Retry</string>
+    <string name="workout_active_set_row">Set %1$d: %2$s kg x %3$d</string>
+    <string name="workout_active_load_label">Load (kg)</string>
+    <string name="workout_active_reps_label">Reps</string>
+    <string name="workout_active_add_set">Add set</string>
+    <string name="workout_active_undo_set">Undo</string>
+    <string name="workout_active_edit_set">Edit</string>
+    <string name="workout_active_add_exercise">Add exercise</string>
 
     <string name="training_plan_editor_title_create">New plan</string>
     <string name="training_plan_editor_title_edit">Edit plan</string>

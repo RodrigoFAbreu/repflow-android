@@ -15,6 +15,10 @@ fun ActiveWorkoutRoute(viewModel: ActiveWorkoutViewModel = hiltViewModel()) {
     ActiveWorkoutScreen(
         uiState = uiState,
         onStartWorkout = viewModel::onStartWorkout,
+        onAddExercise = viewModel::onAddExercise,
+        onRecordSet = viewModel::onRecordSet,
+        onUndoLastSet = viewModel::onUndoLastSet,
+        onEditLastSet = viewModel::onEditLastSet,
         onCompleteWorkout = viewModel::onCompleteWorkout,
         onAbandonWorkout = viewModel::onAbandonWorkout,
         onRetry = viewModel::onErrorShown,

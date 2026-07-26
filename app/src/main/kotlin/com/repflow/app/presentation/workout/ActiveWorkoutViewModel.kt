@@ -2,13 +2,24 @@ package com.repflow.app.presentation.workout
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.repflow.app.application.exercise.ExerciseStatusFilter
+import com.repflow.app.application.exercise.ObserveExercises
 import com.repflow.app.application.workout.AbandonWorkoutSession
+import com.repflow.app.application.workout.AddWorkoutExercise
+import com.repflow.app.application.workout.AddWorkoutExerciseCommand
 import com.repflow.app.application.workout.CompleteWorkoutSession
+import com.repflow.app.application.workout.EditLastWorkoutSet
+import com.repflow.app.application.workout.EditLastWorkoutSetCommand
 import com.repflow.app.application.workout.ObserveActiveWorkoutSession
+import com.repflow.app.application.workout.RecordWorkoutSet
+import com.repflow.app.application.workout.RecordWorkoutSetCommand
 import com.repflow.app.application.workout.StartWorkoutSession
 import com.repflow.app.application.workout.StartWorkoutSessionCommand
+import com.repflow.app.application.workout.UndoLastWorkoutSet
 import com.repflow.app.application.workout.WorkoutOperationError
 import com.repflow.app.domain.common.DomainResult
+import com.repflow.app.domain.exercise.Exercise
+import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSession
 import com.repflow.app.domain.workout.WorkoutSessionId
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -25,19 +36,23 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Drives [ActiveWorkoutUiState] from [ObserveActiveWorkoutSession], and
- * dispatches [StartWorkoutSession]/[CompleteWorkoutSession]/
- * [AbandonWorkoutSession]. Mirrors
- * [com.repflow.app.presentation.trainingplan.list.TrainingPlanListViewModel]'s
- * shape for observation, plus a one-off action-error surfaced alongside the
- * observed [ActiveWorkoutContent] on [ActiveWorkoutUiState].
+ * Drives [ActiveWorkoutUiState] from [ObserveActiveWorkoutSession] and
+ * [ObserveExercises], and dispatches the active-workout use cases: starting,
+ * adding an ad hoc exercise, recording/undoing/editing a set, and
+ * completing/abandoning the session.
  */
+@Suppress("LongParameterList")
 @HiltViewModel
 class ActiveWorkoutViewModel
     @Inject
     constructor(
         observeActiveWorkoutSession: ObserveActiveWorkoutSession,
+        observeExercises: ObserveExercises,
         private val startWorkoutSession: StartWorkoutSession,
+        private val addWorkoutExercise: AddWorkoutExercise,
+        private val recordWorkoutSet: RecordWorkoutSet,
+        private val undoLastWorkoutSet: UndoLastWorkoutSet,
+        private val editLastWorkoutSet: EditLastWorkoutSet,
         private val completeWorkoutSession: CompleteWorkoutSession,
         private val abandonWorkoutSession: AbandonWorkoutSession,
     ) : ViewModel() {
@@ -52,43 +67,110 @@ class ActiveWorkoutViewModel
                     emit(ActiveWorkoutContent.ObservationFailed(ActiveWorkoutErrorReason.UNKNOWN))
                 }
 
+        private val availableExercises =
+            observeExercises(ExerciseStatusFilter.ACTIVE, "")
+                .map { exercises -> exercises.map(::toPickerItem) }
+                .catch { failure ->
+                    if (failure is CancellationException) throw failure
+                    emit(emptyList())
+                }
+
         val uiState =
-            combine(content, error) { observed, err -> ActiveWorkoutUiState(observed, err) }
-                .stateIn(
-                    scope = viewModelScope,
-                    started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
-                    initialValue = ActiveWorkoutUiState(),
-                )
+            combine(content, availableExercises, error) { observed, exercises, err ->
+                ActiveWorkoutUiState(observed, exercises, err)
+            }.stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+                initialValue = ActiveWorkoutUiState(),
+            )
 
         fun onStartWorkout() {
-            viewModelScope.launch {
-                when (val result = startWorkoutSession(StartWorkoutSessionCommand(trainingPlanVersionId = null))) {
-                    is DomainResult.Success -> Unit
-                    is DomainResult.Failure -> error.update { result.error.toReason() }
-                }
+            launchAction { startWorkoutSession(StartWorkoutSessionCommand(trainingPlanVersionId = null)) }
+        }
+
+        fun onAddExercise(exercise: ExercisePickerItem) {
+            val sessionId = activeSessionId() ?: return
+            launchAction {
+                addWorkoutExercise(
+                    AddWorkoutExerciseCommand(
+                        sessionId = sessionId,
+                        exerciseId = exercise.id,
+                        exerciseNameSnapshot = exercise.name,
+                        trackingType = exercise.trackingType,
+                        plannedExerciseId = null,
+                    ),
+                )
+            }
+        }
+
+        fun onRecordSet(
+            exerciseId: WorkoutExerciseId,
+            load: Double?,
+            reps: Int?,
+        ) {
+            val sessionId = activeSessionId() ?: return
+            launchAction {
+                recordWorkoutSet(
+                    RecordWorkoutSetCommand(
+                        sessionId = sessionId,
+                        exerciseId = exerciseId,
+                        load = load,
+                        reps = reps,
+                        durationSeconds = null,
+                        rpe = null,
+                        isWarmup = false,
+                    ),
+                )
+            }
+        }
+
+        fun onUndoLastSet(exerciseId: WorkoutExerciseId) {
+            val sessionId = activeSessionId() ?: return
+            launchAction { undoLastWorkoutSet(sessionId, exerciseId) }
+        }
+
+        fun onEditLastSet(
+            exerciseId: WorkoutExerciseId,
+            load: Double?,
+            reps: Int?,
+        ) {
+            val sessionId = activeSessionId() ?: return
+            launchAction {
+                editLastWorkoutSet(
+                    EditLastWorkoutSetCommand(
+                        sessionId = sessionId,
+                        exerciseId = exerciseId,
+                        load = load,
+                        reps = reps,
+                        durationSeconds = null,
+                        rpe = null,
+                        isWarmup = false,
+                    ),
+                )
             }
         }
 
         fun onCompleteWorkout(sessionId: WorkoutSessionId) {
-            viewModelScope.launch {
-                when (val result = completeWorkoutSession(sessionId)) {
-                    is DomainResult.Success -> Unit
-                    is DomainResult.Failure -> error.update { result.error.toReason() }
-                }
-            }
+            launchAction { completeWorkoutSession(sessionId) }
         }
 
         fun onAbandonWorkout(sessionId: WorkoutSessionId) {
-            viewModelScope.launch {
-                when (val result = abandonWorkoutSession(sessionId)) {
-                    is DomainResult.Success -> Unit
-                    is DomainResult.Failure -> error.update { result.error.toReason() }
-                }
-            }
+            launchAction { abandonWorkoutSession(sessionId) }
         }
 
         fun onErrorShown() {
             error.update { null }
+        }
+
+        private fun activeSessionId(): WorkoutSessionId? = (uiState.value.content as? ActiveWorkoutContent.Active)?.sessionId
+
+        private fun launchAction(action: suspend () -> DomainResult<*, WorkoutOperationError>) {
+            viewModelScope.launch {
+                when (val result = action()) {
+                    is DomainResult.Success -> Unit
+                    is DomainResult.Failure -> error.update { result.error.toReason() }
+                }
+            }
         }
 
         private companion object {
@@ -103,10 +185,29 @@ private fun toContent(session: WorkoutSession?): ActiveWorkoutContent =
         ActiveWorkoutContent.Active(
             sessionId = session.id,
             startedAt = session.startedAt,
-            exerciseCount = session.exercises.size,
-            setCount = session.exercises.sumOf { it.sets.size },
+            exercises =
+                session.exercises.map { exercise ->
+                    ActiveExerciseUi(
+                        id = exercise.id,
+                        name = exercise.exerciseNameSnapshot,
+                        trackingType = exercise.trackingType,
+                        sets =
+                            exercise.sets.map { set ->
+                                ActiveSetUi(
+                                    id = set.id,
+                                    setNumber = set.order + 1,
+                                    load = set.load,
+                                    reps = set.reps,
+                                    durationSeconds = set.durationSeconds,
+                                )
+                            },
+                    )
+                },
         )
     }
+
+private fun toPickerItem(exercise: Exercise): ExercisePickerItem =
+    ExercisePickerItem(id = exercise.id, name = exercise.name.value, trackingType = exercise.trackingType)
 
 private fun WorkoutOperationError.toReason(): ActiveWorkoutErrorReason =
     when (this) {

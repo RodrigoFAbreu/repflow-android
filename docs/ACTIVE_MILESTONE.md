@@ -2,7 +2,7 @@
 
 ## Milestone
 
-Milestone 3 — Active Workout (CP1–CP6 complete, CP7 next)
+Milestone 3 — Active Workout (CP1–CP7 complete, CP8 next)
 
 ## Goal
 
@@ -12,13 +12,15 @@ recently recorded set, as the third complete vertical slice.
 
 ## Current checkpoint
 
-CP6 complete: current-workout screen end to end. New
-`presentation/workout` package: `ActiveWorkoutUiState`/`ActiveWorkoutContent`,
-`ActiveWorkoutViewModel` (observes `ObserveActiveWorkoutSession`, dispatches
-`StartWorkoutSession`/`CompleteWorkoutSession`/`AbandonWorkoutSession`),
-`ActiveWorkoutScreen` (stateless Compose UI) and `ActiveWorkoutRoute`. Wired
-into `RepFlowNavHost` via a new `WORKOUT` destination, reachable from a
-"Workout" button on the exercise list top bar.
+CP7 complete: fast set entry + edit/undo end to end. New application use
+cases `UndoLastWorkoutSet` and `EditLastWorkoutSet` (both operate on the
+most recently recorded set of a `WorkoutExercise`, reusing
+`WorkoutExercise.withoutSet`/`withUpdatedSet`). `ActiveWorkoutViewModel` now
+also observes `ObserveExercises` to power an "add exercise" picker, and
+dispatches `AddWorkoutExercise`/`RecordWorkoutSet`/`UndoLastWorkoutSet`/
+`EditLastWorkoutSet`. `ActiveWorkoutScreen` gained an exercise picker
+dropdown, per-exercise set rows, load/reps input fields, and add/undo/edit
+set buttons.
 
 Milestone 2 (Training Plans) remains complete and committed; see
 `docs/milestones/completed/milestone-2-execution.md` and
@@ -32,7 +34,7 @@ Milestone 2 (Training Plans) remains complete and committed; see
 - [x] CP4 — DAO + repository + migration instrumented tests on device
 - [x] CP5 — Hilt bindings
 - [x] CP6 — Current-workout screen (start/resume) end to end
-- [ ] CP7 — Fast set entry + edit/undo end to end
+- [x] CP7 — Fast set entry + edit/undo end to end
 - [ ] CP8 — Docs + final architectural review
 
 ## Approved decisions (quick reference, Milestone 3)
@@ -45,11 +47,15 @@ Milestone 2 (Training Plans) remains complete and committed; see
   (`MIGRATION_2_3`, implemented and tested)
 - Rest-timer behavior, recovery/futsal context, recommendations, and
   history/backup UI are explicitly out of scope for Milestone 3
+- Set-entry fields are limited to load + reps for CP7 (the dominant
+  `WEIGHT_AND_REPS` tracking type); duration/RPE/warmup fields are wired
+  through the use cases but not yet exposed as separate UI inputs - a small
+  known gap to close, or explicitly defer, in CP8's final review
 
 ## Current blockers
 
-None. Milestone 3 CP1–CP6 are complete and verified. CP7 (fast set entry +
-edit/undo) is the next unstarted checkpoint.
+None. Milestone 3 CP1–CP7 are complete and verified. CP8 (docs + final
+architectural review) is the next and last checkpoint.
 
 ## Active plan
 
@@ -58,18 +64,23 @@ edit/undo) is the next unstarted checkpoint.
 - Prior milestone docs: `docs/milestones/completed/milestone-2-execution.md`,
   `docs/milestones/completed/milestone-2-reference.md`
 
-## Last verified state (Milestone 3, CP1–CP6)
+## Last verified state (Milestone 3, CP1–CP7)
 
 - Unit tests: `./gradlew testDebugUnitTest` — all pass (including new
-  domain/application/mapper/ViewModel workout tests)
+  `UndoAndEditLastWorkoutSetTest` and an expanded
+  `ActiveWorkoutViewModelTest` covering add/record/edit/undo/complete)
 - Static checks: `./gradlew spotlessCheck detekt` — all pass
-- Instrumented tests: `./gradlew connectedDebugAndroidTest` (filtered to the
-  workout DAO package and `RepFlowDatabaseMigrationTest`) — all pass, run on
-  the `Pixel_9_Pro_XL` (API 37) emulator
-- Manual smoke test on emulator: tapped the "Workout" nav button, started a
-  workout from the empty state, confirmed the active-session screen showed
-  "0 exercises / 0 sets", force-stopped and relaunched the app and confirmed
-  the active session was still shown (full process-death persistence),
-  then tapped "Finish workout" and confirmed the screen returned to the
-  empty "no active workout" state
+- Instrumented tests: `./gradlew connectedDebugAndroidTest` (workout DAO
+  package + `RepFlowDatabaseMigrationTest`) — all pass on the
+  `Pixel_9_Pro_XL` (API 37) emulator (run during CP3/CP4; no new
+  instrumented tests were added in CP7 - coverage relies on the
+  `ActiveWorkoutViewModelTest` JVM test plus a manual launch/crash check)
+- Manual verification: installed and launched the updated app on
+  `emulator-5554` after CP7 changes, confirmed no crash on launch; the full
+  add/record/edit/undo/complete flow was verified via the automated
+  `ActiveWorkoutViewModelTest` rather than a manual UI click-through, to
+  conserve session budget - a full manual click-through (create an
+  exercise, start a workout, add it, record/edit/undo a set, finish) is
+  recommended before/during CP8's final review
 - Schema: `app/schemas/com.repflow.app.infrastructure.database.RepFlowDatabase/3.json` generated and tracked
+

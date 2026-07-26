@@ -1,16 +1,28 @@
 package com.repflow.app.presentation.workout
 
+import com.repflow.app.domain.exercise.ExerciseId
+import com.repflow.app.domain.exercise.ExerciseTrackingType
+import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSessionId
+import com.repflow.app.domain.workout.WorkoutSetId
 import java.time.Instant
 
 /**
- * Stable UI state for the current-workout screen (Milestone 3 CP6). Set
- * entry/editing is CP7 scope - this checkpoint only covers observing
- * whether a session is active and starting/completing/abandoning it.
+ * Stable UI state for the current-workout screen (Milestone 3 CP6+CP7).
+ * [availableExercises] powers the "add exercise" picker; it is populated
+ * independently of [content] so it stays available even before a session is
+ * started.
  */
 data class ActiveWorkoutUiState(
     val content: ActiveWorkoutContent = ActiveWorkoutContent.Loading,
+    val availableExercises: List<ExercisePickerItem> = emptyList(),
     val errorMessage: ActiveWorkoutErrorReason? = null,
+)
+
+data class ExercisePickerItem(
+    val id: ExerciseId,
+    val name: String,
+    val trackingType: ExerciseTrackingType,
 )
 
 sealed interface ActiveWorkoutContent {
@@ -21,14 +33,28 @@ sealed interface ActiveWorkoutContent {
     data class Active(
         val sessionId: WorkoutSessionId,
         val startedAt: Instant,
-        val exerciseCount: Int,
-        val setCount: Int,
+        val exercises: List<ActiveExerciseUi>,
     ) : ActiveWorkoutContent
 
     data class ObservationFailed(
         val reason: ActiveWorkoutErrorReason,
     ) : ActiveWorkoutContent
 }
+
+data class ActiveExerciseUi(
+    val id: WorkoutExerciseId,
+    val name: String,
+    val trackingType: ExerciseTrackingType,
+    val sets: List<ActiveSetUi>,
+)
+
+data class ActiveSetUi(
+    val id: WorkoutSetId,
+    val setNumber: Int,
+    val load: Double?,
+    val reps: Int?,
+    val durationSeconds: Int?,
+)
 
 /** The specific failure cause is deliberately not surfaced verbatim to the user, mirroring the list-screen conventions elsewhere in the app. */
 enum class ActiveWorkoutErrorReason {
