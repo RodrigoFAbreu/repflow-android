@@ -1,33 +1,23 @@
-Prepare the current work for external architectural and code review.
+---
+description: Ad-hoc review bundle for work outside the milestone workflow gates.
+---
 
-Determine the correct base commit for this review stage.
+For milestone-gated reviews (plan, implementation, post-fix, functional),
+prefer `/milestone-plan`, `/milestone-implement`, `/apply-implementation-review`,
+or `/prepare-functional-review` instead — they populate the review-bundle
+content correctly for each state in `docs/ai-workflow/MILESTONE_WORKFLOW.md`.
 
-Create `.ai-review/current/` containing:
+Use this command only for a one-off review of work that isn't part of a
+tracked milestone checkpoint.
 
-- REVIEW_REQUEST.md
-- PLAN.md, when reviewing a plan
-- IMPLEMENTATION_SUMMARY.md
-- TEST_RESULTS.md
-- CHANGED_FILES.txt
-- COMMITS.txt
-- DIFF.patch
-- final copies of all changed files under `files/`
-- any directly relevant unchanged context files needed to understand the change
-
-REVIEW_REQUEST.md must state:
-
-- branch, base SHA and HEAD SHA;
-- review stage;
-- goal;
-- implementation decisions;
-- schema or backup implications;
-- tests actually run;
-- known risks;
-- unresolved questions;
-- specific areas the reviewer should challenge.
-
-Do not claim checks passed unless they actually ran.
-
-Generate `.ai-review/review-bundle.tar.gz`.
-
-Do not commit `.ai-review/`.
+1. Determine the correct base commit for what's being reviewed (usually the
+   commit before this work started).
+2. Write `.ai-review/current/REVIEW_REQUEST.md` per the format in
+   `docs/ai-workflow/REVIEW_PROTOCOL.md`, and `IMPLEMENTATION_SUMMARY.md`/
+   `TEST_RESULTS.md`/`CONTEXT_FILES.txt` as applicable. Never claim a check
+   passed unless it actually ran.
+3. Run `./scripts/prepare-ai-review.sh <base-sha> <stage>` (pick the closest
+   matching stage: `plan`, `implementation`, `post-fix`, or
+   `functional-review`) to generate `.ai-review/current/` and
+   `.ai-review/review-bundle.tar.gz`.
+4. Report the bundle location. Do not commit `.ai-review/`.
