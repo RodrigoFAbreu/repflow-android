@@ -191,6 +191,38 @@ class RepFlowDatabaseMigrationTest {
         cursor.close()
     }
 
+    @Test
+    fun migrate4To5_addsRecoveryAndFutsalTables() {
+        helper.createDatabase(TEST_DB, 1).apply {
+            insertV1Exercise(this)
+            close()
+        }
+        helper.runMigrationsAndValidate(TEST_DB, 2, true, MIGRATION_1_2).close()
+        helper.runMigrationsAndValidate(TEST_DB, 3, true, MIGRATION_2_3).close()
+        helper.runMigrationsAndValidate(TEST_DB, 4, true, MIGRATION_3_4).close()
+
+        val migratedDb = helper.runMigrationsAndValidate(TEST_DB, 5, true, MIGRATION_4_5)
+        migratedDb.execSQL(
+            "INSERT INTO recovery_entries (id, entry_date, sleep_quality, energy, leg_doms, heel_stiffness, " +
+                "pain_while_walking, heavy_legs, futsal_in_previous_24h, futsal_expected_next_24h, notes, " +
+                "created_at, updated_at) VALUES ('recovery-1', '2026-01-01', 3, 3, 1, 0, 0, 1, 0, 0, NULL, 1000, 1000)",
+        )
+        migratedDb.execSQL(
+            "INSERT INTO futsal_sessions (id, entry_date, duration_minutes, session_rpe, created_at, updated_at) " +
+                "VALUES ('futsal-1', '2026-01-01', 60, 6.0, 1000, 1000)",
+        )
+
+        val recoveryCursor = migratedDb.query("SELECT sleep_quality FROM recovery_entries WHERE id = 'recovery-1'")
+        recoveryCursor.moveToFirst()
+        assertEquals(3, recoveryCursor.getInt(0))
+        recoveryCursor.close()
+
+        val futsalCursor = migratedDb.query("SELECT duration_minutes FROM futsal_sessions WHERE id = 'futsal-1'")
+        futsalCursor.moveToFirst()
+        assertEquals(60, futsalCursor.getInt(0))
+        futsalCursor.close()
+    }
+
     private fun insertV1Exercise(db: SupportSQLiteDatabase) {
         db.execSQL(
             "INSERT INTO exercises (id, name, name_key, tracking_type, instructions, " +
