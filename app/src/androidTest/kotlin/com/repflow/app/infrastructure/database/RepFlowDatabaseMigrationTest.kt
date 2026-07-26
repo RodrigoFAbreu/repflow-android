@@ -223,6 +223,31 @@ class RepFlowDatabaseMigrationTest {
         futsalCursor.close()
     }
 
+    @Test
+    fun migrate5To6_addsProgressionRecommendationsTable() {
+        helper.createDatabase(TEST_DB, 1).apply {
+            insertV1Exercise(this)
+            close()
+        }
+        helper.runMigrationsAndValidate(TEST_DB, 2, true, MIGRATION_1_2).close()
+        helper.runMigrationsAndValidate(TEST_DB, 3, true, MIGRATION_2_3).close()
+        helper.runMigrationsAndValidate(TEST_DB, 4, true, MIGRATION_3_4).close()
+        helper.runMigrationsAndValidate(TEST_DB, 5, true, MIGRATION_4_5).close()
+
+        val migratedDb = helper.runMigrationsAndValidate(TEST_DB, 6, true, MIGRATION_5_6)
+        migratedDb.execSQL(
+            "INSERT INTO progression_recommendations (id, exercise_id, result, reasons, policy_version, " +
+                "computed_at, override_result, override_at) VALUES ('rec-1', 'exercise-1', 'increase_load', " +
+                "'hit top of range', 1, 1000, NULL, NULL)",
+        )
+
+        val cursor =
+            migratedDb.query("SELECT result FROM progression_recommendations WHERE id = 'rec-1'")
+        cursor.moveToFirst()
+        assertEquals("increase_load", cursor.getString(0))
+        cursor.close()
+    }
+
     private fun insertV1Exercise(db: SupportSQLiteDatabase) {
         db.execSQL(
             "INSERT INTO exercises (id, name, name_key, tracking_type, instructions, " +
