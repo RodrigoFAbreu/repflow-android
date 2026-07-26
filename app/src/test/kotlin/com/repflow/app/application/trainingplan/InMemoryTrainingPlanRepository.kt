@@ -1,5 +1,6 @@
 package com.repflow.app.application.trainingplan
 
+import com.repflow.app.domain.backup.TrainingPlanSnapshot
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.trainingplan.PlannedExercise
 import com.repflow.app.domain.trainingplan.PlannedExerciseId
@@ -49,6 +50,11 @@ class InMemoryTrainingPlanRepository : TrainingPlanRepository {
             .flatten()
             .flatMap { it.plannedExercises }
             .firstOrNull { it.id == id }
+
+    override suspend fun findAllForBackup(): List<TrainingPlanSnapshot> =
+        plans.value.values.map { plan ->
+            TrainingPlanSnapshot(plan = plan, versions = versionsByPlan.value[plan.id].orEmpty())
+        }
 
     @Suppress("ReturnCount")
     override suspend fun createPlanWithFirstVersion(

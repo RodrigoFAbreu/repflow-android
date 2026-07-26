@@ -31,6 +31,8 @@ class LocalProgressionRecommendationRepository
         override suspend fun findLatestForExercise(exerciseId: ExerciseId): ProgressionRecommendation? =
             dao.findLatestForExercise(exerciseId.value)?.let(::toDomainOrThrow)
 
+        override suspend fun findAll(): List<ProgressionRecommendation> = dao.findAll().map(::toDomainOrThrow)
+
         override suspend fun insert(recommendation: ProgressionRecommendation): DomainResult<Unit, ProgressionPersistenceError> =
             runCatchingPersistence { dao.insert(ProgressionRecommendationMapper.toEntity(recommendation)) }
 

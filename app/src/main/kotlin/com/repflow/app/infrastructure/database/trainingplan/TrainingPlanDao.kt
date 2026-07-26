@@ -16,6 +16,10 @@ interface TrainingPlanDao {
     @Query("SELECT * FROM training_plans ORDER BY name_key ASC, id ASC")
     fun observeAll(): Flow<List<TrainingPlanEntity>>
 
+    /** Every training plan, for backup export. */
+    @Query("SELECT * FROM training_plans ORDER BY name_key ASC, id ASC")
+    suspend fun findAll(): List<TrainingPlanEntity>
+
     @Query("SELECT * FROM training_plans WHERE id = :id")
     suspend fun findById(id: String): TrainingPlanEntity?
 

@@ -19,5 +19,8 @@ interface RecoveryRepository {
 
     suspend fun findLatest(): RecoveryEntry?
 
+    /** Every recovery entry, most recent first, for backup export. */
+    suspend fun findAll(): List<RecoveryEntry>
+
     suspend fun upsert(entry: RecoveryEntry): DomainResult<Unit, RecoveryPersistenceError>
 }

@@ -23,6 +23,10 @@ interface WorkoutSessionDao {
     @Query("SELECT * FROM workout_sessions WHERE id = :id")
     suspend fun findById(id: String): WorkoutSessionEntity?
 
+    /** Every completed session, most recently ended first, for history browsing and backup export. */
+    @Query("SELECT * FROM workout_sessions WHERE status = 'COMPLETED' ORDER BY ended_at DESC")
+    fun observeCompleted(): Flow<List<WorkoutSessionEntity>>
+
     @Insert
     suspend fun insert(entity: WorkoutSessionEntity)
 

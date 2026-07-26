@@ -18,5 +18,8 @@ interface FutsalRepository {
     /** Sessions with [FutsalSession.date] on or after [since]'s date, most recent first. */
     suspend fun findSince(since: Instant): List<FutsalSession>
 
+    /** Every futsal session, most recent first, for backup export. */
+    suspend fun findAll(): List<FutsalSession>
+
     suspend fun upsert(session: FutsalSession): DomainResult<Unit, FutsalPersistenceError>
 }

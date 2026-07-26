@@ -18,6 +18,8 @@ class InMemoryRecoveryRepository : RecoveryRepository {
 
     override suspend fun findLatest(): RecoveryEntry? = byDate.values.maxByOrNull { it.date }
 
+    override suspend fun findAll(): List<RecoveryEntry> = byDate.values.sortedByDescending { it.date }
+
     override suspend fun upsert(entry: RecoveryEntry): DomainResult<Unit, RecoveryPersistenceError> {
         nextUpsertFailure?.let {
             nextUpsertFailure = null

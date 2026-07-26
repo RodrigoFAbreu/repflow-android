@@ -35,6 +35,8 @@ class LocalRecoveryRepository
 
         override suspend fun findLatest(): RecoveryEntry? = dao.findLatest()?.let(::toDomainOrThrow)
 
+        override suspend fun findAll(): List<RecoveryEntry> = dao.findAll().map(::toDomainOrThrow)
+
         @Suppress("ReturnCount")
         override suspend fun upsert(entry: RecoveryEntry): DomainResult<Unit, RecoveryPersistenceError> {
             try {

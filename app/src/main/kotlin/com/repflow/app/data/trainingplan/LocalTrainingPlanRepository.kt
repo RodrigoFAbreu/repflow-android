@@ -9,6 +9,7 @@ import androidx.room.withTransaction
 import com.repflow.app.application.trainingplan.TrainingPlanOverview
 import com.repflow.app.application.trainingplan.TrainingPlanPersistenceError
 import com.repflow.app.application.trainingplan.TrainingPlanRepository
+import com.repflow.app.domain.backup.TrainingPlanSnapshot
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.trainingplan.PlannedExercise
 import com.repflow.app.domain.trainingplan.PlannedExerciseId
@@ -57,6 +58,18 @@ class LocalTrainingPlanRepository
         override suspend fun findPlannedExercise(id: PlannedExerciseId): PlannedExercise? =
             plannedExerciseDao.findById(id.value)?.let { row ->
                 (TrainingPlanEntityMapper.toDomain(row) as? DomainResult.Success)?.value
+            }
+
+        override suspend fun findAllForBackup(): List<TrainingPlanSnapshot> =
+            planDao.findAll().map { planEntity ->
+                val plan = requireMapped(TrainingPlanEntityMapper.toDomain(planEntity))
+                val versionEntities = versionDao.findAllForPlan(planEntity.id)
+                val versions =
+                    versionEntities.map { versionEntity ->
+                        val plannedExerciseRows = plannedExerciseDao.findAllForVersion(versionEntity.id)
+                        requireMapped(TrainingPlanEntityMapper.toDomain(versionEntity, plannedExerciseRows))
+                    }
+                TrainingPlanSnapshot(plan = plan, versions = versions)
             }
 
         @Suppress("ReturnCount")

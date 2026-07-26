@@ -11,9 +11,9 @@ import kotlinx.coroutines.flow.Flow
  * visible here (see `LayerBoundaryTest`), mirroring
  * [com.repflow.app.application.trainingplan.TrainingPlanRepository]'s shape.
  *
- * There is deliberately no method to fetch "all sessions" here yet - history
- * browsing is out of scope until Milestone 7; only the single current/active
- * session and lookup-by-id are needed for Milestone 3.
+ * [observeCompletedSessions] was added in Milestone 7 for history browsing
+ * and backup export; before that, only the single current/active session and
+ * lookup-by-id were needed.
  */
 interface WorkoutRepository {
     /** Emits the current [WorkoutSessionStatus.ACTIVE][com.repflow.app.domain.workout.WorkoutSessionStatus.ACTIVE] session, or `null` if none exists. */
@@ -22,6 +22,9 @@ interface WorkoutRepository {
     suspend fun findActiveSession(): WorkoutSession?
 
     suspend fun findById(id: WorkoutSessionId): WorkoutSession?
+
+    /** Every completed session, most recently ended first, for history browsing and backup export. */
+    fun observeCompletedSessions(): Flow<List<WorkoutSession>>
 
     /** Inserts a brand-new session. Fails with [WorkoutPersistenceError.ActiveSessionAlreadyExists] if one is already active. */
     suspend fun insert(session: WorkoutSession): DomainResult<Unit, WorkoutPersistenceError>

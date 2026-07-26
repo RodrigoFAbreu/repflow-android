@@ -22,6 +22,8 @@ class InMemoryFutsalRepository : FutsalRepository {
         return byDate.values.filter { !it.date.isBefore(sinceDate) }
     }
 
+    override suspend fun findAll(): List<FutsalSession> = byDate.values.sortedByDescending { it.date }
+
     override suspend fun upsert(session: FutsalSession): DomainResult<Unit, FutsalPersistenceError> {
         nextUpsertFailure?.let {
             nextUpsertFailure = null

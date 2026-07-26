@@ -13,6 +13,9 @@ import com.repflow.app.domain.progression.ProgressionRecommendation
 interface ProgressionRecommendationRepository {
     suspend fun findLatestForExercise(exerciseId: ExerciseId): ProgressionRecommendation?
 
+    /** Every progression recommendation, most recently computed first, for backup export. */
+    suspend fun findAll(): List<ProgressionRecommendation>
+
     suspend fun insert(recommendation: ProgressionRecommendation): DomainResult<Unit, ProgressionPersistenceError>
 
     suspend fun update(recommendation: ProgressionRecommendation): DomainResult<Unit, ProgressionPersistenceError>

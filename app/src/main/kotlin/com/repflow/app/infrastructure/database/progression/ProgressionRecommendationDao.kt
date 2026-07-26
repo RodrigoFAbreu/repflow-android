@@ -15,6 +15,10 @@ interface ProgressionRecommendationDao {
     )
     suspend fun findLatestForExercise(exerciseId: String): ProgressionRecommendationEntity?
 
+    /** Every progression recommendation, most recently computed first, for backup export. */
+    @Query("SELECT * FROM progression_recommendations ORDER BY computed_at DESC")
+    suspend fun findAll(): List<ProgressionRecommendationEntity>
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(entity: ProgressionRecommendationEntity)
 

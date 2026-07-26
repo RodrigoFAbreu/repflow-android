@@ -27,6 +27,13 @@ class InMemoryWorkoutRepository : WorkoutRepository {
 
     override suspend fun findById(id: WorkoutSessionId): WorkoutSession? = sessions.value[id]
 
+    override fun observeCompletedSessions(): Flow<List<WorkoutSession>> =
+        sessions.map { byId ->
+            byId.values
+                .filter { it.status == WorkoutSessionStatus.COMPLETED }
+                .sortedByDescending { it.endedAt }
+        }
+
     @Suppress("ReturnCount")
     override suspend fun insert(session: WorkoutSession): DomainResult<Unit, WorkoutPersistenceError> {
         nextInsertFailure?.let {

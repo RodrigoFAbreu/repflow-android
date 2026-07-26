@@ -60,6 +60,8 @@ class InMemoryExerciseRepository : ExerciseRepository {
             .firstOrNull { it.name.key == nameKey }
             ?.id
 
+    override suspend fun findAll(): List<Exercise> = state.value.values.sortedWith(compareBy({ it.name.key }, { it.id.value }))
+
     // Guard-clause-style early returns (see the `@Suppress` rationale on
     // `CreateExercise.invoke`); `?.let { return }` isn't recognized by detekt's
     // narrow structural guard-clause detector.

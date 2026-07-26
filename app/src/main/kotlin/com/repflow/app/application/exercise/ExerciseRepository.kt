@@ -24,6 +24,9 @@ interface ExerciseRepository {
 
     suspend fun findIdByNameKey(nameKey: String): ExerciseId?
 
+    /** Every exercise regardless of archived status, for backup export. */
+    suspend fun findAll(): List<Exercise>
+
     suspend fun insert(exercise: Exercise): DomainResult<Unit, ExercisePersistenceError>
 
     suspend fun update(exercise: Exercise): DomainResult<Unit, ExercisePersistenceError>

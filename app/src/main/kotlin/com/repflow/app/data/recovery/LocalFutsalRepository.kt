@@ -36,6 +36,8 @@ class LocalFutsalRepository
             return dao.findSince(sinceDate.toString()).map(::toDomainOrThrow)
         }
 
+        override suspend fun findAll(): List<FutsalSession> = dao.findAll().map(::toDomainOrThrow)
+
         @Suppress("ReturnCount")
         override suspend fun upsert(session: FutsalSession): DomainResult<Unit, FutsalPersistenceError> {
             try {

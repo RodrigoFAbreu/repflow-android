@@ -15,6 +15,8 @@ class InMemoryProgressionRecommendationRepository : ProgressionRecommendationRep
     override suspend fun findLatestForExercise(exerciseId: ExerciseId): ProgressionRecommendation? =
         recommendations.values.filter { it.exerciseId == exerciseId }.maxByOrNull { it.computedAt }
 
+    override suspend fun findAll(): List<ProgressionRecommendation> = recommendations.values.sortedByDescending { it.computedAt }
+
     override suspend fun insert(recommendation: ProgressionRecommendation): DomainResult<Unit, ProgressionPersistenceError> {
         nextInsertFailure?.let {
             nextInsertFailure = null
