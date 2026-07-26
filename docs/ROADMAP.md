@@ -1,8 +1,8 @@
 # RepFlow Roadmap
 
-Active milestone: **Milestone 6 — Progression recommendations (planning complete)** → [status](ACTIVE_MILESTONE.md)
+Active milestone: **Milestone 7 — History and backup (not started)** → [status](ACTIVE_MILESTONE.md)
 
-Active plan: [milestones/active/milestone-6-execution.md](milestones/active/milestone-6-execution.md)
+Active plan: none yet.
 
 ## Milestone 0 — Project foundation
 
@@ -49,13 +49,13 @@ Active plan: [milestones/active/milestone-6-execution.md](milestones/active/mile
 - [x] Futsal load
 - [x] Workout-day context
 
-## Milestone 6 — Progression recommendations
+## Milestone 6 — Progression recommendations ✓ complete
 
-- [ ] Deterministic progression policy
-- [ ] Explainable recommendation reasons
-- [ ] Recovery adjustments
-- [ ] Manual overrides
-- [ ] Policy versioning
+- [x] Deterministic progression policy
+- [x] Explainable recommendation reasons
+- [x] Recovery adjustments
+- [x] Manual overrides
+- [x] Policy versioning
 
 ## Milestone 7 — History and backup
 
