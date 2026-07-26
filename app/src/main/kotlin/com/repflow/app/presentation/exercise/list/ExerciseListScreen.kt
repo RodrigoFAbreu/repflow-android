@@ -64,6 +64,8 @@ fun ExerciseListScreen(
     onPlansClick: () -> Unit,
     onWorkoutClick: () -> Unit,
     onRecoveryClick: () -> Unit,
+    onHistoryClick: () -> Unit,
+    onBackupClick: () -> Unit,
     onArchiveClicked: (ExerciseId) -> Unit,
     onRestoreClicked: (ExerciseId) -> Unit,
     onUndoArchiveClicked: (ExerciseId) -> Unit,
@@ -117,6 +119,20 @@ fun ExerciseListScreen(
                         modifier = Modifier.semantics { contentDescription = recoveryContentDescription },
                     ) {
                         Text(stringResource(R.string.recovery_futsal_title))
+                    }
+                    val historyContentDescription = stringResource(R.string.exercise_list_history_content_description)
+                    TextButton(
+                        onClick = onHistoryClick,
+                        modifier = Modifier.semantics { contentDescription = historyContentDescription },
+                    ) {
+                        Text(stringResource(R.string.history_title))
+                    }
+                    val backupContentDescription = stringResource(R.string.exercise_list_backup_content_description)
+                    TextButton(
+                        onClick = onBackupClick,
+                        modifier = Modifier.semantics { contentDescription = backupContentDescription },
+                    ) {
+                        Text(stringResource(R.string.backup_title))
                     }
                 },
             )

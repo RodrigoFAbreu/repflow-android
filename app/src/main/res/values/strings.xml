@@ -148,4 +148,29 @@
     <string name="recovery_futsal_saved">Saved</string>
     <string name="recovery_futsal_error_invalid">Some values need attention before saving.</string>
     <string name="recovery_futsal_error_unavailable">Couldn\'t save. Try again.</string>
+
+    <string name="exercise_list_history_content_description">View workout history</string>
+    <string name="exercise_list_backup_content_description">Backup and restore</string>
+
+    <string name="history_title">History</string>
+    <string name="history_back_content_description">Back</string>
+    <string name="history_empty">No completed workouts yet.</string>
+    <string name="history_session_summary">%1$d exercises, %2$s</string>
+    <string name="history_detail_back">Back</string>
+    <string name="history_detail_set_count">%1$d sets</string>
+    <string name="history_detail_set_row">Set %1$d: %2$s kg x %3$s</string>
+
+    <string name="backup_title">Backup</string>
+    <string name="backup_export_action">Export backup</string>
+    <string name="backup_restore_action">Restore backup</string>
+    <string name="backup_csv_export_action">Export history as CSV</string>
+    <string name="backup_message_export_succeeded">Backup exported</string>
+    <string name="backup_message_restore_succeeded">Backup restored</string>
+    <string name="backup_message_csv_succeeded">History exported as CSV</string>
+    <string name="backup_message_invalid_backup">That file isn\'t a valid RepFlow backup.</string>
+    <string name="backup_message_operation_failed">Couldn\'t complete the operation. Try again.</string>
+    <string name="backup_restore_confirm_title">Restore backup?</string>
+    <string name="backup_restore_confirm_body">This replaces all local data with the contents of the selected backup. This cannot be undone.</string>
+    <string name="backup_restore_confirm_action">Restore</string>
+    <string name="backup_restore_cancel_action">Cancel</string>
 </resources>

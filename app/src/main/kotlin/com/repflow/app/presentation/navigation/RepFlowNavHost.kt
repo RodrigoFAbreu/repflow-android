@@ -7,8 +7,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.repflow.app.presentation.backup.BackupRoute
 import com.repflow.app.presentation.exercise.editor.ExerciseEditorRoute
 import com.repflow.app.presentation.exercise.list.ExerciseListRoute
+import com.repflow.app.presentation.history.HistoryRoute
 import com.repflow.app.presentation.recovery.RecoveryFutsalRoute
 import com.repflow.app.presentation.trainingplan.editor.TrainingPlanEditorRoute
 import com.repflow.app.presentation.trainingplan.list.TrainingPlanListRoute
@@ -31,6 +33,8 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
                 onPlansClick = { navController.navigate(RepFlowDestinations.PLANS) },
                 onWorkoutClick = { navController.navigate(RepFlowDestinations.WORKOUT) },
                 onRecoveryClick = { navController.navigate(RepFlowDestinations.RECOVERY) },
+                onHistoryClick = { navController.navigate(RepFlowDestinations.HISTORY) },
+                onBackupClick = { navController.navigate(RepFlowDestinations.BACKUP) },
             )
         }
         composable(RepFlowDestinations.EXERCISE_NEW) {
@@ -74,6 +78,12 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
         }
         composable(RepFlowDestinations.RECOVERY) {
             RecoveryFutsalRoute(onBackClick = { navController.popBackStack() })
+        }
+        composable(RepFlowDestinations.HISTORY) {
+            HistoryRoute(onBackClick = { navController.popBackStack() })
+        }
+        composable(RepFlowDestinations.BACKUP) {
+            BackupRoute()
         }
     }
 }

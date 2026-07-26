@@ -52,6 +52,8 @@ class ExerciseListScreenTest {
                 onPlansClick = {},
                 onWorkoutClick = {},
                 onRecoveryClick = {},
+                onHistoryClick = {},
+                onBackupClick = {},
                 onArchiveClicked = onArchiveClicked,
                 onRestoreClicked = onRestoreClicked,
                 onUndoArchiveClicked = onUndoArchiveClicked,
