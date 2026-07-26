@@ -1,3 +1,8 @@
 <resources>
+    <!-- Light theme. See values-night/themes.xml for the dark counterpart;
+         there is no single framework "Material.DayNight" style to parent to
+         directly (only Theme.DeviceDefault.DayNight exists, and it has no
+         NoActionBar variant), so day/night is resolved via resource
+         qualifiers instead. -->
     <style name="Theme.RepFlow" parent="android:Theme.Material.Light.NoActionBar" />
 </resources>

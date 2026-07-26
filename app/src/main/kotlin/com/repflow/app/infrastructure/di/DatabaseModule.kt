@@ -1,0 +1,35 @@
+package com.repflow.app.infrastructure.di
+
+import android.content.Context
+import androidx.room.Room
+import com.repflow.app.infrastructure.database.RepFlowDatabase
+import com.repflow.app.infrastructure.database.exercise.ExerciseDao
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.hilt.components.SingletonComponent
+import javax.inject.Singleton
+
+/**
+ * Provides the single [RepFlowDatabase] instance and its DAOs. There is
+ * deliberately no `fallbackToDestructiveMigration` call here (see plan.md
+ * additional implementation correction 14 and section G).
+ */
+@Module
+@InstallIn(SingletonComponent::class)
+object DatabaseModule {
+    private const val DATABASE_NAME = "repflow.db"
+
+    @Provides
+    @Singleton
+    fun provideRepFlowDatabase(
+        @ApplicationContext context: Context,
+    ): RepFlowDatabase =
+        Room
+            .databaseBuilder(context, RepFlowDatabase::class.java, DATABASE_NAME)
+            .build()
+
+    @Provides
+    fun provideExerciseDao(database: RepFlowDatabase): ExerciseDao = database.exerciseDao()
+}

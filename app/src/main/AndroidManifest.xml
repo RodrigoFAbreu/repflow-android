@@ -1,10 +1,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      allowBackup is intentionally false: Android Auto Backup could otherwise
+      silently ship the Room database off-device and restore a stale copy
+      over a fresh install, which conflicts with the local database being the
+      offline-first source of truth (ADR 0002) and with the explicit,
+      versioned backup/restore feature planned for Milestone 7. Revisit this
+      once that feature exists.
+    -->
     <application
         android:name=".RepFlowApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:supportsRtl="true"
         android:theme="@style/Theme.RepFlow">
         <activity
             android:name=".presentation.MainActivity"

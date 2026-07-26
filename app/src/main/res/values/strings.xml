@@ -1,3 +1,53 @@
 <resources>
     <string name="app_name">RepFlow</string>
+
+    <string name="exercise_list_title">Exercises</string>
+    <string name="exercise_list_search_hint">Search exercises</string>
+    <string name="exercise_list_filter_active">Active</string>
+    <string name="exercise_list_filter_archived">Archived</string>
+    <string name="exercise_list_add_content_description">Add exercise</string>
+    <string name="exercise_list_empty_no_exercises">No exercises yet. Tap + to add one.</string>
+    <string name="exercise_list_empty_no_search_results">No exercises match your search.</string>
+    <string name="exercise_list_empty_no_archived">No archived exercises.</string>
+    <string name="exercise_list_observation_failed">Couldn\'t load exercises.</string>
+    <string name="exercise_list_retry">Retry</string>
+    <string name="exercise_list_row_menu_content_description">More options</string>
+    <string name="exercise_list_row_menu_edit">Edit</string>
+    <string name="exercise_list_row_menu_archive">Archive</string>
+    <string name="exercise_list_row_menu_restore">Restore</string>
+    <string name="exercise_list_message_archived">Exercise archived.</string>
+    <string name="exercise_list_message_archived_undo">Undo</string>
+    <string name="exercise_list_message_operation_failed">Something went wrong. Try again.</string>
+
+    <string name="exercise_tracking_type_weight_and_reps">Weight &amp; reps</string>
+    <string name="exercise_tracking_type_reps_only">Reps only</string>
+    <string name="exercise_tracking_type_duration">Duration</string>
+    <string name="exercise_default_rest_seconds_summary">Rest %1$ds</string>
+    <string name="exercise_default_load_increment_summary">+%1$dg</string>
+
+    <string name="exercise_editor_title_create">New exercise</string>
+    <string name="exercise_editor_title_edit">Edit exercise</string>
+    <string name="exercise_editor_not_found">This exercise no longer exists.</string>
+    <string name="exercise_editor_name_label">Name</string>
+    <string name="exercise_editor_tracking_type_label">Tracking type</string>
+    <string name="exercise_editor_instructions_label">Instructions (optional)</string>
+    <string name="exercise_editor_rest_duration_label">Default rest (seconds, optional)</string>
+    <string name="exercise_editor_load_increment_label">Default load increment (kg, optional)</string>
+    <string name="exercise_editor_save">Save</string>
+    <string name="exercise_editor_saving">Saving…</string>
+    <string name="exercise_editor_error_name_blank">Name is required.</string>
+    <string name="exercise_editor_error_name_too_long">Name is too long.</string>
+    <string name="exercise_editor_error_instructions_too_long">Instructions are too long.</string>
+    <string name="exercise_editor_error_load_increment_out_of_range">Enter a load increment between 0 and 100 kg.</string>
+    <string name="exercise_editor_error_load_increment_unsupported">This tracking type doesn\'t support a load increment.</string>
+    <string name="exercise_editor_error_rest_duration_out_of_range">Enter a rest duration between 1 second and 30 minutes.</string>
+    <string name="exercise_editor_error_invalid_number">Enter a valid number.</string>
+    <string name="exercise_editor_load_increment_cleared">Load increment cleared - not supported by this tracking type.</string>
+    <string name="exercise_editor_submit_error_duplicate_name">An exercise with this name already exists.</string>
+    <string name="exercise_editor_submit_error_unavailable">Couldn\'t save this exercise. Try again.</string>
+    <string name="exercise_editor_discard_dialog_title">Discard changes?</string>
+    <string name="exercise_editor_discard_dialog_body">You have unsaved changes. If you go back now, they will be lost.</string>
+    <string name="exercise_editor_discard_dialog_confirm">Discard</string>
+    <string name="exercise_editor_discard_dialog_cancel">Keep editing</string>
+    <string name="exercise_editor_back_content_description">Back</string>
 </resources>

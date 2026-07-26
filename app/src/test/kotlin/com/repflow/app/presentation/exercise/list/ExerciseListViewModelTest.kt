@@ -1,0 +1,324 @@
+package com.repflow.app.presentation.exercise.list
+
+import app.cash.turbine.test
+import com.repflow.app.application.exercise.ArchiveExercise
+import com.repflow.app.application.exercise.ExercisePersistenceError
+import com.repflow.app.application.exercise.ExerciseStatusFilter
+import com.repflow.app.application.exercise.FixedClock
+import com.repflow.app.application.exercise.InMemoryExerciseRepository
+import com.repflow.app.application.exercise.ObserveExercises
+import com.repflow.app.application.exercise.RestoreExercise
+import com.repflow.app.domain.common.DomainResult
+import com.repflow.app.domain.exercise.Exercise
+import com.repflow.app.domain.exercise.ExerciseId
+import com.repflow.app.domain.exercise.ExerciseName
+import com.repflow.app.domain.exercise.ExerciseOrigin
+import com.repflow.app.domain.exercise.ExerciseTrackingType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import java.time.Instant
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class ExerciseListViewModelTest {
+    private val repository = InMemoryExerciseRepository()
+    private val clock = FixedClock(Instant.parse("2026-01-03T00:00:00Z"))
+    private val viewModel =
+        ExerciseListViewModel(
+            ObserveExercises(repository),
+            ArchiveExercise(repository, clock),
+            RestoreExercise(repository, clock),
+        )
+
+    @After
+    fun resetMainDispatcher() {
+        Dispatchers.resetMain()
+    }
+
+    private fun exercise(
+        id: String,
+        name: String,
+        archived: Boolean = false,
+    ): Exercise {
+        val active =
+            requireSuccess(
+                Exercise.create(
+                    id = ExerciseId(id),
+                    name = requireSuccess(ExerciseName.create(name)),
+                    trackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
+                    instructions = null,
+                    defaultLoadIncrement = null,
+                    defaultRestDuration = null,
+                    origin = ExerciseOrigin.CUSTOM,
+                    createdAt = Instant.parse("2026-01-01T00:00:00Z"),
+                ),
+            )
+        return if (archived) active.archive(Instant.parse("2026-01-02T00:00:00Z")) else active
+    }
+
+    private fun <T> requireSuccess(result: DomainResult<T, *>): T =
+        when (result) {
+            is DomainResult.Success -> result.value
+            is DomainResult.Failure -> throw AssertionError("Expected success but was failure: ${result.error}")
+        }
+
+    @Test
+    fun `starts loading then shows the NO_EXERCISES empty state when there are none`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                assertEquals(ExerciseListContent.Loading, awaitItem().content)
+                val loaded = awaitItem()
+                assertEquals(
+                    ExerciseListContent.Empty(ExerciseListEmptyReason.NO_EXERCISES),
+                    loaded.content,
+                )
+            }
+        }
+
+    @Test
+    fun `shows the seeded active exercises as content`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            repository.seed(exercise("1", "Squat"))
+            repository.seed(exercise("2", "Bench Press"))
+
+            viewModel.uiState.test {
+                awaitItem() // Loading
+                val loaded = awaitItem()
+                val content = loaded.content as ExerciseListContent.Content
+                assertEquals(listOf("Bench Press", "Squat"), content.items.map { it.name })
+            }
+        }
+
+    @Test
+    fun `onFilterChanged switches between active and archived exercises`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            repository.seed(exercise("1", "Squat"))
+            repository.seed(exercise("2", "Retired Lift", archived = true))
+
+            viewModel.uiState.test {
+                awaitItem() // Loading
+                awaitItem() // active content
+
+                viewModel.onFilterChanged(ExerciseStatusFilter.ARCHIVED)
+
+                awaitItem() // Loading again after resubscription
+                val archived = awaitItem()
+                val content = archived.content as ExerciseListContent.Content
+                assertEquals(listOf("Retired Lift"), content.items.map { it.name })
+                assertEquals(ExerciseStatusFilter.ARCHIVED, archived.filter)
+            }
+        }
+
+    @Test
+    fun `an empty archived filter reports NO_ARCHIVED rather than NO_EXERCISES`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            repository.seed(exercise("1", "Squat"))
+
+            viewModel.uiState.test {
+                awaitItem() // Loading
+                awaitItem() // active content
+
+                viewModel.onFilterChanged(ExerciseStatusFilter.ARCHIVED)
+
+                awaitItem() // Loading again
+                val archived = awaitItem()
+                assertEquals(
+                    ExerciseListContent.Empty(ExerciseListEmptyReason.NO_ARCHIVED),
+                    archived.content,
+                )
+            }
+        }
+
+    @Test
+    fun `a query with no matches reports NO_SEARCH_RESULTS`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            repository.seed(exercise("1", "Squat"))
+
+            viewModel.uiState.test {
+                awaitItem() // Loading
+                awaitItem() // content
+
+                viewModel.onQueryChanged("nonexistent")
+
+                awaitItem() // Loading again
+                val queried = awaitItem()
+                assertEquals(
+                    ExerciseListContent.Empty(ExerciseListEmptyReason.NO_SEARCH_RESULTS),
+                    queried.content,
+                )
+                assertEquals("nonexistent", queried.query)
+            }
+        }
+
+    @Test
+    fun `an observation failure is visible and retry resubscribes to fresh content`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            repository.seed(exercise("1", "Squat"))
+            repository.observeFailureOnNextSubscription = true
+
+            viewModel.uiState.test {
+                awaitItem() // Loading
+                val failed = awaitItem()
+                assertEquals(
+                    ExerciseListContent.ObservationFailed(ExerciseListFailureReason.UNKNOWN),
+                    failed.content,
+                )
+
+                viewModel.onRetry()
+
+                awaitItem() // Loading again
+                val recovered = awaitItem()
+                val content = recovered.content as ExerciseListContent.Content
+                assertEquals(listOf("Squat"), content.items.map { it.name })
+            }
+        }
+
+    @Test
+    fun `archiving queues an Archived message and removes the exercise from the active list`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            repository.seed(exercise("1", "Squat"))
+
+            viewModel.uiState.test {
+                awaitItem() // Loading
+                awaitItem() // active content with Squat
+
+                viewModel.onArchiveClicked(ExerciseId("1"))
+
+                val messaged = awaitItem() // message queued, content flow re-emits current active list
+                assertEquals(1, messaged.messages.size)
+                val message = messaged.messages.single()
+                assertTrue(message is ExerciseListMessage.Archived)
+                assertEquals(ExerciseId("1"), (message as ExerciseListMessage.Archived).exerciseId)
+
+                val emptied = awaitItem() // active list flow re-emits, now empty
+                assertEquals(
+                    ExerciseListContent.Empty(ExerciseListEmptyReason.NO_EXERCISES),
+                    emptied.content,
+                )
+            }
+        }
+
+    @Test
+    fun `onMessageShown removes only the given message id and preserves a newer one`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            repository.seed(exercise("1", "Squat"))
+            repository.seed(exercise("2", "Bench Press"))
+
+            viewModel.uiState.test {
+                awaitItem() // Loading
+                awaitItem() // active content
+
+                viewModel.onArchiveClicked(ExerciseId("1"))
+                val firstQueued = awaitItem()
+                val firstId = firstQueued.messages.single().id
+                awaitItem() // content re-emission after archive
+
+                viewModel.onArchiveClicked(ExerciseId("2"))
+                val secondQueued = awaitItem()
+                assertEquals(2, secondQueued.messages.size)
+                val secondId = secondQueued.messages.last().id
+                awaitItem() // content re-emission after second archive
+
+                viewModel.onMessageShown(firstId)
+                val afterConsume = awaitItem()
+                assertEquals(listOf(secondId), afterConsume.messages.map { it.id })
+            }
+        }
+
+    @Test
+    fun `undo archive restores the exercise via RestoreExercise`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            repository.seed(exercise("1", "Squat"))
+
+            viewModel.uiState.test {
+                awaitItem() // Loading
+                awaitItem() // active content
+
+                viewModel.onArchiveClicked(ExerciseId("1"))
+                awaitItem() // message queued
+                awaitItem() // active list now empty
+
+                viewModel.onRestoreClicked(ExerciseId("1"))
+                val restored = awaitItem() // active list content re-emits with Squat again
+                val content = restored.content as ExerciseListContent.Content
+                assertEquals(listOf("Squat"), content.items.map { it.name })
+            }
+        }
+
+    @Test
+    fun `undo archive is idempotent when the exercise is already active`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            repository.seed(exercise("1", "Squat"))
+
+            viewModel.uiState.test {
+                awaitItem() // Loading
+                awaitItem() // active content
+
+                // Squat is already active; undo should be a neutral no-op, not an error message.
+                viewModel.onRestoreClicked(ExerciseId("1"))
+                expectNoEvents()
+            }
+        }
+
+    @Test
+    fun `a failed archive queues an OperationFailed message`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            repository.seed(exercise("1", "Squat"))
+            repository.nextUpdateFailure = ExercisePersistenceError.Unavailable
+
+            viewModel.uiState.test {
+                awaitItem() // Loading
+                awaitItem() // active content
+
+                viewModel.onArchiveClicked(ExerciseId("1"))
+
+                val messaged = awaitItem()
+                assertEquals(1, messaged.messages.size)
+                assertTrue(messaged.messages.single() is ExerciseListMessage.OperationFailed)
+            }
+        }
+
+    @Test
+    fun `restoring from the archived filter moves the exercise back to active`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            repository.seed(exercise("1", "Squat", archived = true))
+
+            viewModel.uiState.test {
+                awaitItem() // Loading (active filter, default)
+                awaitItem() // active content, empty (Squat is archived)
+
+                viewModel.onFilterChanged(ExerciseStatusFilter.ARCHIVED)
+                awaitItem() // Loading again
+                val archivedList = awaitItem()
+                val archivedContent = archivedList.content as ExerciseListContent.Content
+                assertEquals(listOf("Squat"), archivedContent.items.map { it.name })
+
+                viewModel.onRestoreClicked(ExerciseId("1"))
+                val afterRestore = awaitItem()
+                assertEquals(
+                    ExerciseListContent.Empty(ExerciseListEmptyReason.NO_ARCHIVED),
+                    afterRestore.content,
+                )
+            }
+        }
+}

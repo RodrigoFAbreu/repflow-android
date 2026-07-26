@@ -1,0 +1,5 @@
+<resources>
+    <!-- Dark counterpart of values/themes.xml, selected automatically by the
+         system night-mode qualifier. -->
+    <style name="Theme.RepFlow" parent="android:Theme.Material.NoActionBar" />
+</resources>

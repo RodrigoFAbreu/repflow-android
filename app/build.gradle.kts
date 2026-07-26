@@ -31,10 +31,30 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    // AGP's built-in Kotlin compiler (no separate org.jetbrains.kotlin.android
+    // plugin is applied here) derives its JVM bytecode target from these same
+    // compileOptions, so this is the single place controlling both javac and
+    // kotlinc output bytecode (currently Java 17), independent of whichever
+    // JDK runs the Gradle daemon itself (pinned separately to 21 via
+    // gradle/gradle-daemon-jvm.properties).
 
     buildFeatures {
         compose = true
     }
+
+    // Instrumented Room DAO/repository tests open the exported schema JSON
+    // (see the ksp room.schemaLocation argument below) as a test asset, e.g.
+    // via androidx.room.testing.MigrationTestHelper in a future milestone.
+    sourceSets {
+        getByName("androidTest") {
+            assets.directories.add("$projectDir/schemas")
+        }
+    }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+    arg("room.generateKotlin", "true")
 }
 
 dependencies {
@@ -48,16 +68,30 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+
+    implementation(libs.androidx.navigation.compose)
+
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
+    implementation(libs.androidx.hilt.navigation.compose)
+
+    implementation(libs.kotlinx.coroutines.core)
 
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.turbine)
 
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.espresso.core)
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.kotlinx.coroutines.test)
+    androidTestImplementation(libs.turbine)
 }
 
 detekt {

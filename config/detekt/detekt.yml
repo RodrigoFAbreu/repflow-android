@@ -10,6 +10,15 @@ comments:
 
 complexity:
   active: true
+  # Composable functions idiomatically take one parameter per piece of state
+  # plus one callback per user event (Compose's "state in, events out"
+  # pattern) and are naturally longer than a typical function because a UI
+  # tree is laid out inline - neither is a sign of poor decomposition the way
+  # it would be in non-Compose code.
+  LongParameterList:
+    ignoreAnnotated: ['Composable']
+  LongMethod:
+    ignoreAnnotated: ['Composable']
 
 coroutines:
   active: true
@@ -37,3 +46,9 @@ style:
   # handled by Spotless/ktlint, not Detekt, to avoid the two tools disagreeing.
   MaxLineLength:
     active: false
+  # Use cases favour sequential guard-clause early returns (validate, check
+  # existence, check uniqueness, ...) over deeply nested `when`/`if`
+  # expressions. excludeGuardClauses keeps that idiom without raising the
+  # limit for genuinely branchy, non-guard-clause functions elsewhere.
+  ReturnCount:
+    excludeGuardClauses: true
