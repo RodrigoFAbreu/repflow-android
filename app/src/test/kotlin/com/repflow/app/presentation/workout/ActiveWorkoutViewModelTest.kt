@@ -5,9 +5,12 @@ import com.repflow.app.application.exercise.FixedClock
 import com.repflow.app.application.exercise.InMemoryExerciseRepository
 import com.repflow.app.application.exercise.ObserveExercises
 import com.repflow.app.application.exercise.SequentialIdentifierGenerator
+import com.repflow.app.application.progression.ComputeProgressionRecommendation
+import com.repflow.app.application.progression.InMemoryProgressionRecommendationRepository
 import com.repflow.app.application.recovery.GetWorkoutDayContext
 import com.repflow.app.application.recovery.InMemoryFutsalRepository
 import com.repflow.app.application.recovery.InMemoryRecoveryRepository
+import com.repflow.app.application.trainingplan.InMemoryTrainingPlanRepository
 import com.repflow.app.application.workout.AbandonWorkoutSession
 import com.repflow.app.application.workout.AddWorkoutExercise
 import com.repflow.app.application.workout.AdjustRestTimer
@@ -57,7 +60,18 @@ class ActiveWorkoutViewModelTest {
             startRestTimer = StartRestTimer(workoutRepository, clock),
             adjustRestTimer = AdjustRestTimer(workoutRepository, clock),
             skipRestTimer = SkipRestTimer(workoutRepository),
-            completeWorkoutSession = CompleteWorkoutSession(workoutRepository, clock),
+            completeWorkoutSession =
+                CompleteWorkoutSession(
+                    workoutRepository,
+                    InMemoryTrainingPlanRepository(),
+                    ComputeProgressionRecommendation(
+                        InMemoryProgressionRecommendationRepository(),
+                        GetWorkoutDayContext(InMemoryRecoveryRepository(), InMemoryFutsalRepository(), clock),
+                        clock,
+                        SequentialIdentifierGenerator(prefix = "rec"),
+                    ),
+                    clock,
+                ),
             abandonWorkoutSession = AbandonWorkoutSession(workoutRepository, clock),
         )
 

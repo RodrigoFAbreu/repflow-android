@@ -125,7 +125,7 @@ object TrainingPlanEntityMapper {
     }
 
     @Suppress("ReturnCount")
-    private fun toDomain(row: PlannedExerciseEntity): DomainResult<PlannedExercise, TrainingPlanMappingError> {
+    fun toDomain(row: PlannedExerciseEntity): DomainResult<PlannedExercise, TrainingPlanMappingError> {
         val fieldErrors = mutableListOf<TrainingPlanValidationError>()
 
         val targetSetsResult = TargetSets.create(row.targetSets)

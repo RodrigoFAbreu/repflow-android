@@ -1,6 +1,8 @@
 package com.repflow.app.application.trainingplan
 
 import com.repflow.app.domain.common.DomainResult
+import com.repflow.app.domain.trainingplan.PlannedExercise
+import com.repflow.app.domain.trainingplan.PlannedExerciseId
 import com.repflow.app.domain.trainingplan.TrainingPlan
 import com.repflow.app.domain.trainingplan.TrainingPlanId
 import com.repflow.app.domain.trainingplan.TrainingPlanVersion
@@ -22,6 +24,9 @@ interface TrainingPlanRepository {
     suspend fun findOverviewByPlanId(id: TrainingPlanId): TrainingPlanOverview?
 
     suspend fun findPlanIdByNameKey(nameKey: String): TrainingPlanId?
+
+    /** Looks up a single planned exercise by id, used to fetch its target rep range for progression recommendations. */
+    suspend fun findPlannedExercise(id: PlannedExerciseId): PlannedExercise?
 
     /** Atomically inserts [plan] and its first [version] (version 1). */
     suspend fun createPlanWithFirstVersion(

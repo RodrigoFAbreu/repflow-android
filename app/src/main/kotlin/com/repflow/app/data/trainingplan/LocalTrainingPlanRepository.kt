@@ -10,6 +10,8 @@ import com.repflow.app.application.trainingplan.TrainingPlanOverview
 import com.repflow.app.application.trainingplan.TrainingPlanPersistenceError
 import com.repflow.app.application.trainingplan.TrainingPlanRepository
 import com.repflow.app.domain.common.DomainResult
+import com.repflow.app.domain.trainingplan.PlannedExercise
+import com.repflow.app.domain.trainingplan.PlannedExerciseId
 import com.repflow.app.domain.trainingplan.TrainingPlan
 import com.repflow.app.domain.trainingplan.TrainingPlanId
 import com.repflow.app.domain.trainingplan.TrainingPlanVersion
@@ -51,6 +53,11 @@ class LocalTrainingPlanRepository
             planDao.findById(id.value)?.let { plan -> toOverviewOrThrow(plan) }
 
         override suspend fun findPlanIdByNameKey(nameKey: String): TrainingPlanId? = planDao.findIdByNameKey(nameKey)?.let(::TrainingPlanId)
+
+        override suspend fun findPlannedExercise(id: PlannedExerciseId): PlannedExercise? =
+            plannedExerciseDao.findById(id.value)?.let { row ->
+                (TrainingPlanEntityMapper.toDomain(row) as? DomainResult.Success)?.value
+            }
 
         @Suppress("ReturnCount")
         override suspend fun createPlanWithFirstVersion(

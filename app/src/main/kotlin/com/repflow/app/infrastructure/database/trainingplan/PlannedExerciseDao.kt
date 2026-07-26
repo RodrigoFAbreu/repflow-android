@@ -17,6 +17,9 @@ interface PlannedExerciseDao {
     @Query("SELECT * FROM planned_exercises WHERE version_id = :versionId ORDER BY sort_order ASC")
     suspend fun findAllForVersion(versionId: String): List<PlannedExerciseEntity>
 
+    @Query("SELECT * FROM planned_exercises WHERE id = :id")
+    suspend fun findById(id: String): PlannedExerciseEntity?
+
     @Insert
     suspend fun insertAll(entities: List<PlannedExerciseEntity>)
 }

@@ -1,6 +1,8 @@
 package com.repflow.app.application.trainingplan
 
 import com.repflow.app.domain.common.DomainResult
+import com.repflow.app.domain.trainingplan.PlannedExercise
+import com.repflow.app.domain.trainingplan.PlannedExerciseId
 import com.repflow.app.domain.trainingplan.TrainingPlan
 import com.repflow.app.domain.trainingplan.TrainingPlanId
 import com.repflow.app.domain.trainingplan.TrainingPlanVersion
@@ -41,6 +43,12 @@ class InMemoryTrainingPlanRepository : TrainingPlanRepository {
         plans.value.values
             .firstOrNull { it.name.key == nameKey }
             ?.id
+
+    override suspend fun findPlannedExercise(id: PlannedExerciseId): PlannedExercise? =
+        versionsByPlan.value.values
+            .flatten()
+            .flatMap { it.plannedExercises }
+            .firstOrNull { it.id == id }
 
     @Suppress("ReturnCount")
     override suspend fun createPlanWithFirstVersion(

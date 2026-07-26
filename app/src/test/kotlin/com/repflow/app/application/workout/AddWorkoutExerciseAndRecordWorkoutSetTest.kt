@@ -2,6 +2,12 @@ package com.repflow.app.application.workout
 
 import com.repflow.app.application.exercise.FixedClock
 import com.repflow.app.application.exercise.SequentialIdentifierGenerator
+import com.repflow.app.application.progression.ComputeProgressionRecommendation
+import com.repflow.app.application.progression.InMemoryProgressionRecommendationRepository
+import com.repflow.app.application.recovery.GetWorkoutDayContext
+import com.repflow.app.application.recovery.InMemoryFutsalRepository
+import com.repflow.app.application.recovery.InMemoryRecoveryRepository
+import com.repflow.app.application.trainingplan.InMemoryTrainingPlanRepository
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseTrackingType
@@ -18,7 +24,18 @@ class AddWorkoutExerciseAndRecordWorkoutSetTest {
     private val startSession = StartWorkoutSession(repository, FixedClock(now), ids)
     private val addExercise = AddWorkoutExercise(repository, ids)
     private val recordSet = RecordWorkoutSet(repository, FixedClock(now), ids)
-    private val complete = CompleteWorkoutSession(repository, FixedClock(now.plusSeconds(3600)))
+    private val complete =
+        CompleteWorkoutSession(
+            repository,
+            InMemoryTrainingPlanRepository(),
+            ComputeProgressionRecommendation(
+                InMemoryProgressionRecommendationRepository(),
+                GetWorkoutDayContext(InMemoryRecoveryRepository(), InMemoryFutsalRepository(), FixedClock(now.plusSeconds(3600))),
+                FixedClock(now.plusSeconds(3600)),
+                SequentialIdentifierGenerator(prefix = "rec"),
+            ),
+            FixedClock(now.plusSeconds(3600)),
+        )
     private val abandon = AbandonWorkoutSession(repository, FixedClock(now.plusSeconds(3600)))
 
     private suspend fun activeSessionId() = repository.findActiveSession()!!.id
