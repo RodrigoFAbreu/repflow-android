@@ -1,5 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Notifies the user when a rest timer ends; degraded silently if denied (see milestone-4-reference.md). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <!--
       allowBackup is intentionally false: Android Auto Backup could otherwise
       silently ship the Room database off-device and restore a stale copy
@@ -23,6 +28,9 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <receiver
+            android:name=".presentation.workout.RestTimerExpiredReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

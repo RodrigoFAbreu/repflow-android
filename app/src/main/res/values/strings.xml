@@ -80,6 +80,9 @@
     <string name="workout_active_rest_timer_add">+15s</string>
     <string name="workout_active_rest_timer_remove">-15s</string>
     <string name="workout_active_rest_timer_skip">Skip</string>
+    <string name="workout_active_rest_timer_notification_title">Rest complete</string>
+    <string name="workout_active_rest_timer_notification_text">Time for your next set.</string>
+    <string name="workout_active_rest_timer_channel_name">Rest timer</string>
 
     <string name="training_plan_editor_title_create">New plan</string>
     <string name="training_plan_editor_title_edit">Edit plan</string>
