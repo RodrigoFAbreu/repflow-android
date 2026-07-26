@@ -2,50 +2,61 @@
 
 ## Milestone
 
-Milestone 2 — Training Plans (complete and committed)
+Milestone 3 — Active Workout (planning complete, implementation not started)
 
 ## Goal
 
-Deliver versioned training-plan creation and editing (ordered exercises with
-targets), with historical version preservation, as the second complete
-vertical slice.
+Support starting/resuming a workout from a training plan (or ad hoc), fast
+per-set entry with immediate persistence, and edit/undo of the most
+recently recorded set, as the third complete vertical slice.
 
 ## Current checkpoint
 
-All checkpoints (CP1–CP8) complete. Milestone 2 is fully implemented,
-verified, and ready for its completion commit.
+CP0 — Planning. Execution and reference guides created at
+`docs/milestones/active/milestone-3-execution.md` and
+`docs/milestones/active/milestone-3-reference.md`. No CP1–CP8 checkpoint
+has been implemented yet.
 
-## Checkpoint checklist
+Milestone 2 (Training Plans) remains complete and committed; see
+`docs/milestones/completed/milestone-2-execution.md` and
+`-reference.md`.
 
-- [x] CP1 — Domain model + pure JVM tests
-- [x] CP2 — Application contracts + use cases + tests
-- [x] CP3 — Room entities, DAOs, mapper, migration 1→2, repository
-- [x] CP4 — DAO + repository + migration instrumented tests on device
-- [x] CP5 — Hilt bindings
-- [x] CP6 — Training plan list end to end
-- [x] CP7 — Training plan editor end to end (create + revise)
-- [x] CP8 — Docs + final architectural review
+## Checkpoint checklist (Milestone 3)
 
-## Approved decisions (quick reference)
+- [ ] CP1 — Domain model + pure JVM tests
+- [ ] CP2 — Application contracts + use cases + tests
+- [ ] CP3 — Room entities, DAOs, mapper, migration 2→3, repository
+- [ ] CP4 — DAO + repository + migration instrumented tests on device
+- [ ] CP5 — Hilt bindings
+- [ ] CP6 — Current-workout screen (start/resume) end to end
+- [ ] CP7 — Fast set entry + edit/undo end to end
+- [ ] CP8 — Docs + final architectural review
 
-- Plan "current version" is a query concept, not state stored on `TrainingPlan`
-- Editing a plan always creates a new immutable version; never mutates one
-- Plan archive/delete out of scope for M2
-- Reordering via move-up/move-down buttons, no drag-and-drop
-- Room schema v1 → v2: real, additive migration + `MigrationTestHelper` test
-- Referenced exercises must exist and match the declared target kind
+## Approved decisions (quick reference, Milestone 3)
+
+- Only one `Active` workout session may exist at a time
+- A session's `TrainingPlanVersionId` reference is fixed at start and never
+  follows later plan revisions (historical meaning preserved)
+- Completing/abandoning a session is terminal; no further mutation allowed
+- Room schema v2 → v3: additive migration + `MigrationTestHelper` test
+  planned (not yet implemented)
+- Rest-timer behavior, recovery/futsal context, recommendations, and
+  history/backup UI are explicitly out of scope for Milestone 3
 
 ## Current blockers
 
-None. Milestone 2 is done; Milestone 3 planning has not yet started (deferred
-for the next session per credit-budget guidance).
+None. Milestone 3 planning (reference + execution guides) is complete;
+implementation (CP1) has not started yet, deferred to a following session
+per credit-budget guidance.
 
 ## Active plan
 
-- Completed docs: `docs/milestones/completed/milestone-2-execution.md`,
+- `docs/milestones/active/milestone-3-execution.md`
+- `docs/milestones/active/milestone-3-reference.md`
+- Prior milestone docs: `docs/milestones/completed/milestone-2-execution.md`,
   `docs/milestones/completed/milestone-2-reference.md`
 
-## Last verified state
+## Last verified state (Milestone 2, still current — no Milestone 3 code exists yet)
 
 - Unit tests: `./gradlew testDebugUnitTest` — 163 tests, 0 failures
 - Static checks: `./gradlew spotlessCheck detekt lintDebug` — all pass

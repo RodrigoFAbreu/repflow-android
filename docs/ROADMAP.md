@@ -1,10 +1,10 @@
 # RepFlow Roadmap
 
-Active milestone: **Milestone 2 — Training Plans (complete)** → [status](ACTIVE_MILESTONE.md)
+Active milestone: **Milestone 3 — Active Workout (planning complete)** → [status](ACTIVE_MILESTONE.md)
 
 Completed plan: [milestones/completed/milestone-2-execution.md](milestones/completed/milestone-2-execution.md)
 
-Milestone 3 planning has not yet started.
+Milestone 3 plan: [milestones/active/milestone-3-execution.md](milestones/active/milestone-3-execution.md)
 
 ## Milestone 0 — Project foundation
 
