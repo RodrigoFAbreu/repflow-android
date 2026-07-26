@@ -7,6 +7,7 @@ import com.repflow.app.application.exercise.ObserveExercises
 import com.repflow.app.application.exercise.SequentialIdentifierGenerator
 import com.repflow.app.application.progression.ComputeProgressionRecommendation
 import com.repflow.app.application.progression.InMemoryProgressionRecommendationRepository
+import com.repflow.app.application.progression.RecordManualOverride
 import com.repflow.app.application.recovery.GetWorkoutDayContext
 import com.repflow.app.application.recovery.InMemoryFutsalRepository
 import com.repflow.app.application.recovery.InMemoryRecoveryRepository
@@ -47,11 +48,14 @@ class ActiveWorkoutViewModelTest {
     private val ids = SequentialIdentifierGenerator(prefix = "session")
     private val workoutRepository = InMemoryWorkoutRepository()
     private val exerciseRepository = InMemoryExerciseRepository()
+    private val progressionRecommendationRepository = InMemoryProgressionRecommendationRepository()
     private val viewModel =
         ActiveWorkoutViewModel(
             observeActiveWorkoutSession = ObserveActiveWorkoutSession(workoutRepository),
             observeExercises = ObserveExercises(exerciseRepository),
             getWorkoutDayContext = GetWorkoutDayContext(InMemoryRecoveryRepository(), InMemoryFutsalRepository(), clock),
+            progressionRecommendationRepository = progressionRecommendationRepository,
+            recordManualOverride = RecordManualOverride(progressionRecommendationRepository, clock),
             startWorkoutSession = StartWorkoutSession(workoutRepository, clock, ids),
             addWorkoutExercise = AddWorkoutExercise(workoutRepository, ids),
             recordWorkoutSet = RecordWorkoutSet(workoutRepository, clock, ids),
@@ -65,7 +69,7 @@ class ActiveWorkoutViewModelTest {
                     workoutRepository,
                     InMemoryTrainingPlanRepository(),
                     ComputeProgressionRecommendation(
-                        InMemoryProgressionRecommendationRepository(),
+                        progressionRecommendationRepository,
                         GetWorkoutDayContext(InMemoryRecoveryRepository(), InMemoryFutsalRepository(), clock),
                         clock,
                         SequentialIdentifierGenerator(prefix = "rec"),

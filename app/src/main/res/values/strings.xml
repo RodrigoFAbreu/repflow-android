@@ -66,6 +66,12 @@
     <string name="workout_day_context_heavy_legs">Heavy legs: %1$d/4</string>
     <string name="workout_day_context_leg_doms">Leg DOMS: %1$d/4</string>
     <string name="workout_day_context_futsal_load">Futsal in the last 24h (load %1$.0f)</string>
+    <string name="progression_overridden">overridden</string>
+    <string name="progression_result_increase_load">Increase load</string>
+    <string name="progression_result_maintain_load">Maintain load</string>
+    <string name="progression_result_reduce_load">Reduce load</string>
+    <string name="progression_result_recovery_adjustment">Recovery adjustment</string>
+    <string name="progression_result_wait_for_more_data">Wait for more data</string>
     <string name="workout_active_exercise_count">%1$d exercises</string>
     <string name="workout_active_set_count">%1$d sets</string>
     <string name="workout_active_complete">Finish workout</string>

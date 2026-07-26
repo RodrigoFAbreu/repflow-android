@@ -49,6 +49,7 @@ fun ActiveWorkoutRoute(viewModel: ActiveWorkoutViewModel = hiltViewModel()) {
         dayContext = dayContext,
         onStartWorkout = viewModel::onStartWorkout,
         onAddExercise = viewModel::onAddExercise,
+        onOverrideRecommendation = viewModel::onOverrideRecommendation,
         onRecordSet = viewModel::onRecordSet,
         onUndoLastSet = viewModel::onUndoLastSet,
         onEditLastSet = viewModel::onEditLastSet,

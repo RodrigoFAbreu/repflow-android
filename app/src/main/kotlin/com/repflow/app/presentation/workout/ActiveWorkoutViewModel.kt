@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.repflow.app.application.exercise.ExerciseStatusFilter
 import com.repflow.app.application.exercise.ObserveExercises
+import com.repflow.app.application.progression.ProgressionRecommendationRepository
+import com.repflow.app.application.progression.RecordManualOverride
 import com.repflow.app.application.recovery.GetWorkoutDayContext
 import com.repflow.app.application.workout.AbandonWorkoutSession
 import com.repflow.app.application.workout.AddWorkoutExercise
@@ -24,6 +26,8 @@ import com.repflow.app.application.workout.UndoLastWorkoutSet
 import com.repflow.app.application.workout.WorkoutOperationError
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.exercise.Exercise
+import com.repflow.app.domain.exercise.ExerciseId
+import com.repflow.app.domain.progression.ProgressionResult
 import com.repflow.app.domain.workout.RestTimer
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSession
@@ -56,6 +60,8 @@ class ActiveWorkoutViewModel
         observeActiveWorkoutSession: ObserveActiveWorkoutSession,
         observeExercises: ObserveExercises,
         private val getWorkoutDayContext: GetWorkoutDayContext,
+        private val progressionRecommendationRepository: ProgressionRecommendationRepository,
+        private val recordManualOverride: RecordManualOverride,
         private val startWorkoutSession: StartWorkoutSession,
         private val addWorkoutExercise: AddWorkoutExercise,
         private val recordWorkoutSet: RecordWorkoutSet,
@@ -70,6 +76,7 @@ class ActiveWorkoutViewModel
         private val error = MutableStateFlow<ActiveWorkoutErrorReason?>(null)
         private val _dayContext = MutableStateFlow<WorkoutDayContextUi?>(null)
         val dayContext: StateFlow<WorkoutDayContextUi?> = _dayContext
+        private val recommendationRefreshTrigger = MutableStateFlow(0)
 
         init {
             viewModelScope.launch {
@@ -93,8 +100,11 @@ class ActiveWorkoutViewModel
                 }
 
         private val availableExercises =
-            observeExercises(ExerciseStatusFilter.ACTIVE, "")
-                .map { exercises -> exercises.map(::toPickerItem) }
+            combine(
+                observeExercises(ExerciseStatusFilter.ACTIVE, ""),
+                recommendationRefreshTrigger,
+            ) { exercises, _ -> exercises }
+                .map { exercises -> exercises.map { exercise -> toPickerItem(exercise, latestRecommendationUi(exercise.id)) } }
                 .catch { failure ->
                     if (failure is CancellationException) throw failure
                     emit(emptyList())
@@ -205,6 +215,25 @@ class ActiveWorkoutViewModel
             error.update { null }
         }
 
+        fun onOverrideRecommendation(
+            exerciseId: ExerciseId,
+            override: ProgressionResultUi,
+        ) {
+            viewModelScope.launch {
+                recordManualOverride(exerciseId, override.toDomain())
+                recommendationRefreshTrigger.update { it + 1 }
+            }
+        }
+
+        private suspend fun latestRecommendationUi(exerciseId: ExerciseId): ProgressionRecommendationUi? =
+            progressionRecommendationRepository.findLatestForExercise(exerciseId)?.let { recommendation ->
+                ProgressionRecommendationUi(
+                    result = (recommendation.manualOverride?.result ?: recommendation.result).toUi(),
+                    topReason = recommendation.reasons.firstOrNull(),
+                    isOverridden = recommendation.manualOverride != null,
+                )
+            }
+
         private fun activeSessionId(): WorkoutSessionId? = (uiState.value.content as? ActiveWorkoutContent.Active)?.sessionId
 
         private fun launchAction(action: suspend () -> DomainResult<*, WorkoutOperationError>) {
@@ -252,8 +281,34 @@ private fun toContent(session: WorkoutSession?): ActiveWorkoutContent =
 
 private fun RestTimer.toUi(): RestTimerUi = RestTimerUi(endAt = endAt, totalDurationSeconds = totalDurationSeconds)
 
-private fun toPickerItem(exercise: Exercise): ExercisePickerItem =
-    ExercisePickerItem(id = exercise.id, name = exercise.name.value, trackingType = exercise.trackingType)
+private fun toPickerItem(
+    exercise: Exercise,
+    recommendation: ProgressionRecommendationUi?,
+): ExercisePickerItem =
+    ExercisePickerItem(
+        id = exercise.id,
+        name = exercise.name.value,
+        trackingType = exercise.trackingType,
+        recommendation = recommendation,
+    )
+
+private fun ProgressionResult.toUi(): ProgressionResultUi =
+    when (this) {
+        ProgressionResult.IncreaseLoad -> ProgressionResultUi.INCREASE_LOAD
+        ProgressionResult.MaintainLoad -> ProgressionResultUi.MAINTAIN_LOAD
+        ProgressionResult.ReduceLoad -> ProgressionResultUi.REDUCE_LOAD
+        ProgressionResult.RecoveryAdjustment -> ProgressionResultUi.RECOVERY_ADJUSTMENT
+        ProgressionResult.WaitForMoreData -> ProgressionResultUi.WAIT_FOR_MORE_DATA
+    }
+
+private fun ProgressionResultUi.toDomain(): ProgressionResult =
+    when (this) {
+        ProgressionResultUi.INCREASE_LOAD -> ProgressionResult.IncreaseLoad
+        ProgressionResultUi.MAINTAIN_LOAD -> ProgressionResult.MaintainLoad
+        ProgressionResultUi.REDUCE_LOAD -> ProgressionResult.ReduceLoad
+        ProgressionResultUi.RECOVERY_ADJUSTMENT -> ProgressionResult.RecoveryAdjustment
+        ProgressionResultUi.WAIT_FOR_MORE_DATA -> ProgressionResult.WaitForMoreData
+    }
 
 private fun WorkoutOperationError.toReason(): ActiveWorkoutErrorReason =
     when (this) {

@@ -13,6 +13,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -30,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.repflow.app.R
+import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSessionId
 
@@ -46,6 +48,7 @@ fun ActiveWorkoutScreen(
     dayContext: WorkoutDayContextUi?,
     onStartWorkout: () -> Unit,
     onAddExercise: (ExercisePickerItem) -> Unit,
+    onOverrideRecommendation: (ExerciseId, ProgressionResultUi) -> Unit,
     onRecordSet: (WorkoutExerciseId, Double?, Int?) -> Unit,
     onUndoLastSet: (WorkoutExerciseId) -> Unit,
     onEditLastSet: (WorkoutExerciseId, Double?, Int?) -> Unit,
@@ -77,6 +80,7 @@ fun ActiveWorkoutScreen(
                         availableExercises = uiState.availableExercises,
                         dayContext = dayContext,
                         onAddExercise = onAddExercise,
+                        onOverrideRecommendation = onOverrideRecommendation,
                         onRecordSet = onRecordSet,
                         onUndoLastSet = onUndoLastSet,
                         onEditLastSet = onEditLastSet,
@@ -122,6 +126,7 @@ private fun ActiveSessionState(
     availableExercises: List<ExercisePickerItem>,
     dayContext: WorkoutDayContextUi?,
     onAddExercise: (ExercisePickerItem) -> Unit,
+    onOverrideRecommendation: (ExerciseId, ProgressionResultUi) -> Unit,
     onRecordSet: (WorkoutExerciseId, Double?, Int?) -> Unit,
     onUndoLastSet: (WorkoutExerciseId) -> Unit,
     onEditLastSet: (WorkoutExerciseId, Double?, Int?) -> Unit,
@@ -146,7 +151,7 @@ private fun ActiveSessionState(
             items(items = content.exercises, key = { it.id.value }) { exercise ->
                 ExerciseCard(exercise, onRecordSet, onUndoLastSet, onEditLastSet)
             }
-            item { AddExercisePicker(availableExercises, onAddExercise) }
+            item { AddExercisePicker(availableExercises, onAddExercise, onOverrideRecommendation) }
         }
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             Button(onClick = { onCompleteWorkout(content.sessionId) }) {
@@ -266,6 +271,7 @@ private fun ExerciseCard(
 private fun AddExercisePicker(
     availableExercises: List<ExercisePickerItem>,
     onAddExercise: (ExercisePickerItem) -> Unit,
+    onOverrideRecommendation: (ExerciseId, ProgressionResultUi) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box(modifier = Modifier.padding(16.dp)) {
@@ -275,7 +281,14 @@ private fun AddExercisePicker(
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             availableExercises.forEach { exercise ->
                 DropdownMenuItem(
-                    text = { Text(exercise.name) },
+                    text = {
+                        Column {
+                            Text(exercise.name)
+                            exercise.recommendation?.let { recommendation ->
+                                RecommendationRow(exercise.id, recommendation, onOverrideRecommendation)
+                            }
+                        }
+                    },
                     onClick = {
                         expanded = false
                         onAddExercise(exercise)
@@ -285,6 +298,41 @@ private fun AddExercisePicker(
         }
     }
 }
+
+@Composable
+private fun RecommendationRow(
+    exerciseId: ExerciseId,
+    recommendation: ProgressionRecommendationUi,
+    onOverrideRecommendation: (ExerciseId, ProgressionResultUi) -> Unit,
+) {
+    Text(
+        text =
+            stringResource(recommendation.result.toLabelRes()) +
+                (recommendation.topReason?.let { " — $it" } ?: "") +
+                if (recommendation.isOverridden) " (${stringResource(R.string.progression_overridden)})" else "",
+        style = MaterialTheme.typography.bodySmall,
+    )
+    Row {
+        TextButton(onClick = { onOverrideRecommendation(exerciseId, ProgressionResultUi.INCREASE_LOAD) }) {
+            Text(stringResource(R.string.progression_result_increase_load), style = MaterialTheme.typography.labelSmall)
+        }
+        TextButton(onClick = { onOverrideRecommendation(exerciseId, ProgressionResultUi.MAINTAIN_LOAD) }) {
+            Text(stringResource(R.string.progression_result_maintain_load), style = MaterialTheme.typography.labelSmall)
+        }
+        TextButton(onClick = { onOverrideRecommendation(exerciseId, ProgressionResultUi.REDUCE_LOAD) }) {
+            Text(stringResource(R.string.progression_result_reduce_load), style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+private fun ProgressionResultUi.toLabelRes(): Int =
+    when (this) {
+        ProgressionResultUi.INCREASE_LOAD -> R.string.progression_result_increase_load
+        ProgressionResultUi.MAINTAIN_LOAD -> R.string.progression_result_maintain_load
+        ProgressionResultUi.REDUCE_LOAD -> R.string.progression_result_reduce_load
+        ProgressionResultUi.RECOVERY_ADJUSTMENT -> R.string.progression_result_recovery_adjustment
+        ProgressionResultUi.WAIT_FOR_MORE_DATA -> R.string.progression_result_wait_for_more_data
+    }
 
 @Composable
 private fun FailureState(onRetry: () -> Unit) {
