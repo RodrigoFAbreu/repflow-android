@@ -58,6 +58,7 @@ class CompleteWorkoutSession
                         workingSetReps = workingSets.mapNotNull { it.reps },
                         workingSetRpe = workingSets.mapNotNull { it.rpe },
                         plannedRepRange = plannedRepRange,
+                        hadOnlyWarmupSets = exercise.sets.isNotEmpty() && workingSets.isEmpty(),
                     ),
                 )
             }

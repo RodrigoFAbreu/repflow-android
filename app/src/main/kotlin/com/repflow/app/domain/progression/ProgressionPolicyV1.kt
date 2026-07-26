@@ -2,7 +2,17 @@ package com.repflow.app.domain.progression
 
 import com.repflow.app.domain.trainingplan.RepRange
 
-/** Raw inputs [ProgressionPolicyV1] needs to evaluate a recommendation for one exercise occurrence. */
+/**
+ * Raw inputs [ProgressionPolicyV1] needs to evaluate a recommendation for
+ * one exercise occurrence.
+ *
+ * [hadOnlyWarmupSets] (Milestone 8, CP5): true when the exercise had at
+ * least one recorded set but every one of them was a warm-up set, so
+ * [workingSetReps] is empty for a reason more specific than "not enough
+ * data was recorded" - the caller already filters warm-ups out of
+ * [workingSetReps]/[workingSetRpe] before this reaches the policy, so this
+ * flag is the only way the policy can tell the two apart.
+ */
 data class ProgressionPolicyInput(
     val workingSetReps: List<Int>,
     val workingSetRpe: List<Double>,
@@ -10,6 +20,7 @@ data class ProgressionPolicyInput(
     val latestPainWhileWalking: Int?,
     val latestHeavyLegs: Int?,
     val hasRecentFutsalSession: Boolean,
+    val hadOnlyWarmupSets: Boolean = false,
 )
 
 /** The outcome of evaluating [ProgressionPolicyV1]: a result plus its contributing reasons. */
@@ -42,10 +53,26 @@ object ProgressionPolicyV1 {
 
     @Suppress("ReturnCount")
     fun evaluate(input: ProgressionPolicyInput): ProgressionEvaluation {
-        if (input.workingSetReps.size < MIN_SETS_FOR_RECOMMENDATION || input.plannedRepRange == null) {
+        // Milestone 8, CP5: three distinct, individually detectable reasons instead of one
+        // sentence OR-ing "too few sets" and "no rep range" together. Checked in order of
+        // specificity: "only warm-up sets" explains *why* workingSetReps is empty when that's
+        // the actual cause, so it's checked before the more generic too-few-sets reason.
+        if (input.hadOnlyWarmupSets) {
             return ProgressionEvaluation(
                 ProgressionResult.WaitForMoreData,
-                listOf("Fewer than $MIN_SETS_FOR_RECOMMENDATION working sets or no planned rep range"),
+                listOf("Only warm-up sets were recorded - no working sets to evaluate"),
+            )
+        }
+        if (input.workingSetReps.size < MIN_SETS_FOR_RECOMMENDATION) {
+            return ProgressionEvaluation(
+                ProgressionResult.WaitForMoreData,
+                listOf("Fewer than $MIN_SETS_FOR_RECOMMENDATION working sets recorded"),
+            )
+        }
+        if (input.plannedRepRange == null) {
+            return ProgressionEvaluation(
+                ProgressionResult.WaitForMoreData,
+                listOf("No planned rep range for this exercise"),
             )
         }
 

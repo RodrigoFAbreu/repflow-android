@@ -158,17 +158,21 @@ implementation-review gate explicit.
     `testDebugUnitTest`, `connectedDebugAndroidTest --tests "*Backup*"`.
 16. **CP15 - Full verification**: full `testDebugUnitTest`,
     `spotlessCheck`, `detekt`, `lintDebug`, `connectedDebugAndroidTest`
-    (full suite), `assembleDebug`, `assembleRelease`; re-run
-    `ActiveWorkoutViewModelTest` in isolation several times to
-    characterize the reported flakiness one way or the other (record the
-    outcome, don't assume from one run). **Also** characterize
-    `ExerciseListViewModelTest`'s `undo archive restores the exercise via
-    RestoreExercise"` test, found genuinely flaky during CP1 (failed 2 of
-    ~7 reruns with `TurbineAssertionError: No value produced in 3s`,
-    unrelated to CP1's own changes — `ExerciseListViewModel.kt` was not
-    touched by CP1). Root-cause or document as a known flake with
-    evidence; do not silently ignore it. Update
-    `docs/ACTIVE_MILESTONE.md`.
+    (full suite), `assembleDebug`, `assembleRelease`. Two genuinely flaky
+    pre-existing tests were found incidentally during implementation, both
+    confirmed via multiple reruns and both unrelated to the checkpoints
+    that surfaced them:
+    - `ExerciseListViewModelTest`'s `"undo archive restores the exercise
+      via RestoreExercise"` (found during CP1; ~2 of 7 reruns failed with
+      `TurbineAssertionError: No value produced in 3s`).
+    - `ActiveWorkoutViewModelTest`'s `"adding an exercise then recording,
+      editing and undoing a set updates the active session"` (found during
+      CP5; 2 of 4 reruns failed with a load-value assertion mismatch,
+      `expected:<70.0> but was:<60.0>` — this is the flakiness the
+      round-2/3 review feedback referenced, now independently confirmed
+      with evidence rather than taken on faith).
+    Root-cause or document both as known flakes with evidence; do not
+    silently ignore either. Update `docs/ACTIVE_MILESTONE.md`.
 17. **External implementation review**: run
     `scripts/prepare-ai-review.sh <base-sha> implementation`, stop at
     `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` per

@@ -11,7 +11,7 @@ class ProgressionPolicyV1Test {
     ) = (RepRange.create(min, max) as com.repflow.app.domain.common.DomainResult.Success).value
 
     @Test
-    fun `fewer than two working sets waits for more data`() {
+    fun `fewer than two working sets waits for more data with a specific reason`() {
         val result =
             ProgressionPolicyV1.evaluate(
                 ProgressionPolicyInput(
@@ -24,10 +24,11 @@ class ProgressionPolicyV1Test {
                 ),
             )
         assertEquals(ProgressionResult.WaitForMoreData, result.result)
+        assertEquals(listOf("Fewer than 2 working sets recorded"), result.reasons)
     }
 
     @Test
-    fun `no planned rep range waits for more data`() {
+    fun `no planned rep range waits for more data with a specific reason`() {
         val result =
             ProgressionPolicyV1.evaluate(
                 ProgressionPolicyInput(
@@ -40,6 +41,25 @@ class ProgressionPolicyV1Test {
                 ),
             )
         assertEquals(ProgressionResult.WaitForMoreData, result.result)
+        assertEquals(listOf("No planned rep range for this exercise"), result.reasons)
+    }
+
+    @Test
+    fun `only warm-up sets waits for more data with a reason distinct from too-few-sets`() {
+        val result =
+            ProgressionPolicyV1.evaluate(
+                ProgressionPolicyInput(
+                    workingSetReps = emptyList(),
+                    workingSetRpe = emptyList(),
+                    plannedRepRange = repRange(8, 12),
+                    latestPainWhileWalking = null,
+                    latestHeavyLegs = null,
+                    hasRecentFutsalSession = false,
+                    hadOnlyWarmupSets = true,
+                ),
+            )
+        assertEquals(ProgressionResult.WaitForMoreData, result.result)
+        assertEquals(listOf("Only warm-up sets were recorded - no working sets to evaluate"), result.reasons)
     }
 
     @Test

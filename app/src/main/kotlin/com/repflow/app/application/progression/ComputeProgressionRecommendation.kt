@@ -24,6 +24,7 @@ data class ComputeProgressionRecommendationCommand(
     val workingSetReps: List<Int>,
     val workingSetRpe: List<Double>,
     val plannedRepRange: RepRange?,
+    val hadOnlyWarmupSets: Boolean = false,
 )
 
 /**
@@ -52,6 +53,7 @@ class ComputeProgressionRecommendation
                         latestPainWhileWalking = dayContext.latestRecoveryEntry?.painWhileWalking,
                         latestHeavyLegs = dayContext.latestRecoveryEntry?.heavyLegs,
                         hasRecentFutsalSession = dayContext.recentFutsalSession != null,
+                        hadOnlyWarmupSets = command.hadOnlyWarmupSets,
                     ),
                 )
             val recommendation =
