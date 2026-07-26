@@ -9,6 +9,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.repflow.app.presentation.exercise.editor.ExerciseEditorRoute
 import com.repflow.app.presentation.exercise.list.ExerciseListRoute
+import com.repflow.app.presentation.recovery.RecoveryFutsalRoute
 import com.repflow.app.presentation.trainingplan.editor.TrainingPlanEditorRoute
 import com.repflow.app.presentation.trainingplan.list.TrainingPlanListRoute
 import com.repflow.app.presentation.workout.ActiveWorkoutRoute
@@ -29,6 +30,7 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
                 onCreateClick = { navController.navigate(RepFlowDestinations.EXERCISE_NEW) },
                 onPlansClick = { navController.navigate(RepFlowDestinations.PLANS) },
                 onWorkoutClick = { navController.navigate(RepFlowDestinations.WORKOUT) },
+                onRecoveryClick = { navController.navigate(RepFlowDestinations.RECOVERY) },
             )
         }
         composable(RepFlowDestinations.EXERCISE_NEW) {
@@ -69,6 +71,9 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
         }
         composable(RepFlowDestinations.WORKOUT) {
             ActiveWorkoutRoute()
+        }
+        composable(RepFlowDestinations.RECOVERY) {
+            RecoveryFutsalRoute(onBackClick = { navController.popBackStack() })
         }
     }
 }

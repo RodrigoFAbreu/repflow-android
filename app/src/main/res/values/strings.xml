@@ -116,4 +116,27 @@
     <string name="training_plan_editor_discard_dialog_cancel">Keep editing</string>
     <string name="training_plan_editor_back_content_description">Back</string>
     <string name="training_plan_editor_select_exercise_placeholder">Select an exercise</string>
+
+    <string name="exercise_list_recovery_content_description">Go to recovery and futsal</string>
+    <string name="recovery_futsal_title">Recovery</string>
+    <string name="recovery_futsal_back_content_description">Back</string>
+    <string name="recovery_futsal_recovery_section_title">Recovery entry (today)</string>
+    <string name="recovery_futsal_sleep_quality">Sleep quality</string>
+    <string name="recovery_futsal_energy">Energy</string>
+    <string name="recovery_futsal_leg_doms">Leg DOMS</string>
+    <string name="recovery_futsal_heel_stiffness">Heel stiffness</string>
+    <string name="recovery_futsal_pain_while_walking">Pain while walking</string>
+    <string name="recovery_futsal_heavy_legs">Heavy legs</string>
+    <string name="recovery_futsal_futsal_previous_24h">Futsal in previous 24h</string>
+    <string name="recovery_futsal_futsal_next_24h">Futsal expected in next 24h</string>
+    <string name="recovery_futsal_notes">Notes (optional)</string>
+    <string name="recovery_futsal_save_recovery">Save recovery entry</string>
+    <string name="recovery_futsal_futsal_section_title">Futsal session (today)</string>
+    <string name="recovery_futsal_duration_minutes">Duration (minutes)</string>
+    <string name="recovery_futsal_session_rpe">Session RPE (0-10)</string>
+    <string name="recovery_futsal_load">Load: %1$s</string>
+    <string name="recovery_futsal_save_futsal">Save futsal session</string>
+    <string name="recovery_futsal_saved">Saved</string>
+    <string name="recovery_futsal_error_invalid">Some values need attention before saving.</string>
+    <string name="recovery_futsal_error_unavailable">Couldn\'t save. Try again.</string>
 </resources>

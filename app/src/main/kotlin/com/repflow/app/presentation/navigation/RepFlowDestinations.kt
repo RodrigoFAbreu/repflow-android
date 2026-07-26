@@ -24,4 +24,6 @@ object RepFlowDestinations {
     fun planEditRoute(planId: String): String = "plans/$planId"
 
     const val WORKOUT = "workout"
+
+    const val RECOVERY = "recovery"
 }

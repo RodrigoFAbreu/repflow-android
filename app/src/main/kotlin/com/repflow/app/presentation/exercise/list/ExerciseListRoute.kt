@@ -16,6 +16,7 @@ fun ExerciseListRoute(
     onCreateClick: () -> Unit,
     onPlansClick: () -> Unit,
     onWorkoutClick: () -> Unit,
+    onRecoveryClick: () -> Unit,
     viewModel: ExerciseListViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -28,6 +29,7 @@ fun ExerciseListRoute(
         onCreateClick = onCreateClick,
         onPlansClick = onPlansClick,
         onWorkoutClick = onWorkoutClick,
+        onRecoveryClick = onRecoveryClick,
         onArchiveClicked = viewModel::onArchiveClicked,
         onRestoreClicked = viewModel::onRestoreClicked,
         onUndoArchiveClicked = viewModel::onRestoreClicked,

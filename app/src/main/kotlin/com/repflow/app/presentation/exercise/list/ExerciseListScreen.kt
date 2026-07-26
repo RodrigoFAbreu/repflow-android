@@ -63,6 +63,7 @@ fun ExerciseListScreen(
     onCreateClick: () -> Unit,
     onPlansClick: () -> Unit,
     onWorkoutClick: () -> Unit,
+    onRecoveryClick: () -> Unit,
     onArchiveClicked: (ExerciseId) -> Unit,
     onRestoreClicked: (ExerciseId) -> Unit,
     onUndoArchiveClicked: (ExerciseId) -> Unit,
@@ -109,6 +110,13 @@ fun ExerciseListScreen(
                         modifier = Modifier.semantics { contentDescription = plansContentDescription },
                     ) {
                         Text(stringResource(R.string.training_plan_list_title))
+                    }
+                    val recoveryContentDescription = stringResource(R.string.exercise_list_recovery_content_description)
+                    TextButton(
+                        onClick = onRecoveryClick,
+                        modifier = Modifier.semantics { contentDescription = recoveryContentDescription },
+                    ) {
+                        Text(stringResource(R.string.recovery_futsal_title))
                     }
                 },
             )
