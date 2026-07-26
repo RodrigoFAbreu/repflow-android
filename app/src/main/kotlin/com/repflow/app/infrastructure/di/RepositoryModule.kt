@@ -1,11 +1,13 @@
 package com.repflow.app.infrastructure.di
 
 import com.repflow.app.application.exercise.ExerciseRepository
+import com.repflow.app.application.progression.ProgressionRecommendationRepository
 import com.repflow.app.application.recovery.FutsalRepository
 import com.repflow.app.application.recovery.RecoveryRepository
 import com.repflow.app.application.trainingplan.TrainingPlanRepository
 import com.repflow.app.application.workout.WorkoutRepository
 import com.repflow.app.data.exercise.LocalExerciseRepository
+import com.repflow.app.data.progression.LocalProgressionRecommendationRepository
 import com.repflow.app.data.recovery.LocalFutsalRepository
 import com.repflow.app.data.recovery.LocalRecoveryRepository
 import com.repflow.app.data.trainingplan.LocalTrainingPlanRepository
@@ -39,4 +41,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindFutsalRepository(impl: LocalFutsalRepository): FutsalRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindProgressionRecommendationRepository(
+        impl: LocalProgressionRecommendationRepository,
+    ): ProgressionRecommendationRepository
 }

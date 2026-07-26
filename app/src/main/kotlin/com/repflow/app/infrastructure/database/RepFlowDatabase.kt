@@ -4,6 +4,8 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.repflow.app.infrastructure.database.exercise.ExerciseDao
 import com.repflow.app.infrastructure.database.exercise.ExerciseEntity
+import com.repflow.app.infrastructure.database.progression.ProgressionRecommendationDao
+import com.repflow.app.infrastructure.database.progression.ProgressionRecommendationEntity
 import com.repflow.app.infrastructure.database.recovery.FutsalSessionDao
 import com.repflow.app.infrastructure.database.recovery.FutsalSessionEntity
 import com.repflow.app.infrastructure.database.recovery.RecoveryEntryDao
@@ -26,7 +28,8 @@ import com.repflow.app.infrastructure.database.workout.WorkoutSetEntity
  * via [MIGRATION_1_2]; version 3 adds the active-workout tables via
  * [MIGRATION_2_3]; version 4 adds the rest-timer columns via
  * [MIGRATION_3_4]; version 5 adds the recovery/futsal tables via
- * [MIGRATION_4_5]. There is deliberately no `fallbackToDestructiveMigration`
+ * [MIGRATION_4_5]; version 6 adds the progression-recommendation table via
+ * [MIGRATION_5_6]. There is deliberately no `fallbackToDestructiveMigration`
  * anywhere in this codebase (see plan.md section G and additional
  * implementation correction 14).
  */
@@ -41,8 +44,9 @@ import com.repflow.app.infrastructure.database.workout.WorkoutSetEntity
         WorkoutSetEntity::class,
         RecoveryEntryEntity::class,
         FutsalSessionEntity::class,
+        ProgressionRecommendationEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class RepFlowDatabase : RoomDatabase() {
@@ -63,4 +67,6 @@ abstract class RepFlowDatabase : RoomDatabase() {
     abstract fun recoveryEntryDao(): RecoveryEntryDao
 
     abstract fun futsalSessionDao(): FutsalSessionDao
+
+    abstract fun progressionRecommendationDao(): ProgressionRecommendationDao
 }

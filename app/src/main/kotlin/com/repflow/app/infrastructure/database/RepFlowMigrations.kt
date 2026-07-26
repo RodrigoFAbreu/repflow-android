@@ -268,6 +268,41 @@ val MIGRATION_4_5: Migration =
     }
 
 /**
+ * The real, additive 5-to-6 migration adding the `progression_recommendations`
+ * table (see `docs/milestones/active/milestone-6-reference.md`'s data
+ * model section). Nothing about the existing tables changes. No
+ * `fallbackToDestructiveMigration` call exists anywhere (see
+ * [RepFlowDatabase]'s KDoc).
+ */
+@Suppress("MagicNumber")
+val MIGRATION_5_6: Migration =
+    object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `progression_recommendations` (
+                    `id` TEXT NOT NULL,
+                    `exercise_id` TEXT NOT NULL,
+                    `result` TEXT NOT NULL,
+                    `reasons` TEXT NOT NULL,
+                    `policy_version` INTEGER NOT NULL,
+                    `computed_at` INTEGER NOT NULL,
+                    `override_result` TEXT,
+                    `override_at` INTEGER,
+                    PRIMARY KEY(`id`)
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE INDEX IF NOT EXISTS `index_progression_recommendations_exercise_id_computed_at`
+                ON `progression_recommendations` (`exercise_id`, `computed_at`)
+                """.trimIndent(),
+            )
+        }
+    }
+
+/**
  * The real, additive 3-to-4 migration adding the rest-timer's absolute end
  * timestamp and total duration to `workout_sessions` (see
  * `docs/milestones/active/milestone-4-reference.md`'s data model section).
