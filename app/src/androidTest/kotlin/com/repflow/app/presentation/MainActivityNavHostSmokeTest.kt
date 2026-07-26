@@ -50,6 +50,21 @@ class MainActivityNavHostSmokeTest {
     }
 
     @Test
+    fun recoveryHistoryDestinationOpensWithoutCrashing() {
+        composeRule
+            .onNodeWithContentDescription(
+                composeRule.activity.getString(R.string.exercise_list_recovery_content_description),
+            ).performClick()
+        composeRule
+            .onNodeWithContentDescription(
+                composeRule.activity.getString(R.string.recovery_futsal_view_history_content_description),
+            ).performClick()
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.recovery_history_title))
+            .assertIsDisplayed()
+    }
+
+    @Test
     fun historyDestinationOpensWithoutCrashing() {
         composeRule
             .onNodeWithContentDescription(

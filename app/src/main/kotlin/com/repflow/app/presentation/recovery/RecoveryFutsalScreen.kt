@@ -30,6 +30,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.repflow.app.R
@@ -46,6 +48,7 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun RecoveryFutsalScreen(
     uiState: RecoveryFutsalUiState,
+    onHistoryClick: () -> Unit,
     onDateChanged: (LocalDate) -> Unit,
     onScaleFieldChanged: (RecoveryScaleField, Int) -> Unit,
     onFutsalPreviousToggled: (Boolean) -> Unit,
@@ -87,6 +90,15 @@ fun RecoveryFutsalScreen(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.recovery_futsal_title)) },
+                actions = {
+                    val historyContentDescription = stringResource(R.string.recovery_futsal_view_history_content_description)
+                    TextButton(
+                        onClick = onHistoryClick,
+                        modifier = Modifier.semantics { contentDescription = historyContentDescription },
+                    ) {
+                        Text(stringResource(R.string.recovery_futsal_view_history))
+                    }
+                },
             )
         },
     ) { padding ->

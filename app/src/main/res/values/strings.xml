@@ -129,6 +129,15 @@
 
     <string name="exercise_list_recovery_content_description">Go to recovery and futsal</string>
     <string name="recovery_futsal_title">Recovery</string>
+    <string name="recovery_futsal_view_history">View history</string>
+    <string name="recovery_futsal_view_history_content_description">View recovery and futsal history</string>
+    <string name="recovery_history_title">Recovery history</string>
+    <string name="recovery_history_back">Back</string>
+    <string name="recovery_history_recovery_section_title">Recovery entries</string>
+    <string name="recovery_history_futsal_section_title">Futsal sessions</string>
+    <string name="recovery_history_empty">No recovery or futsal entries recorded yet.</string>
+    <string name="recovery_history_recovery_row">Sleep %1$d · Energy %2$d · Pain %3$d</string>
+    <string name="recovery_history_futsal_row">%1$d min at RPE %2$s (load %3$s)</string>
     <string name="recovery_futsal_recovery_section_title">Recovery entry</string>
     <string name="recovery_futsal_change_date">Change date</string>
     <string name="recovery_futsal_date_picker_confirm">OK</string>

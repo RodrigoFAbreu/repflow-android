@@ -7,10 +7,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /** Stateful route composable: owns the ViewModel, delegates rendering to [RecoveryFutsalScreen]. */
 @Composable
-fun RecoveryFutsalRoute(viewModel: RecoveryFutsalViewModel = hiltViewModel()) {
+fun RecoveryFutsalRoute(
+    onHistoryClick: () -> Unit,
+    viewModel: RecoveryFutsalViewModel = hiltViewModel(),
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     RecoveryFutsalScreen(
         uiState = uiState,
+        onHistoryClick = onHistoryClick,
         onDateChanged = viewModel::onDateChanged,
         onScaleFieldChanged = viewModel::onScaleFieldChanged,
         onFutsalPreviousToggled = viewModel::onFutsalPreviousToggled,

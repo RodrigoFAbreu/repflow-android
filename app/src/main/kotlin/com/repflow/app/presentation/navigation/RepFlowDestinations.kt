@@ -26,6 +26,7 @@ object RepFlowDestinations {
     const val WORKOUT = "workout"
 
     const val RECOVERY = "recovery"
+    const val RECOVERY_HISTORY = "recovery/history"
 
     const val HISTORY = "history"
 

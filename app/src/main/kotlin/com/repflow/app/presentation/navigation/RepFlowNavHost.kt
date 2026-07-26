@@ -18,6 +18,7 @@ import com.repflow.app.presentation.exercise.editor.ExerciseEditorRoute
 import com.repflow.app.presentation.exercise.list.ExerciseListRoute
 import com.repflow.app.presentation.history.HistoryRoute
 import com.repflow.app.presentation.recovery.RecoveryFutsalRoute
+import com.repflow.app.presentation.recovery.RecoveryHistoryRoute
 import com.repflow.app.presentation.trainingplan.editor.TrainingPlanEditorRoute
 import com.repflow.app.presentation.trainingplan.list.TrainingPlanListRoute
 import com.repflow.app.presentation.workout.ActiveWorkoutRoute
@@ -110,7 +111,10 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
                 ActiveWorkoutRoute()
             }
             composable(RepFlowDestinations.RECOVERY) {
-                RecoveryFutsalRoute()
+                RecoveryFutsalRoute(onHistoryClick = { navController.navigate(RepFlowDestinations.RECOVERY_HISTORY) })
+            }
+            composable(RepFlowDestinations.RECOVERY_HISTORY) {
+                RecoveryHistoryRoute(onBackClick = { navController.popBackStack() })
             }
             composable(RepFlowDestinations.HISTORY) {
                 HistoryRoute()
