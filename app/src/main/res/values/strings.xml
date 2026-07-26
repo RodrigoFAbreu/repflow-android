@@ -63,6 +63,9 @@
     <string name="exercise_list_workout_content_description">Go to current workout</string>
     <string name="workout_active_no_session">No active workout.</string>
     <string name="workout_active_start">Start workout</string>
+    <string name="workout_day_context_heavy_legs">Heavy legs: %1$d/4</string>
+    <string name="workout_day_context_leg_doms">Leg DOMS: %1$d/4</string>
+    <string name="workout_day_context_futsal_load">Futsal in the last 24h (load %1$.0f)</string>
     <string name="workout_active_exercise_count">%1$d exercises</string>
     <string name="workout_active_set_count">%1$d sets</string>
     <string name="workout_active_complete">Finish workout</string>

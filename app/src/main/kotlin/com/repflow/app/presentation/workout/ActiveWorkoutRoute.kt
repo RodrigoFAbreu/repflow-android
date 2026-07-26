@@ -24,6 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 fun ActiveWorkoutRoute(viewModel: ActiveWorkoutViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val dayContext by viewModel.dayContext.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val notificationPermissionLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -45,6 +46,7 @@ fun ActiveWorkoutRoute(viewModel: ActiveWorkoutViewModel = hiltViewModel()) {
 
     ActiveWorkoutScreen(
         uiState = uiState,
+        dayContext = dayContext,
         onStartWorkout = viewModel::onStartWorkout,
         onAddExercise = viewModel::onAddExercise,
         onRecordSet = viewModel::onRecordSet,

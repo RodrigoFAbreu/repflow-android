@@ -43,6 +43,7 @@ import com.repflow.app.domain.workout.WorkoutSessionId
 @Composable
 fun ActiveWorkoutScreen(
     uiState: ActiveWorkoutUiState,
+    dayContext: WorkoutDayContextUi?,
     onStartWorkout: () -> Unit,
     onAddExercise: (ExercisePickerItem) -> Unit,
     onRecordSet: (WorkoutExerciseId, Double?, Int?) -> Unit,
@@ -74,6 +75,7 @@ fun ActiveWorkoutScreen(
                     ActiveSessionState(
                         content = content,
                         availableExercises = uiState.availableExercises,
+                        dayContext = dayContext,
                         onAddExercise = onAddExercise,
                         onRecordSet = onRecordSet,
                         onUndoLastSet = onUndoLastSet,
@@ -118,6 +120,7 @@ private fun NoActiveSessionState(onStartWorkout: () -> Unit) {
 private fun ActiveSessionState(
     content: ActiveWorkoutContent.Active,
     availableExercises: List<ExercisePickerItem>,
+    dayContext: WorkoutDayContextUi?,
     onAddExercise: (ExercisePickerItem) -> Unit,
     onRecordSet: (WorkoutExerciseId, Double?, Int?) -> Unit,
     onUndoLastSet: (WorkoutExerciseId) -> Unit,
@@ -129,6 +132,13 @@ private fun ActiveSessionState(
     onAbandonWorkout: (WorkoutSessionId) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
+        if (dayContext?.heavyLegs != null || dayContext?.legDoms != null || dayContext?.futsalLoad != null) {
+            Column(modifier = Modifier.padding(8.dp)) {
+                dayContext.heavyLegs?.let { Text(stringResource(R.string.workout_day_context_heavy_legs, it)) }
+                dayContext.legDoms?.let { Text(stringResource(R.string.workout_day_context_leg_doms, it)) }
+                dayContext.futsalLoad?.let { Text(stringResource(R.string.workout_day_context_futsal_load, it)) }
+            }
+        }
         content.restTimer?.let { timer ->
             RestTimerBar(timer, onAddRestTime, onRemoveRestTime, onSkipRestTimer)
         }

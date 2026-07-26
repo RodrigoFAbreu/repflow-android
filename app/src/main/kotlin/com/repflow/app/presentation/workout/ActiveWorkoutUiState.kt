@@ -19,6 +19,13 @@ data class ActiveWorkoutUiState(
     val errorMessage: ActiveWorkoutErrorReason? = null,
 )
 
+/** A read-only summary of recovery/futsal context for the active workout screen, per [com.repflow.app.application.recovery.WorkoutDayContext]. */
+data class WorkoutDayContextUi(
+    val heavyLegs: Int?,
+    val legDoms: Int?,
+    val futsalLoad: Double?,
+)
+
 data class ExercisePickerItem(
     val id: ExerciseId,
     val name: String,

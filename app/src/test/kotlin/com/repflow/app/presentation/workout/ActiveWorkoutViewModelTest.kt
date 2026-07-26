@@ -5,6 +5,9 @@ import com.repflow.app.application.exercise.FixedClock
 import com.repflow.app.application.exercise.InMemoryExerciseRepository
 import com.repflow.app.application.exercise.ObserveExercises
 import com.repflow.app.application.exercise.SequentialIdentifierGenerator
+import com.repflow.app.application.recovery.GetWorkoutDayContext
+import com.repflow.app.application.recovery.InMemoryFutsalRepository
+import com.repflow.app.application.recovery.InMemoryRecoveryRepository
 import com.repflow.app.application.workout.AbandonWorkoutSession
 import com.repflow.app.application.workout.AddWorkoutExercise
 import com.repflow.app.application.workout.AdjustRestTimer
@@ -45,6 +48,7 @@ class ActiveWorkoutViewModelTest {
         ActiveWorkoutViewModel(
             observeActiveWorkoutSession = ObserveActiveWorkoutSession(workoutRepository),
             observeExercises = ObserveExercises(exerciseRepository),
+            getWorkoutDayContext = GetWorkoutDayContext(InMemoryRecoveryRepository(), InMemoryFutsalRepository(), clock),
             startWorkoutSession = StartWorkoutSession(workoutRepository, clock, ids),
             addWorkoutExercise = AddWorkoutExercise(workoutRepository, ids),
             recordWorkoutSet = RecordWorkoutSet(workoutRepository, clock, ids),

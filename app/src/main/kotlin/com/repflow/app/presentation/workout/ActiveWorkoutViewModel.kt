@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.repflow.app.application.exercise.ExerciseStatusFilter
 import com.repflow.app.application.exercise.ObserveExercises
+import com.repflow.app.application.recovery.GetWorkoutDayContext
 import com.repflow.app.application.workout.AbandonWorkoutSession
 import com.repflow.app.application.workout.AddWorkoutExercise
 import com.repflow.app.application.workout.AddWorkoutExerciseCommand
@@ -31,6 +32,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -53,6 +55,7 @@ class ActiveWorkoutViewModel
     constructor(
         observeActiveWorkoutSession: ObserveActiveWorkoutSession,
         observeExercises: ObserveExercises,
+        private val getWorkoutDayContext: GetWorkoutDayContext,
         private val startWorkoutSession: StartWorkoutSession,
         private val addWorkoutExercise: AddWorkoutExercise,
         private val recordWorkoutSet: RecordWorkoutSet,
@@ -65,6 +68,20 @@ class ActiveWorkoutViewModel
         private val abandonWorkoutSession: AbandonWorkoutSession,
     ) : ViewModel() {
         private val error = MutableStateFlow<ActiveWorkoutErrorReason?>(null)
+        private val _dayContext = MutableStateFlow<WorkoutDayContextUi?>(null)
+        val dayContext: StateFlow<WorkoutDayContextUi?> = _dayContext
+
+        init {
+            viewModelScope.launch {
+                val context = getWorkoutDayContext()
+                _dayContext.value =
+                    WorkoutDayContextUi(
+                        heavyLegs = context.latestRecoveryEntry?.heavyLegs,
+                        legDoms = context.latestRecoveryEntry?.legDoms,
+                        futsalLoad = context.recentFutsalSession?.load,
+                    )
+            }
+        }
 
         private val content =
             observeActiveWorkoutSession()
