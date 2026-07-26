@@ -1,8 +1,7 @@
 # RepFlow Roadmap
 
-Active milestone: **Milestone 7 — History and backup (planning complete)** → [status](ACTIVE_MILESTONE.md)
-
-Active plan: [milestones/active/milestone-7-execution.md](milestones/active/milestone-7-execution.md)
+Every roadmap milestone (0-7) is complete. See [status](ACTIVE_MILESTONE.md)
+for the current post-MVP review state.
 
 ## Milestone 0 — Project foundation
 
@@ -57,10 +56,10 @@ Active plan: [milestones/active/milestone-7-execution.md](milestones/active/mile
 - [x] Manual overrides
 - [x] Policy versioning
 
-## Milestone 7 — History and backup
+## Milestone 7 — History and backup ✓ complete
 
-- [ ] Workout and exercise history
-- [ ] Basic progress views
-- [ ] Versioned JSON backups
-- [ ] CSV exports
-- [ ] Restore validation and safety snapshots
+- [x] Workout and exercise history
+- [x] Basic progress views
+- [x] Versioned JSON backups
+- [x] CSV exports
+- [x] Restore validation and safety snapshots
