@@ -12,10 +12,11 @@ recently recorded set, as the third complete vertical slice.
 
 ## Current checkpoint
 
-CP0 — Planning. Execution and reference guides created at
-`docs/milestones/active/milestone-3-execution.md` and
-`docs/milestones/active/milestone-3-reference.md`. No CP1–CP8 checkpoint
-has been implemented yet.
+CP1 complete: domain model for active workouts
+(`domain/workout/WorkoutSession`, `WorkoutExercise`, `WorkoutSet`, ids,
+`WorkoutSessionStatus`, `WorkoutValidationError`), pure Kotlin, with JVM
+unit tests (`WorkoutSessionTest`, `WorkoutExerciseTest`, `WorkoutSetTest`).
+CP2 (application layer) not started yet.
 
 Milestone 2 (Training Plans) remains complete and committed; see
 `docs/milestones/completed/milestone-2-execution.md` and
@@ -23,7 +24,7 @@ Milestone 2 (Training Plans) remains complete and committed; see
 
 ## Checkpoint checklist (Milestone 3)
 
-- [ ] CP1 — Domain model + pure JVM tests
+- [x] CP1 — Domain model + pure JVM tests
 - [ ] CP2 — Application contracts + use cases + tests
 - [ ] CP3 — Room entities, DAOs, mapper, migration 2→3, repository
 - [ ] CP4 — DAO + repository + migration instrumented tests on device
@@ -45,9 +46,8 @@ Milestone 2 (Training Plans) remains complete and committed; see
 
 ## Current blockers
 
-None. Milestone 3 planning (reference + execution guides) is complete;
-implementation (CP1) has not started yet, deferred to a following session
-per credit-budget guidance.
+None. Milestone 3 CP1 (domain model) is complete and verified. CP2
+(application contracts + use cases) is the next unstarted checkpoint.
 
 ## Active plan
 
