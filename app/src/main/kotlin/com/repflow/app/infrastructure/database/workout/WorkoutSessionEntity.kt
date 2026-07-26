@@ -39,4 +39,5 @@ data class WorkoutSessionEntity(
     @ColumnInfo(name = "ended_at") val endedAt: Long?,
     @ColumnInfo(name = "rest_timer_end_at_epoch_ms") val restTimerEndAtEpochMs: Long?,
     @ColumnInfo(name = "rest_timer_total_duration_seconds") val restTimerTotalDurationSeconds: Int?,
+    @ColumnInfo(name = "invalidated_at") val invalidatedAt: Long? = null,
 )

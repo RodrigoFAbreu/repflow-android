@@ -319,3 +319,25 @@ val MIGRATION_3_4: Migration =
             db.execSQL("ALTER TABLE `workout_sessions` ADD COLUMN `rest_timer_total_duration_seconds` INTEGER")
         }
     }
+
+/**
+ * The real, additive 6-to-7 migration adding five nullable columns across
+ * four existing tables (see `docs/milestones/active/milestone-8-reference.md`):
+ * pain and technique-quality feedback on `workout_sets`, a planned warm-up
+ * set count on `planned_exercises`, a completed-workout invalidation
+ * timestamp on `workout_sessions`, and a training-plan archive timestamp on
+ * `training_plans`. All five are nullable; existing rows simply get `NULL`.
+ * No `fallbackToDestructiveMigration` call exists anywhere (see
+ * [RepFlowDatabase]'s KDoc).
+ */
+@Suppress("MagicNumber")
+val MIGRATION_6_7: Migration =
+    object : Migration(6, 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `workout_sets` ADD COLUMN `pain` INTEGER")
+            db.execSQL("ALTER TABLE `workout_sets` ADD COLUMN `technique_quality` INTEGER")
+            db.execSQL("ALTER TABLE `planned_exercises` ADD COLUMN `target_warmup_sets` INTEGER")
+            db.execSQL("ALTER TABLE `workout_sessions` ADD COLUMN `invalidated_at` INTEGER")
+            db.execSQL("ALTER TABLE `training_plans` ADD COLUMN `archived_at` INTEGER")
+        }
+    }

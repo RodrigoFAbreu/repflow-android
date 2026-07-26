@@ -31,7 +31,11 @@ import com.repflow.app.infrastructure.database.workout.WorkoutSetEntity
  * [MIGRATION_4_5]; version 6 adds the progression-recommendation table via
  * [MIGRATION_5_6]. There is deliberately no `fallbackToDestructiveMigration`
  * anywhere in this codebase (see plan.md section G and additional
- * implementation correction 14).
+ * implementation correction 14). Version 7 adds five nullable columns
+ * (`workout_sets.pain`/`technique_quality`,
+ * `planned_exercises.target_warmup_sets`,
+ * `workout_sessions.invalidated_at`, `training_plans.archived_at`) via
+ * [MIGRATION_6_7].
  */
 @Database(
     entities = [
@@ -46,7 +50,7 @@ import com.repflow.app.infrastructure.database.workout.WorkoutSetEntity
         FutsalSessionEntity::class,
         ProgressionRecommendationEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class RepFlowDatabase : RoomDatabase() {

@@ -248,6 +248,112 @@ class RepFlowDatabaseMigrationTest {
         cursor.close()
     }
 
+    @Test
+    fun migrate6To7_preservesExistingRowsAndAddsNullableColumns() {
+        seedDatabaseThroughVersion6()
+
+        val migratedDb = helper.runMigrationsAndValidate(TEST_DB, 7, true, MIGRATION_6_7)
+
+        val planCursor = migratedDb.query("SELECT archived_at FROM training_plans WHERE id = 'plan-1'")
+        planCursor.moveToFirst()
+        assertEquals(true, planCursor.isNull(0))
+        planCursor.close()
+
+        val plannedExerciseCursor =
+            migratedDb.query("SELECT target_warmup_sets FROM planned_exercises WHERE id = 'planned-1'")
+        plannedExerciseCursor.moveToFirst()
+        assertEquals(true, plannedExerciseCursor.isNull(0))
+        plannedExerciseCursor.close()
+
+        val sessionCursor = migratedDb.query("SELECT invalidated_at FROM workout_sessions WHERE id = 'session-1'")
+        sessionCursor.moveToFirst()
+        assertEquals(true, sessionCursor.isNull(0))
+        sessionCursor.close()
+
+        val setCursor = migratedDb.query("SELECT pain, technique_quality FROM workout_sets WHERE id = 'set-1'")
+        setCursor.moveToFirst()
+        assertEquals(true, setCursor.isNull(0))
+        assertEquals(true, setCursor.isNull(1))
+        setCursor.close()
+    }
+
+    @Test
+    fun migrate6To7_allowsUpdatingTheNewColumns() {
+        seedDatabaseThroughVersion6()
+
+        val migratedDb = helper.runMigrationsAndValidate(TEST_DB, 7, true, MIGRATION_6_7)
+        migratedDb.execSQL("UPDATE training_plans SET archived_at = 5000 WHERE id = 'plan-1'")
+        migratedDb.execSQL("UPDATE planned_exercises SET target_warmup_sets = 2 WHERE id = 'planned-1'")
+        migratedDb.execSQL("UPDATE workout_sessions SET invalidated_at = 6000 WHERE id = 'session-1'")
+        migratedDb.execSQL("UPDATE workout_sets SET pain = 3, technique_quality = 4 WHERE id = 'set-1'")
+
+        val planCursor = migratedDb.query("SELECT archived_at FROM training_plans WHERE id = 'plan-1'")
+        planCursor.moveToFirst()
+        assertEquals(5000L, planCursor.getLong(0))
+        planCursor.close()
+
+        val plannedExerciseCursor =
+            migratedDb.query("SELECT target_warmup_sets FROM planned_exercises WHERE id = 'planned-1'")
+        plannedExerciseCursor.moveToFirst()
+        assertEquals(2, plannedExerciseCursor.getInt(0))
+        plannedExerciseCursor.close()
+
+        val sessionCursor = migratedDb.query("SELECT invalidated_at FROM workout_sessions WHERE id = 'session-1'")
+        sessionCursor.moveToFirst()
+        assertEquals(6000L, sessionCursor.getLong(0))
+        sessionCursor.close()
+
+        val setCursor = migratedDb.query("SELECT pain, technique_quality FROM workout_sets WHERE id = 'set-1'")
+        setCursor.moveToFirst()
+        assertEquals(3, setCursor.getInt(0))
+        assertEquals(4, setCursor.getInt(1))
+        setCursor.close()
+    }
+
+    private fun seedDatabaseThroughVersion6() {
+        helper.createDatabase(TEST_DB, 1).apply {
+            insertV1Exercise(this)
+            close()
+        }
+        helper.runMigrationsAndValidate(TEST_DB, 2, true, MIGRATION_1_2).apply {
+            execSQL(
+                "INSERT INTO training_plans (id, name, name_key, created_at, updated_at) " +
+                    "VALUES ('plan-1', 'Push Day', 'push day', 1000, 1000)",
+            )
+            execSQL(
+                "INSERT INTO training_plan_versions (id, plan_id, version_number, note, created_at) " +
+                    "VALUES ('version-1', 'plan-1', 1, NULL, 1000)",
+            )
+            execSQL(
+                "INSERT INTO planned_exercises (id, version_id, exercise_id, sort_order, target_sets, " +
+                    "target_kind, rep_min, rep_max, duration_min_seconds, duration_max_seconds, rest_seconds, " +
+                    "is_optional) VALUES ('planned-1', 'version-1', 'exercise-1', 0, 3, 'REPS', 8, 12, NULL, " +
+                    "NULL, 90, 0)",
+            )
+            close()
+        }
+        helper.runMigrationsAndValidate(TEST_DB, 3, true, MIGRATION_2_3).apply {
+            execSQL(
+                "INSERT INTO workout_sessions (id, training_plan_version_id, status, started_at, ended_at) " +
+                    "VALUES ('session-1', NULL, 'ACTIVE', 1000, NULL)",
+            )
+            execSQL(
+                "INSERT INTO workout_exercises (id, session_id, exercise_id, sort_order, " +
+                    "exercise_name_snapshot, tracking_type, planned_exercise_id) " +
+                    "VALUES ('we-1', 'session-1', 'exercise-1', 0, 'Bench Press', 'WEIGHT_AND_REPS', NULL)",
+            )
+            execSQL(
+                "INSERT INTO workout_sets (id, workout_exercise_id, sort_order, load, reps, duration_seconds, " +
+                    "rpe, is_warmup, created_at, updated_at) " +
+                    "VALUES ('set-1', 'we-1', 0, 60.0, 8, NULL, NULL, 0, 1000, 1000)",
+            )
+            close()
+        }
+        helper.runMigrationsAndValidate(TEST_DB, 4, true, MIGRATION_3_4).close()
+        helper.runMigrationsAndValidate(TEST_DB, 5, true, MIGRATION_4_5).close()
+        helper.runMigrationsAndValidate(TEST_DB, 6, true, MIGRATION_5_6).close()
+    }
+
     private fun insertV1Exercise(db: SupportSQLiteDatabase) {
         db.execSQL(
             "INSERT INTO exercises (id, name, name_key, tracking_type, instructions, " +

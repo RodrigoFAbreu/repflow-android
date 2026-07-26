@@ -41,4 +41,6 @@ data class WorkoutSetEntity(
     @ColumnInfo(name = "is_warmup") val isWarmup: Boolean,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
+    val pain: Int? = null,
+    @ColumnInfo(name = "technique_quality") val techniqueQuality: Int? = null,
 )

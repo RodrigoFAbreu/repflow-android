@@ -56,4 +56,5 @@ data class PlannedExerciseEntity(
     @ColumnInfo(name = "duration_max_seconds") val durationMaxSeconds: Long?,
     @ColumnInfo(name = "rest_seconds") val restSeconds: Long?,
     @ColumnInfo(name = "is_optional") val isOptional: Boolean,
+    @ColumnInfo(name = "target_warmup_sets") val targetWarmupSets: Int? = null,
 )
