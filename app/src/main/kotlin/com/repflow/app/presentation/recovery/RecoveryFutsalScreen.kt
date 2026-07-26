@@ -58,6 +58,11 @@ fun RecoveryFutsalScreen(
                 else -> null
             }
         if (text != null) {
+            // Dismiss any still-showing snackbar first (Milestone 8, CP2) - guards
+            // against overlapping feedback if a save resolves while an earlier one's
+            // snackbar is still up, rather than relying only on implicit
+            // LaunchedEffect-restart cancellation timing.
+            snackbarHostState.currentSnackbarData?.dismiss()
             snackbarHostState.showSnackbar(text)
             onMessageShown()
         }
@@ -106,7 +111,7 @@ fun RecoveryFutsalScreen(
                 label = { Text(stringResource(R.string.recovery_futsal_notes)) },
                 modifier = Modifier.fillMaxWidth(),
             )
-            TextButton(onClick = onSaveRecovery) {
+            TextButton(onClick = onSaveRecovery, enabled = !uiState.isSavingRecovery) {
                 Text(stringResource(R.string.recovery_futsal_save_recovery))
             }
 
@@ -134,7 +139,7 @@ fun RecoveryFutsalScreen(
             uiState.futsalLoad?.let { load ->
                 Text(stringResource(R.string.recovery_futsal_load, load.toString()))
             }
-            TextButton(onClick = onSaveFutsal) {
+            TextButton(onClick = onSaveFutsal, enabled = !uiState.isSavingFutsal) {
                 Text(stringResource(R.string.recovery_futsal_save_futsal))
             }
         }

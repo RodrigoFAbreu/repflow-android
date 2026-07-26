@@ -92,6 +92,38 @@ class RecoveryFutsalViewModelTest {
         }
 
     @Test
+    fun `onSaveRecovery ignores a second call while the first save is still in flight`() =
+        runTest {
+            val viewModel = createViewModel()
+            dispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.onSaveRecovery()
+            assertTrue(viewModel.uiState.value.isSavingRecovery)
+            viewModel.onSaveRecovery()
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(false, viewModel.uiState.value.isSavingRecovery)
+            assertEquals("saved", viewModel.uiState.value.recoverySavedMessage)
+        }
+
+    @Test
+    fun `onSaveFutsal ignores a second call while the first save is still in flight`() =
+        runTest {
+            val viewModel = createViewModel()
+            dispatcher.scheduler.advanceUntilIdle()
+            viewModel.onDurationChanged("60")
+            viewModel.onSessionRpeChanged("7")
+
+            viewModel.onSaveFutsal()
+            assertTrue(viewModel.uiState.value.isSavingFutsal)
+            viewModel.onSaveFutsal()
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertEquals(false, viewModel.uiState.value.isSavingFutsal)
+            assertEquals("saved", viewModel.uiState.value.futsalSavedMessage)
+        }
+
+    @Test
     fun `initial load reloads previously saved values for today`() =
         runTest {
             val today = clock.now().atZone(java.time.ZoneId.systemDefault()).toLocalDate()

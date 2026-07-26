@@ -24,6 +24,8 @@ data class RecoveryFutsalUiState(
     val notes: String = "",
     val durationMinutesInput: String = "",
     val sessionRpeInput: String = "",
+    val isSavingRecovery: Boolean = false,
+    val isSavingFutsal: Boolean = false,
     val recoverySavedMessage: String? = null,
     val futsalSavedMessage: String? = null,
     val errorMessage: String? = null,

@@ -21,6 +21,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -81,7 +82,16 @@ fun ExerciseListScreen(
                 is ExerciseListMessage.Archived -> archivedText to archivedUndoText
                 is ExerciseListMessage.OperationFailed -> operationFailedText to null
             }
-        val result = snackbarHostState.showSnackbar(message = text, actionLabel = actionLabel)
+        // A non-null actionLabel makes Material3 default duration to Indefinite,
+        // which never auto-dismisses and (since messages are shown one at a time)
+        // blocks every later message too - give the archive/Undo snackbar a finite
+        // duration explicitly (Milestone 8, CP2).
+        val result =
+            snackbarHostState.showSnackbar(
+                message = text,
+                actionLabel = actionLabel,
+                duration = SnackbarDuration.Long,
+            )
         if (result == SnackbarResult.ActionPerformed && current is ExerciseListMessage.Archived) {
             onUndoArchiveClicked(current.exerciseId)
         }

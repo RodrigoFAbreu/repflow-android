@@ -104,7 +104,9 @@ class RecoveryFutsalViewModel
         }
 
         fun onSaveRecovery() {
+            if (_uiState.value.isSavingRecovery) return
             val state = _uiState.value
+            _uiState.update { it.copy(isSavingRecovery = true) }
             viewModelScope.launch {
                 val today = clock.now().atZone(ZoneId.systemDefault()).toLocalDate()
                 val result =
@@ -123,13 +125,19 @@ class RecoveryFutsalViewModel
                         ),
                     )
                 when (result) {
-                    is DomainResult.Success -> _uiState.update { it.copy(recoverySavedMessage = "saved") }
-                    is DomainResult.Failure -> _uiState.update { it.copy(errorMessage = result.error.toMessageKey()) }
+                    is DomainResult.Success -> {
+                        _uiState.update { it.copy(isSavingRecovery = false, recoverySavedMessage = "saved") }
+                    }
+
+                    is DomainResult.Failure -> {
+                        _uiState.update { it.copy(isSavingRecovery = false, errorMessage = result.error.toMessageKey()) }
+                    }
                 }
             }
         }
 
         fun onSaveFutsal() {
+            if (_uiState.value.isSavingFutsal) return
             val state = _uiState.value
             val durationMinutes = state.durationMinutesInput.toIntOrNull()
             val sessionRpe = state.sessionRpeInput.toDoubleOrNull()
@@ -137,6 +145,7 @@ class RecoveryFutsalViewModel
                 _uiState.update { it.copy(errorMessage = "invalid") }
                 return
             }
+            _uiState.update { it.copy(isSavingFutsal = true) }
             viewModelScope.launch {
                 val today = clock.now().atZone(ZoneId.systemDefault()).toLocalDate()
                 val result =
@@ -144,8 +153,13 @@ class RecoveryFutsalViewModel
                         RecordFutsalSessionCommand(date = today, durationMinutes = durationMinutes, sessionRpe = sessionRpe),
                     )
                 when (result) {
-                    is DomainResult.Success -> _uiState.update { it.copy(futsalSavedMessage = "saved") }
-                    is DomainResult.Failure -> _uiState.update { it.copy(errorMessage = result.error.toMessageKey()) }
+                    is DomainResult.Success -> {
+                        _uiState.update { it.copy(isSavingFutsal = false, futsalSavedMessage = "saved") }
+                    }
+
+                    is DomainResult.Failure -> {
+                        _uiState.update { it.copy(isSavingFutsal = false, errorMessage = result.error.toMessageKey()) }
+                    }
                 }
             }
         }
