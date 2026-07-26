@@ -19,8 +19,13 @@ fun ActiveWorkoutRoute(viewModel: ActiveWorkoutViewModel = hiltViewModel()) {
         onRecordSet = viewModel::onRecordSet,
         onUndoLastSet = viewModel::onUndoLastSet,
         onEditLastSet = viewModel::onEditLastSet,
+        onAddRestTime = { viewModel.onAddRestTime(REST_ADJUST_SECONDS) },
+        onRemoveRestTime = { viewModel.onRemoveRestTime(REST_ADJUST_SECONDS) },
+        onSkipRestTimer = viewModel::onSkipRestTimer,
         onCompleteWorkout = viewModel::onCompleteWorkout,
         onAbandonWorkout = viewModel::onAbandonWorkout,
         onRetry = viewModel::onErrorShown,
     )
 }
+
+private const val REST_ADJUST_SECONDS = 15L

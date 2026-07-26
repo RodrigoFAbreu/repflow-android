@@ -6,6 +6,7 @@ import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.trainingplan.PlannedExerciseId
 import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
+import com.repflow.app.domain.workout.RestTimer
 import com.repflow.app.domain.workout.WorkoutExercise
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSession
@@ -32,6 +33,8 @@ object WorkoutEntityMapper {
             status = session.status.name,
             startedAt = session.startedAt.toEpochMilli(),
             endedAt = session.endedAt?.toEpochMilli(),
+            restTimerEndAtEpochMs = session.restTimer?.endAt?.toEpochMilli(),
+            restTimerTotalDurationSeconds = session.restTimer?.totalDurationSeconds,
         )
 
     fun toExerciseEntities(session: WorkoutSession): List<WorkoutExerciseEntity> =
@@ -98,7 +101,14 @@ object WorkoutEntityMapper {
                 startedAt = Instant.ofEpochMilli(session.startedAt),
                 endedAt = session.endedAt?.let(Instant::ofEpochMilli),
                 exercises = exercises,
+                restTimer = toRestTimer(session),
             ).mapFailure { error -> WorkoutMappingError.InvalidFields(session.id, listOf(error)) }
+    }
+
+    private fun toRestTimer(session: WorkoutSessionEntity): RestTimer? {
+        val endAtEpochMs = session.restTimerEndAtEpochMs ?: return null
+        val totalDurationSeconds = session.restTimerTotalDurationSeconds ?: return null
+        return RestTimer(endAt = Instant.ofEpochMilli(endAtEpochMs), totalDurationSeconds = totalDurationSeconds)
     }
 
     private fun toDomain(

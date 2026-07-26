@@ -27,6 +27,7 @@ data class WorkoutSession private constructor(
     val startedAt: Instant,
     val endedAt: Instant?,
     val exercises: List<WorkoutExercise>,
+    val restTimer: RestTimer?,
 ) {
     companion object {
         /** Starts a new [WorkoutSessionStatus.ACTIVE] session with no exercises yet. */
@@ -42,6 +43,7 @@ data class WorkoutSession private constructor(
                 startedAt = startedAt,
                 endedAt = null,
                 exercises = emptyList(),
+                restTimer = null,
             )
 
         /** Rebuilds a session from persisted state, re-validating its invariants. */
@@ -53,6 +55,7 @@ data class WorkoutSession private constructor(
             startedAt: Instant,
             endedAt: Instant?,
             exercises: List<WorkoutExercise>,
+            restTimer: RestTimer? = null,
         ): DomainResult<WorkoutSession, WorkoutValidationError> {
             if (endedAt != null && endedAt < startedAt) {
                 return DomainResult.Failure(WorkoutValidationError.EndedBeforeStarted)
@@ -76,6 +79,7 @@ data class WorkoutSession private constructor(
                     startedAt = startedAt,
                     endedAt = endedAt,
                     exercises = exercises.sortedBy { it.order },
+                    restTimer = if (isTerminal) null else restTimer,
                 ),
             )
         }
@@ -121,7 +125,25 @@ data class WorkoutSession private constructor(
         if (endedAt < startedAt) {
             return DomainResult.Failure(WorkoutValidationError.EndedBeforeStarted)
         }
-        return DomainResult.Success(copy(status = status, endedAt = endedAt))
+        return DomainResult.Success(copy(status = status, endedAt = endedAt, restTimer = null))
+    }
+
+    /** Starts (or replaces) the session's rest timer. Only valid while [WorkoutSessionStatus.ACTIVE]. */
+    fun withStartedRestTimer(timer: RestTimer): DomainResult<WorkoutSession, WorkoutValidationError> {
+        requireActive()?.let { return DomainResult.Failure(it) }
+        return DomainResult.Success(copy(restTimer = timer))
+    }
+
+    /** Replaces the rest timer with an adjusted one (e.g. after add/remove time). Only valid while [WorkoutSessionStatus.ACTIVE]. */
+    fun withAdjustedRestTimer(timer: RestTimer): DomainResult<WorkoutSession, WorkoutValidationError> {
+        requireActive()?.let { return DomainResult.Failure(it) }
+        return DomainResult.Success(copy(restTimer = timer))
+    }
+
+    /** Clears (skips) the rest timer, if any. Only valid while [WorkoutSessionStatus.ACTIVE]. */
+    fun withClearedRestTimer(): DomainResult<WorkoutSession, WorkoutValidationError> {
+        requireActive()?.let { return DomainResult.Failure(it) }
+        return DomainResult.Success(copy(restTimer = null))
     }
 
     private fun requireActive(): WorkoutValidationError? =

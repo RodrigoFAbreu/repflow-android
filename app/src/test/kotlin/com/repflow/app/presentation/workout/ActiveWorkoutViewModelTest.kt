@@ -7,11 +7,14 @@ import com.repflow.app.application.exercise.ObserveExercises
 import com.repflow.app.application.exercise.SequentialIdentifierGenerator
 import com.repflow.app.application.workout.AbandonWorkoutSession
 import com.repflow.app.application.workout.AddWorkoutExercise
+import com.repflow.app.application.workout.AdjustRestTimer
 import com.repflow.app.application.workout.CompleteWorkoutSession
 import com.repflow.app.application.workout.EditLastWorkoutSet
 import com.repflow.app.application.workout.InMemoryWorkoutRepository
 import com.repflow.app.application.workout.ObserveActiveWorkoutSession
 import com.repflow.app.application.workout.RecordWorkoutSet
+import com.repflow.app.application.workout.SkipRestTimer
+import com.repflow.app.application.workout.StartRestTimer
 import com.repflow.app.application.workout.StartWorkoutSession
 import com.repflow.app.application.workout.UndoLastWorkoutSet
 import com.repflow.app.domain.common.DomainResult
@@ -47,6 +50,9 @@ class ActiveWorkoutViewModelTest {
             recordWorkoutSet = RecordWorkoutSet(workoutRepository, clock, ids),
             undoLastWorkoutSet = UndoLastWorkoutSet(workoutRepository),
             editLastWorkoutSet = EditLastWorkoutSet(workoutRepository, clock),
+            startRestTimer = StartRestTimer(workoutRepository, clock),
+            adjustRestTimer = AdjustRestTimer(workoutRepository, clock),
+            skipRestTimer = SkipRestTimer(workoutRepository),
             completeWorkoutSession = CompleteWorkoutSession(workoutRepository, clock),
             abandonWorkoutSession = AbandonWorkoutSession(workoutRepository, clock),
         )

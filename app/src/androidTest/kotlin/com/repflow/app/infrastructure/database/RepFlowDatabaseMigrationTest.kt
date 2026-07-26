@@ -131,6 +131,66 @@ class RepFlowDatabaseMigrationTest {
         cursor.close()
     }
 
+    @Test
+    fun migrate3To4_preservesExistingWorkoutRowsAndAddsNullableRestTimerColumns() {
+        helper.createDatabase(TEST_DB, 1).apply {
+            insertV1Exercise(this)
+            close()
+        }
+        helper.runMigrationsAndValidate(TEST_DB, 2, true, MIGRATION_1_2).close()
+        helper.runMigrationsAndValidate(TEST_DB, 3, true, MIGRATION_2_3).apply {
+            execSQL(
+                "INSERT INTO workout_sessions (id, training_plan_version_id, status, started_at, ended_at) " +
+                    "VALUES ('session-1', NULL, 'ACTIVE', 1000, NULL)",
+            )
+            close()
+        }
+
+        val migratedDb = helper.runMigrationsAndValidate(TEST_DB, 4, true, MIGRATION_3_4)
+
+        val cursor =
+            migratedDb.query(
+                "SELECT rest_timer_end_at_epoch_ms, rest_timer_total_duration_seconds " +
+                    "FROM workout_sessions WHERE id = 'session-1'",
+            )
+        cursor.moveToFirst()
+        assertEquals(true, cursor.isNull(0))
+        assertEquals(true, cursor.isNull(1))
+        cursor.close()
+    }
+
+    @Test
+    fun migrate3To4_allowsUpdatingTheNewRestTimerColumns() {
+        helper.createDatabase(TEST_DB, 1).apply {
+            insertV1Exercise(this)
+            close()
+        }
+        helper.runMigrationsAndValidate(TEST_DB, 2, true, MIGRATION_1_2).close()
+        helper.runMigrationsAndValidate(TEST_DB, 3, true, MIGRATION_2_3).apply {
+            execSQL(
+                "INSERT INTO workout_sessions (id, training_plan_version_id, status, started_at, ended_at) " +
+                    "VALUES ('session-1', NULL, 'ACTIVE', 1000, NULL)",
+            )
+            close()
+        }
+
+        val migratedDb = helper.runMigrationsAndValidate(TEST_DB, 4, true, MIGRATION_3_4)
+        migratedDb.execSQL(
+            "UPDATE workout_sessions SET rest_timer_end_at_epoch_ms = 91000, " +
+                "rest_timer_total_duration_seconds = 90 WHERE id = 'session-1'",
+        )
+
+        val cursor =
+            migratedDb.query(
+                "SELECT rest_timer_end_at_epoch_ms, rest_timer_total_duration_seconds " +
+                    "FROM workout_sessions WHERE id = 'session-1'",
+            )
+        cursor.moveToFirst()
+        assertEquals(91000L, cursor.getLong(0))
+        assertEquals(90, cursor.getInt(1))
+        cursor.close()
+    }
+
     private fun insertV1Exercise(db: SupportSQLiteDatabase) {
         db.execSQL(
             "INSERT INTO exercises (id, name, name_key, tracking_type, instructions, " +

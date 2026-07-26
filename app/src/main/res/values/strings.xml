@@ -76,6 +76,10 @@
     <string name="workout_active_undo_set">Undo</string>
     <string name="workout_active_edit_set">Edit</string>
     <string name="workout_active_add_exercise">Add exercise</string>
+    <string name="workout_active_rest_timer_remaining">Rest: %1$d:%2$02d</string>
+    <string name="workout_active_rest_timer_add">+15s</string>
+    <string name="workout_active_rest_timer_remove">-15s</string>
+    <string name="workout_active_rest_timer_skip">Skip</string>
 
     <string name="training_plan_editor_title_create">New plan</string>
     <string name="training_plan_editor_title_edit">Edit plan</string>

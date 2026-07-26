@@ -67,6 +67,8 @@ class WorkoutDaoTest {
         status = status,
         startedAt = 1_000L,
         endedAt = null,
+        restTimerEndAtEpochMs = null,
+        restTimerTotalDurationSeconds = null,
     )
 
     private fun exercise(

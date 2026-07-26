@@ -20,7 +20,8 @@ import com.repflow.app.infrastructure.database.workout.WorkoutSetEntity
 /**
  * RepFlow's single Room database. Version 2 added the training-plan tables
  * via [MIGRATION_1_2]; version 3 adds the active-workout tables via
- * [MIGRATION_2_3]. There is deliberately no
+ * [MIGRATION_2_3]; version 4 adds the rest-timer columns via
+ * [MIGRATION_3_4]. There is deliberately no
  * `fallbackToDestructiveMigration` anywhere in this codebase (see plan.md
  * section G and additional implementation correction 14).
  */
@@ -34,7 +35,7 @@ import com.repflow.app.infrastructure.database.workout.WorkoutSetEntity
         WorkoutExerciseEntity::class,
         WorkoutSetEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class RepFlowDatabase : RoomDatabase() {

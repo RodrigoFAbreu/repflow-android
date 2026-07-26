@@ -48,6 +48,9 @@ fun ActiveWorkoutScreen(
     onRecordSet: (WorkoutExerciseId, Double?, Int?) -> Unit,
     onUndoLastSet: (WorkoutExerciseId) -> Unit,
     onEditLastSet: (WorkoutExerciseId, Double?, Int?) -> Unit,
+    onAddRestTime: () -> Unit,
+    onRemoveRestTime: () -> Unit,
+    onSkipRestTimer: () -> Unit,
     onCompleteWorkout: (WorkoutSessionId) -> Unit,
     onAbandonWorkout: (WorkoutSessionId) -> Unit,
     onRetry: () -> Unit,
@@ -75,6 +78,9 @@ fun ActiveWorkoutScreen(
                         onRecordSet = onRecordSet,
                         onUndoLastSet = onUndoLastSet,
                         onEditLastSet = onEditLastSet,
+                        onAddRestTime = onAddRestTime,
+                        onRemoveRestTime = onRemoveRestTime,
+                        onSkipRestTimer = onSkipRestTimer,
                         onCompleteWorkout = onCompleteWorkout,
                         onAbandonWorkout = onAbandonWorkout,
                     )
@@ -116,10 +122,16 @@ private fun ActiveSessionState(
     onRecordSet: (WorkoutExerciseId, Double?, Int?) -> Unit,
     onUndoLastSet: (WorkoutExerciseId) -> Unit,
     onEditLastSet: (WorkoutExerciseId, Double?, Int?) -> Unit,
+    onAddRestTime: () -> Unit,
+    onRemoveRestTime: () -> Unit,
+    onSkipRestTimer: () -> Unit,
     onCompleteWorkout: (WorkoutSessionId) -> Unit,
     onAbandonWorkout: (WorkoutSessionId) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
+        content.restTimer?.let { timer ->
+            RestTimerBar(timer, onAddRestTime, onRemoveRestTime, onSkipRestTimer)
+        }
         LazyColumn(modifier = Modifier.weight(1f)) {
             items(items = content.exercises, key = { it.id.value }) { exercise ->
                 ExerciseCard(exercise, onRecordSet, onUndoLastSet, onEditLastSet)
@@ -136,6 +148,56 @@ private fun ActiveSessionState(
         }
     }
 }
+
+@Composable
+private fun RestTimerBar(
+    timer: RestTimerUi,
+    onAddRestTime: () -> Unit,
+    onRemoveRestTime: () -> Unit,
+    onSkipRestTimer: () -> Unit,
+) {
+    var remainingSeconds by remember(timer.endAt) {
+        mutableStateOf(
+            (
+                timer.endAt.epochSecond -
+                    java.time.Instant
+                        .now()
+                        .epochSecond
+            ).coerceAtLeast(0),
+        )
+    }
+    androidx.compose.runtime.LaunchedEffect(timer.endAt) {
+        while (remainingSeconds > 0) {
+            kotlinx.coroutines.delay(TICK_INTERVAL_MILLIS)
+            remainingSeconds =
+                (
+                    timer.endAt.epochSecond -
+                        java.time.Instant
+                            .now()
+                            .epochSecond
+                ).coerceAtLeast(0)
+        }
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            stringResource(
+                R.string.workout_active_rest_timer_remaining,
+                remainingSeconds / MINUTE_SECONDS,
+                remainingSeconds % MINUTE_SECONDS,
+            ),
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onRemoveRestTime) { Text(stringResource(R.string.workout_active_rest_timer_remove)) }
+        TextButton(onClick = onAddRestTime) { Text(stringResource(R.string.workout_active_rest_timer_add)) }
+        TextButton(onClick = onSkipRestTimer) { Text(stringResource(R.string.workout_active_rest_timer_skip)) }
+    }
+}
+
+private const val MINUTE_SECONDS = 60L
+private const val TICK_INTERVAL_MILLIS = 1_000L
 
 @Composable
 private fun ExerciseCard(

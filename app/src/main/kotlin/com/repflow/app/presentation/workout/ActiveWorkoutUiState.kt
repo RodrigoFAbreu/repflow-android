@@ -34,6 +34,7 @@ sealed interface ActiveWorkoutContent {
         val sessionId: WorkoutSessionId,
         val startedAt: Instant,
         val exercises: List<ActiveExerciseUi>,
+        val restTimer: RestTimerUi? = null,
     ) : ActiveWorkoutContent
 
     data class ObservationFailed(
@@ -54,6 +55,12 @@ data class ActiveSetUi(
     val load: Double?,
     val reps: Int?,
     val durationSeconds: Int?,
+)
+
+/** Presentation carries the absolute end timestamp; the Composable derives remaining time via its own 1s tick, so a full recomposition after process death reconstructs the correct value with no drift. */
+data class RestTimerUi(
+    val endAt: Instant,
+    val totalDurationSeconds: Int,
 )
 
 /** The specific failure cause is deliberately not surfaced verbatim to the user, mirroring the list-screen conventions elsewhere in the app. */

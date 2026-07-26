@@ -3,6 +3,7 @@ package com.repflow.app.data.workout
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseTrackingType
+import com.repflow.app.domain.workout.RestTimer
 import com.repflow.app.domain.workout.WorkoutExercise
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSession
@@ -71,5 +72,22 @@ class WorkoutEntityMapperTest {
             ) as WorkoutSession
 
         assertEquals(sessionWithExercise, rebuilt)
+    }
+
+    @Test
+    fun `round-trips a session with an active rest timer`() {
+        val session = WorkoutSession.start(WorkoutSessionId("session-1"), null, startedAt)
+        val withTimer =
+            requireSuccess(
+                session.withStartedRestTimer(RestTimer.start(90, startedAt)),
+            ) as WorkoutSession
+
+        val sessionEntity = WorkoutEntityMapper.toSessionEntity(withTimer)
+        val rebuilt =
+            requireSuccess(
+                WorkoutEntityMapper.toDomain(sessionEntity, emptyList(), emptyMap()),
+            ) as WorkoutSession
+
+        assertEquals(withTimer.restTimer, rebuilt.restTimer)
     }
 }

@@ -157,6 +157,47 @@ class WorkoutSessionTest {
         assertEquals(DomainResult.Failure(WorkoutValidationError.EndedBeforeStarted), result)
     }
 
+    @Test
+    fun `withStartedRestTimer sets the timer on an active session`() {
+        val session = WorkoutSession.start(WorkoutSessionId("s1"), null, startedAt)
+        val timer = RestTimer.start(90, startedAt)
+
+        val updated = requireSuccess(session.withStartedRestTimer(timer))
+
+        assertEquals(timer, updated.restTimer)
+    }
+
+    @Test
+    fun `withClearedRestTimer removes the timer`() {
+        val session = WorkoutSession.start(WorkoutSessionId("s1"), null, startedAt)
+        val withTimer = requireSuccess(session.withStartedRestTimer(RestTimer.start(90, startedAt)))
+
+        val cleared = requireSuccess(withTimer.withClearedRestTimer())
+
+        assertEquals(null, cleared.restTimer)
+    }
+
+    @Test
+    fun `completing a session clears any running rest timer`() {
+        val session = WorkoutSession.start(WorkoutSessionId("s1"), null, startedAt)
+        val withTimer = requireSuccess(session.withStartedRestTimer(RestTimer.start(90, startedAt)))
+
+        val completed = requireSuccess(withTimer.complete(startedAt.plusSeconds(30)))
+
+        assertEquals(null, completed.restTimer)
+    }
+
+    @Test
+    fun `rest timer methods reject a non-active session`() {
+        val session = WorkoutSession.start(WorkoutSessionId("s1"), null, startedAt)
+        val completed = requireSuccess(session.complete(startedAt.plusSeconds(30)))
+
+        assertEquals(
+            DomainResult.Failure(WorkoutValidationError.SessionNotActive),
+            completed.withStartedRestTimer(RestTimer.start(90, startedAt)),
+        )
+    }
+
     private fun <T> requireSuccess(result: DomainResult<T, *>): T =
         when (result) {
             is DomainResult.Success -> result.value

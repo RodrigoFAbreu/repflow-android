@@ -7,18 +7,23 @@ import com.repflow.app.application.exercise.ObserveExercises
 import com.repflow.app.application.workout.AbandonWorkoutSession
 import com.repflow.app.application.workout.AddWorkoutExercise
 import com.repflow.app.application.workout.AddWorkoutExerciseCommand
+import com.repflow.app.application.workout.AdjustRestTimer
 import com.repflow.app.application.workout.CompleteWorkoutSession
 import com.repflow.app.application.workout.EditLastWorkoutSet
 import com.repflow.app.application.workout.EditLastWorkoutSetCommand
 import com.repflow.app.application.workout.ObserveActiveWorkoutSession
 import com.repflow.app.application.workout.RecordWorkoutSet
 import com.repflow.app.application.workout.RecordWorkoutSetCommand
+import com.repflow.app.application.workout.RestTimerAdjustment
+import com.repflow.app.application.workout.SkipRestTimer
+import com.repflow.app.application.workout.StartRestTimer
 import com.repflow.app.application.workout.StartWorkoutSession
 import com.repflow.app.application.workout.StartWorkoutSessionCommand
 import com.repflow.app.application.workout.UndoLastWorkoutSet
 import com.repflow.app.application.workout.WorkoutOperationError
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.exercise.Exercise
+import com.repflow.app.domain.workout.RestTimer
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSession
 import com.repflow.app.domain.workout.WorkoutSessionId
@@ -41,7 +46,7 @@ import javax.inject.Inject
  * adding an ad hoc exercise, recording/undoing/editing a set, and
  * completing/abandoning the session.
  */
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "TooManyFunctions")
 @HiltViewModel
 class ActiveWorkoutViewModel
     @Inject
@@ -53,6 +58,9 @@ class ActiveWorkoutViewModel
         private val recordWorkoutSet: RecordWorkoutSet,
         private val undoLastWorkoutSet: UndoLastWorkoutSet,
         private val editLastWorkoutSet: EditLastWorkoutSet,
+        private val startRestTimer: StartRestTimer,
+        private val adjustRestTimer: AdjustRestTimer,
+        private val skipRestTimer: SkipRestTimer,
         private val completeWorkoutSession: CompleteWorkoutSession,
         private val abandonWorkoutSession: AbandonWorkoutSession,
     ) : ViewModel() {
@@ -110,18 +118,36 @@ class ActiveWorkoutViewModel
         ) {
             val sessionId = activeSessionId() ?: return
             launchAction {
-                recordWorkoutSet(
-                    RecordWorkoutSetCommand(
-                        sessionId = sessionId,
-                        exerciseId = exerciseId,
-                        load = load,
-                        reps = reps,
-                        durationSeconds = null,
-                        rpe = null,
-                        isWarmup = false,
-                    ),
-                )
+                val result =
+                    recordWorkoutSet(
+                        RecordWorkoutSetCommand(
+                            sessionId = sessionId,
+                            exerciseId = exerciseId,
+                            load = load,
+                            reps = reps,
+                            durationSeconds = null,
+                            rpe = null,
+                            isWarmup = false,
+                        ),
+                    )
+                if (result is DomainResult.Success) startRestTimer(sessionId)
+                result
             }
+        }
+
+        fun onAddRestTime(seconds: Long) {
+            val sessionId = activeSessionId() ?: return
+            launchAction { adjustRestTimer(sessionId, RestTimerAdjustment.ADD, seconds) }
+        }
+
+        fun onRemoveRestTime(seconds: Long) {
+            val sessionId = activeSessionId() ?: return
+            launchAction { adjustRestTimer(sessionId, RestTimerAdjustment.REMOVE, seconds) }
+        }
+
+        fun onSkipRestTimer() {
+            val sessionId = activeSessionId() ?: return
+            launchAction { skipRestTimer(sessionId) }
         }
 
         fun onUndoLastSet(exerciseId: WorkoutExerciseId) {
@@ -185,6 +211,7 @@ private fun toContent(session: WorkoutSession?): ActiveWorkoutContent =
         ActiveWorkoutContent.Active(
             sessionId = session.id,
             startedAt = session.startedAt,
+            restTimer = session.restTimer?.toUi(),
             exercises =
                 session.exercises.map { exercise ->
                     ActiveExerciseUi(
@@ -205,6 +232,8 @@ private fun toContent(session: WorkoutSession?): ActiveWorkoutContent =
                 },
         )
     }
+
+private fun RestTimer.toUi(): RestTimerUi = RestTimerUi(endAt = endAt, totalDurationSeconds = totalDurationSeconds)
 
 private fun toPickerItem(exercise: Exercise): ExercisePickerItem =
     ExercisePickerItem(id = exercise.id, name = exercise.name.value, trackingType = exercise.trackingType)

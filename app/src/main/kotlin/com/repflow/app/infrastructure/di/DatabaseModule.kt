@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.repflow.app.infrastructure.database.MIGRATION_1_2
 import com.repflow.app.infrastructure.database.MIGRATION_2_3
+import com.repflow.app.infrastructure.database.MIGRATION_3_4
 import com.repflow.app.infrastructure.database.RepFlowDatabase
 import com.repflow.app.infrastructure.database.exercise.ExerciseDao
 import com.repflow.app.infrastructure.database.trainingplan.PlannedExerciseDao
@@ -36,7 +37,7 @@ object DatabaseModule {
     ): RepFlowDatabase =
         Room
             .databaseBuilder(context, RepFlowDatabase::class.java, DATABASE_NAME)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .build()
 
     @Provides

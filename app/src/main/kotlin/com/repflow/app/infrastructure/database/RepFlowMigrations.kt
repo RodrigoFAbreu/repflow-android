@@ -207,3 +207,21 @@ val MIGRATION_2_3: Migration =
             )
         }
     }
+
+/**
+ * The real, additive 3-to-4 migration adding the rest-timer's absolute end
+ * timestamp and total duration to `workout_sessions` (see
+ * `docs/milestones/active/milestone-4-reference.md`'s data model section).
+ * Both new columns are nullable; existing rows simply get `NULL` (no active
+ * rest timer), which is exactly the correct default. No
+ * `fallbackToDestructiveMigration` call exists anywhere (see
+ * [RepFlowDatabase]'s KDoc).
+ */
+@Suppress("MagicNumber")
+val MIGRATION_3_4: Migration =
+    object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `workout_sessions` ADD COLUMN `rest_timer_end_at_epoch_ms` INTEGER")
+            db.execSQL("ALTER TABLE `workout_sessions` ADD COLUMN `rest_timer_total_duration_seconds` INTEGER")
+        }
+    }
