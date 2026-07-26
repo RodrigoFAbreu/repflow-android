@@ -1,8 +1,8 @@
 # RepFlow Roadmap
 
-Active milestone: **Milestone 6 — Progression recommendations (not yet planned)** → [status](ACTIVE_MILESTONE.md)
+Active milestone: **Milestone 6 — Progression recommendations (planning complete)** → [status](ACTIVE_MILESTONE.md)
 
-Completed plan: [milestones/completed/milestone-5-execution.md](milestones/completed/milestone-5-execution.md)
+Active plan: [milestones/active/milestone-6-execution.md](milestones/active/milestone-6-execution.md)
 
 ## Milestone 0 — Project foundation
 
