@@ -1,8 +1,10 @@
 # RepFlow Roadmap
 
-Active milestone: **Milestone 1 — Exercise Library** → [status](ACTIVE_MILESTONE.md)
+Active milestone: **Milestone 2 — Training Plans (complete)** → [status](ACTIVE_MILESTONE.md)
 
-Active plan: [milestones/active/milestone-1-execution.md](milestones/active/milestone-1-execution.md)
+Completed plan: [milestones/completed/milestone-2-execution.md](milestones/completed/milestone-2-execution.md)
+
+Milestone 3 planning has not yet started.
 
 ## Milestone 0 — Project foundation
 
@@ -21,12 +23,12 @@ Active plan: [milestones/active/milestone-1-execution.md](milestones/active/mile
 - [x] Add exercise list and editor UI
 - [x] Add unit, repository, and basic UI tests
 
-## Milestone 2 — Training plans
+## Milestone 2 — Training plans ✓ complete
 
-- [ ] Versioned training plan domain
-- [ ] Plan creation and editing
-- [ ] Ordered exercises and targets
-- [ ] Historical version preservation
+- [x] Versioned training plan domain
+- [x] Plan creation and editing
+- [x] Ordered exercises and targets
+- [x] Historical version preservation
 
 ## Milestone 3 — Active workout
 

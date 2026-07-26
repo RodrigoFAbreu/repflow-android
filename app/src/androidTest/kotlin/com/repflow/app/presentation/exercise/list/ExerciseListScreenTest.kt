@@ -49,6 +49,7 @@ class ExerciseListScreenTest {
                 onRetry = onRetry,
                 onExerciseClick = onExerciseClick,
                 onCreateClick = onCreateClick,
+                onPlansClick = {},
                 onArchiveClicked = onArchiveClicked,
                 onRestoreClicked = onRestoreClicked,
                 onUndoArchiveClicked = onUndoArchiveClicked,

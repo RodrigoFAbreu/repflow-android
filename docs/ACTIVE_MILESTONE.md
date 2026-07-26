@@ -2,102 +2,67 @@
 
 ## Milestone
 
-Milestone 1 — Exercise Library
+Milestone 2 — Training Plans (complete, pending commit)
 
 ## Goal
 
-Deliver custom exercise creation, listing, search, editing, archive and restore
-as the first complete vertical slice.
+Deliver versioned training-plan creation and editing (ordered exercises with
+targets), with historical version preservation, as the second complete
+vertical slice.
 
 ## Current checkpoint
 
-**Milestone complete.** All CPs 1–10 implemented and verified; CP11 deferred
-per plan; CP12 (docs + final review) done in this session.
+All checkpoints (CP1–CP8) complete. Milestone 2 is fully implemented,
+verified, and ready for its completion commit.
 
 ## Checkpoint checklist
 
-- [x] CP1 — M0 cleanup
-- [x] CP2 — Dependencies + schema export config
-- [x] CP3 — Domain model + pure JVM tests
-- [x] CP4 — Application contracts + use cases
-- [x] CP5 — Room entity, DAO, mapper, repository
-- [x] CP6 — DAO + repository instrumented tests on device
-- [x] CP7 — Hilt bindings
-- [x] CP8 — Exercise list end to end
-- [x] CP9 — Exercise editor end to end
-- [x] CP10 — Archive / restore + snackbar undo
-- [ ] CP11 — Optional built-in catalog (deferred to M1.1)
-- [x] CP12 — Docs + final review
+- [x] CP1 — Domain model + pure JVM tests
+- [x] CP2 — Application contracts + use cases + tests
+- [x] CP3 — Room entities, DAOs, mapper, migration 1→2, repository
+- [x] CP4 — DAO + repository + migration instrumented tests on device
+- [x] CP5 — Hilt bindings
+- [x] CP6 — Training plan list end to end
+- [x] CP7 — Training plan editor end to end (create + revise)
+- [x] CP8 — Docs + final architectural review
 
 ## Approved decisions (quick reference)
 
-- Tracking types: `WEIGHT_AND_REPS`, `REPS_ONLY`, `DURATION`
-- Name key: NFKC → trim → collapse whitespace → `lowercase(Locale.ROOT)`
-- Search: normalized substring `LIKE`, bound param, accent-sensitive
-- Uniqueness spans active **and** archived rows
-- Archive/restore only; permanent deletion deferred
-- Room schema version: 1; no destructive migration fallback
-- Duplicate check on update excludes the exercise being edited (§P-1)
-- Archive undo is idempotent (§P-8)
-- Save unchanged draft performs no DB write (§P-9)
+- Plan "current version" is a query concept, not state stored on `TrainingPlan`
+- Editing a plan always creates a new immutable version; never mutates one
+- Plan archive/delete out of scope for M2
+- Reordering via move-up/move-down buttons, no drag-and-drop
+- Room schema v1 → v2: real, additive migration + `MigrationTestHelper` test
+- Referenced exercises must exist and match the declared target kind
 
 ## Current blockers
 
-None. Milestone 1 Definition of Done is met.
+None. Milestone 2 is done; Milestone 3 planning has not yet started (deferred
+for the next session per credit-budget guidance).
 
 ## Active plan
 
-- Execution guide: `docs/milestones/active/milestone-1-execution.md`
-- Full reference (all decisions, invariants, DoD): `docs/milestones/active/milestone-1-reference.md`
-
-## Verification for CP3–5
-
-```bash
-./gradlew testDebugUnitTest
-./gradlew spotlessCheck
-./gradlew detekt
-```
-
-## Schema verification (CP5) — schema currently untracked
-
-```bash
-./gradlew kspDebugKotlin
-git status --short -- app/schemas
-find app/schemas -type f -name '*.json' -print
-```
-
-Confirm the expected JSON exists, inspect its content, and confirm
-`app/schemas` is not git-ignored. Report whether the schema is untracked,
-modified, or clean. `git diff --exit-code -- app/schemas` is insufficient
-while the schema is untracked: it exits 0 without detecting the file.
-
-Once the schema is tracked, also verify no new untracked schema appeared:
-
-```bash
-./gradlew kspDebugKotlin
-git diff --exit-code -- app/schemas
-git status --short -- app/schemas
-```
-
-## Verification for CP6
-
-```bash
-./gradlew connectedDebugAndroidTest
-```
-
-Device or emulator required. `assembleDebugAndroidTest` compiles but does
-not execute. Do not report CP6 as passing unless this connected task
-actually completes successfully.
+- Completed docs: `docs/milestones/completed/milestone-2-execution.md`,
+  `docs/milestones/completed/milestone-2-reference.md`
 
 ## Last verified state
 
-- Unit tests: `./gradlew testDebugUnitTest` — 109 tests, 0 failures
+- Unit tests: `./gradlew testDebugUnitTest` — 163 tests, 0 failures
 - Static checks: `./gradlew spotlessCheck detekt lintDebug` — all pass
-- Schema: `app/schemas/com.repflow.app.infrastructure.database.RepFlowDatabase/1.json`
-  tracked in git; `kspDebugKotlin` produced no drift
-- Instrumented tests: `./gradlew connectedDebugAndroidTest` — 46 tests, 0
-  failures, 0 skipped, run on physical device (SM-S928B, Android 16)
-- Manual smoke test: app installed and launched on the same device; app
-  starts on the Exercise list, created "BenchPress", verified it appears in
-  the list, force-stopped the app and relaunched — exercise persisted. No
-  crashes observed in logcat. Test app then uninstalled to reset device state.
+- Instrumented tests: `./gradlew connectedDebugAndroidTest` — 90 tests, 0
+  failures, run on `RepFlow_S24_Ultra_API_37` emulator
+- Manual smoke test on emulator: created a plan with 2 exercises (Squat +
+  Deadlift, mixed sets/rep-range targets), edited it (removed a row), saved
+  a new version, confirmed the list reflects the new exercise count, and
+  confirmed a separately created plan survives a full app-process restart
+  (Room persistence)
+- Two real defects found and fixed during manual verification (not caught
+  by prior automated tests):
+  1. `TargetRangeFields` used `Modifier.fillMaxWidth()` for both fields in a
+     `Row` instead of `Modifier.weight(1f)`, collapsing the second field
+     (max reps / duration max) to near-zero width and breaking the layout.
+  2. Editing an existing plan showed "Select an exercise" instead of the
+     actual exercise name, because `TrainingPlanEditorViewModel.toRow` never
+     backfilled `exerciseName`/`trackingType` from the loaded exercise
+     options; fixed via a `backfillExerciseDetails` step in `revalidate`.
+- Schema: `app/schemas/com.repflow.app.infrastructure.database.RepFlowDatabase/2.json` tracked, no drift

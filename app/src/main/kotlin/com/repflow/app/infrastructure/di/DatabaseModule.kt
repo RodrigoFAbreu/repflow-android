@@ -2,8 +2,12 @@ package com.repflow.app.infrastructure.di
 
 import android.content.Context
 import androidx.room.Room
+import com.repflow.app.infrastructure.database.MIGRATION_1_2
 import com.repflow.app.infrastructure.database.RepFlowDatabase
 import com.repflow.app.infrastructure.database.exercise.ExerciseDao
+import com.repflow.app.infrastructure.database.trainingplan.PlannedExerciseDao
+import com.repflow.app.infrastructure.database.trainingplan.TrainingPlanDao
+import com.repflow.app.infrastructure.database.trainingplan.TrainingPlanVersionDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -28,8 +32,18 @@ object DatabaseModule {
     ): RepFlowDatabase =
         Room
             .databaseBuilder(context, RepFlowDatabase::class.java, DATABASE_NAME)
+            .addMigrations(MIGRATION_1_2)
             .build()
 
     @Provides
     fun provideExerciseDao(database: RepFlowDatabase): ExerciseDao = database.exerciseDao()
+
+    @Provides
+    fun provideTrainingPlanDao(database: RepFlowDatabase): TrainingPlanDao = database.trainingPlanDao()
+
+    @Provides
+    fun provideTrainingPlanVersionDao(database: RepFlowDatabase): TrainingPlanVersionDao = database.trainingPlanVersionDao()
+
+    @Provides
+    fun providePlannedExerciseDao(database: RepFlowDatabase): PlannedExerciseDao = database.plannedExerciseDao()
 }

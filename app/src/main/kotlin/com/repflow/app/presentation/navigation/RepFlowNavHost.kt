@@ -9,6 +9,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.repflow.app.presentation.exercise.editor.ExerciseEditorRoute
 import com.repflow.app.presentation.exercise.list.ExerciseListRoute
+import com.repflow.app.presentation.trainingplan.editor.TrainingPlanEditorRoute
+import com.repflow.app.presentation.trainingplan.list.TrainingPlanListRoute
 
 /**
  * The app's single [NavHost] (D-1): the exercise list (start destination),
@@ -24,6 +26,7 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
             ExerciseListRoute(
                 onExerciseClick = { id -> navController.navigate(RepFlowDestinations.exerciseEditRoute(id.value)) },
                 onCreateClick = { navController.navigate(RepFlowDestinations.EXERCISE_NEW) },
+                onPlansClick = { navController.navigate(RepFlowDestinations.PLANS) },
             )
         }
         composable(RepFlowDestinations.EXERCISE_NEW) {
@@ -37,6 +40,27 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
             arguments = listOf(navArgument(RepFlowDestinations.EXERCISE_EDIT_ARG) { type = NavType.StringType }),
         ) {
             ExerciseEditorRoute(
+                onSaved = { navController.popBackStack() },
+                onDismissed = { navController.popBackStack() },
+            )
+        }
+        composable(RepFlowDestinations.PLANS) {
+            TrainingPlanListRoute(
+                onPlanClick = { id -> navController.navigate(RepFlowDestinations.planEditRoute(id.value)) },
+                onCreateClick = { navController.navigate(RepFlowDestinations.PLAN_NEW) },
+            )
+        }
+        composable(RepFlowDestinations.PLAN_NEW) {
+            TrainingPlanEditorRoute(
+                onSaved = { navController.popBackStack() },
+                onDismissed = { navController.popBackStack() },
+            )
+        }
+        composable(
+            route = RepFlowDestinations.PLAN_EDIT_PATTERN,
+            arguments = listOf(navArgument(RepFlowDestinations.PLAN_EDIT_ARG) { type = NavType.StringType }),
+        ) {
+            TrainingPlanEditorRoute(
                 onSaved = { navController.popBackStack() },
                 onDismissed = { navController.popBackStack() },
             )

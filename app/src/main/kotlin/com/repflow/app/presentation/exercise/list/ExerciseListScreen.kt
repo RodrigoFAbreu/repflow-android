@@ -61,6 +61,7 @@ fun ExerciseListScreen(
     onRetry: () -> Unit,
     onExerciseClick: (ExerciseId) -> Unit,
     onCreateClick: () -> Unit,
+    onPlansClick: () -> Unit,
     onArchiveClicked: (ExerciseId) -> Unit,
     onRestoreClicked: (ExerciseId) -> Unit,
     onUndoArchiveClicked: (ExerciseId) -> Unit,
@@ -90,7 +91,20 @@ fun ExerciseListScreen(
 
     Scaffold(
         modifier = modifier,
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.exercise_list_title)) }) },
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.exercise_list_title)) },
+                actions = {
+                    val plansContentDescription = stringResource(R.string.exercise_list_plans_content_description)
+                    TextButton(
+                        onClick = onPlansClick,
+                        modifier = Modifier.semantics { contentDescription = plansContentDescription },
+                    ) {
+                        Text(stringResource(R.string.training_plan_list_title))
+                    }
+                },
+            )
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(

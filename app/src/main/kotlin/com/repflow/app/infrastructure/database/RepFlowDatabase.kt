@@ -4,16 +4,35 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.repflow.app.infrastructure.database.exercise.ExerciseDao
 import com.repflow.app.infrastructure.database.exercise.ExerciseEntity
+import com.repflow.app.infrastructure.database.trainingplan.PlannedExerciseDao
+import com.repflow.app.infrastructure.database.trainingplan.PlannedExerciseEntity
+import com.repflow.app.infrastructure.database.trainingplan.TrainingPlanDao
+import com.repflow.app.infrastructure.database.trainingplan.TrainingPlanEntity
+import com.repflow.app.infrastructure.database.trainingplan.TrainingPlanVersionDao
+import com.repflow.app.infrastructure.database.trainingplan.TrainingPlanVersionEntity
 
 /**
- * RepFlow's single Room database. Version 1 - no migrations are registered
- * because none exist yet, and there is deliberately no
+ * RepFlow's single Room database. Version 2 adds the training-plan tables
+ * via a real, additive [MIGRATION_1_2] - there is deliberately no
  * `fallbackToDestructiveMigration` anywhere in this codebase (see plan.md
- * section G and additional implementation correction 14: no fake v1
- * migration test). The first `MigrationTestHelper` test is written when
- * version 2 introduces a real 1-to-2 migration.
+ * section G and additional implementation correction 14).
  */
-@Database(entities = [ExerciseEntity::class], version = 1, exportSchema = true)
+@Database(
+    entities = [
+        ExerciseEntity::class,
+        TrainingPlanEntity::class,
+        TrainingPlanVersionEntity::class,
+        PlannedExerciseEntity::class,
+    ],
+    version = 2,
+    exportSchema = true,
+)
 abstract class RepFlowDatabase : RoomDatabase() {
     abstract fun exerciseDao(): ExerciseDao
+
+    abstract fun trainingPlanDao(): TrainingPlanDao
+
+    abstract fun trainingPlanVersionDao(): TrainingPlanVersionDao
+
+    abstract fun plannedExerciseDao(): PlannedExerciseDao
 }

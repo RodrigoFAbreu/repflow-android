@@ -50,4 +50,45 @@
     <string name="exercise_editor_discard_dialog_confirm">Discard</string>
     <string name="exercise_editor_discard_dialog_cancel">Keep editing</string>
     <string name="exercise_editor_back_content_description">Back</string>
+
+    <string name="training_plan_list_title">Plans</string>
+    <string name="exercise_list_plans_content_description">View training plans</string>
+    <string name="training_plan_list_add_content_description">Add training plan</string>
+    <string name="training_plan_list_empty">No training plans yet. Tap + to create one.</string>
+    <string name="training_plan_list_observation_failed">Couldn\'t load training plans.</string>
+    <string name="training_plan_list_retry">Retry</string>
+    <string name="training_plan_list_exercise_count">%1$d exercises</string>
+
+    <string name="training_plan_editor_title_create">New plan</string>
+    <string name="training_plan_editor_title_edit">Edit plan</string>
+    <string name="training_plan_editor_not_found">This training plan no longer exists.</string>
+    <string name="training_plan_editor_name_label">Plan name</string>
+    <string name="training_plan_editor_add_exercise">Add exercise</string>
+    <string name="training_plan_editor_no_exercises">No exercises yet. Tap \"Add exercise\" to add one.</string>
+    <string name="training_plan_editor_row_exercise_label">Exercise</string>
+    <string name="training_plan_editor_row_target_sets_label">Sets</string>
+    <string name="training_plan_editor_row_rep_min_label">Min reps</string>
+    <string name="training_plan_editor_row_rep_max_label">Max reps</string>
+    <string name="training_plan_editor_row_duration_min_label">Min duration (s)</string>
+    <string name="training_plan_editor_row_duration_max_label">Max duration (s)</string>
+    <string name="training_plan_editor_row_rest_label">Rest (s, optional)</string>
+    <string name="training_plan_editor_row_optional_label">Optional</string>
+    <string name="training_plan_editor_row_move_up_content_description">Move up</string>
+    <string name="training_plan_editor_row_move_down_content_description">Move down</string>
+    <string name="training_plan_editor_row_remove_content_description">Remove exercise</string>
+    <string name="training_plan_editor_save">Save</string>
+    <string name="training_plan_editor_saving">Saving…</string>
+    <string name="training_plan_editor_error_name_blank">Plan name is required.</string>
+    <string name="training_plan_editor_error_name_too_long">Plan name is too long.</string>
+    <string name="training_plan_editor_error_invalid_number">Enter a valid number.</string>
+    <string name="training_plan_editor_error_no_exercises">Add at least one exercise.</string>
+    <string name="training_plan_editor_submit_error_duplicate_name">A plan with this name already exists.</string>
+    <string name="training_plan_editor_submit_error_invalid">Some exercises need attention before saving.</string>
+    <string name="training_plan_editor_submit_error_unavailable">Couldn\'t save this plan. Try again.</string>
+    <string name="training_plan_editor_discard_dialog_title">Discard changes?</string>
+    <string name="training_plan_editor_discard_dialog_body">You have unsaved changes. If you go back now, they will be lost.</string>
+    <string name="training_plan_editor_discard_dialog_confirm">Discard</string>
+    <string name="training_plan_editor_discard_dialog_cancel">Keep editing</string>
+    <string name="training_plan_editor_back_content_description">Back</string>
+    <string name="training_plan_editor_select_exercise_placeholder">Select an exercise</string>
 </resources>

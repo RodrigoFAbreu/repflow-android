@@ -15,4 +15,11 @@ object RepFlowDestinations {
     const val EXERCISE_EDIT_PATTERN = "exercises/{$EXERCISE_EDIT_ARG}"
 
     fun exerciseEditRoute(exerciseId: String): String = "exercises/$exerciseId"
+
+    const val PLANS = "plans"
+    const val PLAN_NEW = "plans/new"
+    const val PLAN_EDIT_ARG = "planId"
+    const val PLAN_EDIT_PATTERN = "plans/{$PLAN_EDIT_ARG}"
+
+    fun planEditRoute(planId: String): String = "plans/$planId"
 }
