@@ -12,14 +12,14 @@ Active plan: [milestones/active/milestone-1-execution.md](milestones/active/mile
 - [x] Configure formatting, linting, and baseline tests
 - [x] Define the incremental modularization plan
 
-## Milestone 1 — Exercise library vertical slice ← active
+## Milestone 1 — Exercise library vertical slice ✓ complete
 
-- [ ] Define exercise domain model
-- [ ] Define exercise repository capability
-- [ ] Add application use cases
-- [ ] Add Room persistence
-- [ ] Add exercise list and editor UI
-- [ ] Add unit, repository, and basic UI tests
+- [x] Define exercise domain model
+- [x] Define exercise repository capability
+- [x] Add application use cases
+- [x] Add Room persistence
+- [x] Add exercise list and editor UI
+- [x] Add unit, repository, and basic UI tests
 
 ## Milestone 2 — Training plans
 

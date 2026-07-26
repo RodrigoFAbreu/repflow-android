@@ -21,24 +21,27 @@ tests.
 |---|---|---|
 | 1 | M0 cleanup | ✓ verified |
 | 2 | Dependencies + schema export config | ✓ verified |
-| 3 | Domain model + pure JVM tests | code present, tests not yet run |
-| 4 | Application contracts + use cases | code present, tests not yet run |
-| 5 | Room entity, DAO, mapper, repository | code present, tests not yet run |
-| 6 | DAO + repository instrumented tests on device | **next to run** |
-| 7 | Hilt bindings | code present |
-| 8 | Exercise list end to end | code present |
-| 9 | Exercise editor end to end | code present |
-| 10 | Archive / restore + snackbar undo | code present |
-| 11 | Optional built-in catalog (if D-10 approved) | deferred |
-| 12 | Docs + final architectural review | pending |
+| 3 | Domain model + pure JVM tests | ✓ verified (unit tests pass) |
+| 4 | Application contracts + use cases | ✓ verified (unit tests pass) |
+| 5 | Room entity, DAO, mapper, repository | ✓ verified (schema tracked, no drift) |
+| 6 | DAO + repository instrumented tests on device | ✓ verified (46/46 pass on SM-S928B) |
+| 7 | Hilt bindings | ✓ verified (app builds and runs) |
+| 8 | Exercise list end to end | ✓ verified (manual smoke test) |
+| 9 | Exercise editor end to end | ✓ verified (manual smoke test) |
+| 10 | Archive / restore + snackbar undo | ✓ verified (instrumented + unit tests) |
+| 11 | Optional built-in catalog (if D-10 approved) | deferred to M1.1 |
+| 12 | Docs + final architectural review | ✓ done |
 
-> **Factual note:** Implementation files for CPs 3–10 exist as untracked.
-> Last confirmed build: `./gradlew assembleDebug`. No unit or instrumented tests
-> have been verified yet.
+> **Factual note:** All checkpoints verified: `testDebugUnitTest` (109 tests),
+> `spotlessCheck`, `detekt`, `lintDebug`, `kspDebugKotlin` (no schema drift),
+> and `connectedDebugAndroidTest` (46 tests) on a physical SM-S928B device.
+> Manual smoke test confirmed create → list → persistence across restart with
+> no crashes. No Room types (`ExerciseEntity`, `ExerciseDao`) found outside
+> `infrastructure`/`data`.
 
 ---
 
-## Current action: verify CPs 3–5 unit tests, then CP6 on device
+## Milestone 1 complete — Definition of Done met
 
 ### Files involved (CPs 3–5 already written)
 

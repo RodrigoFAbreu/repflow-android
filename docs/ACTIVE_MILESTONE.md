@@ -11,26 +11,23 @@ as the first complete vertical slice.
 
 ## Current checkpoint
 
-**Verify CPs 3–5 unit tests, then CP6 instrumented tests on device.**
-
-Implementation code for CPs 3–10 exists as untracked files.
-Last confirmed build: `./gradlew assembleDebug`. No unit or instrumented tests
-have been verified yet. CP6 requires a physical device or emulator.
+**Milestone complete.** All CPs 1–10 implemented and verified; CP11 deferred
+per plan; CP12 (docs + final review) done in this session.
 
 ## Checkpoint checklist
 
 - [x] CP1 — M0 cleanup
 - [x] CP2 — Dependencies + schema export config
-- [ ] CP3 — Domain model + pure JVM tests (code present)
-- [ ] CP4 — Application contracts + use cases (code present)
-- [ ] CP5 — Room entity, DAO, mapper, repository (code present)
-- [ ] CP6 — DAO + repository instrumented tests on device ← **next verification**
-- [ ] CP7 — Hilt bindings (code present)
-- [ ] CP8 — Exercise list end to end (code present)
-- [ ] CP9 — Exercise editor end to end (code present)
-- [ ] CP10 — Archive / restore + snackbar undo (code present)
-- [ ] CP11 — Optional built-in catalog (deferred)
-- [ ] CP12 — Docs + final review
+- [x] CP3 — Domain model + pure JVM tests
+- [x] CP4 — Application contracts + use cases
+- [x] CP5 — Room entity, DAO, mapper, repository
+- [x] CP6 — DAO + repository instrumented tests on device
+- [x] CP7 — Hilt bindings
+- [x] CP8 — Exercise list end to end
+- [x] CP9 — Exercise editor end to end
+- [x] CP10 — Archive / restore + snackbar undo
+- [ ] CP11 — Optional built-in catalog (deferred to M1.1)
+- [x] CP12 — Docs + final review
 
 ## Approved decisions (quick reference)
 
@@ -46,7 +43,7 @@ have been verified yet. CP6 requires a physical device or emulator.
 
 ## Current blockers
 
-None. CP6 requires a device or emulator.
+None. Milestone 1 Definition of Done is met.
 
 ## Active plan
 
@@ -94,7 +91,13 @@ actually completes successfully.
 
 ## Last verified state
 
-- Last passing command: `./gradlew assembleDebug`
-- Unit tests: not yet verified
-- Instrumented tests: not yet executed
-- Schema: `app/schemas/.../1.json` present (untracked)
+- Unit tests: `./gradlew testDebugUnitTest` — 109 tests, 0 failures
+- Static checks: `./gradlew spotlessCheck detekt lintDebug` — all pass
+- Schema: `app/schemas/com.repflow.app.infrastructure.database.RepFlowDatabase/1.json`
+  tracked in git; `kspDebugKotlin` produced no drift
+- Instrumented tests: `./gradlew connectedDebugAndroidTest` — 46 tests, 0
+  failures, 0 skipped, run on physical device (SM-S928B, Android 16)
+- Manual smoke test: app installed and launched on the same device; app
+  starts on the Exercise list, created "BenchPress", verified it appears in
+  the list, force-stopped the app and relaunched — exercise persisted. No
+  crashes observed in logcat. Test app then uninstalled to reset device state.
