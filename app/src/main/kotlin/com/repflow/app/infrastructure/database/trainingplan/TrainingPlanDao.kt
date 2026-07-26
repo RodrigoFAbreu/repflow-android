@@ -13,10 +13,17 @@ import kotlinx.coroutines.flow.Flow
  */
 @Dao
 interface TrainingPlanDao {
-    @Query("SELECT * FROM training_plans ORDER BY name_key ASC, id ASC")
-    fun observeAll(): Flow<List<TrainingPlanEntity>>
+    /** Active or archived plans (mirrors `ExerciseDao.observe`'s `archived_at` filter shape), never both. */
+    @Query(
+        """
+        SELECT * FROM training_plans
+        WHERE (:archived = 0 AND archived_at IS NULL) OR (:archived = 1 AND archived_at IS NOT NULL)
+        ORDER BY name_key ASC, id ASC
+        """,
+    )
+    fun observe(archived: Boolean): Flow<List<TrainingPlanEntity>>
 
-    /** Every training plan, for backup export. */
+    /** Every training plan regardless of archived status, for backup export. */
     @Query("SELECT * FROM training_plans ORDER BY name_key ASC, id ASC")
     suspend fun findAll(): List<TrainingPlanEntity>
 

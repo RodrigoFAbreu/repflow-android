@@ -40,23 +40,37 @@ class TrainingPlanDaoTest {
         id: String,
         name: String,
         nameKey: String,
+        archivedAt: Long? = null,
     ) = TrainingPlanEntity(
         id = id,
         name = name,
         nameKey = nameKey,
         createdAt = 1_000L,
         updatedAt = 1_000L,
+        archivedAt = archivedAt,
     )
 
     @Test
-    fun observeAll_returnsRowsOrderedByNameKeyThenId() =
+    fun observe_returnsActiveRowsOrderedByNameKeyThenId() =
         runBlocking {
             dao.insert(entity(id = "b", name = "Push Day", nameKey = "push day"))
             dao.insert(entity(id = "a", name = "Leg Day", nameKey = "leg day"))
+            dao.insert(entity(id = "z", name = "Retired Day", nameKey = "retired day", archivedAt = 500L))
 
-            val plans = dao.observeAll().first()
+            val plans = dao.observe(archived = false).first()
 
             assertEquals(listOf("leg day", "push day"), plans.map { it.nameKey })
+        }
+
+    @Test
+    fun observe_filtersByArchivedStatus() =
+        runBlocking {
+            dao.insert(entity(id = "a", name = "Push Day", nameKey = "push day"))
+            dao.insert(entity(id = "b", name = "Retired Day", nameKey = "retired day", archivedAt = 500L))
+
+            val archived = dao.observe(archived = true).first()
+
+            assertEquals(listOf("b"), archived.map { it.id })
         }
 
     @Test(expected = Exception::class)

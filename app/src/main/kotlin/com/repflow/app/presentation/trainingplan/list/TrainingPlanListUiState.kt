@@ -1,15 +1,37 @@
 package com.repflow.app.presentation.trainingplan.list
 
+import com.repflow.app.application.trainingplan.TrainingPlanStatusFilter
+import com.repflow.app.domain.trainingplan.TrainingPlanId
+
 /**
- * Stable UI state for the training plan list screen. Simpler than
- * [com.repflow.app.presentation.exercise.list.ExerciseListUiState]: there is
- * no search or archived/active filter for plans in M2 (no archive concept
- * exists yet, see the reference doc's deferred-scope table), so [content]
- * is the only observed piece of state.
+ * Stable UI state for the training plan list screen. Mirrors
+ * [com.repflow.app.presentation.exercise.list.ExerciseListUiState]'s
+ * active/archived filter and snackbar-message-queue shape (Milestone 8,
+ * CP12) - plans still have no search field, so [filter] is the only
+ * criterion.
  */
 data class TrainingPlanListUiState(
+    val filter: TrainingPlanStatusFilter = TrainingPlanStatusFilter.ACTIVE,
     val content: TrainingPlanListContent = TrainingPlanListContent.Loading,
+    val messages: List<TrainingPlanListMessage> = emptyList(),
 )
+
+/**
+ * Snackbar-worthy events raised by the list screen, mirroring
+ * [com.repflow.app.presentation.exercise.list.ExerciseListMessage].
+ */
+sealed interface TrainingPlanListMessage {
+    val id: Long
+
+    data class Archived(
+        override val id: Long,
+        val planId: TrainingPlanId,
+    ) : TrainingPlanListMessage
+
+    data class OperationFailed(
+        override val id: Long,
+    ) : TrainingPlanListMessage
+}
 
 sealed interface TrainingPlanListContent {
     data object Loading : TrainingPlanListContent
@@ -18,11 +40,18 @@ sealed interface TrainingPlanListContent {
         val items: List<TrainingPlanListItem>,
     ) : TrainingPlanListContent
 
-    data object Empty : TrainingPlanListContent
+    data class Empty(
+        val reason: TrainingPlanListEmptyReason,
+    ) : TrainingPlanListContent
 
     data class ObservationFailed(
         val reason: TrainingPlanListFailureReason,
     ) : TrainingPlanListContent
+}
+
+enum class TrainingPlanListEmptyReason {
+    NO_PLANS,
+    NO_ARCHIVED,
 }
 
 /**

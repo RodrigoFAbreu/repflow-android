@@ -9,6 +9,7 @@ import androidx.room.withTransaction
 import com.repflow.app.application.trainingplan.TrainingPlanOverview
 import com.repflow.app.application.trainingplan.TrainingPlanPersistenceError
 import com.repflow.app.application.trainingplan.TrainingPlanRepository
+import com.repflow.app.application.trainingplan.TrainingPlanStatusFilter
 import com.repflow.app.domain.backup.TrainingPlanSnapshot
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.trainingplan.PlannedExercise
@@ -47,8 +48,8 @@ class LocalTrainingPlanRepository
         private val versionDao: TrainingPlanVersionDao,
         private val plannedExerciseDao: PlannedExerciseDao,
     ) : TrainingPlanRepository {
-        override fun observeOverviews(): Flow<List<TrainingPlanOverview>> =
-            planDao.observeAll().map { plans -> plans.map { plan -> toOverviewOrThrow(plan) } }
+        override fun observeOverviews(status: TrainingPlanStatusFilter): Flow<List<TrainingPlanOverview>> =
+            planDao.observe(status == TrainingPlanStatusFilter.ARCHIVED).map { plans -> plans.map { plan -> toOverviewOrThrow(plan) } }
 
         override suspend fun findOverviewByPlanId(id: TrainingPlanId): TrainingPlanOverview? =
             planDao.findById(id.value)?.let { plan -> toOverviewOrThrow(plan) }
@@ -109,6 +110,28 @@ class LocalTrainingPlanRepository
                     versionDao.insert(TrainingPlanEntityMapper.toEntity(version))
                     plannedExerciseDao.insertAll(TrainingPlanEntityMapper.toEntities(version))
                 }
+                return if (rowsUpdated == 0) {
+                    DomainResult.Failure(TrainingPlanPersistenceError.Unavailable)
+                } else {
+                    DomainResult.Success(Unit)
+                }
+            } catch (e: SQLiteConstraintException) {
+                return DomainResult.Failure(translateConstraintViolation(e))
+            } catch (expected: SQLiteFullException) {
+                return DomainResult.Failure(TrainingPlanPersistenceError.Unavailable)
+            } catch (expected: SQLiteDiskIOException) {
+                return DomainResult.Failure(TrainingPlanPersistenceError.Unavailable)
+            } catch (expected: SQLiteDatabaseCorruptException) {
+                return DomainResult.Failure(TrainingPlanPersistenceError.Unavailable)
+            } catch (expected: SQLiteException) {
+                return DomainResult.Failure(TrainingPlanPersistenceError.Unavailable)
+            }
+        }
+
+        @Suppress("ReturnCount")
+        override suspend fun updatePlan(plan: TrainingPlan): DomainResult<Unit, TrainingPlanPersistenceError> {
+            try {
+                val rowsUpdated = planDao.update(TrainingPlanEntityMapper.toEntity(plan))
                 return if (rowsUpdated == 0) {
                     DomainResult.Failure(TrainingPlanPersistenceError.Unavailable)
                 } else {

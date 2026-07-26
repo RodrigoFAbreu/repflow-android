@@ -64,9 +64,25 @@ class ObserveTrainingPlansTest {
             requireSuccess(createTrainingPlan(CreateTrainingPlanCommand("Zzz Day", listOf(repsRow(exerciseId.value)))))
             requireSuccess(createTrainingPlan(CreateTrainingPlanCommand("Aaa Day", listOf(repsRow(exerciseId.value)))))
 
-            val overviews = observeTrainingPlans().first()
+            val overviews = observeTrainingPlans(TrainingPlanStatusFilter.ACTIVE).first()
 
             assertEquals(listOf("Aaa Day", "Zzz Day"), overviews.map { it.plan.name.value })
+        }
+
+    @Test
+    fun `excludes an archived plan from the ACTIVE filter and includes it in ARCHIVED`() =
+        runTest {
+            val exerciseId = seedExercise()
+            requireSuccess(createTrainingPlan(CreateTrainingPlanCommand("Push Day", listOf(repsRow(exerciseId.value)))))
+            val overview = observeTrainingPlans(TrainingPlanStatusFilter.ACTIVE).first().single()
+            val archived = overview.plan.archive(now)
+            check(planRepository.updatePlan(archived) is DomainResult.Success)
+
+            assertEquals(emptyList<String>(), observeTrainingPlans(TrainingPlanStatusFilter.ACTIVE).first().map { it.plan.name.value })
+            assertEquals(
+                listOf("Push Day"),
+                observeTrainingPlans(TrainingPlanStatusFilter.ARCHIVED).first().map { it.plan.name.value },
+            )
         }
 
     private fun requireSuccess(result: DomainResult<*, TrainingPlanOperationError>) {

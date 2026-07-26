@@ -22,26 +22,39 @@ data class TrainingPlan private constructor(
     val name: TrainingPlanName,
     val createdAt: Instant,
     val updatedAt: Instant,
+    val archivedAt: Instant?,
 ) {
+    val isArchived: Boolean get() = archivedAt != null
+
+    /** Returns a new, archived instance. Never changes [createdAt]. */
+    fun archive(at: Instant): TrainingPlan = copy(archivedAt = at, updatedAt = at)
+
+    /** Returns a new, active instance. Never changes [createdAt]. */
+    fun restore(at: Instant): TrainingPlan = copy(archivedAt = null, updatedAt = at)
+
     companion object {
         fun create(
             id: TrainingPlanId,
             name: TrainingPlanName,
             createdAt: Instant,
         ): DomainResult<TrainingPlan, TrainingPlanValidationError> =
-            reconstruct(id = id, name = name, createdAt = createdAt, updatedAt = createdAt)
+            reconstruct(id = id, name = name, createdAt = createdAt, updatedAt = createdAt, archivedAt = null)
 
         fun reconstruct(
             id: TrainingPlanId,
             name: TrainingPlanName,
             createdAt: Instant,
             updatedAt: Instant,
+            archivedAt: Instant? = null,
         ): DomainResult<TrainingPlan, TrainingPlanValidationError> {
             if (updatedAt < createdAt) {
                 return DomainResult.Failure(TrainingPlanValidationError.UpdatedBeforeCreated)
             }
+            if (archivedAt != null && archivedAt < createdAt) {
+                return DomainResult.Failure(TrainingPlanValidationError.ArchivedBeforeCreated)
+            }
             return DomainResult.Success(
-                TrainingPlan(id = id, name = name, createdAt = createdAt, updatedAt = updatedAt),
+                TrainingPlan(id = id, name = name, createdAt = createdAt, updatedAt = updatedAt, archivedAt = archivedAt),
             )
         }
     }

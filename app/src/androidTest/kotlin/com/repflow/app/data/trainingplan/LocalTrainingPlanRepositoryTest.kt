@@ -4,6 +4,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.application.trainingplan.TrainingPlanPersistenceError
+import com.repflow.app.application.trainingplan.TrainingPlanStatusFilter
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.RestDuration
@@ -129,9 +130,33 @@ class LocalTrainingPlanRepositoryTest {
             val result = repository.createPlanWithFirstVersion(plan(), version())
 
             assertTrue(result is DomainResult.Success)
-            val overviews = repository.observeOverviews().first()
+            val overviews = repository.observeOverviews(TrainingPlanStatusFilter.ACTIVE).first()
             assertEquals(listOf("plan-1"), overviews.map { it.plan.id.value })
             assertEquals(1, overviews.single().latestVersion.versionNumber)
+        }
+
+    @Test
+    fun updatePlan_archivesAPlanAndExcludesItFromTheActiveFilter() =
+        runBlocking {
+            repository.createPlanWithFirstVersion(plan(), version())
+            val overview = requireNotNull(repository.findOverviewByPlanId(TrainingPlanId("plan-1")))
+            val archived = overview.plan.archive(Instant.ofEpochMilli(2_000L))
+
+            val result = repository.updatePlan(archived)
+
+            assertTrue(result is DomainResult.Success)
+            assertEquals(emptyList<String>(), repository.observeOverviews(TrainingPlanStatusFilter.ACTIVE).first().map { it.plan.id.value })
+            val archivedOverviews = repository.observeOverviews(TrainingPlanStatusFilter.ARCHIVED).first()
+            assertEquals(listOf("plan-1"), archivedOverviews.map { it.plan.id.value })
+            assertTrue(archivedOverviews.single().plan.isArchived)
+        }
+
+    @Test
+    fun updatePlan_returnsUnavailableWhenThePlanDoesNotExist() =
+        runBlocking {
+            val result = repository.updatePlan(plan())
+
+            assertEquals(DomainResult.Failure(TrainingPlanPersistenceError.Unavailable), result)
         }
 
     @Test

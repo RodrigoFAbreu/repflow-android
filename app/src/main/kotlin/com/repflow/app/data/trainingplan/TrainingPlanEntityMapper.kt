@@ -38,6 +38,7 @@ object TrainingPlanEntityMapper {
             nameKey = plan.name.key,
             createdAt = plan.createdAt.toEpochMilli(),
             updatedAt = plan.updatedAt.toEpochMilli(),
+            archivedAt = plan.archivedAt?.toEpochMilli(),
         )
 
     fun toEntity(version: TrainingPlanVersion): TrainingPlanVersionEntity =
@@ -99,6 +100,7 @@ object TrainingPlanEntityMapper {
                 name = name,
                 createdAt = Instant.ofEpochMilli(plan.createdAt),
                 updatedAt = Instant.ofEpochMilli(plan.updatedAt),
+                archivedAt = plan.archivedAt?.let(Instant::ofEpochMilli),
             ).mapFailure { errors -> TrainingPlanMappingError.InvalidFields(plan.id, listOf(errors)) }
     }
 

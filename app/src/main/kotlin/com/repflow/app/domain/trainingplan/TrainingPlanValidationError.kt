@@ -47,6 +47,9 @@ sealed interface TrainingPlanValidationError {
     /** `updatedAt` is before `createdAt` on a [TrainingPlan]. */
     data object UpdatedBeforeCreated : TrainingPlanValidationError
 
+    /** `archivedAt` is before `createdAt` on a [TrainingPlan]. */
+    data object ArchivedBeforeCreated : TrainingPlanValidationError
+
     /** A [TrainingPlanVersion]'s `versionNumber` is less than 1. */
     data object VersionNumberInvalid : TrainingPlanValidationError
 }

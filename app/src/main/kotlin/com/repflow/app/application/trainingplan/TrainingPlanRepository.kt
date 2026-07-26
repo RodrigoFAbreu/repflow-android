@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.Flow
  * "historical version preservation" requirement).
  */
 interface TrainingPlanRepository {
-    fun observeOverviews(): Flow<List<TrainingPlanOverview>>
+    fun observeOverviews(status: TrainingPlanStatusFilter): Flow<List<TrainingPlanOverview>>
 
     suspend fun findOverviewByPlanId(id: TrainingPlanId): TrainingPlanOverview?
 
@@ -46,4 +46,7 @@ interface TrainingPlanRepository {
         plan: TrainingPlan,
         version: TrainingPlanVersion,
     ): DomainResult<Unit, TrainingPlanPersistenceError>
+
+    /** Persists only [plan]'s own row (name/`updatedAt`/`archivedAt`) - never touches its versions. */
+    suspend fun updatePlan(plan: TrainingPlan): DomainResult<Unit, TrainingPlanPersistenceError>
 }

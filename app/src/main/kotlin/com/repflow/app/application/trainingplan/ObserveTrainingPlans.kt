@@ -8,5 +8,5 @@ class ObserveTrainingPlans
     constructor(
         private val repository: TrainingPlanRepository,
     ) {
-        operator fun invoke(): Flow<List<TrainingPlanOverview>> = repository.observeOverviews()
+        operator fun invoke(status: TrainingPlanStatusFilter): Flow<List<TrainingPlanOverview>> = repository.observeOverviews(status)
     }

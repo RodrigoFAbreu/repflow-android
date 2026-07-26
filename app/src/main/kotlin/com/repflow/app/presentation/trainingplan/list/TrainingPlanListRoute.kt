@@ -22,5 +22,10 @@ fun TrainingPlanListRoute(
         onRetry = viewModel::onRetry,
         onPlanClick = onPlanClick,
         onCreateClick = onCreateClick,
+        onFilterChanged = viewModel::onFilterChanged,
+        onArchiveClicked = viewModel::onArchiveClicked,
+        onRestoreClicked = viewModel::onRestoreClicked,
+        onUndoArchiveClicked = viewModel::onRestoreClicked,
+        onMessageShown = viewModel::onMessageShown,
     )
 }

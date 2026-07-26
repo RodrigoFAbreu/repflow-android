@@ -12,6 +12,9 @@ sealed interface TrainingPlanOperationError {
 
     data object DuplicateName : TrainingPlanOperationError
 
+    /** The plan was already archived (see `ArchiveTrainingPlan`). There is deliberately no `NotArchived` case - see `RestoreTrainingPlan`. */
+    data object AlreadyArchived : TrainingPlanOperationError
+
     data class ValidationFailed(
         val errors: List<TrainingPlanValidationError>,
     ) : TrainingPlanOperationError

@@ -69,6 +69,17 @@ class TrainingPlanEntityMapperTest {
     }
 
     @Test
+    fun `round-trips an archived plan's archivedAt through entity and back`() {
+        val archivedEntity = planEntity.copy(archivedAt = 2_000L)
+
+        val plan = requireSuccess(TrainingPlanEntityMapper.toDomain(archivedEntity))
+        assertTrue(plan.isArchived)
+
+        val roundTripped = TrainingPlanEntityMapper.toEntity(plan)
+        assertEquals(archivedEntity, roundTripped)
+    }
+
+    @Test
     fun `round-trips a version with reps and duration rows through entity and back`() {
         val version = requireSuccess(TrainingPlanEntityMapper.toDomain(versionEntity, listOf(repsRow, durationRow)))
 

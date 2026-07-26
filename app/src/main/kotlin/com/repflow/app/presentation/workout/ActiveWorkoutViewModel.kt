@@ -10,6 +10,7 @@ import com.repflow.app.application.progression.RecordManualOverride
 import com.repflow.app.application.recovery.GetWorkoutDayContext
 import com.repflow.app.application.trainingplan.ObserveTrainingPlans
 import com.repflow.app.application.trainingplan.TrainingPlanOverview
+import com.repflow.app.application.trainingplan.TrainingPlanStatusFilter
 import com.repflow.app.application.workout.AbandonWorkoutSession
 import com.repflow.app.application.workout.AddWorkoutExercise
 import com.repflow.app.application.workout.AddWorkoutExerciseCommand
@@ -107,7 +108,7 @@ class ActiveWorkoutViewModel
                     )
             }
             viewModelScope.launch {
-                observeTrainingPlans()
+                observeTrainingPlans(TrainingPlanStatusFilter.ACTIVE)
                     .catch { failure -> if (failure is CancellationException) throw failure }
                     .collect { overviews -> trainingPlanOverviewsFlow.value = overviews }
             }

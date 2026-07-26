@@ -40,6 +40,45 @@ class TrainingPlanTest {
         assertEquals(updatedAt, plan.updatedAt)
     }
 
+    @Test
+    fun `archive marks the plan archived and bumps updatedAt`() {
+        val plan = requireSuccess(TrainingPlan.create(id = id, name = name, createdAt = createdAt))
+        val archivedAt = createdAt.plusSeconds(60)
+
+        val archived = plan.archive(archivedAt)
+
+        assertEquals(true, archived.isArchived)
+        assertEquals(archivedAt, archived.archivedAt)
+        assertEquals(archivedAt, archived.updatedAt)
+    }
+
+    @Test
+    fun `restore clears archivedAt and bumps updatedAt`() {
+        val plan = requireSuccess(TrainingPlan.create(id = id, name = name, createdAt = createdAt))
+        val archived = plan.archive(createdAt.plusSeconds(60))
+        val restoredAt = createdAt.plusSeconds(120)
+
+        val restored = archived.restore(restoredAt)
+
+        assertEquals(false, restored.isArchived)
+        assertEquals(null, restored.archivedAt)
+        assertEquals(restoredAt, restored.updatedAt)
+    }
+
+    @Test
+    fun `reconstruct rejects an archivedAt before createdAt`() {
+        val result =
+            TrainingPlan.reconstruct(
+                id = id,
+                name = name,
+                createdAt = createdAt,
+                updatedAt = createdAt,
+                archivedAt = createdAt.minusSeconds(1),
+            )
+
+        assertEquals(DomainResult.Failure(TrainingPlanValidationError.ArchivedBeforeCreated), result)
+    }
+
     private fun <T> requireSuccess(result: DomainResult<T, *>): T =
         when (result) {
             is DomainResult.Success -> result.value

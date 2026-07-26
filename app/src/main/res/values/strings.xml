@@ -59,6 +59,16 @@
     <string name="training_plan_list_observation_failed">Couldn\'t load training plans.</string>
     <string name="training_plan_list_retry">Retry</string>
     <string name="training_plan_list_exercise_count">%1$d exercises</string>
+    <string name="training_plan_list_filter_active">Active</string>
+    <string name="training_plan_list_filter_archived">Archived</string>
+    <string name="training_plan_list_empty_no_archived">No archived training plans.</string>
+    <string name="training_plan_list_row_menu_content_description">More options</string>
+    <string name="training_plan_list_row_menu_edit">Edit</string>
+    <string name="training_plan_list_row_menu_archive">Archive</string>
+    <string name="training_plan_list_row_menu_restore">Restore</string>
+    <string name="training_plan_list_message_archived">Training plan archived.</string>
+    <string name="training_plan_list_message_archived_undo">Undo</string>
+    <string name="training_plan_list_message_operation_failed">Something went wrong. Try again.</string>
 
     <string name="workout_active_title">Workout</string>
     <string name="exercise_list_workout_content_description">Go to current workout</string>

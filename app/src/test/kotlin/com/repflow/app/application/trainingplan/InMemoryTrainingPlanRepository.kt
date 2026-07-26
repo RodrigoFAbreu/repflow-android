@@ -26,10 +26,12 @@ class InMemoryTrainingPlanRepository : TrainingPlanRepository {
 
     var nextCreateFailure: TrainingPlanPersistenceError? = null
     var nextAddVersionFailure: TrainingPlanPersistenceError? = null
+    var nextUpdatePlanFailure: TrainingPlanPersistenceError? = null
 
-    override fun observeOverviews(): Flow<List<TrainingPlanOverview>> =
+    override fun observeOverviews(status: TrainingPlanStatusFilter): Flow<List<TrainingPlanOverview>> =
         plans.map { plansById ->
             plansById.values
+                .filter { plan -> plan.isArchived == (status == TrainingPlanStatusFilter.ARCHIVED) }
                 .mapNotNull { plan -> latestVersionOf(plan.id)?.let { version -> TrainingPlanOverview(plan, version) } }
                 .sortedWith(compareBy({ it.plan.name.key }, { it.plan.id.value }))
         }
@@ -90,6 +92,19 @@ class InMemoryTrainingPlanRepository : TrainingPlanRepository {
         }
         plans.value = plans.value + (plan.id to plan)
         versionsByPlan.value = versionsByPlan.value + (plan.id to (versionsByPlan.value[plan.id].orEmpty() + version))
+        return DomainResult.Success(Unit)
+    }
+
+    @Suppress("ReturnCount")
+    override suspend fun updatePlan(plan: TrainingPlan): DomainResult<Unit, TrainingPlanPersistenceError> {
+        nextUpdatePlanFailure?.let {
+            nextUpdatePlanFailure = null
+            return DomainResult.Failure(it)
+        }
+        if (!plans.value.containsKey(plan.id)) {
+            return DomainResult.Failure(TrainingPlanPersistenceError.Unavailable)
+        }
+        plans.value = plans.value + (plan.id to plan)
         return DomainResult.Success(Unit)
     }
 

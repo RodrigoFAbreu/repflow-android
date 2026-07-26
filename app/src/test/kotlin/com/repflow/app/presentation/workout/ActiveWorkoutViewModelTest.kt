@@ -230,6 +230,54 @@ class ActiveWorkoutViewModelTest {
         }
 
     @Test
+    fun `an archived plan is excluded from the start-workout plan picker`() =
+        runTest {
+            val exercise = seedExercise()
+            val plannedExercise =
+                PlannedExercise(
+                    id = PlannedExerciseId("planned-1"),
+                    exerciseId = exercise.id,
+                    order = 0,
+                    targetSets = requireSuccess(TargetSets.create(3)),
+                    target = PlannedExerciseTarget.Reps(requireSuccess(RepRange.create(8, 12))),
+                    restDuration = null,
+                    isOptional = false,
+                )
+            val plan =
+                requireSuccess(
+                    TrainingPlan.create(
+                        id = TrainingPlanId("plan-1"),
+                        name = requireSuccess(TrainingPlanName.create("Retired plan")),
+                        createdAt = now,
+                    ),
+                )
+            val version =
+                requireSuccess(
+                    TrainingPlanVersion.create(
+                        id = TrainingPlanVersionId("version-1"),
+                        planId = plan.id,
+                        versionNumber = 1,
+                        plannedExercises = listOf(plannedExercise),
+                        note = null,
+                        createdAt = now,
+                    ),
+                )
+            requireSuccess(trainingPlanRepository.createPlanWithFirstVersion(plan, version))
+            val archived = plan.archive(now)
+            requireSuccess(trainingPlanRepository.updatePlan(archived))
+
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                var state = awaitItem()
+                while (state.content !is ActiveWorkoutContent.NoActiveSession) {
+                    state = awaitItem()
+                }
+                assertEquals(emptyList<TrainingPlanPickerItem>(), state.availablePlans)
+                expectNoEvents()
+            }
+        }
+
+    @Test
     fun `recording a set updates the active session`() =
         runTest {
             seedExercise()
