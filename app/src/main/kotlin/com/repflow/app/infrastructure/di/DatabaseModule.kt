@@ -5,8 +5,11 @@ import androidx.room.Room
 import com.repflow.app.infrastructure.database.MIGRATION_1_2
 import com.repflow.app.infrastructure.database.MIGRATION_2_3
 import com.repflow.app.infrastructure.database.MIGRATION_3_4
+import com.repflow.app.infrastructure.database.MIGRATION_4_5
 import com.repflow.app.infrastructure.database.RepFlowDatabase
 import com.repflow.app.infrastructure.database.exercise.ExerciseDao
+import com.repflow.app.infrastructure.database.recovery.FutsalSessionDao
+import com.repflow.app.infrastructure.database.recovery.RecoveryEntryDao
 import com.repflow.app.infrastructure.database.trainingplan.PlannedExerciseDao
 import com.repflow.app.infrastructure.database.trainingplan.TrainingPlanDao
 import com.repflow.app.infrastructure.database.trainingplan.TrainingPlanVersionDao
@@ -37,7 +40,7 @@ object DatabaseModule {
     ): RepFlowDatabase =
         Room
             .databaseBuilder(context, RepFlowDatabase::class.java, DATABASE_NAME)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
             .build()
 
     @Provides
@@ -60,4 +63,10 @@ object DatabaseModule {
 
     @Provides
     fun provideWorkoutSetDao(database: RepFlowDatabase): WorkoutSetDao = database.workoutSetDao()
+
+    @Provides
+    fun provideRecoveryEntryDao(database: RepFlowDatabase): RecoveryEntryDao = database.recoveryEntryDao()
+
+    @Provides
+    fun provideFutsalSessionDao(database: RepFlowDatabase): FutsalSessionDao = database.futsalSessionDao()
 }

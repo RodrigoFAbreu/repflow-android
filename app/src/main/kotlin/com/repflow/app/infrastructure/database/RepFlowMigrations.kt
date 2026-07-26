@@ -209,6 +209,65 @@ val MIGRATION_2_3: Migration =
     }
 
 /**
+ * The real, additive 4-to-5 migration introducing the recovery and futsal
+ * tables (see `docs/milestones/completed/milestone-5-reference.md`'s data
+ * model section). Nothing about the existing tables changes. No
+ * `fallbackToDestructiveMigration` call exists anywhere (see
+ * [RepFlowDatabase]'s KDoc).
+ */
+@Suppress("MagicNumber")
+val MIGRATION_4_5: Migration =
+    object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `recovery_entries` (
+                    `id` TEXT NOT NULL,
+                    `entry_date` TEXT NOT NULL,
+                    `sleep_quality` INTEGER NOT NULL,
+                    `energy` INTEGER NOT NULL,
+                    `leg_doms` INTEGER NOT NULL,
+                    `heel_stiffness` INTEGER NOT NULL,
+                    `pain_while_walking` INTEGER NOT NULL,
+                    `heavy_legs` INTEGER NOT NULL,
+                    `futsal_in_previous_24h` INTEGER NOT NULL,
+                    `futsal_expected_next_24h` INTEGER NOT NULL,
+                    `notes` TEXT,
+                    `created_at` INTEGER NOT NULL,
+                    `updated_at` INTEGER NOT NULL,
+                    PRIMARY KEY(`id`)
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS `index_recovery_entries_entry_date`
+                ON `recovery_entries` (`entry_date`)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `futsal_sessions` (
+                    `id` TEXT NOT NULL,
+                    `entry_date` TEXT NOT NULL,
+                    `duration_minutes` INTEGER NOT NULL,
+                    `session_rpe` REAL NOT NULL,
+                    `created_at` INTEGER NOT NULL,
+                    `updated_at` INTEGER NOT NULL,
+                    PRIMARY KEY(`id`)
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS `index_futsal_sessions_entry_date`
+                ON `futsal_sessions` (`entry_date`)
+                """.trimIndent(),
+            )
+        }
+    }
+
+/**
  * The real, additive 3-to-4 migration adding the rest-timer's absolute end
  * timestamp and total duration to `workout_sessions` (see
  * `docs/milestones/active/milestone-4-reference.md`'s data model section).

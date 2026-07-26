@@ -4,6 +4,10 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.repflow.app.infrastructure.database.exercise.ExerciseDao
 import com.repflow.app.infrastructure.database.exercise.ExerciseEntity
+import com.repflow.app.infrastructure.database.recovery.FutsalSessionDao
+import com.repflow.app.infrastructure.database.recovery.FutsalSessionEntity
+import com.repflow.app.infrastructure.database.recovery.RecoveryEntryDao
+import com.repflow.app.infrastructure.database.recovery.RecoveryEntryEntity
 import com.repflow.app.infrastructure.database.trainingplan.PlannedExerciseDao
 import com.repflow.app.infrastructure.database.trainingplan.PlannedExerciseEntity
 import com.repflow.app.infrastructure.database.trainingplan.TrainingPlanDao
@@ -21,9 +25,10 @@ import com.repflow.app.infrastructure.database.workout.WorkoutSetEntity
  * RepFlow's single Room database. Version 2 added the training-plan tables
  * via [MIGRATION_1_2]; version 3 adds the active-workout tables via
  * [MIGRATION_2_3]; version 4 adds the rest-timer columns via
- * [MIGRATION_3_4]. There is deliberately no
- * `fallbackToDestructiveMigration` anywhere in this codebase (see plan.md
- * section G and additional implementation correction 14).
+ * [MIGRATION_3_4]; version 5 adds the recovery/futsal tables via
+ * [MIGRATION_4_5]. There is deliberately no `fallbackToDestructiveMigration`
+ * anywhere in this codebase (see plan.md section G and additional
+ * implementation correction 14).
  */
 @Database(
     entities = [
@@ -34,8 +39,10 @@ import com.repflow.app.infrastructure.database.workout.WorkoutSetEntity
         WorkoutSessionEntity::class,
         WorkoutExerciseEntity::class,
         WorkoutSetEntity::class,
+        RecoveryEntryEntity::class,
+        FutsalSessionEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class RepFlowDatabase : RoomDatabase() {
@@ -52,4 +59,8 @@ abstract class RepFlowDatabase : RoomDatabase() {
     abstract fun workoutExerciseDao(): WorkoutExerciseDao
 
     abstract fun workoutSetDao(): WorkoutSetDao
+
+    abstract fun recoveryEntryDao(): RecoveryEntryDao
+
+    abstract fun futsalSessionDao(): FutsalSessionDao
 }
