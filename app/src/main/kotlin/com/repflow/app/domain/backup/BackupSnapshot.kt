@@ -74,4 +74,9 @@ sealed interface BackupValidationError {
     data class UnsupportedSchemaVersion(
         val schemaVersion: Int,
     ) : BackupValidationError
+
+    /** The backup text is not valid JSON, is missing a required field, or has a field of the wrong shape. */
+    data class Malformed(
+        val reason: String,
+    ) : BackupValidationError
 }

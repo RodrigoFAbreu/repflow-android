@@ -83,6 +83,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
 
     testImplementation(libs.junit)
+    testImplementation(libs.json.org.java)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
 
