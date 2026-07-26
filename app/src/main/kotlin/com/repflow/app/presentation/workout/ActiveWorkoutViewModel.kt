@@ -201,10 +201,14 @@ class ActiveWorkoutViewModel
             }
         }
 
+        @Suppress("LongParameterList")
         fun onRecordSet(
             exerciseId: WorkoutExerciseId,
             load: Double?,
             reps: Int?,
+            durationSeconds: Int? = null,
+            rpe: Double? = null,
+            isWarmup: Boolean = false,
         ) {
             val sessionId = activeSessionId() ?: return
             launchAction {
@@ -215,9 +219,9 @@ class ActiveWorkoutViewModel
                             exerciseId = exerciseId,
                             load = load,
                             reps = reps,
-                            durationSeconds = null,
-                            rpe = null,
-                            isWarmup = false,
+                            durationSeconds = durationSeconds,
+                            rpe = rpe,
+                            isWarmup = isWarmup,
                         ),
                     )
                 if (result is DomainResult.Success) startRestTimer(sessionId)
@@ -245,10 +249,14 @@ class ActiveWorkoutViewModel
             launchAction { undoLastWorkoutSet(sessionId, exerciseId) }
         }
 
+        @Suppress("LongParameterList")
         fun onEditLastSet(
             exerciseId: WorkoutExerciseId,
             load: Double?,
             reps: Int?,
+            durationSeconds: Int? = null,
+            rpe: Double? = null,
+            isWarmup: Boolean = false,
         ) {
             val sessionId = activeSessionId() ?: return
             launchAction {
@@ -258,9 +266,9 @@ class ActiveWorkoutViewModel
                         exerciseId = exerciseId,
                         load = load,
                         reps = reps,
-                        durationSeconds = null,
-                        rpe = null,
-                        isWarmup = false,
+                        durationSeconds = durationSeconds,
+                        rpe = rpe,
+                        isWarmup = isWarmup,
                     ),
                 )
             }
@@ -335,6 +343,8 @@ private fun toContent(session: WorkoutSession?): ActiveWorkoutContent =
                                     load = set.load,
                                     reps = set.reps,
                                     durationSeconds = set.durationSeconds,
+                                    rpe = set.rpe,
+                                    isWarmup = set.isWarmup,
                                 )
                             },
                     )

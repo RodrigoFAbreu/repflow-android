@@ -83,6 +83,10 @@
     <string name="workout_active_set_row">Set %1$d: %2$s kg x %3$d</string>
     <string name="workout_active_load_label">Load (kg)</string>
     <string name="workout_active_reps_label">Reps</string>
+    <string name="workout_active_duration_label">Duration (s, optional)</string>
+    <string name="workout_active_rpe_label">RPE (0-10, optional)</string>
+    <string name="workout_active_warmup_label">Warm-up set</string>
+    <string name="workout_active_warmup_suffix">(warm-up)</string>
     <string name="workout_active_add_set">Add set</string>
     <string name="workout_active_undo_set">Undo</string>
     <string name="workout_active_edit_set">Edit</string>

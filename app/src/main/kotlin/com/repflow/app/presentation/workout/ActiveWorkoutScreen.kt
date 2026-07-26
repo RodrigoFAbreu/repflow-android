@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -50,9 +51,9 @@ fun ActiveWorkoutScreen(
     onStartWorkout: (TrainingPlanVersionId?) -> Unit,
     onAddExercise: (ExercisePickerItem) -> Unit,
     onOverrideRecommendation: (ExerciseId, ProgressionResultUi) -> Unit,
-    onRecordSet: (WorkoutExerciseId, Double?, Int?) -> Unit,
+    onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean) -> Unit,
     onUndoLastSet: (WorkoutExerciseId) -> Unit,
-    onEditLastSet: (WorkoutExerciseId, Double?, Int?) -> Unit,
+    onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean) -> Unit,
     onAddRestTime: () -> Unit,
     onRemoveRestTime: () -> Unit,
     onSkipRestTimer: () -> Unit,
@@ -152,9 +153,9 @@ private fun ActiveSessionState(
     dayContext: WorkoutDayContextUi?,
     onAddExercise: (ExercisePickerItem) -> Unit,
     onOverrideRecommendation: (ExerciseId, ProgressionResultUi) -> Unit,
-    onRecordSet: (WorkoutExerciseId, Double?, Int?) -> Unit,
+    onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean) -> Unit,
     onUndoLastSet: (WorkoutExerciseId) -> Unit,
-    onEditLastSet: (WorkoutExerciseId, Double?, Int?) -> Unit,
+    onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean) -> Unit,
     onAddRestTime: () -> Unit,
     onRemoveRestTime: () -> Unit,
     onSkipRestTimer: () -> Unit,
@@ -242,17 +243,24 @@ private const val TICK_INTERVAL_MILLIS = 1_000L
 @Composable
 private fun ExerciseCard(
     exercise: ActiveExerciseUi,
-    onRecordSet: (WorkoutExerciseId, Double?, Int?) -> Unit,
+    onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean) -> Unit,
     onUndoLastSet: (WorkoutExerciseId) -> Unit,
-    onEditLastSet: (WorkoutExerciseId, Double?, Int?) -> Unit,
+    onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean) -> Unit,
 ) {
     var loadText by remember(exercise.id) { mutableStateOf("") }
     var repsText by remember(exercise.id) { mutableStateOf("") }
+    var durationText by remember(exercise.id) { mutableStateOf("") }
+    var rpeText by remember(exercise.id) { mutableStateOf("") }
+    var isWarmup by remember(exercise.id) { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Text(exercise.name)
         exercise.sets.forEach { set ->
-            Text(stringResource(R.string.workout_active_set_row, set.setNumber, set.load ?: 0.0, set.reps ?: 0))
+            val warmupSuffix = if (set.isWarmup) " " + stringResource(R.string.workout_active_warmup_suffix) else ""
+            Text(
+                stringResource(R.string.workout_active_set_row, set.setNumber, set.load ?: 0.0, set.reps ?: 0) +
+                    warmupSuffix,
+            )
         }
         Row {
             OutlinedTextField(
@@ -275,7 +283,42 @@ private fun ExerciseCard(
             )
         }
         Row {
-            Button(onClick = { onRecordSet(exercise.id, loadText.toDoubleOrNull(), repsText.toIntOrNull()) }) {
+            OutlinedTextField(
+                value = durationText,
+                onValueChange = { durationText = it },
+                label = { Text(stringResource(R.string.workout_active_duration_label)) },
+                keyboardOptions =
+                    androidx.compose.foundation.text
+                        .KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedTextField(
+                value = rpeText,
+                onValueChange = { rpeText = it },
+                label = { Text(stringResource(R.string.workout_active_rpe_label)) },
+                keyboardOptions =
+                    androidx.compose.foundation.text
+                        .KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.workout_active_warmup_label), modifier = Modifier.weight(1f))
+            Switch(checked = isWarmup, onCheckedChange = { isWarmup = it })
+        }
+        Row {
+            Button(
+                onClick = {
+                    onRecordSet(
+                        exercise.id,
+                        loadText.toDoubleOrNull(),
+                        repsText.toIntOrNull(),
+                        durationText.toIntOrNull(),
+                        rpeText.toDoubleOrNull(),
+                        isWarmup,
+                    )
+                },
+            ) {
                 Text(stringResource(R.string.workout_active_add_set))
             }
             if (exercise.sets.isNotEmpty()) {
@@ -283,7 +326,16 @@ private fun ExerciseCard(
                     Text(stringResource(R.string.workout_active_undo_set))
                 }
                 TextButton(
-                    onClick = { onEditLastSet(exercise.id, loadText.toDoubleOrNull(), repsText.toIntOrNull()) },
+                    onClick = {
+                        onEditLastSet(
+                            exercise.id,
+                            loadText.toDoubleOrNull(),
+                            repsText.toIntOrNull(),
+                            durationText.toIntOrNull(),
+                            rpeText.toDoubleOrNull(),
+                            isWarmup,
+                        )
+                    },
                 ) {
                     Text(stringResource(R.string.workout_active_edit_set))
                 }

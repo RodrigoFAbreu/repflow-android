@@ -1,5 +1,6 @@
 package com.repflow.app.presentation.workout
 
+import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.test
 import com.repflow.app.application.exercise.FixedClock
 import com.repflow.app.application.exercise.GetExercise
@@ -118,6 +119,24 @@ class ActiveWorkoutViewModelTest {
         return exercise
     }
 
+    private fun seedDurationExercise(): Exercise {
+        val exercise =
+            requireSuccess(
+                Exercise.create(
+                    id = ExerciseId("exercise-plank"),
+                    name = requireSuccess(ExerciseName.create("Plank")),
+                    trackingType = ExerciseTrackingType.DURATION,
+                    instructions = null,
+                    defaultLoadIncrement = null,
+                    defaultRestDuration = null,
+                    origin = ExerciseOrigin.CUSTOM,
+                    createdAt = now,
+                ),
+            )
+        exerciseRepository.seed(exercise)
+        return exercise
+    }
+
     @After
     fun resetMainDispatcher() {
         Dispatchers.resetMain()
@@ -211,46 +230,151 @@ class ActiveWorkoutViewModelTest {
         }
 
     @Test
-    fun `adding an exercise then recording, editing and undoing a set updates the active session`() =
+    fun `recording a set updates the active session`() =
         runTest {
             seedExercise()
             Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
             viewModel.uiState.test {
-                awaitItem() // Loading
-                awaitItem() // NoActiveSession
+                val withExercise = startWorkoutWithFirstAvailableExercise()
 
-                viewModel.onStartWorkout()
-                val activeEmpty = awaitItem() // Active, no exercises
+                // durationSeconds is deliberately omitted here: WorkoutSet.validateTrackedValues
+                // rejects a non-null durationSeconds for a WEIGHT_AND_REPS exercise
+                // (DurationNotApplicable) - seedExercise() creates a WEIGHT_AND_REPS exercise, so
+                // only RPE/isWarmup are exercised here; duration-tracked exercises are covered
+                // separately below.
+                viewModel.onRecordSet(withExercise.id, 60.0, 8, null, 7.5, true)
+                val withSet = awaitSingleSet()
+                assertEquals(60.0, withSet.load)
+                assertEquals(8, withSet.reps)
+                assertEquals(7.5, withSet.rpe)
+                assertEquals(true, withSet.isWarmup)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 
-                val exercisePicked = activeEmpty.availableExercises.single()
-                viewModel.onAddExercise(exercisePicked)
-                val withExercise = (awaitItem().content as ActiveWorkoutContent.Active).exercises.single()
+    @Test
+    fun `editing the last set updates load, reps, rpe and warm-up status`() =
+        runTest {
+            seedExercise()
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                val withExercise = startWorkoutWithFirstAvailableExercise()
+                viewModel.onRecordSet(withExercise.id, 60.0, 8, null, 7.5, true)
+                awaitSingleSet()
 
-                viewModel.onRecordSet(withExercise.id, 60.0, 8)
-                val withSet =
-                    (awaitItem().content as ActiveWorkoutContent.Active)
+                viewModel.onEditLastSet(withExercise.id, 70.0, 5, null, 8.0, false)
+                var state = awaitItem()
+                while ((state.content as ActiveWorkoutContent.Active)
                         .exercises
                         .single()
                         .sets
                         .single()
-                assertEquals(60.0, withSet.load)
-                assertEquals(8, withSet.reps)
-
-                viewModel.onEditLastSet(withExercise.id, 70.0, 5)
+                        .load != 70.0
+                ) {
+                    state = awaitItem()
+                }
                 val edited =
-                    (awaitItem().content as ActiveWorkoutContent.Active)
+                    (state.content as ActiveWorkoutContent.Active)
                         .exercises
                         .single()
                         .sets
                         .single()
                 assertEquals(70.0, edited.load)
                 assertEquals(5, edited.reps)
+                assertEquals(8.0, edited.rpe)
+                assertEquals(false, edited.isWarmup)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `undoing the last set removes it`() =
+        runTest {
+            seedExercise()
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                val withExercise = startWorkoutWithFirstAvailableExercise()
+                viewModel.onRecordSet(withExercise.id, 60.0, 8, null, 7.5, true)
+                awaitSingleSet()
 
                 viewModel.onUndoLastSet(withExercise.id)
-                val undone = (awaitItem().content as ActiveWorkoutContent.Active).exercises.single().sets
+                var state = awaitItem()
+                while ((state.content as ActiveWorkoutContent.Active)
+                        .exercises
+                        .single()
+                        .sets
+                        .isNotEmpty()
+                ) {
+                    state = awaitItem()
+                }
+                val undone = (state.content as ActiveWorkoutContent.Active).exercises.single().sets
                 assertEquals(emptyList<ActiveSetUi>(), undone)
             }
         }
+
+    @Test
+    fun `recording a set for a duration-tracked exercise persists durationSeconds`() =
+        runTest {
+            seedDurationExercise()
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                val withExercise = startWorkoutWithFirstAvailableExercise()
+
+                // load/reps are deliberately null here: a DURATION exercise rejects them
+                // (RepsNotApplicable/LoadNotApplicable), mirroring the WEIGHT_AND_REPS case's
+                // rejection of durationSeconds above.
+                viewModel.onRecordSet(withExercise.id, null, null, 60, 6.0, false)
+                val withSet = awaitSingleSet()
+                assertEquals(60, withSet.durationSeconds)
+                assertEquals(6.0, withSet.rpe)
+                assertEquals(false, withSet.isWarmup)
+                // onRecordSet's success path also calls startRestTimer, which produces one more
+                // combine emission after the one just consumed above - not relevant here.
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    /**
+     * Starts an ad-hoc workout and adds the (single) exercise the test seeded, returning it.
+     * Scans forward with `awaitItem()` rather than assuming a fixed emission count per step
+     * (Milestone 8, CP7 root-caused the pre-existing flakiness here: under
+     * UnconfinedTestDispatcher, the number of intermediate `uiState` combine emissions per
+     * state change isn't guaranteed).
+     */
+    private suspend fun ReceiveTurbine<ActiveWorkoutUiState>.startWorkoutWithFirstAvailableExercise(): ActiveExerciseUi {
+        var state = awaitItem()
+        while (state.content !is ActiveWorkoutContent.NoActiveSession) state = awaitItem()
+
+        viewModel.onStartWorkout()
+        state = awaitItem()
+        while ((state.content as? ActiveWorkoutContent.Active) == null) state = awaitItem()
+
+        val exercisePicked = state.availableExercises.single()
+        viewModel.onAddExercise(exercisePicked)
+        state = awaitItem()
+        while ((state.content as? ActiveWorkoutContent.Active)?.exercises?.isEmpty() != false) {
+            state = awaitItem()
+        }
+        return (state.content as ActiveWorkoutContent.Active).exercises.single()
+    }
+
+    /** Scans forward to the first state with a recorded set on the (single) active exercise. */
+    private suspend fun ReceiveTurbine<ActiveWorkoutUiState>.awaitSingleSet(): ActiveSetUi {
+        var state = awaitItem()
+        while ((state.content as? ActiveWorkoutContent.Active)
+                ?.exercises
+                ?.single()
+                ?.sets
+                ?.isEmpty() != false
+        ) {
+            state = awaitItem()
+        }
+        return (state.content as ActiveWorkoutContent.Active)
+            .exercises
+            .single()
+            .sets
+            .single()
+    }
 
     @Test
     fun `onCompleteWorkout returns to no active session`() =
