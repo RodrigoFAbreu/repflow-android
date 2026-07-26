@@ -19,6 +19,8 @@ data class RecordWorkoutSetCommand(
     val durationSeconds: Int?,
     val rpe: Double?,
     val isWarmup: Boolean,
+    val pain: Int? = null,
+    val techniqueQuality: Int? = null,
 )
 
 class RecordWorkoutSet
@@ -50,6 +52,8 @@ class RecordWorkoutSet
                         isWarmup = command.isWarmup,
                         createdAt = now,
                         updatedAt = now,
+                        pain = command.pain,
+                        techniqueQuality = command.techniqueQuality,
                     ).getOrElse { error ->
                         return DomainResult.Failure(WorkoutOperationError.ValidationFailed(listOf(error)))
                     }

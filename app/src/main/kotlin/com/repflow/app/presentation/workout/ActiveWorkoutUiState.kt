@@ -89,6 +89,8 @@ data class ActiveSetUi(
     val durationSeconds: Int?,
     val rpe: Double? = null,
     val isWarmup: Boolean = false,
+    val pain: Int? = null,
+    val techniqueQuality: Int? = null,
 )
 
 /** Presentation carries the absolute end timestamp; the Composable derives remaining time via its own 1s tick, so a full recomposition after process death reconstructs the correct value with no drift. */

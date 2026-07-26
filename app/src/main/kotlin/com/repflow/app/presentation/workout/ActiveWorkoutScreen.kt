@@ -51,9 +51,9 @@ fun ActiveWorkoutScreen(
     onStartWorkout: (TrainingPlanVersionId?) -> Unit,
     onAddExercise: (ExercisePickerItem) -> Unit,
     onOverrideRecommendation: (ExerciseId, ProgressionResultUi) -> Unit,
-    onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean) -> Unit,
+    onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
     onUndoLastSet: (WorkoutExerciseId) -> Unit,
-    onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean) -> Unit,
+    onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
     onAddRestTime: () -> Unit,
     onRemoveRestTime: () -> Unit,
     onSkipRestTimer: () -> Unit,
@@ -153,9 +153,9 @@ private fun ActiveSessionState(
     dayContext: WorkoutDayContextUi?,
     onAddExercise: (ExercisePickerItem) -> Unit,
     onOverrideRecommendation: (ExerciseId, ProgressionResultUi) -> Unit,
-    onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean) -> Unit,
+    onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
     onUndoLastSet: (WorkoutExerciseId) -> Unit,
-    onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean) -> Unit,
+    onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
     onAddRestTime: () -> Unit,
     onRemoveRestTime: () -> Unit,
     onSkipRestTimer: () -> Unit,
@@ -243,15 +243,17 @@ private const val TICK_INTERVAL_MILLIS = 1_000L
 @Composable
 private fun ExerciseCard(
     exercise: ActiveExerciseUi,
-    onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean) -> Unit,
+    onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
     onUndoLastSet: (WorkoutExerciseId) -> Unit,
-    onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean) -> Unit,
+    onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
 ) {
     var loadText by remember(exercise.id) { mutableStateOf("") }
     var repsText by remember(exercise.id) { mutableStateOf("") }
     var durationText by remember(exercise.id) { mutableStateOf("") }
     var rpeText by remember(exercise.id) { mutableStateOf("") }
     var isWarmup by remember(exercise.id) { mutableStateOf(false) }
+    var painText by remember(exercise.id) { mutableStateOf("") }
+    var techniqueQualityText by remember(exercise.id) { mutableStateOf("") }
 
     Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Text(exercise.name)
@@ -307,6 +309,26 @@ private fun ExerciseCard(
             Switch(checked = isWarmup, onCheckedChange = { isWarmup = it })
         }
         Row {
+            OutlinedTextField(
+                value = painText,
+                onValueChange = { painText = it },
+                label = { Text(stringResource(R.string.workout_active_pain_label)) },
+                keyboardOptions =
+                    androidx.compose.foundation.text
+                        .KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedTextField(
+                value = techniqueQualityText,
+                onValueChange = { techniqueQualityText = it },
+                label = { Text(stringResource(R.string.workout_active_technique_quality_label)) },
+                keyboardOptions =
+                    androidx.compose.foundation.text
+                        .KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row {
             Button(
                 onClick = {
                     onRecordSet(
@@ -316,6 +338,8 @@ private fun ExerciseCard(
                         durationText.toIntOrNull(),
                         rpeText.toDoubleOrNull(),
                         isWarmup,
+                        painText.toIntOrNull(),
+                        techniqueQualityText.toIntOrNull(),
                     )
                 },
             ) {
@@ -334,6 +358,8 @@ private fun ExerciseCard(
                             durationText.toIntOrNull(),
                             rpeText.toDoubleOrNull(),
                             isWarmup,
+                            painText.toIntOrNull(),
+                            techniqueQualityText.toIntOrNull(),
                         )
                     },
                 ) {

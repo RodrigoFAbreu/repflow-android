@@ -105,6 +105,49 @@ class AddWorkoutExerciseAndRecordWorkoutSetTest {
         }
 
     @Test
+    fun `records a set with pain and technique quality`() =
+        runTest {
+            startSession(StartWorkoutSessionCommand(trainingPlanVersionId = null))
+            val sessionId = activeSessionId()
+            val exerciseId =
+                (
+                    addExercise(
+                        AddWorkoutExerciseCommand(
+                            sessionId = sessionId,
+                            exerciseId = ExerciseId("exercise-1"),
+                            exerciseNameSnapshot = "Back Squat",
+                            trackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
+                            plannedExerciseId = null,
+                        ),
+                    ) as DomainResult.Success
+                ).value
+
+            recordSet(
+                RecordWorkoutSetCommand(
+                    sessionId = sessionId,
+                    exerciseId = exerciseId,
+                    load = 60.0,
+                    reps = 8,
+                    durationSeconds = null,
+                    rpe = null,
+                    isWarmup = false,
+                    pain = 3,
+                    techniqueQuality = 4,
+                ),
+            )
+
+            val set =
+                repository
+                    .findById(sessionId)
+                    ?.exercises
+                    ?.first()
+                    ?.sets
+                    ?.single()
+            assertEquals(3, set?.pain)
+            assertEquals(4, set?.techniqueQuality)
+        }
+
+    @Test
     fun `recording a set for a missing exercise fails with NotFound`() =
         runTest {
             startSession(StartWorkoutSessionCommand(trainingPlanVersionId = null))

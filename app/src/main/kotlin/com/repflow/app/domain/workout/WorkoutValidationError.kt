@@ -45,6 +45,12 @@ sealed interface WorkoutValidationError {
     /** A [WorkoutSet]'s `rpe` value is outside the supported `0.0..10.0` range. */
     data object RpeOutOfRange : WorkoutValidationError
 
+    /** A [WorkoutSet]'s `pain` value is outside the supported `0..5` range. */
+    data object PainOutOfRange : WorkoutValidationError
+
+    /** A [WorkoutSet]'s `techniqueQuality` value is outside the supported `0..5` range. */
+    data object TechniqueQualityOutOfRange : WorkoutValidationError
+
     /** A [WorkoutSet]'s `updatedAt` is before its `createdAt`. */
     data object UpdatedBeforeCreated : WorkoutValidationError
 

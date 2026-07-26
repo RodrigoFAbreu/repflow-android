@@ -17,6 +17,8 @@ data class EditLastWorkoutSetCommand(
     val durationSeconds: Int?,
     val rpe: Double?,
     val isWarmup: Boolean,
+    val pain: Int? = null,
+    val techniqueQuality: Int? = null,
 )
 
 /** Edits the most recently recorded set in place (same id and order), the "edit" half of the fast set-entry flow. */
@@ -48,6 +50,8 @@ class EditLastWorkoutSet
                         isWarmup = command.isWarmup,
                         createdAt = lastSet.createdAt,
                         updatedAt = clock.now(),
+                        pain = command.pain,
+                        techniqueQuality = command.techniqueQuality,
                     ).getOrElse { error ->
                         return DomainResult.Failure(WorkoutOperationError.ValidationFailed(listOf(error)))
                     }

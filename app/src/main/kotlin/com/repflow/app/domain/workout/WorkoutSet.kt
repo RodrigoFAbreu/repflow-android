@@ -25,9 +25,12 @@ data class WorkoutSet private constructor(
     val isWarmup: Boolean,
     val createdAt: Instant,
     val updatedAt: Instant,
+    val pain: Int?,
+    val techniqueQuality: Int?,
 ) {
     companion object {
         private val RPE_RANGE = 0.0..10.0
+        private val SCALE_RANGE = 0..5
 
         @Suppress("LongParameterList")
         fun create(
@@ -41,6 +44,8 @@ data class WorkoutSet private constructor(
             isWarmup: Boolean,
             createdAt: Instant,
             updatedAt: Instant,
+            pain: Int? = null,
+            techniqueQuality: Int? = null,
         ): DomainResult<WorkoutSet, WorkoutValidationError> {
             if (order < 0) {
                 return DomainResult.Failure(WorkoutValidationError.NegativeOrder)
@@ -50,6 +55,12 @@ data class WorkoutSet private constructor(
             }
             if (rpe != null && rpe !in RPE_RANGE) {
                 return DomainResult.Failure(WorkoutValidationError.RpeOutOfRange)
+            }
+            if (pain != null && pain !in SCALE_RANGE) {
+                return DomainResult.Failure(WorkoutValidationError.PainOutOfRange)
+            }
+            if (techniqueQuality != null && techniqueQuality !in SCALE_RANGE) {
+                return DomainResult.Failure(WorkoutValidationError.TechniqueQualityOutOfRange)
             }
             validateTrackedValues(trackingType, load, reps, durationSeconds)?.let {
                 return DomainResult.Failure(it)
@@ -65,6 +76,8 @@ data class WorkoutSet private constructor(
                     isWarmup = isWarmup,
                     createdAt = createdAt,
                     updatedAt = updatedAt,
+                    pain = pain,
+                    techniqueQuality = techniqueQuality,
                 ),
             )
         }

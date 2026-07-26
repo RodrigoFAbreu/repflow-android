@@ -31,6 +31,27 @@ class WorkoutSetTest {
     }
 
     @Test
+    fun `create rejects a pain value outside 0 to 5`() {
+        val result = set(pain = 6)
+
+        assertEquals(DomainResult.Failure(WorkoutValidationError.PainOutOfRange), result)
+    }
+
+    @Test
+    fun `create rejects a technique quality value outside 0 to 5`() {
+        val result = set(techniqueQuality = -1)
+
+        assertEquals(DomainResult.Failure(WorkoutValidationError.TechniqueQualityOutOfRange), result)
+    }
+
+    @Test
+    fun `create accepts pain and technique quality within 0 to 5`() {
+        val result = set(pain = 0, techniqueQuality = 5)
+
+        assertEquals(true, result is DomainResult.Success)
+    }
+
+    @Test
     fun `create rejects a weight-and-reps set with no reps`() {
         val result = set(trackingType = ExerciseTrackingType.WEIGHT_AND_REPS, reps = null)
 
@@ -96,6 +117,8 @@ class WorkoutSetTest {
         rpe: Double? = null,
         isWarmup: Boolean = false,
         updatedAt: Instant = createdAt,
+        pain: Int? = null,
+        techniqueQuality: Int? = null,
     ) = WorkoutSet.create(
         id = WorkoutSetId("set-1"),
         order = order,
@@ -107,5 +130,7 @@ class WorkoutSetTest {
         isWarmup = isWarmup,
         createdAt = createdAt,
         updatedAt = updatedAt,
+        pain = pain,
+        techniqueQuality = techniqueQuality,
     )
 }

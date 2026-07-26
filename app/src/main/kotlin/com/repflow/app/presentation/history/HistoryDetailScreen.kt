@@ -64,6 +64,18 @@ fun HistoryDetailScreen(
                             ),
                         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, bottom = 4.dp),
                     )
+                    set.pain?.let { pain ->
+                        Text(
+                            text = stringResource(R.string.history_detail_set_pain, pain),
+                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, bottom = 4.dp),
+                        )
+                    }
+                    set.techniqueQuality?.let { techniqueQuality ->
+                        Text(
+                            text = stringResource(R.string.history_detail_set_technique_quality, techniqueQuality),
+                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, bottom = 4.dp),
+                        )
+                    }
                 }
                 HorizontalDivider()
             }

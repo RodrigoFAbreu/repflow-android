@@ -209,6 +209,8 @@ class ActiveWorkoutViewModel
             durationSeconds: Int? = null,
             rpe: Double? = null,
             isWarmup: Boolean = false,
+            pain: Int? = null,
+            techniqueQuality: Int? = null,
         ) {
             val sessionId = activeSessionId() ?: return
             launchAction {
@@ -222,6 +224,8 @@ class ActiveWorkoutViewModel
                             durationSeconds = durationSeconds,
                             rpe = rpe,
                             isWarmup = isWarmup,
+                            pain = pain,
+                            techniqueQuality = techniqueQuality,
                         ),
                     )
                 if (result is DomainResult.Success) startRestTimer(sessionId)
@@ -257,6 +261,8 @@ class ActiveWorkoutViewModel
             durationSeconds: Int? = null,
             rpe: Double? = null,
             isWarmup: Boolean = false,
+            pain: Int? = null,
+            techniqueQuality: Int? = null,
         ) {
             val sessionId = activeSessionId() ?: return
             launchAction {
@@ -269,6 +275,8 @@ class ActiveWorkoutViewModel
                         durationSeconds = durationSeconds,
                         rpe = rpe,
                         isWarmup = isWarmup,
+                        pain = pain,
+                        techniqueQuality = techniqueQuality,
                     ),
                 )
             }
@@ -345,6 +353,8 @@ private fun toContent(session: WorkoutSession?): ActiveWorkoutContent =
                                     durationSeconds = set.durationSeconds,
                                     rpe = set.rpe,
                                     isWarmup = set.isWarmup,
+                                    pain = set.pain,
+                                    techniqueQuality = set.techniqueQuality,
                                 )
                             },
                     )

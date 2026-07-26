@@ -38,6 +38,8 @@ class WorkoutEntityMapperTest {
                     isWarmup = false,
                     createdAt = startedAt,
                     updatedAt = startedAt,
+                    pain = 2,
+                    techniqueQuality = 4,
                 ),
             ) as WorkoutSet
 

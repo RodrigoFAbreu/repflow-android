@@ -288,6 +288,22 @@ class ActiveWorkoutViewModelTest {
         }
 
     @Test
+    fun `recording a set with pain and technique quality persists both fields`() =
+        runTest {
+            seedExercise()
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                val withExercise = startWorkoutWithFirstAvailableExercise()
+
+                viewModel.onRecordSet(withExercise.id, 60.0, 8, null, 7.5, true, 3, 4)
+                val withSet = awaitSingleSet()
+                assertEquals(3, withSet.pain)
+                assertEquals(4, withSet.techniqueQuality)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
     fun `undoing the last set removes it`() =
         runTest {
             seedExercise()

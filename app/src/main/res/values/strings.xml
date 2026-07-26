@@ -87,6 +87,8 @@
     <string name="workout_active_rpe_label">RPE (0-10, optional)</string>
     <string name="workout_active_warmup_label">Warm-up set</string>
     <string name="workout_active_warmup_suffix">(warm-up)</string>
+    <string name="workout_active_pain_label">Pain during this set (0-5, optional)</string>
+    <string name="workout_active_technique_quality_label">Technique quality (0-5, optional)</string>
     <string name="workout_active_add_set">Add set</string>
     <string name="workout_active_undo_set">Undo</string>
     <string name="workout_active_edit_set">Edit</string>
@@ -175,6 +177,8 @@
     <string name="history_detail_back">Back</string>
     <string name="history_detail_set_count">%1$d sets</string>
     <string name="history_detail_set_row">Set %1$d: %2$s kg x %3$s</string>
+    <string name="history_detail_set_pain">Pain during set: %1$d/5</string>
+    <string name="history_detail_set_technique_quality">Technique quality: %1$d/5</string>
 
     <string name="backup_title">Backup</string>
     <string name="backup_export_action">Export backup</string>

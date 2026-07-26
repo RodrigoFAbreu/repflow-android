@@ -64,6 +64,8 @@ object WorkoutEntityMapper {
                     isWarmup = set.isWarmup,
                     createdAt = set.createdAt.toEpochMilli(),
                     updatedAt = set.updatedAt.toEpochMilli(),
+                    pain = set.pain,
+                    techniqueQuality = set.techniqueQuality,
                 )
             }
         }
@@ -156,5 +158,7 @@ object WorkoutEntityMapper {
                 isWarmup = row.isWarmup,
                 createdAt = Instant.ofEpochMilli(row.createdAt),
                 updatedAt = Instant.ofEpochMilli(row.updatedAt),
+                pain = row.pain,
+                techniqueQuality = row.techniqueQuality,
             ).mapFailure { error -> WorkoutMappingError.InvalidFields(row.id, listOf(error)) }
 }
