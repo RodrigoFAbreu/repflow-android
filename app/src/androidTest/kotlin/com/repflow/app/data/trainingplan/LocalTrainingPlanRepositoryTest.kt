@@ -3,6 +3,7 @@ package com.repflow.app.data.trainingplan
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.cash.turbine.test
 import com.repflow.app.application.trainingplan.TrainingPlanPersistenceError
 import com.repflow.app.application.trainingplan.TrainingPlanStatusFilter
 import com.repflow.app.domain.common.DomainResult
@@ -210,5 +211,43 @@ class LocalTrainingPlanRepositoryTest {
             repository.createPlanWithFirstVersion(plan(), version())
 
             assertEquals(TrainingPlanId("plan-1"), repository.findPlanIdByNameKey("push day"))
+        }
+
+    /**
+     * Real-database proof (Milestone 8, implementation-review finding #5)
+     * that [LocalTrainingPlanRepository.observeVersionLabels] re-emits for
+     * an already-open subscriber when the plan is renamed - not just that a
+     * fresh query happens to see the new name, which a one-shot `suspend`
+     * read would also do.
+     */
+    @Test
+    fun observeVersionLabels_reEmitsForAnAlreadyOpenSubscriberWhenThePlanIsRenamed() =
+        runBlocking {
+            requireSuccessValue(repository.createPlanWithFirstVersion(plan(), version()))
+            val versionId = TrainingPlanVersionId("version-1")
+
+            repository.observeVersionLabels().test {
+                var labels = awaitItem()
+                while (labels[versionId]?.planName != "Push Day") {
+                    labels = awaitItem()
+                }
+
+                val renamed =
+                    requireSuccessValue(
+                        TrainingPlan.create(
+                            id = TrainingPlanId("plan-1"),
+                            name = requireSuccessValue(TrainingPlanName.create("Push Day Renamed")),
+                            createdAt = Instant.ofEpochMilli(1_000L),
+                        ),
+                    )
+                requireSuccessValue(repository.updatePlan(renamed))
+
+                var afterRename = awaitItem()
+                while (afterRename[versionId]?.planName != "Push Day Renamed") {
+                    afterRename = awaitItem()
+                }
+                assertEquals("Push Day Renamed", afterRename[versionId]?.planName)
+                cancelAndIgnoreRemainingEvents()
+            }
         }
 }

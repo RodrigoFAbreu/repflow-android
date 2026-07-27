@@ -10,6 +10,7 @@ import com.repflow.app.domain.exercise.ExerciseName
 import com.repflow.app.domain.exercise.ExerciseOrigin
 import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -74,7 +75,7 @@ class ObserveTrainingPlanVersionLabelsTest {
             )
             val secondVersion = requireNotNull(planRepository.findOverviewByPlanId(planId)).latestVersion.id
 
-            val labels = observeTrainingPlanVersionLabels()
+            val labels = observeTrainingPlanVersionLabels().first()
 
             assertEquals(planId, labels[firstVersion]?.planId)
             assertEquals("Push Day V2", labels[firstVersion]?.planName)
@@ -85,7 +86,7 @@ class ObserveTrainingPlanVersionLabelsTest {
     @Test
     fun `returns an empty map when there are no plans`() =
         runTest {
-            assertEquals(emptyMap<TrainingPlanVersionId, TrainingPlanVersionLabel>(), observeTrainingPlanVersionLabels())
+            assertEquals(emptyMap<TrainingPlanVersionId, TrainingPlanVersionLabel>(), observeTrainingPlanVersionLabels().first())
         }
 
     private fun <T> requireSuccessDomain(result: DomainResult<T, *>): T =
