@@ -48,13 +48,7 @@ fun BackupRoute(viewModel: BackupViewModel = hiltViewModel()) {
     val openBackupDocumentLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri == null) return@rememberLauncherForActivityResult
-            val text =
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    BufferedReader(InputStreamReader(stream, StandardCharsets.UTF_8)).readText()
-                }
-            if (text != null) {
-                viewModel.onRestoreFilePicked(text)
-            }
+            readRestoreFileOrReportFailure(context, uri, updatedViewModel.value)
         }
 
     BackupScreen(
@@ -118,5 +112,35 @@ private fun writeExportOrReportOutcome(
         viewModel.onExportWriteSucceeded(kind)
     } catch (expected: IOException) {
         viewModel.onExportWriteFailed()
+    }
+}
+
+/**
+ * Reads [uri]'s text content and reports the outcome back to the ViewModel
+ * (Milestone 8, implementation-review finding #4): a revoked or otherwise
+ * unreadable `Uri` throws [SecurityException] or [IOException] from
+ * [android.content.ContentResolver.openInputStream] or the subsequent read
+ * - both are caught narrowly here, never a broad `catch (e: Exception)` -
+ * and a `null` stream (no provider for this `Uri`) is treated the same way.
+ * Cancellation (a `null` `Uri`) is handled by the caller before this is
+ * ever invoked, so every path here is a real outcome that must be reported.
+ */
+private fun readRestoreFileOrReportFailure(
+    context: Context,
+    uri: Uri,
+    viewModel: BackupViewModel,
+) {
+    try {
+        val stream =
+            context.contentResolver.openInputStream(uri) ?: run {
+                viewModel.onRestoreFileReadFailed()
+                return
+            }
+        val text = stream.use { BufferedReader(InputStreamReader(it, StandardCharsets.UTF_8)).readText() }
+        viewModel.onRestoreFilePicked(text)
+    } catch (expected: IOException) {
+        viewModel.onRestoreFileReadFailed()
+    } catch (expected: SecurityException) {
+        viewModel.onRestoreFileReadFailed()
     }
 }

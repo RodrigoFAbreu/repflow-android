@@ -117,6 +117,15 @@ class BackupViewModelTest {
         }
 
     @Test
+    fun `onRestoreFileReadFailed reports OperationFailed without staging a restore`() =
+        runTest {
+            viewModel.onRestoreFileReadFailed()
+
+            assertEquals(BackupStatusMessage.OperationFailed, viewModel.uiState.value.statusMessage)
+            assertNull(viewModel.uiState.value.pendingRestoreJson)
+        }
+
+    @Test
     fun `restore round-trip succeeds after a valid export is confirmed`() =
         runTest {
             var exported: String? = null

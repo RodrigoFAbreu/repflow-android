@@ -82,6 +82,17 @@ class BackupViewModel
             _uiState.update { it.copy(pendingRestoreJson = json) }
         }
 
+        /**
+         * The route couldn't read the picked restore file - a revoked/unreadable
+         * `Uri`, a null stream, or an I/O error (Milestone 8,
+         * implementation-review finding #4). No local data is touched, since
+         * [onRestoreFilePicked] (the only path that stages a restore) was
+         * never reached.
+         */
+        fun onRestoreFileReadFailed() {
+            _uiState.update { it.copy(statusMessage = BackupStatusMessage.OperationFailed) }
+        }
+
         fun onRestoreCancelled() {
             _uiState.update { it.copy(pendingRestoreJson = null) }
         }
