@@ -9,6 +9,7 @@ import com.repflow.app.application.progression.InMemoryProgressionRecommendation
 import com.repflow.app.application.recovery.InMemoryFutsalRepository
 import com.repflow.app.application.recovery.InMemoryRecoveryRepository
 import com.repflow.app.application.trainingplan.InMemoryTrainingPlanRepository
+import com.repflow.app.application.trainingplan.ObserveTrainingPlanVersionLabels
 import com.repflow.app.application.workout.InMemoryWorkoutRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -45,7 +46,8 @@ class BackupViewModelTest {
             backupRepository = backupRepository,
         )
     private val restoreBackup = RestoreBackup(backupRepository)
-    private val exportWorkoutHistoryCsv = ExportWorkoutHistoryCsv(workoutRepository)
+    private val exportWorkoutHistoryCsv =
+        ExportWorkoutHistoryCsv(workoutRepository, ObserveTrainingPlanVersionLabels(trainingPlanRepository))
 
     private val viewModel = BackupViewModel(exportBackup, restoreBackup, exportWorkoutHistoryCsv)
 
