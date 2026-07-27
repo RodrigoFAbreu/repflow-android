@@ -65,3 +65,24 @@ An active milestone prompt may explicitly authorize one completion commit after
 all Definition of Done requirements and verification gates pass.
 
 Never push, merge, rebase, force-push, or create a pull request.
+
+## Commands
+
+```bash
+./gradlew build                        # full build
+./gradlew spotlessCheck                # formatting check (Spotless/ktlint)
+./gradlew spotlessApply                # formatting auto-fix
+./gradlew detekt                       # static analysis, config/detekt/detekt.yml, maxIssues: 0
+./gradlew lintDebug                    # Android Lint
+./gradlew testDebugUnitTest            # JVM unit tests (app/src/test)
+./gradlew testDebugUnitTest --tests "com.repflow.app.application.workout.RecordWorkoutSetTest"
+./gradlew connectedDebugAndroidTest     # instrumented tests, requires a device/emulator
+./gradlew assembleDebugAndroidTest      # compile instrumented tests only, no device needed
+./gradlew assembleDebug                 # assemble debug APK
+```
+
+CI (`.github/workflows/ci.yml`) runs, in order: `spotlessCheck`, `detekt`,
+`lintDebug`, `testDebugUnitTest`, `assembleDebug`, `assembleDebugAndroidTest`
+(instrumented tests compile but don't run in CI — no device available). Run
+the narrowest relevant check per checkpoint; run the full suite before
+considering a milestone done.

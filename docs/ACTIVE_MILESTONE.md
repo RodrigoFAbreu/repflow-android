@@ -2,99 +2,72 @@
 
 ## Milestone
 
-Milestone 1 — Exercise Library
+Roadmap milestones 0-7 (`docs/ROADMAP.md`) are complete. The post-MVP
+engineering review (`docs/improvements/POST_MVP_ENGINEERING_REVIEW.md`,
+`IMPROVEMENT_ROADMAP.md`) is also complete and committed (`48da0b0`).
+**Milestone 8 - Post-MVP functional usability stabilization** is now
+active, created from the user's own hands-on functional findings after
+Milestone 7 (not a resumption of any prior work — none existed).
 
 ## Goal
 
-Deliver custom exercise creation, listing, search, editing, archive and restore
-as the first complete vertical slice.
+Close the specific functional/usability gaps in
+`docs/milestones/active/milestone-8-reference.md`'s "Goals" section:
+Recovery/futsal date/scale/history/save-feedback fixes, workout/plan
+set-classification and start-from-plan wiring, History filtering and safe
+accidental-workout removal, training-plan archive/restore, navigation
+consistency, and backup hardening — then a full verification pass and a
+user functional-review checklist. `docs/improvements/IMPROVEMENT_ROADMAP.md`
+§2.1 (`ReturnCount` tuning) is deferred until this milestone is accepted.
 
 ## Current checkpoint
 
-**Verify CPs 3–5 unit tests, then CP6 instrumented tests on device.**
+**Implementing.** P0, CP0-CP13 committed. Next: CP14 (backup hardening +
+v1-backward-compatibility).
 
-Implementation code for CPs 3–10 exists as untracked files.
-Last confirmed build: `./gradlew assembleDebug`. No unit or instrumented tests
-have been verified yet. CP6 requires a physical device or emulator.
+## Checkpoint checklist (Milestone 8, revised round 3)
 
-## Checkpoint checklist
-
-- [x] CP1 — M0 cleanup
-- [x] CP2 — Dependencies + schema export config
-- [ ] CP3 — Domain model + pure JVM tests (code present)
-- [ ] CP4 — Application contracts + use cases (code present)
-- [ ] CP5 — Room entity, DAO, mapper, repository (code present)
-- [ ] CP6 — DAO + repository instrumented tests on device ← **next verification**
-- [ ] CP7 — Hilt bindings (code present)
-- [ ] CP8 — Exercise list end to end (code present)
-- [ ] CP9 — Exercise editor end to end (code present)
-- [ ] CP10 — Archive / restore + snackbar undo (code present)
-- [ ] CP11 — Optional built-in catalog (deferred)
-- [ ] CP12 — Docs + final review
-
-## Approved decisions (quick reference)
-
-- Tracking types: `WEIGHT_AND_REPS`, `REPS_ONLY`, `DURATION`
-- Name key: NFKC → trim → collapse whitespace → `lowercase(Locale.ROOT)`
-- Search: normalized substring `LIKE`, bound param, accent-sensitive
-- Uniqueness spans active **and** archived rows
-- Archive/restore only; permanent deletion deferred
-- Room schema version: 1; no destructive migration fallback
-- Duplicate check on update excludes the exercise being edited (§P-1)
-- Archive undo is idempotent (§P-8)
-- Save unchanged draft performs no DB write (§P-9)
+- [x] P0 — Crash fix: add missing `@HiltViewModel` (Recovery/History/Backup) — `80ec209`. Verified on a real connected device (uninstall/reinstall, tapped all six destinations, no crash) and via 3 new instrumented regression tests (`connectedDebugAndroidTest`, `MainActivityNavHostSmokeTest`, 4/4 passed on `SM-S928B`).
+- [x] CP0 — Audit doc + this doc set + roadmap update — `0fb165f`.
+- [x] CP1 — Bottom navigation redesign. Material 3 `NavigationBar` with the 6 top-level destinations, single source of truth (`RepFlowDestinations.TOP_LEVEL_DESTINATIONS`), `launchSingleTop`/`popUpTo`/`restoreState` (no duplicate back-stack entries, per-tab state preserved), removed the old ad-hoc `TextButton`s and the incorrect Up-arrow on Recovery/History. Verified on a real device: all 6 destinations tap through with no crash, correct selected-state, and (at 1.3x font scale) labels ellipsize instead of wrapping/overflowing. Full instrumented suite (113 tests) and unit suite green. Found and noted (not fixed here, out of CP1's scope): `ExerciseListViewModelTest`'s "undo archive" test is genuinely flaky (Turbine timeout, ~1-2 of 7 reruns), unrelated to CP1 — flagged for CP15.
+- [x] CP2 — Save-feedback hardening. Exercise archive/Undo snackbar now uses an explicit finite `SnackbarDuration.Long` instead of the implicit `Indefinite` default; Recovery/futsal gained `isSavingRecovery`/`isSavingFutsal` guards (Save button disabled + a second call is a no-op while a save is in flight) and the snackbar now explicitly dismisses any still-showing snackbar before presenting a new one. Verified on a real device: triple-tapping Save produces exactly one "Saved" snackbar (not stacked), and switching tabs mid-save leaves no stuck snackbar and doesn't crash. Full instrumented suite (113 tests) and unit suite green (2 new regression tests for the double-tap guard).
+- [x] CP3 — Recovery/futsal usability. Widened `RecoveryEntry.SCALE_RANGE`/`RecoveryFutsalUiState.SCALE_MAX` from 0-4 to 0-5 (fixed the now-stale "/4" in `ProgressionPolicyV1`'s recovery-reason strings to "/5" too); added a date field + Material3 `DatePickerDialog` (future dates disabled) wired through `RecoveryFutsalViewModel.onDateChanged`, which reloads/resets the screen for the selected date and threads it into both save use cases instead of always using "today". No schema change. Verified on a real device: picked a past date (20 Jul), set Sleep quality to 5, saved, switched tabs and back — date and value both persisted correctly for that specific date. Full instrumented suite (113 tests) and unit suite green (5 new regression tests: date load/reset, widened-scale persistence). Note: this device-verification method (tab-switch only) turned out to prove in-memory ViewModel-state continuity, not a genuine disk re-read — CP4 caught this and used a stronger method (force-stop + relaunch) instead.
+- [x] CP4 — Recovery/futsal history screen. New nested `RecoveryHistoryScreen`/`Route`/`ViewModel` (`recovery/history` route, reachable via a "View history" action on the Recovery screen's app bar; keeps an Up action since it's nested, consistent with the navigation rules) rendering `RecoveryRepository.findAll()`/`FutsalRepository.findAll()` - both already existed, previously only consumed by backup export. Presentation-only, no schema. Verified on a real device with a genuine cold-process restart (force-stop + relaunch, not just a tab switch) between saving and checking history, confirming a real disk round-trip rather than leftover in-memory state; also incidentally discovered the device's app data had been wiped since CP3 (`firstInstallTime == lastUpdateTime`, empty DB, cause not identified - re-verified CP1-CP4 all still work correctly with fresh data). Full instrumented suite (114 tests, 1 new) and unit suite green (2 new ViewModel tests).
+- [x] CP5 — Precise progression reasons. Split `ProgressionPolicyV1`'s single OR'd insufficient-data message into three individually-detectable reasons, checked in order of specificity: only-warm-up-sets recorded (new `ProgressionPolicyInput.hadOnlyWarmupSets`, threaded from `CompleteWorkoutSession`'s already-computed `workingSets`/`exercise.sets`), too-few-working-sets, no-planned-rep-range. Explicitly did not add an "insufficient eligible completed history" reason - confirmed the policy has no access to prior occurrences, so that would be a real logic expansion, not a wording fix. Domain/application only, no schema, no threshold change. Full instrumented suite (114 tests) and unit suite green (3 new/updated policy tests). Incidentally found and confirmed (via 4 reruns, 2 failed) a second genuinely flaky pre-existing test, `ActiveWorkoutViewModelTest`'s set-edit test (`expected:<70.0> but was:<60.0>`) - unrelated to CP5, this is the specific flakiness the disputed round-2/3 review feedback referenced; now independently confirmed with real evidence rather than taken on faith. Both known flakes flagged for CP15.
+- [x] CP6 — Start-from-plan. `ActiveWorkoutViewModel.onStartWorkout` now takes an optional `TrainingPlanVersionId`; a new plan-picker dropdown (mirroring the existing "Add exercise" picker) replaces the plain Start button, offering "Start without a plan" (ad-hoc, unchanged) plus every plan from the new `ObserveTrainingPlans`-backed `availablePlans` list. Starting from a plan seeds every one of its `PlannedExercise`s into the new session right after it's created, each carrying its `plannedExerciseId` so `CompleteWorkoutSession` can later resolve a planned rep range for progression. No schema change (fields already existed, just never wired). Fixed a real bug found while writing the test: a nested `stateIn(WhileSubscribed)` for the plan list raced the outer `uiState` combine's own subscription; replaced with an eagerly-collected plain `MutableStateFlow` (mirroring the existing `dayContext` pattern) for reliable synchronous `.value` reads. Verified on a real device end-to-end: created a real exercise and plan through the UI, started a workout from that plan, confirmed the planned exercise was auto-seeded, then force-stopped and relaunched to confirm it persisted to disk (not just in-memory), then cleaned up via Abandon. Full instrumented suite (114 tests) and unit suite green (1 new test, confirmed non-flaky across 3 reruns) — only the two already-known pre-existing flakes (CP1, CP5) failed intermittently, unrelated to CP6.
+- [x] CP7 — Warm-up toggle + RPE/duration entry UI. `onRecordSet`/`onEditLastSet` extended with `durationSeconds`, `rpe`, `isWarmup` params, threaded through to `RecordWorkoutSetCommand`/`EditLastWorkoutSetCommand` (fields already existed on `WorkoutSet`, just never wired from the UI). `ExerciseCard` gained Duration/RPE `OutlinedTextField`s and a "Warm-up set" `Switch`; set rows append " (warm-up)" when applicable. No schema change. Root-caused and fixed the pre-existing flaky `ActiveWorkoutViewModelTest` set-edit test (flagged in CP5's note): `UnconfinedTestDispatcher` doesn't guarantee a fixed number of intermediate `combine()` emissions, so fixed-count `awaitItem()` calls could consume the wrong snapshot — replaced with condition-polling loops throughout (`while (predicate) state = awaitItem()`); confirmed the fix with 5/5 clean reruns (previously ~50% failure rate). Split the reworked test into 4 focused tests (warm-up/RPE, edit, undo, duration-tracked exercise) to stay under Detekt's `LongMethod` limit. Verified on a real device end-to-end: recorded a warm-up set (Load=80, Reps=10, Warm-up=on) and a working set (Load=100, Reps=6, RPE=8.5, Warm-up=off) on the same exercise in one session — both persisted distinctly ("Set 1: 80.0 kg x 10 (warm-up)" / "Set 2: 100.0 kg x 6"), no crash, then cleaned up via Abandon. A first-time rest-timer notification-permission prompt appeared mid-flow — expected Android 13+ behavior, not a bug. Full instrumented suite (114 tests) and unit suite (299 tests) green — only the already-known pre-existing `ExerciseListViewModelTest` flake failed intermittently (confirmed via reruns: 1 failure in 3), unrelated to CP7, still flagged for CP15.
+- [x] CP8 — Consolidated schema migration. `MIGRATION_6_7` (v6→v7) adds all five planned nullable columns in one pass: `workout_sets.pain`/`technique_quality`, `planned_exercises.target_warmup_sets`, `workout_sessions.invalidated_at`, `training_plans.archived_at` — plain `ALTER TABLE ADD COLUMN`, no `NOT NULL`/`DEFAULT`, mirroring the existing `MIGRATION_3_4` precedent. Room entity data classes updated to match (new fields default to `null`, so existing mapper call sites needed no changes). Schema-only — no domain/mapper/UI wiring yet (deferred to CP9-CP12 per the plan). Generated and committed `app/schemas/.../7.json` (round-4 guardrail: this file must not be missed). 2 new migration tests chain `MIGRATION_1_2` through `MIGRATION_6_7` seeding one row in each of the four affected tables, asserting all five new columns are `NULL` pre-populated and round-trip a written value post-migration. Full instrumented suite (116 tests, 2 new) and unit suite (299 tests) green — only the already-known pre-existing `ExerciseListViewModelTest` flake failed intermittently, unrelated to CP8, still flagged for CP15.
+- [x] CP9 — WorkoutSet pain + technique-quality UI. Domain `WorkoutSet` gained nullable `pain`/`techniqueQuality` (`Int?`, `0..5` range mirroring `RecoveryEntry.SCALE_RANGE`, validated the same way as `rpe`), threaded through `RecordWorkoutSetCommand`/`EditLastWorkoutSetCommand`, `WorkoutEntityMapper` (both directions), and `ActiveWorkoutViewModel`/`UiState`/`Screen` (two new set-entry fields). Labeled deliberately distinctly from Recovery's `painWhileWalking` ("Pain during this set" vs. "Pain while walking today", round-3 finding #9) — separate string keys, no shared component. `HistoryDetailScreen` now shows both per-set fields (only this checkpoint's own scope; RPE/duration/warmup display there stays deferred to CP13 per the existing plan). No schema change (columns already landed in CP8). Verified on a real device end-to-end: recorded a set with Pain=3, Technique quality=4 on a fresh exercise, confirmed History shows "Pain during set: 3/5" and "Technique quality: 4/5" — visibly distinct from Recovery's own "Pain while walking" value (2) shown moments earlier on the Recovery tab. Full instrumented suite (116 tests) and unit suite (303 tests, 4 new/updated across `WorkoutSetTest`, `AddWorkoutExerciseAndRecordWorkoutSetTest`, `WorkoutEntityMapperTest`, `ActiveWorkoutViewModelTest`) green after clearing device app data (a stale manual-testing workout session had briefly broken `MainActivityNavHostSmokeTest`'s "empty History" assumption — confirmed as test-environment contamination, not a regression, by clearing data and rerunning clean).
+- [x] CP10 — Planned warm-up/working structure UI. Domain `PlannedExercise` gained a nullable `targetWarmupSets: Int?` (raw `Int?`, not a value class, mirroring CP9's `pain`/`techniqueQuality` precedent), validated via a new `TargetSets.validateWarmupSets` helper (`0..TargetSets.MAX`, distinct from `TargetSets.create`'s `1..20` working-sets range — `null` = "no warm-up guidance", `0` = "planned zero warm-up sets", both legal). Threaded through `PlannedExerciseInput`, `validatePlannedExercises`, `TrainingPlanEntityMapper` (both directions), and the plan-editor `ViewModel`/`UiState`/form fields (new "Warm-up sets (optional)" input per row, blank stays `null` rather than defaulting to `0`). Explicitly documented (round-3 finding #8): `targetSets` keeps meaning "planned working sets" — no rename, no semantic change to pre-milestone plans, which all load with `targetWarmupSets = null`. No schema change (column landed in CP8). Verified on a real device end-to-end: created a plan with Sets=3, Warm-up sets=2, Min/Max reps=8/12, saved, then reopened the plan in edit mode and confirmed all four values — including the new warm-up-sets field — round-tripped correctly from disk. Full instrumented suite (116 tests) and unit suite (green, 7 new/updated across `TargetSetsTest`, `CreateTrainingPlanTest`, `TrainingPlanEntityMapperTest`, `TrainingPlanEditorViewModelTest`) — no known-flake failures this run.
+- [x] CP11 — Completed-workout invalidation UI. Domain `WorkoutSession` gained a nullable `invalidatedAt: Instant?` (schema column already landed in CP8), `isInvalidated`, and an `invalidate(at)` method mirroring `Exercise.archive()`'s "excluded, never deleted" shape — only legal on a `COMPLETED` session, and rejects an `invalidatedAt` before `endedAt` (both enforced in `invalidate()` and in `reconstruct()`'s re-validation). New `InvalidateWorkoutSession` use case mirrors `ArchiveExercise`: `NotFound` / `AlreadyInvalidated` / validation failures, all via the existing `WorkoutRepository`/`Clock`, zero new DI wiring needed. `WorkoutSessionDao.observeCompleted()` now filters `AND invalidated_at IS NULL` alongside the existing `status = 'COMPLETED'` filter — this one query already backs History, backup export, and CSV export, so invalidated sessions disappear from all three without extra wiring; confirmed the progression-recommendation path (`CompleteWorkoutSession` → `ComputeProgressionRecommendation`) never reads `observeCompletedSessions()` at all (it only ever uses the just-completed session's own in-memory sets), so "a recomputed progression recommendation" in this checkpoint's device-check wording is satisfied by completing a fresh workout after invalidating the old one, not by any change to the progression call path itself. History UI: a per-row "Invalidate" text action (no vector-icon dependency, matching the existing FAB precedent) opens a confirmation `AlertDialog` before invalidating — deliberately not a one-tap-plus-Undo snackbar like Exercise archive, since no restore/un-invalidate path exists yet in this milestone (explicitly deferred per the reference doc); this is the "safe accidental-workout removal" the roadmap names. `HistoryUiState` gained the same FIFO `messages` queue pattern as `ExerciseListUiState` (Milestone 8, CP2) for the invalidated/operation-failed snackbar. No schema change. Verified: full unit suite green (`WorkoutSessionTest`, `InvalidateWorkoutSessionTest`, `WorkoutEntityMapperTest`, `HistoryViewModelTest` — all with new/updated tests covering success, already-invalidated, not-found, and the domain-invariant rejections), `spotlessCheck`/`detekt`/`lintDebug` green, full instrumented suite (122 tests, 6 new in a new `HistoryScreenTest`) green on a real connected device (`SM-S928B`) confirming the row action, confirm/cancel dialog behavior, and snackbar all work against the real Compose runtime — the dialog test caught and fixed a real ambiguity where the row's "Invalidate" button and the dialog's confirm button shared identical text while both were present in the semantics tree (dialog confirm relabeled "Invalidate workout"). `HistoryViewModelTest`'s new tests needed the same `UnconfinedTestDispatcher` condition-polling fix CP7 already established (fixed-count `awaitItem()` can't assume a specific number of intermediate `combine()`/`update()` emissions). Not manually walked through on-device as a live create-workout-then-invalidate flow (no live human tester in this session) — verification is the automated unit + real-device instrumented-Compose suite above, stated here explicitly rather than implied.
+- [x] CP12 — Training-plan archive/restore UI. Domain `TrainingPlan` gained a nullable `archivedAt: Instant?` (schema column already landed in CP8), `isArchived`, `archive(at)`/`restore(at)` mirroring `Exercise`'s pattern exactly, including the same `ArchivedBeforeCreated` cross-field invariant. New `ArchiveTrainingPlan`/`RestoreTrainingPlan` use cases mirror `ArchiveExercise`/`RestoreExercise` (restore is an idempotent no-op, no `NotArchived` error case, same rationale). Added `TrainingPlanStatusFilter` (ACTIVE/ARCHIVED) and a new `TrainingPlanRepository.updatePlan()` method that persists only the plan's own row — deliberately separate from `addVersion()`, which always inserts a new version alongside; archiving/restoring must never touch version history. `TrainingPlanDao.observeAll()` became `observe(archived: Boolean)`, mirroring `ExerciseDao`'s existing `archived_at IS NULL`/`IS NOT NULL` filter shape. `ObserveTrainingPlans`/`TrainingPlanRepository.observeOverviews()` both now take an explicit `TrainingPlanStatusFilter` — `ActiveWorkoutViewModel`'s start-workout plan picker was updated to always pass `ACTIVE`, satisfying this checkpoint's "exclude archived plans from CP6's plan picker" requirement without any picker-specific filtering logic. `TrainingPlanListScreen`/`ViewModel`/`UiState` gained the exact same Active/Archived `FilterChip` row, per-row `⋮` menu (Edit/Archive or Restore), and one-tap-archive-plus-Undo-snackbar `messages` queue as `ExerciseListScreen` (Milestone 8, CP2's snackbar-hardening pattern) — unlike CP11's workout invalidation, a plan's archive/restore is fully reversible, so the one-tap+Undo pattern (rather than a confirmation dialog) is appropriate here, matching Exercise's precedent exactly. No schema change. Verified: full unit suite green (new `TrainingPlanTest`, `ArchiveTrainingPlanTest`, `RestoreTrainingPlanTest`, `TrainingPlanEntityMapperTest`, `ObserveTrainingPlansTest`, `TrainingPlanListViewModelTest`, `ActiveWorkoutViewModelTest` cases — the `TrainingPlanListViewModelTest` archive/restore/filter tests use the same `UnconfinedTestDispatcher` condition-polling style CP7/CP11 established, to avoid the same fixed-emission-count flakiness class), `spotlessCheck`/`detekt`/`lintDebug` green, full instrumented suite (132 tests, 10 new across `TrainingPlanListScreenTest`/`TrainingPlanDaoTest`/`LocalTrainingPlanRepositoryTest`) green on a real connected device (`SM-S928B`). Only the already-known pre-existing `ExerciseListViewModelTest` flake (CP1) failed intermittently on one full-suite run, confirmed non-reproducing on immediate rerun, unrelated to CP12.
+- [x] CP13 — History field-consistency + filtering/sorting (incl. plan). Split into two commits per the round-4 guardrail. **Commit 1** fixed a real regression CP11 introduced: `WorkoutRepository.observeCompletedSessions()` unconditionally excluded invalidated sessions, which silently dropped their data from backup and CSV export too (not just History) — the "never physically deleted" invariant was being violated one layer up from where CP11 touched it. Now takes an explicit `includeInvalidated: Boolean` (no default, every call site is deliberate, mirroring CP12's `TrainingPlanRepository.observeOverviews(status)` precedent); `ExportBackup`/`ExportWorkoutHistoryCsv` pass `true` (CSV gained an `is_invalidated` column so a reader can tell such a row apart), History's `ObserveWorkoutHistory` also always passes `true` and applies its own default-hidden show/hide filter client-side instead, so CP11's "invalidating removes it from History" behavior is preserved without losing data for exports. Added full History filtering (exercise, training-plan identity, date range, show/hide invalidated) and newest/oldest-first sorting, all computed client-side as `HistoryUiState.visibleSessions` over the already-loaded session list — proportionate for a single user's own finite workout history, no new Room queries needed. Training-plan filtering resolves by plan *identity* across all of a plan's historical versions (a session's `trainingPlanVersionId` never repoints to a later revision), via a new `ObserveTrainingPlanVersionLabels` use case reusing the existing `findAllForBackup()` capability rather than adding a new repository method. **Commit 2** completed `HistoryDetailScreen`'s per-set fields (RPE, duration, warm-up indicator — pain/technique already showed since CP9) and fixed a real device-only bug the first commit's own instrumented tests caught: the filter bar's `horizontalScroll` `Row` let the sort-order and show-invalidated controls scroll off-screen on a real phone width, where they were composed but not actually tappable (Compose's click injection targets on-screen position) — switched to a wrapping `FlowRow`, confirmed fixed with the same tests passing on a real device afterward. No schema change either commit. Verified: full unit suite green both commits (`HistoryUiStateTest` tests the filter/sort logic directly as pure data, `ObserveTrainingPlanVersionLabelsTest`, `ExportBackupTest`/`InvalidateWorkoutSessionTest` regression tests for the include-invalidated fix), `spotlessCheck`/`detekt`/`lintDebug` green, full instrumented suite (138 tests, 16 new) green on a real device (`SM-S928B`) across two clean reruns. The device disconnected mid-session between the two commits (physically unplugged, not a code issue) and reconnected before commit 2's device pass. Also incidentally hit `MainActivityNavHostSmokeTest`'s already-known "stale on-device data" contamination mode (documented at CP9) once — confirmed non-reproducing after a fresh install, not a regression. `ExerciseListViewModelTest` flaked on three *different* test methods across separate reruns this checkpoint (previously only one specific test was flagged, at CP1) — all confirmed non-reproducing on immediate rerun; this now looks like every test in that file sharing the same `UnconfinedTestDispatcher` fixed-emission-count fragility CP7/CP11/CP12 already fixed elsewhere with condition-polling, strengthening (not just repeating) the existing CP15 flag to address the whole file, not just one test.
+- [ ] CP14 — Backup hardening + v1-backward-compatibility
+- [ ] CP15 — Full verification
+- [ ] External implementation review (`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`)
+- [ ] CP16 — Functional-review checklist prep
 
 ## Current blockers
 
-None. CP6 requires a device or emulator.
+None for planning. Plan is approved; implementation has not started.
+Round 3 (`REVISE`) added a P0 crash fix (missing `@HiltViewModel` on 3
+ViewModels, verified directly against the code) and — after the user was
+asked directly and approved it themselves — a full bottom-navigation
+redesign; consolidated four planned migrations into one; and broadened
+several checkpoints (snackbar coverage, recommendation reasons, History
+filters, backup backward-compatibility). Round 4 (`APPROVE`) added
+implementation guardrails (exhaustive `@HiltViewModel` re-check, Room
+schema-export commit discipline, explicit commit policy, living
+functional-audit discipline) — all folded into
+`milestone-8-execution.md`. Nothing is deliberately left open.
 
 ## Active plan
 
-- Execution guide: `docs/milestones/active/milestone-1-execution.md`
-- Full reference (all decisions, invariants, DoD): `docs/milestones/active/milestone-1-reference.md`
+`docs/milestones/active/milestone-8-execution.md` and
+`milestone-8-reference.md`. Milestones 1-7 remain archived at
+`docs/milestones/completed/`.
 
-## Verification for CP3–5
+## Next action
 
-```bash
-./gradlew testDebugUnitTest
-./gradlew spotlessCheck
-./gradlew detekt
-```
-
-## Schema verification (CP5) — schema currently untracked
-
-```bash
-./gradlew kspDebugKotlin
-git status --short -- app/schemas
-find app/schemas -type f -name '*.json' -print
-```
-
-Confirm the expected JSON exists, inspect its content, and confirm
-`app/schemas` is not git-ignored. Report whether the schema is untracked,
-modified, or clean. `git diff --exit-code -- app/schemas` is insufficient
-while the schema is untracked: it exits 0 without detecting the file.
-
-Once the schema is tracked, also verify no new untracked schema appeared:
-
-```bash
-./gradlew kspDebugKotlin
-git diff --exit-code -- app/schemas
-git status --short -- app/schemas
-```
-
-## Verification for CP6
-
-```bash
-./gradlew connectedDebugAndroidTest
-```
-
-Device or emulator required. `assembleDebugAndroidTest` compiles but does
-not execute. Do not report CP6 as passing unless this connected task
-actually completes successfully.
-
-## Last verified state
-
-- Last passing command: `./gradlew assembleDebug`
-- Unit tests: not yet verified
-- Instrumented tests: not yet executed
-- Schema: `app/schemas/.../1.json` present (untracked)
+Plan is approved. Waiting for the user to invoke `/milestone-implement`
+when ready — implementation does not start automatically.

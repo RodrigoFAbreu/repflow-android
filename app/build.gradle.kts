@@ -83,6 +83,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
 
     testImplementation(libs.junit)
+    testImplementation(libs.json.org.java)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
 
@@ -92,6 +93,29 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.turbine)
+    androidTestImplementation(libs.androidx.room.testing)
+}
+
+/*
+ * `androidx.room:room-testing:2.8.4`'s schema-bundle deserialization needs
+ * `kotlinx-serialization-core` 1.8.1's `GeneratedSerializer.typeParametersSerializers()`,
+ * but several other androidx artifacts (e.g. lifecycle, compose) declare a
+ * `strictly 1.7.3` constraint on the same module, which otherwise wins
+ * conflict resolution and produces an `AbstractMethodError` at runtime in
+ * `com.repflow.app.infrastructure.database.RepFlowDatabaseMigrationTest`.
+ * Forcing 1.8.1 (backwards-compatible for every other consumer here) is the
+ * narrowest fix; revisit once a future Room/Compose BOM release aligns
+ * these versions itself.
+ */
+configurations.all {
+    resolutionStrategy {
+        force(
+            "org.jetbrains.kotlinx:kotlinx-serialization-core:1.8.1",
+            "org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.8.1",
+            "org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1",
+            "org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.8.1",
+        )
+    }
 }
 
 detekt {

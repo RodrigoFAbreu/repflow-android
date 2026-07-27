@@ -35,6 +35,10 @@ interface ExerciseDao {
     @Query("SELECT * FROM exercises WHERE id = :id")
     suspend fun findById(id: String): ExerciseEntity?
 
+    /** Every exercise regardless of archived status, for backup export. */
+    @Query("SELECT * FROM exercises ORDER BY name_key ASC, id ASC")
+    suspend fun findAll(): List<ExerciseEntity>
+
     @Query("SELECT id FROM exercises WHERE name_key = :nameKey")
     suspend fun findIdByNameKey(nameKey: String): String?
 

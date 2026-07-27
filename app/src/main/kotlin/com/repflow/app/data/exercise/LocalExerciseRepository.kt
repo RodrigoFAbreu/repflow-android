@@ -41,6 +41,8 @@ class LocalExerciseRepository
 
         override suspend fun findIdByNameKey(nameKey: String): ExerciseId? = dao.findIdByNameKey(nameKey)?.let(::ExerciseId)
 
+        override suspend fun findAll(): List<Exercise> = dao.findAll().map(::toDomainOrThrow)
+
         /**
          * Only the listed `SQLiteException` subtypes are caught (none of
          * which can be a `CancellationException`), and each failure is

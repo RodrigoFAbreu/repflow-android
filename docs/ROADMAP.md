@@ -1,8 +1,8 @@
 # RepFlow Roadmap
 
-Active milestone: **Milestone 1 — Exercise Library** → [status](ACTIVE_MILESTONE.md)
-
-Active plan: [milestones/active/milestone-1-execution.md](milestones/active/milestone-1-execution.md)
+Every roadmap milestone (0-7) is complete. Milestone 8 (post-MVP functional
+usability stabilization, created from the user's own hands-on findings) is
+in progress. See [status](ACTIVE_MILESTONE.md) for the current state.
 
 ## Milestone 0 — Project foundation
 
@@ -12,55 +12,70 @@ Active plan: [milestones/active/milestone-1-execution.md](milestones/active/mile
 - [x] Configure formatting, linting, and baseline tests
 - [x] Define the incremental modularization plan
 
-## Milestone 1 — Exercise library vertical slice ← active
+## Milestone 1 — Exercise library vertical slice ✓ complete
 
-- [ ] Define exercise domain model
-- [ ] Define exercise repository capability
-- [ ] Add application use cases
-- [ ] Add Room persistence
-- [ ] Add exercise list and editor UI
-- [ ] Add unit, repository, and basic UI tests
+- [x] Define exercise domain model
+- [x] Define exercise repository capability
+- [x] Add application use cases
+- [x] Add Room persistence
+- [x] Add exercise list and editor UI
+- [x] Add unit, repository, and basic UI tests
 
-## Milestone 2 — Training plans
+## Milestone 2 — Training plans ✓ complete
 
-- [ ] Versioned training plan domain
-- [ ] Plan creation and editing
-- [ ] Ordered exercises and targets
-- [ ] Historical version preservation
+- [x] Versioned training plan domain
+- [x] Plan creation and editing
+- [x] Ordered exercises and targets
+- [x] Historical version preservation
 
-## Milestone 3 — Active workout
+## Milestone 3 — Active workout ✓ complete
 
-- [ ] Start and resume workouts
-- [ ] Exercise progression
-- [ ] Fast set entry
-- [ ] Immediate persistence
-- [ ] Editing and undo
+- [x] Start and resume workouts
+- [x] Exercise progression
+- [x] Fast set entry
+- [x] Immediate persistence
+- [x] Editing and undo
 
-## Milestone 4 — Rest timer
+## Milestone 4 — Rest timer ✓ complete
 
-- [ ] Absolute end timestamps
-- [ ] Background and process recovery
-- [ ] Notifications and haptics
-- [ ] Timer-related tests
+- [x] Absolute end timestamps
+- [x] Background and process recovery
+- [x] Notifications and haptics
+- [x] Timer-related tests
 
-## Milestone 5 — Recovery and futsal
+## Milestone 5 — Recovery and futsal ✓ complete
 
-- [ ] Recovery entry
-- [ ] Futsal load
-- [ ] Workout-day context
+- [x] Recovery entry
+- [x] Futsal load
+- [x] Workout-day context
 
-## Milestone 6 — Progression recommendations
+## Milestone 6 — Progression recommendations ✓ complete
 
-- [ ] Deterministic progression policy
-- [ ] Explainable recommendation reasons
-- [ ] Recovery adjustments
-- [ ] Manual overrides
-- [ ] Policy versioning
+- [x] Deterministic progression policy
+- [x] Explainable recommendation reasons
+- [x] Recovery adjustments
+- [x] Manual overrides
+- [x] Policy versioning
 
-## Milestone 7 — History and backup
+## Milestone 7 — History and backup ✓ complete
 
-- [ ] Workout and exercise history
-- [ ] Basic progress views
-- [ ] Versioned JSON backups
-- [ ] CSV exports
-- [ ] Restore validation and safety snapshots
+- [x] Workout and exercise history
+- [x] Basic progress views
+- [x] Versioned JSON backups
+- [x] CSV exports
+- [x] Restore validation and safety snapshots
+
+## Milestone 8 — Post-MVP functional usability stabilization (in progress)
+
+Created from the user's own hands-on functional findings after Milestone 7,
+not from the original MVP goal list. See
+`docs/milestones/active/milestone-8-reference.md` for full scope.
+
+- [ ] P0 crash fix: missing `@HiltViewModel` on 3 ViewModels
+- [ ] Navigation: bottom-navigation redesign (user-approved)
+- [ ] Recovery/futsal: past-date entry, 0-5 scale, history visibility, save feedback
+- [ ] Workout/plans: start-from-plan, warm-up/working classification, RPE/duration/pain/technique entry
+- [ ] History: filtering/sorting (exercise, date, plan), safe accidental-workout removal, detail consistency
+- [ ] Plans/exercises: training-plan archive/restore, exercise archive-snackbar fix
+- [ ] Backup: edge-case hardening + new-field schema coverage + v1-backward-compatibility
+- [ ] Full verification + external implementation review + user functional review

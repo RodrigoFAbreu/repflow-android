@@ -601,6 +601,33 @@ Deferred because RepFlow currently targets Android only. Introducing
 multiplatform constraints would increase Gradle and dependency complexity
 without serving an MVP requirement.
 
+## Current implementation snapshot
+
+This section reflects the current package-by-layer structure inside `:app`;
+unlike the rest of this ADR it is current state, not rationale, and may drift
+— verify against the actual tree if precision matters.
+
+```text
+app/src/main/kotlin/com/repflow/app/
+  domain/{exercise,trainingplan,workout,recovery,progression,backup,common}
+  application/{...same feature packages...}
+  data/{...same feature packages...}
+  infrastructure/{database/, di/, id/, time/}
+  presentation/{...same feature packages.../navigation}
+```
+
+Test trees (`app/src/test`, `app/src/androidTest`) mirror this 1:1.
+
+Hilt (`infrastructure/di`) provides three `SingletonComponent` modules:
+`DatabaseModule` (Room database + DAOs), `RepositoryModule` (`@Binds` each
+application repository interface to its `data`-layer `Local*` implementation),
+`SystemModule` (clock, ID generation, IO dispatcher).
+
+Navigation is a single `NavHost`
+(`presentation/navigation/RepFlowNavHost.kt`) using plain string route
+constants, not type-safe routes — a known, tracked improvement (see
+`docs/improvements/IMPROVEMENT_ROADMAP.md`).
+
 ## Review triggers
 
 Revisit this decision when:
