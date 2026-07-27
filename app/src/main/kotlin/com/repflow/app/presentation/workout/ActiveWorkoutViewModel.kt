@@ -168,19 +168,34 @@ class ActiveWorkoutViewModel
          * [com.repflow.app.domain.trainingplan.PlannedExercise.id] so
          * [com.repflow.app.application.workout.CompleteWorkoutSession] can
          * later resolve a planned rep range for progression (Milestone 8, CP6).
+         *
+         * A non-null [planVersionId] that no longer resolves to an overview
+         * (round-2 implementation-review finding #1: the plan list changed
+         * between rendering and the click, or the selection was stale) must
+         * surface [WorkoutOperationError.NotFound] rather than silently
+         * falling back to an ad-hoc session that would still carry the
+         * plan-version id without any of that plan's exercises.
          */
         fun onStartWorkout(planVersionId: TrainingPlanVersionId? = null) {
             val overview = planVersionId?.let { id -> trainingPlanOverviewsFlow.value.find { it.latestVersion.id == id } }
             launchAction {
-                if (planVersionId != null && overview != null) {
-                    startWorkoutSessionFromPlan(
-                        StartWorkoutSessionFromPlanCommand(
-                            trainingPlanVersionId = planVersionId,
-                            plannedExercises = overview.latestVersion.plannedExercises,
-                        ),
-                    )
-                } else {
-                    startWorkoutSession(StartWorkoutSessionCommand(trainingPlanVersionId = planVersionId))
+                when {
+                    planVersionId == null -> {
+                        startWorkoutSession(StartWorkoutSessionCommand(trainingPlanVersionId = null))
+                    }
+
+                    overview != null -> {
+                        startWorkoutSessionFromPlan(
+                            StartWorkoutSessionFromPlanCommand(
+                                trainingPlanVersionId = planVersionId,
+                                plannedExercises = overview.latestVersion.plannedExercises,
+                            ),
+                        )
+                    }
+
+                    else -> {
+                        DomainResult.Failure(WorkoutOperationError.NotFound)
+                    }
                 }
             }
         }

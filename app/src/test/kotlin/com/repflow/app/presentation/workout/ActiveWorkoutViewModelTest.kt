@@ -290,6 +290,32 @@ class ActiveWorkoutViewModelTest {
         }
 
     @Test
+    fun `onStartWorkout with a plan version that no longer resolves to an overview creates no session`() =
+        runTest {
+            // No plan/version is seeded at all here (round-2 implementation-review finding #1):
+            // simulates a selection that went stale because the plan list changed between
+            // rendering and the click, distinct from `...missing exercise...` above where the
+            // overview resolves fine but one of its planned exercises doesn't.
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                var state = awaitItem()
+                while (state.content !is ActiveWorkoutContent.NoActiveSession) {
+                    state = awaitItem()
+                }
+
+                viewModel.onStartWorkout(TrainingPlanVersionId("version-does-not-exist"))
+
+                var failed = awaitItem()
+                while (failed.errorMessage == null) {
+                    failed = awaitItem()
+                }
+                assertEquals(ActiveWorkoutErrorReason.NOT_FOUND, failed.errorMessage)
+                assertEquals(ActiveWorkoutContent.NoActiveSession, failed.content)
+                assertEquals(null, workoutRepository.findActiveSession())
+            }
+        }
+
+    @Test
     fun `onStartWorkout with a plan surfaces the planned warm-up-working progress, rep range and rest`() =
         runTest {
             val exercise = seedExercise()
