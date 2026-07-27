@@ -17,6 +17,7 @@ import com.repflow.app.domain.exercise.ExerciseName
 import com.repflow.app.domain.exercise.ExerciseOrigin
 import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.trainingplan.TrainingPlanId
+import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
 import com.repflow.app.domain.workout.WorkoutExercise
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSession
@@ -86,26 +87,30 @@ class ExportWorkoutHistoryCsvTest {
 
             val lines = csv.trim().lines()
             assertTrue(lines[0].startsWith("session_id,started_at,ended_at,exercise_name"))
-            assertTrue(lines[0].contains("pain,technique_quality,plan_id,plan_name"))
+            assertTrue(lines[0].contains("pain,technique_quality,plan_id,plan_name,plan_version_id"))
             assertTrue(lines[1].contains("\"session-1\""))
             assertTrue(lines[1].contains("\"Bench Press\""))
             assertTrue(lines[1].contains("\"8\""))
             assertTrue(lines[1].contains("\"60.0\""))
             assertTrue(lines[1].contains("\"7.5\""))
-            // pain=3, technique_quality=4, then empty plan_id/plan_name (ad-hoc session).
-            assertTrue(lines[1].endsWith("\"3\",\"4\",\"\",\"\""))
+            // pain=3, technique_quality=4, then empty plan_id/plan_name/plan_version_id (ad-hoc session).
+            assertTrue(lines[1].endsWith("\"3\",\"4\",\"\",\"\",\"\""))
         }
 
     @Test
     fun `a plan-linked session includes the resolved plan id and name`() =
         runTest {
-            val planId = seedPlanLinkedSession()
+            val (planId, versionId) = seedPlanLinkedSession()
 
             val csv = useCase()
 
             val row = csv.trim().lines()[1]
             assertTrue(row.contains(csvField(planId.value)))
-            assertTrue(row.endsWith(csvField(planId.value) + "," + csvField("Push day")))
+            assertTrue(
+                row.endsWith(
+                    csvField(planId.value) + "," + csvField("Push day") + "," + csvField(versionId.value),
+                ),
+            )
         }
 
     /** Creates a real plan (via [CreateTrainingPlan], not a repository shortcut) with one exercise, returning its id and that exercise's id. */
@@ -145,8 +150,8 @@ class ExportWorkoutHistoryCsvTest {
         return planId to bench.id
     }
 
-    /** Creates a real plan and a completed session started from it, returning the plan's id. */
-    private suspend fun seedPlanLinkedSession(): TrainingPlanId {
+    /** Creates a real plan and a completed session started from it, returning the plan's id and the exact version id it started from. */
+    private suspend fun seedPlanLinkedSession(): Pair<TrainingPlanId, TrainingPlanVersionId> {
         val (planId, exerciseId) = createPlanWithOneExercise()
         val versionId = requireNotNull(trainingPlanRepository.findOverviewByPlanId(planId)).latestVersion.id
 
@@ -187,7 +192,7 @@ class ExportWorkoutHistoryCsvTest {
                 ).complete(Instant.parse("2026-01-01T01:00:00Z")),
             )
         repository.insert(session)
-        return planId
+        return planId to versionId
     }
 
     private fun csvField(value: String) = "\"" + value.replace("\"", "\"\"") + "\""

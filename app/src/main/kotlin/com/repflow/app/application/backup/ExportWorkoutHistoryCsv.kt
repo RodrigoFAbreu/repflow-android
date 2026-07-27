@@ -81,6 +81,8 @@ class ExportWorkoutHistoryCsv
                         .append(csvField(planLabel?.planId?.value.orEmpty()))
                         .append(',')
                         .append(csvField(planLabel?.planName.orEmpty()))
+                        .append(',')
+                        .append(csvField(session.trainingPlanVersionId?.value.orEmpty()))
                         .append('\n')
                 }
             }
@@ -92,6 +94,6 @@ class ExportWorkoutHistoryCsv
         private companion object {
             const val HEADER =
                 "session_id,started_at,ended_at,exercise_name,set_order,reps,load_kg,duration_seconds,rpe," +
-                    "is_warmup,is_invalidated,pain,technique_quality,plan_id,plan_name\n"
+                    "is_warmup,is_invalidated,pain,technique_quality,plan_id,plan_name,plan_version_id\n"
         }
     }
