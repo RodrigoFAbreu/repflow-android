@@ -18,3 +18,14 @@ sealed interface BackupStatusMessage {
 
     data object OperationFailed : BackupStatusMessage
 }
+
+/**
+ * Which of the two SAF `CreateDocument` exports a write outcome belongs to
+ * (Milestone 8, CP14) - [BackupViewModel.onExportWriteSucceeded] needs this
+ * to know which of [BackupStatusMessage.ExportSucceeded] /
+ * [BackupStatusMessage.CsvExportSucceeded] to show.
+ */
+enum class BackupExportKind {
+    BACKUP,
+    CSV,
+}
