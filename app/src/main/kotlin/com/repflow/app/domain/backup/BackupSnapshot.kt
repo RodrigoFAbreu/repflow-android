@@ -27,7 +27,16 @@ data class BackupSnapshot private constructor(
     val progressionRecommendations: List<ProgressionRecommendation>,
 ) {
     companion object {
-        const val CURRENT_SCHEMA_VERSION = 1
+        /**
+         * Bumped from 1 to 2 in Milestone 8 (CP14) when the JSON mapper
+         * gained five new nullable fields (`WorkoutSet.pain`/`techniqueQuality`,
+         * `PlannedExercise.targetWarmupSets`, `WorkoutSession.invalidatedAt`,
+         * `TrainingPlan.archivedAt`). A schema-version-1 backup still parses
+         * cleanly - every new field is read via a null-safe optional lookup,
+         * so a missing key comes back `null` exactly like an explicit one
+         * would, with no version-branching logic anywhere in the mapper.
+         */
+        const val CURRENT_SCHEMA_VERSION = 2
 
         @Suppress("LongParameterList")
         fun create(

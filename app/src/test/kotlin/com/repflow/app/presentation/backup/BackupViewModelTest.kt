@@ -9,6 +9,7 @@ import com.repflow.app.application.progression.InMemoryProgressionRecommendation
 import com.repflow.app.application.recovery.InMemoryFutsalRepository
 import com.repflow.app.application.recovery.InMemoryRecoveryRepository
 import com.repflow.app.application.trainingplan.InMemoryTrainingPlanRepository
+import com.repflow.app.application.trainingplan.ObserveTrainingPlanVersionLabels
 import com.repflow.app.application.workout.InMemoryWorkoutRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -45,7 +46,8 @@ class BackupViewModelTest {
             backupRepository = backupRepository,
         )
     private val restoreBackup = RestoreBackup(backupRepository)
-    private val exportWorkoutHistoryCsv = ExportWorkoutHistoryCsv(workoutRepository)
+    private val exportWorkoutHistoryCsv =
+        ExportWorkoutHistoryCsv(workoutRepository, ObserveTrainingPlanVersionLabels(trainingPlanRepository))
 
     private val viewModel = BackupViewModel(exportBackup, restoreBackup, exportWorkoutHistoryCsv)
 
@@ -60,19 +62,24 @@ class BackupViewModelTest {
     }
 
     @Test
-    fun `onExportBackupRequested delivers the serialized snapshot and reports success`() =
+    fun `onExportBackupRequested delivers the serialized snapshot and stays busy until the write completes`() =
         runTest {
             var delivered: String? = null
 
             viewModel.onExportBackupRequested { delivered = it }
 
             assertNotNull(delivered)
+            assertNull(viewModel.uiState.value.statusMessage)
+            assertEquals(true, viewModel.uiState.value.isBusy)
+
+            viewModel.onExportWriteSucceeded(BackupExportKind.BACKUP)
+
             assertEquals(BackupStatusMessage.ExportSucceeded, viewModel.uiState.value.statusMessage)
             assertEquals(false, viewModel.uiState.value.isBusy)
         }
 
     @Test
-    fun `onCsvExportRequested delivers CSV text and reports success`() =
+    fun `onCsvExportRequested delivers CSV text and stays busy until the write completes`() =
         runTest {
             var delivered: String? = null
 
@@ -80,7 +87,44 @@ class BackupViewModelTest {
 
             assertNotNull(delivered)
             assertTrue(delivered!!.startsWith("session_id,"))
+            assertNull(viewModel.uiState.value.statusMessage)
+            assertEquals(true, viewModel.uiState.value.isBusy)
+
+            viewModel.onExportWriteSucceeded(BackupExportKind.CSV)
+
             assertEquals(BackupStatusMessage.CsvExportSucceeded, viewModel.uiState.value.statusMessage)
+            assertEquals(false, viewModel.uiState.value.isBusy)
+        }
+
+    @Test
+    fun `onExportWriteCancelled clears busy without reporting a status message`() =
+        runTest {
+            viewModel.onExportBackupRequested { }
+
+            viewModel.onExportWriteCancelled()
+
+            assertEquals(false, viewModel.uiState.value.isBusy)
+            assertNull(viewModel.uiState.value.statusMessage)
+        }
+
+    @Test
+    fun `onExportWriteFailed clears busy and reports OperationFailed`() =
+        runTest {
+            viewModel.onExportBackupRequested { }
+
+            viewModel.onExportWriteFailed()
+
+            assertEquals(false, viewModel.uiState.value.isBusy)
+            assertEquals(BackupStatusMessage.OperationFailed, viewModel.uiState.value.statusMessage)
+        }
+
+    @Test
+    fun `onRestoreFileReadFailed reports OperationFailed without staging a restore`() =
+        runTest {
+            viewModel.onRestoreFileReadFailed()
+
+            assertEquals(BackupStatusMessage.OperationFailed, viewModel.uiState.value.statusMessage)
+            assertNull(viewModel.uiState.value.pendingRestoreJson)
         }
 
     @Test
@@ -124,6 +168,7 @@ class BackupViewModelTest {
     fun `onStatusMessageShown clears the status message`() =
         runTest {
             viewModel.onExportBackupRequested { }
+            viewModel.onExportWriteSucceeded(BackupExportKind.BACKUP)
             assertNotNull(viewModel.uiState.value.statusMessage)
 
             viewModel.onStatusMessageShown()

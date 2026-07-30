@@ -3,6 +3,7 @@ package com.repflow.app.infrastructure.database.trainingplan
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Room data access for [TrainingPlanVersionEntity].
@@ -17,6 +18,10 @@ interface TrainingPlanVersionDao {
 
     @Query("SELECT * FROM training_plan_versions WHERE plan_id = :planId ORDER BY version_number ASC")
     suspend fun findAllForPlan(planId: String): List<TrainingPlanVersionEntity>
+
+    /** Every version of every plan, reactively - see `TrainingPlanRepository.observeVersionLabels`'s rationale (Milestone 8, implementation-review finding #5). */
+    @Query("SELECT * FROM training_plan_versions")
+    fun observeAll(): Flow<List<TrainingPlanVersionEntity>>
 
     @Insert
     suspend fun insert(entity: TrainingPlanVersionEntity)

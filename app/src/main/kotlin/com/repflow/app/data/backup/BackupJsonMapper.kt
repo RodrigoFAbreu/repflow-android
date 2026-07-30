@@ -127,6 +127,7 @@ internal object BackupJsonMapper {
             put("nameKey", p.nameKey)
             put("createdAt", p.createdAt)
             put("updatedAt", p.updatedAt)
+            put("archivedAt", p.archivedAt)
         }
 
     private fun trainingPlanFromJson(o: JSONObject) =
@@ -136,6 +137,10 @@ internal object BackupJsonMapper {
             nameKey = o.getString("nameKey"),
             createdAt = o.getLong("createdAt"),
             updatedAt = o.getLong("updatedAt"),
+            // A v1 backup (Milestone 8, CP14) never wrote this key at all - optLongOrNull
+            // already treats a missing key the same as an explicit JSON null, so no
+            // schemaVersion branching is needed here to stay backward-compatible.
+            archivedAt = o.optLongOrNull("archivedAt"),
         )
 
     private fun trainingPlanVersionToJson(v: TrainingPlanVersionEntity) =
@@ -170,6 +175,7 @@ internal object BackupJsonMapper {
             put("durationMaxSeconds", e.durationMaxSeconds)
             put("restSeconds", e.restSeconds)
             put("isOptional", e.isOptional)
+            put("targetWarmupSets", e.targetWarmupSets)
         }
 
     private fun plannedExerciseFromJson(o: JSONObject) =
@@ -186,6 +192,7 @@ internal object BackupJsonMapper {
             durationMaxSeconds = o.optLongOrNull("durationMaxSeconds"),
             restSeconds = o.optLongOrNull("restSeconds"),
             isOptional = o.getBoolean("isOptional"),
+            targetWarmupSets = o.optIntOrNull("targetWarmupSets"),
         )
 
     private fun workoutSessionToJson(s: WorkoutSessionEntity) =
@@ -197,6 +204,7 @@ internal object BackupJsonMapper {
             put("endedAt", s.endedAt)
             put("restTimerEndAtEpochMs", s.restTimerEndAtEpochMs)
             put("restTimerTotalDurationSeconds", s.restTimerTotalDurationSeconds)
+            put("invalidatedAt", s.invalidatedAt)
         }
 
     private fun workoutSessionFromJson(o: JSONObject) =
@@ -208,6 +216,7 @@ internal object BackupJsonMapper {
             endedAt = o.optLongOrNull("endedAt"),
             restTimerEndAtEpochMs = o.optLongOrNull("restTimerEndAtEpochMs"),
             restTimerTotalDurationSeconds = o.optIntOrNull("restTimerTotalDurationSeconds"),
+            invalidatedAt = o.optLongOrNull("invalidatedAt"),
         )
 
     private fun workoutExerciseToJson(e: WorkoutExerciseEntity) =
@@ -244,6 +253,8 @@ internal object BackupJsonMapper {
             put("isWarmup", s.isWarmup)
             put("createdAt", s.createdAt)
             put("updatedAt", s.updatedAt)
+            put("pain", s.pain)
+            put("techniqueQuality", s.techniqueQuality)
         }
 
     private fun workoutSetFromJson(o: JSONObject) =
@@ -258,6 +269,8 @@ internal object BackupJsonMapper {
             isWarmup = o.getBoolean("isWarmup"),
             createdAt = o.getLong("createdAt"),
             updatedAt = o.getLong("updatedAt"),
+            pain = o.optIntOrNull("pain"),
+            techniqueQuality = o.optIntOrNull("techniqueQuality"),
         )
 
     private fun recoveryEntryToJson(r: RecoveryEntryEntity) =

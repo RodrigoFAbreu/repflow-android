@@ -75,6 +75,16 @@ Stores an absolute end timestamp. In-memory countdown is UI only.
 Explicit versioned transfer schema. Room entities are never serialized
 directly as the public backup format. Restore validates before replacing data.
 
+`BackupSnapshot.CURRENT_SCHEMA_VERSION` only needs a bump, and
+`BackupJsonMapper` only needs a null-safe optional read (no
+version-branching logic), for additive nullable fields whose absence
+already has valid null/default semantics (Milestone 8, CP14: five such
+fields landed this way). This convention is **not** sufficient on its own
+for a field rename, a field removal, a field becoming required, or any
+change where a missing value has no valid meaning - those need explicit
+version-aware conversion in the mapper, decided case by case when they
+come up.
+
 ## Future backend
 
 Must be accessed through an API. Never embed long-lived AWS credentials or

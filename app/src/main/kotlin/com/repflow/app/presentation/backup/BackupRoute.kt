@@ -1,5 +1,7 @@
 package com.repflow.app.presentation.backup
 
+import android.content.Context
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -12,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.io.BufferedReader
+import java.io.IOException
 import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
 
@@ -26,43 +29,27 @@ fun BackupRoute(viewModel: BackupViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
+    val updatedViewModel = rememberUpdatedState(viewModel)
+
     // Holds the text produced by the last export request until the SAF
     // picker returns a destination Uri to write it to.
     var pendingExportText by remember { mutableStateOf<String?>(null) }
 
     val createBackupDocumentLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-            val text = pendingExportText
+            writeExportOrReportOutcome(context, pendingExportText, uri, BackupExportKind.BACKUP, updatedViewModel.value)
             pendingExportText = null
-            if (uri != null && text != null) {
-                context.contentResolver.openOutputStream(uri)?.use { stream ->
-                    stream.write(text.toByteArray(StandardCharsets.UTF_8))
-                }
-            }
         }
     val createCsvDocumentLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
-            val text = pendingExportText
+            writeExportOrReportOutcome(context, pendingExportText, uri, BackupExportKind.CSV, updatedViewModel.value)
             pendingExportText = null
-            if (uri != null && text != null) {
-                context.contentResolver.openOutputStream(uri)?.use { stream ->
-                    stream.write(text.toByteArray(StandardCharsets.UTF_8))
-                }
-            }
         }
     val openBackupDocumentLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri == null) return@rememberLauncherForActivityResult
-            val text =
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    BufferedReader(InputStreamReader(stream, StandardCharsets.UTF_8)).readText()
-                }
-            if (text != null) {
-                viewModel.onRestoreFilePicked(text)
-            }
+            readRestoreFileOrReportFailure(context, uri, updatedViewModel.value)
         }
-
-    val updatedViewModel = rememberUpdatedState(viewModel)
 
     BackupScreen(
         uiState = uiState,
@@ -87,3 +74,73 @@ fun BackupRoute(viewModel: BackupViewModel = hiltViewModel()) {
 
 private const val BACKUP_FILE_NAME = "repflow-backup.json"
 private const val CSV_FILE_NAME = "repflow-history.csv"
+
+/**
+ * Writes [text] to [uri] and reports the real outcome back to the ViewModel
+ * (Milestone 8, CP14): `uri == null` means the user cancelled the SAF
+ * picker - not an error, so no failure message. A null [text] should never
+ * happen (the picker only launches after export text is already pending)
+ * but is treated as a failure defensively rather than silently doing
+ * nothing. An actual write failure (e.g. the destination becoming
+ * unavailable mid-write) is caught narrowly - [IOException] is exactly the
+ * exception family [java.io.OutputStream.write] and
+ * [android.content.ContentResolver.openOutputStream] declare - never a
+ * broad `catch (e: Exception)`.
+ */
+private fun writeExportOrReportOutcome(
+    context: Context,
+    text: String?,
+    uri: Uri?,
+    kind: BackupExportKind,
+    viewModel: BackupViewModel,
+) {
+    if (uri == null) {
+        viewModel.onExportWriteCancelled()
+        return
+    }
+    if (text == null) {
+        viewModel.onExportWriteFailed()
+        return
+    }
+    try {
+        val stream =
+            context.contentResolver.openOutputStream(uri) ?: run {
+                viewModel.onExportWriteFailed()
+                return
+            }
+        stream.use { it.write(text.toByteArray(StandardCharsets.UTF_8)) }
+        viewModel.onExportWriteSucceeded(kind)
+    } catch (expected: IOException) {
+        viewModel.onExportWriteFailed()
+    }
+}
+
+/**
+ * Reads [uri]'s text content and reports the outcome back to the ViewModel
+ * (Milestone 8, implementation-review finding #4): a revoked or otherwise
+ * unreadable `Uri` throws [SecurityException] or [IOException] from
+ * [android.content.ContentResolver.openInputStream] or the subsequent read
+ * - both are caught narrowly here, never a broad `catch (e: Exception)` -
+ * and a `null` stream (no provider for this `Uri`) is treated the same way.
+ * Cancellation (a `null` `Uri`) is handled by the caller before this is
+ * ever invoked, so every path here is a real outcome that must be reported.
+ */
+private fun readRestoreFileOrReportFailure(
+    context: Context,
+    uri: Uri,
+    viewModel: BackupViewModel,
+) {
+    try {
+        val stream =
+            context.contentResolver.openInputStream(uri) ?: run {
+                viewModel.onRestoreFileReadFailed()
+                return
+            }
+        val text = stream.use { BufferedReader(InputStreamReader(it, StandardCharsets.UTF_8)).readText() }
+        viewModel.onRestoreFilePicked(text)
+    } catch (expected: IOException) {
+        viewModel.onRestoreFileReadFailed()
+    } catch (expected: SecurityException) {
+        viewModel.onRestoreFileReadFailed()
+    }
+}

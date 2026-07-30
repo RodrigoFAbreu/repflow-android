@@ -79,6 +79,24 @@ data class ActiveExerciseUi(
     val name: String,
     val trackingType: ExerciseTrackingType,
     val sets: List<ActiveSetUi>,
+    /** The resolved plan target this exercise was seeded from, `null` for an ad-hoc exercise (Milestone 8, implementation-review finding #2). */
+    val plannedTarget: PlannedTargetUi? = null,
+)
+
+/**
+ * A resolved [com.repflow.app.domain.trainingplan.PlannedExercise]'s target
+ * shape for the active-workout screen: how many warm-up/working sets are
+ * planned, the target rep or duration range (exactly one of [repRange]/
+ * [durationRangeSeconds] is non-null, mirroring
+ * [com.repflow.app.domain.trainingplan.PlannedExerciseTarget]), and the
+ * planned rest duration.
+ */
+data class PlannedTargetUi(
+    val targetWarmupSets: Int?,
+    val targetWorkingSets: Int,
+    val repRange: IntRange? = null,
+    val durationRangeSeconds: LongRange? = null,
+    val restSeconds: Int? = null,
 )
 
 data class ActiveSetUi(

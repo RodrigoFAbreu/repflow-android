@@ -141,13 +141,11 @@ class TrainingPlanListViewModelTest {
             seedPlan("Push Pull Legs", exerciseId)
 
             viewModel.uiState.test {
-                awaitItem() // Loading
-                awaitItem() // content with Push Pull Legs
+                awaitUntilContent()
 
                 viewModel.onRetry()
 
-                awaitItem() // Loading again after retry
-                val recovered = awaitItem()
+                val recovered = awaitUntilContent()
                 val content = recovered.content as TrainingPlanListContent.Content
                 assertEquals(listOf("Push Pull Legs"), content.items.map { it.name })
             }
@@ -208,7 +206,7 @@ class TrainingPlanListViewModelTest {
                 assertTrue(message is TrainingPlanListMessage.Archived)
                 assertEquals(planId, (message as TrainingPlanListMessage.Archived).planId)
 
-                val emptied = awaitUntilEmptyContent()
+                val emptied = awaitUntilEmptyContent(from = state)
                 assertEquals(TrainingPlanListContent.Empty(TrainingPlanListEmptyReason.NO_PLANS), emptied.content)
             }
         }
@@ -252,8 +250,8 @@ class TrainingPlanListViewModelTest {
                 awaitUntilContent()
 
                 viewModel.onArchiveClicked(planId)
-                awaitUntilMessagesNotEmpty()
-                awaitUntilEmptyContent()
+                val archived = awaitUntilMessagesNotEmpty()
+                awaitUntilEmptyContent(from = archived)
 
                 viewModel.onRestoreClicked(planId)
                 val restored = awaitUntilContent()
@@ -324,45 +322,47 @@ class TrainingPlanListViewModelTest {
         check(planRepository.updatePlan(archived) is DomainResult.Success)
     }
 
-    private suspend fun ReceiveTurbine<TrainingPlanListUiState>.awaitUntilContent(): TrainingPlanListUiState {
-        var state = awaitItem()
-        while (state.content !is TrainingPlanListContent.Content) {
+    /**
+     * Consumes items until [predicate] holds, starting from [from] if given
+     * rather than always requiring a fresh [awaitItem]. `uiState` combines
+     * two independently-updated `MutableStateFlow`s (content, messages), so
+     * a single combine tick can satisfy more than one caller's condition at
+     * once (e.g. an archive's content-becomes-empty and its message-enqueue
+     * landing in the same emission); a caller that discards [from] and
+     * blindly awaits a *new* item after a previous `awaitUntil*` call can
+     * already-satisfied that new call's own condition would hang forever
+     * waiting for an emission that will never come.
+     */
+    private suspend fun ReceiveTurbine<TrainingPlanListUiState>.awaitUntil(
+        from: TrainingPlanListUiState? = null,
+        predicate: (TrainingPlanListUiState) -> Boolean,
+    ): TrainingPlanListUiState {
+        var state = from ?: awaitItem()
+        while (!predicate(state)) {
             state = awaitItem()
         }
         return state
     }
 
-    private suspend fun ReceiveTurbine<TrainingPlanListUiState>.awaitUntilEmptyContent(): TrainingPlanListUiState {
-        var state = awaitItem()
-        while (state.content !is TrainingPlanListContent.Empty) {
-            state = awaitItem()
-        }
-        return state
-    }
+    private suspend fun ReceiveTurbine<TrainingPlanListUiState>.awaitUntilContent(
+        from: TrainingPlanListUiState? = null,
+    ): TrainingPlanListUiState = awaitUntil(from) { it.content is TrainingPlanListContent.Content }
 
-    private suspend fun ReceiveTurbine<TrainingPlanListUiState>.awaitUntilMessagesNotEmpty(): TrainingPlanListUiState {
-        var state = awaitItem()
-        while (state.messages.isEmpty()) {
-            state = awaitItem()
-        }
-        return state
-    }
+    private suspend fun ReceiveTurbine<TrainingPlanListUiState>.awaitUntilEmptyContent(
+        from: TrainingPlanListUiState? = null,
+    ): TrainingPlanListUiState = awaitUntil(from) { it.content is TrainingPlanListContent.Empty }
 
-    private suspend fun ReceiveTurbine<TrainingPlanListUiState>.awaitUntilMessageCountAtLeast(count: Int): TrainingPlanListUiState {
-        var state = awaitItem()
-        while (state.messages.size < count) {
-            state = awaitItem()
-        }
-        return state
-    }
+    private suspend fun ReceiveTurbine<TrainingPlanListUiState>.awaitUntilMessagesNotEmpty(
+        from: TrainingPlanListUiState? = null,
+    ): TrainingPlanListUiState = awaitUntil(from) { it.messages.isNotEmpty() }
+
+    private suspend fun ReceiveTurbine<TrainingPlanListUiState>.awaitUntilMessageCountAtLeast(
+        count: Int,
+        from: TrainingPlanListUiState? = null,
+    ): TrainingPlanListUiState = awaitUntil(from) { it.messages.size >= count }
 
     private suspend fun ReceiveTurbine<TrainingPlanListUiState>.awaitUntilFilterMatches(
         filter: TrainingPlanStatusFilter,
-    ): TrainingPlanListUiState {
-        var state = awaitItem()
-        while (state.filter != filter || state.content is TrainingPlanListContent.Loading) {
-            state = awaitItem()
-        }
-        return state
-    }
+        from: TrainingPlanListUiState? = null,
+    ): TrainingPlanListUiState = awaitUntil(from) { it.filter == filter && it.content !is TrainingPlanListContent.Loading }
 }

@@ -18,7 +18,7 @@ class BackupJsonMapperTest {
     @Suppress("LongMethod") // exercises every field of every backed-up table
     private fun fullSnapshot() =
         BackupEntitySnapshot(
-            schemaVersion = 1,
+            schemaVersion = 2,
             exercises =
                 listOf(
                     ExerciseEntity(
@@ -37,7 +37,14 @@ class BackupJsonMapperTest {
                 ),
             trainingPlans =
                 listOf(
-                    TrainingPlanEntity(id = "plan-1", name = "Push Pull Legs", nameKey = "push pull legs", createdAt = 1L, updatedAt = 2L),
+                    TrainingPlanEntity(
+                        id = "plan-1",
+                        name = "Push Pull Legs",
+                        nameKey = "push pull legs",
+                        createdAt = 1L,
+                        updatedAt = 2L,
+                        archivedAt = 3L,
+                    ),
                 ),
             trainingPlanVersions =
                 listOf(
@@ -58,6 +65,7 @@ class BackupJsonMapperTest {
                         durationMaxSeconds = null,
                         restSeconds = 90,
                         isOptional = false,
+                        targetWarmupSets = 2,
                     ),
                 ),
             workoutSessions =
@@ -70,6 +78,7 @@ class BackupJsonMapperTest {
                         endedAt = 20L,
                         restTimerEndAtEpochMs = null,
                         restTimerTotalDurationSeconds = null,
+                        invalidatedAt = 25L,
                     ),
                 ),
             workoutExercises =
@@ -97,6 +106,8 @@ class BackupJsonMapperTest {
                         isWarmup = false,
                         createdAt = 11L,
                         updatedAt = 12L,
+                        pain = 2,
+                        techniqueQuality = 4,
                     ),
                 ),
             recoveryEntries =
@@ -174,6 +185,78 @@ class BackupJsonMapperTest {
         val parsed = (BackupJsonMapper.parse(json) as DomainResult.Success).value
 
         assertEquals(original, parsed)
+    }
+
+    /**
+     * A hand-written schema-version-1-shaped backup (Milestone 8, CP14):
+     * every key that existed before this milestone, and none of the five new
+     * ones (`archivedAt` on a plan, `targetWarmupSets`, `invalidatedAt`,
+     * `pain`/`techniqueQuality`) - exactly what a real backup exported by a
+     * pre-Milestone-8 build would contain. Confirms the null-safe optional
+     * reads treat a genuinely missing key the same as an explicit JSON null,
+     * with no schema-version branching anywhere in the mapper.
+     */
+    private val v1ShapedJson =
+        """
+        {
+          "schemaVersion": 1,
+          "exercises": [],
+          "trainingPlans": [
+            {"id": "plan-1", "name": "Push Day", "nameKey": "push day", "createdAt": 1, "updatedAt": 2}
+          ],
+          "trainingPlanVersions": [
+            {"id": "v-1", "planId": "plan-1", "versionNumber": 1, "note": null, "createdAt": 1}
+          ],
+          "plannedExercises": [
+            {
+              "id": "pe-1", "versionId": "v-1", "exerciseId": "ex-1", "sortOrder": 0,
+              "targetSets": 3, "targetKind": "REPS", "repMin": 8, "repMax": 12,
+              "durationMinSeconds": null, "durationMaxSeconds": null, "restSeconds": 90,
+              "isOptional": false
+            }
+          ],
+          "workoutSessions": [
+            {
+              "id": "session-1", "trainingPlanVersionId": "v-1", "status": "COMPLETED",
+              "startedAt": 10, "endedAt": 20, "restTimerEndAtEpochMs": null,
+              "restTimerTotalDurationSeconds": null
+            }
+          ],
+          "workoutExercises": [
+            {
+              "id": "we-1", "sessionId": "session-1", "exerciseId": "ex-1", "sortOrder": 0,
+              "exerciseNameSnapshot": "Bench Press", "trackingType": "WEIGHT_AND_REPS",
+              "plannedExerciseId": "pe-1"
+            }
+          ],
+          "workoutSets": [
+            {
+              "id": "set-1", "workoutExerciseId": "we-1", "sortOrder": 0, "load": 60.0,
+              "reps": 8, "durationSeconds": null, "rpe": 7.5, "isWarmup": false,
+              "createdAt": 11, "updatedAt": 12
+            }
+          ],
+          "recoveryEntries": [],
+          "futsalSessions": [],
+          "progressionRecommendations": []
+        }
+        """.trimIndent()
+
+    @Test
+    fun `parses a v1-shaped backup with the five new fields all coming back null`() {
+        val parsed = (BackupJsonMapper.parse(v1ShapedJson) as DomainResult.Success).value
+
+        assertEquals(1, parsed.schemaVersion)
+        assertEquals(null, parsed.trainingPlans.single().archivedAt)
+        assertEquals(null, parsed.plannedExercises.single().targetWarmupSets)
+        assertEquals(null, parsed.workoutSessions.single().invalidatedAt)
+        assertEquals(null, parsed.workoutSets.single().pain)
+        assertEquals(null, parsed.workoutSets.single().techniqueQuality)
+        // Everything else still round-trips correctly.
+        assertEquals("Push Day", parsed.trainingPlans.single().name)
+        assertEquals(3, parsed.plannedExercises.single().targetSets)
+        assertEquals("COMPLETED", parsed.workoutSessions.single().status)
+        assertEquals(60.0, parsed.workoutSets.single().load)
     }
 
     @Test

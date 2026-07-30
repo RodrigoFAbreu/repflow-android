@@ -189,4 +189,52 @@ class LocalBackupRepositoryAtomicityTest {
                 database.exerciseDao().findAll().map { it.id },
             )
         }
+
+    /**
+     * Distinct from the primary-key conflict above (Milestone 8, CP14): two
+     * exercises with different ids but the same normalized name violate the
+     * `name_key` unique index instead, a different `SQLiteConstraintException`
+     * path than a duplicate primary key.
+     */
+    @Test
+    fun replaceAll_rollsBackOnADistinctIdSameNameKeyConflict() =
+        runBlocking {
+            database.exerciseDao().insert(
+                ExerciseEntity(
+                    id = "existing-1",
+                    name = "Squat",
+                    nameKey = "squat",
+                    trackingType = "WEIGHT_AND_REPS",
+                    instructions = null,
+                    defaultLoadIncrementGrams = null,
+                    defaultRestSeconds = null,
+                    origin = "BUILT_IN",
+                    archivedAt = null,
+                    createdAt = 1L,
+                    updatedAt = 1L,
+                ),
+            )
+
+            val snapshot =
+                (
+                    BackupSnapshot.create(
+                        schemaVersion = BackupSnapshot.CURRENT_SCHEMA_VERSION,
+                        exercises = listOf(exercise("a", name = "Bench Press"), exercise("b", name = "Bench Press")),
+                        trainingPlans = emptyList(),
+                        workoutSessions = emptyList(),
+                        recoveryEntries = emptyList(),
+                        futsalSessions = emptyList(),
+                        progressionRecommendations = emptyList(),
+                    ) as DomainResult.Success
+                ).value
+
+            val result = repository.replaceAll(snapshot)
+
+            assertTrue(result is DomainResult.Failure)
+            assertEquals(
+                "a name_key conflict must roll back exactly like a primary-key conflict",
+                listOf("existing-1"),
+                database.exerciseDao().findAll().map { it.id },
+            )
+        }
 }
