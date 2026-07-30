@@ -41,13 +41,27 @@ ancestry to the discovered plan-approval commit, plus freshness), the
 (`any_protected_path_dirty`, consumed by WF4a-ii's own
 `technical_approval_gate_reachable`), and WFR-06's post-approval-commit
 manifest-match verification (`verify_post_approval_manifest_match`).
-Still not this checkpoint's concern: `/approve-review`'s own commit-
-creation step (the Claude session running `git commit` per
-`.claude/commands/approve-review.md`, never a Python-side commit writer,
-consistent with this module's decide-and-validate-only design) and the
-two-stage local-then-manual-external plan-review protocol's own ledger
-writers (`WF4a-iv` -- `_validate_plan_review_stages` below only checks
-the schema shape of a ledger some other, later command writes).
+WF4a-iv adds the two-stage local-then-manual-external plan-review
+protocol's own ledger writers (D-Plan-Review-Stages): `record_local_plan_review`/
+`record_manual_plan_review` implement the six-row verdict/state transition
+table (`/review-plan`'s and `/record-manual-plan-review`'s sole state
+write set, resolving `GPT-R12-001/002/003`), each guarded by its own
+precondition validator (`WrongGoverningVersionForPlanReviewStageError`,
+`WrongPhaseForPlanReviewStageError`, `StaleReviewContentIdError` (hard),
+`WrongReviewerRoleError`, `MissingLocalApprovalForManualStageError`,
+`DuplicateManualStageIngestionError`); `check_manual_stage_bundle_id_advisory`
+implements the manual stage's advisory-only (never blocking) `bundle_id`
+mismatch warning (`OPUS-R14-005`); `transition_to_awaiting_local_plan_review`
+implements `/apply-plan-review`'s `"2.1"`-only revised exit step (D-Plan-
+Review-Stages, resolves `GPT-R11-003`/`-007`) -- the sole writer that
+re-enters `AWAITING_LOCAL_PLAN_REVIEW` after an accepted plan edit, at
+either stage's `REVISE` origin, since the recomputation rule already makes
+a prior stage's ledger entry read as stale the moment the edit changes
+`review_content_id` (no explicit ledger clear needed). Still not this
+checkpoint's concern: `/approve-review`'s own commit-creation step (the
+Claude session running `git commit` per `.claude/commands/approve-review.md`,
+never a Python-side commit writer, consistent with this module's decide-
+and-validate-only design).
 
 Still out of scope here (owned by later checkpoints named in the plan's
 own checkpoint table): `WORKTREE_IDENTITY.json`'s writer (WF2).
@@ -107,6 +121,11 @@ WAIVED_GUARANTEES = frozenset({"no_bundle_id", "no_telemetry"})
 # stage keyword (a real gap in the plan text, resolved here rather than
 # left unimplemented -- flagged to the user in this checkpoint's report).
 APPROVAL_STAGES = frozenset({"plan", "implementation", "acceptance"})
+
+# D-Plan-Review-Stages' verdict/state transition table: the only three
+# verdicts either `/review-plan` or `/record-manual-plan-review` ever
+# ingest from REVIEW_FEEDBACK.md's `Status:` field.
+PLAN_REVIEW_VERDICTS = frozenset({"APPROVE", "REVISE", "BLOCK"})
 
 # Only MILESTONE_COMPLETE is terminal -- LEGACY_READY is explicitly
 # "dormant, not terminal" (D-Legacy phase 1, resolves GPT-R9-005).
@@ -240,6 +259,55 @@ class ManualStageWithoutLocalStageError(Exception):
 class StageVerdictNotApproveError(Exception):
     """Raised when a recorded plan-review stage's `verdict` is anything
     other than `"APPROVE"` (resolves GPT-R14-010, missing-test item 116)."""
+
+
+class UnknownPlanReviewVerdictError(Exception):
+    """Raised when a verdict passed to `record_local_plan_review`/
+    `record_manual_plan_review` is not one of `PLAN_REVIEW_VERDICTS`."""
+
+
+class WrongGoverningVersionForPlanReviewStageError(Exception):
+    """Raised when `/review-plan` or `/record-manual-plan-review` is
+    invoked against a work item whose `governing_workflow_version` is not
+    `"2.1"` -- v1 items have no two-stage plan-review protocol to run
+    (D-Plan-Review-Stages, missing-test item 90's v2.1-side refusal)."""
+
+
+class WrongPhaseForPlanReviewStageError(Exception):
+    """Raised when `/review-plan` is invoked outside `phase ==
+    AWAITING_LOCAL_PLAN_REVIEW`, or `/record-manual-plan-review` outside
+    `phase == AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW` -- covers "already
+    completed this round" (the phase has already moved on) and a local
+    `REVISE`'s work item never reaching the manual stage (WFR-41)."""
+
+
+class StaleReviewContentIdError(Exception):
+    """Raised when the bundle/feedback's `review_content_id` does not
+    match the freshly recomputed current one -- hard, blocks ingestion at
+    either stage (D-Plan-Review-Stages transition table; distinct from the
+    manual stage's advisory-only `bundle_id` check, `OPUS-R14-005`)."""
+
+
+class WrongReviewerRoleError(Exception):
+    """Raised when `REVIEW_FEEDBACK.md`'s declared `Reviewer role:` does
+    not match the stage being ingested (e.g. a local-role or unlabeled
+    file handed to `/record-manual-plan-review`, or vice versa)."""
+
+
+class MissingLocalApprovalForManualStageError(Exception):
+    """Raised when `/record-manual-plan-review` is asked to ingest an
+    `APPROVE` while no current `local_model_plan_review` `APPROVE` is
+    recorded for the same `review_content_id` -- a restated invariant,
+    since entry to `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW` already requires
+    it; defends against a corrupted or hand-edited state file."""
+
+
+class DuplicateManualStageIngestionError(Exception):
+    """Raised when a `manual_external_plan_review` stage is already
+    recorded against the current `review_content_id` -- rejects duplicate
+    ingestion (a second invocation after a completed `APPROVE`/`REVISE`
+    normally fails the phase precondition first; this only fires for a
+    hand-edited or race-condition state, GPT-R12-002/-003)."""
 
 
 class ConfigMissingAfterActivationError(Exception):
@@ -1136,6 +1204,219 @@ def apply_technical_approval(state: dict, work_item_id: str, record: dict, now: 
     work_item = new_state["work_items"][work_item_id]
     work_item["technical_approval"] = record
     work_item["phase"] = "AWAITING_FUNCTIONAL_REVIEW"
+    work_item["state_revision"] = work_item.get("state_revision", 1) + 1
+    work_item["last_transition"] = now
+    return new_state
+
+
+# ---------------------------------------------------------------------------
+# WF4a-iv: D-Plan-Review-Stages -- two-stage local-then-manual-external
+# plan-review protocol's ledger writers and verdict/state transition table
+# ---------------------------------------------------------------------------
+
+
+def _require_v2_1_plan_review(work_item: dict) -> None:
+    if work_item.get("governing_workflow_version") != "2.1":
+        raise WrongGoverningVersionForPlanReviewStageError(
+            f"{work_item['work_item_id']}: governing_workflow_version is "
+            f"{work_item.get('governing_workflow_version')!r}, not \"2.1\" -- "
+            f"the two-stage plan-review protocol only applies to \"2.1\" work items"
+        )
+
+
+def validate_local_plan_review_preconditions(work_item: dict) -> None:
+    """`/review-plan`'s resolution/phase preconditions (D-Plan-Review-Stages):
+    the item must be `"2.1"`-governed and currently at
+    `AWAITING_LOCAL_PLAN_REVIEW`. Bundle/manifest staleness is a separate,
+    generic check (D-Bundle-Manifest, reused unchanged) run by the command
+    itself before this, not duplicated here."""
+    _require_v2_1_plan_review(work_item)
+    if work_item.get("phase") != "AWAITING_LOCAL_PLAN_REVIEW":
+        raise WrongPhaseForPlanReviewStageError(
+            f"{work_item['work_item_id']}: phase is {work_item.get('phase')!r}, "
+            f"not \"AWAITING_LOCAL_PLAN_REVIEW\" -- /review-plan refuses rather "
+            f"than silently re-running (e.g. already completed this round)"
+        )
+
+
+def record_local_plan_review(
+    state: dict, work_item_id: str, *, verdict: str, bundle_id: str,
+    review_content_id: str, round: int, now: str,
+) -> dict:
+    """`/review-plan`'s sole state write set (D-Plan-Review-Stages transition
+    table, resolves `GPT-R12-001`/`-002`):
+
+    - `APPROVE`: records the completed `local_model_plan_review` stage
+      against `review_content_id` (starting a fresh ledger scoped to this
+      content id -- any prior `manual_external_plan_review` entry
+      necessarily belonged to a different, now-stale content id under the
+      correct flow, so it is not carried forward) and transitions to
+      `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW`.
+    - `REVISE`: no ledger write; transitions to `REVISING_PLAN`. Can never
+      reach `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW` (missing-test item 94).
+    - `BLOCK`: no ledger write, no phase transition -- a true no-op
+      (missing-test item 95); the returned state is unchanged.
+    """
+    if verdict not in PLAN_REVIEW_VERDICTS:
+        raise UnknownPlanReviewVerdictError(f"unknown plan-review verdict: {verdict!r}")
+    new_state = copy.deepcopy(state)
+    work_item = new_state["work_items"][work_item_id]
+    validate_local_plan_review_preconditions(work_item)
+
+    if verdict == "APPROVE":
+        work_item["plan_review_stages"] = {
+            "review_content_id": review_content_id,
+            "local_model_plan_review": {
+                "bundle_id": bundle_id, "verdict": "APPROVE",
+                "round": round, "completed_at": now,
+            },
+            "manual_external_plan_review": None,
+        }
+        work_item["phase"] = "AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW"
+    elif verdict == "REVISE":
+        work_item["phase"] = "REVISING_PLAN"
+    else:  # BLOCK
+        return state
+
+    work_item["state_revision"] = work_item.get("state_revision", 1) + 1
+    work_item["last_transition"] = now
+    _validate_plan_review_stages(work_item)
+    return new_state
+
+
+def validate_manual_plan_review_preconditions(
+    work_item: dict, *, current_review_content_id: str, feedback_role: str,
+    feedback_review_content_id: str,
+) -> None:
+    """`/record-manual-plan-review`'s resolution/phase/role/staleness/
+    invariant preconditions (D-Plan-Review-Stages transition table,
+    resolves `GPT-R12-002`/`-003`), checked before writing anything:
+
+    - `"2.1"`-governed and currently at `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW`.
+    - the feedback's declared role is exactly `manual_external_plan_review`
+      (rejects a local-role or unlabeled feedback file).
+    - the feedback's `review_content_id` matches the current recomputed
+      value -- **hard**, blocks ingestion (distinct from the advisory-only
+      `bundle_id` check, `check_manual_stage_bundle_id_advisory`, never
+      performed here).
+    - a current `local_model_plan_review` `APPROVE` is recorded for the
+      same `review_content_id` (restated invariant -- entry to this phase
+      already required it; defends against a corrupted/hand-edited state).
+    - no `manual_external_plan_review` stage is already recorded against
+      the current `review_content_id` (rejects duplicate ingestion).
+    """
+    _require_v2_1_plan_review(work_item)
+    if work_item.get("phase") != "AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW":
+        raise WrongPhaseForPlanReviewStageError(
+            f"{work_item['work_item_id']}: phase is {work_item.get('phase')!r}, "
+            f"not \"AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW\""
+        )
+    if feedback_role != "manual_external_plan_review":
+        raise WrongReviewerRoleError(
+            f"REVIEW_FEEDBACK.md declares Reviewer role: {feedback_role!r}, "
+            f"expected \"manual_external_plan_review\""
+        )
+    if feedback_review_content_id != current_review_content_id:
+        raise StaleReviewContentIdError(
+            f"feedback review_content_id {feedback_review_content_id!r} does not "
+            f"match the current recomputed value {current_review_content_id!r} -- "
+            f"this is a hard block, unlike the manual stage's advisory bundle_id check"
+        )
+    stages = work_item.get("plan_review_stages") or {}
+    local = stages.get("local_model_plan_review")
+    if (
+        stages.get("review_content_id") != current_review_content_id
+        or local is None or local.get("verdict") != "APPROVE"
+    ):
+        raise MissingLocalApprovalForManualStageError(
+            f"{work_item['work_item_id']}: no current local_model_plan_review "
+            f"APPROVE recorded for review_content_id {current_review_content_id!r}"
+        )
+    if stages.get("manual_external_plan_review") is not None:
+        raise DuplicateManualStageIngestionError(
+            f"{work_item['work_item_id']}: manual_external_plan_review is already "
+            f"recorded against review_content_id {current_review_content_id!r}"
+        )
+
+
+def check_manual_stage_bundle_id_advisory(
+    feedback_bundle_id: str, current_bundle_id: str,
+) -> str | None:
+    """The manual stage's `bundle_id` check: advisory only, never blocking
+    (resolves `OPUS-R14-005`, corrects the plan-stage-equality symmetry a
+    naive reading of `/approve-review`'s own hard `bundle_id` check might
+    suggest) -- a wrapper-only bundle regeneration between upload and
+    paste (new `bundle_id`, unchanged `review_content_id`) must not
+    invalidate the manual stage (`GPT-R11-006`). Returns a warning string
+    naming both values on a mismatch, or `None` when they match."""
+    if feedback_bundle_id != current_bundle_id:
+        return (
+            f"bundle_id mismatch (advisory only, does not block ingestion): "
+            f"feedback bundle_id={feedback_bundle_id!r}, current recomputed "
+            f"bundle_id={current_bundle_id!r}"
+        )
+    return None
+
+
+def record_manual_plan_review(
+    state: dict, work_item_id: str, *, verdict: str, bundle_id: str, round: int,
+    now: str, current_review_content_id: str, feedback_role: str,
+    feedback_review_content_id: str,
+) -> dict:
+    """`/record-manual-plan-review`'s sole state write set (D-Plan-Review-
+    Stages transition table, resolves `GPT-R12-002`/`-003`):
+
+    - `APPROVE`: records the completed `manual_external_plan_review` stage
+      -- including the feedback's own `bundle_id` **verbatim**, regardless
+      of whether it matches the current recomputed one, so the ledger
+      records what the reviewer actually saw (`OPUS-R14-005`, missing-test
+      item 113) -- and transitions to `AWAITING_PLAN_APPROVAL`.
+    - `REVISE`: no ledger write; transitions to `REVISING_PLAN`.
+    - `BLOCK`: no ledger write, no phase transition -- a true no-op
+      (missing-test item 99); the returned state is unchanged.
+    """
+    if verdict not in PLAN_REVIEW_VERDICTS:
+        raise UnknownPlanReviewVerdictError(f"unknown plan-review verdict: {verdict!r}")
+    new_state = copy.deepcopy(state)
+    work_item = new_state["work_items"][work_item_id]
+    validate_manual_plan_review_preconditions(
+        work_item, current_review_content_id=current_review_content_id,
+        feedback_role=feedback_role, feedback_review_content_id=feedback_review_content_id,
+    )
+
+    if verdict == "APPROVE":
+        work_item["plan_review_stages"]["manual_external_plan_review"] = {
+            "bundle_id": bundle_id, "verdict": "APPROVE",
+            "round": round, "completed_at": now,
+        }
+        work_item["phase"] = "AWAITING_PLAN_APPROVAL"
+    elif verdict == "REVISE":
+        work_item["phase"] = "REVISING_PLAN"
+    else:  # BLOCK
+        return state
+
+    work_item["state_revision"] = work_item.get("state_revision", 1) + 1
+    work_item["last_transition"] = now
+    _validate_plan_review_stages(work_item)
+    return new_state
+
+
+def transition_to_awaiting_local_plan_review(state: dict, work_item_id: str, now: str) -> dict:
+    """`/apply-plan-review`'s `"2.1"`-only revised exit step (D-Plan-Review-
+    Stages, resolves `GPT-R11-003`/`-007`): after every accepted plan edit,
+    the work item transitions to `AWAITING_LOCAL_PLAN_REVIEW` -- never
+    self-declaring plan readiness. The stale `plan_review_stages` ledger
+    (if any) is left as-is, never explicitly cleared: its own
+    `review_content_id` no longer matches the freshly recomputed one the
+    moment the edit lands, so both stages already read as absent by the
+    recomputation rule (`plan_approval_gate_reachable`). This is the sole
+    path back to `AWAITING_LOCAL_PLAN_REVIEW`, whether the edit was driven
+    by a local-model `REVISE` or a manual-external `REVISE` (missing-test
+    item 89) -- no path re-enters manual-external review without a fresh
+    local pass first."""
+    new_state = copy.deepcopy(state)
+    work_item = new_state["work_items"][work_item_id]
+    work_item["phase"] = "AWAITING_LOCAL_PLAN_REVIEW"
     work_item["state_revision"] = work_item.get("state_revision", 1) + 1
     work_item["last_transition"] = now
     return new_state

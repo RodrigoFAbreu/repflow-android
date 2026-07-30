@@ -1078,5 +1078,308 @@ class TestProtectedPathDirty(unittest.TestCase):
                 self._any_dirty(repo.root)
 
 
+# ---------------------------------------------------------------------------
+# WF4a-iv: D-Plan-Review-Stages' verdict/state transition table -- the
+# ledger writers `record_local_plan_review`/`record_manual_plan_review`
+# and the `"2.1"`-only revised /apply-plan-review exit step
+# (transition_to_awaiting_local_plan_review). Missing-test items 80-99,
+# 112-114, WFR-41.
+# ---------------------------------------------------------------------------
+
+
+def _v21_work_item(**overrides) -> dict:
+    defaults = {"governing_workflow_version": "2.1", "phase": "AWAITING_LOCAL_PLAN_REVIEW"}
+    defaults.update(overrides)
+    return _base_work_item(**defaults)
+
+
+class TestRecordLocalPlanReview(unittest.TestCase):
+    def test_wrong_governing_version_rejected(self):
+        wi = _base_work_item(governing_workflow_version="1", phase="AWAITING_LOCAL_PLAN_REVIEW")
+        with self.assertRaises(ws.WrongGoverningVersionForPlanReviewStageError):
+            ws.record_local_plan_review(
+                _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b1",
+                review_content_id="c1", round=1, now="t1",
+            )
+
+    def test_wrong_phase_rejected(self):
+        """Missing-test item 90 (v2.1 side): "already completed this
+        round" is exactly a phase that has moved on."""
+        wi = _v21_work_item(phase="AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW")
+        with self.assertRaises(ws.WrongPhaseForPlanReviewStageError):
+            ws.record_local_plan_review(
+                _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b1",
+                review_content_id="c1", round=1, now="t1",
+            )
+
+    def test_unknown_verdict_rejected(self):
+        wi = _v21_work_item()
+        with self.assertRaises(ws.UnknownPlanReviewVerdictError):
+            ws.record_local_plan_review(
+                _base_state(wi=wi), "wi", verdict="MAYBE", bundle_id="b1",
+                review_content_id="c1", round=1, now="t1",
+            )
+
+    def test_approve_records_ledger_and_transitions_to_manual_stage(self):
+        """Missing-test items 80/82 (first half): a local APPROVE alone
+        reaches AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW, not AWAITING_PLAN_APPROVAL."""
+        wi = _v21_work_item(state_revision=1)
+        new_state = ws.record_local_plan_review(
+            _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b1",
+            review_content_id="c1", round=1, now="t1",
+        )
+        item = new_state["work_items"]["wi"]
+        self.assertEqual(item["phase"], "AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW")
+        self.assertEqual(item["plan_review_stages"], {
+            "review_content_id": "c1",
+            "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+            "manual_external_plan_review": None,
+        })
+        self.assertEqual(item["state_revision"], 2)
+
+    def test_approve_clears_stale_manual_entry_from_a_prior_content_id(self):
+        wi = _v21_work_item(plan_review_stages={
+            "review_content_id": "old",
+            "local_model_plan_review": {"bundle_id": "b0", "verdict": "APPROVE", "round": 1, "completed_at": "t0"},
+            "manual_external_plan_review": {"bundle_id": "b0", "verdict": "APPROVE", "round": 1, "completed_at": "t0"},
+        })
+        new_state = ws.record_local_plan_review(
+            _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b1",
+            review_content_id="new", round=1, now="t1",
+        )
+        item = new_state["work_items"]["wi"]
+        self.assertEqual(item["plan_review_stages"]["review_content_id"], "new")
+        self.assertIsNone(item["plan_review_stages"]["manual_external_plan_review"])
+
+    def test_revise_transitions_to_revising_plan_with_no_ledger_write(self):
+        """Missing-test item 94: can never reach AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW."""
+        wi = _v21_work_item(state_revision=1, plan_review_stages=None)
+        new_state = ws.record_local_plan_review(
+            _base_state(wi=wi), "wi", verdict="REVISE", bundle_id="b1",
+            review_content_id="c1", round=1, now="t1",
+        )
+        item = new_state["work_items"]["wi"]
+        self.assertEqual(item["phase"], "REVISING_PLAN")
+        self.assertIsNone(item["plan_review_stages"])
+
+    def test_block_is_a_true_no_op(self):
+        """Missing-test item 95: no ledger write, no transition; remains
+        AWAITING_LOCAL_PLAN_REVIEW -- the returned state is unchanged."""
+        wi = _v21_work_item(state_revision=1, plan_review_stages=None)
+        state = _base_state(wi=wi)
+        new_state = ws.record_local_plan_review(
+            state, "wi", verdict="BLOCK", bundle_id="b1",
+            review_content_id="c1", round=1, now="t1",
+        )
+        self.assertEqual(new_state, state)
+        self.assertEqual(new_state["work_items"]["wi"]["phase"], "AWAITING_LOCAL_PLAN_REVIEW")
+
+
+class TestRecordManualPlanReview(unittest.TestCase):
+    def _local_approved_wi(self, **overrides):
+        defaults = {
+            "phase": "AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW",
+            "plan_review_stages": {
+                "review_content_id": "c1",
+                "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+                "manual_external_plan_review": None,
+            },
+        }
+        defaults.update(overrides)
+        return _v21_work_item(**defaults)
+
+    def test_wrong_governing_version_rejected(self):
+        wi = self._local_approved_wi(governing_workflow_version="1")
+        with self.assertRaises(ws.WrongGoverningVersionForPlanReviewStageError):
+            ws.record_manual_plan_review(
+                _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
+                current_review_content_id="c1", feedback_role="manual_external_plan_review",
+                feedback_review_content_id="c1",
+            )
+
+    def test_wrong_phase_rejected(self):
+        """WFR-41: a local REVISE verdict followed by an attempted manual-
+        stage action is refused."""
+        wi = self._local_approved_wi(phase="REVISING_PLAN")
+        with self.assertRaises(ws.WrongPhaseForPlanReviewStageError):
+            ws.record_manual_plan_review(
+                _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
+                current_review_content_id="c1", feedback_role="manual_external_plan_review",
+                feedback_review_content_id="c1",
+            )
+
+    def test_wrong_role_rejected(self):
+        """Missing-test item 97."""
+        wi = self._local_approved_wi()
+        with self.assertRaises(ws.WrongReviewerRoleError):
+            ws.record_manual_plan_review(
+                _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
+                current_review_content_id="c1", feedback_role="local_model_plan_review",
+                feedback_review_content_id="c1",
+            )
+
+    def test_stale_review_content_id_is_hard_blocked(self):
+        """Missing-test items 97/112: a review_content_id change blocks
+        ingestion, unlike a wrapper-only bundle_id mismatch."""
+        wi = self._local_approved_wi()
+        with self.assertRaises(ws.StaleReviewContentIdError):
+            ws.record_manual_plan_review(
+                _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
+                current_review_content_id="c1", feedback_role="manual_external_plan_review",
+                feedback_review_content_id="stale",
+            )
+
+    def test_missing_local_approval_rejected(self):
+        """Missing-test item 81/97: no current local APPROVE for this
+        review_content_id."""
+        wi = self._local_approved_wi(plan_review_stages={
+            "review_content_id": "c1",
+            "local_model_plan_review": None,
+            "manual_external_plan_review": None,
+        })
+        with self.assertRaises(ws.MissingLocalApprovalForManualStageError):
+            ws.record_manual_plan_review(
+                _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
+                current_review_content_id="c1", feedback_role="manual_external_plan_review",
+                feedback_review_content_id="c1",
+            )
+
+    def test_duplicate_ingestion_rejected(self):
+        """Missing-test item 97."""
+        wi = self._local_approved_wi(plan_review_stages={
+            "review_content_id": "c1",
+            "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+            "manual_external_plan_review": {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"},
+        })
+        with self.assertRaises(ws.DuplicateManualStageIngestionError):
+            ws.record_manual_plan_review(
+                _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b3", round=2, now="t3",
+                current_review_content_id="c1", feedback_role="manual_external_plan_review",
+                feedback_review_content_id="c1",
+            )
+
+    def test_approve_completes_ledger_and_transitions_to_plan_approval(self):
+        """Missing-test item 82: both stages recorded, in order, against
+        the same review_content_id reaches AWAITING_PLAN_APPROVAL."""
+        wi = self._local_approved_wi(state_revision=1)
+        new_state = ws.record_manual_plan_review(
+            _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
+            current_review_content_id="c1", feedback_role="manual_external_plan_review",
+            feedback_review_content_id="c1",
+        )
+        item = new_state["work_items"]["wi"]
+        self.assertEqual(item["phase"], "AWAITING_PLAN_APPROVAL")
+        self.assertEqual(item["plan_review_stages"]["manual_external_plan_review"], {
+            "bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2",
+        })
+        self.assertEqual(item["state_revision"], 2)
+        self.assertTrue(ws.plan_approval_gate_reachable(
+            latest_round_status="APPROVE", governing_workflow_version="2.1",
+            plan_review_stages=item["plan_review_stages"], current_review_content_id="c1",
+        ))
+
+    def test_approve_records_actual_bundle_id_even_when_mismatched(self):
+        """Missing-test item 113 (OPUS-R14-005): the ledger records the
+        reviewed feedback's actual bundle_id in both the matching and
+        mismatched cases -- the advisory bundle_id check never blocks."""
+        wi = self._local_approved_wi()
+        warning = ws.check_manual_stage_bundle_id_advisory(
+            feedback_bundle_id="stale-wrapper-bundle", current_bundle_id="fresh-wrapper-bundle",
+        )
+        self.assertIsNotNone(warning)
+        new_state = ws.record_manual_plan_review(
+            _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="stale-wrapper-bundle", round=1, now="t2",
+            current_review_content_id="c1", feedback_role="manual_external_plan_review",
+            feedback_review_content_id="c1",
+        )
+        self.assertEqual(
+            new_state["work_items"]["wi"]["plan_review_stages"]["manual_external_plan_review"]["bundle_id"],
+            "stale-wrapper-bundle",
+        )
+
+    def test_matching_bundle_id_has_no_advisory_warning(self):
+        self.assertIsNone(ws.check_manual_stage_bundle_id_advisory("b1", "b1"))
+
+    def test_revise_transitions_to_revising_plan_with_no_ledger_write(self):
+        """Missing-test item 99."""
+        wi = self._local_approved_wi(state_revision=1)
+        new_state = ws.record_manual_plan_review(
+            _base_state(wi=wi), "wi", verdict="REVISE", bundle_id="b2", round=1, now="t2",
+            current_review_content_id="c1", feedback_role="manual_external_plan_review",
+            feedback_review_content_id="c1",
+        )
+        item = new_state["work_items"]["wi"]
+        self.assertEqual(item["phase"], "REVISING_PLAN")
+        self.assertIsNone(item["plan_review_stages"]["manual_external_plan_review"])
+
+    def test_block_is_a_true_no_op(self):
+        """Missing-test item 99: no ledger write, no transition; remains
+        AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW."""
+        wi = self._local_approved_wi(state_revision=1)
+        state = _base_state(wi=wi)
+        new_state = ws.record_manual_plan_review(
+            state, "wi", verdict="BLOCK", bundle_id="b2", round=1, now="t2",
+            current_review_content_id="c1", feedback_role="manual_external_plan_review",
+            feedback_review_content_id="c1",
+        )
+        self.assertEqual(new_state, state)
+        self.assertEqual(new_state["work_items"]["wi"]["phase"], "AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW")
+
+
+class TestTransitionToAwaitingLocalPlanReview(unittest.TestCase):
+    def test_from_revising_plan_after_an_accepted_edit(self):
+        """Missing-test item 89: whether the edit was driven by a local or
+        manual-external REVISE, the next required stage is always
+        AWAITING_LOCAL_PLAN_REVIEW -- never directly back to manual-external
+        review or to AWAITING_PLAN_APPROVAL."""
+        wi = _v21_work_item(phase="REVISING_PLAN", state_revision=3, plan_review_stages={
+            "review_content_id": "stale",
+            "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+            "manual_external_plan_review": None,
+        })
+        new_state = ws.transition_to_awaiting_local_plan_review(_base_state(wi=wi), "wi", now="t2")
+        item = new_state["work_items"]["wi"]
+        self.assertEqual(item["phase"], "AWAITING_LOCAL_PLAN_REVIEW")
+        self.assertEqual(item["state_revision"], 4)
+        # The stale ledger is left as-is, not explicitly cleared -- it
+        # simply no longer matches a freshly recomputed current id.
+        self.assertEqual(item["plan_review_stages"]["review_content_id"], "stale")
+        self.assertFalse(ws.plan_approval_gate_reachable(
+            latest_round_status="APPROVE", governing_workflow_version="2.1",
+            plan_review_stages=item["plan_review_stages"], current_review_content_id="fresh",
+        ))
+
+
+class TestFullTwoStageSequence(unittest.TestCase):
+    def test_local_approve_then_manual_approve_reaches_plan_approval_gate(self):
+        """Missing-test item 80: a local APPROVE alone cannot reach
+        AWAITING_PLAN_APPROVAL for a "2.1" item; missing-test item 82: both
+        stages, in order, do."""
+        wi = _v21_work_item()
+        state = _base_state(wi=wi)
+
+        after_local = ws.record_local_plan_review(
+            state, "wi", verdict="APPROVE", bundle_id="b1", review_content_id="c1", round=1, now="t1",
+        )
+        item = after_local["work_items"]["wi"]
+        self.assertEqual(item["phase"], "AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW")
+        self.assertFalse(ws.plan_approval_gate_reachable(
+            latest_round_status="APPROVE", governing_workflow_version="2.1",
+            plan_review_stages=item["plan_review_stages"], current_review_content_id="c1",
+        ))
+
+        after_manual = ws.record_manual_plan_review(
+            after_local, "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
+            current_review_content_id="c1", feedback_role="manual_external_plan_review",
+            feedback_review_content_id="c1",
+        )
+        item2 = after_manual["work_items"]["wi"]
+        self.assertEqual(item2["phase"], "AWAITING_PLAN_APPROVAL")
+        self.assertTrue(ws.plan_approval_gate_reachable(
+            latest_round_status="APPROVE", governing_workflow_version="2.1",
+            plan_review_stages=item2["plan_review_stages"], current_review_content_id="c1",
+        ))
+
+
 if __name__ == "__main__":
     unittest.main()

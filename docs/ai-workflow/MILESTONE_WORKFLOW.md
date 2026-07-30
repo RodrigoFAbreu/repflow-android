@@ -67,6 +67,87 @@ condition, and whether Claude stops.
 - **Stop for user/reviewer?** Only if a rejection or major plan change needs
   reviewer sign-off before implementation; otherwise proceed.
 
+### AWAITING_LOCAL_PLAN_REVIEW (`governing_workflow_version: "2.1"` only)
+
+Part of the two-stage local-then-manual-external plan-review protocol
+(`docs/ai-workflow/WORKFLOW_V2_PLAN.md`'s `D-Plan-Review-Stages`), inserted
+between `REVISING_PLAN` and `AWAITING_PLAN_APPROVAL`. Scoped entirely to
+`"2.1"` work items — a `"1"` item never enters this state; its
+`REVISING_PLAN` exits straight to `AWAITING_PLAN_APPROVAL`, unchanged.
+
+- **Entry**: `REVISING_PLAN`'s exit condition is met, or `/apply-plan-review`
+  has just applied an accepted plan edit (its `"2.1"`-only revised exit
+  step, below).
+- **Allowed actions**: run `/review-plan` (recommended in a fresh session,
+  for genuine independence from the session that wrote the plan — strongly
+  recommended operational guidance, not a verified precondition).
+- **Artifacts**: `REVIEW_FEEDBACK.md` (`Reviewer role: local_model_plan_review`);
+  for an `APPROVE` verdict only, a new `plan_review_stages` ledger entry.
+- **Exit, verdict-specific** (see the transition table below):
+  - **`APPROVE`**: `/review-plan` records the completed
+    `local_model_plan_review` stage against the current `review_content_id`
+    and transitions to `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW`. Only a
+    current local `APPROVE` may satisfy that transition.
+  - **`REVISE`**: `/review-plan` writes `REVIEW_FEEDBACK.md` only (no
+    ledger entry); transitions to `REVISING_PLAN`; `/apply-plan-review` is
+    then required.
+  - **`BLOCK`**: no ledger write, no transition; remains at
+    `AWAITING_LOCAL_PLAN_REVIEW` — explicit user resolution required.
+- **Stop for user/reviewer?** Yes — the current session's turn ends here. A
+  fresh, independent session is strongly recommended before running
+  `/review-plan`.
+
+### AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW (`governing_workflow_version: "2.1"` only)
+
+- **Entry**: the `plan_review_stages` ledger records a
+  `local_model_plan_review` stage completed with `verdict: APPROVE` against
+  the *current* plan-stage `review_content_id` — by construction, the only
+  way to reach this state.
+- **Allowed actions**: the user uploads the exact bundle `/review-plan`
+  named (path, `bundle_id`, `review_content_id`) to a manual external
+  reviewer (recommended: ChatGPT) and pastes its feedback into
+  `REVIEW_FEEDBACK.md` (`Reviewer role: manual_external_plan_review`) —
+  manual end-to-end, identical in mechanism to today's single external
+  review, only gated on the local stage having completed first. Once
+  feedback is pasted, run `/record-manual-plan-review` to ingest it.
+- **Artifacts**: `REVIEW_FEEDBACK.md` (`Reviewer role: manual_external_plan_review`);
+  for an `APPROVE` verdict only, the ledger's second stage entry.
+- **Exit, verdict-specific** (see the transition table below):
+  - **`APPROVE`**: `/record-manual-plan-review` records the completed
+    `manual_external_plan_review` stage against the current
+    `review_content_id` and transitions to `AWAITING_PLAN_APPROVAL`.
+  - **`REVISE`**: `/record-manual-plan-review` records nothing in the
+    ledger; transitions to `REVISING_PLAN`; `/apply-plan-review` is then
+    required (identical mechanism to today's single-stage `REVISE`
+    handling).
+  - **`BLOCK`**: no ledger write, no transition; remains at
+    `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW` — explicit user resolution
+    required.
+- **Stop for user/reviewer?** Yes — hard gate, identical in kind to the
+  `"1"` state machine's own `AWAITING_EXTERNAL_PLAN_REVIEW`.
+
+**Verdict/state transition table**, for both `"2.1"`-only states above:
+
+| Current state | Verdict | Writer | Next state/action | Validation preconditions |
+|---|---|---|---|---|
+| `AWAITING_LOCAL_PLAN_REVIEW` | `APPROVE` | `/review-plan` | record local stage (`verdict: APPROVE`) against current `review_content_id` → `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW` | item is `"2.1"`; `phase == AWAITING_LOCAL_PLAN_REVIEW`; recomputed `bundle_id`/`review_content_id` match `MANIFEST.md`/`REVIEW_REQUEST.md` (not stale) |
+| `AWAITING_LOCAL_PLAN_REVIEW` | `REVISE` | `/review-plan` | write `REVIEW_FEEDBACK.md` only, no ledger write → `REVISING_PLAN`; `/apply-plan-review` required | same as above |
+| `AWAITING_LOCAL_PLAN_REVIEW` | `BLOCK` | `/review-plan` | no ledger write, no transition; remains `AWAITING_LOCAL_PLAN_REVIEW` | same as above; explicit user resolution required before any further command |
+| `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW` | `APPROVE` | `/record-manual-plan-review` | record manual stage (`verdict: APPROVE`, plus the feedback's own `bundle_id`) against current `review_content_id` → `AWAITING_PLAN_APPROVAL` | item is `"2.1"`; `phase == AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW`; a current `local_model_plan_review` `APPROVE` recorded for the same `review_content_id`; `REVIEW_FEEDBACK.md`'s `Reviewer role:` is exactly `manual_external_plan_review`; its `review_content_id` matches the current recomputed value (**hard**, blocks ingestion) — its `bundle_id` matching the current recomputed value is **advisory only** (warns, naming both, never blocks); no `manual_external_plan_review` stage already recorded against this `review_content_id` (rejects duplicate ingestion) |
+| `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW` | `REVISE` | `/record-manual-plan-review` | no ledger write → `REVISING_PLAN`; `/apply-plan-review` required | same as above |
+| `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW` | `BLOCK` | `/record-manual-plan-review` | no ledger write, no transition; remains `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW` | same as above; explicit user resolution required |
+
+Malformed, missing, or unparseable `REVIEW_FEEDBACK.md` content at either
+row is refused before any state change, naming what failed to parse.
+
+Any protected plan edit after either or both stages complete invalidates
+both — by the recomputation rule (validity is by recomputation, not an
+active clear step), never an explicit clear — and the work item's next
+required stage is always `AWAITING_LOCAL_PLAN_REVIEW`
+(`/apply-plan-review`'s `"2.1"`-only revised exit step, below), whether the
+edit was driven by a local-model or a manual-external `REVISE`. No path
+re-enters manual-external review without a fresh local pass first.
+
 ### AWAITING_PLAN_APPROVAL
 
 - **Entry**: `REVISING_PLAN`'s exit condition is met. For a
