@@ -1,8 +1,10 @@
 # RepFlow Roadmap
 
-Every roadmap milestone (0-7) is complete. Milestone 8 (post-MVP functional
+Every roadmap milestone (0-8) is complete. Milestone 8 (post-MVP functional
 usability stabilization, created from the user's own hands-on findings) is
-in progress. See [status](ACTIVE_MILESTONE.md) for the current state.
+accepted and closed under an explicit user waiver of its planned
+functional-review gate. See [status](ACTIVE_MILESTONE.md) for the full
+acceptance record.
 
 ## Milestone 0 — Project foundation
 
@@ -65,17 +67,24 @@ in progress. See [status](ACTIVE_MILESTONE.md) for the current state.
 - [x] CSV exports
 - [x] Restore validation and safety snapshots
 
-## Milestone 8 — Post-MVP functional usability stabilization (in progress)
+## Milestone 8 — Post-MVP functional usability stabilization ✓ complete
 
 Created from the user's own hands-on functional findings after Milestone 7,
 not from the original MVP goal list. See
-`docs/milestones/active/milestone-8-reference.md` for full scope.
+`docs/milestones/completed/milestone-8-reference.md` for full scope.
+Implementation and all four external implementation-review rounds are
+complete and approved (round 4: `APPROVE`, HEAD `dc4381a`, confirmed
+reachable from `main`). The planned manual functional-review pass was
+**explicitly waived by the user** on 2026-07-31 — not performed, and not
+claimed to have passed. Detailed UI/UX validation is deferred to a future,
+separate Figma-led redesign milestone (not yet planned). See
+[status](ACTIVE_MILESTONE.md) for the full disposition.
 
-- [ ] P0 crash fix: missing `@HiltViewModel` on 3 ViewModels
-- [ ] Navigation: bottom-navigation redesign (user-approved)
-- [ ] Recovery/futsal: past-date entry, 0-5 scale, history visibility, save feedback
-- [ ] Workout/plans: start-from-plan, warm-up/working classification, RPE/duration/pain/technique entry
-- [ ] History: filtering/sorting (exercise, date, plan), safe accidental-workout removal, detail consistency
-- [ ] Plans/exercises: training-plan archive/restore, exercise archive-snackbar fix
-- [ ] Backup: edge-case hardening + new-field schema coverage + v1-backward-compatibility
-- [ ] Full verification + external implementation review + user functional review
+- [x] P0 crash fix: missing `@HiltViewModel` on 3 ViewModels
+- [x] Navigation: bottom-navigation redesign (user-approved)
+- [x] Recovery/futsal: past-date entry, 0-5 scale, history visibility, save feedback
+- [x] Workout/plans: start-from-plan, warm-up/working classification, RPE/duration/pain/technique entry
+- [x] History: filtering/sorting (exercise, date, plan), safe accidental-workout removal, detail consistency
+- [x] Plans/exercises: training-plan archive/restore, exercise archive-snackbar fix
+- [x] Backup: edge-case hardening + new-field schema coverage + v1-backward-compatibility
+- [x] Full verification + external implementation review; user functional review waived (see ACTIVE_MILESTONE.md)

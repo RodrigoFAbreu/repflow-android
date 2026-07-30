@@ -3,10 +3,10 @@
 Evidence-based classification of every gap the user reported after
 hands-on use of the app post-Milestone 7, checked directly against the
 current code (not assumed, not inferred from docs). This is the canonical
-audit; `docs/milestones/active/milestone-8-reference.md` cites it rather
-than duplicating it. This is a living document, kept in sync with
-implementation through CP0-CP14 (see `docs/ACTIVE_MILESTONE.md` for the
-full per-checkpoint verification detail each row below summarizes).
+audit; `docs/milestones/completed/milestone-8-reference.md` cites it
+rather than duplicating it. Milestone 8 is now accepted and closed (see
+`docs/ACTIVE_MILESTONE.md`); this document reflects the state as of that
+acceptance, kept in sync with implementation through CP0-CP14.
 
 Classification legend: **Implemented** (works today) / **Unreachable**
 (built below the UI, never wired up) / **Partial** / **Absent** (no such
