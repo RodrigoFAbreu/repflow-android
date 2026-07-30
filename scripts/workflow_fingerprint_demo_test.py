@@ -22,6 +22,11 @@ assertion (missing-test item 24): the real submitted bundle's own reported
 `bundle_id` (written into `MANIFEST.md`) recomputes, unchanged, from the
 bundle directory as actually submitted.
 
+`WF4a-i`: `TestImplementationStageAgainstRealRepository` is the real
+implementation-stage fixture this milestone previously had no diff to
+validate against -- exercised against this milestone's own real
+WF0/WF1a/WF1b commits, now that they exist.
+
 Run: python3 scripts/workflow_fingerprint_demo_test.py
 """
 
@@ -286,6 +291,94 @@ class TestAgainstRealRepository(unittest.TestCase):
                         f"{path} is mentioned in a .claude/commands/*.md file but "
                         f"classify_path does not recognize it as protected or excluded"
                     )
+
+
+class TestImplementationStageAgainstRealRepository(unittest.TestCase):
+    """WF4a-i's own real fixture: this milestone's actual WF0/WF1a/WF1b
+    commits are, by now, a real changed-file diff to validate the
+    implementation-stage classification/manifest algorithm against --
+    exactly what this module's own docstring previously said did not
+    exist yet."""
+
+    def test_real_diff_since_base_commit_classifies_exhaustively(self):
+        repo_root = _repo_root()
+        protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
+            wf.load_implementation_stage_classification(repo_root)
+        )
+        changed = sorted(
+            wf._changed_tracked_paths(repo_root, BASE_COMMIT) | wf._untracked_paths(repo_root)
+        )
+        self.assertTrue(changed, "expected at least one changed path since this milestone's base commit")
+        for path in changed:
+            with self.subTest(path=path):
+                try:
+                    wf.classify_path_implementation_stage(
+                        path, protected_paths, protected_prefixes, excluded_paths, excluded_prefixes
+                    )
+                except wf.UnclassifiedPathError:
+                    self.fail(
+                        f"{path} changed since {BASE_COMMIT} but the implementation-stage "
+                        f"classifier does not recognize it as protected or excluded"
+                    )
+
+    def test_real_diff_protects_this_milestones_own_tooling_and_commands(self):
+        """The concrete, checkable claim: every `.claude/commands/` and
+        `scripts/` path this milestone has actually changed since its base
+        commit is protected at the implementation stage -- exactly the
+        'workflow-command file' content D-Commit-Provenance names."""
+        repo_root = _repo_root()
+        protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
+            wf.load_implementation_stage_classification(repo_root)
+        )
+        changed = wf._changed_tracked_paths(repo_root, BASE_COMMIT) | wf._untracked_paths(repo_root)
+        tooling_paths = {
+            p for p in changed if p.startswith(".claude/commands/") or p.startswith("scripts/")
+        }
+        self.assertTrue(tooling_paths, "expected at least one changed .claude/commands/ or scripts/ path")
+        for path in sorted(tooling_paths):
+            with self.subTest(path=path):
+                self.assertEqual(
+                    wf.classify_path_implementation_stage(
+                        path, protected_paths, protected_prefixes, excluded_paths, excluded_prefixes
+                    ),
+                    "protected",
+                )
+
+    def test_real_implementation_stage_manifest_is_nonempty_with_real_blob_shas(self):
+        repo_root = _repo_root()
+        protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
+            wf.load_implementation_stage_classification(repo_root)
+        )
+        digest, projection = wf.compute_review_content_id_implementation_stage(
+            repo_root, BASE_COMMIT,
+            work_item_type="process", work_item_id="workflow-v2-1-core",
+            protected_paths=protected_paths, protected_prefixes=protected_prefixes,
+            excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,
+        )
+        manifest = projection["review_content_manifest"]
+        self.assertTrue(manifest, "expected a non-empty implementation-stage manifest against this milestone's own real diff")
+        for entry in manifest:
+            self.assertTrue(
+                entry["path"].startswith(".claude/commands/")
+                or entry["path"].startswith("scripts/")
+                or entry["path"] == ".github/workflows/ci.yml",
+                f"unexpected protected entry outside this milestone's own tooling: {entry['path']}",
+            )
+            self.assertTrue(entry["exists"])
+            real_sha = wf._hash_object(repo_root, entry["path"])
+            self.assertEqual(entry["blob"], real_sha)
+        # Recomputing twice must be idempotent, same discipline as the
+        # plan-stage identity function.
+        digest2, _ = wf.compute_review_content_id_implementation_stage(
+            repo_root, BASE_COMMIT,
+            work_item_type="process", work_item_id="workflow-v2-1-core",
+            protected_paths=protected_paths, protected_prefixes=protected_prefixes,
+            excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,
+        )
+        self.assertEqual(digest, digest2)
+        print(f"\n[demonstration] implementation-stage review_content_id = {digest}")
+        for entry in manifest:
+            print(f"[demonstration] {entry['path']}: {entry['blob']}")
 
 
 if __name__ == "__main__":

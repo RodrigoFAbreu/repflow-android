@@ -148,6 +148,45 @@ implementation, there is no real changed-file diff to validate a
 commit-source diff algorithm against, and building one against a fabricated
 example would not be executable evidence. Deferred to WF4a-i, alongside
 real implementation-stage fixtures.
+
+`WF4a-i` (this checkpoint): the identity algorithm itself stays frozen, per
+round 10's own instruction -- nothing above this paragraph changed. Three
+additions, all previously recorded as forward-looking obligations:
+  - **Atomic manifest write** (resolves `OPUS-R20-001`, missing-test item
+    138): `compute_bundle_id()` gained an optional
+    `manifest_content_override` parameter so `bundle_id` can be computed
+    against a manifest that has not been written to disk yet.
+    `write_manifest_with_verified_identifiers` now computes and recomputes
+    both identifiers entirely in memory and only ever touches the real
+    `MANIFEST.md` once, at the very end, via a temp file + `os.replace()`
+    -- a protected-path edit landing anywhere in the compute/recompute
+    window still raises, but the real file is now provably untouched
+    rather than merely "detectable as stale."
+  - **Root-level build files, pinned** (resolves `OPUS-R20-002`,
+    missing-test item 139): a regression test confirms
+    `build.gradle.kts`/`settings.gradle.kts`/`gradlew`/`Makefile` still
+    raise `UnclassifiedPathError` under the plan-stage classifier -- the
+    deliberate, previously-only-documented decision that these stay
+    unclassified rather than being added to `PLAN_STAGE_EXCLUDED_*`.
+  - **Implementation-stage manifest, built** (resolves `OPUS-R20-003`,
+    missing-test item 140, and the "remaining scope" this module's own
+    docstring named above): `load_implementation_stage_classification()`,
+    `classify_path_implementation_stage()`, and
+    `compute_review_content_id_implementation_stage()`/`_at_commit()` are
+    new, independent functions -- never a reuse or adaptation of the
+    plan-stage constants/functions, per D-Fingerprint's explicit
+    instruction that the two stages' sets are near-inverses of each other.
+    The protected/excluded sets are loaded from a tracked, machine-readable
+    declarations file
+    (`docs/ai-workflow/registry/workflow-v2-1-core-artifacts.json`) rather
+    than a second hardcoded Python constant -- the generalization
+    `D-Registry`'s and `D-Fingerprint`'s future-work notes named as this
+    checkpoint's own scope (`GPT-R9-011`). That file lives under
+    `docs/ai-workflow/registry/`, already excluded at the plan stage, so
+    declaring or editing it never stales the plan approval. Exercised
+    against this milestone's own real `WF0`/`WF1a`/`WF1b` commits in
+    `workflow_fingerprint_demo_test.py` -- the real implementation-stage
+    fixture this docstring previously said did not exist yet.
 """
 
 from __future__ import annotations
@@ -808,6 +847,250 @@ def compute_review_content_id_plan_stage_at_commit(
 
 
 # ---------------------------------------------------------------------------
+# review_content_id — implementation stage (WF4a-i's own scope, deferred
+# from the plan-stage-only prototype: "there is no real changed-file diff
+# to validate a commit-source diff algorithm against" no longer holds now
+# that WF0/WF1a/WF1b have actually landed). Built as an independent
+# mechanism, not adapted from the plan-stage constants/functions above,
+# per D-Fingerprint's explicit instruction that the two stages' sets are
+# near-inverses of each other (resolves OPUS-R20-003, missing-test item
+# 140): app/, scripts/, .claude/commands/, gradle/, config/ are *excluded*
+# at plan stage (not approval-critical before implementation exists) and
+# *protected* at implementation stage (exactly the "source, test, build,
+# migration, workflow-command file" content D-Commit-Provenance names as
+# what technical_approval binds to).
+# ---------------------------------------------------------------------------
+
+DEFAULT_ARTIFACTS_PATH = Path("docs/ai-workflow/registry/workflow-v2-1-core-artifacts.json")
+
+
+def load_implementation_stage_classification(
+    repo_root: Path, artifacts_path: Path = DEFAULT_ARTIFACTS_PATH,
+) -> tuple[Mapping[str, str], Mapping[str, str], Mapping[str, str], Mapping[str, str]]:
+    """Load the implementation-stage protected/excluded path and prefix
+    sets from a tracked, machine-readable artifact-declarations file,
+    rather than a second hardcoded Python constant adapted from
+    `PLAN_STAGE_*` by inspection. This is the generalization both
+    `D-Registry`'s and `D-Fingerprint`'s future-work notes name as
+    `WF4a-i`'s own scope (`GPT-R9-011`, `OPUS-R20-003`): the classification
+    is derived from a validated, tracked declaration, not re-typed as a
+    Python literal every time it needs to change.
+
+    The declarations file lives under `docs/ai-workflow/registry/`, which
+    is already a `PLAN_STAGE_EXCLUDED_PREFIXES` entry ("any future
+    non-immutable registry artifact -- the immutable registry file itself
+    is separately protected by exact path, checked first"), so creating
+    or editing it never touches `review_content_id` and never stales the
+    plan approval.
+
+    Returns `(protected_paths, protected_prefixes, excluded_paths,
+    excluded_prefixes)`, each a path/prefix -> category-or-justification
+    mapping, in the same shape `classify_path_implementation_stage`
+    consumes. Every prefix key must end in `/` (validated, same rule as
+    `PLAN_STAGE_EXCLUDED_PREFIXES`)."""
+    full = repo_root / artifacts_path
+    data = json.loads(full.read_text())
+    protected_paths = MappingProxyType(dict(data.get("protected_paths", {})))
+    protected_prefixes = MappingProxyType(dict(data.get("protected_prefixes", {})))
+    excluded_paths = MappingProxyType(dict(data.get("excluded_paths", {})))
+    excluded_prefixes = MappingProxyType(dict(data.get("excluded_prefixes", {})))
+    _validate_exclusion_prefixes(protected_prefixes)
+    _validate_exclusion_prefixes(excluded_prefixes)
+    return protected_paths, protected_prefixes, excluded_paths, excluded_prefixes
+
+
+def classify_path_implementation_stage(
+    path: str,
+    protected_paths: Mapping[str, str],
+    protected_prefixes: Mapping[str, str],
+    excluded_paths: Mapping[str, str],
+    excluded_prefixes: Mapping[str, str],
+) -> str:
+    """Implementation-stage counterpart of `classify_path`, built as an
+    independent function rather than a shared code path -- the frozen
+    plan-stage `classify_path` (round 10's freeze) is never modified to
+    grow a "protected prefixes" concept it was never designed to need,
+    and this function is never used to derive the plan-stage sets or vice
+    versa (resolves `OPUS-R20-003`). "Protected" here means "the kind of
+    content `technical_approval` binds to" (source, test, build,
+    migration, workflow-command files), not "the reviewer read these
+    exact bytes" the way plan-stage protection means. Fails closed via
+    `UnclassifiedPathError` exactly like the plan-stage classifier."""
+    if path in protected_paths:
+        return "protected"
+    if any(path.startswith(prefix) for prefix in protected_prefixes):
+        return "protected"
+    if path in excluded_paths:
+        return "excluded"
+    if any(path.startswith(prefix) for prefix in excluded_prefixes):
+        return "excluded"
+    raise UnclassifiedPathError(path)
+
+
+def _implementation_stage_protected_changed_paths(
+    repo_root: Path,
+    base_full: str,
+    protected_paths: Mapping[str, str],
+    protected_prefixes: Mapping[str, str],
+    excluded_paths: Mapping[str, str],
+    excluded_prefixes: Mapping[str, str],
+) -> list[str]:
+    """Every changed/untracked path must classify (fail-closed, mirroring
+    `assert_all_changed_paths_classified_worktree`); the subset that
+    classifies `protected` is what the implementation-stage manifest
+    snapshots. Unlike the plan-stage manifest builders, an absent
+    protected path is a real, representable deletion here, not an error
+    (`AbsentProtectedPathError` is a plan-stage-only rule, per
+    `OPUS-R14-006`'s own scoping note) -- so this function does not raise
+    on absence, only on a path neither set names at all."""
+    changed = sorted(_changed_tracked_paths(repo_root, base_full) | _untracked_paths(repo_root))
+    protected = []
+    for path in changed:
+        classification = classify_path_implementation_stage(
+            path, protected_paths, protected_prefixes, excluded_paths, excluded_prefixes
+        )
+        if classification == "protected":
+            protected.append(path)
+    return protected
+
+
+def compute_review_content_manifest_implementation_stage_worktree(
+    repo_root: Path,
+    base_full: str,
+    protected_paths: Mapping[str, str],
+    protected_prefixes: Mapping[str, str],
+    excluded_paths: Mapping[str, str],
+    excluded_prefixes: Mapping[str, str],
+) -> list[dict]:
+    """Snapshots every changed/untracked path classifying as
+    implementation-stage `protected`, from the working tree. A deletion
+    (path no longer present) is represented as a real tombstone entry
+    (`{"exists": False, ...}`, via `_snapshot_worktree`, already
+    stage-agnostic), never raised as an error -- the opposite rule from
+    the plan-stage manifest builders (`OPUS-R14-006` scoped
+    `AbsentProtectedPathError` to plan stage only, precisely because a
+    deletion is a legitimate implementation-stage change)."""
+    protected = _implementation_stage_protected_changed_paths(
+        repo_root, base_full, protected_paths, protected_prefixes, excluded_paths, excluded_prefixes
+    )
+    return [{"path": path, **_snapshot_worktree(repo_root, path)} for path in protected]
+
+
+def compute_review_content_manifest_implementation_stage_commit(
+    repo_root: Path,
+    base_full: str,
+    commit: str,
+    protected_paths: Mapping[str, str],
+    protected_prefixes: Mapping[str, str],
+    excluded_paths: Mapping[str, str],
+    excluded_prefixes: Mapping[str, str],
+) -> list[dict]:
+    """Commit-source counterpart, scoped to `base_full..commit` rather
+    than base..worktree, mirroring the plan-stage worktree/commit pair."""
+    changed = sorted(_changed_tracked_paths_between(repo_root, base_full, commit))
+    protected = []
+    for path in changed:
+        classification = classify_path_implementation_stage(
+            path, protected_paths, protected_prefixes, excluded_paths, excluded_prefixes
+        )
+        if classification == "protected":
+            protected.append(path)
+    return [{"path": path, **_snapshot_commit(repo_root, commit, path)} for path in protected]
+
+
+def compute_review_content_id_implementation_stage(
+    repo_root: Path,
+    base: str,
+    work_item_type: str,
+    work_item_id: str,
+    protected_paths: Mapping[str, str],
+    protected_prefixes: Mapping[str, str],
+    excluded_paths: Mapping[str, str],
+    excluded_prefixes: Mapping[str, str],
+) -> tuple[str, dict]:
+    """The implementation-stage counterpart of
+    `compute_review_content_id_plan_stage`: hashes the current working
+    tree's protected (source/test/build/migration/workflow-command)
+    content, scoped to what changed since `base`, rather than a fixed
+    small set of design documents. `reviewed_implementation_head` is
+    always `None` in this projection, exactly like the plan-stage
+    function's own projection -- it is never derived from live `HEAD` and
+    hashed here, deliberately: `HEAD == reviewed_implementation_head` is a
+    separate, exact-equality freshness gate `/approve-review implementation`
+    checks against the field `WORKFLOW_STATE.json` stores
+    (D-Approval-Commits, whose sole writer is the bundle generator, a
+    later concern), not part of *this* content identity. Folding live HEAD
+    into the hash here would make `review_content_id` change on every new
+    commit regardless of content -- exactly the concurrent-excluded-write
+    durability property `TestWidenedConcurrentWriteClosure` proves at the
+    plan stage would break at the implementation stage too. No
+    identity-bearing scalar defaults, matching the plan-stage function's
+    own discipline (`OPUS-R8-010`)."""
+    validate_work_item_id(work_item_id)
+    validate_work_item_type(work_item_type)
+    base_full = resolve_base(repo_root, base)
+    manifest = compute_review_content_manifest_implementation_stage_worktree(
+        repo_root, base_full, protected_paths, protected_prefixes, excluded_paths, excluded_prefixes
+    )
+    projection = {
+        "stage": "implementation",
+        "work_item_type": work_item_type,
+        "work_item_id": work_item_id,
+        "base_commit": base_full,
+        "reviewed_implementation_head": None,
+        "review_content_manifest": manifest,
+        "protected_paths": sorted(protected_paths),
+        "protected_prefixes": sorted(protected_prefixes),
+        "excluded_paths": sorted(excluded_paths),
+        "excluded_prefixes": sorted(excluded_prefixes),
+    }
+    digest = hashlib.sha256(_canonical_json(projection)).hexdigest()
+    return digest, projection
+
+
+def compute_review_content_id_implementation_stage_at_commit(
+    repo_root: Path,
+    base: str,
+    commit: str,
+    work_item_type: str,
+    work_item_id: str,
+    protected_paths: Mapping[str, str],
+    protected_prefixes: Mapping[str, str],
+    excluded_paths: Mapping[str, str],
+    excluded_prefixes: Mapping[str, str],
+) -> tuple[str, dict]:
+    """Commit-source counterpart, used for post-technical-approval parity
+    verification, mirroring `compute_review_content_id_plan_stage_at_commit`.
+    Scoped to `base..commit` rather than base..worktree; `commit` selects
+    *which snapshot* to hash, but -- exactly like the worktree-source
+    function above -- is not itself folded into the hashed projection, so
+    two different commits with byte-identical protected content still
+    produce the same `review_content_id` (the property a post-approval
+    parity check actually needs)."""
+    validate_work_item_id(work_item_id)
+    validate_work_item_type(work_item_type)
+    base_full = resolve_base(repo_root, base)
+    commit_full = resolve_base(repo_root, commit)
+    manifest = compute_review_content_manifest_implementation_stage_commit(
+        repo_root, base_full, commit_full, protected_paths, protected_prefixes, excluded_paths, excluded_prefixes
+    )
+    projection = {
+        "stage": "implementation",
+        "work_item_type": work_item_type,
+        "work_item_id": work_item_id,
+        "base_commit": base_full,
+        "reviewed_implementation_head": None,
+        "review_content_manifest": manifest,
+        "protected_paths": sorted(protected_paths),
+        "protected_prefixes": sorted(protected_prefixes),
+        "excluded_paths": sorted(excluded_paths),
+        "excluded_prefixes": sorted(excluded_prefixes),
+    }
+    digest = hashlib.sha256(_canonical_json(projection)).hexdigest()
+    return digest, projection
+
+
+# ---------------------------------------------------------------------------
 # bundle_id — resolves PROTO-R7-004/006/007, OPUS-R8-001/002/004/013/017
 # ---------------------------------------------------------------------------
 
@@ -906,7 +1189,11 @@ def _reject_foreign_bundle_id_field(rel: str, content: bytes) -> None:
         raise ForeignBundleIdFieldError(rel, matches)
 
 
-def compute_bundle_id(bundle_dir: Path) -> tuple[str, dict]:
+def compute_bundle_id(
+    bundle_dir: Path,
+    *,
+    manifest_content_override: bytes | None = None,
+) -> tuple[str, dict]:
     """Hash every file under bundle_dir, keyed by POSIX-style relative path
     (OPUS-R8-017), each entry carrying mode and content hash (PROTO-R7-007).
     Only `MANIFEST.md` may report the bundle's own identity; that one field
@@ -921,7 +1208,18 @@ def compute_bundle_id(bundle_dir: Path) -> tuple[str, dict]:
     stat bits, not effective-access `os.access()` (GPT-R9-009). A bundle
     missing a required file (currently `MANIFEST.md`) fails validation
     rather than returning an identifier for an incomplete bundle
-    (OPUS-R8-001)."""
+    (OPUS-R8-001).
+
+    `manifest_content_override`, if given, substitutes for `MANIFEST.md`'s
+    on-disk content (whether or not that file exists yet) instead of
+    reading it from `bundle_dir` -- lets a caller compute what `bundle_id`
+    would be for a manifest it has not written anywhere, so the actual
+    write can be deferred until every check has passed (resolves
+    `OPUS-R20-001`, missing-test item 138: without this, the generator had
+    to write a placeholder to the real `MANIFEST.md` path before it could
+    even compute `bundle_id`, so a protected-path edit landing in that
+    window left the real file on disk stating an identifier the function
+    itself was about to declare wrong)."""
     entries: dict[str, dict] = {}
     for p in sorted(bundle_dir.rglob("*")):
         rel = p.relative_to(bundle_dir).as_posix()
@@ -932,7 +1230,10 @@ def compute_bundle_id(bundle_dir: Path) -> tuple[str, dict]:
         if not p.is_file():
             raise UnsupportedPathTypeError(rel)
         mode = "100755" if _owner_executable(p.stat().st_mode) else "100644"
-        content = p.read_bytes()
+        if rel == MANIFEST_FILENAME and manifest_content_override is not None:
+            content = manifest_content_override
+        else:
+            content = p.read_bytes()
         if rel == "CHANGED_FILES.txt":
             content = _normalize_changed_files_header(content)
         if rel == MANIFEST_FILENAME:
@@ -940,6 +1241,12 @@ def compute_bundle_id(bundle_dir: Path) -> tuple[str, dict]:
         else:
             _reject_foreign_bundle_id_field(rel, content)
         entries[rel] = {"mode": mode, "sha256": hashlib.sha256(content).hexdigest()}
+    if manifest_content_override is not None and MANIFEST_FILENAME not in entries:
+        # MANIFEST.md doesn't exist on disk yet (first-ever generation for
+        # this bundle directory) -- represent it from the override alone,
+        # as a fresh, non-executable text file.
+        stripped = _strip_manifest_self_reference(manifest_content_override)
+        entries[MANIFEST_FILENAME] = {"mode": "100644", "sha256": hashlib.sha256(stripped).hexdigest()}
     missing_required = sorted(REQUIRED_BUNDLE_FILES - entries.keys())
     if missing_required:
         raise MissingRequiredBundleFileError(missing_required)
@@ -1051,7 +1358,20 @@ def write_manifest_with_verified_identifiers(
     already states the same `review_content_id` **before any write
     happens** (`OPUS-R18-005`) — checked first, not last, so a stale
     `REVIEW_REQUEST.md` fails closed without leaving `MANIFEST.md`
-    partially rewritten. Returns `(review_content_id, bundle_id)`."""
+    partially rewritten.
+
+    **Write sequence is atomic across the idempotence check itself**
+    (resolves `OPUS-R20-001`, missing-test item 138): every identifier
+    below is computed and recomputed purely in memory, via
+    `compute_bundle_id`'s `manifest_content_override` — nothing is
+    written to `manifest_path` at all until both recompute-and-assert
+    steps have already passed. A protected-path edit landing anywhere in
+    that window still raises exactly as before, but now leaves the real
+    `MANIFEST.md` completely untouched rather than holding a placeholder
+    or a since-falsified value. The final write itself goes through a
+    temp file in the same directory and `os.replace()`, so even the write
+    step cannot leave a partially-written file behind. Returns
+    `(review_content_id, bundle_id)`."""
     manifest_path = bundle_dir / MANIFEST_FILENAME
 
     digest, _projection = compute_review_content_id_plan_stage(
@@ -1061,22 +1381,23 @@ def write_manifest_with_verified_identifiers(
     )
     assert_review_request_states_review_content_id(bundle_dir, digest)
 
-    manifest_path.write_text(
-        render_manifest_md(
-            review_content_id=digest, protected=protected,
-            excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,
-        )
-    )
-    bundle_id, _entries = compute_bundle_id(bundle_dir)
-    manifest_path.write_text(
-        render_manifest_md(
-            review_content_id=digest, protected=protected,
-            excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,
-            bundle_id=bundle_id,
-        )
+    placeholder_content = render_manifest_md(
+        review_content_id=digest, protected=protected,
+        excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,
+    ).encode()
+    bundle_id, _entries = compute_bundle_id(
+        bundle_dir, manifest_content_override=placeholder_content
     )
 
-    recomputed_bundle_id, _ = compute_bundle_id(bundle_dir)
+    final_content = render_manifest_md(
+        review_content_id=digest, protected=protected,
+        excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,
+        bundle_id=bundle_id,
+    )
+
+    recomputed_bundle_id, _ = compute_bundle_id(
+        bundle_dir, manifest_content_override=final_content.encode()
+    )
     if recomputed_bundle_id != bundle_id:
         raise BundleIdNotIdempotentError(bundle_id, recomputed_bundle_id)
 
@@ -1087,6 +1408,10 @@ def write_manifest_with_verified_identifiers(
     )
     if recomputed_digest != digest:
         raise ReviewContentIdNotIdempotentError(digest, recomputed_digest)
+
+    tmp_path = bundle_dir / f".{MANIFEST_FILENAME}.tmp-{os.getpid()}"
+    tmp_path.write_text(final_content)
+    os.replace(tmp_path, manifest_path)
 
     return digest, bundle_id
 

@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "work_item_id": "workflow-v2-1-core",
+  "_comment": "Implementation-stage classification declarations, consumed by scripts/workflow_fingerprint.py's load_implementation_stage_classification() (WF4a-i). Non-immutable registry metadata -- lives under docs/ai-workflow/registry/, already a PLAN_STAGE_EXCLUDED_PREFIXES entry, so editing this file never changes review_content_id or stales the plan approval. 'protected' here means the content technical_approval binds to (source, test, build, migration, workflow-command files, per D-Commit-Provenance); 'excluded' means plan-stage-governed design content or runtime-mutable state that is never itself an implementation deliverable. Any path named in neither set fails closed (UnclassifiedPathError), same discipline as the plan-stage classifier.",
+  "protected_prefixes": {
+    ".claude/commands/":
+      "workflow-command files this milestone creates or modifies -- exactly the 'workflow-command file' category D-Commit-Provenance names as implementation-stage-critical",
+    "scripts/":
+      "this milestone's own tooling scripts (the fingerprint/state modules and their tests) -- same content category as .claude/commands/ above",
+    "app/":
+      "product source and test code -- protected here (unlike at the plan stage, where it is not yet approval-critical) because it is exactly the content a functional-remediation checkpoint (D-Functional-Remediation) may touch once Milestone 8 is adopted mid-implementation",
+    "gradle/":
+      "product build configuration a concurrent product checkpoint may touch",
+    "config/":
+      "product lint/build tooling configuration"
+  },
+  "protected_paths": {
+    ".github/workflows/ci.yml":
+      "CI wiring is exactly the kind of build-tooling change technical_approval must bind to, even though the design decision it implements is separately protected at the plan stage"
+  },
+  "excluded_prefixes": {
+    "docs/ai-workflow/registry/":
+      "plan-stage-governed registry/artifact-declaration files (including this file itself) -- not an implementation deliverable in their own right",
+    "docs/ai-workflow/requirements/":
+      "plan-stage-governed requirements mapping/ledger files, same reasoning as docs/ai-workflow/registry/ above",
+    "docs/ai-workflow/archive/":
+      "this work item's own completed-content archival, same exclusion as the plan stage",
+    "docs/milestones/":
+      "product milestone plan/execution artifacts, out of scope for this process work item",
+    "docs/adr/":
+      "product architecture-decision records, a concurrent product work item's own content",
+    "docs/agent-context/":
+      "stale product agent-context docs, out of scope for this process work item",
+    ".github/":
+      "operational GitHub configuration outside this milestone's own ci.yml wiring, carved out above by exact path"
+  },
+  "excluded_paths": {
+    ".gitignore":
+      "repository housekeeping, not implementation content",
+    "CLAUDE.md":
+      "process-command depointer edits implement the design, they are not implementation deliverables themselves",
+    "AGENTS.md": "product-repo documentation, out of scope for this process work item",
+    "README.md": "product-repo documentation, out of scope for this process work item",
+    "docs/PROJECT_BRIEF.md": "product-repo documentation, out of scope for this process work item",
+    "docs/DOMAIN_GLOSSARY.md": "product-repo documentation, out of scope for this process work item",
+    "docs/UX_FLOWS.md": "product-repo documentation, out of scope for this process work item",
+    "docs/ACTIVE_MILESTONE.md":
+      "product-milestone narrative, out of scope for this process work item -- may be written by a concurrent product work item while this one is mid-implementation",
+    "docs/ROADMAP.md":
+      "product milestone ordering, same reasoning as docs/ACTIVE_MILESTONE.md above",
+    "docs/ai-workflow/WORKFLOW_STATE.json":
+      "runtime-mutable per-work-item state -- excluded so ordinary phase/checkpoint writes never stale technical_approval",
+    "docs/ai-workflow/WORKFLOW_CONFIG.json":
+      "runtime-mutable repository-level config, same reasoning as WORKFLOW_STATE.json above",
+    "docs/ai-workflow/MILESTONE_WORKFLOW.md":
+      "plan-stage-governed workflow documentation, not an implementation deliverable",
+    "docs/ai-workflow/REVIEW_PROTOCOL.md":
+      "plan-stage-governed workflow documentation, not an implementation deliverable",
+    "docs/ai-workflow/PLAN_REVIEW_WORKFLOW.md":
+      "plan-stage-governed workflow documentation, not an implementation deliverable",
+    "docs/ai-workflow/WORKFLOW_V2_PLAN.md":
+      "plan-stage design content, already governed by the plan approval -- not an implementation deliverable",
+    "docs/ai-workflow/WORKFLOW_V2_AUDIT.md":
+      "plan-stage design content, already governed by the plan approval -- not an implementation deliverable",
+    "docs/TECHNICAL_DECISIONS.md":
+      "plan-stage design content, already governed by the plan approval -- not an implementation deliverable"
+  }
+}

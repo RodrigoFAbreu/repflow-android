@@ -21,6 +21,13 @@ below, each tagged with its item/finding ID in the test name or
 docstring. Round 9's findings (`GPT-R9-001`, `-009`, `-010`, `-014`;
 missing-test items 1-3, 22, 23, 25) are implemented too.
 
+`WF4a-i`: missing-test items 138 (`OPUS-R20-001`, atomic manifest write),
+139 (`OPUS-R20-002`, root build files pinned unclassified), and 140
+(`OPUS-R20-003`, plan-stage/implementation-stage opposite classification)
+are implemented, plus coverage for the new implementation-stage
+classification/manifest/identity functions
+(`TestImplementationStageClassification`).
+
 Stdlib-only. Run: python3 scripts/workflow_fingerprint_test.py
 """
 
@@ -1510,6 +1517,252 @@ class TestReviewRequestReviewContentIdAgreement(unittest.TestCase):
             (bundle_dir / "REVIEW_REQUEST.md").write_text("stage: plan\n")
             with self.assertRaises(wf.MissingReviewContentIdStatementError):
                 wf.assert_review_request_states_review_content_id(bundle_dir, digest)
+
+
+class TestAtomicManifestWrite(unittest.TestCase):
+    """OPUS-R20-001: the write sequence itself must be atomic across the
+    idempotence check, not only across the pre-write REVIEW_REQUEST.md
+    check -- missing-test item 138."""
+
+    def test_138_protected_path_edit_mid_write_leaves_manifest_untouched(self):
+        """A protected-path edit landing between the first
+        review_content_id computation and the final recompute-and-assert
+        step must still raise (test_126 already covers that), but now
+        MANIFEST.md itself must be byte-identical to its pre-invocation
+        state afterward -- proof that nothing was written before every
+        check passed, not merely that the written value was flagged
+        stale."""
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            repo.commit_plan_docs_as_base()
+            bundle_dir = Path(tempfile.mkdtemp(prefix="wf-fingerprint-bundle-"))
+            self.addCleanup(shutil.rmtree, bundle_dir, ignore_errors=True)
+            _write_review_request_with_content_id(repo, bundle_dir)
+
+            # Establish a real pre-existing MANIFEST.md (a prior, valid
+            # generation) so there is real "pre-invocation state" to prove
+            # untouched, not just an absent file.
+            wf.write_manifest_with_verified_identifiers(
+                repo.root, bundle_dir, repo.base,
+                work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=7,
+            )
+            manifest_path = bundle_dir / "MANIFEST.md"
+            before = manifest_path.read_bytes()
+
+            real_compute = wf.compute_review_content_id_plan_stage
+            call_count = {"n": 0}
+
+            def fake_compute(*args, **kwargs):
+                call_count["n"] += 1
+                result = real_compute(*args, **kwargs)
+                if call_count["n"] == 1:
+                    (repo.root / "docs" / "ai-workflow" / "WORKFLOW_V2_PLAN.md").write_text(
+                        "plan v3 -- edited mid-flight\n"
+                    )
+                return result
+
+            with mock.patch.object(wf, "compute_review_content_id_plan_stage", side_effect=fake_compute):
+                with self.assertRaises(wf.ReviewContentIdNotIdempotentError):
+                    wf.write_manifest_with_verified_identifiers(
+                        repo.root, bundle_dir, repo.base,
+                        work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=7,
+                    )
+
+            after = manifest_path.read_bytes()
+            self.assertEqual(before, after, "MANIFEST.md must be byte-identical to its pre-invocation state")
+            # No stray temp file left behind either.
+            leftovers = [p.name for p in bundle_dir.iterdir() if p.name != "MANIFEST.md" and p.name != "REVIEW_REQUEST.md"]
+            self.assertEqual(leftovers, [], f"unexpected files left in bundle_dir: {leftovers}")
+
+    def test_manifest_content_override_lets_bundle_id_be_computed_before_any_write(self):
+        """compute_bundle_id's manifest_content_override must reproduce
+        exactly the bundle_id an on-disk MANIFEST.md with the same bytes
+        would have produced -- the mechanism the atomic write relies on."""
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle_dir = Path(tmp)
+            content = "# Bundle Manifest\n\nreview_content_id: " + ("a" * 64) + "\n"
+            (bundle_dir / "OTHER.md").write_text("some other bundle file\n")
+
+            bid_via_override, _ = wf.compute_bundle_id(bundle_dir, manifest_content_override=content.encode())
+
+            (bundle_dir / "MANIFEST.md").write_text(content)
+            bid_via_disk, _ = wf.compute_bundle_id(bundle_dir)
+
+            self.assertEqual(bid_via_override, bid_via_disk)
+
+
+class TestRootBuildFilesFailClosed(unittest.TestCase):
+    """OPUS-R20-002: root-level build files deliberately stay unclassified
+    at the plan stage and fail closed -- missing-test item 139."""
+
+    def test_139_root_build_files_raise_unclassified_at_plan_stage(self):
+        for path in (
+            "build.gradle.kts", "settings.gradle.kts", "gradlew",
+            "gradlew.bat", ".editorconfig", "Makefile",
+        ):
+            with self.subTest(path=path):
+                with self.assertRaises(wf.UnclassifiedPathError):
+                    wf.classify_path(
+                        path, wf.PLAN_STAGE_PROTECTED,
+                        wf.PLAN_STAGE_EXCLUDED_PATHS, wf.PLAN_STAGE_EXCLUDED_PREFIXES,
+                    )
+
+
+class TestImplementationStageClassification(unittest.TestCase):
+    """OPUS-R20-003, D-Fingerprint's WF4a-i mandate: the implementation-
+    stage classification projection is a new, independent mechanism, and
+    must classify a representative source file oppositely from the
+    plan-stage projection -- missing-test item 140."""
+
+    def _write_artifacts_declarations(self, repo, **overrides):
+        data = {
+            "schema_version": 1,
+            "protected_prefixes": {"app/": "source"},
+            "protected_paths": {},
+            "excluded_prefixes": {},
+            "excluded_paths": {},
+        }
+        data.update(overrides)
+        artifacts_dir = repo.root / "docs" / "ai-workflow" / "registry"
+        artifacts_dir.mkdir(parents=True, exist_ok=True)
+        (artifacts_dir / "workflow-v2-1-core-artifacts.json").write_text(json.dumps(data))
+        # Committed immediately, mirroring the real repository's own
+        # tracked artifacts file -- otherwise this write would itself be
+        # an untracked path the classifier has to see, incidental to what
+        # these tests check.
+        _run(["git", "add", "-A"], cwd=repo.root)
+        _run(["git", "commit", "-q", "-m", "declare implementation-stage artifacts"], cwd=repo.root)
+
+    def test_140_plan_and_implementation_stage_classify_same_path_oppositely(self):
+        path = "app/src/main/kotlin/com/repflow/Foo.kt"
+        self.assertEqual(
+            wf.classify_path(
+                path, wf.PLAN_STAGE_PROTECTED,
+                wf.PLAN_STAGE_EXCLUDED_PATHS, wf.PLAN_STAGE_EXCLUDED_PREFIXES,
+            ),
+            "excluded",
+            "app/ is a PLAN_STAGE_EXCLUDED_PREFIXES entry -- not approval-critical before implementation exists",
+        )
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            self._write_artifacts_declarations(repo)
+            protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
+                wf.load_implementation_stage_classification(
+                    repo.root, artifacts_path=Path("docs/ai-workflow/registry/workflow-v2-1-core-artifacts.json")
+                )
+            )
+            self.assertEqual(
+                wf.classify_path_implementation_stage(
+                    path, protected_paths, protected_prefixes, excluded_paths, excluded_prefixes
+                ),
+                "protected",
+                "app/ must be protected at the implementation stage -- exactly the source content "
+                "technical_approval binds to",
+            )
+
+    def test_unclassified_path_fails_closed_at_implementation_stage_too(self):
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            self._write_artifacts_declarations(repo)
+            protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
+                wf.load_implementation_stage_classification(
+                    repo.root, artifacts_path=Path("docs/ai-workflow/registry/workflow-v2-1-core-artifacts.json")
+                )
+            )
+            with self.assertRaises(wf.UnclassifiedPathError):
+                wf.classify_path_implementation_stage(
+                    "yet_another_new_thing/mystery.bin",
+                    protected_paths, protected_prefixes, excluded_paths, excluded_prefixes,
+                )
+
+    def test_implementation_stage_manifest_tombstones_a_deletion_instead_of_raising(self):
+        """Unlike the plan-stage manifest builders (AbsentProtectedPathError,
+        OPUS-R14-001/-006), an implementation-stage protected path that no
+        longer exists must be represented as a tombstone entry -- a
+        deletion is a real, representable change at this stage."""
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            self._write_artifacts_declarations(repo, protected_prefixes={"app/": "source"})
+            (repo.root / "app").mkdir()
+            (repo.root / "app" / "Foo.kt").write_text("class Foo\n")
+            _run(["git", "add", "-A"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "add app/Foo.kt"], cwd=repo.root)
+            base = repo.head()
+
+            (repo.root / "app" / "Foo.kt").unlink()
+            _run(["git", "add", "-A"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "delete app/Foo.kt"], cwd=repo.root)
+
+            protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
+                wf.load_implementation_stage_classification(
+                    repo.root, artifacts_path=Path("docs/ai-workflow/registry/workflow-v2-1-core-artifacts.json")
+                )
+            )
+            manifest = wf.compute_review_content_manifest_implementation_stage_commit(
+                repo.root, base, repo.head(),
+                protected_paths, protected_prefixes, excluded_paths, excluded_prefixes,
+            )
+            self.assertEqual(manifest, [{"path": "app/Foo.kt", "exists": False, "mode": None, "blob": None}])
+
+    def test_compute_review_content_id_implementation_stage_hashes_protected_changes(self):
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            repo.commit_plan_docs_as_base()
+            self._write_artifacts_declarations(repo)
+            registry_exclusion = {"docs/ai-workflow/registry/": "artifact-declarations file itself"}
+            digest_before, projection_before = wf.compute_review_content_id_implementation_stage(
+                repo.root, repo.base, work_item_type="process", work_item_id="workflow-v2-1-core",
+                protected_paths={}, protected_prefixes={"app/": "source"},
+                excluded_paths={}, excluded_prefixes=registry_exclusion,
+            )
+            self.assertEqual(projection_before["review_content_manifest"], [])
+
+            (repo.root / "app").mkdir()
+            (repo.root / "app" / "Foo.kt").write_text("class Foo\n")
+            _run(["git", "add", "-A"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "add app/Foo.kt"], cwd=repo.root)
+
+            digest_after, projection_after = wf.compute_review_content_id_implementation_stage(
+                repo.root, repo.base, work_item_type="process", work_item_id="workflow-v2-1-core",
+                protected_paths={}, protected_prefixes={"app/": "source"},
+                excluded_paths={}, excluded_prefixes=registry_exclusion,
+            )
+            self.assertNotEqual(digest_before, digest_after)
+            self.assertEqual(
+                [e["path"] for e in projection_after["review_content_manifest"]], ["app/Foo.kt"]
+            )
+            self.assertEqual(projection_after["stage"], "implementation")
+            # reviewed_implementation_head is never derived from live HEAD
+            # and hashed here -- folding it in would make review_content_id
+            # change on every new commit regardless of content, which is
+            # exactly what test_excluded_concurrent_write_does_not_change_
+            # implementation_stage_id below proves must not happen.
+            self.assertIsNone(projection_after["reviewed_implementation_head"])
+
+    def test_excluded_concurrent_write_does_not_change_implementation_stage_id(self):
+        """Mirrors TestWidenedConcurrentWriteClosure at the plan stage: a
+        write to a path this work item's own artifacts declarations name
+        as excluded must not raise or change review_content_id."""
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            repo.commit_plan_docs_as_base()
+            self._write_artifacts_declarations(
+                repo,
+                protected_prefixes={},
+                excluded_paths={"docs/ai-workflow/WORKFLOW_STATE.json": "runtime-mutable state"},
+            )
+            kwargs = dict(
+                work_item_type="process", work_item_id="workflow-v2-1-core",
+                protected_paths={}, protected_prefixes={},
+                excluded_paths={"docs/ai-workflow/WORKFLOW_STATE.json": "runtime-mutable state"},
+                excluded_prefixes={"docs/ai-workflow/registry/": "artifact-declarations file itself"},
+            )
+            digest_before, _ = wf.compute_review_content_id_implementation_stage(repo.root, repo.base, **kwargs)
+            (repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json").write_text('{"phase": "IMPLEMENTING"}\n')
+            _run(["git", "add", "-A"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "state write"], cwd=repo.root)
+            digest_after, _ = wf.compute_review_content_id_implementation_stage(repo.root, repo.base, **kwargs)
+            self.assertEqual(digest_before, digest_after)
 
 
 if __name__ == "__main__":
