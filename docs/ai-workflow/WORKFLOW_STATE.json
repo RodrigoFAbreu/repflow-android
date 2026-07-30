@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "active_work_item_id": "workflow-v2-1-core",
+  "work_items": {
+    "workflow-v2-1-core": {
+      "work_item_type": "process",
+      "work_item_kind": "process",
+      "work_item_id": "workflow-v2-1-core",
+      "parent_work_item_id": null,
+      "plan_path": "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+      "registry_path": "docs/ai-workflow/registry/workflow-v2-1-core-registry.json",
+      "governing_workflow_version": "1",
+      "phase": "IMPLEMENTING",
+      "plan_revision": 15,
+      "implementation_revision": null,
+      "functional_review_round": null,
+      "base_commit": "162154d3e5e10eb65e109833acae4b4fb01fc5d6",
+      "reviewed_implementation_head": null,
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": "WF1a",
+      "checkpoints": {
+        "WF0": {
+          "status": "COMPLETE",
+          "start_commit": "162154d3e5e10eb65e109833acae4b4fb01fc5d6"
+        },
+        "WF1a": {
+          "status": "COMPLETE",
+          "start_commit": "8f76175348d0f63e61f6c1a9997b5004a27430fe"
+        }
+      },
+      "current_bundle_id": null,
+      "plan_approval": {
+        "status": "CURRENT",
+        "basis": "USER_OVERRIDE",
+        "reviewed_bundle_id": "c0c3e17288e73cf71d79cb473c6850d52895f7afc51088758678fd13cd086954",
+        "approved_review_content_id": "e85533a91d40cd43d6066f0435e90d7b3a94e64e50d58aceec3e4363e60dd030",
+        "review_content_manifest": [
+          {
+            "path": "docs/TECHNICAL_DECISIONS.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "79e2156aafb3100fd4afb8f2bac4b70531294efa"
+          },
+          {
+            "path": "docs/ai-workflow/WORKFLOW_V2_AUDIT.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5a0eb51ab7870b9505f6831cff381c25aa2bde2b"
+          },
+          {
+            "path": "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "17566291e554872d90abdcbf07baad353a149db1"
+          },
+          {
+            "path": "docs/ai-workflow/registry/workflow-v2-1-core-registry.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "da2a1cb4b15ce043bd69a63bb661293fd64dc2ab"
+          },
+          {
+            "path": "docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "81fbf9c05c13b37df7d23fe54e47daf43ad17791"
+          }
+        ],
+        "reviewed_content_commit": null,
+        "user_confirmation": "Reconstructed during WF1a from the WF0 bootstrap commit (8f76175348d0f63e61f6c1a9997b5004a27430fe) and its approving .ai-review/feedback/REVIEW_FEEDBACK.md (Status: APPROVE) for work item workflow-v2-1-core's plan-approval stage -- the original verbatim conversational go-ahead text spans many external plan-review rounds under v1's apply-plan-review flow and is not preserved in Git, so it is not available to this reconstruction.",
+        "recorded_at": "2026-07-30T18:33:29+01:00"
+      },
+      "technical_approval": null,
+      "plan_review_stages": null,
+      "functional_acceptance_status": null,
+      "blocking_decisions": [],
+      "state_revision": 1,
+      "last_transition": "2026-07-30T19:25:02+01:00"
+    }
+  }
+}
