@@ -1,0 +1,292 @@
+#!/usr/bin/env python3
+"""Explicit integration/demonstration test against this repository's real
+state — split out from the hermetic unit suite per `PROTO-R7-009`, which
+found the previous single-file suite's own module docstring claiming the
+suite "never" runs against this repository's own working tree, while one
+of its test classes did exactly that.
+
+This file intentionally depends on the real repository and a specific
+historical base commit (`162154d`, this milestone's actual base). It is
+not part of the hermetic unit suite (`workflow_fingerprint_test.py`) and
+should be run separately / treated as an opt-in integration check, not
+wired into a CI job that expects to run against arbitrary checkouts.
+
+Satisfies round-6's required acceptance criterion 4: a demonstration run
+against this repository's actual state showing a non-empty plan-stage
+manifest containing the real blob SHAs of `WORKFLOW_V2_PLAN.md`,
+`WORKFLOW_V2_AUDIT.md`, `docs/TECHNICAL_DECISIONS.md`, and (since
+`GPT-R9-003`) the registry and requirements-mapping JSON files.
+
+Also satisfies OPUS-R8-001's core acceptance criterion as an integration
+assertion (missing-test item 24): the real submitted bundle's own reported
+`bundle_id` (written into `MANIFEST.md`) recomputes, unchanged, from the
+bundle directory as actually submitted.
+
+Run: python3 scripts/workflow_fingerprint_demo_test.py
+"""
+
+from __future__ import annotations
+
+import re
+import subprocess
+import unittest
+from pathlib import Path
+
+import workflow_fingerprint as wf
+
+BASE_COMMIT = "162154d3e5e10eb65e109833acae4b4fb01fc5d6"
+
+
+def _repo_root() -> Path:
+    return Path(
+        subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"], check=True,
+            capture_output=True, text=True,
+        ).stdout.strip()
+    )
+
+
+class TestAgainstRealRepository(unittest.TestCase):
+    def test_demonstration_against_real_repo(self):
+        repo_root = _repo_root()
+        # plan_revision is sourced from the registry JSON, not a literal
+        # constant this file maintains by hand (OPUS-R18-003) -- the same
+        # drift `test_plan_title_revision_matches_declared_plan_revision`
+        # guards against is now structurally impossible here: there is no
+        # second copy of the number left to drift.
+        plan_revision = wf.load_plan_revision(repo_root)
+        digest, projection = wf.compute_review_content_id_plan_stage(
+            repo_root, BASE_COMMIT,
+            work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=plan_revision,
+        )
+        manifest = projection["review_content_manifest"]
+        # 5: the concise two-stage plan-review guide's path
+        # (docs/ai-workflow/PLAN_REVIEW_WORKFLOW.md) moved from
+        # PLAN_STAGE_PROTECTED to PLAN_STAGE_EXCLUDED_PATHS this round
+        # (OPUS-R14-001/-009) -- a plan-stage manifest no longer has room
+        # for a protected-but-unwritten tombstone entry at all; this call
+        # would now raise AbsentProtectedPathError instead of returning one
+        # (missing-test item 100, real-repo half: every entry below is a
+        # real, present file this checkout's own manifest generation would
+        # otherwise fail closed on).
+        self.assertEqual(len(manifest), 5)
+        paths = {e["path"] for e in manifest}
+        self.assertEqual(
+            paths,
+            {
+                "docs/ai-workflow/WORKFLOW_V2_AUDIT.md",
+                "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+                "docs/TECHNICAL_DECISIONS.md",
+                "docs/ai-workflow/registry/workflow-v2-1-core-registry.json",
+                "docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json",
+            },
+        )
+        for entry in manifest:
+            self.assertTrue(entry["exists"])
+            real_sha = wf._hash_object(repo_root, entry["path"])
+            self.assertEqual(entry["blob"], real_sha)
+        print(f"\n[demonstration] base_commit (resolved): {projection['base_commit']}")
+        print(f"[demonstration] review_content_id = {digest}")
+        for entry in manifest:
+            print(f"[demonstration] {entry['path']}: {entry['blob']}")
+
+    def test_demonstration_bundle_id_against_current_bundle(self):
+        repo_root = _repo_root()
+        bundle_dir = repo_root / ".ai-review" / "current"
+        if not bundle_dir.is_dir():
+            self.skipTest("no .ai-review/current bundle present in this checkout")
+        bid, entries = wf.compute_bundle_id(bundle_dir)
+        recomputed_bid, _ = wf.compute_bundle_id(bundle_dir)
+        self.assertEqual(bid, recomputed_bid, "bundle_id must be idempotent on the real bundle too")
+        actual_file_count = sum(1 for p in bundle_dir.rglob("*") if p.is_file())
+        self.assertEqual(
+            len(entries), actual_file_count,
+            "the reported file count must equal the bundle's actual file count "
+            "(PROTO-R7-004: no computing against a stale snapshot)",
+        )
+        print(f"\n[demonstration] bundle_dir: {bundle_dir}")
+        print(f"[demonstration] bundle_id = {bid}")
+        print(f"[demonstration] file count = {len(entries)}")
+
+    def test_024_real_bundle_recomputes_to_its_own_reported_bundle_id(self):
+        """OPUS-R8-001's core acceptance criterion, as an integration
+        assertion: the `bundle_id` reported inside the real submitted
+        bundle's own `MANIFEST.md` must recompute unchanged from that same
+        bundle directory."""
+        repo_root = _repo_root()
+        bundle_dir = repo_root / ".ai-review" / "current"
+        manifest_path = bundle_dir / "MANIFEST.md"
+        if not manifest_path.is_file():
+            self.skipTest("no MANIFEST.md present in this checkout's bundle")
+        reported = None
+        for line in manifest_path.read_text().splitlines():
+            m = re.match(r"^bundle_id: ([0-9a-f]{64})$", line)
+            if m:
+                reported = m.group(1)
+                break
+        self.assertIsNotNone(reported, "MANIFEST.md must report bundle_id in the contract spelling")
+        recomputed, _ = wf.compute_bundle_id(bundle_dir)
+        self.assertEqual(
+            reported, recomputed,
+            "the bundle_id reported inside the submitted bundle must recompute "
+            "unchanged from that same bundle directory",
+        )
+        print(f"\n[demonstration] MANIFEST.md-reported bundle_id: {reported}")
+        print(f"[demonstration] recomputed bundle_id:            {recomputed}")
+
+    def test_125_real_bundle_review_content_id_recomputes_to_its_own_reported_value(self):
+        """Missing-test item 125 (OPUS-R18-001), the review_content_id
+        counterpart of test_024: the value the real submitted bundle's own
+        MANIFEST.md reports must recompute unchanged from the current
+        working tree and registry-declared plan_revision. This is exactly
+        the acceptance criterion round 18 found violated -- the round-17
+        bundle's manifest stated a review_content_id that no revision
+        number reproduced."""
+        repo_root = _repo_root()
+        bundle_dir = repo_root / ".ai-review" / "current"
+        manifest_path = bundle_dir / "MANIFEST.md"
+        if not manifest_path.is_file():
+            self.skipTest("no MANIFEST.md present in this checkout's bundle")
+        existing = wf.read_manifest_identifiers(manifest_path)
+        reported = existing.get("review_content_id")
+        self.assertIsNotNone(reported, "MANIFEST.md must report review_content_id in the contract spelling")
+        plan_revision = wf.load_plan_revision(repo_root)
+        recomputed, _ = wf.compute_review_content_id_plan_stage(
+            repo_root, BASE_COMMIT,
+            work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=plan_revision,
+        )
+        self.assertEqual(
+            reported, recomputed,
+            "the review_content_id reported inside the submitted bundle must recompute "
+            "unchanged from the current working tree and registry plan_revision",
+        )
+        print(f"\n[demonstration] MANIFEST.md-reported review_content_id: {reported}")
+        print(f"[demonstration] recomputed review_content_id:            {recomputed}")
+
+    def test_plan_title_revision_matches_declared_plan_revision(self):
+        """Missing-test item 109 (OPUS-R14-004): a concrete regression
+        guard against exactly this round's own defect, where the title
+        line said 'Revision 10' while every other section (and the
+        identity computation itself, via `plan_revision`) had already
+        moved on to 11. `load_plan_revision` (OPUS-R18-003) now performs
+        this exact check as part of normal generation; this test is kept
+        as an explicit, independent regression guard against the same
+        historical defect class, going straight to the title line rather
+        than through the function under test."""
+        repo_root = _repo_root()
+        plan_path = repo_root / "docs" / "ai-workflow" / "WORKFLOW_V2_PLAN.md"
+        title_line = plan_path.read_text().splitlines()[0]
+        m = re.search(r"\(Revision (\d+)\)", title_line)
+        self.assertIsNotNone(m, f"title line has no '(Revision N)' marker: {title_line!r}")
+        declared = int(m.group(1))
+        registry = wf.load_plan_revision(repo_root)
+        self.assertEqual(
+            declared, registry,
+            f"title declares Revision {declared}, but the registry JSON's "
+            f"plan_revision (the value used to reproduce review_content_id) "
+            f"is {registry}",
+        )
+
+    def test_every_protected_path_has_a_files_copy_in_the_bundle(self):
+        """Missing-test item 115 (OPUS-R14-009): a protected path approved
+        sight-unseen is exactly the defect this checks against -- every
+        entry in PLAN_STAGE_PROTECTED must have a real copy under the
+        generated bundle's files/ directory, not just a manifest entry."""
+        repo_root = _repo_root()
+        files_dir = repo_root / ".ai-review" / "current" / "files"
+        if not files_dir.is_dir():
+            self.skipTest("no .ai-review/current/files present in this checkout")
+        for path in sorted(wf.PLAN_STAGE_PROTECTED):
+            with self.subTest(path=path):
+                self.assertTrue(
+                    (files_dir / path).is_file(),
+                    f"protected path has no files/ copy in the generated bundle: {path}",
+                )
+
+    def test_archive_prefix_exclusion_is_timed_at_or_after_milestone_complete(self):
+        """Missing-test item 123 (OPUS-R16-002): a conformance check against
+        the exact defect this round retracted -- scheduling the
+        disposition-table archival (a write under docs/ai-workflow/archive/)
+        for "immediately after approval" would edit WORKFLOW_V2_PLAN.md, a
+        protected path, between an approval and the next commit, staling
+        that same approval with no "approved with corrections" transition
+        to survive it (the OPUS-R14-003 class). Rather than grep the plan's
+        own prose (which legitimately quotes the old, now-retracted timing
+        in its historical disposition tables and self-review notes, and
+        would false-positive on those accurate citations), this checks the
+        one place the *current, governing* timing actually lives: the
+        exclusion justification string itself."""
+        justification = wf.PLAN_STAGE_EXCLUDED_PREFIXES["docs/ai-workflow/archive/"]
+        self.assertIn(
+            "MILESTONE_COMPLETE", justification,
+            "the docs/ai-workflow/archive/ exclusion justification no longer "
+            "states the at-or-after-MILESTONE_COMPLETE timing",
+        )
+        self.assertNotIn(
+            "immediately after", justification,
+            "the docs/ai-workflow/archive/ exclusion justification has "
+            "regressed to the retracted immediately-after-approval timing "
+            "(OPUS-R16-002)",
+        )
+
+    def test_136_every_path_named_in_a_command_doc_classifies(self):
+        """Missing-test item 136 (OPUS-R18-004): an exhaustiveness scan
+        over every path any `.claude/commands/*.md` file names, checked
+        against classify_path. This is a best-effort superset scan, stated
+        explicitly rather than silently assumed exhaustive: it extracts
+        every backtick-quoted, repo-relative-looking path mentioned in a
+        command doc and that actually exists in this checkout, whether the
+        command reads or writes it -- over-inclusive of true write targets,
+        which is the safe direction for a regression guard, not a formal
+        per-command writes manifest. A path this scan finds and
+        classify_path rejects is a real gap the same shape as
+        OPUS-R18-004's own discovery process; a path outside this scan
+        that a command actually writes is not caught here (see
+        test_133/test_134/test_135 in the hermetic suite for the
+        specific, already-known concurrent-write paths, and the
+        `PRODUCT_SCOPE_JUSTIFICATION` closure that covers this scan's
+        real findings today)."""
+        repo_root = _repo_root()
+        commands_dir = repo_root / ".claude" / "commands"
+        if not commands_dir.is_dir():
+            self.skipTest("no .claude/commands/ present in this checkout")
+        path_re = re.compile(r"`([A-Za-z0-9_./-]+\.[A-Za-z0-9]+)`")
+        mentioned: set[str] = set()
+        for doc in sorted(commands_dir.glob("*.md")):
+            mentioned.update(path_re.findall(doc.read_text()))
+
+        def is_gitignored(rel_path: str) -> bool:
+            return subprocess.run(
+                ["git", "check-ignore", "-q", "--", rel_path], cwd=repo_root,
+            ).returncode == 0
+
+        # Only paths that exist, aren't themselves a `.claude/commands/*.md`
+        # file (protected/excluded by the `.claude/commands/` prefix as a
+        # directory, not as individual entries), and aren't gitignored --
+        # a gitignored path (e.g. `.ai-review/current/...`) never actually
+        # reaches classify_path in real usage, since both entry points
+        # (`git diff --name-only` and `git ls-files --others
+        # --exclude-standard`) are blind to it by construction.
+        real_paths = {
+            p for p in mentioned
+            if (repo_root / p).is_file()
+            and not p.startswith(".claude/commands/")
+            and not is_gitignored(p)
+        }
+        self.assertTrue(real_paths, "expected at least one real repo-relative path mentioned in .claude/commands/*.md")
+        for path in sorted(real_paths):
+            with self.subTest(path=path):
+                try:
+                    wf.classify_path(
+                        path, wf.PLAN_STAGE_PROTECTED, wf.PLAN_STAGE_EXCLUDED_PATHS,
+                        wf.PLAN_STAGE_EXCLUDED_PREFIXES,
+                    )
+                except wf.UnclassifiedPathError:
+                    self.fail(
+                        f"{path} is mentioned in a .claude/commands/*.md file but "
+                        f"classify_path does not recognize it as protected or excluded"
+                    )
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

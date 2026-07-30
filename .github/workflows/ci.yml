@@ -22,6 +22,11 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Set up Python (workflow fingerprint conformance suite)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Formatting (Spotless)
         run: ./gradlew spotlessCheck
 
@@ -39,3 +44,14 @@ jobs:
 
       - name: Compile instrumentation tests
         run: ./gradlew assembleDebugAndroidTest
+
+      - name: Workflow fingerprint conformance suite (hermetic only, stdlib-only, no install step)
+        working-directory: scripts
+        run: python3 workflow_fingerprint_test.py
+        # workflow_fingerprint_demo_test.py is intentionally NOT run here:
+        # it computes plan-stage classification from a fixed historical
+        # base commit, so once this milestone merges, any later unrelated
+        # product PR would fail this job purely because the diff from that
+        # fixed base now includes product paths this process plan never
+        # classified (GPT-R9-002). Run it locally/explicitly instead:
+        # `python3 scripts/workflow_fingerprint_demo_test.py`.

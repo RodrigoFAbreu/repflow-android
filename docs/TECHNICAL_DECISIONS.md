@@ -80,6 +80,29 @@ directly as the public backup format. Restore validates before replacing data.
 Must be accessed through an API. Never embed long-lived AWS credentials or
 connect directly to DynamoDB from the Android client.
 
+## Repository tooling scripts (workflow, not product)
+
+Repository-local workflow fingerprinting scripts (`scripts/workflow_fingerprint.py`,
+`scripts/workflow_fingerprint_test.py`, `scripts/workflow_fingerprint_demo_test.py`)
+use Python 3 standard library only — no third-party runtime dependency, no
+new package manager or lockfile. Distinct from the product's Kotlin/Gradle
+stack above; these scripts never ship in the app and are not touched by
+`spotlessCheck`/`detekt`. Chosen because it introduces no new dependency
+category (`AGENTS.md`'s stop-condition list), supports structured JSON and
+a stdlib test runner directly, and is easier to keep deterministic than
+shell parsing of Git's plumbing output. `scripts/validate_workflow_state.py`
+is planned future work (WF1a, per `WORKFLOW_V2_PLAN.md`'s checkpoint
+registry) and does not exist yet — not named here until it does
+(`OPUS-R8-011`: a decision entry must name only files that exist). CI runs
+the hermetic `workflow_fingerprint_test.py` suite on every PR
+(`.github/workflows/ci.yml`'s "Workflow fingerprint conformance suite"
+step); there is no unpinned dependency to install, since it is stdlib-only.
+`workflow_fingerprint_demo_test.py` is deliberately **not** run in CI — it
+computes plan-stage classification from a fixed historical base commit, so
+wiring it into generic CI would fail on any later, unrelated product PR
+once this milestone's own diff is no longer current (`GPT-R9-002`); it is
+a local/explicit real-repository demonstration, run on demand.
+
 ## Dependency policy
 
 Add libraries only when they solve a concrete requirement. Avoid Firebase,

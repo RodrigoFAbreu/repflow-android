@@ -1,0 +1,91 @@
+---
+description: One-time bootstrap driver for the workflow-v2-1-core work item. Implements exactly one checkpoint per invocation, then stops. See docs/ai-workflow/WORKFLOW_V2_PLAN.md's D-Bootstrap.
+---
+
+Bootstrap-only driver for the `workflow-v2-1-core` work item (Workflow
+v2.1 core — a process/tooling milestone, not a product one). This command
+is the **sole** driver for this one work item's checkpoints, from WF0
+through WF8b (`D-Bootstrap`, revised per `OPUS-R10-002`/`-003`). It never
+hands off to `/milestone-implement`, and `/milestone-implement` is never
+invoked for this work item at any point. It never reads
+`docs/ACTIVE_MILESTONE.md` or `docs/ROADMAP.md`; its target work item is
+hardcoded below, so it cannot accidentally resume Milestone 8 or any
+other work item. It is retired — deleted — only at this work item's own
+`MILESTONE_COMPLETE`.
+
+Authoritative plan: `docs/ai-workflow/WORKFLOW_V2_PLAN.md`.
+Registry: `docs/ai-workflow/registry/workflow-v2-1-core-registry.json`.
+Work item: `workflow-v2-1-core` (hardcoded, never an argument).
+`base_commit`: `162154d3e5e10eb65e109833acae4b4fb01fc5d6` — hardcoded here
+until `docs/ai-workflow/WORKFLOW_STATE.json` exists to read it from
+(after WF1a lands).
+
+1. **State-sync** — only once `docs/ai-workflow/WORKFLOW_STATE.json`
+   exists (dormant before WF1a; skip this step entirely until then): read
+   `work_items["workflow-v2-1-core"]` if present, or initialize it with
+   the full field set: `work_item_type: "process"`, `work_item_kind:
+   "process"`, `plan_path: "docs/ai-workflow/WORKFLOW_V2_PLAN.md"`,
+   `registry_path:
+   "docs/ai-workflow/registry/workflow-v2-1-core-registry.json"`,
+   `governing_workflow_version: "1"` (fixed, never re-derived), the
+   `base_commit` above, the plan's current `plan_revision`, `phase:
+   "IMPLEMENTING"`, `checkpoints` populated from every already-completed
+   checkpoint's trailer (step 3), and `plan_approval: {status: "CURRENT",
+   basis: "USER_OVERRIDE", reviewed_bundle_id: <WF0's approving feedback's
+   "Reviewed bundle ID:" field, verbatim>, approved_review_content_id:
+   <WF0's own Workflow-Plan-Approval trailer value>, review_content_manifest:
+   <the plan-stage manifest at WF0's commit>, reviewed_content_commit:
+   null, user_confirmation: <the user's actual go-ahead text>, recorded_at:
+   <WF0's commit timestamp>}`. Set `active_work_item_id` to
+   `"workflow-v2-1-core"` if not already set to some other item.
+2. **Durability guard**: before selecting the next checkpoint, recompute
+   the plan-stage `review_content_id`
+   (`python3 scripts/workflow_fingerprint.py <base_commit>`) and compare
+   it against the `Workflow-Plan-Approval` trailer value discovered in
+   step 3 (or, once step 1 has run, against
+   `plan_approval.approved_review_content_id`). A mismatch — someone
+   edited the authoritative plan documents between two invocations —
+   stops immediately, naming both values. Do not proceed past this check.
+3. **Select the next checkpoint**: search `git log` in
+   `<base_commit>..HEAD` for commits carrying an exact
+   `Workflow-Checkpoint: <id>` trailer scoped to `Workflow-Work-Item:
+   workflow-v2-1-core`, requiring exactly one match per id
+   (`D-Commit-Provenance`); on more than one match apply its tie-break
+   (first-parent ancestor of HEAD, verified content), and on genuine
+   ambiguity stop rather than pick silently. Mark every checkpoint with a
+   confirmed match `COMPLETE`. Walk
+   `docs/ai-workflow/registry/workflow-v2-1-core-registry.json`'s
+   `checkpoints` array in dependency order and select the first entry not
+   yet `COMPLETE`. Report which checkpoint this is, and which one
+   completed last (if any) — every invocation states both.
+4. **Implement exactly that one checkpoint**, per its registry entry and
+   the plan's own decision sections, following
+   `CLAUDE.md`/`AGENTS.md`/`.github/copilot-instructions.md` for layer
+   boundaries, migrations, and enum persistence rules where applicable.
+5. Run the checkpoint's own conformance tests at minimum; run the full
+   `scripts/workflow_fingerprint_test.py` (+ `_demo_test.py` if a
+   real-repository check applies) whenever the checkpoint touches the
+   identity subsystem or its wiring.
+6. Commit the checkpoint's changes, carrying an exact
+   `Workflow-Checkpoint: <id>` + `Workflow-Work-Item: workflow-v2-1-core`
+   trailer. Once `docs/ai-workflow/WORKFLOW_STATE.json` exists, also
+   update `checkpoints[id].status = COMPLETE` (with the real commit SHA)
+   in that same commit — the state file becomes the sole writable record
+   of checkpoint status from that point on; the trailer remains
+   verification evidence, never a second source of truth.
+7. **Stop immediately** — never loop, never continue to the next
+   checkpoint in the same invocation, unlike `/milestone-implement`.
+   Report the checkpoint just completed and its commit SHA. Continuing
+   requires the user to invoke this command again in a **fresh
+   session**: a session that has just edited this command file must
+   never act on its own stale in-memory copy of it, and a stopped
+   command naturally ends the turn, so a fresh invocation is the only
+   way forward.
+
+This command is exempt from `D-Self-Governance`'s dual-mode branching
+requirement — it drives exactly one work item whose
+`governing_workflow_version` is permanently `"1"` by construction, so
+there is no second version to branch on. It is not exempt from
+conformance coverage (`WF8a-ii` owns a dedicated test asserting it stops
+after exactly one checkpoint and never reads
+`docs/ACTIVE_MILESTONE.md`/`docs/ROADMAP.md`).
