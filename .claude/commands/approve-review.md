@@ -46,9 +46,10 @@ actually load-bearing control for the Skill exposure path, not mechanism
    - **`governing_workflow_version: "2.1"`**: steps 1-7 execute identically;
      for the plan stage only, step 1's gate-reachability check additionally
      requires `workflow_state.plan_approval_gate_reachable(...)`'s `"2.1"`
-     branch (the `plan_review_stages` ledger — full mechanism owned by
-     `WF4a-iv`, not yet built; this branch is inert until then, since this
-     repository's own work item is fixed at `"1"`).
+     branch (the `plan_review_stages` ledger, populated by `/review-plan`/
+     `/record-manual-plan-review`, `D-Plan-Review-Stages`) — fully live;
+     inert only in the sense that this repository's own work item is fixed
+     at `"1"` for its entire execution and so never exercises it.
 1. **Confirm gate reachability**: read `.ai-review/feedback/REVIEW_FEEDBACK.md`'s
    most recently reviewed round status and bundle ID. Call
    `workflow_state.approval_gate_reachable(status)` for the plan stage on a

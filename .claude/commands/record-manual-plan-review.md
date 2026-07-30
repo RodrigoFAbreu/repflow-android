@@ -1,0 +1,83 @@
+---
+description: Ingest an already-pasted manual external reviewer's verdict as the manual_external_plan_review stage of the two-stage plan-review protocol ("2.1" work items only).
+argument-hint: "[work-item-id]"
+---
+
+Enter the exit of `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW`
+(`docs/ai-workflow/MILESTONE_WORKFLOW.md`,
+`docs/ai-workflow/WORKFLOW_V2_PLAN.md`'s `D-Plan-Review-Stages`). A small,
+mechanical, model-independent command: it never evaluates plan content
+itself (the external reviewer already did that) and never edits the plan
+(`/apply-plan-review` does, unchanged, exactly as it reads and applies
+today's single-stage external feedback).
+
+**Not a user-authority gate**: no `disable-model-invocation` guard and no
+`user_confirmation` requirement — it grants no approval itself, it only
+records a verdict the user already obtained externally and already pasted
+into `REVIEW_FEEDBACK.md` in the current turn. `/approve-review plan`
+remains the sole, separate user-authority gate, entirely unchanged by this
+command's existence: its own `plan_review_stages` check re-verifies the
+same ledger invariant this command writes, as a restated invariant, not a
+second ingestion path.
+
+1. **Resolve the work item**: `$ARGUMENTS`, if given, names the
+   `work_item_id`; otherwise use `active_work_item_id`
+   (`docs/ai-workflow/WORKFLOW_STATE.json`).
+2. **Governing-version guard**: if the resolved item's
+   `governing_workflow_version` is not `"2.1"`, refuse cleanly, naming the
+   actual version (`WrongGoverningVersionForPlanReviewStageError`).
+3. **Phase guard**: if the item's `phase` is not
+   `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW`, refuse cleanly, naming the
+   actual phase — including "already ingested this round" and "no local
+   `APPROVE` on record" (`WrongPhaseForPlanReviewStageError`).
+4. **Read**: `.ai-review/feedback/REVIEW_FEEDBACK.md` (must declare
+   `Reviewer role: manual_external_plan_review`), `.ai-review/current/MANIFEST.md`,
+   `.ai-review/current/REVIEW_REQUEST.md`, and the ledger's existing
+   `local_model_plan_review` entry.
+5. **Recompute fresh**: the current `bundle_id` and plan-stage
+   `review_content_id`, identical in mechanism to `/review-plan`'s own
+   (staleness/wrong-worktree handling included).
+6. **Validate before writing anything**
+   (`workflow_state.validate_manual_plan_review_preconditions`), in order:
+   - the feedback's declared role is exactly `manual_external_plan_review`
+     (`WrongReviewerRoleError` otherwise, naming what was declared instead);
+   - the feedback's `review_content_id` matches the current recomputed
+     value — **hard**, blocks ingestion (`StaleReviewContentIdError`,
+     naming both values);
+   - a current `local_model_plan_review` `APPROVE` is recorded for the
+     same `review_content_id` (`MissingLocalApprovalForManualStageError` —
+     a restated invariant, since entry to this phase already required it;
+     defends against a corrupted or hand-edited state file);
+   - no `manual_external_plan_review` stage is already recorded against
+     the current `review_content_id` (`DuplicateManualStageIngestionError`
+     — a second invocation after a completed `APPROVE`/`REVISE` normally
+     fails the phase guard first; this only fires for a hand-edited or
+     race-condition state).
+   Separately, check the feedback's `bundle_id` against the current
+   recomputed one via `workflow_state.check_manual_stage_bundle_id_advisory`:
+   a mismatch is **advisory only** — report the warning naming both
+   values, never block on it (a wrapper-only bundle regeneration between
+   upload and paste, new `bundle_id`/unchanged `review_content_id`, must
+   not invalidate the manual stage).
+7. **Write set, exact**:
+   - `APPROVE`: via `workflow_state.record_manual_plan_review(...,
+     verdict="APPROVE", bundle_id=<the feedback's own bundle_id,
+     verbatim>, ...)` — the resolved work item's `manual_external_plan_review`
+     ledger fields (recording the feedback's actual `bundle_id` regardless
+     of whether it matched the current recomputed one, so the ledger
+     records what the reviewer actually saw) and its phase transition to
+     `AWAITING_PLAN_APPROVAL`.
+   - `REVISE`: only the phase transition to `REVISING_PLAN`
+     (`record_manual_plan_review(..., verdict="REVISE", ...)` — no ledger
+     write).
+   - `BLOCK`: nothing (`record_manual_plan_review(..., verdict="BLOCK",
+     ...)` is a true no-op; the work item stays at
+     `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW`).
+   Never `REVIEW_FEEDBACK.md` (already user-authored), the plan, registry,
+   mapping, command, product, or bundle-content files.
+8. **Report and stop.** For an `APPROVE`: state that `AWAITING_PLAN_APPROVAL`
+   is next and that only the user can invoke `/approve-review plan`. For a
+   `REVISE`: state that `/apply-plan-review` is next. For a `BLOCK`: state
+   that explicit user resolution is required before any further command
+   runs. **Never** auto-continue to `/apply-plan-review` or
+   `/approve-review` in this same invocation.

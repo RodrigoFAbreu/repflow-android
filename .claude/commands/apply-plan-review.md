@@ -11,12 +11,11 @@ Enter the `REVISING_PLAN` state of `docs/ai-workflow/MILESTONE_WORKFLOW.md`.
    - **`governing_workflow_version: "1"`**: steps 1-7 execute exactly as
      written, exiting to `AWAITING_PLAN_APPROVAL`.
    - **`governing_workflow_version: "2.1"`**: steps 1-6 execute identically;
-     step 7's exit target is `AWAITING_LOCAL_PLAN_REVIEW`, not
-     `AWAITING_PLAN_APPROVAL` — the two-stage local-then-manual-external
-     plan-review protocol (`D-Plan-Review-Stages`, `/review-plan`,
-     `/record-manual-plan-review`) is owned by `WF4a-iv`, not yet built;
-     this branch is inert until then, since this repository's own work item
-     is fixed at `"1"` for its entire execution.
+     step 7 is replaced by the revised exit step below — the two-stage
+     local-then-manual-external plan-review protocol (`D-Plan-Review-Stages`,
+     `/review-plan`, `/record-manual-plan-review`). This branch is inert for
+     this repository's own work item, which is fixed at `"1"` for its
+     entire execution, but is otherwise fully live.
 1. Read `.ai-review/feedback/REVIEW_FEEDBACK.md`. If it does not exist, stop
    and say so — do not proceed on assumed feedback.
 2. For every Blocking, Important, and Optional finding: validate it against
@@ -33,10 +32,28 @@ Enter the `REVISING_PLAN` state of `docs/ai-workflow/MILESTONE_WORKFLOW.md`.
 6. If the `Status` was `BLOCK`, or if you made major structural changes to
    the plan, stay in `AWAITING_EXTERNAL_PLAN_REVIEW` and stop for another
    review round.
-7. Otherwise, per step 0's branch: report the plan as ready and that
-   `AWAITING_PLAN_APPROVAL` (`"1"`) / `AWAITING_LOCAL_PLAN_REVIEW` (`"2.1"`)
-   is the next state, and stop — do not auto-run `/approve-review` or
-   `/milestone-implement`. Only the user invokes `/approve-review plan`;
-   let the user decide when to proceed.
+7. **`governing_workflow_version: "1"`**: report the plan as ready and that
+   `AWAITING_PLAN_APPROVAL` is the next state, and stop — do not auto-run
+   `/approve-review` or `/milestone-implement`. Only the user invokes
+   `/approve-review plan`; let the user decide when to proceed.
+7'. **`governing_workflow_version: "2.1"`, revised exit step** (resolves
+    `GPT-R11-003`/`-007`): this command never self-declares plan readiness,
+    regardless of how large or small a "structural change" judgment would
+    call the edit:
+    1. the recomputed `review_content_id` already differs from whatever
+       `plan_review_stages` last recorded, so both stages already read as
+       absent (`plan_approval_gate_reachable`'s recomputation rule — no
+       explicit ledger clear performed or needed);
+    2. the bundle is regenerated (`./scripts/prepare-ai-review.sh <base-sha>
+       plan`, same as step 5, unchanged mechanism);
+    3. call `workflow_state.transition_to_awaiting_local_plan_review(state,
+       work_item_id, now)` and persist the returned state to
+       `docs/ai-workflow/WORKFLOW_STATE.json`;
+    4. report the work item's phase as `AWAITING_LOCAL_PLAN_REVIEW` and
+       stop — the same "stop, do not auto-continue" pattern step 7 uses for
+       `"1"`. This is the sole path back to `AWAITING_LOCAL_PLAN_REVIEW`,
+       whether the edit was driven by a local-model or a manual-external
+       `REVISE` — no path re-enters manual-external review without a fresh
+       local pass first.
 
 Do not implement product code in this command.
