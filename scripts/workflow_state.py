@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Workflow v2.1 state-file schema and validator core (WF1a).
+"""Workflow v2.1 state-file schema and validator core (WF1a), extended
+with work-item routing and the registry/mapping generator (WF1b).
 
 Implements the `docs/ai-workflow/WORKFLOW_V2_PLAN.md` D3 schema for
 `docs/ai-workflow/WORKFLOW_CONFIG.json` (repository-level default,
@@ -11,14 +12,17 @@ its writer is WF2, not built here), and D-Commit-Provenance's exact,
 scoped, ancestry-limited `Workflow-Checkpoint`/`Workflow-Work-Item`
 trailer search with its duplicate-trailer tie-break.
 
-Deliberately out of WF1a's scope (owned by later checkpoints named in the
-plan's own checkpoint table): work-item routing/creation (D1, WF1b),
-generating the registry/mapping JSON (WF1b), a full phase-entry/exit
-transition graph (D-States, applied to `MILESTONE_WORKFLOW.md` by
-WF4a-ii/`WF4a-iv`), `WORKTREE_IDENTITY.json`'s writer (WF2), and the
-approval/commit-lifecycle helpers (WF4a-iii). What is validated here is
-exactly D3's stated "Validator rejects" list, to the extent it is
-checkable from schema/registry/Git history alone.
+WF1b adds D1's work-item routing (create-or-resume semantics for
+`/milestone-plan`, completion/reset), and D-Registry/D4b's registry/
+mapping JSON generator (the sole writer either file should ever have,
+running the coverage/topological-order checks at generation time rather
+than leaving them to be discovered at review time).
+
+Still out of scope here (owned by later checkpoints named in the plan's
+own checkpoint table): a full phase-entry/exit transition graph
+(D-States, applied to `MILESTONE_WORKFLOW.md` by WF4a-ii/`WF4a-iv`),
+`WORKTREE_IDENTITY.json`'s writer (WF2), and the approval/commit-lifecycle
+helpers (WF4a-iii).
 
 Stdlib-only, mirroring `scripts/workflow_fingerprint.py`'s own
 `docs/TECHNICAL_DECISIONS.md`-recorded constraint.
@@ -29,6 +33,7 @@ Run the real-repository demonstration: python3 scripts/workflow_state_demo_test.
 
 from __future__ import annotations
 
+import copy
 import json
 import subprocess
 from pathlib import Path
@@ -183,6 +188,11 @@ class ConfigMissingAfterActivationError(Exception):
 class UnsupportedGoverningVersionError(Exception):
     """Raised when a work item's `governing_workflow_version` is outside
     the config's `supported_versions` (resolves OPUS-R6-024, optional)."""
+
+
+class WorkItemTerminalReuseError(Exception):
+    """Raised when routing names a `work_item_id` that already exists at a
+    terminal phase -- ids are not reused after `MILESTONE_COMPLETE` (D1)."""
 
 
 def _run(args: list[str], cwd: Path) -> str:
@@ -413,6 +423,193 @@ def validate_registry_mapping_coverage(registry: dict, mapping: dict) -> None:
     unowned = checkpoint_ids - owned
     if unowned:
         raise UnownedCheckpointError(f"checkpoints owned by no requirement: {sorted(unowned)}")
+
+
+def render_registry_markdown(registry: dict) -> str:
+    """A generated, human-readable view of the registry JSON (D-Registry).
+    Never itself hashed -- reformatting this output must never change
+    `review_content_id`, since only the JSON file is a protected path."""
+    lines = ["| id | name | depends_on | complexity | session_target |",
+             "| --- | --- | --- | --- | --- |"]
+    for entry in registry["checkpoints"]:
+        deps = ", ".join(entry.get("depends_on", [])) or "-"
+        lines.append(
+            f"| {entry['id']} | {entry['name']} | {deps} | "
+            f"{entry['complexity']} | {entry['session_target']} |"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def generate_registry(work_item_id: str, plan_revision: int, checkpoints: list[dict]) -> dict:
+    """Builds the registry JSON structure (D-Registry) and validates
+    D-Selection point 3 (topological order) before returning -- a bad
+    order fails at generation time, never silently written."""
+    validate_work_item_id(work_item_id)
+    registry = {
+        "schema_version": SCHEMA_VERSION,
+        "work_item_id": work_item_id,
+        "plan_revision": plan_revision,
+        "checkpoints": checkpoints,
+    }
+    validate_registry_topological_order(registry)
+    return registry
+
+
+def generate_mapping(work_item_id: str, requirements: dict, *, registry: dict) -> dict:
+    """Builds the requirements-mapping JSON (D4b) and validates
+    bidirectional registry x mapping coverage before returning (resolves
+    `OPUS-R10-006`: the coverage query runs at generation time, not review
+    time -- an unmapped requirement or unowned checkpoint fails here,
+    before either file is ever written)."""
+    validate_work_item_id(work_item_id)
+    mapping = {
+        "schema_version": SCHEMA_VERSION,
+        "work_item_id": work_item_id,
+        "requirements": requirements,
+    }
+    validate_registry_mapping_coverage(registry, mapping)
+    return mapping
+
+
+def write_registry_and_mapping(
+    repo_root: Path, registry_path: Path, mapping_path: Path, registry: dict, mapping: dict,
+) -> None:
+    """The sole writer D-Registry names for either file: byte-for-byte, no
+    independent reformatting (the exact lesson `OPUS-R8-002` already
+    taught this design once). Re-validates immediately before writing as a
+    fail-closed guard against a stale or hand-built argument, even though
+    `generate_registry`/`generate_mapping` should already have validated
+    their own output."""
+    validate_registry_topological_order(registry)
+    validate_registry_mapping_coverage(registry, mapping)
+    (repo_root / registry_path).write_text(json.dumps(registry, indent=2) + "\n")
+    (repo_root / mapping_path).write_text(json.dumps(mapping, indent=2) + "\n")
+
+
+# ---------------------------------------------------------------------------
+# D1: work-item routing (create-or-resume) and completion/reset
+# ---------------------------------------------------------------------------
+
+
+def default_work_item(
+    *, work_item_id: str, work_item_type: str, work_item_kind: str,
+    plan_path: str, registry_path: str, governing_workflow_version: str,
+    plan_revision: int, last_transition: str,
+) -> dict:
+    """D3's full per-item field list, defaulted for a freshly created work
+    item (D1). `governing_workflow_version` is the caller's concern to fix
+    from the then-current repository-level default -- this function never
+    reads config itself (D-Self-Governance: fixed at creation, never
+    re-read afterward)."""
+    validate_work_item_id(work_item_id)
+    validate_work_item_type(work_item_type)
+    if work_item_kind not in WORK_ITEM_KINDS:
+        raise InvalidWorkItemTypeError(f"unknown work_item_kind: {work_item_kind!r}")
+    return {
+        "work_item_type": work_item_type,
+        "work_item_kind": work_item_kind,
+        "work_item_id": work_item_id,
+        "parent_work_item_id": None,
+        "plan_path": plan_path,
+        "registry_path": registry_path,
+        "governing_workflow_version": governing_workflow_version,
+        "phase": "PLANNING",
+        "plan_revision": plan_revision,
+        "implementation_revision": None,
+        "functional_review_round": None,
+        "base_commit": None,
+        "reviewed_implementation_head": None,
+        "current_checkpoint_id": None,
+        "last_completed_checkpoint_id": None,
+        "checkpoints": {},
+        "current_bundle_id": None,
+        "plan_approval": None,
+        "technical_approval": None,
+        "plan_review_stages": None,
+        "functional_acceptance_status": None,
+        "blocking_decisions": [],
+        "state_revision": 1,
+        "last_transition": last_transition,
+    }
+
+
+def route_work_item(
+    state: dict, config: dict, *, work_item_id: str, work_item_type: str,
+    work_item_kind: str, plan_path: str, registry_path: str,
+    plan_revision: int, now: str,
+) -> dict:
+    """D1's routing text, in full: `/milestone-plan` creates or updates the
+    item under `work_items[id]`. Returns a new state dict (does not mutate
+    the input, so a caller can inspect the pre-route state on failure).
+
+    - A fresh id creates a new `work_items[id]` entry, fixing
+      `governing_workflow_version` from the config's current
+      `default_workflow_version` (validated against `supported_versions`,
+      `OPUS-R6-024`) and never re-read afterward.
+    - An id naming an existing *non-terminal* entry resumes it: only
+      `plan_revision`/`state_revision`/`last_transition` advance --
+      identity fields (`work_item_type`/`kind`/`governing_workflow_version`/
+      `parent_work_item_id`) are immutable after creation.
+    - An id naming an existing *terminal* entry is a hard error: ids are
+      not reused after `MILESTONE_COMPLETE`.
+    - `active_work_item_id` is set to this id only if no other item is
+      currently active (or this item already is) -- routing never steals
+      focus from unrelated in-flight, non-terminal work (D1's "resume-focus
+      pointer, not an execution lock").
+    """
+    validate_work_item_id(work_item_id)
+    validate_work_item_type(work_item_type)
+    if work_item_kind not in WORK_ITEM_KINDS:
+        raise InvalidWorkItemTypeError(f"unknown work_item_kind: {work_item_kind!r}")
+
+    new_state = copy.deepcopy(state)
+    work_items = new_state.setdefault("work_items", {})
+    existing = work_items.get(work_item_id)
+
+    if existing is not None and existing.get("phase") in TERMINAL_PHASES:
+        raise WorkItemTerminalReuseError(
+            f"{work_item_id!r} already exists at a terminal phase "
+            f"({existing.get('phase')!r}) -- use a new work_item_id"
+        )
+
+    if existing is None:
+        validate_governing_version(config["default_workflow_version"], config)
+        work_items[work_item_id] = default_work_item(
+            work_item_id=work_item_id, work_item_type=work_item_type,
+            work_item_kind=work_item_kind, plan_path=plan_path,
+            registry_path=registry_path,
+            governing_workflow_version=config["default_workflow_version"],
+            plan_revision=plan_revision, last_transition=now,
+        )
+    else:
+        existing["plan_revision"] = plan_revision
+        existing["state_revision"] = existing.get("state_revision", 1) + 1
+        existing["last_transition"] = now
+
+    active = new_state.get("active_work_item_id")
+    if active is None or active == work_item_id:
+        new_state["active_work_item_id"] = work_item_id
+    # else: a different item is active and non-terminal -- left alone;
+    # repointing active_work_item_id is always an explicit, separate act.
+
+    return new_state
+
+
+def complete_work_item(state: dict, work_item_id: str, now: str) -> dict:
+    """D1's completion/reset text: on `MILESTONE_COMPLETE` (or
+    process-completion archival), the entry's phase becomes terminal and,
+    if it was `active_work_item_id`, that pointer resets to `null` so the
+    next `/milestone-plan` creates a fresh entry and claims the pointer.
+    Returns a new state dict."""
+    new_state = copy.deepcopy(state)
+    work_item = new_state["work_items"][work_item_id]
+    work_item["phase"] = "MILESTONE_COMPLETE"
+    work_item["current_checkpoint_id"] = None
+    work_item["state_revision"] = work_item.get("state_revision", 1) + 1
+    work_item["last_transition"] = now
+    if new_state.get("active_work_item_id") == work_item_id:
+        new_state["active_work_item_id"] = None
+    return new_state
 
 
 # ---------------------------------------------------------------------------
