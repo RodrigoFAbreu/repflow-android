@@ -17,7 +17,7 @@
       "base_commit": "162154d3e5e10eb65e109833acae4b4fb01fc5d6",
       "reviewed_implementation_head": null,
       "current_checkpoint_id": null,
-      "last_completed_checkpoint_id": "WF4a-i",
+      "last_completed_checkpoint_id": "WF4a-ii",
       "checkpoints": {
         "WF0": {
           "status": "COMPLETE",
@@ -34,6 +34,10 @@
         "WF4a-i": {
           "status": "COMPLETE",
           "start_commit": "6b8904fed8f0f76b7c6d3a8145b70383b9496187"
+        },
+        "WF4a-ii": {
+          "status": "COMPLETE",
+          "start_commit": "01f340376b746b422334b9438f4c17180ca26c28"
         }
       },
       "current_bundle_id": null,
@@ -82,8 +86,8 @@
       "plan_review_stages": null,
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 3,
-      "last_transition": "2026-07-30T21:15:00+01:00"
+      "state_revision": 4,
+      "last_transition": "2026-07-30T23:52:23+01:00"
     }
   }
 }

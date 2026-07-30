@@ -588,5 +588,259 @@ class TestRegistryMappingGenerator(unittest.TestCase):
             self.assertNotEqual(id_round2, id_round3, "a real registry edit must change review_content_id")
 
 
+class TestApprovalGateReachability(unittest.TestCase):
+    """WF4a-ii, D-States: non-circular entry -- reachable from the review
+    round alone, never from plan_approval/technical_approval existing."""
+
+    def test_approve_round_reaches_gate(self):
+        self.assertTrue(ws.approval_gate_reachable("APPROVE"))
+
+    def test_revise_round_with_findings_resolved_reaches_gate(self):
+        """Missing-test items 12/27: a REVISE round with zero blocking
+        findings left reaches the gate exactly as readily as APPROVE,
+        with no approval record in existence."""
+        self.assertTrue(ws.approval_gate_reachable("REVISE"))
+
+    def test_block_never_reaches_gate(self):
+        """Missing-test item 15."""
+        self.assertFalse(ws.approval_gate_reachable("BLOCK"))
+
+    def test_technical_gate_blocked_by_dirty_protected_path(self):
+        self.assertFalse(ws.technical_approval_gate_reachable(
+            latest_round_status="APPROVE", protected_path_dirty=True,
+            head_matches_reviewed_implementation_head=True,
+        ))
+
+    def test_technical_gate_blocked_by_head_mismatch(self):
+        self.assertFalse(ws.technical_approval_gate_reachable(
+            latest_round_status="APPROVE", protected_path_dirty=False,
+            head_matches_reviewed_implementation_head=False,
+        ))
+
+    def test_technical_gate_reachable_when_clean_and_matching(self):
+        self.assertTrue(ws.technical_approval_gate_reachable(
+            latest_round_status="REVISE", protected_path_dirty=False,
+            head_matches_reviewed_implementation_head=True,
+        ))
+
+    def test_v1_plan_gate_ignores_plan_review_stages(self):
+        self.assertTrue(ws.plan_approval_gate_reachable(
+            latest_round_status="APPROVE", governing_workflow_version="1",
+            plan_review_stages=None, current_review_content_id="c1",
+        ))
+
+    def test_v2_1_plan_gate_requires_both_stages_current(self):
+        """GPT-R11-001/-003: a single reviewed round is necessary but no
+        longer sufficient for a "2.1" item."""
+        self.assertFalse(ws.plan_approval_gate_reachable(
+            latest_round_status="APPROVE", governing_workflow_version="2.1",
+            plan_review_stages=None, current_review_content_id="c1",
+        ))
+        stages = {
+            "review_content_id": "c1",
+            "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+            "manual_external_plan_review": {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"},
+        }
+        self.assertTrue(ws.plan_approval_gate_reachable(
+            latest_round_status="APPROVE", governing_workflow_version="2.1",
+            plan_review_stages=stages, current_review_content_id="c1",
+        ))
+
+    def test_v2_1_plan_gate_rejects_stale_review_content_id(self):
+        stages = {
+            "review_content_id": "stale",
+            "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+            "manual_external_plan_review": {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"},
+        }
+        self.assertFalse(ws.plan_approval_gate_reachable(
+            latest_round_status="APPROVE", governing_workflow_version="2.1",
+            plan_review_stages=stages, current_review_content_id="current",
+        ))
+
+    def test_v2_1_plan_gate_rejects_local_only(self):
+        stages = {
+            "review_content_id": "c1",
+            "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+            "manual_external_plan_review": None,
+        }
+        self.assertFalse(ws.plan_approval_gate_reachable(
+            latest_round_status="APPROVE", governing_workflow_version="2.1",
+            plan_review_stages=stages, current_review_content_id="c1",
+        ))
+
+
+class TestUserConfirmationGuard(unittest.TestCase):
+    """WF4a-ii, D2's mechanism-independent guard, second control."""
+
+    def test_empty_confirmation_rejected(self):
+        """Missing-test item 26."""
+        with self.assertRaises(ws.UserConfirmationRejectedError):
+            ws.validate_user_confirmation("", work_item_id="wi", stage="plan")
+
+    def test_whitespace_only_confirmation_rejected(self):
+        with self.assertRaises(ws.UserConfirmationRejectedError):
+            ws.validate_user_confirmation("   ", work_item_id="wi", stage="plan")
+
+    def test_confirmation_naming_wrong_work_item_rejected(self):
+        """Missing-test item 74."""
+        with self.assertRaises(ws.UserConfirmationRejectedError):
+            ws.validate_user_confirmation("I approve the plan for other-item", work_item_id="wi", stage="plan")
+
+    def test_confirmation_naming_wrong_stage_rejected(self):
+        with self.assertRaises(ws.UserConfirmationRejectedError):
+            ws.validate_user_confirmation("I approve the implementation for wi", work_item_id="wi", stage="plan")
+
+    def test_confirmation_naming_exact_item_and_stage_accepted(self):
+        ws.validate_user_confirmation("I approve the plan for wi", work_item_id="wi", stage="plan")  # no raise
+
+    def test_unknown_stage_rejected(self):
+        with self.assertRaises(ws.InvalidApprovalRecordError):
+            ws.validate_user_confirmation("I approve wi plan", work_item_id="wi", stage="not_a_stage")
+
+    def test_legitimate_repeat_across_two_different_approvals_accepted(self):
+        """Missing-test items 74/91 (GPT-R11-004): a correct confirmation
+        is not a novelty check -- the same literal text legitimately
+        repeated across two genuinely different approval calls is accepted
+        both times, not rejected as "reused"."""
+        ws.validate_user_confirmation("wi plan implementation go-ahead", work_item_id="wi", stage="plan")
+        ws.validate_user_confirmation("wi plan implementation go-ahead", work_item_id="wi", stage="implementation")
+
+    def test_acceptance_stage_supported_for_accept_milestone(self):
+        ws.validate_user_confirmation("I accept the wi milestone acceptance", work_item_id="wi", stage="acceptance")
+
+
+class TestApprovalBasisResolution(unittest.TestCase):
+    """WF4a-ii, D2's basis decision."""
+
+    def test_matching_approve_feedback_yields_external_approve(self):
+        """Missing-test item 13: writes EXTERNAL_APPROVE without a separate
+        override-justification prompt -- the standard confirmation still
+        satisfies the mechanism-independent guard."""
+        basis = ws.resolve_approval_basis(
+            latest_round_status="APPROVE", feedback_bundle_id="b1", current_bundle_id="b1",
+            user_confirmation="approve wi plan", work_item_id="wi", stage="plan",
+        )
+        self.assertEqual(basis, "EXTERNAL_APPROVE")
+
+    def test_mismatched_bundle_id_requires_override_text(self):
+        """Missing-test item 14: without matching feedback, refuses to
+        write until literal override text is supplied."""
+        with self.assertRaises(ws.UserConfirmationRejectedError):
+            ws.resolve_approval_basis(
+                latest_round_status="APPROVE", feedback_bundle_id="stale-bundle", current_bundle_id="b1",
+                user_confirmation="", work_item_id="wi", stage="plan",
+            )
+        basis = ws.resolve_approval_basis(
+            latest_round_status="APPROVE", feedback_bundle_id="stale-bundle", current_bundle_id="b1",
+            user_confirmation="override wi plan", work_item_id="wi", stage="plan",
+        )
+        self.assertEqual(basis, "USER_OVERRIDE")
+
+    def test_revise_round_requires_override_text(self):
+        basis = ws.resolve_approval_basis(
+            latest_round_status="REVISE", feedback_bundle_id="b1", current_bundle_id="b1",
+            user_confirmation="override wi implementation", work_item_id="wi", stage="implementation",
+        )
+        self.assertEqual(basis, "USER_OVERRIDE")
+
+    def test_block_never_reaches_either_basis(self):
+        """Missing-test item 15."""
+        with self.assertRaises(ws.BlockCannotApproveError):
+            ws.resolve_approval_basis(
+                latest_round_status="BLOCK", feedback_bundle_id="b1", current_bundle_id="b1",
+                user_confirmation="override wi plan", work_item_id="wi", stage="plan",
+            )
+
+
+class TestApprovalRecordShape(unittest.TestCase):
+    """WF4a-ii, D2's record shape."""
+
+    def test_plan_stage_forbids_reviewed_content_commit(self):
+        with self.assertRaises(ws.InvalidApprovalRecordError):
+            ws.validate_approval_record({
+                "status": "CURRENT", "basis": "EXTERNAL_APPROVE",
+                "reviewed_bundle_id": "b", "approved_review_content_id": "c",
+                "review_content_manifest": [], "reviewed_content_commit": "deadbeef",
+                "user_confirmation": "approve wi plan",
+            }, stage="plan")
+
+    def test_implementation_stage_allows_reviewed_content_commit(self):
+        ws.validate_approval_record({
+            "status": "CURRENT", "basis": "EXTERNAL_APPROVE",
+            "reviewed_bundle_id": "b", "approved_review_content_id": "c",
+            "review_content_manifest": [], "reviewed_content_commit": "deadbeef",
+            "user_confirmation": "approve wi implementation",
+        }, stage="implementation")  # must not raise
+
+    def test_non_legacy_basis_requires_bundle_fields(self):
+        with self.assertRaises(ws.InvalidApprovalRecordError):
+            ws.validate_approval_record({
+                "status": "CURRENT", "basis": "USER_OVERRIDE",
+                "reviewed_bundle_id": None, "approved_review_content_id": None,
+                "review_content_manifest": None, "reviewed_content_commit": None,
+                "user_confirmation": "override wi plan",
+            }, stage="plan")
+
+    def test_legacy_v1_basis_allows_null_bundle_fields(self):
+        ws.validate_approval_record({
+            "status": "CURRENT", "basis": "LEGACY_V1",
+            "reviewed_bundle_id": None, "approved_review_content_id": "backfilled",
+            "review_content_manifest": None, "reviewed_content_commit": "deadbeef",
+            "user_confirmation": "legacy import confirmed for wi",
+            "legacy_evidence": {"note": "milestone-8"},
+        }, stage="implementation")  # must not raise
+
+    def test_unknown_waived_guarantee_rejected(self):
+        with self.assertRaises(ws.InvalidApprovalRecordError):
+            ws.validate_approval_record({
+                "status": "CURRENT", "basis": "LEGACY_V1",
+                "reviewed_bundle_id": None, "approved_review_content_id": "backfilled",
+                "review_content_manifest": None, "reviewed_content_commit": "deadbeef",
+                "user_confirmation": "legacy import confirmed for wi",
+                "waived_guarantees": ["no_content_id"],
+            }, stage="implementation")
+
+    def test_build_approval_record_round_trips(self):
+        record = ws.build_approval_record(
+            basis="EXTERNAL_APPROVE", stage="plan", user_confirmation="approve wi plan",
+            now="t", reviewed_bundle_id="b", approved_review_content_id="c",
+            review_content_manifest=[{"path": "x"}],
+        )
+        self.assertEqual(record["status"], "CURRENT")
+        self.assertIsNone(record["reviewed_content_commit"])
+
+
+class TestApprovalStateWrites(unittest.TestCase):
+    """WF4a-ii, D-Approval-Commits' state-write step (commit creation is
+    WF4a-iii's own concern, not exercised here)."""
+
+    def test_apply_plan_approval_transitions_to_implementing(self):
+        wi = _base_work_item(phase="AWAITING_PLAN_APPROVAL", state_revision=1)
+        state = _base_state(wi=wi)
+        record = ws.build_approval_record(
+            basis="EXTERNAL_APPROVE", stage="plan", user_confirmation="approve wi plan",
+            now="t2", reviewed_bundle_id="b", approved_review_content_id="c",
+            review_content_manifest=[],
+        )
+        new_state = ws.apply_plan_approval(state, "wi", record, now="t2")
+        self.assertEqual(new_state["work_items"]["wi"]["phase"], "IMPLEMENTING")
+        self.assertEqual(new_state["work_items"]["wi"]["plan_approval"], record)
+        self.assertEqual(new_state["work_items"]["wi"]["state_revision"], 2)
+        # Original state is untouched.
+        self.assertIsNone(state["work_items"]["wi"].get("plan_approval"))
+
+    def test_apply_technical_approval_transitions_to_awaiting_functional_review(self):
+        wi = _base_work_item(phase="AWAITING_TECHNICAL_APPROVAL", state_revision=1)
+        state = _base_state(wi=wi)
+        record = ws.build_approval_record(
+            basis="USER_OVERRIDE", stage="implementation", user_confirmation="override wi implementation",
+            now="t2", reviewed_bundle_id="b", approved_review_content_id="c",
+            review_content_manifest=[], reviewed_content_commit="deadbeef",
+        )
+        new_state = ws.apply_technical_approval(state, "wi", record, now="t2")
+        self.assertEqual(new_state["work_items"]["wi"]["phase"], "AWAITING_FUNCTIONAL_REVIEW")
+        self.assertEqual(new_state["work_items"]["wi"]["technical_approval"], record)
+
+
 if __name__ == "__main__":
     unittest.main()

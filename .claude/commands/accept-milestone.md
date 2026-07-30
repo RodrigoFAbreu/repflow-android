@@ -1,5 +1,6 @@
 ---
 description: Close out an explicitly accepted milestone and prepare the next one for planning.
+disable-model-invocation: true
 ---
 
 Enter the `MILESTONE_COMPLETE` state of
@@ -8,18 +9,42 @@ explicitly accepted the milestone (`AWAITING_USER_ACCEPTANCE` exit
 condition) — if that acceptance hasn't happened in this conversation, ask for
 it before proceeding.
 
-1. Confirm final verification already passed (from the last
+**This command is user-only by construction** (`docs/ai-workflow/WORKFLOW_V2_PLAN.md`
+D2, resolves `OPUS-R6-010`), the same two mechanisms as `/approve-review`:
+(1) `disable-model-invocation: true` (primary, harness-enforced — see
+`approve-review.md` for this installation's verified/unverified coverage of
+each exposure path); (2) refuse to write anything unless the user's own
+current-turn message supplies literal confirmation text naming the exact
+`work_item_id` and the `acceptance` stage
+(`workflow_state.validate_user_confirmation(text, work_item_id=..., stage="acceptance")`).
+Never fabricate, infer, or carry over this text from a prior turn. If it is
+missing, ask for it and stop — do not proceed on an inferred "yes."
+
+0. **Dual-mode branch** (Workflow v2.1, `WF4a-ii`): read the target work
+   item's `governing_workflow_version` from
+   `docs/ai-workflow/WORKFLOW_STATE.json`. Both `"1"` and `"2.1"` items run
+   steps 1-7 identically — `AWAITING_USER_ACCEPTANCE`/`MILESTONE_COMPLETE`
+   are unmodified by this checkpoint's own gates, so there is nothing to
+   branch behavior on yet; this step exists so the command's own dual-mode
+   structure is explicit and testable per `D-Self-Governance`'s "every
+   command this milestone modifies" enumeration.
+1. Run the user-only guard: call
+   `workflow_state.validate_user_confirmation(text, work_item_id=..., stage="acceptance")`
+   against this turn's literal user text. `UserConfirmationRejectedError`
+   stops the command here — report the concrete reason and ask for the
+   missing/corrected confirmation; do not proceed without it.
+2. Confirm final verification already passed (from the last
    `/milestone-implement` or `/apply-implementation-review` run); rerun only
    if the working tree changed since.
-2. Update `docs/ROADMAP.md` to mark the milestone complete.
-3. Update `docs/ACTIVE_MILESTONE.md`: move this milestone's summary into the
+3. Update `docs/ROADMAP.md` to mark the milestone complete.
+4. Update `docs/ACTIVE_MILESTONE.md`: move this milestone's summary into the
    factual "complete" state, clear the active plan section.
-4. Archive this milestone's execution/reference plans to
+5. Archive this milestone's execution/reference plans to
    `docs/milestones/completed/`.
-5. Create the final completion commit if verification/doc updates are not
+6. Create the final completion commit if verification/doc updates are not
    already committed.
-6. Set `docs/ACTIVE_MILESTONE.md`'s "Next action" to point at the next
+7. Set `docs/ACTIVE_MILESTONE.md`'s "Next action" to point at the next
    incomplete milestone in `docs/ROADMAP.md`, ready for `PLANNING`.
-7. Report the milestone as complete and the next action as
+8. Report the milestone as complete and the next action as
    `/milestone-plan`. Do not begin implementing the next milestone in this
    command.

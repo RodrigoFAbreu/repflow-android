@@ -58,14 +58,47 @@ condition, and whether Claude stops.
 - **Artifacts**: revised plan; rejection rationale (inline in the plan or
   review bundle, not a new standalone doc).
 - **Exit**: all blocking/important findings resolved or rejected with
-  evidence.
+  evidence, **and** the most recently reviewed round's status was `REVISE`
+  or `APPROVE` (never `BLOCK`) — proceeds to `AWAITING_PLAN_APPROVAL`. A
+  `REVISE` round with zero blocking findings left reaches that gate exactly
+  as readily as an `APPROVE` round; this condition reads only the
+  review-round artifact, never any existing approval record (non-circular
+  by construction — see `AWAITING_PLAN_APPROVAL` below).
 - **Stop for user/reviewer?** Only if a rejection or major plan change needs
   reviewer sign-off before implementation; otherwise proceed.
 
+### AWAITING_PLAN_APPROVAL
+
+- **Entry**: `REVISING_PLAN`'s exit condition is met. For a
+  `governing_workflow_version: "2.1"` work item, one further condition
+  applies: the work item's `plan_review_stages` ledger must additionally
+  record both `local_model_plan_review` and `manual_external_plan_review`
+  completed, in that order, against the *current* plan-stage
+  `review_content_id` (the two-stage local-then-manual-external plan-review
+  protocol, `/review-plan`/`/record-manual-plan-review`) — a single
+  reviewed round is necessary but no longer sufficient for a `"2.1"` item. A
+  `"1"` item's entry condition is exactly `REVISING_PLAN`'s exit condition,
+  unchanged.
+- **Allowed actions**: run `/approve-review plan`, which chooses the
+  approval basis (`EXTERNAL_APPROVE` when the current
+  `REVIEW_FEEDBACK.md`'s status is exactly `APPROVE` and its bundle ID
+  matches the just-recomputed one exactly; otherwise `USER_OVERRIDE`, which
+  requires literal override text naming the exact work item and stage in
+  the same turn). `BLOCK` never reaches either basis. No plan edits, no
+  implementation.
+- **Artifacts**: none new until `/approve-review plan` runs.
+- **Exit**: `/approve-review plan` writes `plan_approval` and creates the
+  one plan-approval commit.
+- **Stop for user/reviewer?** Yes — hard gate. Only the user can invoke
+  `/approve-review` (mechanism-independent guard: `disable-model-invocation:
+  true`, plus a specificity check on the literal `user_confirmation` text).
+
 ### IMPLEMENTING
 
-- **Entry**: plan is approved (explicitly, or no further review needed per
-  the previous state).
+- **Entry**: current HEAD is the plan-approval commit or a checkpoint-commit
+  descendant of it, `plan_approval.status == CURRENT`, and a freshly
+  recomputed plan-stage `review_content_id` matches
+  `plan_approval.approved_review_content_id`.
 - **Allowed actions**: implement checkpoint by checkpoint; run the narrowest
   relevant checks per checkpoint; review each coherent diff; create
   authorized intermediate commits; update `docs/ACTIVE_MILESTONE.md` as
@@ -109,13 +142,31 @@ condition, and whether Claude stops.
 - **Artifacts**: fixed diff; updated `.ai-review/current/` (post-fix stage);
   commits.
 - **Exit**: all blocking/important findings resolved or rejected with
-  evidence.
+  evidence, **and** the most recently reviewed round's status was `REVISE`
+  or `APPROVE` (never `BLOCK`) — proceeds to `AWAITING_TECHNICAL_APPROVAL`.
 - **Stop for user/reviewer?** Only if unresolved blocking findings or major
-  rework remain; otherwise proceed to functional review prep.
+  rework remain; otherwise proceed.
+
+### AWAITING_TECHNICAL_APPROVAL
+
+- **Entry**: `APPLYING_REVIEW_FEEDBACK`'s exit condition is met, no
+  protected path is dirty (`WORKFLOW_STATE.json`/`WORKFLOW_CONFIG.json`
+  dirtiness never blocks this), and current committed content matches
+  `reviewed_implementation_head` exactly (the bundle generator's own,
+  sole-writer field — set at `implementation`/`post-fix` stage).
+- **Allowed actions**: run `/approve-review implementation`, which chooses
+  the approval basis exactly as `AWAITING_PLAN_APPROVAL` does above. No
+  further implementation changes.
+- **Artifacts**: none new until the command runs.
+- **Exit**: `/approve-review implementation` writes `technical_approval`
+  and creates a metadata-only technical-approval commit (zero production/
+  test changes).
+- **Stop for user/reviewer?** Yes — hard gate, same enforcement as
+  `AWAITING_PLAN_APPROVAL`.
 
 ### AWAITING_FUNCTIONAL_REVIEW
 
-- **Entry**: implementation review feedback is fully applied.
+- **Entry**: `technical_approval.status == CURRENT`.
 - **Allowed actions**: confirm automated verification state; write a concise
   manual functional-review checklist (setup, test data, exact flows,
   expected results, known limitations); update `docs/ACTIVE_MILESTONE.md`.
@@ -164,12 +215,32 @@ condition, and whether Claude stops.
 
 ## Hard gates summary
 
-Claude must stop and wait for a human/external input at exactly four points:
+Claude must stop and wait for a human/external input at exactly six points:
 
 1. `AWAITING_EXTERNAL_PLAN_REVIEW`
-2. `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`
-3. `AWAITING_FUNCTIONAL_REVIEW`
-4. `AWAITING_USER_ACCEPTANCE`
+2. `AWAITING_PLAN_APPROVAL`
+3. `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`
+4. `AWAITING_TECHNICAL_APPROVAL`
+5. `AWAITING_FUNCTIONAL_REVIEW`
+6. `AWAITING_USER_ACCEPTANCE`
+
+`AWAITING_PLAN_APPROVAL` and `AWAITING_TECHNICAL_APPROVAL` are each enforced
+by `/approve-review`'s mechanism-independent user-only guard
+(`disable-model-invocation: true`, plus a literal, specificity-checked
+`user_confirmation`) — only the user can exit either gate, never Claude
+autonomously. `/accept-milestone` carries the same guard for
+`AWAITING_USER_ACCEPTANCE`.
+
+For a `governing_workflow_version: "2.1"` work item, the edge from
+`REVISING_PLAN` to `AWAITING_PLAN_APPROVAL` is further refined into
+`REVISING_PLAN → AWAITING_LOCAL_PLAN_REVIEW → AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW
+→ AWAITING_PLAN_APPROVAL` (two-stage local-then-manual-external plan
+review) — a refinement of the existing edge, not two additional hard gates
+layered on top of it. This repository's own workflow-v2-1-core work item is
+fixed at `governing_workflow_version: "1"` for its entire execution, so the
+refined edge does not apply to it; see `docs/ai-workflow/WORKFLOW_V2_PLAN.md`
+(`D-Plan-Review-Stages`) for the full `"2.1"`-only mechanism, owned by a
+later checkpoint.
 
 Between gates, Claude may work autonomously, subject to the stop conditions
 already defined in `AGENTS.md` (ambiguous product behavior, architecture

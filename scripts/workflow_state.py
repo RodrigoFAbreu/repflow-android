@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Workflow v2.1 state-file schema and validator core (WF1a), extended
-with work-item routing and the registry/mapping generator (WF1b).
+with work-item routing and the registry/mapping generator (WF1b), and
+D2/D-States' approval-record schema and gate logic (WF4a-ii).
 
 Implements the `docs/ai-workflow/WORKFLOW_V2_PLAN.md` D3 schema for
 `docs/ai-workflow/WORKFLOW_CONFIG.json` (repository-level default,
@@ -18,11 +19,24 @@ mapping JSON generator (the sole writer either file should ever have,
 running the coverage/topological-order checks at generation time rather
 than leaving them to be discovered at review time).
 
+WF4a-ii adds D2's unified `plan_approval`/`technical_approval` record
+schema, the non-circular gate-reachability check for both new D-States
+gates (`AWAITING_PLAN_APPROVAL`/`AWAITING_TECHNICAL_APPROVAL`), the
+EXTERNAL_APPROVE/USER_OVERRIDE basis decision, and the mechanism-
+independent user-only guard's second control (literal, specific
+`user_confirmation` text). `/approve-review`'s own commit-creation step
+and the exact scoped trailer *lookup* used for later durability checks
+are D-Approval-Commits/D-Commit-Provenance mechanics owned by `WF4a-iii`,
+not this checkpoint -- this module only decides and validates the record,
+never writes a commit.
+
 Still out of scope here (owned by later checkpoints named in the plan's
-own checkpoint table): a full phase-entry/exit transition graph
-(D-States, applied to `MILESTONE_WORKFLOW.md` by WF4a-ii/`WF4a-iv`),
-`WORKTREE_IDENTITY.json`'s writer (WF2), and the approval/commit-lifecycle
-helpers (WF4a-iii).
+own checkpoint table): `WORKTREE_IDENTITY.json`'s writer (WF2), the
+approval/checkpoint-completion Git-lifecycle helpers and per-stage
+freshness/durability recomputation (WF4a-iii), and the two-stage local-
+then-manual-external plan-review protocol's own ledger writers
+(`WF4a-iv` -- `_validate_plan_review_stages` below only checks the
+schema shape of a ledger some other, later command writes).
 
 Stdlib-only, mirroring `scripts/workflow_fingerprint.py`'s own
 `docs/TECHNICAL_DECISIONS.md`-recorded constraint.
@@ -62,6 +76,21 @@ WORK_ITEM_TYPES = frozenset({"process", "product"})
 WORK_ITEM_KINDS = frozenset({"process", "product", "synthetic"})
 
 CHECKPOINT_STATUSES = frozenset({"IN_PROGRESS", "COMPLETE"})
+
+# D2's unified plan_approval/technical_approval record shape.
+APPROVAL_STATUSES = frozenset({"CURRENT", "STALE"})
+APPROVAL_BASES = frozenset({"EXTERNAL_APPROVE", "USER_OVERRIDE", "LEGACY_V1"})
+# Narrowed per OPUS-R10-014: no_content_id removed -- the only basis that
+# uses waivers (LEGACY_V1) always backfills a real content ID at import
+# (D-Legacy), so no reachable state can ever emit it.
+WAIVED_GUARANTEES = frozenset({"no_bundle_id", "no_telemetry"})
+# D2's mechanism-independent guard names "plan"/"implementation" explicitly
+# for /approve-review; "acceptance" extends the identical mechanism to
+# /accept-milestone's AWAITING_USER_ACCEPTANCE gate, which the same guard
+# sentence names in the same breath without itself enumerating a third
+# stage keyword (a real gap in the plan text, resolved here rather than
+# left unimplemented -- flagged to the user in this checkpoint's report).
+APPROVAL_STAGES = frozenset({"plan", "implementation", "acceptance"})
 
 # Only MILESTONE_COMPLETE is terminal -- LEGACY_READY is explicitly
 # "dormant, not terminal" (D-Legacy phase 1, resolves GPT-R9-005).
@@ -193,6 +222,24 @@ class UnsupportedGoverningVersionError(Exception):
 class WorkItemTerminalReuseError(Exception):
     """Raised when routing names a `work_item_id` that already exists at a
     terminal phase -- ids are not reused after `MILESTONE_COMPLETE` (D1)."""
+
+
+class InvalidApprovalRecordError(Exception):
+    """Raised when a `plan_approval`/`technical_approval` record does not
+    match D2's shape, including the plan-stage's permanently-null
+    `reviewed_content_commit` rule (GPT-R9-006) and the `waived_guarantees`
+    controlled vocabulary (OPUS-R6-025/OPUS-R10-014)."""
+
+
+class BlockCannotApproveError(Exception):
+    """Raised when the most recently reviewed round's status is `BLOCK` --
+    D-States: `BLOCK` never reaches either approval basis by any path."""
+
+
+class UserConfirmationRejectedError(Exception):
+    """Raised when literal `user_confirmation` text is missing, empty, or
+    does not name the exact `work_item_id` and stage being approved
+    (resolves OPUS-R6-010, corrected by GPT-R9-008/OPUS-R10-010/GPT-R11-004)."""
 
 
 def _run(args: list[str], cwd: Path) -> str:
@@ -609,6 +656,217 @@ def complete_work_item(state: dict, work_item_id: str, now: str) -> dict:
     work_item["last_transition"] = now
     if new_state.get("active_work_item_id") == work_item_id:
         new_state["active_work_item_id"] = None
+    return new_state
+
+
+# ---------------------------------------------------------------------------
+# D-States: non-circular gate-reachability for AWAITING_PLAN_APPROVAL /
+# AWAITING_TECHNICAL_APPROVAL (never reads plan_approval/technical_approval
+# themselves -- resolves OPUS-R6-004/-011)
+# ---------------------------------------------------------------------------
+
+
+def approval_gate_reachable(latest_round_status: str) -> bool:
+    """Shared entry condition for both new gates: reachable whenever the
+    most recently reviewed round's status is `REVISE` or `APPROVE` (never
+    `BLOCK`), regardless of whether any approval record exists yet -- a
+    `REVISE` round with zero blocking findings left reaches the gate
+    exactly as readily as an `APPROVE` round (missing-test items 12/27)."""
+    return latest_round_status in ("REVISE", "APPROVE")
+
+
+def technical_approval_gate_reachable(
+    *, latest_round_status: str, protected_path_dirty: bool,
+    head_matches_reviewed_implementation_head: bool,
+) -> bool:
+    """`AWAITING_TECHNICAL_APPROVAL`'s entry condition: the shared
+    reachability rule above, plus "no protected path is dirty" (D3;
+    `WORKFLOW_STATE.json`/`WORKFLOW_CONFIG.json` dirtiness never blocks
+    this) and current committed content matching
+    `reviewed_implementation_head` exactly."""
+    return (
+        approval_gate_reachable(latest_round_status)
+        and not protected_path_dirty
+        and head_matches_reviewed_implementation_head
+    )
+
+
+def plan_approval_gate_reachable(
+    *, latest_round_status: str, governing_workflow_version: str,
+    plan_review_stages: dict | None, current_review_content_id: str,
+) -> bool:
+    """`AWAITING_PLAN_APPROVAL`'s entry condition: the shared reachability
+    rule above, plus -- for a `governing_workflow_version: "2.1"` work item
+    only (resolves GPT-R11-001/-003) -- the `plan_review_stages` ledger
+    must record both `local_model_plan_review` and
+    `manual_external_plan_review` completed (`verdict: APPROVE`) against
+    the *current* plan-stage `review_content_id`. A `"1"` item's condition
+    is exactly the shared rule, unchanged."""
+    if not approval_gate_reachable(latest_round_status):
+        return False
+    if governing_workflow_version != "2.1":
+        return True
+    if plan_review_stages is None:
+        return False
+    if plan_review_stages.get("review_content_id") != current_review_content_id:
+        return False
+    local = plan_review_stages.get("local_model_plan_review")
+    manual = plan_review_stages.get("manual_external_plan_review")
+    return (
+        local is not None and local.get("verdict") == "APPROVE"
+        and manual is not None and manual.get("verdict") == "APPROVE"
+    )
+
+
+# ---------------------------------------------------------------------------
+# D2: unified plan_approval/technical_approval record -- shape, basis
+# decision, and the mechanism-independent user-only guard's second control
+# ---------------------------------------------------------------------------
+
+
+def validate_user_confirmation(text: str, *, work_item_id: str, stage: str) -> None:
+    """Second of the two named, real user-only-guard mechanisms (D2): the
+    text must be non-empty and must literally name both the exact
+    `work_item_id` and the exact `stage` being approved. A trust boundary,
+    not a cryptographic guarantee (D2) -- rejects an empty/generic string
+    and a confirmation naming the wrong item/stage, but a legitimate literal
+    repeat across two different, genuine approvals is accepted (deliberately
+    not a novelty check, per OPUS-R10-010/GPT-R11-004)."""
+    if stage not in APPROVAL_STAGES:
+        raise InvalidApprovalRecordError(f"unknown approval stage: {stage!r}")
+    if not text or not text.strip():
+        raise UserConfirmationRejectedError(
+            f"user_confirmation is empty -- must name work_item_id {work_item_id!r} "
+            f"and stage {stage!r} explicitly"
+        )
+    if work_item_id not in text:
+        raise UserConfirmationRejectedError(
+            f"user_confirmation does not name work_item_id {work_item_id!r}: {text!r}"
+        )
+    if stage not in text:
+        raise UserConfirmationRejectedError(
+            f"user_confirmation does not name stage {stage!r}: {text!r}"
+        )
+
+
+def resolve_approval_basis(
+    *, latest_round_status: str, feedback_bundle_id: str | None, current_bundle_id: str,
+    user_confirmation: str | None, work_item_id: str, stage: str,
+) -> str:
+    """D2's basis decision, run *inside* the approval gate, never as an
+    entry precondition (OPUS-R6-004): `EXTERNAL_APPROVE` only when the
+    latest reviewed round's status is exactly `APPROVE` and its recorded
+    `bundle_id` equals the just-recomputed current bundle_id exactly;
+    otherwise `USER_OVERRIDE`. `BLOCK` never reaches either basis (the
+    round's findings are, by definition, not resolved). The mechanism-
+    independent guard's `user_confirmation` specificity check applies to
+    every write regardless of basis (D2's record shape: "every basis") --
+    `EXTERNAL_APPROVE` does not additionally prompt for override
+    *justification* text (missing-test item 13), but still requires the
+    same named-item/stage confirmation already gathered as part of
+    invoking `/approve-review` in the current turn."""
+    if latest_round_status == "BLOCK":
+        raise BlockCannotApproveError(
+            f"{work_item_id}/{stage}: latest reviewed round status is BLOCK -- "
+            f"neither EXTERNAL_APPROVE nor USER_OVERRIDE is reachable"
+        )
+    validate_user_confirmation(user_confirmation or "", work_item_id=work_item_id, stage=stage)
+    if (
+        latest_round_status == "APPROVE"
+        and feedback_bundle_id is not None
+        and feedback_bundle_id == current_bundle_id
+    ):
+        return "EXTERNAL_APPROVE"
+    return "USER_OVERRIDE"
+
+
+def build_approval_record(
+    *, basis: str, stage: str, user_confirmation: str, now: str,
+    reviewed_bundle_id: str | None = None,
+    approved_review_content_id: str | None = None,
+    review_content_manifest: object | None = None,
+    reviewed_content_commit: str | None = None,
+    legacy_evidence: object | None = None,
+    waived_guarantees: list[str] | None = None,
+) -> dict:
+    """Builds a D2-shaped `plan_approval`/`technical_approval` record and
+    validates it before returning -- `reviewed_content_commit` is the
+    caller's concern to omit for the plan stage (permanently null,
+    GPT-R9-006) and to supply for the implementation stage."""
+    record = {
+        "status": "CURRENT",
+        "basis": basis,
+        "reviewed_bundle_id": reviewed_bundle_id,
+        "approved_review_content_id": approved_review_content_id,
+        "review_content_manifest": review_content_manifest,
+        "reviewed_content_commit": reviewed_content_commit,
+        "legacy_evidence": legacy_evidence,
+        "user_confirmation": user_confirmation,
+        "waived_guarantees": list(waived_guarantees or []),
+        "recorded_at": now,
+    }
+    validate_approval_record(record, stage=stage)
+    return record
+
+
+def validate_approval_record(record: dict, *, stage: str) -> None:
+    """D2's shape check: known `status`/`basis`, the plan-stage's
+    permanently-null `reviewed_content_commit` rule (GPT-R9-006), a
+    non-`LEGACY_V1` basis requiring `reviewed_bundle_id`/
+    `approved_review_content_id`/`review_content_manifest`, a non-empty
+    `user_confirmation` ("every basis"), and the `waived_guarantees`
+    controlled vocabulary (OPUS-R6-025, narrowed OPUS-R10-014)."""
+    if stage not in APPROVAL_STAGES:
+        raise InvalidApprovalRecordError(f"unknown approval stage: {stage!r}")
+    if record.get("status") not in APPROVAL_STATUSES:
+        raise InvalidApprovalRecordError(f"unknown approval status: {record.get('status')!r}")
+    basis = record.get("basis")
+    if basis not in APPROVAL_BASES:
+        raise InvalidApprovalRecordError(f"unknown approval basis: {basis!r}")
+    if stage == "plan" and record.get("reviewed_content_commit") is not None:
+        raise InvalidApprovalRecordError(
+            "a plan-stage approval record must never set reviewed_content_commit "
+            "-- it stays permanently null (GPT-R9-006)"
+        )
+    if basis != "LEGACY_V1":
+        for field in ("reviewed_bundle_id", "approved_review_content_id", "review_content_manifest"):
+            if record.get(field) is None:
+                raise InvalidApprovalRecordError(
+                    f"a {basis} approval record must set {field} (only LEGACY_V1 may leave it null)"
+                )
+    if not record.get("user_confirmation"):
+        raise InvalidApprovalRecordError("approval record must set a non-empty user_confirmation")
+    for guarantee in record.get("waived_guarantees") or []:
+        if guarantee not in WAIVED_GUARANTEES:
+            raise InvalidApprovalRecordError(f"unknown waived_guarantees entry: {guarantee!r}")
+
+
+def apply_plan_approval(state: dict, work_item_id: str, record: dict, now: str) -> dict:
+    """`/approve-review plan`'s state-write step (D-Approval-Commits): sets
+    `plan_approval` and transitions the work item to `IMPLEMENTING`. Commit
+    creation itself is `/approve-review`'s own concern (D-Approval-Commits),
+    not this function's."""
+    validate_approval_record(record, stage="plan")
+    new_state = copy.deepcopy(state)
+    work_item = new_state["work_items"][work_item_id]
+    work_item["plan_approval"] = record
+    work_item["phase"] = "IMPLEMENTING"
+    work_item["state_revision"] = work_item.get("state_revision", 1) + 1
+    work_item["last_transition"] = now
+    return new_state
+
+
+def apply_technical_approval(state: dict, work_item_id: str, record: dict, now: str) -> dict:
+    """`/approve-review implementation`'s state-write step: sets
+    `technical_approval` and transitions the work item to
+    `AWAITING_FUNCTIONAL_REVIEW`."""
+    validate_approval_record(record, stage="implementation")
+    new_state = copy.deepcopy(state)
+    work_item = new_state["work_items"][work_item_id]
+    work_item["technical_approval"] = record
+    work_item["phase"] = "AWAITING_FUNCTIONAL_REVIEW"
+    work_item["state_revision"] = work_item.get("state_revision", 1) + 1
+    work_item["last_transition"] = now
     return new_state
 
 

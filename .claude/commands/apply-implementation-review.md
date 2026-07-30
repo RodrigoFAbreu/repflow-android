@@ -5,6 +5,14 @@ description: Apply external implementation-review feedback and prepare for anoth
 Enter the `APPLYING_REVIEW_FEEDBACK` state of
 `docs/ai-workflow/MILESTONE_WORKFLOW.md`.
 
+0. **Dual-mode branch** (Workflow v2.1, `WF4a-ii`): read the target work
+   item's `governing_workflow_version` from
+   `docs/ai-workflow/WORKFLOW_STATE.json`. Both `"1"` and `"2.1"` items run
+   steps 1-8 identically — this command's exit target
+   (`AWAITING_TECHNICAL_APPROVAL`) is amended only in its naming, per
+   `D-Self-Governance`; there is no other version-specific behavior here.
+   This step exists so the command's own dual-mode structure is explicit
+   and testable per that enumeration.
 1. Read `.ai-review/feedback/REVIEW_FEEDBACK.md`. If it does not exist, stop
    and say so.
 2. Reproduce and validate every Blocking and Important finding against the
@@ -23,5 +31,8 @@ Enter the `APPLYING_REVIEW_FEEDBACK` state of
    `./scripts/prepare-ai-review.sh <base-sha> post-fix`.
 8. If any Blocking finding remains unresolved, or the fix was structurally
    significant, stay in `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` and stop
-   for another review round. Otherwise report readiness and proceed to
-   `/prepare-functional-review`.
+   for another review round. Otherwise report readiness and that
+   `AWAITING_TECHNICAL_APPROVAL` is the next state, and stop — do not
+   auto-run `/approve-review` or `/prepare-functional-review`. Only the user
+   invokes `/approve-review implementation`; let the user decide when to
+   proceed.

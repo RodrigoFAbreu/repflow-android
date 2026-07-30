@@ -58,10 +58,11 @@ rules.
 
 Milestone work follows the state machine in
 `docs/ai-workflow/MILESTONE_WORKFLOW.md`. Claude works autonomously between
-gates but must stop and wait at exactly four points: external plan review,
-external implementation review, user functional review, and explicit
-milestone acceptance. Use the commands in `.claude/commands/` to drive each
-state — do not skip a gate because the diff looks small.
+gates but must stop and wait at every hard gate that document names — see
+its "Hard gates summary" for the current count and list, which changes as
+the workflow evolves; do not hardcode a count here. Use the commands in
+`.claude/commands/` to drive each state — do not skip a gate because the
+diff looks small.
 
 ## Git restrictions
 
@@ -77,6 +78,6 @@ state — do not skip a gate because the diff looks small.
 - Review bundle mechanics and feedback format:
   `docs/ai-workflow/REVIEW_PROTOCOL.md`.
 - Slash commands: `.claude/commands/` (`milestone-plan`, `apply-plan-review`,
-  `milestone-implement`, `apply-implementation-review`,
+  `milestone-implement`, `apply-implementation-review`, `approve-review`,
   `prepare-functional-review`, `apply-functional-review`,
   `accept-milestone`, `prepare-review`).
