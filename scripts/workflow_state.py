@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Workflow v2.1 state-file schema and validator core (WF1a), extended
-with work-item routing and the registry/mapping generator (WF1b), and
-D2/D-States' approval-record schema and gate logic (WF4a-ii).
+with work-item routing and the registry/mapping generator (WF1b), D2/
+D-States' approval-record schema and gate logic (WF4a-ii), and the
+approval/checkpoint-completion Git-lifecycle mechanics (WF4a-iii).
 
 Implements the `docs/ai-workflow/WORKFLOW_V2_PLAN.md` D3 schema for
 `docs/ai-workflow/WORKFLOW_CONFIG.json` (repository-level default,
@@ -24,19 +25,32 @@ schema, the non-circular gate-reachability check for both new D-States
 gates (`AWAITING_PLAN_APPROVAL`/`AWAITING_TECHNICAL_APPROVAL`), the
 EXTERNAL_APPROVE/USER_OVERRIDE basis decision, and the mechanism-
 independent user-only guard's second control (literal, specific
-`user_confirmation` text). `/approve-review`'s own commit-creation step
-and the exact scoped trailer *lookup* used for later durability checks
-are D-Approval-Commits/D-Commit-Provenance mechanics owned by `WF4a-iii`,
-not this checkpoint -- this module only decides and validates the record,
-never writes a commit.
+`user_confirmation` text).
+
+WF4a-iii adds D-Commit-Provenance's trailer search generalized beyond
+checkpoint trailers to the `Workflow-Plan-Approval`/
+`Workflow-Technical-Approval` trailers `/approve-review` creates
+(`discover_approval_commits`, sharing the same first-parent-ancestor
+tie-break and genuine-ambiguity recovery as `discover_checkpoint_commits`
+via one private helper), D-States' "Recomputation rule, stated per
+stage" (`approval_review_content_id`/`approval_is_current`, resolving
+`OPUS-R6-003`'s self-invalidation defect), the full `IMPLEMENTING` entry
+condition D-Approval-Commits names (`implementing_entry_reachable`:
+ancestry to the discovered plan-approval commit, plus freshness), the
+"no protected path is dirty" gate condition's actual Git-derived boolean
+(`any_protected_path_dirty`, consumed by WF4a-ii's own
+`technical_approval_gate_reachable`), and WFR-06's post-approval-commit
+manifest-match verification (`verify_post_approval_manifest_match`).
+Still not this checkpoint's concern: `/approve-review`'s own commit-
+creation step (the Claude session running `git commit` per
+`.claude/commands/approve-review.md`, never a Python-side commit writer,
+consistent with this module's decide-and-validate-only design) and the
+two-stage local-then-manual-external plan-review protocol's own ledger
+writers (`WF4a-iv` -- `_validate_plan_review_stages` below only checks
+the schema shape of a ledger some other, later command writes).
 
 Still out of scope here (owned by later checkpoints named in the plan's
-own checkpoint table): `WORKTREE_IDENTITY.json`'s writer (WF2), the
-approval/checkpoint-completion Git-lifecycle helpers and per-stage
-freshness/durability recomputation (WF4a-iii), and the two-stage local-
-then-manual-external plan-review protocol's own ledger writers
-(`WF4a-iv` -- `_validate_plan_review_stages` below only checks the
-schema shape of a ledger some other, later command writes).
+own checkpoint table): `WORKTREE_IDENTITY.json`'s writer (WF2).
 
 Stdlib-only, mirroring `scripts/workflow_fingerprint.py`'s own
 `docs/TECHNICAL_DECISIONS.md`-recorded constraint.
@@ -51,7 +65,9 @@ import copy
 import json
 import subprocess
 from pathlib import Path
+from typing import Mapping
 
+import workflow_fingerprint as fingerprint
 from workflow_fingerprint import (  # noqa: F401 - re-exported for callers
     InvalidWorkItemIdError,
     InvalidWorkItemTypeError,
@@ -176,6 +192,24 @@ class AmbiguousCheckpointTrailerError(Exception):
     silent pick)."""
 
 
+class AmbiguousApprovalTrailerError(Exception):
+    """Raised when more than one commit in range carries the same
+    (`Workflow-Plan-Approval` or `Workflow-Technical-Approval`,
+    `Workflow-Work-Item`) trailer pair and the first-parent-ancestor
+    tie-break does not resolve to exactly one -- the same genuine-
+    ambiguity recovery `AmbiguousCheckpointTrailerError` names, extended
+    by WF4a-iii to the approval trailers (resolves `OPUS-R6-022`,
+    missing-test item 39)."""
+
+
+class PostApprovalManifestMismatchError(Exception):
+    """Raised when a just-created approval commit's own committed content
+    does not recompute to the `review_content_id` its approval record
+    claims -- WFR-06's post-commit parity check, run once immediately
+    after `/approve-review` creates the commit, never trusted on the
+    record's word alone."""
+
+
 class NonTopologicalRegistryOrderError(Exception):
     """Raised when a registry's `checkpoints` array does not list every
     checkpoint after all of its own `depends_on` entries (D-Selection
@@ -289,6 +323,53 @@ def _first_parent_commits_ordered(repo_root: Path, head: str = "HEAD") -> list[s
     return [line for line in out.splitlines() if line]
 
 
+def _discover_trailer_commits(
+    repo_root: Path, trailer_key: str, work_item_id: str, base_commit: str,
+    head: str, *, ambiguous_error_cls: type[Exception],
+) -> dict[str, str]:
+    """Generic D-Commit-Provenance search shared by checkpoint- and
+    approval-trailer discovery (WF4a-iii generalizes the WF1a checkpoint-
+    only search): every commit reachable in `base_commit..head` carrying
+    an exact `trailer_key: <value>` + `Workflow-Work-Item: <work_item_id>`
+    trailer pair, requiring exactly one match per trailer value after the
+    stated tie-break (prefer a first-parent ancestor of `head`). Returns
+    `{trailer_value: commit_sha}`. Genuine ambiguity (more than one
+    first-parent-ancestor match) raises `ambiguous_error_cls` rather than
+    silently picking (resolves OPUS-R6-022; missing-test items 39, 50,
+    62, 64)."""
+    out = _run(["git", "log", "--format=%H", f"{base_commit}..{head}"], cwd=repo_root)
+    commits = [line for line in out.splitlines() if line]
+
+    matches_by_value: dict[str, list[str]] = {}
+    for commit in commits:
+        trailers = _commit_trailers(repo_root, commit)
+        if trailers.get("Workflow-Work-Item") != work_item_id:
+            continue
+        value = trailers.get(trailer_key)
+        if not value:
+            continue
+        matches_by_value.setdefault(value, []).append(commit)
+
+    first_parent = set(_first_parent_commits_ordered(repo_root, head))
+    resolved: dict[str, str] = {}
+    for value, candidates in matches_by_value.items():
+        if len(candidates) == 1:
+            resolved[value] = candidates[0]
+            continue
+        tie_broken = [c for c in candidates if c in first_parent]
+        if len(tie_broken) == 1:
+            resolved[value] = tie_broken[0]
+        else:
+            raise ambiguous_error_cls(
+                f"{trailer_key} {value!r} for work item {work_item_id!r} has "
+                f"{len(candidates)} trailer matches in {base_commit}..{head}, and "
+                f"{len(tie_broken)} remain after the first-parent-ancestor "
+                f"tie-break (candidates: {candidates}); needs a Workflow-Supersedes "
+                f"trailer or an explicit WORKFLOW_STATE.json annotation"
+            )
+    return resolved
+
+
 def discover_checkpoint_commits(
     repo_root: Path, work_item_id: str, base_commit: str, head: str = "HEAD",
 ) -> dict[str, str]:
@@ -300,37 +381,59 @@ def discover_checkpoint_commits(
     Genuine ambiguity (more than one first-parent-ancestor match) raises
     rather than silently picking (resolves OPUS-R6-022; missing-test items
     50, 62, 64)."""
-    out = _run(["git", "log", "--format=%H", f"{base_commit}..{head}"], cwd=repo_root)
-    commits = [line for line in out.splitlines() if line]
+    return _discover_trailer_commits(
+        repo_root, "Workflow-Checkpoint", work_item_id, base_commit, head,
+        ambiguous_error_cls=AmbiguousCheckpointTrailerError,
+    )
 
-    matches_by_id: dict[str, list[str]] = {}
-    for commit in commits:
-        trailers = _commit_trailers(repo_root, commit)
-        if trailers.get("Workflow-Work-Item") != work_item_id:
-            continue
-        checkpoint_id = trailers.get("Workflow-Checkpoint")
-        if not checkpoint_id:
-            continue
-        matches_by_id.setdefault(checkpoint_id, []).append(commit)
 
-    first_parent = set(_first_parent_commits_ordered(repo_root, head))
-    resolved: dict[str, str] = {}
-    for checkpoint_id, candidates in matches_by_id.items():
-        if len(candidates) == 1:
-            resolved[checkpoint_id] = candidates[0]
-            continue
-        tie_broken = [c for c in candidates if c in first_parent]
-        if len(tie_broken) == 1:
-            resolved[checkpoint_id] = tie_broken[0]
-        else:
-            raise AmbiguousCheckpointTrailerError(
-                f"checkpoint {checkpoint_id!r} for work item {work_item_id!r} has "
-                f"{len(candidates)} trailer matches in {base_commit}..{head}, and "
-                f"{len(tie_broken)} remain after the first-parent-ancestor "
-                f"tie-break (candidates: {candidates}); needs a Workflow-Supersedes "
-                f"trailer or an explicit WORKFLOW_STATE.json annotation"
-            )
-    return resolved
+def discover_approval_commits(
+    repo_root: Path, trailer_key: str, work_item_id: str, base_commit: str, head: str = "HEAD",
+) -> dict[str, str]:
+    """The approval-trailer counterpart of `discover_checkpoint_commits`
+    (WF4a-iii, resolves `OPUS-R6-022` for approval commits too): searches
+    for `trailer_key` (`"Workflow-Plan-Approval"` or
+    `"Workflow-Technical-Approval"`) instead of `"Workflow-Checkpoint"`.
+    Returns `{review_content_id: commit_sha}` -- a work item can carry more
+    than one approval commit per stage over its lifetime (an approval that
+    later staled and was re-approved after a plan revision), each keyed by
+    the distinct `review_content_id` it approved."""
+    return _discover_trailer_commits(
+        repo_root, trailer_key, work_item_id, base_commit, head,
+        ambiguous_error_cls=AmbiguousApprovalTrailerError,
+    )
+
+
+def discover_plan_approval_commit(
+    repo_root: Path, work_item_id: str, review_content_id: str, base_commit: str, head: str = "HEAD",
+) -> str | None:
+    """The specific plan-approval commit carrying
+    `Workflow-Plan-Approval: <review_content_id>` for this work item, or
+    `None` if none is reachable."""
+    matches = discover_approval_commits(repo_root, "Workflow-Plan-Approval", work_item_id, base_commit, head)
+    return matches.get(review_content_id)
+
+
+def discover_technical_approval_commit(
+    repo_root: Path, work_item_id: str, review_content_id: str, base_commit: str, head: str = "HEAD",
+) -> str | None:
+    """The specific technical-approval commit carrying
+    `Workflow-Technical-Approval: <review_content_id>` for this work item,
+    or `None` if none is reachable."""
+    matches = discover_approval_commits(repo_root, "Workflow-Technical-Approval", work_item_id, base_commit, head)
+    return matches.get(review_content_id)
+
+
+def _is_ancestor(repo_root: Path, ancestor: str, descendant: str) -> bool:
+    """Whether `ancestor` is `descendant` itself or a (non-first-parent-
+    restricted) ancestor of it -- used by `implementing_entry_reachable`
+    to confirm current HEAD is the plan-approval commit or a checkpoint-
+    commit descendant of it (D-Approval-Commits)."""
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", ancestor, descendant],
+        cwd=repo_root, capture_output=True,
+    )
+    return result.returncode == 0
 
 
 def verify_checkpoint_completions(
@@ -348,6 +451,174 @@ def verify_checkpoint_completions(
                 f"commit in {base_commit}..{head} carries a matching "
                 f"Workflow-Checkpoint/Workflow-Work-Item trailer pair"
             )
+
+
+# ---------------------------------------------------------------------------
+# WF4a-iii: D-States' "Recomputation rule, stated per stage" and
+# D-Approval-Commits' IMPLEMENTING entry condition (resolves OPUS-R6-003;
+# missing-test items 9, 10, 11)
+# ---------------------------------------------------------------------------
+
+
+def approval_review_content_id(
+    repo_root: Path, *, stage: str, base_commit: str, work_item_type: str,
+    work_item_id: str, plan_revision: int | None = None, head: str = "HEAD",
+    protected: frozenset[str] = fingerprint.PLAN_STAGE_PROTECTED,
+    excluded_paths: Mapping[str, str] = fingerprint.PLAN_STAGE_EXCLUDED_PATHS,
+    excluded_prefixes: Mapping[str, str] = fingerprint.PLAN_STAGE_EXCLUDED_PREFIXES,
+    artifacts_path: Path = fingerprint.DEFAULT_ARTIFACTS_PATH,
+) -> str:
+    """Recomputes the current `review_content_id` at `head` for the given
+    approval `stage`, commit-source (never worktree-source -- this checks
+    committed content, exactly what a fresh session sees, never
+    uncommitted local edits). D-States' "Recomputation rule, stated per
+    stage": `stage="plan"` hashes only the plan-stage projection
+    (protected plan/audit/decisions documents), invariant under checkpoint
+    commits because those never touch those documents; `stage=
+    "implementation"` hashes the implementation-stage projection (source/
+    test/build/migration/workflow-command files, WF4a-i's scope), loaded
+    from the tracked artifact-declarations file rather than adapted from
+    the plan-stage sets (`OPUS-R20-003`: the two stages' sets are
+    near-inverses, never derived from one another). `plan_revision` is
+    required for `stage="plan"` and ignored for `stage="implementation"`
+    -- `implementation_revision` is never part of either projection
+    (D-States: "meaningless before implementation starts and mutating
+    during it")."""
+    if stage == "plan":
+        if plan_revision is None:
+            raise ValueError("plan_revision is required for stage='plan'")
+        digest, _ = fingerprint.compute_review_content_id_plan_stage_at_commit(
+            repo_root, base_commit, head, work_item_type, work_item_id, plan_revision,
+            protected, excluded_paths, excluded_prefixes,
+        )
+        return digest
+    if stage == "implementation":
+        impl_protected_paths, impl_protected_prefixes, impl_excluded_paths, impl_excluded_prefixes = (
+            fingerprint.load_implementation_stage_classification(repo_root, artifacts_path)
+        )
+        digest, _ = fingerprint.compute_review_content_id_implementation_stage_at_commit(
+            repo_root, base_commit, head, work_item_type, work_item_id,
+            impl_protected_paths, impl_protected_prefixes, impl_excluded_paths, impl_excluded_prefixes,
+        )
+        return digest
+    raise InvalidApprovalRecordError(f"unknown approval stage: {stage!r}")
+
+
+def approval_is_current(
+    repo_root: Path, work_item: dict, *, stage: str, base_commit: str, head: str = "HEAD",
+) -> bool:
+    """D2/D-States durability check for either approval record: `status ==
+    CURRENT` plus a freshly recomputed, stage-appropriate
+    `review_content_id` matching `approved_review_content_id` exactly.
+    `False` whenever no record exists yet or its status is already
+    `STALE` -- this function only ever detects fresh staleness, it never
+    clears a status a caller previously set. Missing-test item 10: a
+    plan-document edit after a checkpoint commit changes the plan-stage
+    projection, so this returns `False`. Missing-test item 11: an
+    `implementation_revision` bump touches no hashed field of either
+    projection, so this keeps returning `True`."""
+    record_field = "plan_approval" if stage == "plan" else "technical_approval"
+    record = work_item.get(record_field)
+    if record is None or record.get("status") != "CURRENT":
+        return False
+    current_id = approval_review_content_id(
+        repo_root, stage=stage, base_commit=base_commit,
+        work_item_type=work_item["work_item_type"], work_item_id=work_item["work_item_id"],
+        plan_revision=work_item.get("plan_revision"), head=head,
+    )
+    return current_id == record["approved_review_content_id"]
+
+
+def implementing_entry_reachable(
+    repo_root: Path, work_item: dict, base_commit: str, head: str = "HEAD",
+) -> bool:
+    """D-Approval-Commits' `IMPLEMENTING` entry condition, in full:
+    current HEAD (derived live) is the plan-approval commit or a
+    checkpoint-commit descendant of it, `plan_approval.status ==
+    CURRENT`, and a freshly recomputed plan-stage `review_content_id`
+    matches `plan_approval.approved_review_content_id` (missing-test item
+    9: true at checkpoints 1, 2, and N in a fresh session, since the
+    plan-approval commit stays a first-ancestor-chain ancestor of every
+    later checkpoint commit and the plan-stage projection stays
+    unchanged by them)."""
+    plan_approval = work_item.get("plan_approval")
+    if plan_approval is None or plan_approval.get("status") != "CURRENT":
+        return False
+    approval_commit = discover_plan_approval_commit(
+        repo_root, work_item["work_item_id"],
+        plan_approval["approved_review_content_id"], base_commit, head,
+    )
+    if approval_commit is None or not _is_ancestor(repo_root, approval_commit, head):
+        return False
+    return approval_is_current(repo_root, work_item, stage="plan", base_commit=base_commit, head=head)
+
+
+def verify_post_approval_manifest_match(
+    repo_root: Path, work_item: dict, *, stage: str, base_commit: str, commit: str,
+) -> None:
+    """WFR-06: "the committed plan exactly matches the reviewed working-
+    tree content after the plan-approval commit", generalized to either
+    approval stage. Recomputes `review_content_id` from `commit`'s own
+    committed content and asserts it equals the approval record's
+    `approved_review_content_id` exactly -- run once, immediately after
+    `/approve-review` creates the commit, never trusted on the record's
+    word alone."""
+    record_field = "plan_approval" if stage == "plan" else "technical_approval"
+    record = work_item[record_field]
+    expected = record["approved_review_content_id"]
+    actual = approval_review_content_id(
+        repo_root, stage=stage, base_commit=base_commit,
+        work_item_type=work_item["work_item_type"], work_item_id=work_item["work_item_id"],
+        plan_revision=work_item.get("plan_revision"), head=commit,
+    )
+    if actual != expected:
+        raise PostApprovalManifestMismatchError(
+            f"{work_item['work_item_id']}/{stage}: commit {commit} recomputes to "
+            f"{actual!r}, expected {expected!r} (approved_review_content_id)"
+        )
+
+
+# ---------------------------------------------------------------------------
+# WF4a-iii: D-States' "no protected path is dirty" gate condition
+# ---------------------------------------------------------------------------
+
+
+def _dirty_paths(repo_root: Path) -> set[str]:
+    """Paths with uncommitted changes relative to HEAD -- staged,
+    unstaged, and untracked-but-not-ignored -- used by the
+    `AWAITING_TECHNICAL_APPROVAL` entry condition's "no protected path is
+    dirty" clause (D3). Distinct from `workflow_fingerprint`'s own
+    `base_commit..worktree` diff, which measures change since plan
+    approval, not uncommitted state."""
+    changed = _run(["git", "diff", "--name-only", "-z", "HEAD"], cwd=repo_root)
+    untracked = _run(["git", "ls-files", "--others", "--exclude-standard", "-z"], cwd=repo_root)
+    paths = {p for p in changed.split("\x00") if p}
+    paths |= {p for p in untracked.split("\x00") if p}
+    return paths
+
+
+def any_protected_path_dirty(
+    repo_root: Path,
+    protected_paths: Mapping[str, str],
+    protected_prefixes: Mapping[str, str],
+    excluded_paths: Mapping[str, str],
+    excluded_prefixes: Mapping[str, str],
+) -> bool:
+    """`AWAITING_TECHNICAL_APPROVAL`'s entry condition (D-States): "no
+    protected path is dirty", `WORKFLOW_STATE.json`/`WORKFLOW_CONFIG.json`
+    dirtiness never blocking this by construction -- both are declared
+    `excluded_paths` in the implementation-stage classification, never
+    `protected` (missing-test item 16). Fails closed (`UnclassifiedPathError`)
+    on a dirty path neither set names, the same discipline
+    `classify_path_implementation_stage` already applies to the
+    `base..worktree` diff."""
+    for path in sorted(_dirty_paths(repo_root)):
+        classification = fingerprint.classify_path_implementation_stage(
+            path, protected_paths, protected_prefixes, excluded_paths, excluded_prefixes
+        )
+        if classification == "protected":
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------

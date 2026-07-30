@@ -54,8 +54,12 @@ actually load-bearing control for the Skill exposure path, not mechanism
    `workflow_state.approval_gate_reachable(status)` for the plan stage on a
    `"1"` item (`plan_approval_gate_reachable(...)` on a `"2.1"` item), or
    `workflow_state.technical_approval_gate_reachable(...)` for the
-   implementation stage (also requires no protected path dirty and current
-   HEAD `== reviewed_implementation_head`). A `BLOCK` status, or an unmet
+   implementation stage. The latter's `protected_path_dirty` argument is
+   `workflow_state.any_protected_path_dirty(...)` (`WF4a-iii`), called with
+   the implementation-stage classification
+   (`workflow_fingerprint.load_implementation_stage_classification(...)`) —
+   `WORKFLOW_STATE.json`/`WORKFLOW_CONFIG.json` dirtiness never blocks this,
+   by construction of that classification. A `BLOCK` status, or an unmet
    additional condition, stops here — report why, do not proceed.
 2. **Recompute fresh**: `bundle_id` over the current bundle and the
    stage-appropriate `review_content_id` (`scripts/workflow_fingerprint.py`)
@@ -84,9 +88,18 @@ actually load-bearing control for the Skill exposure path, not mechanism
    - Implementation stage: a metadata-only commit (zero production/test
      changes) carrying `Workflow-Technical-Approval: <full
      review_content_id>` + `Workflow-Work-Item: <id>`.
-   The exact scoped trailer *lookup* used by later durability/freshness
-   checks is `WF4a-iii`'s own mechanism — this command only writes the
-   trailer, it never needs to search for one.
+   This command only writes the trailer; it never needs to search for one
+   itself. The exact scoped trailer *lookup* later durability/freshness
+   checks use is `workflow_state.discover_plan_approval_commit`/
+   `discover_technical_approval_commit` (`WF4a-iii`).
+6a. **Verify the commit** (`WF4a-iii`, WFR-06): immediately after the
+    commit lands, call
+    `workflow_state.verify_post_approval_manifest_match(repo_root,
+    work_item, stage=..., base_commit=..., commit=<the new commit's SHA>)`.
+    `PostApprovalManifestMismatchError` means the committed content does
+    not match what was reviewed — stop and report it; never silently
+    accept it, and never let a mismatch reach the user as a successful
+    approval.
 7. Report the new phase (`IMPLEMENTING` or `AWAITING_FUNCTIONAL_REVIEW`) and
    **stop**. Never chain into the next state's actions in the same
    invocation.

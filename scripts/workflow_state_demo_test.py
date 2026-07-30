@@ -82,6 +82,53 @@ class TestAgainstRealRepository(unittest.TestCase):
         ).stdout
         self.assertIn(f"Workflow-Plan-Approval: {approval['approved_review_content_id']}", body)
 
+    def test_real_plan_approval_commit_is_discovered_by_the_generalized_trailer_search(self):
+        """WF4a-iii's discover_plan_approval_commit against this milestone's
+        own real WF0 approval commit (mirrors test_wf0_and_wf1a's checkpoint-
+        trailer counterpart above)."""
+        repo_root = _repo_root()
+        state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
+        work_item = state["work_items"][WORK_ITEM_ID]
+        approval = work_item["plan_approval"]
+        discovered = ws.discover_plan_approval_commit(
+            repo_root, WORK_ITEM_ID, approval["approved_review_content_id"], BASE_COMMIT,
+        )
+        self.assertEqual(discovered, "8f76175348d0f63e61f6c1a9997b5004a27430fe")
+
+    def test_real_implementing_entry_is_reachable_at_current_head(self):
+        """D-Approval-Commits' full IMPLEMENTING entry condition, exercised
+        against this work item's own real history: the plan-approval
+        commit (WF0) is a first-parent ancestor of current HEAD, and the
+        plan-stage projection is unchanged by every checkpoint commit
+        since (missing-test item 9, real-repository half)."""
+        repo_root = _repo_root()
+        state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
+        work_item = state["work_items"][WORK_ITEM_ID]
+        self.assertTrue(ws.implementing_entry_reachable(repo_root, work_item, work_item["base_commit"]))
+
+    def test_real_plan_approval_is_current(self):
+        repo_root = _repo_root()
+        state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
+        work_item = state["work_items"][WORK_ITEM_ID]
+        self.assertTrue(
+            ws.approval_is_current(repo_root, work_item, stage="plan", base_commit=work_item["base_commit"])
+        )
+
+    def test_real_implementation_stage_classification_has_no_unclassified_dirty_path(self):
+        """any_protected_path_dirty fails closed on an unclassified dirty
+        path -- run here against whatever this working tree's real
+        uncommitted state happens to be, proving the real
+        artifact-declarations file classifies it either way (missing-test
+        item 16, real-repository half; the hermetic half is
+        TestProtectedPathDirty in workflow_state_test.py)."""
+        repo_root = _repo_root()
+        protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
+            ws.fingerprint.load_implementation_stage_classification(repo_root)
+        )
+        ws.any_protected_path_dirty(
+            repo_root, protected_paths, protected_prefixes, excluded_paths, excluded_prefixes
+        )  # must not raise
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -27,6 +27,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import workflow_fingerprint as fingerprint
 import workflow_state as ws
 
 
@@ -840,6 +841,241 @@ class TestApprovalStateWrites(unittest.TestCase):
         new_state = ws.apply_technical_approval(state, "wi", record, now="t2")
         self.assertEqual(new_state["work_items"]["wi"]["phase"], "AWAITING_FUNCTIONAL_REVIEW")
         self.assertEqual(new_state["work_items"]["wi"]["technical_approval"], record)
+
+
+# ---------------------------------------------------------------------------
+# WF4a-iii: approval-trailer discovery (extends D-Commit-Provenance beyond
+# checkpoint trailers, resolves OPUS-R6-022 for approval commits too --
+# missing-test item 39)
+# ---------------------------------------------------------------------------
+
+
+class TestApprovalTrailerDiscovery(unittest.TestCase):
+    def test_single_plan_approval_match_is_discovered(self):
+        with ScratchRepo() as repo:
+            sha = repo.commit("approve-plan", trailers={
+                "Workflow-Plan-Approval": "abc123", "Workflow-Work-Item": "wi",
+            })
+            discovered = ws.discover_approval_commits(repo.root, "Workflow-Plan-Approval", "wi", repo.base)
+            self.assertEqual(discovered, {"abc123": sha})
+            self.assertEqual(ws.discover_plan_approval_commit(repo.root, "wi", "abc123", repo.base), sha)
+
+    def test_single_technical_approval_match_is_discovered(self):
+        with ScratchRepo() as repo:
+            sha = repo.commit("approve-impl", trailers={
+                "Workflow-Technical-Approval": "def456", "Workflow-Work-Item": "wi",
+            })
+            self.assertEqual(ws.discover_technical_approval_commit(repo.root, "wi", "def456", repo.base), sha)
+
+    def test_no_match_returns_none(self):
+        with ScratchRepo() as repo:
+            self.assertIsNone(ws.discover_plan_approval_commit(repo.root, "wi", "nonexistent", repo.base))
+
+    def test_wrong_work_item_is_not_matched(self):
+        with ScratchRepo() as repo:
+            repo.commit("approve-plan", trailers={
+                "Workflow-Plan-Approval": "abc123", "Workflow-Work-Item": "other",
+            })
+            self.assertIsNone(ws.discover_plan_approval_commit(repo.root, "wi", "abc123", repo.base))
+
+    def test_duplicate_approval_trailer_resolves_via_first_parent_tie_break(self):
+        """Same OPUS-R6-022 scenario as checkpoint trailers, extended to
+        approval trailers: a cherry-pick/rebase can copy the trailer onto
+        a new commit while the original stays reachable."""
+        with ScratchRepo() as repo:
+            _run(["git", "checkout", "-q", "-b", "side"], cwd=repo.root)
+            repo.commit("approve-side", trailers={"Workflow-Plan-Approval": "abc123", "Workflow-Work-Item": "wi"})
+            _run(["git", "checkout", "-q", "-"], cwd=repo.root)
+            main_sha = repo.commit("approve-main", trailers={"Workflow-Plan-Approval": "abc123", "Workflow-Work-Item": "wi"})
+            _run(["git", "merge", "-q", "--no-ff", "-m", "merge side", "side"], cwd=repo.root)
+            self.assertEqual(ws.discover_plan_approval_commit(repo.root, "wi", "abc123", repo.base), main_sha)
+
+    def test_genuine_ambiguity_raises(self):
+        with ScratchRepo() as repo:
+            repo.commit("approve-a", trailers={"Workflow-Technical-Approval": "abc123", "Workflow-Work-Item": "wi"})
+            repo.commit("approve-b", trailers={"Workflow-Technical-Approval": "abc123", "Workflow-Work-Item": "wi"})
+            with self.assertRaises(ws.AmbiguousApprovalTrailerError):
+                ws.discover_approval_commits(repo.root, "Workflow-Technical-Approval", "wi", repo.base)
+
+
+# ---------------------------------------------------------------------------
+# WF4a-iii: per-stage approval-freshness rule and the full IMPLEMENTING
+# entry condition (resolves OPUS-R6-003; missing-test items 9, 10, 11)
+# ---------------------------------------------------------------------------
+
+
+class TestApprovalFreshnessAndEntry(unittest.TestCase):
+    """Uses the module's own real `PLAN_STAGE_PROTECTED`/
+    `PLAN_STAGE_EXCLUDED_PREFIXES` defaults rather than a fabricated
+    classification: `docs/TECHNICAL_DECISIONS.md` stands in for "the plan
+    document" (a real protected path), and checkpoint-commit scaffolding
+    lives under `scripts/` (a real excluded prefix), so no override
+    plumbing is needed and the scenario matches this milestone's own
+    actual classification."""
+
+    # One representative real protected path (the plan-stage manifest
+    # requires every entry in PLAN_STAGE_PROTECTED to exist, fail-closed --
+    # `_approve_plan` below writes placeholder content for all of them,
+    # this is the one it later edits to simulate a post-approval plan
+    # revision).
+    PLAN_DOC = "docs/ai-workflow/WORKFLOW_V2_PLAN.md"
+
+    def _plan_stage_worktree_id(self, repo, plan_revision=1):
+        digest, _ = fingerprint.compute_review_content_id_plan_stage(
+            repo.root, repo.base, "process", "wi", plan_revision,
+        )
+        return digest
+
+    def _commit_at_path(self, repo, rel_path, content, subject, trailers=None):
+        full = repo.root / rel_path
+        full.parent.mkdir(parents=True, exist_ok=True)
+        full.write_text(content)
+        _run(["git", "add", rel_path], cwd=repo.root)
+        body = subject
+        if trailers:
+            body += "\n\n" + "\n".join(f"{k}: {v}" for k, v in trailers.items())
+        _run(["git", "commit", "-q", "-m", body], cwd=repo.root)
+        return repo.head()
+
+    def _approve_plan(self, repo, plan_revision=1):
+        for rel_path in fingerprint.PLAN_STAGE_PROTECTED:
+            full = repo.root / rel_path
+            full.parent.mkdir(parents=True, exist_ok=True)
+            if not full.exists():
+                full.write_text(f"placeholder for {rel_path}\n")
+            _run(["git", "add", rel_path], cwd=repo.root)
+        (repo.root / self.PLAN_DOC).write_text("plan v1\n")
+        _run(["git", "add", self.PLAN_DOC], cwd=repo.root)
+        review_content_id = self._plan_stage_worktree_id(repo, plan_revision)
+        _run(["git", "commit", "-q", "-m",
+              "approve plan\n\nWorkflow-Plan-Approval: " + review_content_id + "\nWorkflow-Work-Item: wi"],
+             cwd=repo.root)
+        approval_sha = repo.head()
+        work_item = {
+            "work_item_id": "wi", "work_item_type": "process", "plan_revision": plan_revision,
+            "implementation_revision": None,
+            "plan_approval": {"status": "CURRENT", "approved_review_content_id": review_content_id},
+        }
+        return approval_sha, review_content_id, work_item
+
+    def _commit_checkpoint(self, repo, n):
+        return self._commit_at_path(
+            repo, f"scripts/checkpoint_{n}.txt", f"checkpoint {n}\n", f"checkpoint {n}", trailers={
+                "Workflow-Checkpoint": f"WF{n}", "Workflow-Work-Item": "wi",
+            },
+        )
+
+    def test_reachable_at_checkpoint_0_1_2_and_n(self):
+        with ScratchRepo() as repo:
+            _, _, work_item = self._approve_plan(repo)
+            self.assertTrue(ws.implementing_entry_reachable(repo.root, work_item, repo.base))
+            for n in range(1, 4):
+                self._commit_checkpoint(repo, n)
+                self.assertTrue(
+                    ws.implementing_entry_reachable(repo.root, work_item, repo.base),
+                    f"expected reachable at checkpoint {n}",
+                )
+
+    def test_plan_document_edit_after_checkpoint_stales_plan_approval(self):
+        with ScratchRepo() as repo:
+            _, _, work_item = self._approve_plan(repo)
+            self._commit_checkpoint(repo, 1)
+            self.assertTrue(ws.implementing_entry_reachable(repo.root, work_item, repo.base))
+            self._commit_at_path(repo, self.PLAN_DOC, "plan v2 -- edited after checkpoint\n", "edit plan post-checkpoint")
+            self.assertFalse(ws.implementing_entry_reachable(repo.root, work_item, repo.base))
+            self.assertFalse(
+                ws.approval_is_current(repo.root, work_item, stage="plan", base_commit=repo.base)
+            )
+
+    def test_implementation_revision_bump_does_not_stale_plan_approval(self):
+        with ScratchRepo() as repo:
+            _, _, work_item = self._approve_plan(repo)
+            self.assertTrue(
+                ws.approval_is_current(repo.root, work_item, stage="plan", base_commit=repo.base)
+            )
+            work_item["implementation_revision"] = 5
+            self.assertTrue(
+                ws.approval_is_current(repo.root, work_item, stage="plan", base_commit=repo.base),
+                "an implementation_revision bump touches no field of the plan-stage projection",
+            )
+
+    def test_no_approval_record_is_never_reachable(self):
+        with ScratchRepo() as repo:
+            work_item = {"work_item_id": "wi", "work_item_type": "process", "plan_revision": 1, "plan_approval": None}
+            self.assertFalse(ws.implementing_entry_reachable(repo.root, work_item, repo.base))
+
+    def test_stale_status_is_never_reachable_even_with_matching_content(self):
+        with ScratchRepo() as repo:
+            _, _, work_item = self._approve_plan(repo)
+            work_item["plan_approval"]["status"] = "STALE"
+            self.assertFalse(ws.implementing_entry_reachable(repo.root, work_item, repo.base))
+
+    def test_post_approval_manifest_match_succeeds_for_the_real_approval_commit(self):
+        with ScratchRepo() as repo:
+            approval_sha, _, work_item = self._approve_plan(repo)
+            ws.verify_post_approval_manifest_match(
+                repo.root, work_item, stage="plan", base_commit=repo.base, commit=approval_sha,
+            )  # must not raise
+
+    def test_post_approval_manifest_mismatch_raises(self):
+        with ScratchRepo() as repo:
+            approval_sha, _, work_item = self._approve_plan(repo)
+            work_item["plan_approval"]["approved_review_content_id"] = "wrong-value"
+            with self.assertRaises(ws.PostApprovalManifestMismatchError):
+                ws.verify_post_approval_manifest_match(
+                    repo.root, work_item, stage="plan", base_commit=repo.base, commit=approval_sha,
+                )
+
+
+# ---------------------------------------------------------------------------
+# WF4a-iii: "no protected path is dirty" gate condition (D-States;
+# missing-test item 16)
+# ---------------------------------------------------------------------------
+
+
+class TestProtectedPathDirty(unittest.TestCase):
+    PROTECTED_PATHS = {"scripts/foo.py": "protected"}
+    PROTECTED_PREFIXES = {"app/": "protected"}
+    EXCLUDED_PATHS = {
+        "docs/ai-workflow/WORKFLOW_STATE.json": "excluded",
+        "docs/ai-workflow/WORKFLOW_CONFIG.json": "excluded",
+    }
+    EXCLUDED_PREFIXES = {"docs/": "excluded"}
+
+    def _any_dirty(self, repo_root):
+        return ws.any_protected_path_dirty(
+            repo_root, self.PROTECTED_PATHS, self.PROTECTED_PREFIXES,
+            self.EXCLUDED_PATHS, self.EXCLUDED_PREFIXES,
+        )
+
+    def test_clean_tree_is_not_dirty(self):
+        with ScratchRepo() as repo:
+            self.assertFalse(self._any_dirty(repo.root))
+
+    def test_dirty_state_and_config_files_alone_do_not_block(self):
+        with ScratchRepo() as repo:
+            (repo.root / "docs" / "ai-workflow").mkdir(parents=True)
+            (repo.root / "docs/ai-workflow/WORKFLOW_STATE.json").write_text("{}")
+            (repo.root / "docs/ai-workflow/WORKFLOW_CONFIG.json").write_text("{}")
+            self.assertFalse(self._any_dirty(repo.root))
+
+    def test_dirty_protected_prefix_path_blocks(self):
+        with ScratchRepo() as repo:
+            (repo.root / "app").mkdir()
+            (repo.root / "app" / "Main.kt").write_text("fun main() {}\n")
+            self.assertTrue(self._any_dirty(repo.root))
+
+    def test_dirty_protected_exact_path_blocks(self):
+        with ScratchRepo() as repo:
+            (repo.root / "scripts").mkdir()
+            (repo.root / "scripts" / "foo.py").write_text("pass\n")
+            self.assertTrue(self._any_dirty(repo.root))
+
+    def test_unclassified_dirty_path_fails_closed(self):
+        with ScratchRepo() as repo:
+            (repo.root / "mystery.txt").write_text("???\n")
+            with self.assertRaises(fingerprint.UnclassifiedPathError):
+                self._any_dirty(repo.root)
 
 
 if __name__ == "__main__":
