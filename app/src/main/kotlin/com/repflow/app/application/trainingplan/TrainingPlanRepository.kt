@@ -7,6 +7,7 @@ import com.repflow.app.domain.trainingplan.PlannedExerciseId
 import com.repflow.app.domain.trainingplan.TrainingPlan
 import com.repflow.app.domain.trainingplan.TrainingPlanId
 import com.repflow.app.domain.trainingplan.TrainingPlanVersion
+import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -31,6 +32,16 @@ interface TrainingPlanRepository {
 
     /** Every plan with every one of its versions (never just the latest), for backup export. */
     suspend fun findAllForBackup(): List<TrainingPlanSnapshot>
+
+    /**
+     * Every training-plan version's owning plan identity and current name,
+     * reactively - re-emits on any plan/version insert, rename, or
+     * archive/restore, including a full backup restore (Milestone 8,
+     * implementation-review finding #5). Includes archived plans: History
+     * must still label a session started from a plan that's since been
+     * archived.
+     */
+    fun observeVersionLabels(): Flow<Map<TrainingPlanVersionId, TrainingPlanVersionLabel>>
 
     /** Atomically inserts [plan] and its first [version] (version 1). */
     suspend fun createPlanWithFirstVersion(

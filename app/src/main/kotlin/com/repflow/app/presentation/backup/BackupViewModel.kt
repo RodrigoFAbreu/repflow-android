@@ -31,29 +31,66 @@ class BackupViewModel
         private val _uiState = MutableStateFlow(BackupUiState())
         val uiState = _uiState.asStateFlow()
 
-        /** Builds the backup JSON text; [onReady] is called with it so the route can write it via SAF. */
+        /**
+         * Builds the backup JSON text; [onReady] is called with it so the
+         * route can write it via SAF. Stays busy, and reports no status yet -
+         * the export isn't done until the SAF write actually completes (see
+         * [onExportWriteSucceeded]/[onExportWriteCancelled]/[onExportWriteFailed]),
+         * not merely once the text has been generated in memory (Milestone 8,
+         * CP14: the previous "succeeded" message here fired even if the user
+         * went on to cancel the file picker).
+         */
         fun onExportBackupRequested(onReady: (String) -> Unit) {
             _uiState.update { it.copy(isBusy = true) }
             viewModelScope.launch {
                 val json = exportBackup()
-                _uiState.update { it.copy(isBusy = false, statusMessage = BackupStatusMessage.ExportSucceeded) }
                 onReady(json)
             }
         }
 
-        /** Builds the history CSV text; [onReady] is called with it so the route can write it via SAF. */
+        /** Builds the history CSV text; [onReady] is called with it so the route can write it via SAF. Same deferred-status shape as [onExportBackupRequested]. */
         fun onCsvExportRequested(onReady: (String) -> Unit) {
             _uiState.update { it.copy(isBusy = true) }
             viewModelScope.launch {
                 val csv = exportWorkoutHistoryCsv()
-                _uiState.update { it.copy(isBusy = false, statusMessage = BackupStatusMessage.CsvExportSucceeded) }
                 onReady(csv)
             }
+        }
+
+        /** The route calls this once the SAF write has actually completed successfully. */
+        fun onExportWriteSucceeded(kind: BackupExportKind) {
+            val message =
+                when (kind) {
+                    BackupExportKind.BACKUP -> BackupStatusMessage.ExportSucceeded
+                    BackupExportKind.CSV -> BackupStatusMessage.CsvExportSucceeded
+                }
+            _uiState.update { it.copy(isBusy = false, statusMessage = message) }
+        }
+
+        /** The user dismissed the SAF picker without choosing a destination - not an error, just clears busy silently. */
+        fun onExportWriteCancelled() {
+            _uiState.update { it.copy(isBusy = false) }
+        }
+
+        /** The SAF picker returned a destination but writing to it failed (e.g. an I/O error). */
+        fun onExportWriteFailed() {
+            _uiState.update { it.copy(isBusy = false, statusMessage = BackupStatusMessage.OperationFailed) }
         }
 
         /** The route reads the picked file's text and calls this to ask for restore confirmation. */
         fun onRestoreFilePicked(json: String) {
             _uiState.update { it.copy(pendingRestoreJson = json) }
+        }
+
+        /**
+         * The route couldn't read the picked restore file - a revoked/unreadable
+         * `Uri`, a null stream, or an I/O error (Milestone 8,
+         * implementation-review finding #4). No local data is touched, since
+         * [onRestoreFilePicked] (the only path that stages a restore) was
+         * never reached.
+         */
+        fun onRestoreFileReadFailed() {
+            _uiState.update { it.copy(statusMessage = BackupStatusMessage.OperationFailed) }
         }
 
         fun onRestoreCancelled() {

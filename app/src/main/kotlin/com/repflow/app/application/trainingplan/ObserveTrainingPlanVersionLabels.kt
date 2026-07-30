@@ -2,6 +2,7 @@ package com.repflow.app.application.trainingplan
 
 import com.repflow.app.domain.trainingplan.TrainingPlanId
 import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
+import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
 /** A training plan's stable identity and current display name, for labeling one of its historical versions. */
@@ -12,9 +13,12 @@ data class TrainingPlanVersionLabel(
 
 /**
  * Resolves every training-plan version ever created back to its owning
- * plan's identity and current name - reuses
- * [TrainingPlanRepository.findAllForBackup]'s existing "every plan, every
- * version" capability (Milestone 7) rather than adding a new one.
+ * plan's identity and current name, reactively - delegates to
+ * [TrainingPlanRepository.observeVersionLabels] (Milestone 8,
+ * implementation-review finding #5: this was previously a one-shot
+ * `suspend` read taken once in `HistoryViewModel.init`, so a backup
+ * restore, plan rename, or archive/restore while History stayed open left
+ * the labels stale even though sessions kept updating live).
  *
  * A [com.repflow.app.domain.workout.WorkoutSession] only ever carries the
  * exact [TrainingPlanVersionId] it was started from (never re-pointed at a
@@ -29,11 +33,5 @@ class ObserveTrainingPlanVersionLabels
     constructor(
         private val repository: TrainingPlanRepository,
     ) {
-        suspend operator fun invoke(): Map<TrainingPlanVersionId, TrainingPlanVersionLabel> =
-            repository
-                .findAllForBackup()
-                .flatMap { snapshot ->
-                    val label = TrainingPlanVersionLabel(snapshot.plan.id, snapshot.plan.name.value)
-                    snapshot.versions.map { version -> version.id to label }
-                }.toMap()
+        operator fun invoke(): Flow<Map<TrainingPlanVersionId, TrainingPlanVersionLabel>> = repository.observeVersionLabels()
     }

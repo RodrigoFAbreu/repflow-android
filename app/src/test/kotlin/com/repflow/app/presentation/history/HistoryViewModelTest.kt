@@ -2,12 +2,25 @@ package com.repflow.app.presentation.history
 
 import app.cash.turbine.test
 import com.repflow.app.application.exercise.FixedClock
+import com.repflow.app.application.exercise.InMemoryExerciseRepository
+import com.repflow.app.application.exercise.SequentialIdentifierGenerator
 import com.repflow.app.application.history.ObserveWorkoutHistory
+import com.repflow.app.application.trainingplan.CreateTrainingPlan
+import com.repflow.app.application.trainingplan.CreateTrainingPlanCommand
 import com.repflow.app.application.trainingplan.InMemoryTrainingPlanRepository
 import com.repflow.app.application.trainingplan.ObserveTrainingPlanVersionLabels
+import com.repflow.app.application.trainingplan.PlannedExerciseInput
+import com.repflow.app.application.trainingplan.PlannedExerciseTargetKind
+import com.repflow.app.application.trainingplan.ReviseTrainingPlan
+import com.repflow.app.application.trainingplan.ReviseTrainingPlanCommand
 import com.repflow.app.application.workout.InMemoryWorkoutRepository
 import com.repflow.app.application.workout.InvalidateWorkoutSession
 import com.repflow.app.domain.common.DomainResult
+import com.repflow.app.domain.exercise.Exercise
+import com.repflow.app.domain.exercise.ExerciseId
+import com.repflow.app.domain.exercise.ExerciseName
+import com.repflow.app.domain.exercise.ExerciseOrigin
+import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.workout.WorkoutSession
 import com.repflow.app.domain.workout.WorkoutSessionId
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +59,12 @@ class HistoryViewModelTest {
         Dispatchers.resetMain()
     }
 
+    private fun <T> requireSuccess(result: DomainResult<T, *>): T =
+        when (result) {
+            is DomainResult.Success -> result.value
+            is DomainResult.Failure -> throw AssertionError("Expected success but was failure: ${result.error}")
+        }
+
     private suspend fun seedCompletedSession(id: String): WorkoutSessionId {
         val sessionId = WorkoutSessionId(id)
         val started =
@@ -74,6 +93,68 @@ class HistoryViewModelTest {
                 val loaded = awaitItem()
                 assertEquals(false, loaded.isLoading)
                 assertEquals(listOf("session-1"), loaded.sessions.map { it.id.value })
+            }
+        }
+
+    @Test
+    fun `versionLabels refresh reactively when a plan is renamed while History stays open`() =
+        runTest {
+            // Milestone 8, implementation-review finding #5: versionLabels used to be a
+            // one-shot suspend read taken once in HistoryViewModel.init, so a rename after
+            // the screen was already open would never be reflected without recreating the
+            // ViewModel. Reusing the real ReviseTrainingPlan use case (not a repository
+            // shortcut) proves the fix against the actual rename path, not a synthetic one.
+            val exerciseRepository = InMemoryExerciseRepository()
+            val ids = SequentialIdentifierGenerator(prefix = "plan")
+            val createTrainingPlan = CreateTrainingPlan(trainingPlanRepository, exerciseRepository, clock, ids)
+            val reviseTrainingPlan = ReviseTrainingPlan(trainingPlanRepository, exerciseRepository, clock, ids)
+            val exercise =
+                requireSuccess(
+                    Exercise.create(
+                        id = ExerciseId("bench-press"),
+                        name = requireSuccess(ExerciseName.create("Bench Press")),
+                        trackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
+                        instructions = null,
+                        defaultLoadIncrement = null,
+                        defaultRestDuration = null,
+                        origin = ExerciseOrigin.CUSTOM,
+                        createdAt = clock.now(),
+                    ),
+                )
+            exerciseRepository.seed(exercise)
+            val plannedExercise =
+                PlannedExerciseInput(
+                    exerciseId = exercise.id.value,
+                    order = 0,
+                    targetSets = 3,
+                    targetKind = PlannedExerciseTargetKind.REPS,
+                    repMin = 8,
+                    repMax = 12,
+                    durationMinSeconds = null,
+                    durationMaxSeconds = null,
+                    restSeconds = 90,
+                    isOptional = false,
+                )
+            seedCompletedSession("session-1")
+            val planId = requireSuccess(createTrainingPlan(CreateTrainingPlanCommand("Push day", listOf(plannedExercise))))
+            val versionId =
+                requireNotNull(trainingPlanRepository.findOverviewByPlanId(planId)).latestVersion.id
+            val viewModel = viewModel()
+
+            viewModel.uiState.test {
+                var state = awaitItem()
+                while (state.versionLabels[versionId]?.planName != "Push day") {
+                    state = awaitItem()
+                }
+
+                requireSuccess(reviseTrainingPlan(ReviseTrainingPlanCommand(planId.value, "Push day (renamed)", listOf(plannedExercise))))
+
+                var afterRename = awaitItem()
+                while (afterRename.versionLabels[versionId]?.planName != "Push day (renamed)") {
+                    afterRename = awaitItem()
+                }
+                assertEquals("Push day (renamed)", afterRename.versionLabels[versionId]?.planName)
+                cancelAndIgnoreRemainingEvents()
             }
         }
 
@@ -156,6 +237,7 @@ class HistoryViewModelTest {
                     state = awaitItem()
                 }
                 assertNull(state.selectedSessionId)
+                cancelAndIgnoreRemainingEvents()
             }
         }
 

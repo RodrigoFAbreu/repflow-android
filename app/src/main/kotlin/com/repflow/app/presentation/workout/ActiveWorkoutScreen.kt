@@ -33,6 +33,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.repflow.app.R
 import com.repflow.app.domain.exercise.ExerciseId
+import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSessionId
@@ -239,136 +240,6 @@ private fun RestTimerBar(
 
 private const val MINUTE_SECONDS = 60L
 private const val TICK_INTERVAL_MILLIS = 1_000L
-
-@Composable
-private fun ExerciseCard(
-    exercise: ActiveExerciseUi,
-    onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
-    onUndoLastSet: (WorkoutExerciseId) -> Unit,
-    onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
-) {
-    var loadText by remember(exercise.id) { mutableStateOf("") }
-    var repsText by remember(exercise.id) { mutableStateOf("") }
-    var durationText by remember(exercise.id) { mutableStateOf("") }
-    var rpeText by remember(exercise.id) { mutableStateOf("") }
-    var isWarmup by remember(exercise.id) { mutableStateOf(false) }
-    var painText by remember(exercise.id) { mutableStateOf("") }
-    var techniqueQualityText by remember(exercise.id) { mutableStateOf("") }
-
-    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-        Text(exercise.name)
-        exercise.sets.forEach { set ->
-            val warmupSuffix = if (set.isWarmup) " " + stringResource(R.string.workout_active_warmup_suffix) else ""
-            Text(
-                stringResource(R.string.workout_active_set_row, set.setNumber, set.load ?: 0.0, set.reps ?: 0) +
-                    warmupSuffix,
-            )
-        }
-        Row {
-            OutlinedTextField(
-                value = loadText,
-                onValueChange = { loadText = it },
-                label = { Text(stringResource(R.string.workout_active_load_label)) },
-                keyboardOptions =
-                    androidx.compose.foundation.text
-                        .KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.weight(1f),
-            )
-            OutlinedTextField(
-                value = repsText,
-                onValueChange = { repsText = it },
-                label = { Text(stringResource(R.string.workout_active_reps_label)) },
-                keyboardOptions =
-                    androidx.compose.foundation.text
-                        .KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.weight(1f),
-            )
-        }
-        Row {
-            OutlinedTextField(
-                value = durationText,
-                onValueChange = { durationText = it },
-                label = { Text(stringResource(R.string.workout_active_duration_label)) },
-                keyboardOptions =
-                    androidx.compose.foundation.text
-                        .KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.weight(1f),
-            )
-            OutlinedTextField(
-                value = rpeText,
-                onValueChange = { rpeText = it },
-                label = { Text(stringResource(R.string.workout_active_rpe_label)) },
-                keyboardOptions =
-                    androidx.compose.foundation.text
-                        .KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.weight(1f),
-            )
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.workout_active_warmup_label), modifier = Modifier.weight(1f))
-            Switch(checked = isWarmup, onCheckedChange = { isWarmup = it })
-        }
-        Row {
-            OutlinedTextField(
-                value = painText,
-                onValueChange = { painText = it },
-                label = { Text(stringResource(R.string.workout_active_pain_label)) },
-                keyboardOptions =
-                    androidx.compose.foundation.text
-                        .KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.weight(1f),
-            )
-            OutlinedTextField(
-                value = techniqueQualityText,
-                onValueChange = { techniqueQualityText = it },
-                label = { Text(stringResource(R.string.workout_active_technique_quality_label)) },
-                keyboardOptions =
-                    androidx.compose.foundation.text
-                        .KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.weight(1f),
-            )
-        }
-        Row {
-            Button(
-                onClick = {
-                    onRecordSet(
-                        exercise.id,
-                        loadText.toDoubleOrNull(),
-                        repsText.toIntOrNull(),
-                        durationText.toIntOrNull(),
-                        rpeText.toDoubleOrNull(),
-                        isWarmup,
-                        painText.toIntOrNull(),
-                        techniqueQualityText.toIntOrNull(),
-                    )
-                },
-            ) {
-                Text(stringResource(R.string.workout_active_add_set))
-            }
-            if (exercise.sets.isNotEmpty()) {
-                TextButton(onClick = { onUndoLastSet(exercise.id) }) {
-                    Text(stringResource(R.string.workout_active_undo_set))
-                }
-                TextButton(
-                    onClick = {
-                        onEditLastSet(
-                            exercise.id,
-                            loadText.toDoubleOrNull(),
-                            repsText.toIntOrNull(),
-                            durationText.toIntOrNull(),
-                            rpeText.toDoubleOrNull(),
-                            isWarmup,
-                            painText.toIntOrNull(),
-                            techniqueQualityText.toIntOrNull(),
-                        )
-                    },
-                ) {
-                    Text(stringResource(R.string.workout_active_edit_set))
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun AddExercisePicker(

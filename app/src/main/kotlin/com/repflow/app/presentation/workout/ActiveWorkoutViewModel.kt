@@ -3,19 +3,20 @@ package com.repflow.app.presentation.workout
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.repflow.app.application.exercise.ExerciseStatusFilter
-import com.repflow.app.application.exercise.GetExercise
 import com.repflow.app.application.exercise.ObserveExercises
 import com.repflow.app.application.progression.ProgressionRecommendationRepository
 import com.repflow.app.application.progression.RecordManualOverride
 import com.repflow.app.application.recovery.GetWorkoutDayContext
 import com.repflow.app.application.trainingplan.ObserveTrainingPlans
 import com.repflow.app.application.trainingplan.TrainingPlanOverview
+import com.repflow.app.application.trainingplan.TrainingPlanRepository
 import com.repflow.app.application.trainingplan.TrainingPlanStatusFilter
 import com.repflow.app.application.workout.AbandonWorkoutSession
 import com.repflow.app.application.workout.AddWorkoutExercise
 import com.repflow.app.application.workout.AddWorkoutExerciseCommand
 import com.repflow.app.application.workout.AdjustRestTimer
 import com.repflow.app.application.workout.CompleteWorkoutSession
+import com.repflow.app.application.workout.DEFAULT_REST_TIMER_SECONDS
 import com.repflow.app.application.workout.EditLastWorkoutSet
 import com.repflow.app.application.workout.EditLastWorkoutSetCommand
 import com.repflow.app.application.workout.ObserveActiveWorkoutSession
@@ -26,14 +27,19 @@ import com.repflow.app.application.workout.SkipRestTimer
 import com.repflow.app.application.workout.StartRestTimer
 import com.repflow.app.application.workout.StartWorkoutSession
 import com.repflow.app.application.workout.StartWorkoutSessionCommand
+import com.repflow.app.application.workout.StartWorkoutSessionFromPlan
+import com.repflow.app.application.workout.StartWorkoutSessionFromPlanCommand
 import com.repflow.app.application.workout.UndoLastWorkoutSet
 import com.repflow.app.application.workout.WorkoutOperationError
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.exercise.Exercise
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.progression.ProgressionResult
+import com.repflow.app.domain.trainingplan.PlannedExercise
+import com.repflow.app.domain.trainingplan.PlannedExerciseTarget
 import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
 import com.repflow.app.domain.workout.RestTimer
+import com.repflow.app.domain.workout.WorkoutExercise
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSession
 import com.repflow.app.domain.workout.WorkoutSessionId
@@ -65,11 +71,12 @@ class ActiveWorkoutViewModel
         observeActiveWorkoutSession: ObserveActiveWorkoutSession,
         observeExercises: ObserveExercises,
         observeTrainingPlans: ObserveTrainingPlans,
-        private val getExercise: GetExercise,
+        private val trainingPlanRepository: TrainingPlanRepository,
         private val getWorkoutDayContext: GetWorkoutDayContext,
         private val progressionRecommendationRepository: ProgressionRecommendationRepository,
         private val recordManualOverride: RecordManualOverride,
         private val startWorkoutSession: StartWorkoutSession,
+        private val startWorkoutSessionFromPlan: StartWorkoutSessionFromPlan,
         private val addWorkoutExercise: AddWorkoutExercise,
         private val recordWorkoutSet: RecordWorkoutSet,
         private val undoLastWorkoutSet: UndoLastWorkoutSet,
@@ -150,40 +157,46 @@ class ActiveWorkoutViewModel
 
         /**
          * Starts a new session, optionally from [planVersionId]. Ad-hoc
-         * (`null`) remains fully supported - it's the only path this used to
-         * have. When a plan is chosen, every one of its planned exercises is
-         * added right after the session starts, each carrying its
+         * (`null`) remains fully supported via the unchanged
+         * [StartWorkoutSession] path. When a plan is chosen,
+         * [StartWorkoutSessionFromPlan] seeds every one of its planned
+         * exercises atomically - either the whole session (with every
+         * exercise) is persisted, or none of it is (Milestone 8,
+         * implementation-review finding #1: the previous inline loop here
+         * silently skipped exercises it couldn't resolve and always reported
+         * success regardless). Each seeded exercise carries its
          * [com.repflow.app.domain.trainingplan.PlannedExercise.id] so
          * [com.repflow.app.application.workout.CompleteWorkoutSession] can
          * later resolve a planned rep range for progression (Milestone 8, CP6).
+         *
+         * A non-null [planVersionId] that no longer resolves to an overview
+         * (round-2 implementation-review finding #1: the plan list changed
+         * between rendering and the click, or the selection was stale) must
+         * surface [WorkoutOperationError.NotFound] rather than silently
+         * falling back to an ad-hoc session that would still carry the
+         * plan-version id without any of that plan's exercises.
          */
         fun onStartWorkout(planVersionId: TrainingPlanVersionId? = null) {
             val overview = planVersionId?.let { id -> trainingPlanOverviewsFlow.value.find { it.latestVersion.id == id } }
             launchAction {
-                val result = startWorkoutSession(StartWorkoutSessionCommand(trainingPlanVersionId = planVersionId))
-                if (result is DomainResult.Success && overview != null) {
-                    seedPlannedExercises(result.value, overview)
-                }
-                result
-            }
-        }
+                when {
+                    planVersionId == null -> {
+                        startWorkoutSession(StartWorkoutSessionCommand(trainingPlanVersionId = null))
+                    }
 
-        private suspend fun seedPlannedExercises(
-            sessionId: WorkoutSessionId,
-            overview: TrainingPlanOverview,
-        ) {
-            for (plannedExercise in overview.latestVersion.plannedExercises.sortedBy { it.order }) {
-                val exercise =
-                    (getExercise(plannedExercise.exerciseId) as? DomainResult.Success)?.value ?: continue
-                addWorkoutExercise(
-                    AddWorkoutExerciseCommand(
-                        sessionId = sessionId,
-                        exerciseId = exercise.id,
-                        exerciseNameSnapshot = exercise.name.value,
-                        trackingType = exercise.trackingType,
-                        plannedExerciseId = plannedExercise.id,
-                    ),
-                )
+                    overview != null -> {
+                        startWorkoutSessionFromPlan(
+                            StartWorkoutSessionFromPlanCommand(
+                                trainingPlanVersionId = planVersionId,
+                                plannedExercises = overview.latestVersion.plannedExercises,
+                            ),
+                        )
+                    }
+
+                    else -> {
+                        DomainResult.Failure(WorkoutOperationError.NotFound)
+                    }
+                }
             }
         }
 
@@ -214,6 +227,7 @@ class ActiveWorkoutViewModel
             techniqueQuality: Int? = null,
         ) {
             val sessionId = activeSessionId() ?: return
+            val restSeconds = plannedRestSecondsFor(exerciseId) ?: DEFAULT_REST_TIMER_SECONDS
             launchAction {
                 val result =
                     recordWorkoutSet(
@@ -229,7 +243,7 @@ class ActiveWorkoutViewModel
                             techniqueQuality = techniqueQuality,
                         ),
                     )
-                if (result is DomainResult.Success) startRestTimer(sessionId)
+                if (result is DomainResult.Success) startRestTimer(sessionId, restSeconds)
                 result
             }
         }
@@ -325,45 +339,78 @@ class ActiveWorkoutViewModel
             }
         }
 
+        /**
+         * Resolves each exercise's planned target (Milestone 8,
+         * implementation-review finding #2) via [trainingPlanRepository] -
+         * `null` for an ad-hoc exercise ([WorkoutExercise.plannedExerciseId]
+         * is `null`) or one whose plan/version has since been altered such
+         * that the planned exercise no longer resolves. Suspend calls inside
+         * `List.map` are fine here: `map` is `inline`, so its lambda is
+         * inlined into this already-`suspend` function rather than compiled
+         * as a separate non-suspend closure (same pattern
+         * [latestRecommendationUi] already relies on above).
+         */
+        private suspend fun toContent(session: WorkoutSession?): ActiveWorkoutContent =
+            if (session == null) {
+                ActiveWorkoutContent.NoActiveSession
+            } else {
+                ActiveWorkoutContent.Active(
+                    sessionId = session.id,
+                    startedAt = session.startedAt,
+                    restTimer = session.restTimer?.toUi(),
+                    exercises = session.exercises.map { exercise -> toExerciseUi(exercise) },
+                )
+            }
+
+        private suspend fun toExerciseUi(exercise: WorkoutExercise): ActiveExerciseUi =
+            ActiveExerciseUi(
+                id = exercise.id,
+                name = exercise.exerciseNameSnapshot,
+                trackingType = exercise.trackingType,
+                sets =
+                    exercise.sets.map { set ->
+                        ActiveSetUi(
+                            id = set.id,
+                            setNumber = set.order + 1,
+                            load = set.load,
+                            reps = set.reps,
+                            durationSeconds = set.durationSeconds,
+                            rpe = set.rpe,
+                            isWarmup = set.isWarmup,
+                            pain = set.pain,
+                            techniqueQuality = set.techniqueQuality,
+                        )
+                    },
+                plannedTarget =
+                    exercise.plannedExerciseId
+                        ?.let { trainingPlanRepository.findPlannedExercise(it) }
+                        ?.toUi(),
+            )
+
+        /** The exercise's planned rest, if it was seeded from a plan target; `null` for an ad-hoc exercise (Milestone 8, implementation-review finding #2). */
+        private fun plannedRestSecondsFor(exerciseId: WorkoutExerciseId): Int? =
+            (uiState.value.content as? ActiveWorkoutContent.Active)
+                ?.exercises
+                ?.find { it.id == exerciseId }
+                ?.plannedTarget
+                ?.restSeconds
+
         private companion object {
             const val STOP_TIMEOUT_MILLIS = 5_000L
         }
     }
 
-private fun toContent(session: WorkoutSession?): ActiveWorkoutContent =
-    if (session == null) {
-        ActiveWorkoutContent.NoActiveSession
-    } else {
-        ActiveWorkoutContent.Active(
-            sessionId = session.id,
-            startedAt = session.startedAt,
-            restTimer = session.restTimer?.toUi(),
-            exercises =
-                session.exercises.map { exercise ->
-                    ActiveExerciseUi(
-                        id = exercise.id,
-                        name = exercise.exerciseNameSnapshot,
-                        trackingType = exercise.trackingType,
-                        sets =
-                            exercise.sets.map { set ->
-                                ActiveSetUi(
-                                    id = set.id,
-                                    setNumber = set.order + 1,
-                                    load = set.load,
-                                    reps = set.reps,
-                                    durationSeconds = set.durationSeconds,
-                                    rpe = set.rpe,
-                                    isWarmup = set.isWarmup,
-                                    pain = set.pain,
-                                    techniqueQuality = set.techniqueQuality,
-                                )
-                            },
-                    )
-                },
-        )
-    }
-
 private fun RestTimer.toUi(): RestTimerUi = RestTimerUi(endAt = endAt, totalDurationSeconds = totalDurationSeconds)
+
+/** Pure mapping from the domain plan target to its presentation shape - no DI dependency, so it stays a top-level function like the file's other `toUi()` mappers. */
+private fun PlannedExercise.toUi(): PlannedTargetUi =
+    PlannedTargetUi(
+        targetWarmupSets = targetWarmupSets,
+        targetWorkingSets = targetSets.value,
+        repRange = (target as? PlannedExerciseTarget.Reps)?.range?.let { it.min..it.max },
+        durationRangeSeconds = (target as? PlannedExerciseTarget.Duration)?.range?.let { it.minSeconds..it.maxSeconds },
+        restSeconds = restDuration?.seconds?.toInt(),
+    )
 
 private fun toPickerItem(
     exercise: Exercise,

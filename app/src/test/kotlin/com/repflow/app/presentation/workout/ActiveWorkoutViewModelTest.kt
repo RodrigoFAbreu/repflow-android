@@ -26,13 +26,16 @@ import com.repflow.app.application.workout.RecordWorkoutSet
 import com.repflow.app.application.workout.SkipRestTimer
 import com.repflow.app.application.workout.StartRestTimer
 import com.repflow.app.application.workout.StartWorkoutSession
+import com.repflow.app.application.workout.StartWorkoutSessionFromPlan
 import com.repflow.app.application.workout.UndoLastWorkoutSet
+import com.repflow.app.application.workout.WorkoutOperationError
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.exercise.Exercise
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseName
 import com.repflow.app.domain.exercise.ExerciseOrigin
 import com.repflow.app.domain.exercise.ExerciseTrackingType
+import com.repflow.app.domain.exercise.RestDuration
 import com.repflow.app.domain.trainingplan.PlannedExercise
 import com.repflow.app.domain.trainingplan.PlannedExerciseId
 import com.repflow.app.domain.trainingplan.PlannedExerciseTarget
@@ -68,11 +71,12 @@ class ActiveWorkoutViewModelTest {
             observeActiveWorkoutSession = ObserveActiveWorkoutSession(workoutRepository),
             observeExercises = ObserveExercises(exerciseRepository),
             observeTrainingPlans = ObserveTrainingPlans(trainingPlanRepository),
-            getExercise = GetExercise(exerciseRepository),
+            trainingPlanRepository = trainingPlanRepository,
             getWorkoutDayContext = GetWorkoutDayContext(InMemoryRecoveryRepository(), InMemoryFutsalRepository(), clock),
             progressionRecommendationRepository = progressionRecommendationRepository,
             recordManualOverride = RecordManualOverride(progressionRecommendationRepository, clock),
             startWorkoutSession = StartWorkoutSession(workoutRepository, clock, ids),
+            startWorkoutSessionFromPlan = StartWorkoutSessionFromPlan(workoutRepository, GetExercise(exerciseRepository), clock, ids),
             addWorkoutExercise = AddWorkoutExercise(workoutRepository, ids),
             recordWorkoutSet = RecordWorkoutSet(workoutRepository, clock, ids),
             undoLastWorkoutSet = UndoLastWorkoutSet(workoutRepository),
@@ -226,6 +230,208 @@ class ActiveWorkoutViewModelTest {
                 }
                 val active = (afterStart.content as ActiveWorkoutContent.Active).exercises.single()
                 assertEquals(exercise.name.value, active.name)
+            }
+        }
+
+    @Test
+    fun `onStartWorkout with a plan referencing a missing exercise fails atomically and leaves no active session`() =
+        runTest {
+            // The exercise (Milestone 8, implementation-review finding #1) was never seeded -
+            // simulates a planned exercise whose underlying Exercise has since been deleted.
+            val plannedExercise =
+                PlannedExercise(
+                    id = PlannedExerciseId("planned-missing"),
+                    exerciseId = ExerciseId("exercise-does-not-exist"),
+                    order = 0,
+                    targetSets = requireSuccess(TargetSets.create(3)),
+                    target = PlannedExerciseTarget.Reps(requireSuccess(RepRange.create(8, 12))),
+                    restDuration = null,
+                    isOptional = false,
+                )
+            val plan =
+                requireSuccess(
+                    TrainingPlan.create(
+                        id = TrainingPlanId("plan-missing"),
+                        name = requireSuccess(TrainingPlanName.create("Broken plan")),
+                        createdAt = now,
+                    ),
+                )
+            val version =
+                requireSuccess(
+                    TrainingPlanVersion.create(
+                        id = TrainingPlanVersionId("version-missing"),
+                        planId = plan.id,
+                        versionNumber = 1,
+                        plannedExercises = listOf(plannedExercise),
+                        note = null,
+                        createdAt = now,
+                    ),
+                )
+            requireSuccess(trainingPlanRepository.createPlanWithFirstVersion(plan, version))
+
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                var state = awaitItem()
+                while (state.content !is ActiveWorkoutContent.NoActiveSession || state.availablePlans.isEmpty()) {
+                    state = awaitItem()
+                }
+                val pickedPlan = state.availablePlans.single()
+
+                viewModel.onStartWorkout(pickedPlan.versionId)
+
+                var failed = awaitItem()
+                while (failed.errorMessage == null) {
+                    failed = awaitItem()
+                }
+                assertEquals(ActiveWorkoutErrorReason.NOT_FOUND, failed.errorMessage)
+                assertEquals(ActiveWorkoutContent.NoActiveSession, failed.content)
+                assertEquals(null, workoutRepository.findActiveSession())
+            }
+        }
+
+    @Test
+    fun `onStartWorkout with a plan version that no longer resolves to an overview creates no session`() =
+        runTest {
+            // No plan/version is seeded at all here (round-2 implementation-review finding #1):
+            // simulates a selection that went stale because the plan list changed between
+            // rendering and the click, distinct from `...missing exercise...` above where the
+            // overview resolves fine but one of its planned exercises doesn't.
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                var state = awaitItem()
+                while (state.content !is ActiveWorkoutContent.NoActiveSession) {
+                    state = awaitItem()
+                }
+
+                viewModel.onStartWorkout(TrainingPlanVersionId("version-does-not-exist"))
+
+                var failed = awaitItem()
+                while (failed.errorMessage == null) {
+                    failed = awaitItem()
+                }
+                assertEquals(ActiveWorkoutErrorReason.NOT_FOUND, failed.errorMessage)
+                assertEquals(ActiveWorkoutContent.NoActiveSession, failed.content)
+                assertEquals(null, workoutRepository.findActiveSession())
+            }
+        }
+
+    @Test
+    fun `onStartWorkout with a plan surfaces the planned warm-up-working progress, rep range and rest`() =
+        runTest {
+            val exercise = seedExercise()
+            val plannedExercise =
+                PlannedExercise(
+                    id = PlannedExerciseId("planned-1"),
+                    exerciseId = exercise.id,
+                    order = 0,
+                    targetSets = requireSuccess(TargetSets.create(4)),
+                    target = PlannedExerciseTarget.Reps(requireSuccess(RepRange.create(8, 12))),
+                    restDuration = requireSuccess(RestDuration.create(45)),
+                    isOptional = false,
+                    targetWarmupSets = 2,
+                )
+            val plan =
+                requireSuccess(
+                    TrainingPlan.create(
+                        id = TrainingPlanId("plan-1"),
+                        name = requireSuccess(TrainingPlanName.create("Push day")),
+                        createdAt = now,
+                    ),
+                )
+            val version =
+                requireSuccess(
+                    TrainingPlanVersion.create(
+                        id = TrainingPlanVersionId("version-1"),
+                        planId = plan.id,
+                        versionNumber = 1,
+                        plannedExercises = listOf(plannedExercise),
+                        note = null,
+                        createdAt = now,
+                    ),
+                )
+            requireSuccess(trainingPlanRepository.createPlanWithFirstVersion(plan, version))
+
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                var state = awaitItem()
+                while (state.content !is ActiveWorkoutContent.NoActiveSession || state.availablePlans.isEmpty()) {
+                    state = awaitItem()
+                }
+                val pickedPlan = state.availablePlans.single()
+
+                viewModel.onStartWorkout(pickedPlan.versionId)
+
+                var afterStart = awaitItem()
+                while ((afterStart.content as? ActiveWorkoutContent.Active)?.exercises?.isEmpty() != false) {
+                    afterStart = awaitItem()
+                }
+                val active = (afterStart.content as ActiveWorkoutContent.Active).exercises.single()
+                val target = requireNotNull(active.plannedTarget)
+                assertEquals(2, target.targetWarmupSets)
+                assertEquals(4, target.targetWorkingSets)
+                assertEquals(8..12, target.repRange)
+                assertEquals(null, target.durationRangeSeconds)
+                assertEquals(45, target.restSeconds)
+            }
+        }
+
+    @Test
+    fun `recording a set uses the planned rest duration instead of the default`() =
+        runTest {
+            val exercise = seedExercise()
+            val plannedExercise =
+                PlannedExercise(
+                    id = PlannedExerciseId("planned-1"),
+                    exerciseId = exercise.id,
+                    order = 0,
+                    targetSets = requireSuccess(TargetSets.create(3)),
+                    target = PlannedExerciseTarget.Reps(requireSuccess(RepRange.create(8, 12))),
+                    restDuration = requireSuccess(RestDuration.create(45)),
+                    isOptional = false,
+                )
+            val plan =
+                requireSuccess(
+                    TrainingPlan.create(
+                        id = TrainingPlanId("plan-1"),
+                        name = requireSuccess(TrainingPlanName.create("Push day")),
+                        createdAt = now,
+                    ),
+                )
+            val version =
+                requireSuccess(
+                    TrainingPlanVersion.create(
+                        id = TrainingPlanVersionId("version-1"),
+                        planId = plan.id,
+                        versionNumber = 1,
+                        plannedExercises = listOf(plannedExercise),
+                        note = null,
+                        createdAt = now,
+                    ),
+                )
+            requireSuccess(trainingPlanRepository.createPlanWithFirstVersion(plan, version))
+
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                var state = awaitItem()
+                while (state.content !is ActiveWorkoutContent.NoActiveSession || state.availablePlans.isEmpty()) {
+                    state = awaitItem()
+                }
+                val pickedPlan = state.availablePlans.single()
+
+                viewModel.onStartWorkout(pickedPlan.versionId)
+                var afterStart = awaitItem()
+                while ((afterStart.content as? ActiveWorkoutContent.Active)?.exercises?.isEmpty() != false) {
+                    afterStart = awaitItem()
+                }
+                val seededExercise = (afterStart.content as ActiveWorkoutContent.Active).exercises.single()
+
+                viewModel.onRecordSet(seededExercise.id, 60.0, 8, null, null, false)
+                var withTimer = awaitItem()
+                while ((withTimer.content as? ActiveWorkoutContent.Active)?.restTimer == null) {
+                    withTimer = awaitItem()
+                }
+                val restTimer = requireNotNull((withTimer.content as ActiveWorkoutContent.Active).restTimer)
+                assertEquals(45, restTimer.totalDurationSeconds)
             }
         }
 

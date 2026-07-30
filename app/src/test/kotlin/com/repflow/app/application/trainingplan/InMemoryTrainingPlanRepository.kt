@@ -7,8 +7,10 @@ import com.repflow.app.domain.trainingplan.PlannedExerciseId
 import com.repflow.app.domain.trainingplan.TrainingPlan
 import com.repflow.app.domain.trainingplan.TrainingPlanId
 import com.repflow.app.domain.trainingplan.TrainingPlanVersion
+import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
 /**
@@ -56,6 +58,15 @@ class InMemoryTrainingPlanRepository : TrainingPlanRepository {
     override suspend fun findAllForBackup(): List<TrainingPlanSnapshot> =
         plans.value.values.map { plan ->
             TrainingPlanSnapshot(plan = plan, versions = versionsByPlan.value[plan.id].orEmpty())
+        }
+
+    override fun observeVersionLabels(): Flow<Map<TrainingPlanVersionId, TrainingPlanVersionLabel>> =
+        combine(plans, versionsByPlan) { plansById, versionsByPlanId ->
+            versionsByPlanId
+                .flatMap { (planId, versions) ->
+                    val planName = plansById[planId]?.name?.value ?: return@flatMap emptyList()
+                    versions.map { version -> version.id to TrainingPlanVersionLabel(planId, planName) }
+                }.toMap()
         }
 
     @Suppress("ReturnCount")

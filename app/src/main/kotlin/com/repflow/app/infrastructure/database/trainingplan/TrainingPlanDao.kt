@@ -27,6 +27,10 @@ interface TrainingPlanDao {
     @Query("SELECT * FROM training_plans ORDER BY name_key ASC, id ASC")
     suspend fun findAll(): List<TrainingPlanEntity>
 
+    /** Every training plan regardless of archived status, reactively - see `TrainingPlanRepository.observeVersionLabels`'s rationale (Milestone 8, implementation-review finding #5). */
+    @Query("SELECT * FROM training_plans ORDER BY name_key ASC, id ASC")
+    fun observeAll(): Flow<List<TrainingPlanEntity>>
+
     @Query("SELECT * FROM training_plans WHERE id = :id")
     suspend fun findById(id: String): TrainingPlanEntity?
 

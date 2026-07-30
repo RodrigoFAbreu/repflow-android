@@ -10,6 +10,7 @@ import com.repflow.app.application.trainingplan.TrainingPlanOverview
 import com.repflow.app.application.trainingplan.TrainingPlanPersistenceError
 import com.repflow.app.application.trainingplan.TrainingPlanRepository
 import com.repflow.app.application.trainingplan.TrainingPlanStatusFilter
+import com.repflow.app.application.trainingplan.TrainingPlanVersionLabel
 import com.repflow.app.domain.backup.TrainingPlanSnapshot
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.trainingplan.PlannedExercise
@@ -17,6 +18,7 @@ import com.repflow.app.domain.trainingplan.PlannedExerciseId
 import com.repflow.app.domain.trainingplan.TrainingPlan
 import com.repflow.app.domain.trainingplan.TrainingPlanId
 import com.repflow.app.domain.trainingplan.TrainingPlanVersion
+import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
 import com.repflow.app.infrastructure.database.RepFlowDatabase
 import com.repflow.app.infrastructure.database.trainingplan.PlannedExerciseDao
 import com.repflow.app.infrastructure.database.trainingplan.TrainingPlanDao
@@ -24,6 +26,7 @@ import com.repflow.app.infrastructure.database.trainingplan.TrainingPlanEntity
 import com.repflow.app.infrastructure.database.trainingplan.TrainingPlanVersionDao
 import com.repflow.app.infrastructure.database.trainingplan.TrainingPlanVersionEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
@@ -40,6 +43,7 @@ import javax.inject.Inject
  * one of them, and there is no `runCatching` or broad `catch (e: Exception)`
  * anywhere here.
  */
+@Suppress("TooManyFunctions") // one method per TrainingPlanRepository capability, by design
 class LocalTrainingPlanRepository
     @Inject
     constructor(
@@ -59,6 +63,17 @@ class LocalTrainingPlanRepository
         override suspend fun findPlannedExercise(id: PlannedExerciseId): PlannedExercise? =
             plannedExerciseDao.findById(id.value)?.let { row ->
                 (TrainingPlanEntityMapper.toDomain(row) as? DomainResult.Success)?.value
+            }
+
+        override fun observeVersionLabels(): Flow<Map<TrainingPlanVersionId, TrainingPlanVersionLabel>> =
+            combine(planDao.observeAll(), versionDao.observeAll()) { planEntities, versionEntities ->
+                val nameByPlanId = planEntities.associate { it.id to it.name }
+                versionEntities
+                    .mapNotNull { versionEntity ->
+                        val planName = nameByPlanId[versionEntity.planId] ?: return@mapNotNull null
+                        TrainingPlanVersionId(versionEntity.id) to
+                            TrainingPlanVersionLabel(TrainingPlanId(versionEntity.planId), planName)
+                    }.toMap()
             }
 
         override suspend fun findAllForBackup(): List<TrainingPlanSnapshot> =
