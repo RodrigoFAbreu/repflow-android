@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_work_item_id": "workflow-v2-1-core",
+  "active_work_item_id": "v2-1-dry-run",
   "work_items": {
     "workflow-v2-1-core": {
       "work_item_type": "process",
@@ -200,6 +200,32 @@
       "blocking_decisions": [],
       "state_revision": 1,
       "last_transition": "2026-07-31T12:00:00+01:00"
+    },
+    "v2-1-dry-run": {
+      "work_item_type": "process",
+      "work_item_kind": "synthetic",
+      "work_item_id": "v2-1-dry-run",
+      "parent_work_item_id": null,
+      "plan_path": "docs/ai-workflow/dry-run/v2-1-dry-run-plan.md",
+      "registry_path": null,
+      "governing_workflow_version": "2.1",
+      "phase": "PLANNING",
+      "plan_revision": 1,
+      "implementation_revision": null,
+      "functional_review_round": null,
+      "base_commit": null,
+      "reviewed_implementation_head": null,
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": null,
+      "checkpoints": {},
+      "current_bundle_id": null,
+      "plan_approval": null,
+      "technical_approval": null,
+      "plan_review_stages": null,
+      "functional_acceptance_status": null,
+      "blocking_decisions": [],
+      "state_revision": 1,
+      "last_transition": "2026-07-31T19:25:00+01:00"
     }
   }
 }

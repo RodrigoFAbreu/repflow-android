@@ -334,6 +334,48 @@ class TestStateValidation(unittest.TestCase):
                 ws._load_json(path)
 
 
+class TestWF8bDryRunEntrySetup(unittest.TestCase):
+    """WF8b's entry step: `default_work_item` builds the synthetic
+    `v2-1-dry-run` item (the grammar-compliant canonicalization of the
+    plan's literal `v2.1-dry-run` prose -- see
+    TestWF8bSyntheticWorkItemIdCanonicalization in
+    workflow_fingerprint_test.py for the ID-grammar half of that
+    decision), and the resulting multi-item state -- the real process
+    item still present, non-active, exactly as WF8b's entry step leaves
+    it -- validates cleanly."""
+
+    def _dry_run_item(self, **overrides):
+        item = ws.default_work_item(
+            work_item_id="v2-1-dry-run", work_item_type="process",
+            work_item_kind="synthetic", plan_path="docs/ai-workflow/dry-run/v2-1-dry-run-plan.md",
+            registry_path=None, governing_workflow_version="2.1",
+            plan_revision=1, last_transition="2026-07-31T19:25:00+01:00",
+        )
+        item.update(overrides)
+        return item
+
+    def test_synthetic_item_type_is_process_per_opus_r10_007(self):
+        item = self._dry_run_item()
+        self.assertEqual(item["work_item_type"], "process")
+        self.assertEqual(item["work_item_kind"], "synthetic")
+
+    def test_active_pointer_repointed_to_synthetic_item_validates(self):
+        """Mirrors the real WF8b entry commit's shape: the prior active
+        process item (`workflow-v2-1-core`) stays present and unmodified,
+        non-active, while `active_work_item_id` repoints at the synthetic
+        item -- D1's "resume-focus pointer, not an execution lock"."""
+        state = _base_state(
+            **{
+                "workflow-v2-1-core": _base_work_item(
+                    work_item_id="workflow-v2-1-core", phase="IMPLEMENTING",
+                ),
+                "v2-1-dry-run": self._dry_run_item(),
+            }
+        )
+        state["active_work_item_id"] = "v2-1-dry-run"
+        ws.validate_state(state)  # must not raise
+
+
 class TestPlanReviewStages(unittest.TestCase):
     def test_non_null_on_v1_item_rejected(self):
         wi = _base_work_item(

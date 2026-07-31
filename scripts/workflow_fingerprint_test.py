@@ -846,6 +846,23 @@ class TestIdentityScalars(unittest.TestCase):
             repo.compute(work_item_type="product")
 
 
+class TestWF8bSyntheticWorkItemIdCanonicalization(unittest.TestCase):
+    """WF8b entry setup found the plan's literal synthetic work-item name
+    (`v2.1-dry-run`, D-Self-Governance/D1) violates D1's own
+    `WORK_ITEM_ID_RE` grammar (no dot allowed) -- both are already-approved
+    protected-path sources. Resolved by canonicalizing the machine
+    `work_item_id` to `v2-1-dry-run` without widening the grammar; this
+    pins both halves of that decision so a future edit can't silently
+    re-admit the dotted literal or reject the canonical one."""
+
+    def test_canonical_synthetic_id_is_accepted(self):
+        wf.validate_work_item_id("v2-1-dry-run")  # must not raise
+
+    def test_dotted_literal_from_plan_prose_remains_rejected(self):
+        with self.assertRaises(wf.InvalidWorkItemIdError):
+            wf.validate_work_item_id("v2.1-dry-run")
+
+
 class TestProtectedAndExclusionSetsInProjection(unittest.TestCase):
     """OPUS-R8-014: the protected and exclusion sets are themselves part of
     the hashed projection."""
