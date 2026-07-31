@@ -1,7 +1,11 @@
 # WF8b manual dry-run scenario checklist
 
-**Status:** approved by the user. Not yet executed — S1 is the first
-scenario to run, in a later, genuinely fresh session.
+**Status:** approved by the user. S1 was attempted and blocked before any
+mutation by a real tooling defect (see S1's own "Outcome" note and
+`WF8B_S1_FINDING_review_content_id_not_generalized.md`) — no scenario has
+reached completion. S1 must be rerun from the beginning, in a fresh
+session, once that finding's remediation lands and is independently
+reviewed.
 
 **Scope note:** this document is dry-run *execution evidence* for the
 `workflow-v2-1-core` checkpoint `WF8b`. It records what will be manually
@@ -146,6 +150,31 @@ section below, not left implicit.
   recorded `bundle_id`/`review_content_id` match a fresh recomputation;
   registry JSON is a valid topological order (`D-Selection` rule 3).
 - **Cleanup**: none this scenario — artifacts feed S2 onward.
+
+- **Outcome (attempted, blocked before mutation)**: `/milestone-plan
+  v2-1-dry-run`'s step 6 depends on `scripts/workflow_fingerprint.py` to
+  compute `review_content_id` and write `MANIFEST.md`. That script's
+  `--work-item-id` flag affects only `resolve_bundle_dir` (which directory
+  to write to) — every call into `compute_review_content_id_plan_stage`/
+  `write_manifest_with_verified_identifiers` hardcodes
+  `work_item_id="workflow-v2-1-core"` and its own 5-file protected-path set
+  regardless of the flag. Confirmed by a real, read-only invocation
+  (`python3 scripts/workflow_fingerprint.py <base> --work-item-id
+  v2-1-dry-run`): it printed `workflow-v2-1-core`'s own `plan_revision`,
+  protected paths, and `review_content_id`, ignoring the argument entirely.
+  Proceeding would have produced a `MANIFEST.md` whose `review_content_id`
+  never depends on `v2-1-dry-run`'s own plan/registry/mapping content — a
+  false-positive pass against S1's own stated evidence criterion, and a
+  fail-open gap in every downstream freshness/staleness check
+  (`/review-plan`, `/record-manual-plan-review`, `/approve-review plan`,
+  `/apply-plan-review`). Stopped before creating any plan doc, registry,
+  mapping, bundle, or manifest — full detail, reproduction, and required
+  remediation scope in
+  `docs/ai-workflow/dry-run/WF8B_S1_FINDING_review_content_id_not_generalized.md`.
+  This is the deferred "generalize protected-path derivation beyond this
+  one process plan" scope from `WF4a-i`, surfacing for real. S1 is not
+  complete and must be rerun from the beginning, in a fresh session, once
+  the remediation lands and is independently reviewed.
 
 ## S2 — Local model-independent plan review returning APPROVE
 
