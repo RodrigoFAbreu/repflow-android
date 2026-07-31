@@ -116,6 +116,71 @@ class TestConfigFailSafe(unittest.TestCase):
             })
 
 
+class TestWFActivateFourCombinations(unittest.TestCase):
+    """Item 32: all four combinations of (config present/absent) x
+    (activation trailer present/absent) behave per D-Self-Governance's
+    documented rule -- config-present short-circuits regardless of
+    trailer state (the trailer only matters for missing-config recovery),
+    so the four combinations collapse to three distinct behaviors, all
+    asserted here in one place explicitly owned by WF-Activate."""
+
+    def test_config_present_trailer_present_returns_config_as_is(self):
+        with ScratchRepo() as repo:
+            repo.commit("activate", trailers={"Workflow-Activation": "2.1"})
+            config = {"schema_version": 1, "default_workflow_version": "2.1", "supported_versions": ["1", "2.1"]}
+            (repo.root / "config.json").write_text(json.dumps(config))
+            loaded = ws.load_config(repo.root, config_path=Path("config.json"))
+            self.assertEqual(loaded, config)
+
+    def test_config_present_trailer_absent_returns_config_as_is(self):
+        with ScratchRepo() as repo:
+            config = ws.default_config()
+            (repo.root / "config.json").write_text(json.dumps(config))
+            loaded = ws.load_config(repo.root, config_path=Path("config.json"))
+            self.assertEqual(loaded, config)
+
+    def test_config_absent_trailer_present_is_a_hard_stop(self):
+        with ScratchRepo() as repo:
+            repo.commit("activate", trailers={"Workflow-Activation": "2.1"})
+            with self.assertRaises(ws.ConfigMissingAfterActivationError):
+                ws.load_config(repo.root, config_path=Path("nonexistent.json"))
+
+    def test_config_absent_trailer_absent_defaults_to_v1(self):
+        with ScratchRepo() as repo:
+            config = ws.load_config(repo.root, config_path=Path("nonexistent.json"))
+            self.assertEqual(config["default_workflow_version"], "1")
+
+
+class TestActivationRollbackTransforms(unittest.TestCase):
+    def test_build_activated_config_flips_only_the_version_field(self):
+        config = ws.default_config()
+        activated = ws.build_activated_config(config)
+        self.assertEqual(activated["default_workflow_version"], "2.1")
+        self.assertEqual(activated["supported_versions"], config["supported_versions"])
+        self.assertEqual(config["default_workflow_version"], "1")  # input untouched
+
+    def test_build_activated_config_rejects_already_activated(self):
+        config = {**ws.default_config(), "default_workflow_version": "2.1"}
+        with self.assertRaises(ws.AlreadyActivatedError):
+            ws.build_activated_config(config)
+
+    def test_build_rolled_back_config_flips_back_to_v1(self):
+        config = {**ws.default_config(), "default_workflow_version": "2.1"}
+        rolled_back = ws.build_rolled_back_config(config)
+        self.assertEqual(rolled_back["default_workflow_version"], "1")
+
+    def test_build_rolled_back_config_rejects_not_activated(self):
+        config = ws.default_config()
+        with self.assertRaises(ws.NotActivatedError):
+            ws.build_rolled_back_config(config)
+
+    def test_activate_then_rollback_round_trips_to_original(self):
+        config = ws.default_config()
+        activated = ws.build_activated_config(config)
+        rolled_back = ws.build_rolled_back_config(activated)
+        self.assertEqual(rolled_back, config)
+
+
 class TestCheckpointTrailerDiscovery(unittest.TestCase):
     def test_single_match_is_discovered(self):
         with ScratchRepo() as repo:

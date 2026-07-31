@@ -360,6 +360,19 @@ class ConfigMissingAfterActivationError(Exception):
     (resolves OPUS-R6-015)."""
 
 
+class AlreadyActivatedError(Exception):
+    """Raised by `build_activated_config` when the config's
+    `default_workflow_version` is already `"2.1"` -- `WF-Activate` is a
+    sole, one-time boundary (WFR-10), never an idempotent no-op call."""
+
+
+class NotActivatedError(Exception):
+    """Raised by `build_rolled_back_config` when the config's
+    `default_workflow_version` is not `"2.1"` -- there is nothing to roll
+    back (WFR-10/WFR-12's rollback is a real state reversal, not a bare
+    field reset)."""
+
+
 class UnsupportedGoverningVersionError(Exception):
     """Raised when a work item's `governing_workflow_version` is outside
     the config's `supported_versions` (resolves OPUS-R6-024, optional)."""
@@ -1072,6 +1085,40 @@ def find_latest_activation_event(repo_root: Path, head: str = "HEAD") -> tuple[s
 def is_activated(repo_root: Path, head: str = "HEAD") -> bool:
     event = find_latest_activation_event(repo_root, head)
     return event is not None and event[0] == "activation"
+
+
+def build_activated_config(config: dict) -> dict:
+    """`WF-Activate`'s own transform: `default_workflow_version` -> `"2.1"`,
+    every other field untouched. The caller writes the returned dict to
+    `WORKFLOW_CONFIG.json` and commits it carrying a `Workflow-Activation:
+    2.1` trailer (D-Self-Governance) -- this function only computes the
+    new content, never touches Git or the filesystem itself, matching
+    every other state-transform function in this module. Rejects a config
+    already at `"2.1"`: activation is a sole, one-time boundary, not an
+    idempotent setter (`AlreadyActivatedError`)."""
+    if config.get("default_workflow_version") == "2.1":
+        raise AlreadyActivatedError(
+            "config.default_workflow_version is already \"2.1\" -- WF-Activate "
+            "is a one-time boundary, not an idempotent call"
+        )
+    return {**config, "default_workflow_version": "2.1"}
+
+
+def build_rolled_back_config(config: dict) -> dict:
+    """The rollback counterpart of `build_activated_config`: `"2.1"` ->
+    `"1"`. The caller commits the result carrying a `Workflow-Rollback:
+    2.1` trailer. This reverts only the repository-level default -- it
+    never touches any work item's own `governing_workflow_version`, fixed
+    at creation and immune to this change (D-Self-Governance). Rejects a
+    config not currently at `"2.1"`: there is nothing to roll back
+    (`NotActivatedError`)."""
+    if config.get("default_workflow_version") != "2.1":
+        raise NotActivatedError(
+            f"config.default_workflow_version is "
+            f"{config.get('default_workflow_version')!r}, not \"2.1\" -- "
+            f"nothing to roll back"
+        )
+    return {**config, "default_workflow_version": "1"}
 
 
 # ---------------------------------------------------------------------------
