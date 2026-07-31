@@ -52,14 +52,14 @@
       "plan_approval": {
         "status": "CURRENT",
         "basis": "USER_OVERRIDE",
-        "reviewed_bundle_id": "c0c3e17288e73cf71d79cb473c6850d52895f7afc51088758678fd13cd086954",
-        "approved_review_content_id": "e85533a91d40cd43d6066f0435e90d7b3a94e64e50d58aceec3e4363e60dd030",
+        "reviewed_bundle_id": "5c35c19ac222bbc133a52efa36d733f6b3b6c9c00f0ebd58aba5b6e2e02883ce",
+        "approved_review_content_id": "03e9698c7c017da85e2f7845a341a55334ec8b3b79544bc9d22f057a9f90bb5a",
         "review_content_manifest": [
           {
             "path": "docs/TECHNICAL_DECISIONS.md",
             "exists": true,
             "mode": "100644",
-            "blob": "79e2156aafb3100fd4afb8f2bac4b70531294efa"
+            "blob": "596cb1a506abd1d463e196d1ef8a12b391c55483"
           },
           {
             "path": "docs/ai-workflow/WORKFLOW_V2_AUDIT.md",
@@ -87,15 +87,15 @@
           }
         ],
         "reviewed_content_commit": null,
-        "user_confirmation": "Reconstructed during WF1a from the WF0 bootstrap commit (8f76175348d0f63e61f6c1a9997b5004a27430fe) and its approving .ai-review/feedback/REVIEW_FEEDBACK.md (Status: APPROVE) for work item workflow-v2-1-core's plan-approval stage -- the original verbatim conversational go-ahead text spans many external plan-review rounds under v1's apply-plan-review flow and is not preserved in Git, so it is not available to this reconstruction.",
-        "recorded_at": "2026-07-30T18:33:29+01:00"
+        "user_confirmation": "Reconstructed during WF1a from the WF0 bootstrap commit (8f76175348d0f63e61f6c1a9997b5004a27430fe) and its approving .ai-review/feedback/REVIEW_FEEDBACK.md (Status: APPROVE) for work item workflow-v2-1-core's plan-approval stage -- the original verbatim conversational go-ahead text spans many external plan-review rounds under v1's apply-plan-review flow and is not preserved in Git, so it is not available to this reconstruction. Remediation recorded 2026-07-31 (still USER_OVERRIDE) for work item workflow-v2-1-core's plan-approval stage: approved_review_content_id/review_content_manifest updated to review_content_id 03e9698c7c017da85e2f7845a341a55334ec8b3b79544bc9d22f057a9f90bb5a per the narrow binding-approval check in .ai-review/feedback/REVIEW_FEEDBACK.md (Opus 5, finding prefix OPUS-R23-*, Status: APPROVE, bundle_id 5c35c19ac222bbc133a52efa36d733f6b3b6c9c00f0ebd58aba5b6e2e02883ce). The identifier changed because (a) Milestone 8 integration (commit 6808794, merged via 7274586e7a12f27f4e17019246540621e3c6bace) legitimately added the nullable-backup-field section to docs/TECHNICAL_DECISIONS.md, and (b) the plan-stage classifier (scripts/workflow_fingerprint.py) now excludes docs/improvements/ as unrelated product scope (PRODUCT_SCOPE_JUSTIFICATION). No other protected path drifted; the plan document, registry, and mapping JSON blobs are unchanged from the prior approval.",
+        "recorded_at": "2026-07-31T01:35:28+01:00"
       },
       "technical_approval": null,
       "plan_review_stages": null,
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 6,
-      "last_transition": "2026-07-31T00:32:40+01:00"
+      "state_revision": 7,
+      "last_transition": "2026-07-31T01:35:28+01:00"
     }
   }
 }

@@ -1440,10 +1440,13 @@ class TestPlanRevisionFromRegistry(unittest.TestCase):
 
 class TestWidenedConcurrentWriteClosure(unittest.TestCase):
     """OPUS-R18-004: the concurrent-write classification closure widened
-    to app/, docs/adr/, docs/agent-context/, gradle/, config/, .github/,
-    and five top-level product docs must not raise or change
-    review_content_id, while a genuinely novel path still fails closed.
-    Missing-test items 133-135."""
+    to app/, docs/adr/, docs/agent-context/, docs/improvements/, gradle/,
+    config/, .github/, and five top-level product docs must not raise or
+    change review_content_id, while a genuinely novel path still fails
+    closed. Missing-test items 133-135. docs/improvements/ was added
+    after Milestone 8's FUNCTIONAL_FEATURE_AUDIT.md landed on the
+    workflow-v2-1-core branch as a genuinely novel concurrent-write
+    path the durability guard could not classify."""
 
     def test_133_concurrent_product_code_write_mid_sequence_does_not_raise_or_change_id(self):
         with ScratchRepo() as repo:
@@ -1473,6 +1476,7 @@ class TestWidenedConcurrentWriteClosure(unittest.TestCase):
                 ("AGENTS.md", "agent instructions\n"),
                 ("docs/DOMAIN_GLOSSARY.md", "glossary\n"),
                 ("docs/adr/0099-new-decision.md", "adr\n"),
+                ("docs/improvements/FUNCTIONAL_FEATURE_AUDIT.md", "audit\n"),
                 ("gradle/libs.versions.toml", "[versions]\n"),
                 ("config/detekt/detekt.yml", "rules: {}\n"),
                 (".github/copilot-instructions.md", "instructions\n"),

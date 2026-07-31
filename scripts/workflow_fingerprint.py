@@ -623,15 +623,19 @@ PLAN_STAGE_EXCLUDED_PREFIXES: Mapping[str, str] = MappingProxyType({
         "retiming it)",
     # The closed set of top-level product directories a concurrent
     # product work item may write -- app code, its own tests, ADRs,
-    # stale agent-context docs, and build/lint config -- per
-    # PRODUCT_SCOPE_JUSTIFICATION above (resolves OPUS-R18-004). A path
-    # under any *other* directory not named here, or not named in
+    # stale agent-context docs, product-improvement audits, and
+    # build/lint config -- per PRODUCT_SCOPE_JUSTIFICATION above
+    # (resolves OPUS-R18-004; docs/improvements/ added post-round-18
+    # after Milestone 8's FUNCTIONAL_FEATURE_AUDIT.md landed on this
+    # branch as a genuinely novel concurrent-write path). A path under
+    # any *other* directory not named here, or not named in
     # PLAN_STAGE_EXCLUDED_PATHS, still fails closed via
     # UnclassifiedPathError -- this widens the named set, it does not
     # relax the fail-closed default.
     "app/": PRODUCT_SCOPE_JUSTIFICATION,
     "docs/adr/": PRODUCT_SCOPE_JUSTIFICATION,
     "docs/agent-context/": PRODUCT_SCOPE_JUSTIFICATION,
+    "docs/improvements/": PRODUCT_SCOPE_JUSTIFICATION,
     "gradle/": PRODUCT_SCOPE_JUSTIFICATION,
     "config/": PRODUCT_SCOPE_JUSTIFICATION,
     ".github/": PRODUCT_SCOPE_JUSTIFICATION,
