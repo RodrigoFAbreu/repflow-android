@@ -112,29 +112,72 @@ class TestAgainstRealRepository(unittest.TestCase):
         work_item = state["work_items"][WORK_ITEM_ID]
         ws.verify_checkpoint_completions(work_item, repo_root, work_item["base_commit"])
 
-    def test_real_state_file_plan_approval_matches_wf0_trailer(self):
+    def test_real_state_file_current_plan_approval_is_discoverable_and_matches_manifest(self):
+        """`plan_approval.approved_review_content_id` was legitimately
+        advanced past WF0's original approval by 2da0b66 ("remediate stale
+        plan_approval after Milestone 8 merge") -- a later commit that is
+        not WF0 and carries no Workflow-Checkpoint trailer of its own. The
+        durable invariant is discoverability via the generalized
+        approval-trailer search (WF4a-iii), not literal identity with
+        WF0's commit: this asserts the current identifier resolves to
+        exactly one reachable Workflow-Plan-Approval commit for
+        workflow-v2-1-core (discover_plan_approval_commit raises on
+        genuine ambiguity rather than returning one), and that commit's
+        own trailer and tree content match the state file's approval
+        metadata and manifest."""
         repo_root = _repo_root()
         state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
         work_item = state["work_items"][WORK_ITEM_ID]
         approval = work_item["plan_approval"]
-        body = subprocess.run(
-            ["git", "log", "-1", "--format=%B", "8f76175348d0f63e61f6c1a9997b5004a27430fe"],
-            cwd=repo_root, check=True, capture_output=True, text=True,
-        ).stdout
-        self.assertIn(f"Workflow-Plan-Approval: {approval['approved_review_content_id']}", body)
 
-    def test_real_plan_approval_commit_is_discovered_by_the_generalized_trailer_search(self):
-        """WF4a-iii's discover_plan_approval_commit against this milestone's
-        own real WF0 approval commit (mirrors test_wf0_and_wf1a's checkpoint-
-        trailer counterpart above)."""
-        repo_root = _repo_root()
-        state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
-        work_item = state["work_items"][WORK_ITEM_ID]
-        approval = work_item["plan_approval"]
         discovered = ws.discover_plan_approval_commit(
             repo_root, WORK_ITEM_ID, approval["approved_review_content_id"], BASE_COMMIT,
         )
-        self.assertEqual(discovered, "8f76175348d0f63e61f6c1a9997b5004a27430fe")
+        self.assertIsNotNone(
+            discovered,
+            "current approved_review_content_id is not reachable via the "
+            "generalized Workflow-Plan-Approval trailer search",
+        )
+
+        body = subprocess.run(
+            ["git", "log", "-1", "--format=%B", discovered],
+            cwd=repo_root, check=True, capture_output=True, text=True,
+        ).stdout
+        self.assertIn(f"Workflow-Plan-Approval: {approval['approved_review_content_id']}", body)
+        self.assertIn(f"Workflow-Work-Item: {WORK_ITEM_ID}", body)
+        self.assertIn(approval["reviewed_bundle_id"], body)
+
+        for entry in approval["review_content_manifest"]:
+            blob = subprocess.run(
+                ["git", "rev-parse", f"{discovered}:{entry['path']}"],
+                cwd=repo_root, check=True, capture_output=True, text=True,
+            ).stdout.strip()
+            self.assertEqual(
+                blob, entry["blob"],
+                f"{entry['path']} blob at the discovered approval commit {discovered} "
+                "does not match plan_approval.review_content_manifest",
+            )
+
+    def test_historical_wf0_plan_approval_remains_independently_discoverable(self):
+        """WF0's own original Workflow-Plan-Approval identifier was
+        superseded (not invalidated) by the later remediation commit
+        above -- it must remain independently discoverable under its own
+        identifier, without requiring it to equal the current
+        plan_approval.approved_review_content_id (mirrors
+        test_wf0_and_wf1a_are_discovered_via_real_trailer_search's
+        checkpoint-trailer counterpart, for the approval-trailer
+        search)."""
+        repo_root = _repo_root()
+        all_approvals = ws.discover_approval_commits(
+            repo_root, "Workflow-Plan-Approval", WORK_ITEM_ID, BASE_COMMIT,
+        )
+        original_wf0_review_content_id = (
+            "e85533a91d40cd43d6066f0435e90d7b3a94e64e50d58aceec3e4363e60dd030"
+        )
+        self.assertEqual(
+            all_approvals.get(original_wf0_review_content_id),
+            "8f76175348d0f63e61f6c1a9997b5004a27430fe",
+        )
 
     def test_real_implementing_entry_is_reachable_at_current_head(self):
         """D-Approval-Commits' full IMPLEMENTING entry condition, exercised
