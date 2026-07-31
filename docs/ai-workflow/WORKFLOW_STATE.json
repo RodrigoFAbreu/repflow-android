@@ -17,7 +17,7 @@
       "base_commit": "162154d3e5e10eb65e109833acae4b4fb01fc5d6",
       "reviewed_implementation_head": null,
       "current_checkpoint_id": null,
-      "last_completed_checkpoint_id": "WF4a-iv",
+      "last_completed_checkpoint_id": "WF-M8a",
       "checkpoints": {
         "WF0": {
           "status": "COMPLETE",
@@ -46,6 +46,10 @@
         "WF4a-iv": {
           "status": "COMPLETE",
           "start_commit": "18d7123a0e711786deb11f41f04b14625f1792c9"
+        },
+        "WF-M8a": {
+          "status": "COMPLETE",
+          "start_commit": "2da0b661491d35fc6e0e95be2c0383a9dea3b3fb"
         }
       },
       "current_bundle_id": null,
@@ -94,8 +98,76 @@
       "plan_review_stages": null,
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 7,
-      "last_transition": "2026-07-31T01:35:28+01:00"
+      "state_revision": 8,
+      "last_transition": "2026-07-31T12:00:00+01:00"
+    },
+    "milestone-8": {
+      "work_item_type": "product",
+      "work_item_kind": "product",
+      "work_item_id": "milestone-8",
+      "parent_work_item_id": null,
+      "plan_path": "docs/milestones/completed/milestone-8-execution.md",
+      "registry_path": null,
+      "governing_workflow_version": "1",
+      "phase": "LEGACY_READY",
+      "plan_revision": 1,
+      "implementation_revision": null,
+      "functional_review_round": null,
+      "base_commit": "2d09ec02252848124d0e1accfbefb57dc8561872",
+      "reviewed_implementation_head": null,
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": null,
+      "checkpoints": {},
+      "current_bundle_id": null,
+      "plan_approval": null,
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "LEGACY_V1",
+        "reviewed_bundle_id": null,
+        "approved_review_content_id": "44916a5a6c555ffb92e0248607e8f7c75eda906e29e2cf27e141413be29327cf",
+        "review_content_manifest": null,
+        "reviewed_content_commit": "dc4381a348c114ec4967174c4e6a76ac00b1a537",
+        "legacy_evidence": {
+          "branch_reconciliation": {
+            "reviewed_content_commit": "dc4381a348c114ec4967174c4e6a76ac00b1a537",
+            "reachable_from": "HEAD at import time (verified via scripts/workflow_state.verify_legacy_branch_reconciliation, git merge-base --is-ancestor)",
+            "active_milestone_confirms": "docs/ACTIVE_MILESTONE.md at import-time HEAD contains 'accepted and closed' (Milestone 8 status), confirming the integrated branch's own version is what's reachable, per D-Legacy's branch-reconciliation precondition"
+          },
+          "rounds": [
+            {
+              "round": 1,
+              "commit": "eeacf386753b83cbd8c7f546c1e001e4aa7e5c24",
+              "summary": "All four blocking and two important findings validated and fixed, no rejections; optional findings 7/8 deferred, 9 applied. Full verification clean."
+            },
+            {
+              "round": 2,
+              "commit": "1c01b43214bb6d3ee680474ba3c584c12c1cbead",
+              "summary": "REVISE with one blocking (fa66d80) and one important (585b396) finding, both fixed and verified."
+            },
+            {
+              "round": 3,
+              "commit": "8d69ea4ff04ffa5af8947e24f09b7c32f63d2ce8",
+              "summary": "BLOCK - review artifact mismatch (stale bundle copy) plus a pre-existing test flake; both resolved (bundle re-synced, flake root-caused and fixed at 3253ea2)."
+            },
+            {
+              "round": 4,
+              "commit": "dc4381a348c114ec4967174c4e6a76ac00b1a537",
+              "summary": "APPROVE - no new blocking/important finding. Manual functional-review checklist (23 flows) added."
+            }
+          ]
+        },
+        "user_confirmation": "Legacy import confirmed for milestone-8 implementation: on 2026-07-31 the user explicitly accepted and closed Milestone 8 (technical implementation and all four external implementation-review rounds complete, integrated into main via merge b39af90c98fda382bd4923aa919058d7343e57a5), while explicitly waiving its planned manual functional-review pass -- a user-authorized waiver, not a claim that functional review passed. Recorded in commit c1195b375c9a033403f6e9e1d536ec8a9874fc70 and docs/ACTIVE_MILESTONE.md's \"Functional review disposition\" section.",
+        "waived_guarantees": [
+          "no_bundle_id",
+          "no_telemetry"
+        ],
+        "recorded_at": "2026-07-31T12:00:00+01:00"
+      },
+      "plan_review_stages": null,
+      "functional_acceptance_status": null,
+      "blocking_decisions": [],
+      "state_revision": 1,
+      "last_transition": "2026-07-31T12:00:00+01:00"
     }
   }
 }

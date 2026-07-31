@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "work_item_id": "milestone-8",
+  "_comment": "Implementation-stage classification declarations for the milestone-8 legacy import (D-Legacy phase 1, WF-M8a), consumed by scripts/workflow_fingerprint.py's load_implementation_stage_classification(). Scoped to what actually changed between milestone-8's own base commit (2d09ec02252848124d0e1accfbefb57dc8561872, the commit before its plan doc was committed) and its reviewed head (dc4381a348c114ec4967174c4e6a76ac00b1a537, the round-4-approved commit docs/ACTIVE_MILESTONE.md records as integrated). 'protected' means the content technical_approval binds to (source, test, build, migration files); 'excluded' means design/tracking documentation that is not itself an implementation deliverable, mirroring workflow-v2-1-core-artifacts.json's own category discipline. Any path named in neither set fails closed (UnclassifiedPathError).",
+  "protected_prefixes": {
+    "app/":
+      "product source, test, and Room schema/migration content Milestone 8 changed (CP0-CP16, P0)",
+    "gradle/":
+      "product build/dependency configuration Milestone 8 changed (gradle/libs.versions.toml)"
+  },
+  "protected_paths": {},
+  "excluded_prefixes": {},
+  "excluded_paths": {
+    "docs/ACTIVE_MILESTONE.md":
+      "product-milestone narrative, not an implementation deliverable -- its final accepted/waived-review wording legitimately lands in a commit after the reviewed head",
+    "docs/ROADMAP.md":
+      "product milestone ordering, not an implementation deliverable",
+    "docs/TECHNICAL_DECISIONS.md":
+      "design-decision record, not an implementation deliverable",
+    "docs/improvements/FUNCTIONAL_FEATURE_AUDIT.md":
+      "product feature-tracking document, not source/test/build content",
+    "docs/milestones/active/milestone-8-execution.md":
+      "this milestone's own plan/execution tracking doc, not an implementation deliverable (later archived to docs/milestones/completed/ after the reviewed head)",
+    "docs/milestones/active/milestone-8-reference.md":
+      "this milestone's own plan/reference doc, not an implementation deliverable (later archived to docs/milestones/completed/ after the reviewed head)"
+  }
+}

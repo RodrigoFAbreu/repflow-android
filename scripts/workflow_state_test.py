@@ -482,6 +482,97 @@ class TestWorkItemCompletion(unittest.TestCase):
         self.assertEqual(new_state["active_work_item_id"], "active")
 
 
+class TestLegacyBranchReconciliation(unittest.TestCase):
+    def test_reachable_ancestor_with_matching_substring_accepted(self):
+        with ScratchRepo() as repo:
+            (repo.root / "docs").mkdir()
+            (repo.root / "docs/ACTIVE_MILESTONE.md").write_text("Milestone 8 accepted and closed.\n")
+            _run(["git", "add", "docs/ACTIVE_MILESTONE.md"], cwd=repo.root)
+            reviewed = repo.commit("reviewed head")
+            ws.verify_legacy_branch_reconciliation(
+                repo.root, reviewed_content_commit=reviewed,
+                required_active_milestone_substring="Milestone 8 accepted",
+            )  # must not raise
+
+    def test_unreachable_reviewed_commit_rejected(self):
+        with ScratchRepo() as repo:
+            _run(["git", "checkout", "-q", "-b", "side"], cwd=repo.root)
+            side_sha = repo.commit("side work")
+            _run(["git", "checkout", "-q", "-"], cwd=repo.root)
+            with self.assertRaises(ws.LegacyReconciliationError):
+                ws.verify_legacy_branch_reconciliation(
+                    repo.root, reviewed_content_commit=side_sha,
+                    required_active_milestone_substring="anything",
+                )
+
+    def test_missing_expected_substring_rejected(self):
+        with ScratchRepo() as repo:
+            (repo.root / "docs").mkdir()
+            (repo.root / "docs/ACTIVE_MILESTONE.md").write_text("still in progress\n")
+            _run(["git", "add", "docs/ACTIVE_MILESTONE.md"], cwd=repo.root)
+            reviewed = repo.commit("reviewed head")
+            with self.assertRaises(ws.LegacyReconciliationError):
+                ws.verify_legacy_branch_reconciliation(
+                    repo.root, reviewed_content_commit=reviewed,
+                    required_active_milestone_substring="accepted and closed",
+                )
+
+    def test_missing_active_milestone_file_rejected(self):
+        with ScratchRepo() as repo:
+            reviewed = repo.base
+            with self.assertRaises(ws.LegacyReconciliationError):
+                ws.verify_legacy_branch_reconciliation(
+                    repo.root, reviewed_content_commit=reviewed,
+                    required_active_milestone_substring="anything",
+                )
+
+
+class TestLegacyImport(unittest.TestCase):
+    def _import(self, state=None, **overrides):
+        kwargs = dict(
+            work_item_id="milestone-8", plan_path="docs/milestones/completed/milestone-8-execution.md",
+            registry_path=None, base_commit="base-sha", reviewed_content_commit="reviewed-sha",
+            approved_review_content_id="backfilled-id", legacy_evidence={"rounds": 4},
+            user_confirmation="legacy import confirmed for milestone-8 implementation", now="t1",
+        )
+        kwargs.update(overrides)
+        return ws.import_legacy_work_item(state if state is not None else _base_state(), **kwargs)
+
+    def test_import_creates_dormant_legacy_ready_entry(self):
+        new_state = self._import()
+        entry = new_state["work_items"]["milestone-8"]
+        self.assertEqual(entry["phase"], "LEGACY_READY")
+        self.assertEqual(entry["work_item_type"], "product")
+        self.assertEqual(entry["work_item_kind"], "product")
+        self.assertEqual(entry["governing_workflow_version"], "1")
+        self.assertEqual(entry["base_commit"], "base-sha")
+        self.assertIsNone(entry["plan_approval"])
+        approval = entry["technical_approval"]
+        self.assertEqual(approval["basis"], "LEGACY_V1")
+        self.assertEqual(approval["status"], "CURRENT")
+        self.assertIsNone(approval["reviewed_bundle_id"])
+        self.assertEqual(approval["approved_review_content_id"], "backfilled-id")
+        self.assertEqual(approval["reviewed_content_commit"], "reviewed-sha")
+        self.assertEqual(approval["waived_guarantees"], ["no_bundle_id", "no_telemetry"])
+        ws.validate_state(new_state)  # must not raise
+
+    def test_import_never_claims_active_work_item_pointer(self):
+        state = _base_state(active=_base_work_item(work_item_id="active", phase="IMPLEMENTING"))
+        state["active_work_item_id"] = "active"
+        new_state = self._import(state=state)
+        self.assertEqual(new_state["active_work_item_id"], "active")
+
+    def test_import_does_not_mutate_input_state(self):
+        state = _base_state()
+        self._import(state=state)
+        self.assertEqual(state, _base_state())
+
+    def test_reimporting_existing_id_rejected(self):
+        new_state = self._import()
+        with self.assertRaises(ws.LegacyImportAlreadyExistsError):
+            self._import(state=new_state)
+
+
 class TestRegistryMappingGenerator(unittest.TestCase):
     def test_generate_registry_valid_order_accepted(self):
         registry = ws.generate_registry("wi", 1, [

@@ -130,5 +130,46 @@ class TestAgainstRealRepository(unittest.TestCase):
         )  # must not raise
 
 
+class TestLegacyImportAgainstRealMilestone8(unittest.TestCase):
+    """WF-M8a's own real-repository check: Milestone 8's actual, already-
+    integrated history satisfies D-Legacy's branch-reconciliation
+    precondition, and its backfilled approved_review_content_id (recorded
+    in docs/ai-workflow/WORKFLOW_STATE.json's work_items["milestone-8"])
+    reproduces exactly from milestone-8-artifacts.json's own declarations,
+    scoped to Milestone 8's own base_commit..reviewed_content_commit --
+    never workflow-v2-1-core's own base_commit or artifacts file."""
+
+    BASE_COMMIT = "2d09ec02252848124d0e1accfbefb57dc8561872"
+    REVIEWED_CONTENT_COMMIT = "dc4381a348c114ec4967174c4e6a76ac00b1a537"
+    ARTIFACTS_PATH = Path("docs/ai-workflow/registry/milestone-8-artifacts.json")
+
+    def test_reviewed_commit_is_reachable_and_active_milestone_confirms_acceptance(self):
+        repo_root = _repo_root()
+        ws.verify_legacy_branch_reconciliation(
+            repo_root, reviewed_content_commit=self.REVIEWED_CONTENT_COMMIT,
+            required_active_milestone_substring="accepted and closed",
+        )  # must not raise
+
+    def test_backfilled_review_content_id_reproduces_from_declarations(self):
+        repo_root = _repo_root()
+        state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
+        milestone_8 = state["work_items"]["milestone-8"]
+        approval = milestone_8["technical_approval"]
+        self.assertEqual(approval["basis"], "LEGACY_V1")
+        self.assertEqual(approval["reviewed_content_commit"], self.REVIEWED_CONTENT_COMMIT)
+        recomputed = ws.approval_review_content_id(
+            repo_root, stage="implementation", base_commit=milestone_8["base_commit"],
+            work_item_type="product", work_item_id="milestone-8",
+            head=self.REVIEWED_CONTENT_COMMIT, artifacts_path=self.ARTIFACTS_PATH,
+        )
+        self.assertEqual(recomputed, approval["approved_review_content_id"])
+
+    def test_milestone_8_entry_is_dormant_not_active(self):
+        repo_root = _repo_root()
+        state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
+        self.assertEqual(state["work_items"]["milestone-8"]["phase"], "LEGACY_READY")
+        self.assertNotEqual(state.get("active_work_item_id"), "milestone-8")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -344,6 +344,21 @@ class UserConfirmationRejectedError(Exception):
     (resolves OPUS-R6-010, corrected by GPT-R9-008/OPUS-R10-010/GPT-R11-004)."""
 
 
+class LegacyReconciliationError(Exception):
+    """D-Legacy's branch-reconciliation precondition failed: either the
+    reviewed legacy commit is not a reachable ancestor of head, or the
+    reachable `docs/ACTIVE_MILESTONE.md` content does not contain the
+    caller-expected substring. Re-checked at both import (WF-M8a) and
+    adoption (WF-M8b) time -- never trusted once and cached."""
+
+
+class LegacyImportAlreadyExistsError(Exception):
+    """Raised when D-Legacy's import step is invoked for a `work_item_id`
+    that already has an entry -- import is a one-time act, never a silent
+    re-import or resume (unlike `route_work_item`'s ordinary
+    create-or-resume semantics)."""
+
+
 def _run(args: list[str], cwd: Path) -> str:
     result = subprocess.run(args, cwd=cwd, check=True, capture_output=True, text=True)
     return result.stdout
@@ -879,7 +894,7 @@ def write_registry_and_mapping(
 
 def default_work_item(
     *, work_item_id: str, work_item_type: str, work_item_kind: str,
-    plan_path: str, registry_path: str, governing_workflow_version: str,
+    plan_path: str, registry_path: str | None, governing_workflow_version: str,
     plan_revision: int, last_transition: str,
 ) -> dict:
     """D3's full per-item field list, defaulted for a freshly created work
@@ -1419,6 +1434,105 @@ def transition_to_awaiting_local_plan_review(state: dict, work_item_id: str, now
     work_item["phase"] = "AWAITING_LOCAL_PLAN_REVIEW"
     work_item["state_revision"] = work_item.get("state_revision", 1) + 1
     work_item["last_transition"] = now
+    return new_state
+
+
+# ---------------------------------------------------------------------------
+# WF-M8a: D-Legacy phase 1 -- Milestone 8 legacy import (dormant
+# LEGACY_READY, resolves GPT-R9-005/OPUS-R6-006/OPUS-R6-009/OPUS-R10-011).
+# Phase 2 (the adoption transition on /prepare-functional-review) is
+# WF-M8b's own scope, not built here.
+# ---------------------------------------------------------------------------
+
+
+def verify_legacy_branch_reconciliation(
+    repo_root: Path, *, reviewed_content_commit: str,
+    required_active_milestone_substring: str, head: str = "HEAD",
+    active_milestone_path: str = "docs/ACTIVE_MILESTONE.md",
+) -> None:
+    """D-Legacy's branch-reconciliation precondition, in full: (1) the
+    user integrates the legacy branch into `main` themselves -- this
+    function only ever verifies that already happened, it never performs
+    the integration; (2) the reviewed legacy commit must be a real,
+    reachable ancestor of `head`; (3) `active_milestone_path`'s content at
+    `head` must contain the caller-supplied substring naming the expected
+    integrated/accepted narrative -- a substring check, not exact-content
+    equality, since the branch's own final doc state (e.g. a later
+    acceptance/waiver update) can legitimately land in a commit after
+    `reviewed_content_commit` itself. Raises `LegacyReconciliationError`,
+    naming both values, on either failure -- never proceeds past a failed
+    check. Re-checked at both import (WF-M8a) time and adoption (WF-M8b)
+    time, never trusted from one to the other (a dormant item can sit for
+    a long time between the two)."""
+    if not _is_ancestor(repo_root, reviewed_content_commit, head):
+        raise LegacyReconciliationError(
+            f"reviewed_content_commit {reviewed_content_commit!r} is not a reachable "
+            f"ancestor of {head!r} -- integrate the branch into main before "
+            f"importing/adopting this legacy work item"
+        )
+    try:
+        actual = _run(["git", "show", f"{head}:{active_milestone_path}"], repo_root)
+    except subprocess.CalledProcessError as exc:
+        raise LegacyReconciliationError(
+            f"{active_milestone_path!r} is not readable at {head!r}: {exc}"
+        ) from exc
+    if required_active_milestone_substring not in actual:
+        raise LegacyReconciliationError(
+            f"{active_milestone_path!r} at {head!r} does not contain the expected "
+            f"substring {required_active_milestone_substring!r}"
+        )
+
+
+def import_legacy_work_item(
+    state: dict, *, work_item_id: str, plan_path: str, registry_path: str | None,
+    base_commit: str, reviewed_content_commit: str, approved_review_content_id: str,
+    legacy_evidence: object, user_confirmation: str, now: str,
+) -> dict:
+    """D-Legacy phase 1 (WF-M8a): creates a dormant `LEGACY_READY` entry
+    (D3: non-terminal, addressable by id, not `active_work_item_id`) for a
+    product milestone fully built and reviewed entirely under Workflow v1.
+    `governing_workflow_version` is fixed to `"1"` (factually correct, and
+    makes the later adoption transition an ordinary, auditable version
+    change rather than a first-time assignment, resolving `OPUS-R10-011`).
+    `active_work_item_id` is deliberately left untouched -- import is not
+    activation, D-Legacy phase 2 (`WF-M8b`) owns that transition.
+
+    Refuses a second import of the same id outright
+    (`LegacyImportAlreadyExistsError`): unlike `route_work_item`'s
+    ordinary create-or-resume semantics, importing an already-imported id
+    is never a resume.
+
+    The caller is responsible for having already run
+    `verify_legacy_branch_reconciliation` and for computing
+    `approved_review_content_id` via the implementation-stage projection
+    (`approval_review_content_id(..., stage="implementation", ...)`,
+    scoped to this work item's own `base_commit`..`reviewed_content_commit`
+    and its own artifact-declarations file) -- this function only shapes
+    and writes the resulting state, exactly like `apply_technical_approval`
+    does for an ordinary approval."""
+    validate_work_item_id(work_item_id)
+    new_state = copy.deepcopy(state)
+    work_items = new_state.setdefault("work_items", {})
+    if work_item_id in work_items:
+        raise LegacyImportAlreadyExistsError(
+            f"{work_item_id!r} already exists -- legacy import is a one-time act, "
+            f"never a re-import"
+        )
+    technical_approval = build_approval_record(
+        basis="LEGACY_V1", stage="implementation", user_confirmation=user_confirmation, now=now,
+        reviewed_bundle_id=None, approved_review_content_id=approved_review_content_id,
+        review_content_manifest=None, reviewed_content_commit=reviewed_content_commit,
+        legacy_evidence=legacy_evidence, waived_guarantees=["no_bundle_id", "no_telemetry"],
+    )
+    work_item = default_work_item(
+        work_item_id=work_item_id, work_item_type="product", work_item_kind="product",
+        plan_path=plan_path, registry_path=registry_path,
+        governing_workflow_version="1", plan_revision=1, last_transition=now,
+    )
+    work_item["phase"] = "LEGACY_READY"
+    work_item["technical_approval"] = technical_approval
+    work_item["base_commit"] = base_commit
+    work_items[work_item_id] = work_item
     return new_state
 
 
