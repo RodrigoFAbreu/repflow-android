@@ -573,6 +573,115 @@ class TestLegacyImport(unittest.TestCase):
             self._import(state=new_state)
 
 
+class TestLegacyPromotion(unittest.TestCase):
+    """WF-M8b: D-Legacy phase 2 (`promote_legacy_work_item`). Uses its own
+    scratch implementation-stage artifact-declarations file (never
+    `workflow-v2-1-core`'s own `DEFAULT_ARTIFACTS_PATH`), exactly the
+    "never silently reused across work items" discipline the function's
+    own docstring states."""
+
+    ARTIFACTS_REL = Path("artifacts.json")
+    PROTECTED_PATH = "src/thing.txt"
+
+    def _write_artifacts(self, repo):
+        (repo.root / self.ARTIFACTS_REL).write_text(json.dumps({
+            "protected_paths": {self.PROTECTED_PATH: "product code"},
+            "protected_prefixes": {},
+            "excluded_paths": {"artifacts.json": "declarations file"},
+            "excluded_prefixes": {"docs/": "docs"},
+        }))
+        _run(["git", "add", str(self.ARTIFACTS_REL)], cwd=repo.root)
+        _run(["git", "commit", "-q", "-m", "add artifact declarations"], cwd=repo.root)
+
+    def _seed_active_milestone(self, repo, text):
+        (repo.root / "docs").mkdir(exist_ok=True)
+        (repo.root / "docs/ACTIVE_MILESTONE.md").write_text(text)
+        _run(["git", "add", "docs/ACTIVE_MILESTONE.md"], cwd=repo.root)
+        _run(["git", "commit", "-q", "-m", "seed active milestone doc"], cwd=repo.root)
+
+    def _content_id_at(self, repo, commit):
+        digest, _ = fingerprint.compute_review_content_id_implementation_stage_at_commit(
+            repo.root, repo.base, commit, "product", "milestone-8",
+            {self.PROTECTED_PATH: "product code"}, {},
+            {"artifacts.json": "declarations file"}, {"docs/": "docs"},
+        )
+        return digest
+
+    def _import(self, repo, *, active_milestone_text="Milestone 8 accepted and closed.\n"):
+        self._write_artifacts(repo)
+        self._seed_active_milestone(repo, active_milestone_text)
+        (repo.root / "src").mkdir(exist_ok=True)
+        (repo.root / self.PROTECTED_PATH).write_text("v1\n")
+        _run(["git", "add", self.PROTECTED_PATH], cwd=repo.root)
+        _run(["git", "commit", "-q", "-m", "reviewed head"], cwd=repo.root)
+        reviewed_sha = repo.head()
+        content_id = self._content_id_at(repo, reviewed_sha)
+        state = ws.import_legacy_work_item(
+            _base_state(), work_item_id="milestone-8",
+            plan_path="docs/milestones/completed/milestone-8-execution.md", registry_path=None,
+            base_commit=repo.base, reviewed_content_commit=reviewed_sha,
+            approved_review_content_id=content_id, legacy_evidence={"rounds": 4},
+            user_confirmation="legacy import confirmed for milestone-8 implementation", now="t1",
+        )
+        return state, reviewed_sha
+
+    def _promote(self, state, repo, **overrides):
+        kwargs = dict(
+            work_item_id="milestone-8",
+            required_active_milestone_substring="accepted and closed",
+            artifacts_path=self.ARTIFACTS_REL, now="t2",
+        )
+        kwargs.update(overrides)
+        return ws.promote_legacy_work_item(state, repo.root, **kwargs)
+
+    def test_promotion_activates_and_transitions_version_and_phase(self):
+        with ScratchRepo() as repo:
+            state, _ = self._import(repo)
+            new_state = self._promote(state, repo)
+            entry = new_state["work_items"]["milestone-8"]
+            self.assertEqual(new_state["active_work_item_id"], "milestone-8")
+            self.assertEqual(entry["governing_workflow_version"], "2.1")
+            self.assertEqual(entry["phase"], "AWAITING_FUNCTIONAL_REVIEW")
+            # technical_approval itself is preserved exactly as imported.
+            self.assertEqual(entry["technical_approval"]["basis"], "LEGACY_V1")
+            self.assertEqual(entry["technical_approval"], state["work_items"]["milestone-8"]["technical_approval"])
+
+    def test_promotion_does_not_mutate_input_state(self):
+        with ScratchRepo() as repo:
+            state, _ = self._import(repo)
+            before = json.loads(json.dumps(state))
+            self._promote(state, repo)
+            self.assertEqual(state, before)
+
+    def test_promotion_refused_when_not_legacy_ready(self):
+        with ScratchRepo() as repo:
+            state, _ = self._import(repo)
+            already_active = self._promote(state, repo)
+            with self.assertRaises(ws.LegacyAdoptionWrongPhaseError):
+                self._promote(already_active, repo)
+
+    def test_stale_technical_approval_blocks_promotion_not_reimport(self):
+        with ScratchRepo() as repo:
+            state, reviewed_sha = self._import(repo)
+            # A protected path changes after import, before adoption.
+            (repo.root / self.PROTECTED_PATH).write_text("v2 -- changed after import\n")
+            _run(["git", "add", self.PROTECTED_PATH], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "post-import protected edit"], cwd=repo.root)
+            with self.assertRaises(ws.LegacyAdoptionStaleApprovalError):
+                self._promote(state, repo)
+            # Still dormant -- never silently re-imported or promoted.
+            self.assertEqual(state["work_items"]["milestone-8"]["phase"], "LEGACY_READY")
+
+    def test_branch_reconciliation_recheck_failure_blocks_promotion(self):
+        with ScratchRepo() as repo:
+            state, _ = self._import(repo)
+            (repo.root / "docs/ACTIVE_MILESTONE.md").write_text("still in progress\n")
+            _run(["git", "add", "docs/ACTIVE_MILESTONE.md"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "regressed active milestone doc"], cwd=repo.root)
+            with self.assertRaises(ws.LegacyReconciliationError):
+                self._promote(state, repo)
+
+
 class TestRegistryMappingGenerator(unittest.TestCase):
     def test_generate_registry_valid_order_accepted(self):
         registry = ws.generate_registry("wi", 1, [
@@ -1167,6 +1276,73 @@ class TestProtectedPathDirty(unittest.TestCase):
             (repo.root / "mystery.txt").write_text("???\n")
             with self.assertRaises(fingerprint.UnclassifiedPathError):
                 self._any_dirty(repo.root)
+
+
+# ---------------------------------------------------------------------------
+# WF-M8b: D-Legacy phase 2's own freshness primitive -- a committed-
+# history (not exact-hash-reproduction) counterpart of
+# any_protected_path_dirty, purpose-built so widening a dormant legacy
+# item's own artifact-declarations file (to classify a concurrent work
+# item's later paths) never itself reads as staleness.
+# ---------------------------------------------------------------------------
+
+
+class TestProtectedPathChangedSince(unittest.TestCase):
+    PROTECTED_PATHS = {"app/Main.kt": "protected"}
+    PROTECTED_PREFIXES = {"gradle/": "protected"}
+    EXCLUDED_PATHS = {}
+    EXCLUDED_PREFIXES = {"docs/": "excluded", "scripts/": "excluded"}
+
+    def _changed_since(self, repo_root, base, head):
+        return ws.any_protected_path_changed_since(
+            repo_root, base, head, self.PROTECTED_PATHS, self.PROTECTED_PREFIXES,
+            self.EXCLUDED_PATHS, self.EXCLUDED_PREFIXES,
+        )
+
+    def test_no_change_in_range_is_not_stale(self):
+        with ScratchRepo() as repo:
+            reviewed = repo.commit("reviewed head")
+            self.assertFalse(self._changed_since(repo.root, reviewed, "HEAD"))
+
+    def test_unrelated_excluded_commit_after_review_is_not_stale(self):
+        with ScratchRepo() as repo:
+            reviewed = repo.commit("reviewed head")
+            self._commit_at(repo, "docs/NOTES.md", "unrelated concurrent work item\n")
+            self.assertFalse(self._changed_since(repo.root, reviewed, "HEAD"))
+
+    def test_protected_exact_path_commit_after_review_is_stale(self):
+        with ScratchRepo() as repo:
+            reviewed = repo.commit("reviewed head")
+            self._commit_at(repo, "app/Main.kt", "fun main() {}\n")
+            self.assertTrue(self._changed_since(repo.root, reviewed, "HEAD"))
+
+    def test_protected_prefix_path_commit_after_review_is_stale(self):
+        with ScratchRepo() as repo:
+            reviewed = repo.commit("reviewed head")
+            self._commit_at(repo, "gradle/libs.versions.toml", "[versions]\n")
+            self.assertTrue(self._changed_since(repo.root, reviewed, "HEAD"))
+
+    def test_protected_change_before_review_is_never_seen(self):
+        with ScratchRepo() as repo:
+            self._commit_at(repo, "app/Main.kt", "fun main() {}\n")
+            reviewed = repo.head()
+            self._commit_at(repo, "docs/NOTES.md", "unrelated\n")
+            self.assertFalse(self._changed_since(repo.root, reviewed, "HEAD"))
+
+    def test_unclassified_committed_path_after_review_fails_closed(self):
+        with ScratchRepo() as repo:
+            reviewed = repo.commit("reviewed head")
+            self._commit_at(repo, "mystery.txt", "???\n")
+            with self.assertRaises(fingerprint.UnclassifiedPathError):
+                self._changed_since(repo.root, reviewed, "HEAD")
+
+    def _commit_at(self, repo, rel_path, content):
+        full = repo.root / rel_path
+        full.parent.mkdir(parents=True, exist_ok=True)
+        full.write_text(content)
+        _run(["git", "add", rel_path], cwd=repo.root)
+        _run(["git", "commit", "-q", "-m", f"touch {rel_path}"], cwd=repo.root)
+        return repo.head()
 
 
 # ---------------------------------------------------------------------------

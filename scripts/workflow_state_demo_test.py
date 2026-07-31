@@ -19,6 +19,7 @@ import subprocess
 import unittest
 from pathlib import Path
 
+import workflow_fingerprint as fingerprint
 import workflow_state as ws
 
 BASE_COMMIT = "162154d3e5e10eb65e109833acae4b4fb01fc5d6"
@@ -135,13 +136,23 @@ class TestLegacyImportAgainstRealMilestone8(unittest.TestCase):
     integrated history satisfies D-Legacy's branch-reconciliation
     precondition, and its backfilled approved_review_content_id (recorded
     in docs/ai-workflow/WORKFLOW_STATE.json's work_items["milestone-8"])
-    reproduces exactly from milestone-8-artifacts.json's own declarations,
-    scoped to Milestone 8's own base_commit..reviewed_content_commit --
-    never workflow-v2-1-core's own base_commit or artifacts file."""
+    reproduces exactly from milestone-8-artifacts.json's declarations *as
+    WF-M8a originally authored them* (commit WF_M8A_COMMIT below), scoped
+    to Milestone 8's own base_commit..reviewed_content_commit -- never
+    workflow-v2-1-core's own base_commit or artifacts file. WF-M8b later
+    widens this same file's excluded sets for its own, separate,
+    non-hash-based promotion-time freshness check
+    (any_protected_path_changed_since) -- that widening deliberately
+    changes what recomputing from the file's *current* content would
+    produce (the full classification config is embedded in the hash), so
+    this test pins the exact historical commit rather than reading the
+    live file, to keep proving the stored ID's provenance without being
+    broken by that later, legitimate widening."""
 
     BASE_COMMIT = "2d09ec02252848124d0e1accfbefb57dc8561872"
     REVIEWED_CONTENT_COMMIT = "dc4381a348c114ec4967174c4e6a76ac00b1a537"
-    ARTIFACTS_PATH = Path("docs/ai-workflow/registry/milestone-8-artifacts.json")
+    ARTIFACTS_PATH = "docs/ai-workflow/registry/milestone-8-artifacts.json"
+    WF_M8A_COMMIT = "2baf7bcfdd12006335e65f7fbae41e5d1fa4a8e3"
 
     def test_reviewed_commit_is_reachable_and_active_milestone_confirms_acceptance(self):
         repo_root = _repo_root()
@@ -150,17 +161,24 @@ class TestLegacyImportAgainstRealMilestone8(unittest.TestCase):
             required_active_milestone_substring="accepted and closed",
         )  # must not raise
 
-    def test_backfilled_review_content_id_reproduces_from_declarations(self):
+    def test_backfilled_review_content_id_reproduces_from_declarations_as_originally_authored(self):
         repo_root = _repo_root()
         state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
         milestone_8 = state["work_items"]["milestone-8"]
         approval = milestone_8["technical_approval"]
         self.assertEqual(approval["basis"], "LEGACY_V1")
         self.assertEqual(approval["reviewed_content_commit"], self.REVIEWED_CONTENT_COMMIT)
-        recomputed = ws.approval_review_content_id(
-            repo_root, stage="implementation", base_commit=milestone_8["base_commit"],
-            work_item_type="product", work_item_id="milestone-8",
-            head=self.REVIEWED_CONTENT_COMMIT, artifacts_path=self.ARTIFACTS_PATH,
+        original_declarations = json.loads(
+            subprocess.run(
+                ["git", "show", f"{self.WF_M8A_COMMIT}:{self.ARTIFACTS_PATH}"],
+                cwd=repo_root, check=True, capture_output=True, text=True,
+            ).stdout
+        )
+        recomputed, _ = fingerprint.compute_review_content_id_implementation_stage_at_commit(
+            repo_root, milestone_8["base_commit"], self.REVIEWED_CONTENT_COMMIT,
+            "product", "milestone-8",
+            original_declarations["protected_paths"], original_declarations["protected_prefixes"],
+            original_declarations["excluded_paths"], original_declarations["excluded_prefixes"],
         )
         self.assertEqual(recomputed, approval["approved_review_content_id"])
 
@@ -169,6 +187,37 @@ class TestLegacyImportAgainstRealMilestone8(unittest.TestCase):
         state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
         self.assertEqual(state["work_items"]["milestone-8"]["phase"], "LEGACY_READY")
         self.assertNotEqual(state.get("active_work_item_id"), "milestone-8")
+
+
+class TestLegacyPromotionAgainstRealMilestone8(unittest.TestCase):
+    """WF-M8b's own real-repository check: `promote_legacy_work_item`
+    succeeds against the real dormant `milestone-8` entry as of this
+    commit -- both the branch-reconciliation re-check and the
+    implementation-stage freshness recomputation (against milestone-8's
+    own real `milestone-8-artifacts.json`, never `workflow-v2-1-core`'s)
+    pass on real repository content. Exercised read-only: the returned
+    state is never persisted back to `WORKFLOW_STATE.json`, so this test
+    only proves adoption is currently reachable -- it is not itself an
+    adoption."""
+
+    ARTIFACTS_PATH = Path("docs/ai-workflow/registry/milestone-8-artifacts.json")
+
+    def test_promotion_succeeds_against_the_real_dormant_entry(self):
+        repo_root = _repo_root()
+        state_path = repo_root / "docs/ai-workflow/WORKFLOW_STATE.json"
+        state = json.loads(state_path.read_text())
+        new_state = ws.promote_legacy_work_item(
+            state, repo_root, work_item_id="milestone-8",
+            required_active_milestone_substring="accepted and closed",
+            artifacts_path=self.ARTIFACTS_PATH, now="demo-only, never persisted",
+        )
+        entry = new_state["work_items"]["milestone-8"]
+        self.assertEqual(new_state["active_work_item_id"], "milestone-8")
+        self.assertEqual(entry["governing_workflow_version"], "2.1")
+        self.assertEqual(entry["phase"], "AWAITING_FUNCTIONAL_REVIEW")
+        self.assertEqual(entry["technical_approval"], state["work_items"]["milestone-8"]["technical_approval"])
+        # Read-only: the real on-disk file is provably untouched.
+        self.assertEqual(json.loads(state_path.read_text()), state)
 
 
 if __name__ == "__main__":

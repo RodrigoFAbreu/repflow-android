@@ -359,6 +359,26 @@ class LegacyImportAlreadyExistsError(Exception):
     create-or-resume semantics)."""
 
 
+class LegacyAdoptionWrongPhaseError(Exception):
+    """Raised when D-Legacy phase 2 (`WF-M8b`) adoption is invoked against
+    a work item whose `phase` is not `LEGACY_READY` -- adoption only ever
+    promotes a dormant legacy entry; a command targeting a different work
+    item, or this same item outside `LEGACY_READY`, never touches it
+    (D-Legacy: "adoption never runs implicitly")."""
+
+
+class LegacyAdoptionStaleApprovalError(Exception):
+    """Raised when D-Legacy phase 2 adoption recomputes the dormant
+    entry's `technical_approval` freshness and finds it `STALE` --
+    protected implementation-stage content changed between import and
+    adoption. Adoption stops outright and requires a fresh
+    implementation-review round through the normal `technical_approval`
+    lifecycle (`/apply-implementation-review` + `/approve-review
+    implementation`); it never re-imports (D-Legacy phase 2, resolves
+    `WFR-08`'s "no basis branch" rule applied to promotion time, not just
+    import time)."""
+
+
 def _run(args: list[str], cwd: Path) -> str:
     result = subprocess.run(args, cwd=cwd, check=True, capture_output=True, text=True)
     return result.stdout
@@ -696,6 +716,48 @@ def any_protected_path_dirty(
     `classify_path_implementation_stage` already applies to the
     `base..worktree` diff."""
     for path in sorted(_dirty_paths(repo_root)):
+        classification = fingerprint.classify_path_implementation_stage(
+            path, protected_paths, protected_prefixes, excluded_paths, excluded_prefixes
+        )
+        if classification == "protected":
+            return True
+    return False
+
+
+def _changed_paths_between(repo_root: Path, base: str, head: str) -> set[str]:
+    out = _run(["git", "diff", "--name-only", "-z", base, head], cwd=repo_root)
+    return {p for p in out.split("\x00") if p}
+
+
+def any_protected_path_changed_since(
+    repo_root: Path, base: str, head: str,
+    protected_paths: Mapping[str, str],
+    protected_prefixes: Mapping[str, str],
+    excluded_paths: Mapping[str, str],
+    excluded_prefixes: Mapping[str, str],
+) -> bool:
+    """D-Legacy phase 2's own freshness primitive (`WF-M8b`,
+    `promote_legacy_work_item`): a committed-history counterpart of
+    `any_protected_path_dirty` -- "did any protected implementation-stage
+    path change between `base` and `head`" -- deliberately **not** an
+    exact-hash-reproduction check like `approval_is_current`. That
+    function embeds the full classification config itself in its hashed
+    projection, so widening a work item's own artifact-declarations file
+    to correctly exclude paths a *concurrent* work item introduces while
+    a legacy entry sits dormant (exactly `milestone-8-artifacts.json`'s
+    own situation: workflow-v2-1-core's later `.claude/commands/`,
+    `scripts/`, `docs/ai-workflow/` commits were never anticipated by the
+    narrow set `WF-M8a` originally authored) would otherwise permanently
+    and incorrectly read as `STALE` even with zero real protected-content
+    drift -- the classification text itself would no longer hash-match,
+    regardless of whether `app/`/`gradle/` content actually changed. This
+    function never compares against a stored digest; it only answers
+    whether a `protected` path is present in the diff, so widening the
+    *excluded* side of a classification is safe here in a way it is not
+    for `approval_is_current`. Fails closed (`UnclassifiedPathError`,
+    propagated from `classify_path_implementation_stage`) on a changed
+    path neither set names, same discipline as `any_protected_path_dirty`."""
+    for path in sorted(_changed_paths_between(repo_root, base, head)):
         classification = fingerprint.classify_path_implementation_stage(
             path, protected_paths, protected_prefixes, excluded_paths, excluded_prefixes
         )
@@ -1533,6 +1595,86 @@ def import_legacy_work_item(
     work_item["technical_approval"] = technical_approval
     work_item["base_commit"] = base_commit
     work_items[work_item_id] = work_item
+    return new_state
+
+
+# ---------------------------------------------------------------------------
+# WF-M8b: D-Legacy phase 2 -- Milestone 8 adoption (dormant LEGACY_READY ->
+# active, ordinary v2.1 routing). Resolves OPUS-R10-005/-011, GPT-R9-005.
+# ---------------------------------------------------------------------------
+
+
+def promote_legacy_work_item(
+    state: dict, repo_root: Path, *, work_item_id: str,
+    required_active_milestone_substring: str,
+    artifacts_path: Path = fingerprint.DEFAULT_ARTIFACTS_PATH, now: str,
+) -> dict:
+    """D-Legacy phase 2 (`WF-M8b`): promotes a dormant `LEGACY_READY` entry
+    to active, ordinary Workflow v2.1 routing. Called by
+    `/prepare-functional-review`'s selector step only when the resolved
+    target's `phase` is already `LEGACY_READY` -- adoption never runs
+    implicitly against any other item or phase (`LegacyAdoptionWrongPhaseError`
+    guards misuse defensively, mirroring `import_legacy_work_item`'s own
+    `LegacyImportAlreadyExistsError` guard).
+
+    Re-validates, never trusts from import time:
+    1. the branch-reconciliation precondition (`verify_legacy_branch_
+       reconciliation`) -- a dormant item can sit for a long time between
+       import and adoption;
+    2. `technical_approval` freshness, via `any_protected_path_changed_
+       since(reviewed_content_commit, "HEAD", ...)` scoped to
+       `work_item_id`'s own `artifacts_path` -- deliberately not
+       `approval_is_current`'s exact-hash-reproduction, which would
+       permanently misfire here (see that function's own docstring): a
+       dormant legacy entry's declarations file legitimately needs
+       widening, after import, to classify paths a concurrent work item
+       introduces while it waits, and that widening alone must never read
+       as staleness. A real `protected` path change since
+       `reviewed_content_commit` raises `LegacyAdoptionStaleApprovalError`
+       and stops outright: adoption never re-imports, a stale legacy
+       approval is handled exactly like a stale ordinary one, through the
+       normal `technical_approval` lifecycle (D-Approval-Commits).
+
+    On success: `active_work_item_id` is set to `work_item_id`,
+    `governing_workflow_version` transitions `"1"` -> `"2.1"` (an
+    ordinary, auditable version transition, legal only because adoption
+    runs from Workflow v2.1's own completed `/prepare-functional-review`,
+    so the repository default is already `"2.1"` -- resolves
+    `OPUS-R10-011`), and `phase` transitions to `AWAITING_FUNCTIONAL_REVIEW`
+    -- `technical_approval` itself is preserved exactly as imported
+    (`basis: LEGACY_V1`, untouched); adoption changes routing, never the
+    approval record."""
+    work_item = state["work_items"][work_item_id]
+    if work_item.get("phase") != "LEGACY_READY":
+        raise LegacyAdoptionWrongPhaseError(
+            f"{work_item_id!r} is not LEGACY_READY (phase={work_item.get('phase')!r}) -- "
+            f"adoption only promotes a dormant legacy entry"
+        )
+    technical_approval = work_item["technical_approval"]
+    verify_legacy_branch_reconciliation(
+        repo_root, reviewed_content_commit=technical_approval["reviewed_content_commit"],
+        required_active_milestone_substring=required_active_milestone_substring,
+    )
+    protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
+        fingerprint.load_implementation_stage_classification(repo_root, artifacts_path)
+    )
+    if any_protected_path_changed_since(
+        repo_root, technical_approval["reviewed_content_commit"], "HEAD",
+        protected_paths, protected_prefixes, excluded_paths, excluded_prefixes,
+    ):
+        raise LegacyAdoptionStaleApprovalError(
+            f"{work_item_id!r}'s legacy technical_approval is no longer current -- a "
+            f"protected implementation-stage path changed since {technical_approval['reviewed_content_commit']!r}; "
+            f"adoption requires a fresh implementation-review round and /approve-review "
+            f"implementation, never a re-import"
+        )
+    new_state = copy.deepcopy(state)
+    new_state["active_work_item_id"] = work_item_id
+    new_work_item = new_state["work_items"][work_item_id]
+    new_work_item["governing_workflow_version"] = "2.1"
+    new_work_item["phase"] = "AWAITING_FUNCTIONAL_REVIEW"
+    new_work_item["state_revision"] = new_work_item.get("state_revision", 1) + 1
+    new_work_item["last_transition"] = now
     return new_state
 
 
