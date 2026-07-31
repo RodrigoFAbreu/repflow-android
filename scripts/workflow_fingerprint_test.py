@@ -769,6 +769,39 @@ class TestRegistryAndMappingAreProtected(unittest.TestCase):
             self.assertNotEqual(digest1, digest2)
 
 
+class TestLedgerDocIsExcludedFromPlanStageIdentity(unittest.TestCase):
+    """WF4b, missing-test item 6: the mutable
+    `workflow-v2-1-core-ledger.md` execution ledger (D4b) is physically
+    separate from the protected, machine-readable
+    `workflow-v2-1-core-mapping.json` -- creating or editing the ledger
+    doc must never change plan-stage `review_content_id`, since it is
+    appended to on every checkpoint completion and must never stale a
+    plan approval or require a fresh review round."""
+
+    def _ledger_path(self, repo):
+        return (
+            repo.root / "docs" / "ai-workflow" / "requirements"
+            / "workflow-v2-1-core-ledger.md"
+        )
+
+    def test_creating_ledger_doc_does_not_change_review_content_id(self):
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            digest1, _ = repo.compute()
+            self._ledger_path(repo).write_text("# ledger v1\n")
+            digest2, _ = repo.compute()
+            self.assertEqual(digest1, digest2)
+
+    def test_editing_ledger_doc_does_not_change_review_content_id(self):
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            self._ledger_path(repo).write_text("# ledger v1\n")
+            digest1, _ = repo.compute()
+            self._ledger_path(repo).write_text("# ledger v1\n\nappended entry\n")
+            digest2, _ = repo.compute()
+            self.assertEqual(digest1, digest2)
+
+
 class TestIdentityScalars(unittest.TestCase):
     """OPUS-R8-010: no identity-bearing scalar has a default; `work_item_id`
     is slug-validated; a differing declared revision changes the ID even
