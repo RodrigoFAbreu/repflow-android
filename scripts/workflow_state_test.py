@@ -1648,5 +1648,183 @@ class TestFullTwoStageSequence(unittest.TestCase):
         ))
 
 
+# ---------------------------------------------------------------------------
+# WF2: D-Selection's four-rule checkpoint-selection algorithm, the
+# IN_PROGRESS/COMPLETE state writers, and WORKTREE_IDENTITY.json's writer
+# and resume-side check. Missing-test items 9, 28, 31, 43, 71.
+# ---------------------------------------------------------------------------
+
+
+_REGISTRY = {"checkpoints": [
+    {"id": "A", "depends_on": []},
+    {"id": "B", "depends_on": ["A"]},
+    {"id": "C", "depends_on": ["A"]},
+    {"id": "D", "depends_on": ["B", "C"]},
+]}
+
+
+class TestSelectNextCheckpoint(unittest.TestCase):
+    def test_fresh_work_item_selects_first_dependency_free_checkpoint(self):
+        wi = _base_work_item(current_checkpoint_id=None, checkpoints={})
+        self.assertEqual(ws.select_next_checkpoint(wi, _REGISTRY), "A")
+
+    def test_rule_1_resumes_in_progress_checkpoint_without_reconciliation(self):
+        """Missing-test item 31: an interrupted checkpoint with state
+        written but narrative not updated resumes without human
+        reconciliation -- rule 1 alone decides this, no other field of the
+        work item is consulted."""
+        wi = _base_work_item(
+            current_checkpoint_id="B",
+            checkpoints={"A": {"status": "COMPLETE"}, "B": {"status": "IN_PROGRESS"}},
+        )
+        self.assertEqual(ws.select_next_checkpoint(wi, _REGISTRY), "B")
+
+    def test_rule_2_skips_completed_and_respects_dependencies(self):
+        wi = _base_work_item(
+            current_checkpoint_id=None,
+            checkpoints={"A": {"status": "COMPLETE"}, "B": {"status": "COMPLETE"}},
+        )
+        # C is also dependency-ready (depends only on A); registry order
+        # places C before D, and D's own dependency (C) isn't complete yet.
+        self.assertEqual(ws.select_next_checkpoint(wi, _REGISTRY), "C")
+
+    def test_all_complete_returns_none(self):
+        wi = _base_work_item(current_checkpoint_id=None, checkpoints={
+            cid: {"status": "COMPLETE"} for cid in ("A", "B", "C", "D")
+        })
+        self.assertIsNone(ws.select_next_checkpoint(wi, _REGISTRY))
+
+    def test_rule_4_blocked_dependency_is_named_not_silently_idle(self):
+        """B and C both depend on A, which is not COMPLETE -- nothing is
+        selectable, and this must raise rather than return None (None is
+        reserved for the genuinely-finished case)."""
+        wi = _base_work_item(current_checkpoint_id=None, checkpoints={})
+        registry = {"checkpoints": [
+            {"id": "A", "depends_on": ["MISSING"]},
+        ]}
+        with self.assertRaises(ws.NoCheckpointReadyError) as ctx:
+            ws.select_next_checkpoint(wi, registry)
+        self.assertIn("A", str(ctx.exception))
+        self.assertIn("MISSING", str(ctx.exception))
+
+    def test_determinism_across_independent_calls(self):
+        """Missing-test item 28: two independent fresh sessions against
+        identical state select the same checkpoint -- the function is
+        pure, so this is just repeatability, checked against two
+        independently-constructed (not shared/mutated) copies of the same
+        logical state."""
+        wi_a = _base_work_item(current_checkpoint_id=None, checkpoints={"A": {"status": "COMPLETE"}})
+        wi_b = _base_work_item(current_checkpoint_id=None, checkpoints={"A": {"status": "COMPLETE"}})
+        self.assertEqual(
+            ws.select_next_checkpoint(wi_a, _REGISTRY),
+            ws.select_next_checkpoint(wi_b, _REGISTRY),
+        )
+
+
+class TestCheckpointStateTransitions(unittest.TestCase):
+    def test_transition_to_in_progress_sets_status_and_current_pointer(self):
+        wi = _base_work_item(current_checkpoint_id=None, checkpoints={}, state_revision=1)
+        state = _base_state(wi=wi)
+        new_state = ws.transition_checkpoint_in_progress(state, "wi", "A", "deadbeef", now="t1")
+        item = new_state["work_items"]["wi"]
+        self.assertEqual(item["checkpoints"]["A"], {"status": "IN_PROGRESS", "start_commit": "deadbeef"})
+        self.assertEqual(item["current_checkpoint_id"], "A")
+        self.assertEqual(item["state_revision"], 2)
+        # Original state is untouched (functions return a new dict).
+        self.assertEqual(state["work_items"]["wi"]["checkpoints"], {})
+
+    def test_complete_checkpoint_stays_implementing_when_others_remain(self):
+        """Checkpoint-complete-vs-all-complete semantics: completing one
+        checkpoint out of several never itself flips the phase."""
+        wi = _base_work_item(
+            current_checkpoint_id="A", checkpoints={"A": {"status": "IN_PROGRESS", "start_commit": "x"}},
+            phase="IMPLEMENTING", state_revision=1,
+        )
+        state = _base_state(wi=wi)
+        new_state = ws.complete_checkpoint(state, "wi", "A", _REGISTRY, now="t2")
+        item = new_state["work_items"]["wi"]
+        self.assertEqual(item["checkpoints"]["A"]["status"], "COMPLETE")
+        self.assertIsNone(item["current_checkpoint_id"])
+        self.assertEqual(item["last_completed_checkpoint_id"], "A")
+        self.assertEqual(item["phase"], "IMPLEMENTING")
+
+    def test_complete_checkpoint_transitions_phase_when_all_complete(self):
+        registry = {"checkpoints": [{"id": "A", "depends_on": []}]}
+        wi = _base_work_item(
+            current_checkpoint_id="A", checkpoints={"A": {"status": "IN_PROGRESS", "start_commit": "x"}},
+            phase="IMPLEMENTING", state_revision=1,
+        )
+        state = _base_state(wi=wi)
+        new_state = ws.complete_checkpoint(state, "wi", "A", registry, now="t2")
+        item = new_state["work_items"]["wi"]
+        self.assertEqual(item["phase"], "SELF_REVIEWING_IMPLEMENTATION")
+
+
+class TestWorktreeIdentityWriteAndResume(unittest.TestCase):
+    def test_write_creates_file_and_resume_then_succeeds(self):
+        """Missing-test item 43: the IN_PROGRESS transition creates
+        WORKTREE_IDENTITY.json, and resume against the same worktree
+        succeeds."""
+        with ScratchRepo() as repo:
+            ws.write_worktree_identity(repo.root, "wi", now="t1")
+            self.assertTrue((repo.root / ws.WORKTREE_IDENTITY_PATH).exists())
+            ws.verify_dirty_resume_safety(repo.root, "wi")  # must not raise
+
+    def test_resume_with_missing_file_stops(self):
+        with ScratchRepo() as repo:
+            with self.assertRaises(ws.WorktreeIdentityMissingError):
+                ws.verify_dirty_resume_safety(repo.root, "wi")
+
+    def test_resume_for_a_different_work_item_stops(self):
+        with ScratchRepo() as repo:
+            ws.write_worktree_identity(repo.root, "wi-a", now="t1")
+            with self.assertRaises(ws.WorktreeIdentityMissingError):
+                ws.verify_dirty_resume_safety(repo.root, "wi-b")
+
+    def test_two_work_items_keep_independently_keyed_entries(self):
+        """Missing-test item 71: two work items with interleaved
+        IN_PROGRESS dirty work each resume against their own keyed
+        expected set -- writing wi-b's entry must not disturb wi-a's."""
+        with ScratchRepo() as repo:
+            ws.write_worktree_identity(repo.root, "wi-a", now="t1")
+            ws.write_worktree_identity(repo.root, "wi-b", now="t2")
+            data = ws._load_json(repo.root / ws.WORKTREE_IDENTITY_PATH)
+            self.assertIn("wi-a", data["expected_dirty_paths_by_work_item"])
+            self.assertIn("wi-b", data["expected_dirty_paths_by_work_item"])
+            ws.verify_dirty_resume_safety(repo.root, "wi-a")  # must not raise
+            ws.verify_dirty_resume_safety(repo.root, "wi-b")  # must not raise
+
+    def test_mismatched_worktree_identity_stops(self):
+        with ScratchRepo() as repo:
+            ws.write_worktree_identity(repo.root, "wi", now="t1")
+            full_path = repo.root / ws.WORKTREE_IDENTITY_PATH
+            data = json.loads(full_path.read_text())
+            data["repo_root"] = "/somewhere/else"
+            full_path.write_text(json.dumps(data))
+            with self.assertRaises(ws.WorktreeIdentityMismatchError):
+                ws.verify_dirty_resume_safety(repo.root, "wi")
+
+    def test_snapshot_captures_current_dirty_paths_with_content_hash(self):
+        import hashlib
+        with ScratchRepo() as repo:
+            (repo.root / "dirty.txt").write_text("wip content\n")
+            written = ws.write_worktree_identity(repo.root, "wi", now="t1")
+            entries = written["expected_dirty_paths_by_work_item"]["wi"]
+            self.assertEqual(
+                entries,
+                [{"path": "dirty.txt", "sha256": hashlib.sha256(b"wip content\n").hexdigest()}],
+            )
+
+    def test_resume_succeeds_even_after_dirty_set_changes(self):
+        """The resume check never re-compares the snapshot's per-path
+        content against the current dirty state (missing-test item 31's
+        underlying reason: the dirty set legitimately keeps changing while
+        a checkpoint is in progress)."""
+        with ScratchRepo() as repo:
+            ws.write_worktree_identity(repo.root, "wi", now="t1")
+            (repo.root / "more_wip.txt").write_text("more work\n")
+            ws.verify_dirty_resume_safety(repo.root, "wi")  # must not raise
+
+
 if __name__ == "__main__":
     unittest.main()

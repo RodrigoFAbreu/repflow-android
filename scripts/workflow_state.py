@@ -63,8 +63,13 @@ Claude session running `git commit` per `.claude/commands/approve-review.md`,
 never a Python-side commit writer, consistent with this module's decide-
 and-validate-only design).
 
-Still out of scope here (owned by later checkpoints named in the plan's
-own checkpoint table): `WORKTREE_IDENTITY.json`'s writer (WF2).
+WF2 adds D-Selection's deterministic four-rule checkpoint-selection
+algorithm (`select_next_checkpoint`), the `IN_PROGRESS`/`COMPLETE` state
+writers (`transition_checkpoint_in_progress`/`complete_checkpoint`,
+implementing checkpoint-complete-vs-all-complete semantics), and D3's
+worktree-scoped dirty-resume mechanics: `write_worktree_identity` (the
+named writer for `.ai-review/runtime/WORKTREE_IDENTITY.json`, previously
+schema-only) and its read-side counterpart `verify_dirty_resume_safety`.
 
 Stdlib-only, mirroring `scripts/workflow_fingerprint.py`'s own
 `docs/TECHNICAL_DECISIONS.md`-recorded constraint.
@@ -76,6 +81,7 @@ Run the real-repository demonstration: python3 scripts/workflow_state_demo_test.
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -233,6 +239,28 @@ class NonTopologicalRegistryOrderError(Exception):
     """Raised when a registry's `checkpoints` array does not list every
     checkpoint after all of its own `depends_on` entries (D-Selection
     point 3; missing-test items 29/73)."""
+
+
+class NoCheckpointReadyError(Exception):
+    """D-Selection rule 4: raised when no checkpoint is `COMPLETE` yet none
+    is selectable either -- every remaining checkpoint has an incomplete
+    dependency. Names the blocked checkpoint and its unmet dependencies
+    rather than ever silently idling."""
+
+
+class WorktreeIdentityMissingError(Exception):
+    """D3's worktree-scoped dirty-resume rule: raised when resuming an
+    `IN_PROGRESS` checkpoint finds no local `WORKTREE_IDENTITY.json`, or
+    one with no entry for this exact work item (`OPUS-R10-008`'s keyed
+    design -- a different work item's entry never satisfies this)."""
+
+
+class WorktreeIdentityMismatchError(Exception):
+    """D3's worktree-scoped dirty-resume rule: raised when a local
+    `WORKTREE_IDENTITY.json` exists but its recorded git identity
+    (`repo_root`/`git_common_dir`/`worktree_root`) does not match this
+    worktree's actual identity -- the file was inherited from, or copied
+    from, a different worktree/clone."""
 
 
 class UnmappedRequirementError(Exception):
@@ -678,6 +706,214 @@ def verify_post_approval_manifest_match(
         raise PostApprovalManifestMismatchError(
             f"{work_item['work_item_id']}/{stage}: commit {commit} recomputes to "
             f"{actual!r}, expected {expected!r} (approved_review_content_id)"
+        )
+
+
+# ---------------------------------------------------------------------------
+# WF2: D-Selection's deterministic four-rule checkpoint-selection algorithm,
+# the IN_PROGRESS/COMPLETE state writers, and D3's worktree-scoped dirty-
+# resume mechanics (WORKTREE_IDENTITY.json writer + resume check).
+# ---------------------------------------------------------------------------
+
+
+def select_next_checkpoint(work_item: dict, registry: dict) -> str | None:
+    """D-Selection, rules 1-2-4 in full (rule 3 -- the registry JSON's own
+    order being a valid topological order -- is a separate precondition,
+    `validate_registry_topological_order`, checked once at registry-write
+    time rather than on every selection call).
+
+    Pure: reads only `work_item`/`registry`, touches no filesystem or Git
+    state, so two independent fresh sessions given byte-identical inputs
+    always select the same checkpoint (missing-test item 28) without any
+    tie-break beyond rule 3's own topological-order guarantee. Deliberately
+    does *not* perform the worktree-identity check rule 1 defers to --
+    that is `verify_dirty_resume_safety`'s job, kept separate so this
+    determinism guarantee is testable with no worktree fixture at all.
+
+    Returns:
+    - the `current_checkpoint_id`, unchanged, if it is set and its own
+      status is `IN_PROGRESS` (rule 1 -- an interrupted checkpoint resumes
+      without any human reconciliation of narrative/doc state, missing-
+      test item 31);
+    - otherwise the first checkpoint in the registry JSON array's own
+      order whose status is not `COMPLETE` and whose every `depends_on`
+      entry is `COMPLETE` (rule 2);
+    - `None` if every registry checkpoint is already `COMPLETE` -- a
+      legitimate, distinct outcome from being blocked, signaling the
+      caller to drive the `IMPLEMENTING` -> `SELF_REVIEWING_IMPLEMENTATION`
+      transition (`complete_checkpoint` already does this the moment the
+      last checkpoint completes, so a caller only ever observes `None`
+      here on a stale/out-of-band re-check).
+
+    Raises `NoCheckpointReadyError` (rule 4) when at least one checkpoint
+    remains incomplete but none is currently selectable -- names the
+    specific blocked checkpoint and its unmet dependencies, never silently
+    idling.
+    """
+    checkpoints = work_item.get("checkpoints", {})
+    current_id = work_item.get("current_checkpoint_id")
+    if current_id is not None and checkpoints.get(current_id, {}).get("status") == "IN_PROGRESS":
+        return current_id
+
+    complete = {cid for cid, entry in checkpoints.items() if entry.get("status") == "COMPLETE"}
+    for entry in registry["checkpoints"]:
+        checkpoint_id = entry["id"]
+        if checkpoint_id in complete:
+            continue
+        depends_on = entry.get("depends_on", [])
+        if all(dep in complete for dep in depends_on):
+            return checkpoint_id
+
+    incomplete = [entry for entry in registry["checkpoints"] if entry["id"] not in complete]
+    if not incomplete:
+        return None
+
+    blocked = incomplete[0]
+    unmet = [dep for dep in blocked.get("depends_on", []) if dep not in complete]
+    raise NoCheckpointReadyError(
+        f"no checkpoint is currently selectable: {blocked['id']!r} is the first "
+        f"incomplete entry in registry order, blocked on incomplete "
+        f"dependencies {unmet}"
+    )
+
+
+def transition_checkpoint_in_progress(
+    state: dict, work_item_id: str, checkpoint_id: str, start_commit: str, now: str,
+) -> dict:
+    """The state half of D3's `IN_PROGRESS` transition: records
+    `checkpoints[checkpoint_id] = {status: IN_PROGRESS, start_commit}` and
+    sets `current_checkpoint_id`. The filesystem half --
+    `write_worktree_identity` -- is a separate call the caller makes
+    alongside this one, since it touches a local, gitignored file this
+    module's other state writers never touch. Returns a new state dict."""
+    new_state = copy.deepcopy(state)
+    work_item = new_state["work_items"][work_item_id]
+    work_item["checkpoints"][checkpoint_id] = {"status": "IN_PROGRESS", "start_commit": start_commit}
+    work_item["current_checkpoint_id"] = checkpoint_id
+    work_item["state_revision"] = work_item.get("state_revision", 1) + 1
+    work_item["last_transition"] = now
+    return new_state
+
+
+def complete_checkpoint(
+    state: dict, work_item_id: str, checkpoint_id: str, registry: dict, now: str,
+) -> dict:
+    """D3's checkpoint-complete-vs-all-complete semantics: marks
+    `checkpoint_id` `COMPLETE`, resets `current_checkpoint_id` to `null`
+    (phase stays `IMPLEMENTING` between checkpoints), and additionally
+    transitions `phase` to `SELF_REVIEWING_IMPLEMENTATION` only when every
+    checkpoint named in the registry is now `COMPLETE` -- the two
+    conditions are deliberately distinct: completing one checkpoint is
+    never itself evidence the whole work item is done. Returns a new
+    state dict."""
+    new_state = copy.deepcopy(state)
+    work_item = new_state["work_items"][work_item_id]
+    entry = work_item["checkpoints"].setdefault(checkpoint_id, {})
+    entry["status"] = "COMPLETE"
+    work_item["current_checkpoint_id"] = None
+    work_item["last_completed_checkpoint_id"] = checkpoint_id
+    work_item["state_revision"] = work_item.get("state_revision", 1) + 1
+    work_item["last_transition"] = now
+    all_ids = [entry["id"] for entry in registry["checkpoints"]]
+    if all(work_item["checkpoints"].get(cid, {}).get("status") == "COMPLETE" for cid in all_ids):
+        work_item["phase"] = "SELF_REVIEWING_IMPLEMENTATION"
+    return new_state
+
+
+def _git_identity(repo_root: Path) -> tuple[str, str, str]:
+    """`(repo_root, git_common_dir, worktree_root)` as `WORKTREE_IDENTITY.json`
+    stores them -- `git_common_dir` resolved to an absolute path since Git
+    reports it relative to `cwd` for a normal (non-worktree) checkout."""
+    repo_root_out = _run(["git", "rev-parse", "--show-toplevel"], cwd=repo_root).strip()
+    raw_common_dir = _run(["git", "rev-parse", "--git-common-dir"], cwd=repo_root).strip()
+    git_common_dir = raw_common_dir if Path(raw_common_dir).is_absolute() else str((repo_root / raw_common_dir).resolve())
+    return repo_root_out, git_common_dir, repo_root_out
+
+
+def _hash_dirty_paths(repo_root: Path) -> list[dict]:
+    """`{path, sha256}` for every currently dirty path this module's own
+    `_dirty_paths` reports, hashing the working-tree file's real bytes
+    directly (not `git hash-object`) -- a deleted-but-dirty path is simply
+    omitted, since there is no content left to hash."""
+    entries = []
+    for path in sorted(_dirty_paths(repo_root)):
+        full = repo_root / path
+        if not full.is_file():
+            continue
+        entries.append({"path": path, "sha256": hashlib.sha256(full.read_bytes()).hexdigest()})
+    return entries
+
+
+def write_worktree_identity(
+    repo_root: Path, work_item_id: str, *, now: str, path: Path = WORKTREE_IDENTITY_PATH,
+) -> dict:
+    """D3's named writer (resolves `OPUS-R6-026`, optional): the command
+    that transitions a checkpoint to `IN_PROGRESS` (WF2's own
+    `/milestone-implement`, or the bootstrap command for
+    `workflow-v2-1-core`'s own checkpoints) creates or refreshes **only
+    its own work item's entry** here -- `expected_dirty_paths_by_work_item`
+    is keyed by `work_item_id` precisely so two work items with interleaved
+    `IN_PROGRESS` dirty work never disturb each other's entry when this is
+    called (`OPUS-R10-008`, missing-test item 71).
+
+    The snapshot recorded per path (`path`, `sha256` of the file's current
+    bytes) is diagnostic audit data, not a resume-blocking equality gate:
+    `verify_dirty_resume_safety` never compares it against a later dirty
+    state. An exact dirty-set match would break resuming an interrupted
+    checkpoint (missing-test item 31) -- the whole point of resuming is to
+    keep editing, so the dirty set is expected to keep changing between
+    the moment this snapshot is taken and the next time it's read.
+
+    Writes (creating parent directories as needed) and returns the full,
+    now-validated `WORKTREE_IDENTITY.json` document."""
+    full_path = repo_root / path
+    existing = _load_json(full_path) or {}
+    repo_root_id, git_common_dir, worktree_root = _git_identity(repo_root)
+    existing["repo_root"] = repo_root_id
+    existing["git_common_dir"] = git_common_dir
+    existing["worktree_root"] = worktree_root
+    expected = existing.setdefault("expected_dirty_paths_by_work_item", {})
+    expected[work_item_id] = _hash_dirty_paths(repo_root)
+    existing["generated_at"] = now
+    validate_worktree_identity(existing)
+    full_path.parent.mkdir(parents=True, exist_ok=True)
+    full_path.write_text(json.dumps(existing, indent=2, sort_keys=True) + "\n")
+    return existing
+
+
+def verify_dirty_resume_safety(
+    repo_root: Path, work_item_id: str, *, path: Path = WORKTREE_IDENTITY_PATH,
+) -> None:
+    """D3's worktree-scoped dirty-resume rule, the read half of
+    `write_worktree_identity` (missing-test items 31, 43, 71): a clean
+    (`COMPLETE`) checkpoint is portable anywhere; an `IN_PROGRESS`
+    checkpoint's uncommitted work is worktree-local, so resuming it
+    (D-Selection rule 1) requires this worktree's own local
+    `WORKTREE_IDENTITY.json` to exist, to record this exact worktree's own
+    Git identity, and to carry an entry for this exact `work_item_id`
+    (never another item's). Raises `WorktreeIdentityMissingError` for a
+    missing file or missing per-work-item entry, `WorktreeIdentityMismatchError`
+    for an identity mismatch; returns `None` (no exception) on a clean
+    match. Never inspects `expected_dirty_paths_by_work_item`'s per-path
+    content -- see `write_worktree_identity`'s docstring for why."""
+    full_path = repo_root / path
+    data = _load_json(full_path)
+    if data is None:
+        raise WorktreeIdentityMissingError(
+            f"{path} not found -- cannot resume {work_item_id!r}'s IN_PROGRESS "
+            f"checkpoint from a worktree with no local identity record"
+        )
+    validate_worktree_identity(data)
+    repo_root_id, git_common_dir, worktree_root = _git_identity(repo_root)
+    if (data["repo_root"], data["git_common_dir"], data["worktree_root"]) != (repo_root_id, git_common_dir, worktree_root):
+        raise WorktreeIdentityMismatchError(
+            f"{path} records a different worktree's identity than this one -- "
+            f"resume {work_item_id!r}'s IN_PROGRESS checkpoint from the worktree that started it"
+        )
+    if work_item_id not in data.get("expected_dirty_paths_by_work_item", {}):
+        raise WorktreeIdentityMissingError(
+            f"{path} has no expected_dirty_paths_by_work_item entry for {work_item_id!r} -- "
+            f"this worktree never started (or lost the record for) this work item's IN_PROGRESS checkpoint"
         )
 
 
@@ -1775,16 +2011,17 @@ def validate_state(state: dict, *, registry: dict | None = None) -> None:
 
 
 # ---------------------------------------------------------------------------
-# .ai-review/runtime/WORKTREE_IDENTITY.json (schema only -- WF2 writes it)
+# .ai-review/runtime/WORKTREE_IDENTITY.json schema (the writer,
+# `write_worktree_identity`, and its resume-side check,
+# `verify_dirty_resume_safety`, live in WF2's own section above)
 # ---------------------------------------------------------------------------
 
 
 def validate_worktree_identity(data: dict) -> None:
-    """Schema check for D3's local-only, gitignored WORKTREE_IDENTITY.json.
-    No writer is implemented here -- D3 names the writer as the command
-    that transitions a checkpoint to IN_PROGRESS (WF2's
-    `/milestone-implement`, or the bootstrap command for this work item's
-    own checkpoints), not WF1a."""
+    """Schema check for D3's local-only, gitignored WORKTREE_IDENTITY.json,
+    shared by `write_worktree_identity` (which validates before writing)
+    and `verify_dirty_resume_safety` (which validates before trusting a
+    file it did not just write)."""
     for key in ("repo_root", "git_common_dir", "worktree_root", "generated_at"):
         if not isinstance(data.get(key), str) or not data[key]:
             raise CorruptJsonError(f"WORKTREE_IDENTITY.json missing/invalid {key!r}")
