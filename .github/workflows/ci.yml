@@ -68,3 +68,19 @@ jobs:
       - name: Workflow test-harness self-verification (WF8a-i, hermetic, stdlib-only)
         working-directory: scripts
         run: python3 workflow_test_harness_test.py
+
+      - name: Workflow integration/conformance suite (WF8a-ii, hermetic, stdlib-only)
+        working-directory: scripts
+        run: python3 workflow_integration_test.py
+        # Reads .claude/commands/*.md and docs/ai-workflow/WORKFLOW_V2_PLAN.md's
+        # current content directly (dual-mode text conformance, write-set
+        # consistency lint) plus disposable ScratchRepo fixtures -- none of
+        # this depends on a fixed historical base commit or a diff that
+        # widens over time, so unlike the *_demo_test.py suites this is
+        # safe to run on every PR (GPT-R9-002 does not apply here). The two
+        # tests in TestGoldenV1BehaviorAgainstPreV21BaseCommit that compare
+        # against real pre-v2.1 command-file content use an embedded,
+        # already-verified sha256 constant rather than `git show
+        # <base_commit>:...` at test time, since this checkout step's
+        # default shallow clone would not have that historical commit
+        # reachable.

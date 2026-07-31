@@ -15,6 +15,10 @@ needs from the two pieces below without reading `workflow_state.py`'s or
   named Git trailers in its body, exactly like a real
   `Workflow-Checkpoint`/`Workflow-Work-Item`/`Workflow-Plan-Approval`-
   bearing commit, and returns the new commit's SHA.
+  `repo.commit_files(subject, {path: content}, trailers=...)` is the
+  multi-file counterpart, for a fixture that needs one commit to carry
+  both a trailer-bearing change and an accompanying `WORKFLOW_STATE.json`
+  update together (added by `WF8a-ii` for its own integration fixtures).
   `repo.write_plan_docs(...)`/`repo.commit_plan_docs_as_base()` seed and
   commit the five plan-stage protected files
   (`docs/ai-workflow/WORKFLOW_V2_PLAN.md`, `WORKFLOW_V2_AUDIT.md`,
@@ -103,6 +107,32 @@ class ScratchRepo:
         filename = filename or f"{subject.replace(' ', '_')}.txt"
         (self.root / filename).write_text(subject + "\n")
         _run(["git", "add", filename], cwd=self.root)
+        body = subject
+        if trailers:
+            body += "\n\n" + "\n".join(f"{k}: {v}" for k, v in trailers.items())
+        _run(["git", "commit", "-q", "-m", body], cwd=self.root)
+        return self.head()
+
+    def commit_files(
+        self, subject: str, files: dict[str, str],
+        trailers: dict[str, str] | None = None,
+    ) -> str:
+        """The multi-file counterpart of `commit()` (added for `WF8a-ii`):
+        writes every `{repo-relative path: content}` entry in `files`
+        (creating parent directories as needed) and commits them together
+        in one commit carrying `trailers`. Exists for fixtures that need a
+        single commit to carry both a trailer-bearing marker/product
+        change and an accompanying `WORKFLOW_STATE.json` update side by
+        side, mirroring a real checkpoint/approval commit -- D3/
+        `OPUS-R6-005` already establishes that `WORKFLOW_STATE.json` is
+        never itself a protected path, so it can legitimately ride along
+        in the same commit as a checkpoint/approval trailer. Returns the
+        new commit's full SHA."""
+        for rel_path, content in files.items():
+            full = self.root / rel_path
+            full.parent.mkdir(parents=True, exist_ok=True)
+            full.write_text(content)
+        _run(["git", "add", "-A"], cwd=self.root)
         body = subject
         if trailers:
             body += "\n\n" + "\n".join(f"{k}: {v}" for k, v in trailers.items())
