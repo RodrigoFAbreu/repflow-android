@@ -658,6 +658,13 @@ PLAN_STAGE_EXCLUDED_PREFIXES: Mapping[str, str] = MappingProxyType({
         "future write is never itself a plan-approval-staling event "
         "(resolves OPUS-R16-001, and closes the loop OPUS-R16-002 opens on "
         "retiming it)",
+    "docs/ai-workflow/dry-run/":
+        "WF8b's own dry-run scenario checklist/evidence and the isolated "
+        "synthetic v2-1-dry-run (and v2-1-dry-run-legacy) work items' entire "
+        "plan/registry/mapping artifact tree -- operational execution "
+        "evidence for a separate, throwaway work item, not design content "
+        "for workflow-v2-1-core's own plan, so a write here must never "
+        "stale this work item's plan approval",
     # The closed set of top-level product directories a concurrent
     # product work item may write -- app code, its own tests, ADRs,
     # stale agent-context docs, product-improvement audits, and

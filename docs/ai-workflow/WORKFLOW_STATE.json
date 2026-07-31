@@ -89,7 +89,7 @@
         "status": "CURRENT",
         "basis": "USER_OVERRIDE",
         "reviewed_bundle_id": "5c35c19ac222bbc133a52efa36d733f6b3b6c9c00f0ebd58aba5b6e2e02883ce",
-        "approved_review_content_id": "03e9698c7c017da85e2f7845a341a55334ec8b3b79544bc9d22f057a9f90bb5a",
+        "approved_review_content_id": "2b4d2e3b89c2b8f243d89fcfb90fded67cc9cd003ba5feff3751d455fb3e49bf",
         "review_content_manifest": [
           {
             "path": "docs/TECHNICAL_DECISIONS.md",
@@ -123,15 +123,17 @@
           }
         ],
         "reviewed_content_commit": null,
-        "user_confirmation": "Reconstructed during WF1a from the WF0 bootstrap commit (8f76175348d0f63e61f6c1a9997b5004a27430fe) and its approving .ai-review/feedback/REVIEW_FEEDBACK.md (Status: APPROVE) for work item workflow-v2-1-core's plan-approval stage -- the original verbatim conversational go-ahead text spans many external plan-review rounds under v1's apply-plan-review flow and is not preserved in Git, so it is not available to this reconstruction. Remediation recorded 2026-07-31 (still USER_OVERRIDE) for work item workflow-v2-1-core's plan-approval stage: approved_review_content_id/review_content_manifest updated to review_content_id 03e9698c7c017da85e2f7845a341a55334ec8b3b79544bc9d22f057a9f90bb5a per the narrow binding-approval check in .ai-review/feedback/REVIEW_FEEDBACK.md (Opus 5, finding prefix OPUS-R23-*, Status: APPROVE, bundle_id 5c35c19ac222bbc133a52efa36d733f6b3b6c9c00f0ebd58aba5b6e2e02883ce). The identifier changed because (a) Milestone 8 integration (commit 6808794, merged via 7274586e7a12f27f4e17019246540621e3c6bace) legitimately added the nullable-backup-field section to docs/TECHNICAL_DECISIONS.md, and (b) the plan-stage classifier (scripts/workflow_fingerprint.py) now excludes docs/improvements/ as unrelated product scope (PRODUCT_SCOPE_JUSTIFICATION). No other protected path drifted; the plan document, registry, and mapping JSON blobs are unchanged from the prior approval.",
-        "recorded_at": "2026-07-31T01:35:28+01:00"
+        "legacy_evidence": null,
+        "user_confirmation": "Reconstructed during WF1a from the WF0 bootstrap commit (8f76175348d0f63e61f6c1a9997b5004a27430fe) and its approving .ai-review/feedback/REVIEW_FEEDBACK.md (Status: APPROVE) for work item workflow-v2-1-core's plan-approval stage -- the original verbatim conversational go-ahead text spans many external plan-review rounds under v1's apply-plan-review flow and is not preserved in Git, so it is not available to this reconstruction. Remediation recorded 2026-07-31 (still USER_OVERRIDE) for work item workflow-v2-1-core's plan-approval stage: approved_review_content_id updated to review_content_id 2b4d2e3b89c2b8f243d89fcfb90fded67cc9cd003ba5feff3751d455fb3e49bf per the binding-only remediation review in .ai-review/feedback/REVIEW_FEEDBACK.md (Opus 5, finding prefix OPUS-R24-*, Status: APPROVE, bundle_id 5c35c19ac222bbc133a52efa36d733f6b3b6c9c00f0ebd58aba5b6e2e02883ce; the superseded round-23 verdict is preserved beside it as REVIEW_FEEDBACK.opus-r23.md). Dry-run-evidence classification rationale: the identifier changed for one reason only -- docs/ai-workflow/dry-run/ was added to the plan-stage classifier's PLAN_STAGE_EXCLUDED_PREFIXES (scripts/workflow_fingerprint.py). That directory holds WF8b's own dry-run scenario checklist/execution evidence and the isolated synthetic v2-1-dry-run work item's plan/registry/mapping artifact tree -- operational evidence for a separate, throwaway work item, not design content for workflow-v2-1-core's own plan -- so it is excluded rather than protected, on the same reasoning as docs/ai-workflow/archive/ and docs/milestones/. Because excluded_prefixes is itself part of the hashed projection (OPUS-R8-014), widening it necessarily moves review_content_id even though no design content changed: all five protected plan-stage blobs are byte-identical to the prior approval's manifest, verified before recording. Fail-closed behavior is unchanged for every path outside the named sets.",
+        "waived_guarantees": [],
+        "recorded_at": "2026-07-31T23:43:37+01:00"
       },
       "technical_approval": null,
       "plan_review_stages": null,
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 16,
-      "last_transition": "2026-07-31T18:42:36+01:00"
+      "state_revision": 17,
+      "last_transition": "2026-07-31T23:43:37+01:00"
     },
     "milestone-8": {
       "work_item_type": "product",

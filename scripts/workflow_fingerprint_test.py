@@ -235,6 +235,14 @@ class TestFailClosedClassification(unittest.TestCase):
             "docs/ROADMAP.md",
             "docs/milestones/completed/milestone-8-execution.md",
             "docs/ai-workflow/archive/workflow-v2.1-core-final-state.json",
+            # WF8b's own dry-run evidence and the synthetic item's artifact
+            # tree (remediation: docs/ai-workflow/dry-run/ added to
+            # PLAN_STAGE_EXCLUDED_PREFIXES after the real
+            # docs/ai-workflow/dry-run/WF8B_SCENARIOS.md commit surfaced an
+            # UnclassifiedPathError the classifier's prior exhaustive list
+            # never covered).
+            "docs/ai-workflow/dry-run/WF8B_SCENARIOS.md",
+            "docs/ai-workflow/dry-run/v2-1-dry-run-plan.md",
         ]
         for path in known_paths:
             with self.subTest(path=path):
@@ -424,6 +432,36 @@ class TestFailClosedClassification(unittest.TestCase):
             ),
             "excluded",
         )
+
+    def test_wf8b_dry_run_prefix_is_excluded(self):
+        """Remediation test: `docs/ai-workflow/dry-run/WF8B_SCENARIOS.md`
+        (committed by WF8b's evidence-prep commit) raised
+        `UnclassifiedPathError` because the exhaustive prefix list predated
+        that directory. `docs/ai-workflow/dry-run/` was added to
+        `PLAN_STAGE_EXCLUDED_PREFIXES` -- it is WF8b's own dry-run evidence
+        and the throwaway synthetic work item's artifact tree, not design
+        content for this work item's own plan."""
+        path = "docs/ai-workflow/dry-run/WF8B_SCENARIOS.md"
+        self.assertNotIn(path, wf.PLAN_STAGE_PROTECTED)
+        self.assertEqual(
+            wf.classify_path(
+                path, wf.PLAN_STAGE_PROTECTED, wf.PLAN_STAGE_EXCLUDED_PATHS,
+                wf.PLAN_STAGE_EXCLUDED_PREFIXES,
+            ),
+            "excluded",
+        )
+
+    def test_wf8b_dry_run_prefix_match_is_precise_not_a_substring_match(self):
+        """A lookalike path that merely shares the `dry-run` substring but is
+        not actually under the `docs/ai-workflow/dry-run/` directory must
+        still fail closed -- proves the exclusion is a real path-segment
+        prefix, not a loose substring match that could be widened by
+        accident."""
+        with self.assertRaises(wf.UnclassifiedPathError):
+            wf.classify_path(
+                "docs/ai-workflow/dry-runner/x.md", wf.PLAN_STAGE_PROTECTED,
+                wf.PLAN_STAGE_EXCLUDED_PATHS, wf.PLAN_STAGE_EXCLUDED_PREFIXES,
+            )
 
 
 class TestExclusionListStructure(unittest.TestCase):
