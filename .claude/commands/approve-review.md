@@ -9,6 +9,10 @@ Enter `AWAITING_PLAN_APPROVAL` or `AWAITING_TECHNICAL_APPROVAL`
 `$ARGUMENTS` (`plan` or `implementation`), for the work item also named in
 `$ARGUMENTS` or, if omitted, `active_work_item_id`.
 
+`<bundle_dir>`/`<feedback_dir>` below resolve per
+`docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Bundle location"
+(`workflow_fingerprint.resolve_bundle_dir`/`resolve_feedback_dir`).
+
 **This command is user-only by construction.** `disable-model-invocation:
 true` is the primary, harness-enforced control (blocks the SlashCommand
 tool). Claude must never invoke it on the user's own behalf, including as a
@@ -50,8 +54,13 @@ actually load-bearing control for the Skill exposure path, not mechanism
      `/record-manual-plan-review`, `D-Plan-Review-Stages`) — fully live;
      inert only in the sense that this repository's own work item is fixed
      at `"1"` for its entire execution and so never exercises it.
-1. **Confirm gate reachability**: read `.ai-review/feedback/REVIEW_FEEDBACK.md`'s
-   most recently reviewed round status and bundle ID. Call
+1. **Confirm gate reachability**: read `<feedback_dir>/REVIEW_FEEDBACK.md`'s
+   most recently reviewed round status and bundle ID
+   (`workflow_fingerprint.parse_review_feedback_binding_fields`) —
+   missing/mismatched `Reviewed bundle ID:`/`Reviewed base commit:`/
+   `Work item:` fields are not fatal to reading the file (an
+   `EXTERNAL_APPROVE` basis simply becomes unreachable, per step 3), but
+   report the mismatch naming both values (`WFR-03`). Call
    `workflow_state.approval_gate_reachable(status)` for the plan stage on a
    `"1"` item (`plan_approval_gate_reachable(...)` on a `"2.1"` item), or
    `workflow_state.technical_approval_gate_reachable(...)` for the
@@ -75,7 +84,16 @@ actually load-bearing control for the Skill exposure path, not mechanism
 2. **Recompute fresh**: `bundle_id` over the current bundle and the
    stage-appropriate `review_content_id` (`scripts/workflow_fingerprint.py`)
    over the working tree. Display both, and the protected/excluded path
-   lists, to the user.
+   lists, to the user. **Local worktree/HEAD staleness check**
+   (`D-Bundle-Manifest`, resolves `OPUS-R6-016`): this command runs inside
+   a real, current worktree, so call
+   `workflow_fingerprint.assert_local_generation_matches(repo_root,
+   <bundle_dir>/MANIFEST.md)` and stop, naming both the recorded and
+   current worktree_root/HEAD, on a `WorktreeOrHeadMismatchError` — this
+   is the actual first-party Milestone-8 incident (a stale bundle read
+   from a different worktree). Never skip this because the recomputed
+   `bundle_id` happens to still match; the two checks catch different
+   failure modes.
 3. **Resolve the basis**: call `workflow_state.resolve_approval_basis(...)`
    with the feedback round's status/bundle_id, the freshly recomputed
    current bundle_id, this turn's literal `user_confirmation` text (if the

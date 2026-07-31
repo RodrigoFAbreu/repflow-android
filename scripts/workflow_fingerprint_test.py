@@ -33,6 +33,7 @@ Stdlib-only. Run: python3 scripts/workflow_fingerprint_test.py
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -1800,6 +1801,310 @@ class TestImplementationStageClassification(unittest.TestCase):
             _run(["git", "commit", "-q", "-m", "state write"], cwd=repo.root)
             digest_after, _ = wf.compute_review_content_id_implementation_stage(repo.root, repo.base, **kwargs)
             self.assertEqual(digest_before, digest_after)
+
+
+class TestBundleLayoutResolver(unittest.TestCase):
+    """WF5's `.ai-review/<work_item_id>/{current,feedback}/` relayout
+    resolver, with the stated compatibility fallback (resolves
+    `OPUS-R6-021`)."""
+
+    def test_falls_back_to_flat_layout_when_scoped_dir_absent(self):
+        with ScratchRepo() as repo:
+            self.assertEqual(
+                wf.resolve_bundle_dir(repo.root, "workflow-v2-1-core"),
+                Path(".ai-review/current"),
+            )
+            self.assertEqual(
+                wf.resolve_feedback_dir(repo.root, "workflow-v2-1-core"),
+                Path(".ai-review/feedback"),
+            )
+
+    def test_prefers_scoped_layout_once_it_exists(self):
+        with ScratchRepo() as repo:
+            (repo.root / ".ai-review" / "workflow-v2-1-core" / "current").mkdir(parents=True)
+            (repo.root / ".ai-review" / "workflow-v2-1-core" / "feedback").mkdir(parents=True)
+            self.assertEqual(
+                wf.resolve_bundle_dir(repo.root, "workflow-v2-1-core"),
+                Path(".ai-review/workflow-v2-1-core/current"),
+            )
+            self.assertEqual(
+                wf.resolve_feedback_dir(repo.root, "workflow-v2-1-core"),
+                Path(".ai-review/workflow-v2-1-core/feedback"),
+            )
+
+    def test_two_work_items_resolve_independently(self):
+        with ScratchRepo() as repo:
+            (repo.root / ".ai-review" / "milestone-8" / "current").mkdir(parents=True)
+            self.assertEqual(
+                wf.resolve_bundle_dir(repo.root, "milestone-8"),
+                Path(".ai-review/milestone-8/current"),
+            )
+            self.assertEqual(
+                wf.resolve_bundle_dir(repo.root, "workflow-v2-1-core"),
+                Path(".ai-review/current"),
+            )
+
+    def test_rejects_invalid_work_item_id(self):
+        with ScratchRepo() as repo:
+            with self.assertRaises(wf.InvalidWorkItemIdError):
+                wf.resolve_bundle_dir(repo.root, "Not_A_Valid_Slug!")
+
+
+class TestGenerationDiagnosticMetadata(unittest.TestCase):
+    """`worktree_root`/`generation_head` recorded in `MANIFEST.md` as
+    diagnostic metadata, and the repository-local-only staleness check
+    that reads them back (resolves `OPUS-R6-016`, `WFR-17`)."""
+
+    def _bundle_dir(self, repo):
+        # Outside repo.root, same reasoning as TestManifestWriteSafety
+        # above: the real .ai-review/ is gitignored, this scratch repo has
+        # no such entry, and that is incidental to what these tests check.
+        bundle_dir = Path(tempfile.mkdtemp(prefix="wf-fingerprint-bundle-"))
+        self.addCleanup(shutil.rmtree, bundle_dir, ignore_errors=True)
+        return bundle_dir
+
+    def test_write_manifest_records_current_worktree_root_and_head(self):
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            repo.commit_plan_docs_as_base()
+            bundle_dir = self._bundle_dir(repo)
+            _write_review_request_with_content_id(repo, bundle_dir)
+            wf.write_manifest_with_verified_identifiers(
+                repo.root, bundle_dir, repo.base,
+                work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=7,
+            )
+            meta = wf.read_manifest_generation_metadata(bundle_dir / "MANIFEST.md")
+            expected_root, expected_head = wf.current_worktree_root_and_head(repo.root)
+            self.assertEqual(meta["worktree_root"], expected_root)
+            self.assertEqual(meta["generation_head"], expected_head)
+
+    def test_local_generation_check_passes_in_the_generating_worktree(self):
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            repo.commit_plan_docs_as_base()
+            bundle_dir = self._bundle_dir(repo)
+            _write_review_request_with_content_id(repo, bundle_dir)
+            wf.write_manifest_with_verified_identifiers(
+                repo.root, bundle_dir, repo.base,
+                work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=7,
+            )
+            wf.assert_local_generation_matches(repo.root, bundle_dir / "MANIFEST.md")
+
+    def test_local_generation_check_stops_on_worktree_root_mismatch(self):
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            repo.commit_plan_docs_as_base()
+            bundle_dir = self._bundle_dir(repo)
+            _write_review_request_with_content_id(repo, bundle_dir)
+            wf.write_manifest_with_verified_identifiers(
+                repo.root, bundle_dir, repo.base,
+                work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=7,
+            )
+            manifest_path = bundle_dir / "MANIFEST.md"
+            content = manifest_path.read_text()
+            content = wf._WORKTREE_ROOT_LINE_RE.sub("worktree_root: /some/other/worktree", content)
+            manifest_path.write_text(content)
+            with self.assertRaises(wf.WorktreeOrHeadMismatchError):
+                wf.assert_local_generation_matches(repo.root, manifest_path)
+
+    def test_local_generation_check_stops_on_head_mismatch(self):
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            repo.commit_plan_docs_as_base()
+            bundle_dir = self._bundle_dir(repo)
+            _write_review_request_with_content_id(repo, bundle_dir)
+            wf.write_manifest_with_verified_identifiers(
+                repo.root, bundle_dir, repo.base,
+                work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=7,
+            )
+            manifest_path = bundle_dir / "MANIFEST.md"
+            content = manifest_path.read_text()
+            fake_head = "f" * 40
+            content = wf._GENERATION_HEAD_LINE_RE.sub(f"generation_head: {fake_head}", content)
+            manifest_path.write_text(content)
+            with self.assertRaises(wf.WorktreeOrHeadMismatchError):
+                wf.assert_local_generation_matches(repo.root, manifest_path)
+
+    def test_missing_manifest_metadata_is_not_a_local_mismatch(self):
+        """An older bundle generated before WF5 landed has no
+        worktree_root/generation_head lines at all -- absence is not
+        itself a mismatch, since there is nothing to compare against."""
+        with ScratchRepo() as repo:
+            bundle_dir = self._bundle_dir(repo)
+            (bundle_dir / "MANIFEST.md").write_text("# Bundle Manifest\n\nreview_content_id: " + "a" * 64 + "\n")
+            wf.assert_local_generation_matches(repo.root, bundle_dir / "MANIFEST.md")
+
+
+class TestStageCompletenessCheck(unittest.TestCase):
+    """`assert_stage_completeness`: a bundle's own author-written stage
+    document must state the revision the authoritative source currently
+    declares (unchanged design from round 5's `R5-PLAN-015`)."""
+
+    def test_plan_stage_passes_when_revision_matches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle_dir = Path(tmp)
+            (bundle_dir / "PLAN.md").write_text("# Plan (Revision 7)\n\ncontent\n")
+            wf.assert_stage_completeness(bundle_dir, "plan", plan_revision=7)
+
+    def test_plan_stage_fails_on_stale_revision(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle_dir = Path(tmp)
+            (bundle_dir / "PLAN.md").write_text("# Plan (Revision 6)\n\ncontent\n")
+            with self.assertRaises(wf.StageCompletenessError):
+                wf.assert_stage_completeness(bundle_dir, "plan", plan_revision=7)
+
+    def test_plan_stage_fails_when_marker_absent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle_dir = Path(tmp)
+            (bundle_dir / "PLAN.md").write_text("# Plan\n\ncontent, no revision marker\n")
+            with self.assertRaises(wf.StageCompletenessError):
+                wf.assert_stage_completeness(bundle_dir, "plan", plan_revision=7)
+
+    def test_implementation_stage_passes_when_revision_matches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle_dir = Path(tmp)
+            (bundle_dir / "IMPLEMENTATION_SUMMARY.md").write_text(
+                "implementation_revision: 3\n\nwhat was built\n"
+            )
+            wf.assert_stage_completeness(bundle_dir, "implementation", implementation_revision=3)
+            wf.assert_stage_completeness(bundle_dir, "post-fix", implementation_revision=3)
+
+    def test_implementation_stage_fails_on_stale_revision(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle_dir = Path(tmp)
+            (bundle_dir / "IMPLEMENTATION_SUMMARY.md").write_text(
+                "implementation_revision: 2\n\nwhat was built\n"
+            )
+            with self.assertRaises(wf.StageCompletenessError):
+                wf.assert_stage_completeness(bundle_dir, "implementation", implementation_revision=3)
+
+    def test_functional_review_stage_is_a_noop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle_dir = Path(tmp)
+            wf.assert_stage_completeness(bundle_dir, "functional-review")
+
+    def test_unknown_stage_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle_dir = Path(tmp)
+            with self.assertRaises(wf.StageCompletenessError):
+                wf.assert_stage_completeness(bundle_dir, "not-a-real-stage")
+
+
+class TestFeedbackBindingFields(unittest.TestCase):
+    """`WFR-03`: external feedback is matched against `bundle_id` exactly;
+    stale/missing feedback is rejected naming both values."""
+
+    def _feedback(self, *, status="APPROVE", bundle_id=FAKE_ID_A, base_commit="a" * 40, work_item="workflow-v2-1-core"):
+        return (
+            f"# Review Decision\n\nStatus: {status}\n\n"
+            f"Reviewed bundle ID: {bundle_id}\n"
+            f"Reviewed base commit: {base_commit}\n"
+            f"Work item: {work_item}\n"
+        )
+
+    def test_parses_all_four_fields(self):
+        fields = wf.parse_review_feedback_binding_fields(self._feedback())
+        self.assertEqual(fields["status"], "APPROVE")
+        self.assertEqual(fields["reviewed_bundle_id"], FAKE_ID_A)
+        self.assertEqual(fields["reviewed_base_commit"], "a" * 40)
+        self.assertEqual(fields["work_item"], "workflow-v2-1-core")
+
+    def test_missing_fields_parse_as_none(self):
+        fields = wf.parse_review_feedback_binding_fields("# Review Decision\n\nStatus: APPROVE\n")
+        self.assertIsNone(fields["reviewed_bundle_id"])
+        self.assertIsNone(fields["reviewed_base_commit"])
+        self.assertIsNone(fields["work_item"])
+
+    def test_assert_matches_passes_on_agreement(self):
+        fields = wf.parse_review_feedback_binding_fields(self._feedback())
+        wf.assert_feedback_matches_bundle(
+            fields, bundle_id=FAKE_ID_A, base_commit="a" * 40, work_item_id="workflow-v2-1-core"
+        )
+
+    def test_assert_matches_rejects_missing_field_naming_it(self):
+        fields = wf.parse_review_feedback_binding_fields("# Review Decision\n\nStatus: APPROVE\n")
+        with self.assertRaises(wf.MissingFeedbackBindingFieldError):
+            wf.assert_feedback_matches_bundle(
+                fields, bundle_id=FAKE_ID_A, base_commit="a" * 40, work_item_id="workflow-v2-1-core"
+            )
+
+    def test_assert_matches_rejects_stale_bundle_id(self):
+        fields = wf.parse_review_feedback_binding_fields(self._feedback(bundle_id=FAKE_ID_B))
+        with self.assertRaises(wf.FeedbackBundleMismatchError):
+            wf.assert_feedback_matches_bundle(
+                fields, bundle_id=FAKE_ID_A, base_commit="a" * 40, work_item_id="workflow-v2-1-core"
+            )
+
+    def test_assert_matches_rejects_stale_base_commit(self):
+        fields = wf.parse_review_feedback_binding_fields(self._feedback(base_commit="b" * 40))
+        with self.assertRaises(wf.FeedbackBundleMismatchError):
+            wf.assert_feedback_matches_bundle(
+                fields, bundle_id=FAKE_ID_A, base_commit="a" * 40, work_item_id="workflow-v2-1-core"
+            )
+
+    def test_assert_matches_rejects_wrong_work_item(self):
+        fields = wf.parse_review_feedback_binding_fields(self._feedback(work_item="milestone-8"))
+        with self.assertRaises(wf.FeedbackBundleMismatchError):
+            wf.assert_feedback_matches_bundle(
+                fields, bundle_id=FAKE_ID_A, base_commit="a" * 40, work_item_id="workflow-v2-1-core"
+            )
+
+
+class TestBinaryAndUnusualPathBundleEntries(unittest.TestCase):
+    """`OPUS-R6-019`/`WFR-05`: `compute_bundle_id` treats bundle-file
+    content as opaque bytes throughout, so binaries and unusual-but-
+    supported paths (newline-in-path, non-ASCII path) round-trip
+    deterministically -- restored to explicit test-vector coverage
+    (previously only asserted in the module docstring)."""
+
+    def test_binary_file_hashes_by_raw_bytes_never_decoded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle_dir = Path(tmp)
+            (bundle_dir / "MANIFEST.md").write_text(f"review_content_id: {'a' * 64}\n")
+            binary_content = bytes(range(256)) + b"\xff\xfe\x00\x01"
+            (bundle_dir / "files").mkdir()
+            (bundle_dir / "files" / "blob.bin").write_bytes(binary_content)
+            digest1, entries1 = wf.compute_bundle_id(bundle_dir)
+            digest2, entries2 = wf.compute_bundle_id(bundle_dir)
+            self.assertEqual(digest1, digest2)
+            self.assertEqual(
+                entries1["files/blob.bin"]["sha256"], hashlib.sha256(binary_content).hexdigest()
+            )
+            self.assertEqual(entries1, entries2)
+
+    def test_different_binary_content_changes_bundle_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle_dir = Path(tmp)
+            (bundle_dir / "MANIFEST.md").write_text(f"review_content_id: {'a' * 64}\n")
+            (bundle_dir / "files").mkdir()
+            (bundle_dir / "files" / "blob.bin").write_bytes(b"\x00\x01\x02")
+            digest1, _ = wf.compute_bundle_id(bundle_dir)
+            (bundle_dir / "files" / "blob.bin").write_bytes(b"\x00\x01\x03")
+            digest2, _ = wf.compute_bundle_id(bundle_dir)
+            self.assertNotEqual(digest1, digest2)
+
+    def test_non_ascii_path_round_trips(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle_dir = Path(tmp)
+            (bundle_dir / "MANIFEST.md").write_text(f"review_content_id: {'a' * 64}\n")
+            (bundle_dir / "files").mkdir()
+            (bundle_dir / "files" / "café.txt").write_text("espresso\n")
+            digest, entries = wf.compute_bundle_id(bundle_dir)
+            self.assertIn("files/café.txt", entries)
+            digest_again, _ = wf.compute_bundle_id(bundle_dir)
+            self.assertEqual(digest, digest_again)
+
+    def test_newline_in_path_round_trips(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle_dir = Path(tmp)
+            (bundle_dir / "MANIFEST.md").write_text(f"review_content_id: {'a' * 64}\n")
+            (bundle_dir / "files").mkdir()
+            weird_name = "line1\nline2.txt"
+            (bundle_dir / "files" / weird_name).write_text("content\n")
+            digest, entries = wf.compute_bundle_id(bundle_dir)
+            self.assertIn(f"files/{weird_name}", entries)
+            digest_again, _ = wf.compute_bundle_id(bundle_dir)
+            self.assertEqual(digest, digest_again)
 
 
 if __name__ == "__main__":

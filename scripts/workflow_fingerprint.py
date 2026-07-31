@@ -321,6 +321,43 @@ class ReviewContentIdMismatchError(Exception):
     value) — resolves `OPUS-R18-005`."""
 
 
+class WorktreeOrHeadMismatchError(Exception):
+    """Raised by a **repository-local** consumer (`/approve-review`) when
+    the current worktree root or HEAD SHA differs from what `MANIFEST.md`
+    recorded at bundle-generation time — the actual first-party Milestone-8
+    incident (a stale bundle read from a different worktree) this check
+    exists to catch (`D-Bundle-Manifest`, resolves `OPUS-R6-016`). Never
+    raised for an external reviewer consuming a portable extracted
+    archive — that consumer treats the recorded values as diagnostic
+    metadata only (`GPT-R9-015`)."""
+
+
+class StageCompletenessError(Exception):
+    """Raised when a bundle's author-written stage document (`PLAN.md` at
+    the plan stage, `IMPLEMENTATION_SUMMARY.md` at the implementation/
+    post-fix stages) does not state the revision the authoritative source
+    currently declares — a stale, unrefreshed copy inside the bundle is
+    exactly the class of mistake round 5's `R5-PLAN-015` named this check
+    to catch."""
+
+
+class MissingFeedbackBindingFieldError(Exception):
+    """Raised when `REVIEW_FEEDBACK.md` is missing one of its three
+    required binding fields (`Reviewed bundle ID:`, `Reviewed base
+    commit:`, `Work item:`) — resolves `OPUS-R14-002`'s binding-field
+    requirement, generalized from WF0's bootstrap-only check to every
+    ordinary review round (`WFR-03`)."""
+
+
+class FeedbackBundleMismatchError(Exception):
+    """Raised when `REVIEW_FEEDBACK.md`'s stated `Reviewed bundle ID:`,
+    `Reviewed base commit:`, or `Work item:` disagrees with the bundle
+    actually being approved against — names both the feedback's own value
+    and the current value so the mismatch is diagnosable, never silently
+    absorbed (`WFR-03`, resolves `OPUS-R6-021`/`GPT-R9-015`'s underlying
+    concern applied to feedback matching rather than worktree/HEAD)."""
+
+
 WORK_ITEM_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
 # D1's controlled vocabulary. "synthetic" (WF8b's dry-run item) is
@@ -1095,6 +1132,226 @@ def compute_review_content_id_implementation_stage_at_commit(
 
 
 # ---------------------------------------------------------------------------
+# Bundle layout — WF5's `.ai-review/<work_item_id>/{current,feedback}/`
+# relayout, with a stated compatibility fallback (resolves `OPUS-R6-021`).
+# `.claude/commands/*.md` and `docs/ai-workflow/REVIEW_PROTOCOL.md` state
+# this same rule in prose; this is the one real, testable implementation of
+# it, rather than leaving path resolution to an executing agent's own
+# reading of that prose. Once a work item's own `.ai-review/<id>/` layout
+# exists, it is authoritative; the flat legacy layout is read only for a
+# work item that has never had the new layout created yet -- this
+# milestone's own in-flight bundle during WF5's own landing, in practice.
+# ---------------------------------------------------------------------------
+
+
+def resolve_bundle_dir(repo_root: Path, work_item_id: str) -> Path:
+    """The current bundle directory for `work_item_id`, repo-root-relative:
+    `.ai-review/<work_item_id>/current` if that directory already exists,
+    else the flat compatibility path `.ai-review/current`."""
+    validate_work_item_id(work_item_id)
+    scoped = Path(".ai-review") / work_item_id / "current"
+    if (repo_root / scoped).is_dir():
+        return scoped
+    return Path(".ai-review/current")
+
+
+def resolve_feedback_dir(repo_root: Path, work_item_id: str) -> Path:
+    """The feedback directory counterpart of `resolve_bundle_dir` -- kept
+    as an independent function (not derived from the bundle dir's parent)
+    because a caller may need to resolve the feedback path before any
+    bundle has ever been generated in the scoped layout."""
+    validate_work_item_id(work_item_id)
+    scoped = Path(".ai-review") / work_item_id / "feedback"
+    if (repo_root / scoped).is_dir():
+        return scoped
+    return Path(".ai-review/feedback")
+
+
+# ---------------------------------------------------------------------------
+# Generation diagnostic metadata — worktree_root/HEAD recorded in
+# MANIFEST.md, portability-vs-local-staleness split (resolves
+# `OPUS-R6-016`/`GPT-R9-015`). Deliberately never folded into either
+# fingerprint's hashed projection: these two values identify *which
+# generation run* produced the bundle, not the reviewed content itself, and
+# an external reviewer consuming a portable extracted archive must never be
+# blocked by local-path equality (`WFR-17`).
+# ---------------------------------------------------------------------------
+
+_WORKTREE_ROOT_LINE_RE = re.compile(r"^worktree_root: (.+)$", re.MULTILINE)
+_GENERATION_HEAD_LINE_RE = re.compile(r"^generation_head: ([0-9a-f]{40})$", re.MULTILINE)
+
+
+def current_worktree_root_and_head(repo_root: Path) -> tuple[str, str]:
+    """The absolute worktree root and current HEAD SHA, as recorded into a
+    freshly generated bundle's `MANIFEST.md`."""
+    root = _run(["git", "rev-parse", "--show-toplevel"], cwd=repo_root).strip()
+    head = _run(["git", "rev-parse", "HEAD"], cwd=repo_root).strip()
+    return root, head
+
+
+def read_manifest_generation_metadata(manifest_path: Path) -> dict[str, str]:
+    """Read whichever of `worktree_root`/`generation_head` a `MANIFEST.md`
+    currently states, without writing anything -- mirrors
+    `read_manifest_identifiers`'s read-only contract."""
+    if not manifest_path.is_file():
+        return {}
+    content = manifest_path.read_text()
+    fields: dict[str, str] = {}
+    root_match = _WORKTREE_ROOT_LINE_RE.search(content)
+    if root_match:
+        fields["worktree_root"] = root_match.group(1)
+    head_match = _GENERATION_HEAD_LINE_RE.search(content)
+    if head_match:
+        fields["generation_head"] = head_match.group(1)
+    return fields
+
+
+def assert_local_generation_matches(repo_root: Path, manifest_path: Path) -> None:
+    """**Repository-local commands only** (`/approve-review`): stop if the
+    current worktree root or HEAD SHA differs from what `MANIFEST.md`
+    recorded at generation time, naming both. Never call this from a path
+    that also serves external reviewers -- see `WorktreeOrHeadMismatchError`
+    and `WFR-17`."""
+    recorded = read_manifest_generation_metadata(manifest_path)
+    current_root, current_head = current_worktree_root_and_head(repo_root)
+    if "worktree_root" in recorded and recorded["worktree_root"] != current_root:
+        raise WorktreeOrHeadMismatchError(
+            f"MANIFEST.md was generated in worktree {recorded['worktree_root']!r}, "
+            f"this is {current_root!r}"
+        )
+    if "generation_head" in recorded and recorded["generation_head"] != current_head:
+        raise WorktreeOrHeadMismatchError(
+            f"MANIFEST.md was generated at HEAD {recorded['generation_head']!r}, "
+            f"current HEAD is {current_head!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Stage-completeness / revision-consistency check (WF5): `PLAN.md`'s stated
+# revision must agree with the plan document's current `plan_revision`
+# before a plan-stage bundle is considered complete; `IMPLEMENTATION_SUMMARY.md`'s
+# stated `implementation_revision` must agree with the work item's current
+# counter before an implementation/post-fix-stage bundle is.
+# ---------------------------------------------------------------------------
+
+_IMPLEMENTATION_REVISION_LINE_RE = re.compile(r"^implementation_revision: (\d+)$", re.MULTILINE)
+
+
+def assert_stage_completeness(
+    bundle_dir: Path,
+    stage: str,
+    *,
+    plan_revision: int | None = None,
+    implementation_revision: int | None = None,
+) -> None:
+    """Fails closed if the bundle's own author-written stage document does
+    not state the revision the authoritative source currently declares —
+    an unrefreshed copy left over from an earlier round is exactly the
+    staleness this check exists to catch (unchanged design from round 5's
+    `R5-PLAN-015`). No-ops for `functional-review`, which has no revision
+    counter of its own."""
+    if stage == "plan":
+        if plan_revision is None:
+            raise StageCompletenessError("plan_revision is required for the plan stage")
+        plan_path = bundle_dir / "PLAN.md"
+        content = plan_path.read_text() if plan_path.is_file() else ""
+        match = PLAN_TITLE_REVISION_RE.search(content)
+        if match is None:
+            raise StageCompletenessError(
+                f"{plan_path} states no '(Revision N)' marker -- expected Revision {plan_revision}"
+            )
+        if int(match.group(1)) != plan_revision:
+            raise StageCompletenessError(
+                f"{plan_path} states Revision {match.group(1)}, "
+                f"the authoritative plan document currently declares Revision {plan_revision}"
+            )
+    elif stage in ("implementation", "post-fix"):
+        if implementation_revision is None:
+            raise StageCompletenessError(
+                "implementation_revision is required for the implementation/post-fix stage"
+            )
+        summary_path = bundle_dir / "IMPLEMENTATION_SUMMARY.md"
+        content = summary_path.read_text() if summary_path.is_file() else ""
+        match = _IMPLEMENTATION_REVISION_LINE_RE.search(content)
+        if match is None:
+            raise StageCompletenessError(
+                f"{summary_path} states no 'implementation_revision: N' line -- "
+                f"expected {implementation_revision}"
+            )
+        if int(match.group(1)) != implementation_revision:
+            raise StageCompletenessError(
+                f"{summary_path} states implementation_revision: {match.group(1)}, "
+                f"the work item's current counter is {implementation_revision}"
+            )
+    elif stage == "functional-review":
+        return
+    else:
+        raise StageCompletenessError(f"unknown stage: {stage!r}")
+
+
+# ---------------------------------------------------------------------------
+# Feedback binding fields (WFR-03): `REVIEW_FEEDBACK.md` must state which
+# exact bundle it reviewed, so stale/missing feedback is rejected naming
+# both the feedback's value and the current one, rather than a reviewer's
+# free-text claim being trusted at face value.
+# ---------------------------------------------------------------------------
+
+_FEEDBACK_STATUS_RE = re.compile(r"^Status:\s*(APPROVE|REVISE|BLOCK)\s*$", re.MULTILINE)
+_FEEDBACK_BUNDLE_ID_RE = re.compile(r"^Reviewed bundle ID:\s*([0-9a-f]{64})\s*$", re.MULTILINE)
+_FEEDBACK_BASE_COMMIT_RE = re.compile(r"^Reviewed base commit:\s*([0-9a-f]{40})\s*$", re.MULTILINE)
+_FEEDBACK_WORK_ITEM_RE = re.compile(r"^Work item:\s*(\S+)\s*$", re.MULTILINE)
+
+
+def parse_review_feedback_binding_fields(content: str) -> dict[str, str | None]:
+    """Extract `REVIEW_FEEDBACK.md`'s `Status:`, `Reviewed bundle ID:`,
+    `Reviewed base commit:`, and `Work item:` fields. Each key is `None` if
+    the field is absent -- callers decide whether absence is fatal (most
+    are, per `WFR-03`; WF0's bootstrap-only check already enforces this for
+    its own one-time approving feedback, per `OPUS-R14-002`)."""
+    status_match = _FEEDBACK_STATUS_RE.search(content)
+    bundle_id_match = _FEEDBACK_BUNDLE_ID_RE.search(content)
+    base_commit_match = _FEEDBACK_BASE_COMMIT_RE.search(content)
+    work_item_match = _FEEDBACK_WORK_ITEM_RE.search(content)
+    return {
+        "status": status_match.group(1) if status_match else None,
+        "reviewed_bundle_id": bundle_id_match.group(1) if bundle_id_match else None,
+        "reviewed_base_commit": base_commit_match.group(1) if base_commit_match else None,
+        "work_item": work_item_match.group(1) if work_item_match else None,
+    }
+
+
+def assert_feedback_matches_bundle(
+    feedback_fields: Mapping[str, str | None],
+    *,
+    bundle_id: str,
+    base_commit: str,
+    work_item_id: str,
+) -> None:
+    """Reject feedback missing any of the three binding fields, or whose
+    values disagree with the bundle actually being approved against —
+    naming both the feedback's own value and the current one in every case
+    (`WFR-03`)."""
+    for key in ("reviewed_bundle_id", "reviewed_base_commit", "work_item"):
+        if feedback_fields.get(key) is None:
+            raise MissingFeedbackBindingFieldError(key)
+    if feedback_fields["reviewed_bundle_id"] != bundle_id:
+        raise FeedbackBundleMismatchError(
+            f"feedback reviewed bundle_id {feedback_fields['reviewed_bundle_id']!r}, "
+            f"current bundle_id is {bundle_id!r}"
+        )
+    if feedback_fields["reviewed_base_commit"] != base_commit:
+        raise FeedbackBundleMismatchError(
+            f"feedback reviewed base commit {feedback_fields['reviewed_base_commit']!r}, "
+            f"current base commit is {base_commit!r}"
+        )
+    if feedback_fields["work_item"] != work_item_id:
+        raise FeedbackBundleMismatchError(
+            f"feedback names work item {feedback_fields['work_item']!r}, "
+            f"expected {work_item_id!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
 # bundle_id — resolves PROTO-R7-004/006/007, OPUS-R8-001/002/004/013/017
 # ---------------------------------------------------------------------------
 
@@ -1265,17 +1522,31 @@ def render_manifest_md(
     excluded_paths: Mapping[str, str],
     excluded_prefixes: Mapping[str, str],
     bundle_id: str | None = None,
+    worktree_root: str | None = None,
+    generation_head: str | None = None,
 ) -> str:
     """Render `MANIFEST.md` content. If `bundle_id` is supplied, it is
     written using the exact contract `_strip_bundle_id_field` recognizes
     (`bundle_id: <64-hex-chars>`), so writing it in after computing
     `compute_bundle_id()` never invalidates the value just computed --
     the field is excluded from the hash by construction, not by
-    convention."""
+    convention.
+
+    `worktree_root`/`generation_head`, if supplied, are written as plain
+    diagnostic lines (`worktree_root: <path>` / `generation_head: <sha>`)
+    -- neither is part of any identity-bearing field pattern, so they are
+    ordinary hashed bundle content for `bundle_id` and never touch
+    `review_content_id` at all. Repository-local commands read them back
+    via `assert_local_generation_matches`; an external reviewer treats
+    them as informational only (`WFR-17`)."""
     lines = ["# Bundle Manifest", ""]
     if bundle_id is not None:
         lines.append(f"bundle_id: {bundle_id}")
     lines.append(f"review_content_id: {review_content_id}")
+    if worktree_root is not None:
+        lines.append(f"worktree_root: {worktree_root}")
+    if generation_head is not None:
+        lines.append(f"generation_head: {generation_head}")
     lines.append("")
     lines.append("## Protected paths")
     for path in sorted(protected):
@@ -1385,9 +1656,16 @@ def write_manifest_with_verified_identifiers(
     )
     assert_review_request_states_review_content_id(bundle_dir, digest)
 
+    # Computed once and reused for both renders below, so the placeholder
+    # and final MANIFEST.md content never disagree with each other on
+    # worktree_root/generation_head purely because of when in this
+    # function's own execution each was read (WFR-17).
+    worktree_root, generation_head = current_worktree_root_and_head(repo_root)
+
     placeholder_content = render_manifest_md(
         review_content_id=digest, protected=protected,
         excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,
+        worktree_root=worktree_root, generation_head=generation_head,
     ).encode()
     bundle_id, _entries = compute_bundle_id(
         bundle_dir, manifest_content_override=placeholder_content
@@ -1397,6 +1675,7 @@ def write_manifest_with_verified_identifiers(
         review_content_id=digest, protected=protected,
         excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,
         bundle_id=bundle_id,
+        worktree_root=worktree_root, generation_head=generation_head,
     )
 
     recomputed_bundle_id, _ = compute_bundle_id(
@@ -1438,7 +1717,16 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--write-manifest", action="store_true",
-        help="write .ai-review/current/MANIFEST.md (the only invocation that writes anything)",
+        help="write MANIFEST.md (the only invocation that writes anything)",
+    )
+    parser.add_argument(
+        "--work-item-id", default="workflow-v2-1-core",
+        help=(
+            "work item whose bundle directory to resolve (default: this "
+            "milestone's own work item). Resolves via resolve_bundle_dir "
+            "-- .ai-review/<id>/current if it exists, else the flat "
+            "compatibility path .ai-review/current"
+        ),
     )
     args = parser.parse_args()
 
@@ -1466,7 +1754,7 @@ if __name__ == "__main__":
     for entry in projection["review_content_manifest"]:
         print(f"  {entry}")
 
-    bundle_dir = repo_root / ".ai-review" / "current"
+    bundle_dir = repo_root / resolve_bundle_dir(repo_root, args.work_item_id)
     manifest_path = bundle_dir / "MANIFEST.md"
     print()
 
@@ -1503,7 +1791,19 @@ if __name__ == "__main__":
             print(f"MANIFEST.md's recorded bundle_id: {existing['bundle_id']} ({match})")
     except MissingRequiredBundleFileError:
         print(f"{manifest_path} does not exist yet -- run with --write-manifest first")
+    generation_meta = read_manifest_generation_metadata(manifest_path)
+    if generation_meta:
+        current_root, current_head = current_worktree_root_and_head(repo_root)
+        print(f"MANIFEST.md's recorded worktree_root: {generation_meta.get('worktree_root')} "
+              f"(current: {current_root}, "
+              f"{'matches' if generation_meta.get('worktree_root') == current_root else 'DIFFERS -- see WorktreeOrHeadMismatchError'})")
+        print(f"MANIFEST.md's recorded generation_head: {generation_meta.get('generation_head')} "
+              f"(current: {current_head}, "
+              f"{'matches' if generation_meta.get('generation_head') == current_head else 'DIFFERS -- see WorktreeOrHeadMismatchError'})")
+        print("(diagnostic only here -- a repository-local command like /approve-review "
+              "enforces this via assert_local_generation_matches; an external reviewer "
+              "consuming a portable archive ignores it, WFR-17)")
     print()
-    print("This command never writes to .ai-review/current/ -- safe to re-run "
+    print(f"This command never writes to {bundle_dir} -- safe to re-run "
           "at any time. Verify from an extracted archive copy for a second, "
           "independent check.")

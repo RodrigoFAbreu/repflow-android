@@ -8,7 +8,7 @@ are defined in `docs/ai-workflow/MILESTONE_WORKFLOW.md`.
 ## Generating a bundle
 
 ```bash
-./scripts/prepare-ai-review.sh <base-sha> <stage>
+./scripts/prepare-ai-review.sh <base-sha> <stage> [work-item-id]
 ```
 
 `<stage>` is one of: `plan`, `implementation`, `post-fix`,
@@ -18,15 +18,49 @@ are defined in `docs/ai-workflow/MILESTONE_WORKFLOW.md`.
 milestone's starting commit (the last commit before this milestone's work
 began, e.g. the completion commit of the previous milestone).
 
+`[work-item-id]` is optional. Passing it writes the bundle under the
+per-work-item layout (`.ai-review/<work-item-id>/`, see below). Omitting it
+writes the flat compatibility layout (`.ai-review/current/`,
+`.ai-review/feedback/`) directly under `.ai-review/`.
+
 The script is deterministic and safe to rerun: it always regenerates the
 git-derived files from current repository state, and leaves author-written
 files untouched if they already exist (it only creates empty stubs for
 missing ones, so the bundle structure stays stable at every stage).
 
+### Bundle location: `.ai-review/<work_item_id>/` layout, with a compatibility fallback
+
+The canonical layout is per-work-item:
+
+```text
+.ai-review/<work_item_id>/
+├── current/            # the bundle currently under review (see structure below)
+├── feedback/            # external feedback, placed here by the reviewer/user
+└── review-bundle.tar.gz # archive of current/
+```
+
+For any work item that has never had this layout created yet, commands
+read the flat compatibility path instead: `.ai-review/current/` and
+`.ai-review/feedback/` directly under `.ai-review/` (no work-item
+subdirectory). The resolution rule (implemented in
+`scripts/workflow_fingerprint.py`'s `resolve_bundle_dir`/
+`resolve_feedback_dir`, not left to prose alone) is: prefer
+`.ai-review/<work_item_id>/{current,feedback}/` if that directory already
+exists, else fall back to the flat path. This exists to cover this
+milestone's own remaining execution, which is still running out of the
+flat layout as WF5 lands; every new command invocation should prefer the
+scoped layout once it exists for a given work item.
+
+`.ai-review/` is entirely gitignored, including `.ai-review/source/` —
+files a human places there as raw proposal material for Claude to read,
+never review-bundle content. `CONTEXT_FILES.txt` must never list a path
+under `.ai-review/source/`; `scripts/prepare-ai-review.sh` skips (and
+warns on) any such entry as defense in depth.
+
 ### Bundle structure
 
 ```text
-.ai-review/current/
+<bundle_dir>/                  # .ai-review/<work_item_id>/current/, or .ai-review/current/ (compatibility)
 ├── REVIEW_REQUEST.md          # author-written, see below
 ├── PLAN.md                    # author-written; plan-stage content
 ├── IMPLEMENTATION_SUMMARY.md  # author-written; implementation-stage content
@@ -35,26 +69,55 @@ missing ones, so the bundle structure stays stable at every stage).
 ├── COMMITS.txt                # generated: git log base..HEAD
 ├── DIFF.patch                 # generated: full diff from base to working tree
 ├── CONTEXT_FILES.txt          # author-written: list of unchanged context files to include
+├── MANIFEST.md                # generated (scripts/workflow_fingerprint.py --write-manifest only):
+│                               # bundle_id, review_content_id, protected/excluded path lists,
+│                               # and diagnostic-only worktree_root/generation_head (see below)
 └── files/                     # generated: final copies of changed + listed context files
 ```
 
-`.ai-review/review-bundle.tar.gz` is produced from the whole `current/`
-directory.
+### Generation diagnostic metadata (`worktree_root`/`generation_head`)
+
+`MANIFEST.md` records the absolute worktree root and HEAD SHA the bundle
+was generated from, as plain diagnostic lines — never hashed into
+`review_content_id`, and not part of any identity-bearing field contract.
+This is **portability vs. local staleness, split by consumer**:
+
+- A **repository-local command** (`/approve-review`) runs inside a real,
+  current worktree and can meaningfully ask "is this the same worktree and
+  HEAD I'm sitting in right now" — it calls
+  `workflow_fingerprint.assert_local_generation_matches(...)` and stops,
+  naming both values, on a mismatch. This is the actual first-party
+  Milestone-8 incident (a stale bundle read from a different worktree) the
+  mechanism exists to catch.
+- An **external reviewer** receiving the bundle via the archive is, by
+  design, outside the generating worktree — that is not staleness, it is
+  the archive doing its job. External review validates the exact
+  `bundle_id` and the reported Git metadata (base/head SHAs, branch)
+  instead; it never checks `worktree_root`/`generation_head` for equality.
 
 ### Author-written files — what belongs in each
 
 - **REVIEW_REQUEST.md** — the index. See "Review request format" below.
+  Must state `review_content_id: <hex>` as a plain labelled line, agreeing
+  with `MANIFEST.md` (`OPUS-R18-005`).
 - **PLAN.md** — populated at the `plan` stage: the actual execution plan
-  being reviewed. Leave empty (or omit updating it) at later stages.
+  being reviewed. Leave empty (or omit updating it) at later stages. Must
+  state the plan's current `(Revision N)` marker — a bundle whose `PLAN.md`
+  disagrees with the authoritative plan document's own declared revision
+  fails the stage-completeness check (`assert_stage_completeness`).
 - **IMPLEMENTATION_SUMMARY.md** — populated at `implementation`/`post-fix`
-  stages: what was built, checkpoint by checkpoint, and why.
+  stages: what was built, checkpoint by checkpoint, and why. Must state
+  `implementation_revision: <N>` matching the work item's current counter
+  (`WORKFLOW_STATE.json`'s `implementation_revision`) — same
+  stage-completeness discipline as `PLAN.md`'s revision marker.
 - **TEST_RESULTS.md** — exact commands run and their real outcome. Never
   state a check passed unless it actually ran in this session.
 - **CONTEXT_FILES.txt** — one repo-relative path per line, no comments. Only
   the files a reviewer genuinely needs beyond the diff itself (e.g. the ADR
   a decision follows, the domain glossary entry a rule depends on). The
   script copies every listed file into `files/` verbatim. Keep this short —
-  it is not a dump of the whole `docs/` tree.
+  it is not a dump of the whole `docs/` tree. Never list a path under
+  `.ai-review/source/` (source-proposal material, not review content).
 
 ### What the script does NOT do
 
@@ -98,8 +161,11 @@ diff and `files/` must hold the final changed files, not a summary.
 External plan/implementation feedback is placed at:
 
 ```text
-.ai-review/feedback/REVIEW_FEEDBACK.md
+<feedback_dir>/REVIEW_FEEDBACK.md
 ```
+
+(`.ai-review/<work_item_id>/feedback/`, or the flat compatibility
+`.ai-review/feedback/` — see "Bundle location" above.)
 
 Required structure:
 
@@ -107,6 +173,10 @@ Required structure:
 # Review Decision
 
 Status: APPROVE | REVISE | BLOCK
+
+Reviewed bundle ID: <the exact bundle_id this feedback reviewed>
+Reviewed base commit: <the exact base_commit this feedback reviewed>
+Work item: <the exact work_item_id this feedback reviewed>
 
 ## Blocking findings
 
@@ -125,13 +195,24 @@ Status: APPROVE | REVISE | BLOCK
 ## Required acceptance criteria
 ```
 
+The three binding fields (`Reviewed bundle ID:`, `Reviewed base commit:`,
+`Work item:`) are required on every ordinary review round, not only WF0's
+one-time bootstrap check (`OPUS-R14-002`, generalized here). Feedback
+missing any of the three, or whose values disagree with the bundle
+actually being approved against, is rejected naming both the feedback's
+own value and the current one
+(`workflow_fingerprint.parse_review_feedback_binding_fields`/
+`assert_feedback_matches_bundle`, `WFR-03`) — never applied at face value.
+
 User functional-testing feedback is placed at:
 
 ```text
-.ai-review/feedback/FUNCTIONAL_REVIEW.md
+<feedback_dir>/FUNCTIONAL_REVIEW.md
 ```
 
-(Free-form findings; `/apply-functional-review` classifies each one.)
+(Free-form findings; no binding-field requirement, since functional review
+has no `bundle_id`/`review_content_id` of its own to bind against —
+`/apply-functional-review` classifies each finding.)
 
 **Claude must validate feedback, never apply it blindly.** Every blocking and
 important finding must end up either resolved, or explicitly rejected in the
@@ -160,3 +241,6 @@ and a clear explanation.
   substitute a prose-only summary for the real diff.
 - Compact the conversation or start a fresh session at milestone/review
   boundaries when the session has grown large.
+- Never list a `.ai-review/source/` path in `CONTEXT_FILES.txt` or treat it
+  as review content — it is raw proposal material a human places there for
+  Claude to read, not part of any bundle (`WFR-16`).

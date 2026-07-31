@@ -8,6 +8,12 @@ Optional argument: `$ARGUMENTS` may name a base commit SHA to diff from. If
 omitted, use the milestone's starting commit (the completion commit of the
 previous milestone, from `docs/ACTIVE_MILESTONE.md`/`git log`).
 
+`<bundle_dir>`/`<feedback_dir>` below resolve per
+`docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Bundle location"
+(`workflow_fingerprint.resolve_bundle_dir`/`resolve_feedback_dir`): the
+per-work-item layout once it exists for this `work_item_id`, else the flat
+compatibility path.
+
 0. **Dual-mode branch** (Workflow v2.1, WF1b): read
    `docs/ai-workflow/WORKFLOW_CONFIG.json` (missing/corrupt before
    activation defaults to `default_workflow_version: "1"`) and
@@ -70,11 +76,11 @@ previous milestone, from `docs/ACTIVE_MILESTONE.md`/`git log`).
    `docs/TECHNICAL_DECISIONS.md` it touches — flag any it would silently
    finalize instead of deciding for the user.
 6. Enter `AWAITING_EXTERNAL_PLAN_REVIEW`:
-   - write/refresh `.ai-review/current/PLAN.md` with the actual plan;
-   - write `.ai-review/current/CONTEXT_FILES.txt` listing only the docs a
+   - write/refresh `<bundle_dir>/PLAN.md` with the actual plan;
+   - write `<bundle_dir>/CONTEXT_FILES.txt` listing only the docs a
      reviewer genuinely needs beyond the plan itself;
-   - write `.ai-review/current/REVIEW_REQUEST.md` per the format in
+   - write `<bundle_dir>/REVIEW_REQUEST.md` per the format in
      `docs/ai-workflow/REVIEW_PROTOCOL.md` (stage: `plan`);
-   - run `./scripts/prepare-ai-review.sh <base-sha> plan`.
+   - run `./scripts/prepare-ai-review.sh <base-sha> plan [work_item_id]`.
 7. Report the bundle location and **stop**. Do not implement anything. This
-   is a hard gate — wait for `.ai-review/feedback/REVIEW_FEEDBACK.md`.
+   is a hard gate — wait for `<feedback_dir>/REVIEW_FEEDBACK.md`.

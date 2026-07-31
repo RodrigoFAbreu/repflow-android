@@ -13,6 +13,10 @@ Recommended in a **fresh session** for genuine independence from the
 session that wrote the plan — strongly recommended operational guidance,
 not a verified precondition; no check here depends on session freshness.
 
+`<bundle_dir>`/`<feedback_dir>` below resolve per
+`docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Bundle location"
+(`workflow_fingerprint.resolve_bundle_dir`/`resolve_feedback_dir`).
+
 1. **Resolve the work item**: `$ARGUMENTS`, if given, names the
    `work_item_id`; otherwise use `active_work_item_id`
    (`docs/ai-workflow/WORKFLOW_STATE.json`).
@@ -26,9 +30,9 @@ not a verified precondition; no check here depends on session freshness.
    `AWAITING_LOCAL_PLAN_REVIEW`, refuse cleanly, naming the actual phase —
    including "already completed this round" (`WrongPhaseForPlanReviewStageError`).
    Never silently re-run.
-4. **Read**: the authoritative plan doc (`plan_path`), `.ai-review/current/REVIEW_REQUEST.md`,
-   `.ai-review/current/MANIFEST.md`, the required-context file list, any
-   prior `.ai-review/feedback/REVIEW_FEEDBACK.md` (for continuity across
+4. **Read**: the authoritative plan doc (`plan_path`), `<bundle_dir>/REVIEW_REQUEST.md`,
+   `<bundle_dir>/MANIFEST.md`, the required-context file list, any
+   prior `<feedback_dir>/REVIEW_FEEDBACK.md` (for continuity across
    rounds), and `docs/ai-workflow/REVIEW_PROTOCOL.md`'s feedback-structure
    contract.
 5. **Recompute fresh, before writing anything**: the current `bundle_id`
@@ -39,17 +43,25 @@ not a verified precondition; no check here depends on session freshness.
    `/approve-review` applies, run one stage earlier) — a missing/unreadable
    bundle, or a work item resolved from the wrong worktree
    (`WORKTREE_IDENTITY.json`'s existing local-staleness check), are the
-   same class of refusal.
+   same class of refusal. This command also runs inside a real, current
+   worktree, so also call
+   `workflow_fingerprint.assert_local_generation_matches(repo_root,
+   <bundle_dir>/MANIFEST.md)` and stop, naming both, on a
+   `WorktreeOrHeadMismatchError` (`D-Bundle-Manifest`, `WFR-17`).
 6. **Independently verify** every finding the plan document claims as
    addressed against the actual repository state — never take the
    disposition table's word for it — and search for new findings, exactly
    as thoroughly as `/apply-plan-review`'s own validation requirement.
 7. **Decide the verdict** (`Status: APPROVE | REVISE | BLOCK`) and write
-   `.ai-review/feedback/REVIEW_FEEDBACK.md` per
+   `<feedback_dir>/REVIEW_FEEDBACK.md` per
    `docs/ai-workflow/REVIEW_PROTOCOL.md`'s required structure, **plus**
    these provenance fields this role always includes:
    - `Reviewer role: local_model_plan_review` (never a model name here);
-   - the recomputed `bundle_id` and `review_content_id`;
+   - the three binding fields `docs/ai-workflow/REVIEW_PROTOCOL.md` now
+     requires on every round (`Reviewed bundle ID:`, `Reviewed base
+     commit:`, `Work item:`), stated with the recomputed `bundle_id`,
+     `base_commit`, and `work_item_id` from step 5 (`WFR-03`), plus the
+     recomputed plan-stage `review_content_id` as its own labelled line;
    - the round/sequence number (one more than the highest prior
      `local_model_plan_review` round on record, or `1` if none);
    - a completion timestamp.

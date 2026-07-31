@@ -6,6 +6,10 @@ argument-hint: [work-item-id]
 Enter the `AWAITING_FUNCTIONAL_REVIEW` state of
 `docs/ai-workflow/MILESTONE_WORKFLOW.md`.
 
+`<feedback_dir>` below resolves per
+`docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Bundle location"
+(`workflow_fingerprint.resolve_feedback_dir`).
+
 0. **Resolve the target** (D-Legacy phase 2, `WF-M8b`): the work-item id
    named in `$ARGUMENTS`, or `active_work_item_id` from
    `docs/ai-workflow/WORKFLOW_STATE.json` if none is given. Refuse with a
@@ -57,6 +61,6 @@ Enter the `AWAITING_FUNCTIONAL_REVIEW` state of
    checklist" section (or link to a short file from there) — do not create a
    second, separate status document.
 4. State clearly that findings should be placed at
-   `.ai-review/feedback/FUNCTIONAL_REVIEW.md`.
+   `<feedback_dir>/FUNCTIONAL_REVIEW.md`.
 5. Report and **stop**. This is a hard gate for the user to perform manual
    testing.

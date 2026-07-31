@@ -5,6 +5,10 @@ description: Classify and fix user functional-testing findings, then return to t
 Enter the `FIXING_FUNCTIONAL_FINDINGS` state of
 `docs/ai-workflow/MILESTONE_WORKFLOW.md`.
 
+`<feedback_dir>` below resolves per
+`docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Bundle location"
+(`workflow_fingerprint.resolve_feedback_dir`).
+
 0. **Dual-mode branch** (Workflow v2.1, `WF4c`, `D-Functional-Remediation`):
    resolve the target work item — the id named in `$ARGUMENTS`, or
    `active_work_item_id` from `docs/ai-workflow/WORKFLOW_STATE.json` if
@@ -21,7 +25,7 @@ Enter the `FIXING_FUNCTIONAL_FINDINGS` state of
      (`workflow_state.load_config`). Step 4 is replaced by the per-finding
      three-way branch below; steps 1-3 and 5-7 execute unchanged.
 
-1. Read `.ai-review/feedback/FUNCTIONAL_REVIEW.md`. If it does not exist,
+1. Read `<feedback_dir>/FUNCTIONAL_REVIEW.md`. If it does not exist,
    stop and say so.
 2. Classify each finding as one of: **defect**, **usability issue**,
    **missing requirement**, **enhancement**, or **expected behavior**. State
@@ -61,7 +65,7 @@ all in the same invocation.
   3. Commit the fix (one coherent commit; do not bundle it with an
      unrelated finding's fix).
   4. Regenerate the bundle at the `post-fix` stage:
-     `./scripts/prepare-ai-review.sh <base-sha> post-fix`, then call
+     `./scripts/prepare-ai-review.sh <base-sha> post-fix [work_item_id]`, then call
      `workflow_state.record_bundle_generation(state, work_item_id,
      stage="post-fix", head=<current HEAD SHA>, now=<now>)` and persist —
      this is the step that writes the new `reviewed_implementation_head`

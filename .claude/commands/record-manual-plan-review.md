@@ -20,6 +20,10 @@ command's existence: its own `plan_review_stages` check re-verifies the
 same ledger invariant this command writes, as a restated invariant, not a
 second ingestion path.
 
+`<bundle_dir>`/`<feedback_dir>` below resolve per
+`docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Bundle location"
+(`workflow_fingerprint.resolve_bundle_dir`/`resolve_feedback_dir`).
+
 1. **Resolve the work item**: `$ARGUMENTS`, if given, names the
    `work_item_id`; otherwise use `active_work_item_id`
    (`docs/ai-workflow/WORKFLOW_STATE.json`).
@@ -30,9 +34,9 @@ second ingestion path.
    `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW`, refuse cleanly, naming the
    actual phase — including "already ingested this round" and "no local
    `APPROVE` on record" (`WrongPhaseForPlanReviewStageError`).
-4. **Read**: `.ai-review/feedback/REVIEW_FEEDBACK.md` (must declare
-   `Reviewer role: manual_external_plan_review`), `.ai-review/current/MANIFEST.md`,
-   `.ai-review/current/REVIEW_REQUEST.md`, and the ledger's existing
+4. **Read**: `<feedback_dir>/REVIEW_FEEDBACK.md` (must declare
+   `Reviewer role: manual_external_plan_review`), `<bundle_dir>/MANIFEST.md`,
+   `<bundle_dir>/REVIEW_REQUEST.md`, and the ledger's existing
    `local_model_plan_review` entry.
 5. **Recompute fresh**: the current `bundle_id` and plan-stage
    `review_content_id`, identical in mechanism to `/review-plan`'s own

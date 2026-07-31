@@ -4,6 +4,10 @@ description: Apply external plan-review feedback and revise the plan.
 
 Enter the `REVISING_PLAN` state of `docs/ai-workflow/MILESTONE_WORKFLOW.md`.
 
+`<bundle_dir>`/`<feedback_dir>` below resolve per
+`docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Bundle location"
+(`workflow_fingerprint.resolve_bundle_dir`/`resolve_feedback_dir`).
+
 0. **Dual-mode branch** (Workflow v2.1, `WF4a-ii`/`WF4a-iv`): read the
    target work item's `governing_workflow_version` from
    `docs/ai-workflow/WORKFLOW_STATE.json` (missing entirely is equivalent to
@@ -16,18 +20,22 @@ Enter the `REVISING_PLAN` state of `docs/ai-workflow/MILESTONE_WORKFLOW.md`.
      `/review-plan`, `/record-manual-plan-review`). This branch is inert for
      this repository's own work item, which is fixed at `"1"` for its
      entire execution, but is otherwise fully live.
-1. Read `.ai-review/feedback/REVIEW_FEEDBACK.md`. If it does not exist, stop
-   and say so — do not proceed on assumed feedback.
+1. Read `<feedback_dir>/REVIEW_FEEDBACK.md`. If it does not exist, stop
+   and say so — do not proceed on assumed feedback. Validate its binding
+   fields (`workflow_fingerprint.parse_review_feedback_binding_fields`/
+   `assert_feedback_matches_bundle` against the current recomputed
+   `bundle_id`/`base_commit`/`work_item_id`, `WFR-03`) — stale or
+   mismatched feedback is a reason to stop and say so, not to apply.
 2. For every Blocking, Important, and Optional finding: validate it against
    the actual repository (read the relevant code/docs, do not take the
    finding's premise on faith).
-3. Apply accepted findings to the plan (`.ai-review/current/PLAN.md` and the
+3. Apply accepted findings to the plan (`<bundle_dir>/PLAN.md` and the
    real execution/reference plan doc).
 4. For any finding you reject, write the rejection with concrete repository
    evidence (file path, line, existing test, or doc reference) directly in
    the plan doc's decisions section — not a separate rebuttal file.
-5. Update `.ai-review/current/REVIEW_REQUEST.md` to reflect the revision and
-   rerun `./scripts/prepare-ai-review.sh <base-sha> plan` to refresh the
+5. Update `<bundle_dir>/REVIEW_REQUEST.md` to reflect the revision and
+   rerun `./scripts/prepare-ai-review.sh <base-sha> plan [work_item_id]` to refresh the
    bundle.
 6. If the `Status` was `BLOCK`, or if you made major structural changes to
    the plan, stay in `AWAITING_EXTERNAL_PLAN_REVIEW` and stop for another

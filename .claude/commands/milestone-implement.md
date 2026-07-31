@@ -130,15 +130,18 @@ dirty-resume rule, `WF2`):
    what ran and its real result — never claim a check passed that did not
    run.
 4. Enter `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`:
-   - write `.ai-review/current/IMPLEMENTATION_SUMMARY.md` (what was built,
+   - write `<bundle_dir>/IMPLEMENTATION_SUMMARY.md` (what was built,
      per checkpoint, and why);
-   - write `.ai-review/current/TEST_RESULTS.md` (exact commands + results);
-   - write `.ai-review/current/CONTEXT_FILES.txt` with only the unchanged
+   - write `<bundle_dir>/TEST_RESULTS.md` (exact commands + results);
+   - write `<bundle_dir>/CONTEXT_FILES.txt` with only the unchanged
      docs a reviewer needs;
-   - write `.ai-review/current/REVIEW_REQUEST.md` per
+   - write `<bundle_dir>/REVIEW_REQUEST.md` per
      `docs/ai-workflow/REVIEW_PROTOCOL.md` (stage: `implementation`);
-   - run `./scripts/prepare-ai-review.sh <base-sha> implementation`, where
-     `<base-sha>` is the milestone's starting commit;
+   - run `./scripts/prepare-ai-review.sh <base-sha> implementation
+     [work_item_id]`, where `<base-sha>` is the milestone's starting
+     commit; `<bundle_dir>` here resolves per
+     `docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Bundle location"
+     (`workflow_fingerprint.resolve_bundle_dir`);
    - if this work item has a `docs/ai-workflow/WORKFLOW_STATE.json` entry:
      call `workflow_state.record_bundle_generation(state, work_item_id,
      stage="implementation", head=<current HEAD SHA>, now=<now>)` (`WF4c`,
