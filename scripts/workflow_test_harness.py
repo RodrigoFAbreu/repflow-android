@@ -1,0 +1,216 @@
+#!/usr/bin/env python3
+"""Shared hermetic test fixtures for Workflow v2.1's own test suites
+(`WF8a-i`, `WFR-36`).
+
+**Documented fixture format** (this is the "documented fixture format"
+`WFR-36` requires; every future consumer -- starting with `WF8a-ii`'s
+cross-checkpoint integration tests -- should be able to build what it
+needs from the two pieces below without reading `workflow_state.py`'s or
+`workflow_fingerprint.py`'s own internals first):
+
+- `ScratchRepo`: a disposable, real `git` repository under a temp
+  directory. `repo.root` is its path, `repo.base` is the initial commit's
+  full SHA, `repo.head()` returns current `HEAD`. `repo.commit(subject,
+  trailers=..., filename=...)` writes one file and one commit carrying the
+  named Git trailers in its body, exactly like a real
+  `Workflow-Checkpoint`/`Workflow-Work-Item`/`Workflow-Plan-Approval`-
+  bearing commit, and returns the new commit's SHA.
+  `repo.write_plan_docs(...)`/`repo.commit_plan_docs_as_base()` seed and
+  commit the five plan-stage protected files
+  (`docs/ai-workflow/WORKFLOW_V2_PLAN.md`, `WORKFLOW_V2_AUDIT.md`,
+  `docs/TECHNICAL_DECISIONS.md`, and the registry/mapping JSON pair) at a
+  given `work_item_id`, mirroring this repository's real layout closely
+  enough that `workflow_fingerprint.py`'s plan-stage functions accept it
+  unmodified -- see `workflow_test_harness_test.py` for the round-trip
+  proof. `workflow_fingerprint.PLAN_STAGE_PROTECTED` is itself hardcoded
+  to `workflow-v2-1-core`'s own registry/mapping paths (a known, already-
+  documented limitation of that module, not this harness -- see its own
+  `GPT-R9-011` note), so a caller using a different `work_item_id` must
+  pass `plan_stage_protected_paths(work_item_id)` as the `protected`
+  argument to any plan-stage identity function; `workflow-v2-1-core`
+  itself needs no override.
+- `base_work_item(**overrides)` / `base_state(**work_items)`: minimal,
+  schema-valid dicts (accepted by `workflow_state.validate_state`) for
+  tests that exercise state-machine logic directly, without going through
+  the full `default_work_item`/`route_work_item` production path. Every
+  field `validate_state` currently checks is present; `**overrides`
+  replaces individual fields the way `dict.update` does.
+- `base_registry(**overrides)` / `base_mapping(**overrides)`: minimal,
+  schema-valid registry/mapping dicts (accepted by
+  `workflow_state.validate_registry_topological_order`/
+  `validate_registry_mapping_coverage`) for tests that don't need this
+  work item's own real 17-checkpoint registry.
+
+Deliberately **not** wired into the already-committed, already-approved
+hermetic suites (`workflow_fingerprint_test.py`, `workflow_state_test.py`)
+-- retrofitting frozen, previously-reviewed checkpoints to use a shared
+harness is out of this checkpoint's own scope (no behavior change to
+already-passing tests). This module exists for checkpoints that land
+*after* `WF8a-i`, starting with `WF8a-ii`.
+
+Stdlib-only. `workflow_test_harness_test.py` is this module's own
+hermetic self-verification; there is no `_demo_test.py` counterpart since
+this module makes no real-repository claims of its own.
+"""
+
+from __future__ import annotations
+
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+
+SCHEMA_VERSION = 1
+
+
+def _run(args: list[str], cwd: Path) -> None:
+    subprocess.run(args, cwd=cwd, check=True, capture_output=True, text=True)
+
+
+class ScratchRepo:
+    """A disposable Git repo with an initial commit, usable both as a bare
+    trailer/commit-history fixture and, once `write_plan_docs` has been
+    called and committed, as a target for
+    `workflow_fingerprint.compute_review_content_id_plan_stage`."""
+
+    def __enter__(self) -> "ScratchRepo":
+        self.root = Path(tempfile.mkdtemp(prefix="wf-harness-test-"))
+        _run(["git", "init", "-q"], cwd=self.root)
+        _run(["git", "config", "user.email", "test@example.com"], cwd=self.root)
+        _run(["git", "config", "user.name", "Test"], cwd=self.root)
+        (self.root / "README.md").write_text("base\n")
+        _run(["git", "add", "README.md"], cwd=self.root)
+        _run(["git", "commit", "-q", "-m", "base"], cwd=self.root)
+        self.base = self.head()
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def head(self) -> str:
+        return subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=self.root, check=True,
+            capture_output=True, text=True,
+        ).stdout.strip()
+
+    def commit(
+        self, subject: str, trailers: dict[str, str] | None = None,
+        filename: str | None = None,
+    ) -> str:
+        """Writes one file (new content each call, so the commit is never
+        empty) and one commit whose body carries `trailers` as trailing
+        `Key: value` lines. Returns the new commit's full SHA."""
+        filename = filename or f"{subject.replace(' ', '_')}.txt"
+        (self.root / filename).write_text(subject + "\n")
+        _run(["git", "add", filename], cwd=self.root)
+        body = subject
+        if trailers:
+            body += "\n\n" + "\n".join(f"{k}: {v}" for k, v in trailers.items())
+        _run(["git", "commit", "-q", "-m", body], cwd=self.root)
+        return self.head()
+
+    def write_plan_docs(
+        self,
+        work_item_id: str = "wi",
+        plan_text: str = "plan v1\n",
+        audit_text: str = "audit v1\n",
+        decisions_text: str = "decisions v1\n",
+        registry_text: str = '{"checkpoints": []}\n',
+        mapping_text: str = '{"requirements": {}}\n',
+    ) -> None:
+        """Seeds the five plan-stage protected files at their real
+        repository-relative paths for the given `work_item_id`, mirroring
+        this repository's own layout (`docs/ai-workflow/registry/
+        <work_item_id>-registry.json` / `.../requirements/
+        <work_item_id>-mapping.json`)."""
+        (self.root / "docs" / "ai-workflow").mkdir(parents=True, exist_ok=True)
+        (self.root / "docs" / "ai-workflow" / "WORKFLOW_V2_PLAN.md").write_text(plan_text)
+        (self.root / "docs" / "ai-workflow" / "WORKFLOW_V2_AUDIT.md").write_text(audit_text)
+        (self.root / "docs" / "TECHNICAL_DECISIONS.md").write_text(decisions_text)
+        registry_dir = self.root / "docs" / "ai-workflow" / "registry"
+        registry_dir.mkdir(parents=True, exist_ok=True)
+        (registry_dir / f"{work_item_id}-registry.json").write_text(registry_text)
+        requirements_dir = self.root / "docs" / "ai-workflow" / "requirements"
+        requirements_dir.mkdir(parents=True, exist_ok=True)
+        (requirements_dir / f"{work_item_id}-mapping.json").write_text(mapping_text)
+
+    def commit_plan_docs_as_base(self) -> None:
+        """Commits every currently-written/untracked file and advances
+        `self.base` to that commit -- used when a test varies the
+        protected-set *parameter* itself rather than file content, where
+        the docs must already be settled, unclassified-content-neutral
+        history."""
+        _run(["git", "add", "-A"], cwd=self.root)
+        _run(["git", "commit", "-q", "-m", "settle plan docs"], cwd=self.root)
+        self.base = self.head()
+
+
+def plan_stage_protected_paths(work_item_id: str = "wi") -> frozenset[str]:
+    """The plan-stage protected-path set `write_plan_docs`'s fixture
+    actually populates for `work_item_id`, matching
+    `workflow_fingerprint.PLAN_STAGE_PROTECTED`'s own three fixed-path
+    entries plus the two paths `write_plan_docs` names for this specific
+    `work_item_id`. Pass this as the `protected` argument to
+    `compute_review_content_id_plan_stage`/`..._at_commit` for any
+    `work_item_id` other than `workflow-v2-1-core`, whose real registry/
+    mapping paths are what `PLAN_STAGE_PROTECTED`'s own default already
+    names."""
+    return frozenset({
+        "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+        "docs/ai-workflow/WORKFLOW_V2_AUDIT.md",
+        "docs/TECHNICAL_DECISIONS.md",
+        f"docs/ai-workflow/registry/{work_item_id}-registry.json",
+        f"docs/ai-workflow/requirements/{work_item_id}-mapping.json",
+    })
+
+
+def base_work_item(**overrides: object) -> dict:
+    """A minimal work-item dict accepted by
+    `workflow_state.validate_state`/`_validate_work_item`. `**overrides`
+    replaces individual fields."""
+    work_item = {
+        "work_item_type": "process",
+        "work_item_kind": "process",
+        "work_item_id": "wi",
+        "parent_work_item_id": None,
+        "governing_workflow_version": "1",
+        "phase": "IMPLEMENTING",
+        "checkpoints": {},
+        "plan_review_stages": None,
+    }
+    work_item.update(overrides)
+    return work_item
+
+
+def base_state(**work_items: dict) -> dict:
+    """A minimal `WORKFLOW_STATE.json`-shaped dict; `active_work_item_id`
+    is left `None`. Pass keyword work items, e.g. `base_state(wi=
+    base_work_item())`."""
+    return {"schema_version": SCHEMA_VERSION, "active_work_item_id": None, "work_items": work_items}
+
+
+def base_registry(
+    work_item_id: str = "wi", plan_revision: int = 1, checkpoints: list[dict] | None = None,
+) -> dict:
+    """A minimal registry dict accepted by
+    `workflow_state.validate_registry_topological_order`/
+    `validate_registry_mapping_coverage`. `checkpoints` must already be in
+    a topological order of its own `depends_on` columns if non-empty --
+    this builder does not validate it, so a test can also use it to
+    construct a deliberately invalid fixture."""
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "work_item_id": work_item_id,
+        "plan_revision": plan_revision,
+        "checkpoints": checkpoints if checkpoints is not None else [],
+    }
+
+
+def base_mapping(work_item_id: str = "wi", requirements: dict | None = None) -> dict:
+    """A minimal requirements-mapping dict accepted by
+    `workflow_state.validate_registry_mapping_coverage`."""
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "work_item_id": work_item_id,
+        "requirements": requirements if requirements is not None else {},
+    }

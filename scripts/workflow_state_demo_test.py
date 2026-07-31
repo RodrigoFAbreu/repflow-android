@@ -54,6 +54,46 @@ class TestAgainstRealRepository(unittest.TestCase):
         registry = json.loads((repo_root / "docs/ai-workflow/registry/workflow-v2-1-core-registry.json").read_text())
         ws.validate_registry_topological_order(registry)
 
+    def test_072_generated_markdown_registry_view_row_order_matches_json_array_order(self):
+        """Missing-test item 72 (OPUS-R10-009), D-Selection point 3: the
+        'Checkpoint registry' Markdown table in WORKFLOW_V2_PLAN.md is a
+        generated, human-readable view of the registry JSON and must
+        never drift from it in row order -- a hand-edit, a regeneration
+        bug, or a readability reordering of the view could otherwise
+        silently break rule 2's determinism guarantee. Parses the real
+        table's first column (the id) and the real registry JSON's
+        checkpoints array, asserting the two id sequences are identical."""
+        repo_root = _repo_root()
+        plan_path = repo_root / "docs" / "ai-workflow" / "WORKFLOW_V2_PLAN.md"
+        lines = plan_path.read_text().splitlines()
+        section_idx = next(
+            (i for i, line in enumerate(lines) if line.startswith("## Checkpoint registry")), None,
+        )
+        self.assertIsNotNone(section_idx, "WORKFLOW_V2_PLAN.md has no '## Checkpoint registry' section")
+        header_idx = next(
+            (i for i in range(section_idx, len(lines)) if lines[i].startswith("| ID |")), None,
+        )
+        self.assertIsNotNone(header_idx, "no '| ID | ...' table header found under 'Checkpoint registry'")
+        separator_idx = header_idx + 1
+        self.assertTrue(
+            lines[separator_idx].startswith("|---"),
+            f"expected a Markdown table separator row after the header, got: {lines[separator_idx]!r}",
+        )
+        row_ids = []
+        i = separator_idx + 1
+        while i < len(lines) and lines[i].startswith("|"):
+            row_ids.append(lines[i].split("|")[1].strip())
+            i += 1
+        self.assertTrue(row_ids, "no data rows parsed from the Checkpoint registry table")
+
+        registry = json.loads((repo_root / "docs/ai-workflow/registry/workflow-v2-1-core-registry.json").read_text())
+        json_ids = [entry["id"] for entry in registry["checkpoints"]]
+        self.assertEqual(
+            row_ids, json_ids,
+            "the Checkpoint registry Markdown table's row order has drifted from "
+            "the registry JSON's checkpoints array order",
+        )
+
     def test_real_registry_and_mapping_have_full_bidirectional_coverage(self):
         repo_root = _repo_root()
         registry = json.loads((repo_root / "docs/ai-workflow/registry/workflow-v2-1-core-registry.json").read_text())
