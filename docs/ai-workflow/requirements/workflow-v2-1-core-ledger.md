@@ -43,3 +43,46 @@ physically separated (D4b)
   round.
 - **Functional-verification outcome:** not applicable (process checkpoint,
   no product-facing behavior).
+
+## `WF4c` — General functional-remediation cycle (D-Functional-Remediation)
+
+- **Implementation evidence:** `scripts/workflow_state.py` gains
+  `mark_technical_approval_stale` (the bounded-fix branch's
+  stale-before-edit write), `record_bundle_generation`
+  (`reviewed_implementation_head`'s sole writer, closing the loop
+  `OPUS-R6-013` found — nothing wrote this field before this checkpoint,
+  so `AWAITING_TECHNICAL_APPROVAL`'s entry condition was unreachable for
+  any real item), `create_remediation_child_work_item` (the broad-
+  remediation branch: a distinct `<parent>-remediation-<n>` child work
+  item, `n` derived deterministically, never mutating the parent's own
+  registry/mapping/checkpoint history), and `incomplete_children` (wired
+  into `complete_work_item`, which now refuses outright, naming every
+  still-incomplete child, resolving `GPT-R9-016`). `validate_state` gained
+  a `DanglingParentWorkItemError` check. `.claude/commands/apply-
+  functional-review.md` implements the three-way per-finding branch (no
+  code change / bounded / broad); `.claude/commands/milestone-implement.md`
+  step 4 and `.claude/commands/apply-implementation-review.md` step 7 now
+  call `record_bundle_generation` at the `"implementation"`/`"post-fix"`
+  bundle-generation points respectively; `.claude/commands/approve-review.md`
+  step 1 now states exactly how `head_matches_reviewed_implementation_head`
+  is computed; `.claude/commands/accept-milestone.md` gained step 2a,
+  calling `workflow_state.complete_work_item` (the parent-completion
+  block) before finalizing acceptance. `docs/ai-workflow/MILESTONE_WORKFLOW.md`'s
+  `FIXING_FUNCTIONAL_FINDINGS`/`AWAITING_USER_ACCEPTANCE`/`MILESTONE_COMPLETE`
+  sections document the same mechanics. No change to the registry or
+  mapping file.
+- **Verification results:** `python3 scripts/workflow_state_test.py` —
+  174/174 pass (17 new: `TestMarkTechnicalApprovalStale`,
+  `TestRecordBundleGeneration`, `TestRemediationChildWorkItem`,
+  `TestParentCompletionBlocksOnIncompleteChild`,
+  `TestDanglingParentWorkItem`). `python3 scripts/workflow_fingerprint_test.py`
+  — 91/91 pass, unchanged. Durability guard re-run after all edits: the
+  plan-stage `review_content_id` at `base_commit` is unchanged
+  (`03e9698c7c017da85e2f7845a341a55334ec8b3b79544bc9d22f057a9f90bb5a`) —
+  every file this checkpoint touched is plan-stage excluded
+  (`.claude/commands/`, `docs/ai-workflow/MILESTONE_WORKFLOW.md`,
+  `scripts/`).
+- **Review findings:** none yet — pending this checkpoint's own review
+  round.
+- **Functional-verification outcome:** not applicable (process checkpoint,
+  no product-facing behavior).

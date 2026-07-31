@@ -60,8 +60,18 @@ actually load-bearing control for the Skill exposure path, not mechanism
    the implementation-stage classification
    (`workflow_fingerprint.load_implementation_stage_classification(...)`) —
    `WORKFLOW_STATE.json`/`WORKFLOW_CONFIG.json` dirtiness never blocks this,
-   by construction of that classification. A `BLOCK` status, or an unmet
-   additional condition, stops here — report why, do not proceed.
+   by construction of that classification. Its
+   `head_matches_reviewed_implementation_head` argument
+   (`WF4c`, D-Approval-Commits) is exactly `work_item["reviewed_implementation_head"]
+   == <live HEAD SHA>` — `reviewed_implementation_head`'s sole writer is the
+   bundle generator (`workflow_state.record_bundle_generation`, called by
+   `/milestone-implement` at the `"implementation"` stage and
+   `/apply-implementation-review`/`/apply-functional-review`'s bounded-fix
+   branch at the `"post-fix"` stage); a `None` value (nothing has ever
+   generated a bundle for this work item) compares unequal to any HEAD, so
+   the gate is correctly unreachable until at least one bundle exists. A
+   `BLOCK` status, or an unmet additional condition, stops here — report
+   why, do not proceed.
 2. **Recompute fresh**: `bundle_id` over the current bundle and the
    stage-appropriate `review_content_id` (`scripts/workflow_fingerprint.py`)
    over the working tree. Display both, and the protected/excluded path

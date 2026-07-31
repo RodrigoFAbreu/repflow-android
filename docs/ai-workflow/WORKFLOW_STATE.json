@@ -17,7 +17,7 @@
       "base_commit": "162154d3e5e10eb65e109833acae4b4fb01fc5d6",
       "reviewed_implementation_head": null,
       "current_checkpoint_id": null,
-      "last_completed_checkpoint_id": "WF4b",
+      "last_completed_checkpoint_id": "WF4c",
       "checkpoints": {
         "WF0": {
           "status": "COMPLETE",
@@ -62,6 +62,10 @@
         "WF4b": {
           "status": "COMPLETE",
           "start_commit": "2c68c5041fa97a316869f026fb35c0c417930fe5"
+        },
+        "WF4c": {
+          "status": "COMPLETE",
+          "start_commit": "01fa75c4c36824a6aa3bb5e8ef3510743b5ea076"
         }
       },
       "current_bundle_id": null,
@@ -110,8 +114,8 @@
       "plan_review_stages": null,
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 11,
-      "last_transition": "2026-07-31T17:00:00+01:00"
+      "state_revision": 12,
+      "last_transition": "2026-07-31T18:00:00+01:00"
     },
     "milestone-8": {
       "work_item_type": "product",

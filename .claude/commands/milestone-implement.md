@@ -138,6 +138,13 @@ dirty-resume rule, `WF2`):
    - write `.ai-review/current/REVIEW_REQUEST.md` per
      `docs/ai-workflow/REVIEW_PROTOCOL.md` (stage: `implementation`);
    - run `./scripts/prepare-ai-review.sh <base-sha> implementation`, where
-     `<base-sha>` is the milestone's starting commit.
+     `<base-sha>` is the milestone's starting commit;
+   - if this work item has a `docs/ai-workflow/WORKFLOW_STATE.json` entry:
+     call `workflow_state.record_bundle_generation(state, work_item_id,
+     stage="implementation", head=<current HEAD SHA>, now=<now>)` (`WF4c`,
+     D-Approval-Commits' sole writer of `reviewed_implementation_head`) and
+     persist the returned state — this is what later makes
+     `AWAITING_TECHNICAL_APPROVAL` reachable at all; skip this call
+     entirely for a work item with no state entry (nothing to track).
 5. Report the bundle location and **stop**. This is a hard gate — do not
    mark the milestone accepted, do not start the next milestone.

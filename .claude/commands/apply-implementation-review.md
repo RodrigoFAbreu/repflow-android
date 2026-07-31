@@ -28,7 +28,14 @@ Enter the `APPLYING_REVIEW_FEEDBACK` state of
 6. Commit coherent fixes (one commit per coherent fix, not one giant
    catch-all commit).
 7. Regenerate the bundle at the `post-fix` stage:
-   `./scripts/prepare-ai-review.sh <base-sha> post-fix`.
+   `./scripts/prepare-ai-review.sh <base-sha> post-fix`. If this work item
+   has a `docs/ai-workflow/WORKFLOW_STATE.json` entry: call
+   `workflow_state.record_bundle_generation(state, work_item_id,
+   stage="post-fix", head=<current HEAD SHA>, now=<now>)` (`WF4c`,
+   D-Approval-Commits' sole writer of `reviewed_implementation_head`) and
+   persist the returned state — required before `AWAITING_TECHNICAL_APPROVAL`
+   can be reachable again; skip this call entirely for a work item with no
+   state entry.
 8. If any Blocking finding remains unresolved, or the fix was structurally
    significant, stay in `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` and stop
    for another review round. Otherwise report readiness and that

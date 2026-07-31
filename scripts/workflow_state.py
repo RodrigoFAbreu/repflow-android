@@ -71,6 +71,22 @@ worktree-scoped dirty-resume mechanics: `write_worktree_identity` (the
 named writer for `.ai-review/runtime/WORKTREE_IDENTITY.json`, previously
 schema-only) and its read-side counterpart `verify_dirty_resume_safety`.
 
+WF4c adds D-Functional-Remediation's general functional-remediation cycle:
+`mark_technical_approval_stale` (the bounded-code-change branch's
+stale-before-edit write, persisted before the first source/test edit) and
+`record_bundle_generation` (`reviewed_implementation_head`'s sole writer,
+closing the loop `OPUS-R6-013` found -- nothing wrote this field before,
+so `AWAITING_TECHNICAL_APPROVAL`'s entry condition was unreachable for any
+real `"2.1"` item; wired into the bundle generator at exactly the
+`"implementation"`/`"post-fix"` stage). `create_remediation_child_work_item`
+implements the broad/multi-finding branch: a distinct child work item
+(`"<parent>-remediation-<n>"`, `n` derived deterministically, never
+caller-supplied) with its own registry/mapping/approval lifecycle,
+routed through the ordinary commands from there, never mutating the
+parent's own registry/mapping/completed-checkpoint history.
+`incomplete_children`/`complete_work_item`'s extended check implement
+"parent acceptance blocks on an incomplete child" (resolves `GPT-R9-016`).
+
 Stdlib-only, mirroring `scripts/workflow_fingerprint.py`'s own
 `docs/TECHNICAL_DECISIONS.md`-recorded constraint.
 
@@ -405,6 +421,37 @@ class LegacyAdoptionStaleApprovalError(Exception):
     implementation`); it never re-imports (D-Legacy phase 2, resolves
     `WFR-08`'s "no basis branch" rule applied to promotion time, not just
     import time)."""
+
+
+class InvalidBundleGenerationStageError(Exception):
+    """Raised when `record_bundle_generation` is called with a `stage`
+    other than `"implementation"`/`"post-fix"` -- `reviewed_implementation_head`
+    is written at exactly those two bundle-generation points, never any
+    other (D-Approval-Commits, WF4c)."""
+
+
+class RemediationChildAlreadyExistsError(Exception):
+    """Raised when `create_remediation_child_work_item`'s deterministically
+    derived `<parent>-remediation-<n>` id already names an existing entry
+    -- should not happen given the function's own internal, gap-free
+    numbering, so this is a defensive guard against a corrupted/hand-edited
+    state file, not a normal control-flow path (D-Functional-Remediation)."""
+
+
+class IncompleteChildWorkItemError(Exception):
+    """Raised by `complete_work_item` when at least one work item names the
+    target as its `parent_work_item_id` and has not itself reached
+    `MILESTONE_COMPLETE` -- D-Functional-Remediation's "parent acceptance
+    blocks on an incomplete child" rule (resolves `GPT-R9-016`, `WFR-35`).
+    Names every blocking child, never just the first."""
+
+
+class DanglingParentWorkItemError(Exception):
+    """Raised when a work item's `parent_work_item_id` names an id absent
+    from `work_items` -- a corrupted or hand-edited state file, since every
+    writer that sets `parent_work_item_id`
+    (`create_remediation_child_work_item`) also creates the parent-naming
+    entry in the same state dict."""
 
 
 def _run(args: list[str], cwd: Path) -> str:
@@ -1294,12 +1341,36 @@ def route_work_item(
     return new_state
 
 
+def incomplete_children(state: dict, work_item_id: str) -> list[str]:
+    """D-Functional-Remediation: every work item naming `work_item_id` as
+    its own `parent_work_item_id` and not yet at a terminal phase --
+    reverse lookup over `work_items`, no new field needed on the parent
+    (the plan's own stated approach). Returns ids in insertion order,
+    empty if there are no children or all of them are `MILESTONE_COMPLETE`."""
+    return [
+        child_id for child_id, child in state.get("work_items", {}).items()
+        if child.get("parent_work_item_id") == work_item_id
+        and child.get("phase") not in TERMINAL_PHASES
+    ]
+
+
 def complete_work_item(state: dict, work_item_id: str, now: str) -> dict:
     """D1's completion/reset text: on `MILESTONE_COMPLETE` (or
     process-completion archival), the entry's phase becomes terminal and,
     if it was `active_work_item_id`, that pointer resets to `null` so the
     next `/milestone-plan` creates a fresh entry and claims the pointer.
-    Returns a new state dict."""
+    Returns a new state dict.
+
+    D-Functional-Remediation's "parent acceptance blocks on an incomplete
+    child" rule (resolves `GPT-R9-016`, `WFR-35`): refuses outright, naming
+    every still-incomplete child, rather than completing a parent whose
+    broad remediation work is still open elsewhere."""
+    blocking = incomplete_children(state, work_item_id)
+    if blocking:
+        raise IncompleteChildWorkItemError(
+            f"{work_item_id!r} cannot reach MILESTONE_COMPLETE while child work "
+            f"item(s) {blocking} have not themselves reached MILESTONE_COMPLETE"
+        )
     new_state = copy.deepcopy(state)
     work_item = new_state["work_items"][work_item_id]
     work_item["phase"] = "MILESTONE_COMPLETE"
@@ -1309,6 +1380,63 @@ def complete_work_item(state: dict, work_item_id: str, now: str) -> dict:
     if new_state.get("active_work_item_id") == work_item_id:
         new_state["active_work_item_id"] = None
     return new_state
+
+
+def create_remediation_child_work_item(
+    state: dict, config: dict, *, parent_work_item_id: str,
+    plan_path: str, registry_path: str, base_commit: str, now: str,
+) -> tuple[dict, str]:
+    """D-Functional-Remediation's broad/multi-finding remediation branch:
+    creates a new, separate work item -- `work_item_id:
+    "<parent_work_item_id>-remediation-<n>"`, `n` derived deterministically
+    as one past however many remediation children this parent already has
+    (never caller-supplied, so numbering can never collide or skip) -- with
+    the same `work_item_type`/`work_item_kind` as the parent, carrying the
+    new `parent_work_item_id` field, its own `base_commit` (the parent's
+    implementation head at the moment broad remediation was needed), and
+    otherwise `default_work_item`'s ordinary fresh-`PLANNING`-phase shape.
+    `governing_workflow_version` is fixed from the config's current
+    default, exactly like any other freshly created work item (D1) --
+    because a remediation child *is* one, routed through the full normal
+    plan/implement/review/accept cycle by the ordinary commands from here.
+
+    Deliberately does not touch `active_work_item_id` -- the parent
+    typically stays the operator's focus; the child is addressed by its
+    own id until the operator chooses otherwise, exactly D1's "resume-focus
+    pointer, not an execution lock" text.
+
+    The parent's own registry/mapping/completed-checkpoint history is
+    untouched by construction: this function only adds a new key to
+    `work_items`, never reads or writes the parent's `registry_path`/
+    `plan_path` contents."""
+    parent = state["work_items"][parent_work_item_id]
+    existing_children = [
+        wid for wid in state.get("work_items", {})
+        if state["work_items"][wid].get("parent_work_item_id") == parent_work_item_id
+    ]
+    remediation_number = len(existing_children) + 1
+    child_id = f"{parent_work_item_id}-remediation-{remediation_number}"
+    validate_work_item_id(child_id)
+
+    new_state = copy.deepcopy(state)
+    work_items = new_state.setdefault("work_items", {})
+    if child_id in work_items:
+        raise RemediationChildAlreadyExistsError(
+            f"{child_id!r} already exists -- remediation-child numbering should "
+            f"never collide; check for a hand-edited state file"
+        )
+    validate_governing_version(config["default_workflow_version"], config)
+    child = default_work_item(
+        work_item_id=child_id, work_item_type=parent["work_item_type"],
+        work_item_kind=parent["work_item_kind"], plan_path=plan_path,
+        registry_path=registry_path,
+        governing_workflow_version=config["default_workflow_version"],
+        plan_revision=1, last_transition=now,
+    )
+    child["parent_work_item_id"] = parent_work_item_id
+    child["base_commit"] = base_commit
+    work_items[child_id] = child
+    return new_state, child_id
 
 
 # ---------------------------------------------------------------------------
@@ -1517,6 +1645,64 @@ def apply_technical_approval(state: dict, work_item_id: str, record: dict, now: 
     work_item = new_state["work_items"][work_item_id]
     work_item["technical_approval"] = record
     work_item["phase"] = "AWAITING_FUNCTIONAL_REVIEW"
+    work_item["state_revision"] = work_item.get("state_revision", 1) + 1
+    work_item["last_transition"] = now
+    return new_state
+
+
+# ---------------------------------------------------------------------------
+# WF4c: D-Functional-Remediation -- the bounded-fix branch's stale-before-
+# edit write and the bundle generator's sole reviewed_implementation_head
+# writer (closes the loop OPUS-R6-013 found: nothing wrote this field
+# before, so AWAITING_TECHNICAL_APPROVAL's entry condition was permanently
+# unreachable for any real "2.1" item).
+# ---------------------------------------------------------------------------
+
+
+def mark_technical_approval_stale(state: dict, work_item_id: str, now: str) -> dict:
+    """D-Functional-Remediation's bounded-code-change branch, stale-before-
+    edit ordering: the caller must persist this write to
+    `docs/ai-workflow/WORKFLOW_STATE.json` *before* touching a single
+    source/test file, so an interrupted session still shows `STALE` rather
+    than a `CURRENT` record whose reviewed content no longer matches the
+    working tree. Requires an existing `technical_approval` record (there
+    is nothing to stale otherwise) and leaves every other field of it
+    untouched -- only `status` flips."""
+    work_item = state["work_items"][work_item_id]
+    record = work_item.get("technical_approval")
+    if record is None:
+        raise InvalidApprovalRecordError(
+            f"{work_item_id!r} has no technical_approval record to stale -- "
+            f"the bounded-fix branch only applies after a prior technical approval"
+        )
+    new_state = copy.deepcopy(state)
+    new_work_item = new_state["work_items"][work_item_id]
+    new_work_item["technical_approval"]["status"] = "STALE"
+    new_work_item["state_revision"] = new_work_item.get("state_revision", 1) + 1
+    new_work_item["last_transition"] = now
+    return new_state
+
+
+def record_bundle_generation(state: dict, work_item_id: str, *, stage: str, head: str, now: str) -> dict:
+    """`reviewed_implementation_head`'s sole writer (D-Approval-Commits),
+    called by the bundle generator at exactly the `"implementation"` (first
+    round) or `"post-fix"` (every remediation round after, whether driven
+    by an implementation-review finding or a functional-review bounded
+    fix) stage -- never any other. Records live `head` as the new
+    `reviewed_implementation_head` and bumps `implementation_revision`
+    (`None` -> `1` on the first call, incrementing on every call after --
+    `implementation_revision` itself is never part of either fingerprint
+    projection, so this bump alone never stales `technical_approval`,
+    `approval_is_current`'s own missing-test item 11)."""
+    if stage not in ("implementation", "post-fix"):
+        raise InvalidBundleGenerationStageError(
+            f"reviewed_implementation_head is written only at the "
+            f"\"implementation\"/\"post-fix\" bundle-generation stage, got {stage!r}"
+        )
+    new_state = copy.deepcopy(state)
+    work_item = new_state["work_items"][work_item_id]
+    work_item["reviewed_implementation_head"] = head
+    work_item["implementation_revision"] = (work_item.get("implementation_revision") or 0) + 1
     work_item["state_revision"] = work_item.get("state_revision", 1) + 1
     work_item["last_transition"] = now
     return new_state
@@ -1985,6 +2171,12 @@ def validate_state(state: dict, *, registry: dict | None = None) -> None:
     work_items = state.get("work_items", {})
     for work_item_id, work_item in work_items.items():
         _validate_work_item(work_item_id, work_item)
+        parent_id = work_item.get("parent_work_item_id")
+        if parent_id is not None and parent_id not in work_items:
+            raise DanglingParentWorkItemError(
+                f"work_items[{work_item_id!r}].parent_work_item_id names "
+                f"{parent_id!r}, which is not a known work item"
+            )
 
     active_id = state.get("active_work_item_id")
     if active_id is not None:

@@ -264,11 +264,49 @@ re-enters manual-external review without a fresh local pass first.
   missing requirement, enhancement, expected behavior); reproduce where
   practical; fix defects/usability issues/missing requirements; add
   regression tests; commit coherent fixes; prepare a revised checklist.
+- **General functional-remediation cycle** (`D-Functional-Remediation`,
+  `WF4c`): for a work item with a `docs/ai-workflow/WORKFLOW_STATE.json`
+  entry (either governing version — this is not a `"2.1"`-only mechanism),
+  each finding requiring a fix routes through exactly one of three
+  branches, decided before any source/test edit lands:
+  - **No code change**: the finding is resolved without touching
+    source/tests (e.g. a narrative-only checklist correction). Returns
+    directly to `AWAITING_FUNCTIONAL_REVIEW`; `technical_approval` is left
+    completely untouched.
+  - **Bounded code change**: a normal, contained fix. **Stale-before-edit
+    ordering, hard requirement**: `technical_approval.status` is set to
+    `STALE` and persisted to `WORKFLOW_STATE.json` *before* the first
+    edit — never after. The fix is made, committed, and the bundle is
+    regenerated at the `post-fix` stage; regeneration is the step that
+    writes the new `reviewed_implementation_head` (D-Approval-Commits'
+    sole writer for that field), which is what makes `/approve-review
+    implementation` reachable again. This re-enters
+    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`: a fresh implementation-
+    review round and a fresh `/approve-review implementation` are
+    required before `AWAITING_FUNCTIONAL_REVIEW` is reachable again for
+    this item — Claude stops here, it does not loop back into functional
+    review directly.
+  - **Broad/multi-finding remediation, as a child work item**: findings
+    whose fix spans substantially more work than a single contained
+    round are never implemented inline. A distinct child work item
+    (`work_item_id: "<parent-id>-remediation-<n>"`, `n` derived
+    deterministically) is created — same `work_item_type` as the parent,
+    carrying `parent_work_item_id`, with its own registry/mapping and its
+    own `base_commit` (the parent's implementation head at branch time).
+    It routes through the full normal cycle
+    (`AWAITING_EXTERNAL_PLAN_REVIEW` → ... → `MILESTONE_COMPLETE`) via the
+    ordinary commands, exactly like any other work item, because it is
+    one. The parent's own registry, mapping, and completed-checkpoint
+    history are never mutated by this branch; the deferral is recorded in
+    the parent's own functional-review checklist, naming the child id.
 - **Artifacts**: fixed diff with regression tests; revised functional
-  checklist; commits.
-- **Exit**: all findings addressed or explicitly deferred with rationale.
+  checklist (naming any remediation child work-item id); commits.
+- **Exit**: all findings addressed or explicitly deferred with rationale
+  (a deferral to a remediation child counts as a rationale).
 - **Stop for user/reviewer?** Returns to `AWAITING_FUNCTIONAL_REVIEW` for
-  another pass unless the user explicitly waives it.
+  another pass unless the user explicitly waives it — except a round with
+  any bounded-code-change finding, which stops at the fresh
+  `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` gate instead (above).
 
 ### AWAITING_USER_ACCEPTANCE
 
@@ -283,6 +321,15 @@ re-enters manual-external review without a fresh local pass first.
 ### MILESTONE_COMPLETE
 
 - **Entry**: explicit user acceptance received.
+- **Parent-completion block** (`D-Functional-Remediation`, `WF4c`,
+  resolves `GPT-R9-016`): for a work item with a
+  `docs/ai-workflow/WORKFLOW_STATE.json` entry, this state is unreachable
+  while any other work item names it as `parent_work_item_id` and has not
+  itself reached `MILESTONE_COMPLETE` — a reverse lookup over
+  `work_items`, requiring no new field on the parent.
+  `/accept-milestone` refuses outright, naming every still-incomplete
+  child, rather than completing a parent whose broad remediation work is
+  still open in a child item elsewhere.
 - **Allowed actions**: final verification confirmation; update
   `docs/ROADMAP.md` and `docs/ACTIVE_MILESTONE.md`; archive the milestone's
   plans to `docs/milestones/completed/`; create the final completion commit

@@ -1826,5 +1826,189 @@ class TestWorktreeIdentityWriteAndResume(unittest.TestCase):
             ws.verify_dirty_resume_safety(repo.root, "wi")  # must not raise
 
 
+# ---------------------------------------------------------------------------
+# WF4c: D-Functional-Remediation -- stale-before-edit write,
+# reviewed_implementation_head's sole writer, and the broad-remediation
+# child-work-item branch plus its parent-completion block.
+# ---------------------------------------------------------------------------
+
+
+class TestMarkTechnicalApprovalStale(unittest.TestCase):
+    def _approved_work_item(self, **overrides):
+        record = ws.build_approval_record(
+            basis="EXTERNAL_APPROVE", stage="implementation", user_confirmation="approve wi implementation",
+            now="t1", reviewed_bundle_id="b", approved_review_content_id="c",
+            review_content_manifest=[], reviewed_content_commit="deadbeef",
+        )
+        return _base_work_item(technical_approval=record, **overrides)
+
+    def test_marks_status_stale_and_leaves_other_fields_untouched(self):
+        wi = self._approved_work_item()
+        state = _base_state(wi=wi)
+        new_state = ws.mark_technical_approval_stale(state, "wi", now="t2")
+        record = new_state["work_items"]["wi"]["technical_approval"]
+        self.assertEqual(record["status"], "STALE")
+        self.assertEqual(record["approved_review_content_id"], "c")
+        self.assertEqual(record["basis"], "EXTERNAL_APPROVE")
+        # original state untouched (stale-before-edit ordering requires a
+        # fresh dict the caller can persist independently of the input)
+        self.assertEqual(state["work_items"]["wi"]["technical_approval"]["status"], "CURRENT")
+
+    def test_bumps_state_revision_and_last_transition(self):
+        wi = self._approved_work_item(state_revision=1)
+        state = _base_state(wi=wi)
+        new_state = ws.mark_technical_approval_stale(state, "wi", now="t2")
+        self.assertEqual(new_state["work_items"]["wi"]["state_revision"], 2)
+        self.assertEqual(new_state["work_items"]["wi"]["last_transition"], "t2")
+
+    def test_no_existing_technical_approval_rejected(self):
+        state = _base_state(wi=_base_work_item())
+        with self.assertRaises(ws.InvalidApprovalRecordError):
+            ws.mark_technical_approval_stale(state, "wi", now="t2")
+
+
+class TestRecordBundleGeneration(unittest.TestCase):
+    def test_first_implementation_stage_call_sets_head_and_revision_one(self):
+        state = _base_state(wi=_base_work_item(reviewed_implementation_head=None, implementation_revision=None))
+        new_state = ws.record_bundle_generation(state, "wi", stage="implementation", head="abc123", now="t1")
+        wi = new_state["work_items"]["wi"]
+        self.assertEqual(wi["reviewed_implementation_head"], "abc123")
+        self.assertEqual(wi["implementation_revision"], 1)
+
+    def test_post_fix_call_advances_head_and_increments_revision(self):
+        state = _base_state(wi=_base_work_item(reviewed_implementation_head="abc123", implementation_revision=1))
+        new_state = ws.record_bundle_generation(state, "wi", stage="post-fix", head="def456", now="t2")
+        wi = new_state["work_items"]["wi"]
+        self.assertEqual(wi["reviewed_implementation_head"], "def456")
+        self.assertEqual(wi["implementation_revision"], 2)
+
+    def test_unknown_stage_rejected(self):
+        state = _base_state(wi=_base_work_item())
+        with self.assertRaises(ws.InvalidBundleGenerationStageError):
+            ws.record_bundle_generation(state, "wi", stage="plan", head="abc123", now="t1")
+
+    def test_original_state_untouched(self):
+        state = _base_state(wi=_base_work_item(reviewed_implementation_head=None, implementation_revision=None))
+        ws.record_bundle_generation(state, "wi", stage="implementation", head="abc123", now="t1")
+        self.assertIsNone(state["work_items"]["wi"]["reviewed_implementation_head"])
+
+
+class TestRemediationChildWorkItem(unittest.TestCase):
+    def test_creates_child_with_derived_id_and_parent_link(self):
+        state = _base_state(parent=_base_work_item(
+            work_item_id="parent", work_item_type="product", work_item_kind="product",
+        ))
+        config = ws.default_config()
+        new_state, child_id = ws.create_remediation_child_work_item(
+            state, config, parent_work_item_id="parent", plan_path="p", registry_path="r",
+            base_commit="feedcafe", now="t1",
+        )
+        self.assertEqual(child_id, "parent-remediation-1")
+        child = new_state["work_items"][child_id]
+        self.assertEqual(child["parent_work_item_id"], "parent")
+        self.assertEqual(child["base_commit"], "feedcafe")
+        self.assertEqual(child["work_item_type"], "product")
+        self.assertEqual(child["work_item_kind"], "product")
+        self.assertEqual(child["phase"], "PLANNING")
+        self.assertEqual(child["governing_workflow_version"], config["default_workflow_version"])
+        # parent entry itself is untouched, and the input state is unmutated
+        self.assertNotIn("parent-remediation-1", state["work_items"])
+        self.assertEqual(new_state["work_items"]["parent"], state["work_items"]["parent"])
+
+    def test_numbering_increments_past_existing_children(self):
+        state = _base_state(
+            parent=_base_work_item(work_item_id="parent"),
+            **{"parent-remediation-1": _base_work_item(
+                work_item_id="parent-remediation-1", parent_work_item_id="parent",
+            )},
+        )
+        config = ws.default_config()
+        _, child_id = ws.create_remediation_child_work_item(
+            state, config, parent_work_item_id="parent", plan_path="p", registry_path="r",
+            base_commit="feedcafe", now="t1",
+        )
+        self.assertEqual(child_id, "parent-remediation-2")
+
+    def test_never_touches_active_work_item_id(self):
+        state = _base_state(parent=_base_work_item(work_item_id="parent"))
+        state["active_work_item_id"] = "parent"
+        config = ws.default_config()
+        new_state, _ = ws.create_remediation_child_work_item(
+            state, config, parent_work_item_id="parent", plan_path="p", registry_path="r",
+            base_commit="feedcafe", now="t1",
+        )
+        self.assertEqual(new_state["active_work_item_id"], "parent")
+
+    def test_resulting_state_is_valid(self):
+        state = _base_state(parent=_base_work_item(work_item_id="parent"))
+        config = ws.default_config()
+        new_state, _ = ws.create_remediation_child_work_item(
+            state, config, parent_work_item_id="parent", plan_path="p", registry_path="r",
+            base_commit="feedcafe", now="t1",
+        )
+        ws.validate_state(new_state)  # must not raise -- parent_work_item_id resolves
+
+
+class TestParentCompletionBlocksOnIncompleteChild(unittest.TestCase):
+    def test_incomplete_children_lists_only_non_terminal_children(self):
+        state = _base_state(
+            parent=_base_work_item(work_item_id="parent"),
+            **{
+                "parent-remediation-1": _base_work_item(
+                    work_item_id="parent-remediation-1", parent_work_item_id="parent",
+                    phase="IMPLEMENTING",
+                ),
+                "parent-remediation-2": _base_work_item(
+                    work_item_id="parent-remediation-2", parent_work_item_id="parent",
+                    phase="MILESTONE_COMPLETE",
+                ),
+                "unrelated": _base_work_item(work_item_id="unrelated"),
+            },
+        )
+        self.assertEqual(ws.incomplete_children(state, "parent"), ["parent-remediation-1"])
+
+    def test_complete_work_item_refuses_while_child_incomplete(self):
+        state = _base_state(
+            parent=_base_work_item(work_item_id="parent", phase="AWAITING_USER_ACCEPTANCE"),
+            **{"parent-remediation-1": _base_work_item(
+                work_item_id="parent-remediation-1", parent_work_item_id="parent", phase="IMPLEMENTING",
+            )},
+        )
+        with self.assertRaises(ws.IncompleteChildWorkItemError):
+            ws.complete_work_item(state, "parent", now="t2")
+        # refusing must not have mutated the input
+        self.assertEqual(state["work_items"]["parent"]["phase"], "AWAITING_USER_ACCEPTANCE")
+
+    def test_complete_work_item_succeeds_once_every_child_is_complete(self):
+        state = _base_state(
+            parent=_base_work_item(work_item_id="parent", phase="AWAITING_USER_ACCEPTANCE"),
+            **{"parent-remediation-1": _base_work_item(
+                work_item_id="parent-remediation-1", parent_work_item_id="parent",
+                phase="MILESTONE_COMPLETE",
+            )},
+        )
+        new_state = ws.complete_work_item(state, "parent", now="t2")
+        self.assertEqual(new_state["work_items"]["parent"]["phase"], "MILESTONE_COMPLETE")
+
+    def test_complete_work_item_with_no_children_still_succeeds(self):
+        state = _base_state(wi=_base_work_item(phase="AWAITING_USER_ACCEPTANCE"))
+        new_state = ws.complete_work_item(state, "wi", now="t2")
+        self.assertEqual(new_state["work_items"]["wi"]["phase"], "MILESTONE_COMPLETE")
+
+
+class TestDanglingParentWorkItem(unittest.TestCase):
+    def test_parent_work_item_id_naming_unknown_entry_rejected(self):
+        state = _base_state(wi=_base_work_item(parent_work_item_id="nonexistent"))
+        with self.assertRaises(ws.DanglingParentWorkItemError):
+            ws.validate_state(state)
+
+    def test_parent_work_item_id_naming_real_entry_accepted(self):
+        state = _base_state(
+            parent=_base_work_item(work_item_id="parent"),
+            child=_base_work_item(work_item_id="child", parent_work_item_id="parent"),
+        )
+        ws.validate_state(state)  # must not raise
+
+
 if __name__ == "__main__":
     unittest.main()
