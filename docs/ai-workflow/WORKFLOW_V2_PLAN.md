@@ -1,4 +1,4 @@
-# Workflow v2.1 core — Refined Plan (Revision 15)
+# Workflow v2.1 core — Refined Plan (Revision 21)
 
 Status: plan review complete — round 20 (`OPUS-R20-*`) returned
 `Status: APPROVE`, no blocking or important findings, against revision 14.
@@ -1027,7 +1027,392 @@ missing-test obligations, all owed to `WF4a-i`. No source in
 `scripts/workflow_fingerprint.py` changed this revision; the 81 hermetic +
 8 real-repository/integration tests are unchanged from revision 14.
 
-## Decisions (revision 15)
+## Round 25 finding disposition (revision 17) — self-discovered origin, first external review round (`OPUS-R25-*`, `Status: REVISE`)
+
+Unlike rounds 6-20 (external reviewer findings, `OPUS-R*`/`GPT-R*`/`PROTO-R*`
+prefixes) and the out-of-band `OPUS-R24-*` classification-only remediation
+recorded directly in `WORKFLOW_STATE.json`'s `plan_approval.user_confirmation`
+(which widened `PLAN_STAGE_EXCLUDED_PREFIXES` with `docs/ai-workflow/dry-run/`
+— a code-only change to an already-excluded path, requiring no plan-text
+amendment and provably no `review_content_id` change to any *design*
+content, so it was correctly never given its own round-disposition section
+here even though, in hindsight, a one-line cross-reference here would have
+made this document and the code agree on what `docs/ai-workflow/dry-run/`'s
+exclusion actually is — not fixed retroactively in this revision, out of
+scope for this finding), this round originates from Claude's own attempt to
+execute WF8b's first scenario (S1, `docs/ai-workflow/dry-run/WF8B_SCENARIOS.md`)
+against the isolated synthetic `v2-1-dry-run` work item. S1 was **not
+executed**: no plan, registry, mapping, or bundle file was created for
+`v2-1-dry-run`, and repository/workflow state is confirmed unchanged. Full
+reproduction, root cause, and impact analysis:
+`docs/ai-workflow/dry-run/WF8B_S1_FINDING_review_content_id_not_generalized.md`.
+
+**Note on this section's own numbering**: revision 16's design (below,
+superseded by the corrected version this revision carries) was itself then
+put through this work item's ordinary single-stage
+`AWAITING_EXTERNAL_PLAN_REVIEW` gate. The external reviewer's own feedback
+independently chose the prefix `OPUS-R25-*` for that pass — the first
+externally *reviewed* round this finding has had, even though it is
+sequentially the same "Round 25" this section was already using for the
+self-discovery narrative below. Both are documented in this one section
+rather than split across two, since they describe the same finding's two
+stages (discovery, then review) rather than two different findings.
+
+**Finding, `WF8B-S1-001`**: `scripts/workflow_fingerprint.py --work-item-id
+v2-1-dry-run` (read-only, no `--write-manifest`) reported
+`workflow-v2-1-core`'s own `plan_revision`, `protected_paths`, and
+`review_content_id` verbatim, not `v2-1-dry-run`'s. Root cause:
+`PLAN_STAGE_PROTECTED`/`PLAN_STAGE_EXCLUDED_PATHS`/`PLAN_STAGE_EXCLUDED_PREFIXES`
+are module-level constants naming exactly `workflow-v2-1-core`'s own five
+files, used as the *default* parameter value of
+`compute_review_content_id_plan_stage`/`compute_review_content_id_plan_stage_at_commit`/
+`write_manifest_with_verified_identifiers` — and every real caller (the
+CLI's `__main__`, `scripts/workflow_fingerprint.py:1747-1752`/`:1771-1775`;
+and `scripts/workflow_state.py`'s `approval_review_content_id`,
+`:654-660`/`:681-685` — the **sole** call site in that module touching any
+of `fingerprint.PLAN_STAGE_*`/`compute_review_content_id_plan_stage_at_commit`,
+confirmed by exhaustive grep, not an open-ended surface) accepts these
+defaults rather than resolving a set specific to the `work_item_id` it was
+actually given. `approval_review_content_id` gates `approval_is_current`,
+`implementing_entry_reachable`, and `verify_post_approval_manifest_match` —
+i.e. `IMPLEMENTING` entry and `/approve-review plan`'s durability check, for
+**every** work item, not only the CLI's own diagnostic output. `--work-item-id`
+is threaded only into `resolve_bundle_dir` (which bundle *directory* to
+read/write), never into which content is protected.
+`WORKFLOW_STATE.json`'s per-item `plan_path`/`registry_path` fields (D3,
+populated for every work item since `WF1b`) are consequently dead data as
+far as plan-stage fingerprinting is concerned today — stored, but never
+read by any fingerprint call site.
+
+| ID | Disposition | Resolved in | Evidence |
+|---|---|---|---|
+| `WF8B-S1-001` | **Accepted, design corrected this revision after external `REVISE`; implementation still deferred to a dedicated fix session, tracked within `WF8b`'s own continued scope, before S1 is re-attempted** | D-Fingerprint-Generalization (rewritten this round), D3 (`mapping_path` field, four validator rules — two new this round), D-Registry/D4b (cross-reference correction), Missing tests (items 141-160) | Confirmed directly against `scripts/workflow_fingerprint.py:468-469` (`DEFAULT_REGISTRY_PATH`/`DEFAULT_PLAN_PATH`), `:515` (`PLAN_STAGE_PROTECTED`), `:1730` (`--work-item-id` argparse default), `:1749-1750`/`:1773` (hardcoded `work_item_id="workflow-v2-1-core"` literals in `__main__`), and `scripts/workflow_state.py:654-660`/`:681-685` (`approval_review_content_id`'s own hardcoded-default parameters, never overridden by any of its three callers `approval_is_current`/`implementing_entry_reachable`/`verify_post_approval_manifest_match`) — full detail in `docs/ai-workflow/dry-run/WF8B_S1_FINDING_review_content_id_not_generalized.md` and `.ai-review/feedback/REVIEW_FEEDBACK.md` (`OPUS-R25-*`). |
+
+**Why this is a plan revision, not a code-only fix (unlike `OPUS-R24-*`)**:
+`OPUS-R24-*` added one classification-list entry to already-designed
+machinery; nothing about *how* plan-stage identity resolves per work item
+changed. This finding requires a genuinely new mechanism — a per-work-item
+metadata source, a resolution algorithm, and a fail-closed validation
+matrix that did not exist in any prior revision's design — so it is new
+design content belonging in D-Fingerprint/D3, not an operational data
+change to an already-approved mechanism. Per this document's own
+governance (any edit to `WORKFLOW_V2_PLAN.md` is plan-stage protected),
+that content requires the same review-and-approval cycle as any other
+decision here, run exactly like every prior mid-implementation plan
+revision this work item has already been through (revisions 12 through 15
+all landed while later checkpoints — `WF-M8a` onward — were already
+`COMPLETE`).
+
+**Relationship to `WF4a-i`**: `WF4a-i` (`COMPLETE`) already named this exact
+gap as deferred, unfinished scope — its own registry description ends
+"...generalize protected-path derivation beyond this one process plan," and
+D-Registry's revision-9 future-work note independently commits to the same
+generalization (`GPT-R9-011`). `WF4a-i` was marked `COMPLETE` without it
+landing. This revision does not reopen `WF4a-i` (checkpoint completion is
+not revoked; its own commit and trailer remain valid history) — it
+specifies the previously-deferred design so a dedicated implementation
+session can execute it under the ordinary implementation-review/
+technical-approval cycle before S1 is retried. No new checkpoint ID is
+created; the work is tracked as continued `WF8b` scope, the same checkpoint
+whose own S1 scenario surfaced the gap (`WF8b` is explicitly "multiple
+sessions, deliberately not 1" and already tracks scenario-blocking findings
+this way under `docs/ai-workflow/dry-run/`).
+
+### `OPUS-R25-*` external review disposition (revision 16 → 17, `Status: REVISE`)
+
+The first externally reviewed round of this finding's design (revision 16,
+bundle `bundle_id: c508f5b7…`, `review_content_id: f7aeff4985…`) came back
+`REVISE`: sound direction, five `HIGH`-severity defects and ten further
+gaps, none requiring reopening the frozen identity algorithm, the two-stage
+plan-review protocol, the registry/mapping file formats, `D-Bootstrap`, or
+`D-Legacy` (the reviewer's own explicit scope confirmation). All fifteen
+findings validated against the actual repository before disposition —
+independently confirmed, not taken on the reviewer's word: the live
+`plan_revision: 15` (state) vs. `16` (registry) divergence `OPUS-R25-002`
+named was reproduced directly; `render_manifest_md`'s missing
+`work_item_id`/`plan_revision`/`base_commit` fields (`OPUS-R25-005`);
+`approval_is_current`/`verify_post_approval_manifest_match` both passing
+`plan_revision=work_item.get("plan_revision")` (`OPUS-R25-002`); `scripts/
+prepare-ai-review.sh` containing no reference to `workflow_fingerprint`,
+`MANIFEST`, or `--write-manifest` anywhere (`OPUS-R25-012`); `resolve_bundle_dir`'s
+silent flat-path fallback (`OPUS-R25-005`); `workflow_fingerprint.py:361-365`'s
+"synthetic … borrows the real process item's" comment (`OPUS-R25-011`);
+and `workflow_test_harness.py`'s existing `plan_stage_protected_paths`
+workaround and `write_plan_docs`' five-fixed-path fixture shape
+(`OPUS-R25-014`) — all confirmed by direct read/grep, all accurate.
+
+| ID | Severity | Disposition | Resolved in |
+|---|---|---|---|
+| `OPUS-R25-001` | HIGH | **Accepted.** Acceptance criterion 1 (and test 142, WFR-50) pinned revision 15's approved digest as a literal, which revision 16's own protected-content changes make unreproducible by construction — the criterion demanded the impossible. Restated mechanism-relatively: the migrated JSON sets and the pre-migration Python constants must produce byte-identical digests on the same tree, compared directly, never against a hardcoded literal. | D-Fingerprint-Generalization "Backward compatibility" paragraph; acceptance criterion 1; missing tests 141-142, 150; WFR-50 |
+| `OPUS-R25-002` | HIGH | **Accepted.** `plan_revision` had two sources (registry JSON per the design; `WORKFLOW_STATE.json` per the actual `approval_review_content_id` call sites) and they were already divergent in the reviewed bundle (`15` vs. `16`). Collapsed to one: the registry JSON alone; `WORKFLOW_STATE.json`'s field becomes a validated, non-authoritative mirror. Corrected the live divergence in this same commit. | Authoritative-source table; resolution algorithm; D3 (new mirror-consistency validator rule); migration steps 1, 6; `WORKFLOW_STATE.json` |
+| `OPUS-R25-003` | HIGH | **Accepted.** `plan_path`/`registry_path`/`mapping_path` were resolved from state independently of the protected-path set loaded from the artifacts file, with no check that the two agree — a work item could name one file as its plan while a different file was actually hashed. Added a path-to-role binding check (resolution step 11); `mapping_path` gains a real consumer. | Resolution algorithm step 11; new `PlanStageMetadataNotProtectedError`; fail-closed matrix condition 7; acceptance criterion 3; missing tests 143, 146; WFR-47, WFR-48 |
+| `OPUS-R25-004` | HIGH | **Accepted.** No writer or ordering was specified for a new work item's `plan_path`/`registry_path`/`mapping_path`/artifacts-declarations file, so S1 would still fail after the fix, one error deeper. Added a "Creation path" block naming both writers, the default artifacts template, and the ordering that avoids circularity; conceded `/milestone-plan` needs a text change after all. | New "Creation path" subsection; `route_work_item`/`default_work_item` gain `mapping_path`; acceptance criterion 4; missing tests 143, 149, 151; WFR-47, WFR-49 |
+| `OPUS-R25-005` | HIGH | **Accepted.** `MANIFEST.md` recorded no `work_item_id`; the CLI's `--work-item-id` default stayed the literal `"workflow-v2-1-core"`; `resolve_bundle_dir` falls back to the flat path silently — once `--work-item-id` is made meaningful, a mis-invocation becomes destructive cross-item manifest overwriting instead of harmless. Added the three fields, a `BundleWorkItemMismatchError` write-time check, and a live-`active_work_item_id` CLI default. | "Manifest/bundle bound to an explicit work item" subsection; new `BundleWorkItemMismatchError`; fail-closed matrix condition 12; acceptance criterion 5; missing tests 147, 149; WFR-49 |
+| `OPUS-R25-006` | MEDIUM-HIGH | **Accepted.** Migrating the classification sets into `<work_item_id>-artifacts.json` moved them from implementation-stage-protected (`scripts/`) to excluded-at-both-stages, silently removing their approval binding and falsifying the file's own stated invariant. Carved the file out as implementation-stage protected by exact path; migration corrects the stale invariant text. | "Artifacts declarations file gets a real approval binding" subsection; migration steps 2, 7; missing test 141 (extended); WFR-48, WFR-50 |
+| `OPUS-R25-007` | MEDIUM | **Accepted.** Duplicate-metadata detection lived only in `validate_state`, a write-time check the resolution algorithm's own read path never calls, and matched only exact-triple equality. Moved into `resolve_plan_stage_metadata` itself (resolution step 9), widened to per-field uniqueness; `validate_state` keeps the same widened rule as a write-time backstop. | Resolution algorithm step 9; fail-closed matrix condition 8; missing test 146 |
+| `OPUS-R25-008` | MEDIUM | **Accepted.** `plan_path`/`registry_path`/`mapping_path` were consumed with no grammar — an absolute value silently replaces `repo_root` under `pathlib` join semantics; `../` escapes the worktree; `work_item_id` read from a state key was never independently checked against its own grammar. Added a shared path-grammar validator (resolution step 6) and an explicit `validate_work_item_id` call (step 2). | Resolution algorithm steps 2, 6; new `InvalidPlanStageMetadataPathError`; fail-closed matrix condition 4; acceptance criterion 8; missing test 146 |
+| `OPUS-R25-009` | MEDIUM | **Accepted.** The nine-condition matrix and its "nine sub-cases" test item actually described ten sub-cases, and conditions 7-8 (per-item revision mismatch; per-item unclassified-path fail-closed) had no test anywhere. Matrix rebuilt to twelve conditions given the three genuine additions above; every condition now has a named test. | Fail-closed matrix (rebuilt); missing tests 141-160 (renumbered/added); WFR-48 |
+| `OPUS-R25-010` | MEDIUM | **Accepted.** Placing the resolver in `workflow_state.py` (which already imports `workflow_fingerprint`) would have created an import cycle; the design also stated the hardcoded `PLAN_STAGE_*` defaults would remain live on the public functions, unchanged — the exact root cause this finding fixes, left standing as a silent-fallback trap for any future caller. Relocated to `workflow_fingerprint.py`; the three classification parameters become required once the migration's test suite is green. | "Module placement" paragraph; migration steps 4-6; acceptance criterion 7; missing tests 141, 150; WFR-47 |
+| `OPUS-R25-011` | MEDIUM | **Accepted.** The resolution algorithm never consulted `work_item_kind`, while acceptance criteria required a `"synthetic"`-kind item to get its own distinct digest — directly contradicting `scripts/workflow_fingerprint.py:361-365`'s standing comment that a synthetic item "borrows the real process item's" fingerprint. Stated explicitly: `work_item_kind` is not consulted; superseded code comment rewritten in the same migration commit. | Resolution algorithm step 4; migration step 7; acceptance criteria 4, 11; missing test 151 |
+| `OPUS-R25-012` | MEDIUM | **Accepted.** The affected-commands audit checked five `.claude/commands/*.md` files but not `scripts/prepare-ai-review.sh`, the actual code every plan-stage bundle generation runs — which contains no reference to the fingerprint module at all, so `MANIFEST.md` was only ever written by a separate, easy-to-omit manual CLI step. Specified the fix: `prepare-ai-review.sh` gains the `--write-manifest` call for the `plan` stage. | "`prepare-ai-review.sh` shares the same authoritative path" subsection; migration step 8; acceptance criterion 5; missing tests 147, 149, 151; WFR-47 |
+| `OPUS-R25-013` | MEDIUM | **Accepted, resolved by clarification, not new mechanism.** Commit-source resolution at any commit predating the schema-version-2 migration was unaddressed, and the durability guarantee `D-Approval-Commits` rests on implicitly assumes it always works. Confirmed the already-specified fail-closed conditions (3, 5) correctly and deliberately raise for any such commit — no command needs pre-migration commit-source recomputation in practice; stated as an explicit, deliberate boundary rather than left silent. | Fail-closed matrix condition 11; "Backward compatibility" point 1; missing test 145 (extended) |
+| `OPUS-R25-014` | LOW | **Accepted.** Migration steps named the production modules but not `workflow_test_harness.py`, which encodes the exact hardcoded-default workaround (`plan_stage_protected_paths`) this revision retires, and whose fixtures cannot express a second work item's own artifacts file today. Added a migration step extending the harness. | Migration step 9; acceptance criterion 10; missing tests 143, 144, 149, 150 |
+| `OPUS-R25-015` | LOW | **Accepted.** Migration step 8 described a second `/approve-review plan` round happening after implementation, contradicting the "Restart discipline for S1" paragraph's statement that approval happens immediately on this bundle's own `APPROVE`. Deleted the contradictory step; the migration's final step now correctly points at the implementation-review/technical-approval cycle. | Migration step 11 (renumbered); "Restart discipline for S1" paragraph |
+
+No finding required reopening the identity algorithm, the two-stage
+plan-review protocol, the registry/mapping file formats, `D-Bootstrap`, or
+`D-Legacy` — confirmed by direct inspection of every corrected section
+against those five, not merely by repeating the reviewer's own scope
+claim: none of the fifteen corrections above touches `compute_bundle_id`,
+`_canonical_json`, any `_snapshot_*` function, `D-Plan-Review-Stages`,
+`D-Registry`'s file-format text, `D-Bootstrap`, or `D-Legacy`.
+
+**Scope discipline**: this revision touches D-Fingerprint-Generalization
+(rewritten in full, incorporating all fifteen corrections above), D3 (the
+`mapping_path` field, now four validator rules — the two revision 16 added
+plus the mirror-consistency and per-field-uniqueness rules `OPUS-R25-002`/
+`-007` require), D-Registry/D4b (unchanged from revision 16's
+cross-reference correction), Missing tests (items 141-160, corrected and
+extended), Requirements traceability (WFR-47 through WFR-50, wording
+corrected to match), Self-review notes, and — as a live data fix, not new
+design — `WORKFLOW_STATE.json`'s `plan_revision` field for
+`workflow-v2-1-core` (corrected to match the registry, per `OPUS-R25-002`).
+It still does not reopen the identity algorithm's own
+hashing/canonicalization, the two-stage plan-review protocol, the
+registry/mapping *file format*, `D-Bootstrap`, or `D-Legacy`.
+
+## Round 26 finding disposition (revision 17 → 18) — second external review round (`OPUS-R26-*`, `Status: REVISE`)
+
+Revision 17's own bundle (`bundle_id: 56e66705…`, `review_content_id:
+c517f260…`) went through this work item's ordinary single-stage
+`AWAITING_EXTERNAL_PLAN_REVIEW` gate a second time. The verdict: sound,
+substantial improvement over revision 16 — all fifteen `OPUS-R25-*`
+findings independently re-verified against the actual repository, not
+merely against the disposition table's own claims — but still not safe to
+implement, because the defect class `WF8B-S1-001` exists to eliminate *an
+identity-bearing fact resolved from a literal, or from a second,
+uncrosschecked rule, rather than from the requested work item* survives in
+three concrete places the round-17 corrections introduce or leave
+standing. Three `HIGH`, two `MEDIUM`, two `LOW` findings; zero require
+reopening the identity algorithm, the two-stage plan-review protocol, the
+registry/mapping file formats, `D-Bootstrap`, or `D-Legacy` (confirmed by
+inspection, not by repeating the reviewer's own scope claim).
+
+| ID | Severity | Disposition | Resolved in |
+|---|---|---|---|
+| `OPUS-R26-001` | HIGH | **Accepted.** Matrix condition 12's manifest-binding check fired only when an existing `MANIFEST.md` *names a different* `work_item_id` — every manifest in this repository today names none, so the check was inert on exactly the first post-migration write it exists to protect. Split condition 12 into three named outcomes (absent → binds; present, names the resolved item → agrees; present, names no `work_item_id` or a different one → refuses), added the one-time rebinding migration step for `.ai-review/current`, and specified the comparison parses the manifest's own `field: value` header lines rather than substring-scanning (avoiding the false-positive trap in this bundle's own exclusion-justification prose). | "Manifest/bundle bound to an explicit work item" subsection (corrected); fail-closed matrix condition 12 (split); migration (new rebinding step); missing test 152 (extended), new test 161; acceptance criterion 5; WFR-52 |
+| `OPUS-R26-002` | HIGH | **Accepted.** `prepare-ai-review.sh` was specified to resolve the bundle *directory* and the manifest's *work item* by two different rules in the same invocation (`--work-item-id <work-item-id-or-live-active>` — a hyphenated "or", not one rule — while the script's own `ROOT_DIR` choice reads only the explicit third argument). Under this remediation's own commitment to keep `active_work_item_id` at `v2-1-dry-run` throughout, the ordinary flat invocation `./scripts/prepare-ai-review.sh <base-sha> plan` would bind `workflow-v2-1-core`'s bundle to `v2-1-dry-run`'s manifest. Corrected to one rule: the script resolves the work-item id exactly once (its own third argument if given, else the live `active_work_item_id`) and uses that single resolved value for both `ROOT_DIR` and `--write-manifest`. | "`prepare-ai-review.sh` shares the same authoritative path" subsection (corrected); acceptance criterion 5; missing tests 149, 153 (extended), new test 162; WFR-49, WFR-52 |
+| `OPUS-R26-003` | HIGH | **Accepted.** The CLI's `--work-item-id` literal default was retired, but the `base` positional argument kept a hardcoded literal of `workflow-v2-1-core`'s own base commit as its default — and `base_commit` is a hashed member of the plan-stage projection, so a second item's `review_content_id` would silently incorporate core's base commit whenever `base` was omitted. Compounded by `base_commit`'s writer being explicitly out of scope (revision 17's own self-review note), leaving no resolved per-item value to fall back to. Closed both halves together: `base_commit` gains a named writer (`route_work_item`/`default_work_item` gain the parameter, populated at creation time, mirroring `plan_path`/`registry_path`/`mapping_path`'s own ordering), the `base` positional resolves from the requested item's own `base_commit` (required, fails closed when `null`, never a literal), and `MANIFEST.md`'s `base_commit` field is checked against the resolved item's declared value at write time, the same pattern condition 12 already uses for `work_item_id`. | "Creation path" subsection (extended: `base_commit` added as a third sole-writer fact); "Effect on `--work-item-id`" subsection (corrected: `base` positional literal retired); new fail-closed matrix condition 13; acceptance criteria 3, 4, 5, 9, 11; missing tests 149, 151, 154 (extended), new test 163; WFR-47, WFR-49, WFR-51 |
+| `OPUS-R26-004` | MEDIUM | **Accepted.** `OPUS-R25-006`'s fix was specified as an exact-path `protected_paths` entry containing a literal `<work_item_id>` placeholder — but `classify_path_implementation_stage` (`workflow_fingerprint.py:967`) tests `if path in protected_paths`, a plain exact-match dictionary with no templating, so a key spelled with the literal characters `<work_item_id>` matches nothing and the file falls through to the `docs/ai-workflow/registry/` excluded prefix, exactly as unprotected as before. Corrected: each work item's own `<id>-artifacts.json` declares, within its own `implementation_stage.protected_paths`, the concrete literal path to itself (e.g. `workflow-v2-1-core`'s own file names `docs/ai-workflow/registry/workflow-v2-1-core-artifacts.json`, spelled out); `generate_artifacts_declarations` emits that self-referential concrete entry automatically for every new item as part of the default template — general by construction, not by a placeholder the exact-match classifier cannot read. | "Artifacts declarations file gets a real approval binding" subsection (corrected); migration step 2 (corrected); acceptance criterion 1; missing tests 155, 156 (corrected); WFR-50 |
+| `OPUS-R26-005` | MEDIUM | **Accepted.** Cross-referencing every WFR row's evidence column against missing-test items 141-160 found three items (145, 157, 159) mapped to no requirement — not cosmetic in these three cases: 145 is the sole coverage for fail-closed matrix condition 11 and `OPUS-R25-013`'s pre-migration boundary disposition; 157 is the sole coverage for `OPUS-R25-011`'s `work_item_kind: "synthetic"` correction; 159 is the sole coverage for acceptance criterion 10's harness change. Added to the evidence columns: 145 → WFR-50, 157 → WFR-49, 159 → WFR-47. `docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json`'s own schema (D4b) carries only `{description, checkpoint_ids}` per requirement, no per-test evidence field — the traceability table above is, and has been since revision 9, the sole locus of requirement↔test-item mapping; adding a test-evidence field to the mapping file's format would reopen D4b's frozen file format, which this finding does not ask for and this revision's own scope discipline (confirmed above) does not touch. ~~The mapping file's `WFR-47`/`-49`/`-50` **descriptions** already state the same requirement content the corrected table rows describe, so no JSON edit is needed to satisfy this finding.~~ **This last sentence was false and is struck rather than silently corrected: `OPUS-R27-001` found six table rows rewritten this round (`WFR-47` through `WFR-52`, not only the three named here) against a `workflow-v2-1-core-mapping.json` left completely untouched — `WFR-47`'s JSON description did not mention `base_commit` at all. The per-test-evidence reasoning immediately above is unaffected and remains correct; only the description-content claim was wrong. See "Round 27 finding disposition" below.** | Requirements traceability table (WFR-47, WFR-49, WFR-50 evidence columns corrected); no `workflow-v2-1-core-mapping.json` change (reasoned above, corrected `OPUS-R27-001`) |
+| `OPUS-R26-006` | LOW | **Accepted.** Missing-test item 146 enumerated seventeen sub-cases while its own summary said "sixteen" — the exact defect class `OPUS-R25-009` raised against revision 16, reproduced in the corrected text — and sub-case group (4a-c) was ambiguous between three *fields* and three *rule violations*. Corrected: "sixteen" → "seventeen"; (4a-c) restated as three fields, each independently exercised against the same representative rule violation (absolute path), with the three rule violations (absolute, `../` traversal, non-tracked/symlinked target) named as the minimum vector set per field rather than a separate 3×3 matrix. | Missing test 146 (corrected) |
+| `OPUS-R26-007` | LOW | **Accepted.** Fail-closed matrix condition 11 and "Backward compatibility" point 1 cross-referenced each other for the same statement, which lives in neither — the substantive disposition is the `OPUS-R25-013` row of the Round 25 disposition table above. Corrected: both now point directly at that row instead of at each other. | Fail-closed matrix condition 11 (corrected); "Backward compatibility" point 1 (corrected) |
+
+No finding required reopening the identity algorithm, the two-stage
+plan-review protocol, the registry/mapping file formats, `D-Bootstrap`, or
+`D-Legacy` — confirmed by direct inspection of every corrected section
+against those five: none of the seven corrections above touches
+`compute_bundle_id`, `_canonical_json`, any `_snapshot_*` function,
+`D-Plan-Review-Stages`, `D-Registry`'s file-format text, `D-Bootstrap`, or
+`D-Legacy`.
+
+**Scope discipline**: this revision touches D-Fingerprint-Generalization
+(the manifest-binding subsection, the `prepare-ai-review.sh` subsection,
+the "Effect on `--work-item-id`" subsection, the "Creation path"
+subsection, the artifacts-declarations subsection, the fail-closed matrix,
+the migration steps, and the acceptance criteria — all corrections above),
+Requirements traceability (WFR-47, WFR-48, WFR-49, WFR-50, WFR-51, WFR-52
+evidence columns/wording corrected — six rows, corrected `OPUS-R27-009`;
+this list previously omitted WFR-48), Missing tests (items 146, 149,
+151-156, 161-163 corrected/added), and Self-review notes. It still does not reopen the
+identity algorithm's own hashing/canonicalization, the two-stage
+plan-review protocol, the registry/mapping *file format*, `D-Bootstrap`, or
+`D-Legacy`. No file under `scripts/` or `.claude/commands/` is edited by
+this revision — every correction above is design text; the dedicated fix
+session that follows approval is where the code actually changes, exactly
+as revision 17's own self-review notes already stated for its own scope.
+
+**Restart discipline for S1** (consolidated into one paragraph revision 19,
+`OPUS-R27-008`; the two versions revision 18 carried side by side had
+drifted — one pointed "above" at the other, which was actually below it,
+and the other still said "`plan_revision` itself moves 16 → 17," revision
+17's own transition, not revision 18's — both defects were resolved by
+merging into the single statement below rather than correcting each copy
+separately a third time; kept as one paragraph through this revision's own
+`20 → 21` bump, updated in place, `OPUS-R28-012`'s standing-invariant
+convention): once this revision is reviewed and approved (a fresh
+`/approve-review plan` round for `workflow-v2-1-core`, producing a new
+`plan_approval` record against this revision's own `review_content_id` —
+which necessarily differs from every prior revision's, since
+`plan_revision` itself moves 20 → 21 and this document's own protected
+bytes changed, exactly as expected for any revision bump, and exactly the
+point `OPUS-R25-001`'s correction makes explicit) and the
+deferred implementation lands and independently passes its own
+`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`/`AWAITING_TECHNICAL_APPROVAL`
+cycle, S1 is re-attempted **from the beginning, in a fresh session** —
+never resumed from `v2-1-dry-run`'s current `PLANNING`/`plan_revision:
+1`/empty-`checkpoints` state, even though that state is confirmed
+untouched by this finding's own discovery and by every REVISE round since
+alike — exactly as
+`docs/ai-workflow/dry-run/WF8B_S1_FINDING_review_content_id_not_generalized.md`'s
+own "Next step" section requires. `active_work_item_id` remains
+`v2-1-dry-run` throughout this remediation's own review/implementation
+(D1: a resume-focus pointer, not an execution lock — this remediation is
+process work on `workflow-v2-1-core` itself, not on the dry-run item, so it
+never needs to repoint the active pointer). `WF8b` remains `IN_PROGRESS`;
+S1 remains unexecuted; no `v2-1-dry-run` plan artifact was created or
+touched by applying this REVISE, exactly as confirmed against the working
+diff of `WORKFLOW_STATE.json` before this round's own review began.
+
+## Round 27 finding disposition (revision 18 → 19) — third external review round (`OPUS-R27-*`, `Status: REVISE`)
+
+Revision 18's own bundle (`bundle_id: 46cf3d02…`, `review_content_id:
+05c89e24…`) went through this work item's ordinary single-stage
+`AWAITING_EXTERNAL_PLAN_REVIEW` gate a third time. The verdict: all seven
+`OPUS-R26-*` findings independently re-verified — three fully resolved
+(`-003`, `-006`, `-007`), three resolved in design text but not yet holding
+end to end (`-001`, `-002`, `-004`), one resolved on a claim about
+`workflow-v2-1-core-mapping.json`'s contents that was factually false
+(`-005`) — still not safe to implement, for three concrete `HIGH` reasons,
+plus four further gaps. Zero require reopening the identity algorithm, the
+two-stage plan-review protocol, the registry/mapping file formats,
+`D-Bootstrap`, or `D-Legacy` (confirmed by inspection).
+
+| ID | Severity | Disposition | Resolved in |
+|---|---|---|---|
+| `OPUS-R27-001` | HIGH | **Accepted.** Six traceability table rows (`WFR-47` through `WFR-52`) were rewritten in revision 18 and `workflow-v2-1-core-mapping.json` was not touched, on an explicit claim about that file's contents (Round 26 disposition row `OPUS-R26-005`; the revision-18 self-review notes) that was false — the JSON's `WFR-47` did not mention `base_commit` at all. Synced all six `description` values in the mapping JSON to their revision-18 table-row content (backticks and round-citation parentheticals stripped, matching the style every other requirement's `description` already uses); struck and corrected the false sentence in the `OPUS-R26-005` disposition row and in the revision-18 self-review notes; added a grep-based conformance test (item 166) enforcing the "generated view" claim going forward rather than merely asserting it. | `workflow-v2-1-core-mapping.json` (`WFR-47`-`WFR-52` descriptions); `OPUS-R26-005` disposition row (corrected); Self-review notes (corrected); missing test 166 |
+| `OPUS-R27-002` | HIGH | **Accepted.** `approval_review_content_id`'s `artifacts_path` parameter still defaulted to `fingerprint.DEFAULT_ARTIFACTS_PATH` (a literal naming `workflow-v2-1-core-artifacts.json`) for `stage="implementation"`, and `approval_is_current` never passed it — the same "one literal retired while a structurally identical sibling survived" pattern `OPUS-R26-003` named for the `base` positional, recurring a third time, this time for the implementation stage. A second work item's `technical_approval` would durability-check against `workflow-v2-1-core`'s own protected/excluded sets, not its own. Resolved by bringing it in (the finding's option (a)): `artifacts_path` for the implementation stage is now resolved per work item via `fingerprint.artifacts_path_for_work_item(work_item_id)` — the same helper the plan-stage resolver already introduces — for every caller that actually reaches `approval_review_content_id` with `stage="implementation"` (corrected, `OPUS-R28-001`: that is `approval_is_current` and `verify_post_approval_manifest_match`, not `implementing_entry_reachable`, which only ever calls `approval_is_current(..., stage="plan", ...)` and never needs `artifacts_path`; `promote_legacy_work_item` calls `load_implementation_stage_classification` directly and is likewise unaffected); the literal default is retired in the same migration step as the plan-stage ones. | "Artifacts declarations file gets a real approval binding" subsection (extended); migration steps 4, 6, 7 (extended); acceptance criteria 14, 15 (extended); new acceptance criterion 20; missing test 156 (extended), new test 164; WFR-47, WFR-50 |
+| `OPUS-R27-003` | HIGH | **Accepted.** The single-resolution rule fixed `OPUS-R26-002`'s "or" but left three consequences unstated: the flat `.ai-review/current` layout would be silently retired the first time the corrected script ran (since the resolved value would never be empty), migration step 6a's in-place rebinding would then be rebinding a directory nothing writes to again, and — independent of both — the bundle's *content* (derived from `<base-sha>` and the working tree) was still bound to nothing. Resolved: the work-item id is now a **required** third argument to `prepare-ai-review.sh` for `stage == "plan"` specifically (never falling back to the live `active_work_item_id` for this stage; the flat, optional-third-argument layout is explicitly retained, unchanged, for every other stage, where `MANIFEST.md` is never written — the one legitimate "explicitly authorized" exception). The resolved item's own declared `base_commit` is cross-checked against the `<base-sha>` positional *before* any bundle content is generated — applying fail-closed matrix condition 13 (which already names "CLI-argument" among the sources that must agree) as an early script-level refusal, not only a downstream manifest-write check — which is the fact that ties content, directory, and manifest to one source. Migration step 6a is retimed into a physical one-time relocation (`.ai-review/current` → `.ai-review/workflow-v2-1-core/current`, `.ai-review/feedback` → `.ai-review/workflow-v2-1-core/feedback`, the latter closing the `resolve_feedback_dir` scoped-directory gap the review also named) followed by the same rebinding write, now at the relocated path; `MILESTONE_WORKFLOW.md`/`REVIEW_PROTOCOL.md`'s printed paths are updated in the same commit. | "One authoritative work-item selection rule, not two" subsection (corrected); migration steps 6a (retimed), 8 (corrected); acceptance criterion 13 (corrected), new acceptance criterion 21; missing tests 153 (corrected), 162 (corrected), new test 165; WFR-27, WFR-49, WFR-52 |
+| `OPUS-R27-004` | MEDIUM | **Accepted.** The "absent `MANIFEST.md` → binds" first-write branch is unreachable as specified: `resolve_bundle_dir` returns the scoped path only if it *already exists*, so the CLI's `--write-manifest` path (which resolves through it) hard-errors on a genuinely new item's directory instead of creating and binding it — the exact invocation shape `WF8B-S1-001` itself used. Resolved: `write_manifest_with_verified_identifiers`, given an explicit, resolved `work_item_id`, now creates its own scoped directory (`mkdir -p`, mirroring `prepare-ai-review.sh`'s own `FILES_DIR` creation for the driven case) rather than deferring to `resolve_bundle_dir`'s existence-gated fallback; `resolve_bundle_dir`'s own scoped-else-flat resolution is retained unchanged for its original read-only/inspection use, where it is harmless. A fallback into another item's flat bundle is no longer reachable from the write path at all. | "Manifest/bundle bound to an explicit work item" subsection (corrected, first outcome); "Creation path" subsection's bundle-directory-identity paragraph (corrected); fail-closed matrix condition 12 (precondition stated); new acceptance criterion 22; missing test 161 (extended); WFR-52 |
+| `OPUS-R27-005` | MEDIUM | **Accepted.** Missing-test item 162 still accepted either the single-resolution design or the two-rule "or" design `OPUS-R26-002` explicitly rejected, so it could not fail under a regression to the rejected shape. Superseded by the `OPUS-R27-003` fix itself: with the work-item id now a required argument for the plan stage, there is no longer a fallback branch for `ROOT_DIR` and `--write-manifest` to disagree about — item 162 is restated as the simpler, unambiguous assertion that the omitted-argument invocation refuses outright. | Missing test 162 (restated); acceptance criterion 13 (corrected, folded into `OPUS-R27-003`'s resolution above); WFR-49, WFR-52 |
+| `OPUS-R27-006` | MEDIUM | **Accepted.** `WFR-48`'s evidence column named items 146-148 and 158 — conditions 1-10 — but conditions 11, 12, and 13 (items 145, 152/161, and 163) had their sole coverage recorded under `WFR-50`, `WFR-49`, and `WFR-49` respectively, never under `WFR-48`, the requirement that actually owns the thirteen-condition matrix. Added items 145, 152, 161, 163 to `WFR-48`'s evidence column (the requirement's own JSON `description` was already corrected as part of `OPUS-R27-001`'s fix above; this is the table's verification-column half). | Requirements traceability table, `WFR-48` verification column |
+| `OPUS-R27-007` | LOW | **Accepted.** Fail-closed matrix condition 12's own sentence said "all **three** disagreeing sub-cases" while enumerating two (12a, 12b) — the three-outcome prose subsection above it is correct (absent/agrees/disagrees, of which exactly two disagree); only the matrix restatement conflated the counts. Corrected to name the two disagreeing sub-cases explicitly, of the three named outcomes. | Fail-closed matrix condition 12 (count corrected) |
+| `OPUS-R27-008` | LOW | **Accepted.** Two stale statements: (a) the `OPUS-R25-002` resolution evidence still said "both now read `17`" after two further revision bumps; (b) two consecutive "Restart discipline for S1" paragraphs had drifted — one's own cross-reference pointed the wrong direction, the other still described revision 17's `16 → 17` transition. (a) corrected to the current value; (b) resolved by merging the two paragraphs into one, per the finding's own offered alternative, rather than correcting each copy separately a third time. | `OPUS-R25-002` resolution evidence (value corrected); "Restart discipline for S1" (consolidated, above) |
+| `OPUS-R27-009` | LOW | **Accepted.** Three different lists of which requirement rows changed in revision 18 (`REVIEW_REQUEST.md`, plan line ~3780, the Round 26 scope-discipline paragraph), none matching the actual six-row diff (`WFR-47` through `WFR-52`, all omitting `WFR-48`); separately, the `WORKFLOW_STATE.json` bundle-narrative claim of "no other field touched" omitted that `state_revision`/`last_transition` also changed (both on an excluded path, no approval implication, but the claim as written didn't say so). Reconciled all three lists to name all six rows; the `REVIEW_REQUEST.md` regenerated for this round states the `WORKFLOW_STATE.json` change accurately. | Round 26 scope-discipline paragraph (corrected, above); Requirements traceability intro paragraph (corrected, below); `REVIEW_REQUEST.md` (regenerated this round) |
+
+No finding required reopening the identity algorithm, the two-stage
+plan-review protocol, the registry/mapping file formats, `D-Bootstrap`, or
+`D-Legacy` — confirmed by direct inspection of every corrected section
+against those five, the same standard applied in rounds 25 and 26.
+
+**Scope discipline**: this revision touches `workflow-v2-1-core-mapping.json`
+(six `description` values synced, `OPUS-R27-001`), `D-Fingerprint-Generalization`
+(the artifacts-declarations subsection extended for the implementation
+stage, `OPUS-R27-002`; the `prepare-ai-review.sh` subsection and migration
+step 6a corrected, `OPUS-R27-003`; the manifest-binding subsection's
+first-outcome precondition and the "Creation path" subsection's
+bundle-directory-identity paragraph corrected, `OPUS-R27-004`; fail-closed
+matrix condition 12's count corrected, `OPUS-R27-007`), acceptance criteria
+(14, 15, 13 extended/corrected; 19-25 added), Requirements traceability
+(`WFR-48` verification column, intro paragraph reconciled), Missing tests
+(items 153, 161, 162 corrected in place; 164-166 added), and Self-review
+notes. It does not reopen the identity algorithm's own hashing/canonicalization,
+the two-stage plan-review protocol, the registry/mapping *file format*,
+`D-Bootstrap`, or `D-Legacy`. No file under `scripts/` or
+`.claude/commands/` is edited by this revision — every correction above is
+design text; the dedicated fix session that follows approval is where the
+code actually changes.
+
+## Round 28 finding disposition (revision 19 → 20) — fourth external review round (`OPUS-R28-*`, `Status: REVISE`)
+
+Revision 19's own bundle (`bundle_id: b3896c42…`, `review_content_id:
+9a5df32a…`) went through this work item's ordinary single-stage
+`AWAITING_EXTERNAL_PLAN_REVIEW` gate a fourth time. The verdict: six of
+nine `OPUS-R27-*` findings fully and correctly resolved (`-005` through
+`-009`, and `-001` for the six rows it named), three resolved in direction
+but each leaving a reachable hole (`-002`, `-003`, `-004`) — still not safe
+to implement, for three concrete `HIGH` reasons (two of them the same
+"literal retired, structurally identical sibling survived" defect one
+layer further out), plus seven further `MEDIUM`/`LOW` gaps. Zero require
+reopening the identity algorithm, the two-stage plan-review protocol, the
+registry/mapping file formats, `D-Bootstrap`, or `D-Legacy` (confirmed by
+inspection, the same standard applied in rounds 25 through 27).
+
+| ID | Severity | Disposition | Resolved in |
+|---|---|---|---|
+| `OPUS-R28-001` | HIGH | **Accepted.** The implementation-stage `artifacts_path` caller list `OPUS-R27-002` gave named `implementing_entry_reachable`, which never reaches `approval_review_content_id` with `stage="implementation"` at all — it only calls `approval_is_current(..., stage="plan", ...)`, hardcoded — and omitted `verify_post_approval_manifest_match`, the caller `/approve-review` step 6a actually invokes post-commit for either stage. Corrected the caller list everywhere it appeared (artifacts-declarations subsection, migration step 6, disposition row, acceptance criterion 20, test 164) to the two callers that actually reach it, derived mechanically (grep for every function whose body reaches `approval_review_content_id`) rather than re-enumerated by inspection a fifth time. | Artifacts-declarations subsection (corrected); migration step 6 (corrected); `OPUS-R27-002` disposition row (corrected); acceptance criterion 20 (corrected); missing test 164 (extended) |
+| `OPUS-R28-002` | HIGH | **Accepted — the finding that decides whether S1 can run at all.** `route_work_item`'s resume branch (`workflow_state.py:1377-1380`) writes only `plan_revision`/`state_revision`/`last_transition`; `plan_path`/`registry_path`/`mapping_path`/`base_commit` are written only by `default_work_item`, called only from the creation branch. `v2-1-dry-run` is a pre-existing non-terminal entry, so a fresh S1 attempt after this design's own implementation would still take the resume branch and still fail at `MissingPlanStageMetadataError`, one layer deeper, exactly as `OPUS-R25-004` originally described. Resolved by the finding's preferred option (a): the resume branch gains the same four writers, per-field, write-if-null-else-conflict-if-disagreeing-else-leave, with a new `WorkItemDeclarationFactConflictError` on genuine disagreement — generalizing to every resumed non-terminal entry, not special-casing `v2-1-dry-run`. Option (b) (hand-backfill `v2-1-dry-run` in the migration) rejected: smaller for this one item, but leaves the same gap for the next process work item created the same way. | "Creation and resume path" subsection (retitled and extended); acceptance criterion 4 (corrected); missing test 154 (corrected) |
+| `OPUS-R28-003` | HIGH | **Accepted.** `OPUS-R27-001` synced six mapping-JSON `description` rows to their table content; 15 further rows had diverged, some substantively — `WFR-24`'s two versions stated opposite properties (mechanism-specific vs. mechanism-independent), a live contradiction across two protected, hashed artifacts. Diffed all 52 rows under test 166's own stated normalization and synced the 15; independently re-verified afterward (zero mismatches under the same normalization, script-checked, not eyeballed). The Checkpoint column is explicitly excluded from the "generated view" claim and from test 166's scope: several rows cite a design-doc section (`D3`, `D2`, `D-Registry`, `D4b`, `D-Legacy`) that `checkpoint_ids`'s validator-enforced, checkpoint-only schema cannot represent — stated as a scope decision in the Requirements traceability intro paragraph, not left silently inconsistent. Acceptance criterion 19 extended from six rows to all 52; test 166's ownership reconciled with criterion 19's (data fix owed to this revision, automated regression test still owed to `WF8a-ii`). | `workflow-v2-1-core-mapping.json` (15 further `description` values synced); Requirements traceability intro paragraph (Checkpoint-column scope stated); acceptance criterion 19 (extended); missing test 166 (scope/ownership reconciled) |
+| `OPUS-R28-004` | MEDIUM | **Accepted.** Migration step `6a`'s relocation was numbered between steps 6 and 7 while its own text said it ran after step 8; ran entirely in gitignored space with no atomicity, no collision rule (a second bundle generated between step 8 and `6a` would nest under itself rather than fail), no resumability (a partial move binds as authoritative per the first-write rule), and under-enumerated `.ai-review/`'s actual six entries. Renumbered `8a`, moved to its actual execution position; every entry under `.ai-review/` named explicitly with its disposition; non-empty-destination hard stop; post-move file-set verification before rebinding, run before, not folded into, the rebinding write. | Migration step (renumbered `6a` → `8a`, rewritten); acceptance criterion 21 (corrected); missing test 165 (extended) |
+| `OPUS-R28-005` | MEDIUM | **Accepted.** Step `6a`/`8a` relocated `.ai-review/feedback` — stage-agnostic, no stage argument on `resolve_feedback_dir` — into `workflow-v2-1-core`'s scope, while step 8 explicitly retains the flat layout for every non-`plan` stage; the split would strand the implementation/post-fix/functional-review stages' feedback from their own still-flat bundles the moment the step ran. Took the finding's smaller option (b): `feedback/` stays flat, dropped from the relocation; `resolve_feedback_dir`'s scoped branch remains correctly unreachable until a future revision scopes every stage, which this one does not attempt. | Migration step 8a (feedback exclusion stated); acceptance criterion 21 (corrected) |
+| `OPUS-R28-006` | MEDIUM | **Accepted.** The `base_commit` cross-check named a file-and-key-path, not a reader — an inline JSON read would bypass every validation `resolve_plan_stage_metadata` performs; named no exception a shell script can raise for condition 13; and compared against the raw requested argument rather than the resolved commit, so an abbreviated SHA or symbolic ref (which `git rev-parse` has always accepted) would have falsely refused. Named the reader (`fingerprint.resolve_plan_stage_metadata` via `python3 -c`), the comparison basis (resolved `BASE_SHA`, both forms named on refusal), and the two enforcement points condition 13 now names explicitly (early script-level exit; downstream `BundleWorkItemMismatchError`). | "Bundle content is bound to the resolved item too" subsection (corrected); migration step 8 (corrected); fail-closed matrix condition 13 (enforcement points named); acceptance criterion 13 (corrected); missing test 165 (extended) |
+| `OPUS-R28-007` | MEDIUM | **Accepted.** The "no text change" audit was already wrong for `/apply-plan-review` under this revision's own required-argument change (two call sites, one printing the invocation with no work-item id at all) and never audited `/prepare-review`'s own third, unaudited call site. Moved `/apply-plan-review` to the changed list; added `/prepare-review`, stating the id is required only when `<stage>` is `plan`; folded both into migration step 8 and named all three files in acceptance criterion 21. | "Affected commands, corrected" paragraph (rewritten); migration step 8 (extended); acceptance criterion 21 (extended) |
+| `OPUS-R28-008` | MEDIUM | **Accepted.** The first-write precondition ("the resolved directory is the resolved item's own scoped path, or a verified-empty target") was prose: `write_manifest_with_verified_identifiers`'s signature still took a caller-supplied `bundle_dir`, and "verified empty" named no verifier or definition, leaving the one case a reader most wants specified — present, non-empty, no manifest — falling under the first, unconditional-bind disjunct. Made the precondition a check: `bundle_dir` resolved internally from `work_item_id` (caller-supplied value kept only as an assert-equal cross-check); bind only when just-created or already containing a complete generation's required file set (the same set `MissingRequiredBundleFileError` enforces); refuse otherwise, naming the missing file. | Manifest-binding subsection's first outcome (corrected); acceptance criterion 22 (extended); missing test 161 (extended) |
+| `OPUS-R28-009` | MEDIUM | **Accepted.** Migration step 10's green-suite gate still named "items 141-163," unchanged since round 26, while revision 19 added items 164 and 165 with no step requiring either to run before implementation is declared complete. Extended the range to 141-165, explicitly excluding item 166 (owed to `WF8a-ii`, not this fix session, per `OPUS-R28-003`'s ownership reconciliation); reconciled item 160's own parenthetical to the corrected range. | Migration step 10 (range corrected); missing test item 160 (parenthetical corrected) |
+| `OPUS-R28-010` | MEDIUM | **Accepted.** The CLI's `--work-item-id` live-`active_work_item_id` default, safe on the read-only inspection path (`OPUS-R18-002`'s no-mutation invariant), was left unexamined on the `--write-manifest` path after `OPUS-R27-004`'s own fix turned that same path into a directory creator — an omitted flag during the fix session's own work (which runs with `active_work_item_id` pinned at `v2-1-dry-run`) would silently create and bind `v2-1-dry-run`'s directory. Made `--work-item-id` required whenever `--write-manifest` is passed; kept the live default for the read-only path only. | "Effect on `--work-item-id`" subsection (corrected); migration step 6 (corrected); acceptance criterion 9 (extended); missing test 149 (extended) |
+| `OPUS-R28-011` | LOW | **Accepted.** `DEFAULT_REGISTRY_PATH`/`DEFAULT_PLAN_PATH` were named as confirmed defects in the original `WF8B-S1-001` disposition row, alongside `PLAN_STAGE_PROTECTED` and the CLI argparse defaults — every other literal in that list was explicitly retired by a migration step; these two were not, and remain live parameter defaults on `load_plan_revision` today. Added to migration step 6: `load_plan_revision`'s `registry_path`/`plan_path` parameters become required, retired in the same pass as the other literals; named in acceptance criterion 14's explicit list. | Migration step 6 (extended); acceptance criterion 14 (extended) |
+| `OPUS-R28-012` | LOW | **Accepted.** Three "this revision specifies but does not implement" paragraphs and two "`active_work_item_id` remains `v2-1-dry-run`" paragraphs, within one self-review notes section, resolved to three and two different revisions respectively — the same duplication-and-drift pattern `OPUS-R27-008(b)` found in the "Restart discipline for S1" paragraphs, which revision 19 had already correctly merged. Restated the oldest "specifies but does not implement" occurrence as the standing invariant it actually is (true of every revision, not re-dated at each bump); merged the two duplicated `active_work_item_id` paragraphs into one, stating the invariant has held across every round from 17 through the current one; extended acceptance criterion 25 with the general property. | Self-review notes (oldest occurrence restated as standing invariant; two duplicated paragraphs merged into one); acceptance criterion 25 (extended) |
+
+No finding required reopening the identity algorithm, the two-stage
+plan-review protocol, the registry/mapping file formats, `D-Bootstrap`, or
+`D-Legacy` — confirmed by direct inspection of every corrected section
+against those five, the same standard applied in rounds 25 through 27.
+
+**Scope discipline**: this revision touches `D-Fingerprint-Generalization`
+(the implementation-stage caller list, `OPUS-R28-001`; the "Creation and
+resume path" subsection retitled and extended, `OPUS-R28-002`; the
+migration relocation step renumbered `6a` → `8a` and rewritten,
+`OPUS-R28-004`/`-005`; the `base_commit` cross-check subsection corrected,
+`OPUS-R28-006`; the "Affected commands" paragraph rewritten, `OPUS-R28-007`;
+the manifest-binding first-outcome precondition corrected, `OPUS-R28-008`;
+the "Effect on `--work-item-id`" subsection corrected, `OPUS-R28-010`;
+migration step 6 extended, `OPUS-R28-011`), `workflow-v2-1-core-mapping.json`
+(15 further `description` values synced, `OPUS-R28-003`), acceptance
+criteria (4, 9, 13, 14, 19, 20, 21, 22, 25 extended/corrected), Requirements
+traceability (intro paragraph, Checkpoint-column scope stated), Missing
+tests (items 149, 154, 161, 164, 165, 166 extended/corrected in place; item
+160 reconciled), fail-closed matrix conditions 12 (cross-reference) and 13
+(enforcement points named), and Self-review notes (de-duplicated). It does
+not reopen the identity algorithm's own hashing/canonicalization, the
+two-stage plan-review protocol, the registry/mapping *file format*,
+`D-Bootstrap`, or `D-Legacy`. No file under `scripts/` or
+`.claude/commands/` is edited by this revision — every correction above is
+design text; the dedicated fix session that follows approval is where the
+code actually changes.
+
+## Round 29 finding disposition (revision 20 → 21) — fifth external review round (`GPT-R29-*`, `Status: REVISE`)
+
+Revision 20's own bundle (`bundle_id: eb4ec6cb…`, `review_content_id:
+9c9799ca…`) went through this work item's ordinary single-stage
+`AWAITING_EXTERNAL_PLAN_REVIEW` gate a fifth time, this time by a different
+reviewer (`ChatGPT`, `GPT-R29-*`). The verdict: two `HIGH`-severity defects
+that each make part of the design as written unimplementable rather than
+merely incomplete, one `MEDIUM-HIGH` ownership gap, and two `LOW` stale/
+inaccurate statements. Zero require reopening the identity algorithm, the
+two-stage plan-review protocol, the registry/mapping file formats,
+`D-Bootstrap`, or `D-Legacy` (confirmed by direct inspection against each
+of the five, the same standard applied in rounds 25 through 28).
+
+| ID | Severity | Disposition | Resolved in |
+|---|---|---|---|
+| `GPT-R29-001` | HIGH | **Accepted.** The resolution algorithm's step 5 read `base_commit` as one of four nullable declaration facts, but step 13's return value — a bare tuple — never included it, so `resolve_plan_stage_metadata`'s only actual output could not supply the field that later sections (the CLI's `base` positional, `prepare-ai-review.sh`'s cross-check, the manifest writer's comparison) all describe obtaining "through `resolve_plan_stage_metadata`." Every one of those consumers was consequently either unimplementable as specified, or implementable only by adding a second, independent read of `WORKFLOW_STATE.json` — exactly the second-source-of-truth problem this whole design exists to eliminate. Fixed by adding `base_commit` to the returned value and, per the review's own preference, replacing the growing positional tuple with a named `PlanStageMetadata` result object (ten fields, up from nine) — an added field is now a loud attribute-access error at a stale call site, not a silent positional misread. `compute_review_content_id_plan_stage_for_work_item`/`_at_commit_for_work_item`'s own `base` parameter is now optional, defaulting to `metadata.base_commit` from the one resolver call these functions already make, never a second read. | Resolution algorithm steps 5 and 13 (`base_commit` added; tuple replaced with named result object); `compute_review_content_id_plan_stage_for_work_item`/`_at_commit_for_work_item` signatures (corrected); "base positional" subsection (corrected, single-resolver-call stated explicitly) |
+| `GPT-R29-002` | HIGH | **Accepted.** `OPUS-R28-008`'s own "just created by this same call" bind-precondition disjunct specified that a standalone `--write-manifest --work-item-id <new-item>` invocation could `mkdir -p` an empty directory and then bind it — but `compute_bundle_id` hashes the bundle's required generation files (`REVIEW_REQUEST.md`, `PLAN.md`, `DIFF.patch`, `TEST_RESULTS.md`), none of which a bare `mkdir -p` creates, making acceptance criterion 22/missing test 161's own asserted "creates and binds successfully" outcome impossible for the algorithm as specified to actually produce. Fixed by retiring the "just created" disjunct entirely and collapsing the bind precondition to the one check that was always actually sound: bind only when the resolved directory **already** contains the complete required generation file set. An absent directory is simply the limiting case of that same check — every required file is trivially missing from a directory that does not exist — so it raises the existing `MissingRequiredBundleFileError` exactly as an existing-but-incomplete directory does, with no new exception type needed. `write_manifest_with_verified_identifiers` no longer creates a bundle directory at all; that remains `prepare-ai-review.sh`'s (or an equivalent full-generation step's) sole responsibility, as in every revision before 19's write-path-creator addition — only the templated (never existence-gated-fallback) directory-path *resolution* `OPUS-R27-004` introduced survives this correction. | "No `MANIFEST.md` present" outcome (bind precondition collapsed to one check; directory-creation retracted); "Bundle-directory identity for the write path" subsection (corrected: resolver, not creator); "Effect on `--work-item-id`" subsection (failure-shape caveat added); acceptance criterion 22 (corrected); missing test 161 (corrected, positive case stated explicitly) |
+| `GPT-R29-003` | MEDIUM-HIGH | **Accepted.** `OPUS-R28-003` split test 166's ownership from criterion 19's: the one-time 52-row data sync stayed with this revision, but the automated regression test that keeps the two in sync going forward stayed assigned to `WF8a-ii` — already `COMPLETE`, with checkpoint completion never reopened to attach a new obligation (the same standing rule `WF4a-i`'s own deferred-generalization history already establishes). That left item 166 with no reachable owner: this remediation's own implementation could pass migration step 10's full required-test range while never adding the one test the review found missing during self-review in the first place. Reassigned item 166 to this same `WF8b` continued-scope set items 141-165 already belong to, and added it to migration step 10's required-green range (now 141-166) — the smaller of the finding's two offered fixes, and the one consistent with `WF8b`'s own `OPUS-R28-003` fix being what populated the 52 rows this test verifies. | Acceptance criterion 19 (ownership parenthetical corrected); migration step 10 (range extended to 141-166); missing tests 160 and 166 (ownership corrected) |
+| `GPT-R29-004` | LOW | **Accepted.** The `OPUS-R25-002` resolution evidence's "both now read" sentence had already drifted once (`OPUS-R27-008` caught it stuck at `17`) and had drifted again, silently, to `19` while the registry and state files had both already moved to `20`. Corrected to the current value (`21`) and, this time, verified by direct comparison against both files rather than hand-incremented, so the same drift is at least caught mechanically rather than trusted by inspection next time it is touched. | `OPUS-R25-002` resolution evidence (value corrected) |
+| `GPT-R29-005` | LOW | **Accepted.** Migration step 8a's own heading claimed the relocation was "atomic, collision-safe, resumable-or-fail-closed," but the described mechanism is two sequential `mv -n` operations plus a post-move verification — collision-safe and fail-closed after an interruption, genuinely, but neither atomic (an interruption between the two moves is a real, named, manually-resolved state) nor resumable in the sense of an automated retry completing the job. Retitled to "collision-safe, fail-closed-after-interruption," matching the guarantee the rest of the bullet already correctly describes, rather than widening the mechanism to earn the stronger label. | Migration step 8a heading (retitled) |
+
+No finding required reopening the identity algorithm, the two-stage
+plan-review protocol, the registry/mapping file formats, `D-Bootstrap`, or
+`D-Legacy` — confirmed by direct inspection of every corrected section
+against those five, the same standard applied in rounds 25 through 28.
+
+**Scope discipline**: this revision touches `D-Fingerprint-Generalization`
+(the resolution algorithm's steps 5/13 and the `compute_*_for_work_item`
+signatures, `GPT-R29-001`; the manifest-binding first-outcome precondition
+and the write-path bundle-directory-identity subsection, `GPT-R29-002`;
+the "Effect on `--work-item-id`" subsection's failure-shape caveat,
+`GPT-R29-002`; migration step 8a's heading, `GPT-R29-005`), migration step
+10 (range extended to 141-166, `GPT-R29-003`), acceptance criteria (19, 22
+corrected), missing tests (items 160, 161, 166 corrected), and the
+`OPUS-R25-002` resolution evidence's stale value (`GPT-R29-004`). It does
+not reopen the identity algorithm's own hashing/canonicalization, the
+two-stage plan-review protocol, the registry/mapping *file format*,
+`D-Bootstrap`, or `D-Legacy`. No file under `scripts/` or
+`.claude/commands/` is edited by this revision — every correction above is
+design text; the dedicated fix session that follows approval is where the
+code actually changes.
+
+## Decisions (revision 21)
 
 ### D-Bootstrap — one-time Workflow-v1-to-v2.1 transition (new, resolves GPT-R9-004)
 
@@ -1422,6 +1807,1387 @@ independent ways, all now fixed without touching the algorithm itself:
   only after both assertions pass, making the whole function atomic
   instead of only its `REVIEW_REQUEST.md` pre-check.
 
+### D-Fingerprint-Generalization — per-work-item plan-stage metadata resolution (revised this round, resolves `WF8B-S1-001` and `OPUS-R25-001` through `-015`; executes `WF4a-i`'s/D-Registry's deferred generalization)
+
+**Revision-17 disposition note, read this first**: the version of this
+subsection revision 16 shipped was reviewed (`OPUS-R25-*`, `Status:
+REVISE`, see "Round 25 finding disposition" above) and found structurally
+sound but not yet safe to implement: five `HIGH`-severity defects and ten
+further gaps, all now corrected below. The corrections are additive to the
+same design, not a different one — the metadata source, the JSON
+declarations file, and the fail-closed philosophy are unchanged; what
+changes is closing every place the revision-16 text left two sources of
+truth, an unbound reference, or an unspecified writer.
+
+**Authoritative metadata source, per field — corrected**. For any
+`work_item_id`, every plan-stage-identity-bearing fact is sourced from
+exactly one place, never duplicated or re-derived elsewhere:
+
+| Field | Source |
+|---|---|
+| `work_item_type`, `plan_path`, `registry_path`, `mapping_path`, `base_commit` | `WORKFLOW_STATE.json`'s `work_items[work_item_id]` entry (`base_commit` added, corrected `GPT-R29-001`: revision 18 already named `base_commit` as identity-bearing and gave it a writer, but the resolution algorithm below never actually read or returned it alongside the other three, leaving every downstream consumer that "obtains the item's declared `base_commit` through `resolve_plan_stage_metadata`" — the CLI's `base` positional, `prepare-ai-review.sh`'s cross-check, the manifest writer — with nothing to obtain) |
+| `plan_revision` | **the registry JSON at `registry_path` alone** (`plan_revision` key), cross-checked against the plan document at `plan_path`'s own declared `(Revision N)` title (`load_plan_revision`, unchanged mechanism). `WORKFLOW_STATE.json`'s own `plan_revision` field is **not** a second source — resolved per `OPUS-R25-002` below, it is a non-authoritative display mirror only, and the fingerprint functions no longer accept it as a parameter at all. |
+| protected-path set, excluded-path set, excluded-prefix set (plan stage) | `docs/ai-workflow/registry/<work_item_id>-artifacts.json`'s `plan_stage` key |
+| the registry/mapping/artifacts files' own claimed identity | each file's own `work_item_id` field, cross-checked against the map key that resolved it |
+| that `plan_path`/`registry_path`/`mapping_path` actually name protected content | membership in the resolved protected-path set, checked at resolution time (`OPUS-R25-003` below) — not merely assumed from the fact that a path was named |
+
+**`OPUS-R25-002` — `plan_revision` collapsed to one source.**
+`approval_review_content_id` (`scripts/workflow_state.py:654-696`) loses its
+`plan_revision` parameter entirely for `stage="plan"` — the resolved value
+comes from `resolve_plan_stage_metadata` (below), never from a caller.
+`approval_is_current` and `verify_post_approval_manifest_match` stop
+passing `plan_revision=work_item.get("plan_revision")`; that call-site
+change is part of migration step 6. `WORKFLOW_STATE.json`'s own
+`plan_revision` field is retained (existing readers outside the fingerprint
+path — reporting, `docs/ACTIVE_MILESTONE.md` narrative — still want a cheap
+value to display) but downgraded to a **non-authoritative mirror**: `D3`
+gains a validator rule that it must equal the registry JSON's `plan_revision`
+whenever `registry_path` is non-null (`PlanRevisionMirrorMismatchError`
+otherwise) — the same shape as the two rules revision 16 already added for
+`mapping_path`'s nullability and path-triple duplication. **This bundle's
+own repository state was already divergent** (`WORKFLOW_STATE.json` said
+`15`, the registry JSON said `16`) — corrected in the same commit as
+revision 17 (an excluded-path edit, no approval implication); kept in sync
+through every revision bump since, including this one (corrected,
+`OPUS-R27-008`, which found this sentence still said "both now read `17`"
+two revision bumps later; corrected again, `GPT-R29-004`, which found this
+sentence still said "both now read `19`" two further revision bumps later
+— restated once more here, and this time cross-checked directly against
+both files rather than hand-incremented): both now read `21`.
+
+**Resolution algorithm** (`fingerprint.resolve_plan_stage_metadata(repo_root,
+work_item_id, *, at_commit=None)` — relocated from `workflow_state.py`,
+see `OPUS-R25-010` below):
+
+1. Load `WORKFLOW_STATE.json` — from the live working tree when
+   `at_commit` is `None`, or via `git show <at_commit>:docs/ai-workflow/WORKFLOW_STATE.json`
+   when given. This choice of source is threaded through every subsequent
+   read in this algorithm (registry/mapping/artifacts files too) — a
+   commit-source computation never reads the live working tree or the live
+   `WORKFLOW_STATE.json` for any of these facts, only what was actually
+   committed at `at_commit` (missing-test item 145).
+2. `validate_work_item_id(work_item_id)` — stated explicitly as this
+   algorithm's own precondition (`OPUS-R25-008`); unlike the CLI flag, a
+   `work_item_id` read as a `work_items` map key has never otherwise passed
+   this check. `entry = work_items.get(work_item_id)` — absent →
+   `UnknownWorkItemError`.
+3. `entry["work_item_id"] == work_item_id` — re-asserted defensively even
+   though `D3`'s validator already enforces it structurally.
+4. `entry["work_item_type"] == "process"` — else `PlanStageNotApplicableError`.
+   **`work_item_kind` is not consulted** (`OPUS-R25-011`, corrected):
+   a `"process"`-typed item resolves its own plan-stage projection
+   regardless of `work_item_kind` (`"process"` or `"synthetic"`) — this
+   supersedes `scripts/workflow_fingerprint.py:361-365`'s current comment
+   ("'synthetic' … is deliberately not identity-bearing … it borrows the
+   real process item's"), which is now wrong and must be rewritten in the
+   same commit as migration step 9 states. `v2-1-dry-run` (`work_item_type:
+   "process"`, `work_item_kind: "synthetic"`) resolves and fingerprints its
+   own plan-stage content exactly like any other process item, once it has
+   the metadata below to do so.
+5. `plan_path`, `registry_path`, `mapping_path`, **and `base_commit`**
+   (corrected, `GPT-R29-001`: read alongside the other three declaration
+   facts here, not left for a caller to obtain some other way) read from
+   the entry; any one of the four being `None` → `MissingPlanStageMetadataError`,
+   naming which field.
+6. **Path grammar** (new, `OPUS-R25-008`): each of the three, independently,
+   must be repo-relative (no leading `/`), use POSIX separators, contain no
+   `.`/`..` path component, name no symlink component, and exist as a
+   tracked regular file at the resolved source — else
+   `InvalidPlanStageMetadataPathError`, naming the field and the failing
+   rule. Closes the traversal/aliasing gap `load_plan_revision`'s bare
+   `repo_root / registry_path` join would otherwise leave open (an absolute
+   value silently replaces `repo_root`; a `../` value escapes the worktree).
+7. `artifacts_path = <work_item_id>-artifacts.json` under
+   `docs/ai-workflow/registry/` (pure string templating, no I/O — collision
+   between two different `work_item_id`s is structurally impossible, since
+   `work_items` map keys are already unique). Absent at the resolved source
+   → `MissingWorkItemArtifactsDeclarationError`.
+8. Load the registry, mapping, and artifacts JSON files from the resolved
+   source; assert each file's own `work_item_id` field equals the key that
+   resolved it — else `RegistryWorkItemIdMismatchError`/
+   `MappingWorkItemIdMismatchError`/`ArtifactsWorkItemIdMismatchError`
+   respectively, naming both the expected and the found value.
+9. **Uniqueness, relocated and widened** (`OPUS-R25-007`, corrected — this
+   step, not `validate_state`, is now the enforcement point the read path
+   actually runs; step 1 already loaded the whole `work_items` map, so the
+   cost is one pass already paid): no non-null `plan_path`, `registry_path`,
+   or `mapping_path` may be claimed by any *other* work item, checked
+   independently per field, not only as a triple — else
+   `DuplicateWorkItemArtifactPathError`, naming the field, both work-item
+   ids, and the shared value. `validate_state` keeps the same rule as a
+   write-time, whole-map structural check (belt-and-suspenders — a
+   hand-edited or half-written state file that never passed through a
+   writer bypasses validator-only enforcement entirely, per `OPUS-R25-007`'s
+   own failure scenario), now restated to match this widened, per-field
+   shape rather than triple-equality.
+10. `protected_paths, excluded_paths, excluded_prefixes =
+    fingerprint.load_plan_stage_classification(<source>, artifacts_path)`.
+11. **Path-to-role binding** (new, `OPUS-R25-003`): `plan_path`,
+    `registry_path`, and `mapping_path` must each be a member of
+    `protected_paths`, and the three must be pairwise distinct — else
+    `PlanStageMetadataNotProtectedError`, naming the field(s) and both
+    values on a collision. This is what makes `mapping_path` a materially
+    consumed, validated fact rather than a resolved-and-ignored one (it was
+    revision 16's own unaddressed gap: resolved at former step 10, fed to
+    nothing) — the reviewed digest is now provably a hash *of* the files
+    the item claims as its own plan/registry/mapping, not merely a hash
+    computed *alongside* that claim.
+12. `plan_revision = fingerprint.load_plan_revision(<source>, registry_path, plan_path)`.
+13. Return a named, immutable `PlanStageMetadata` result object — **not a
+    positional tuple** (corrected, `GPT-R29-001`: a bare tuple had already
+    grown three fields since revision 15 with no rename, becoming exactly
+    the kind of thing an implementer or a later revision misdescribes; a
+    named object makes an added or reordered field a loud attribute-access
+    error at every existing call site instead of a silent positional
+    misread) — with fields `work_item_id`, `work_item_type`, `plan_path`,
+    `registry_path`, `mapping_path`, **`base_commit`**, `plan_revision`,
+    `protected_paths`, `excluded_paths`, `excluded_prefixes`. `base_commit`
+    joining this return value (corrected, `GPT-R29-001`) is the fix this
+    finding requires: step 5 above already reads it as one of the four
+    nullable declaration facts, but revision 20's own text stopped short of
+    also returning it, leaving every downstream consumer that is specified
+    elsewhere in this section to "obtain the item's declared `base_commit`
+    through `resolve_plan_stage_metadata`" — the CLI's `base` positional
+    below, `prepare-ai-review.sh`'s cross-check, `write_manifest_with_verified_identifiers`'s
+    own comparison — with no field on the actual return value to obtain it
+    from, forcing exactly the second read, silent caller-supplied fallback,
+    or unimplementable contract this finding's failure scenario describes.
+
+`fingerprint.compute_review_content_id_plan_stage_for_work_item(repo_root,
+work_item_id, *, base=None)` (worktree-source) and
+`compute_review_content_id_plan_stage_at_commit_for_work_item(repo_root,
+work_item_id, commit, *, base=None)` (commit-source) call steps 1-13 above
+**exactly once** with `at_commit=None`/`at_commit=commit` respectively,
+obtaining the resolved `PlanStageMetadata` (including its `base_commit`
+field, per the `GPT-R29-001` correction above), then call
+`compute_review_content_id_plan_stage`/`_at_commit` with the resolved
+values — `base if base is not None else metadata.base_commit` as the
+digest's `base_commit` input (corrected, `GPT-R29-001`: `base` is now an
+optional override on these two functions, resolved from the one
+`resolve_plan_stage_metadata` call already made here, never a second,
+independent read of `WORKFLOW_STATE.json` by the caller before invoking
+either function — closing the exact ambiguity the finding's failure
+scenario describes). `MissingPlanStageMetadataError` (condition 3) already
+fires inside step 5 if `base` is omitted and the resolved item's own
+`base_commit` is `null`; no separate null check is needed here.
+
+**Module placement, stated explicitly** (`OPUS-R25-010`, corrected): both
+functions above and `resolve_plan_stage_metadata` live in
+**`scripts/workflow_fingerprint.py`** — not `workflow_state.py` as revision
+16 said. `workflow_fingerprint.py` gains a minimal `WORKFLOW_STATE.json`
+reader (parse the JSON, index `work_items[id]`; it does not import or reuse
+`workflow_state.validate_state`, which stays `workflow_state.py`'s own,
+heavier concern). This direction avoids a real import cycle revision 16's
+placement would have created: `workflow_state.py` already imports
+`workflow_fingerprint` (`workflow_state.py:106-107`); `workflow_state.py`'s
+`approval_review_content_id` now simply calls
+`fingerprint.compute_review_content_id_plan_stage_at_commit_for_work_item(...)`,
+preserving the existing one-way import direction. **Fail-open defaults
+retired, not kept** (corrected — revision 16 said the opposite):
+`compute_review_content_id_plan_stage`/`_at_commit`'s `protected`/
+`excluded_paths`/`excluded_prefixes` parameters become **required** (no
+default) once migration step 8 (full suite green) completes.
+`PLAN_STAGE_PROTECTED`/`PLAN_STAGE_EXCLUDED_PATHS`/`PLAN_STAGE_EXCLUDED_PREFIXES`
+are retired as live call defaults and kept only as a named
+migration-comparison fixture for missing-test item 141 — the exact class of
+defect this whole finding is about (`--work-item-id` silently meaning
+"core") cannot survive if nothing calls the plan-stage functions without an
+explicit, resolved argument, defaults included. The 81 pre-existing
+hermetic tests are updated to pass the fixture explicitly at their call
+sites — a mechanical test-call-site edit, not a behavior change to what
+they assert.
+
+**Effect on `--work-item-id`** (corrected, `OPUS-R25-005`; write path
+corrected, `OPUS-R28-010`). The CLI no longer defaults `--work-item-id` to
+the literal `"workflow-v2-1-core"`. For the **read-only inspection path**
+(`__main__`'s default display, no `--write-manifest`), an omitted
+`--work-item-id` resolves to the live `active_work_item_id`
+(`docs/ai-workflow/WORKFLOW_STATE.json`), matching how `/review-plan`/
+`/record-manual-plan-review` already resolve an omitted work-item argument,
+and may still be passed explicitly to target a non-active item — a wrong
+guess here is harmless, per `OPUS-R18-002`'s no-mutation invariant: the
+worst case is printing the wrong item's identifiers, not writing anything.
+**For the `--write-manifest` write path, `--work-item-id` is required —
+never defaulted at all** (corrected, `OPUS-R28-010`: revision 19 kept the
+live-`active_work_item_id` default for both call sites, but
+`OPUS-R27-004`'s own fix made this same write path bind a directory the
+resolved `work_item_id` alone selects — before that fix the default was
+comparatively inert, since `--write-manifest` hard-errored on a
+non-existent resolved directory; after it, an omitted `--work-item-id`
+during the fix session's own work, which runs with `active_work_item_id`
+pinned at `v2-1-dry-run` throughout, would resolve to `v2-1-dry-run` and
+bind whatever `.ai-review/v2-1-dry-run/current` already held — the same
+"one instance retired while a structurally identical sibling survived"
+pattern this revision's own self-review note already names as recurring.
+**The exact failure shape is narrower after `GPT-R29-002`'s correction**
+(the write path no longer creates a directory or silently binds a
+near-empty one, since binding now requires a pre-existing complete
+generation — see the "No `MANIFEST.md` present" outcome above), **but the
+underlying risk is not**: if a complete, unbound generation for
+`v2-1-dry-run` already exists at that path (the ordinary case immediately
+after its own `prepare-ai-review.sh` run finishes), an omitted flag would
+still silently bind the wrong item's directory rather than
+`workflow-v2-1-core`'s own. Requiring the argument on the write path
+mirrors `prepare-ai-review.sh`'s own plan-stage rule and closes the gap for
+the same reason). A literal default naming one work item is exactly the
+shape of bug this revision exists to remove; neither a literal nor a
+silently-resolved live default is safe on a path that binds a directory to
+an identity. The CLI's two call
+sites (`__main__`'s read-only display, live-default; and
+`write_manifest_with_verified_identifiers` under `--write-manifest`,
+required-argument) both resolve through
+`compute_review_content_id_plan_stage_for_work_item`/`resolve_plan_stage_metadata`,
+never a hardcoded literal, and never an implicit default on the write
+path.
+
+**The `base` positional loses its own hardcoded literal too** (new,
+`OPUS-R26-003`; revision 17 retired only the `--work-item-id` literal and
+left a second one standing). Today `base`'s `argparse` default is
+`workflow-v2-1-core`'s own base commit
+(`workflow_fingerprint.py:1721-1724`), and `base_commit` is not a
+diagnostic — it is a hashed member of the plan-stage projection
+(`"base_commit": base_full`, `workflow_fingerprint.py:844` and its
+`_at_commit` counterpart), exactly as identity-bearing as `plan_revision`
+or the path sets. Leaving it a literal would mean a second item's
+`review_content_id` silently incorporates `workflow-v2-1-core`'s base
+commit whenever `base` is omitted — the same defect class `--work-item-id`'s
+correction removes, reintroduced through the sibling argument. Corrected,
+both halves together (this closes the gap revision 17's own self-review
+notes named but deliberately left open):
+
+- **`base_commit` gains a named writer** (the writer revision 17 scoped
+  out): `workflow_state.route_work_item`/`default_work_item` gain a
+  `base_commit: str | None` parameter, the same mechanism `mapping_path`
+  already uses, written into the entry at creation time — the third fact
+  the "Creation path" subsection below now names as a sole-writer
+  obligation, alongside `plan_path`/`registry_path`/`mapping_path`.
+- **The `base` positional resolves from the requested work item's own
+  `base_commit`** when the argument is omitted — required, not defaulted;
+  `MissingPlanStageMetadataError` if the resolved item's `base_commit` is
+  `null` (new fail-closed matrix condition 13 below) — never a fallback to
+  any other item's value. **Resolved from the same single
+  `resolve_plan_stage_metadata` call `compute_review_content_id_plan_stage_for_work_item`/
+  `_at_commit_for_work_item` already perform** (corrected, `GPT-R29-001`:
+  step 13's returned `PlanStageMetadata` now carries `base_commit`
+  explicitly, so this resolution is reading a field off that one result,
+  never a second, independent read of `WORKFLOW_STATE.json`). An explicit
+  `base` argument remains a validated override (used for `_at_commit`-style
+  historical recomputation), never a silent default.
+- **`MANIFEST.md`'s `base_commit` field is cross-checked, not merely
+  recorded**: `write_manifest_with_verified_identifiers` asserts the
+  resolved item's declared `base_commit` equals the value about to be
+  rendered before writing, the same pattern condition 12's `work_item_id`
+  check already uses — a disagreement between the CLI argument, the
+  resolved state, and the manifest fails closed rather than silently
+  picking one source.
+
+A second item can therefore never inherit `workflow-v2-1-core`'s base
+commit: either it has its own resolved, non-null `base_commit` (written at
+creation, per the "Creation path" subsection), or the computation fails
+closed naming the missing field — there is no third path through which a
+literal or another item's value could reach the hash.
+
+**Manifest/bundle bound to an explicit work item** (new, `OPUS-R25-005`).
+Three additions, all to `MANIFEST.md`'s content and the write path guarding
+it — none to the frozen hashing algorithm itself:
+
+- `render_manifest_md` gains `work_item_id`, `work_item_type`,
+  `plan_revision`, and `base_commit` as new rendered fields (plain lines,
+  alongside the existing `worktree_root`/`generation_head` diagnostics) —
+  ordinary hashed `bundle_id` content like every other bundle file, never
+  part of `review_content_id` (that digest is computed before rendering,
+  over the protected-path manifest only, unchanged). Today's `MANIFEST.md`
+  records none of these four fields at all (confirmed directly against
+  `render_manifest_md`'s current field list) — a bundle with no
+  self-declared owner is exactly what let `-005`'s failure scenario stay
+  silent. `work_item_type` joins the set this revision (`OPUS-R26-003`,
+  acceptance criterion 18): it is exactly as identity-bearing a hashed
+  projection field (`workflow_fingerprint.py:840`) as the other three, and
+  its omission from revision 17's field list was a usability gap, not a
+  deliberate scoping decision.
+- **New fail-closed condition, matrix item 12 below, corrected to a
+  first-write-safe rule** (`OPUS-R25-005`, corrected `OPUS-R26-001`; the
+  bundle directory the write targets is always the one resolved from the
+  explicitly-resolved work item — the same resolution
+  `resolve_plan_stage_metadata`/the "one authoritative work-item selection
+  rule" below already performs — never re-derived from the manifest being
+  read):
+  `write_manifest_with_verified_identifiers` reads an *existing*
+  `MANIFEST.md` at that resolved `bundle_dir`, if one is present, before
+  writing, and parses its `work_item_id:` **header line** specifically
+  (never a substring scan — this bundle's own current `MANIFEST.md` names
+  `work_item_id` only inside an unrelated exclusion-justification sentence
+  on line 21, a decoy a naive substring reader would false-positive on).
+  Three outcomes, every one of them named, not two with a gap between:
+  - **No `MANIFEST.md` present**: the directory is unbound. **`write_manifest_with_verified_identifiers`
+    never creates the bundle directory or any bundle content itself**
+    (corrected, `GPT-R29-002`, retracting the "just created by this same
+    call" disjunct `OPUS-R28-008` added: that disjunct let a standalone
+    `--write-manifest --work-item-id <new-item>` invocation `mkdir -p` an
+    empty directory and then bind it, but `compute_bundle_id` hashes the
+    bundle's required generation files — `REVIEW_REQUEST.md`, `PLAN.md`,
+    `DIFF.patch`, `TEST_RESULTS.md` — none of which a bare `mkdir -p` can
+    create; the disjunct therefore specified an outcome the algorithm it
+    shares a function with cannot produce, exactly the contradiction
+    `GPT-R29-002` names). Directory creation and content generation remain
+    exactly one function's job, unchanged from every earlier revision:
+    `prepare-ai-review.sh` (or, for a harness-created fixture, an
+    equivalent full-generation step) creates the scoped directory and
+    writes its complete required file set; `write_manifest_with_verified_identifiers`
+    only ever computes identifiers over files that already exist and writes
+    `MANIFEST.md` next to them. Given an explicit, resolved `work_item_id`,
+    it **resolves its own `bundle_dir` internally as
+    `.ai-review/<work_item_id>/current`, dropping the caller-supplied
+    parameter** (`OPUS-R28-008`'s surviving contribution, kept unchanged:
+    only as an assert-equal cross-check against the internally resolved
+    value for any caller that still passes one, rather than trusting it) —
+    **never** `resolve_bundle_dir`'s existence-gated scoped-else-flat
+    fallback, so the write path can never target the wrong (flat) directory
+    for a new item, the one part of `OPUS-R27-004`'s original fix that this
+    correction keeps. `resolve_bundle_dir`'s own scoped-else-flat resolution
+    remains unchanged for its original read-only/inspection use, where
+    falling back to a plausible existing directory to *display* is
+    harmless. **The bind precondition is one check, not two** (corrected,
+    `GPT-R29-002`, collapsing `OPUS-R28-008`'s two disjuncts — "just
+    created" or "already complete" — into the single one that was always
+    actually sound): bind only when the resolved directory **already**
+    contains a complete generation's required file set — the same set
+    `compute_bundle_id`'s existing `MissingRequiredBundleFileError` already
+    enforces. A resolved directory that does not exist at all is simply the
+    limiting case of this same check, not a distinct mechanism or a new
+    exception type: every required file is trivially absent from a
+    nonexistent directory, so `MissingRequiredBundleFileError` fires
+    exactly as it would for a directory that exists but is missing one file
+    (an interrupted prior generation run) — naming the first missing file
+    (or, for an absent directory, its path) either way, and never binding a
+    partial or nonexistent bundle as authoritative. The ordinary first-write
+    case this outcome exists for is therefore: `prepare-ai-review.sh`
+    finishes writing `.ai-review/v2-1-dry-run/current`'s complete content
+    first, and only then does its own final `--write-manifest` step (or a
+    manual follow-up invocation) bind it — content generation strictly
+    precedes identifier computation strictly precedes the manifest write,
+    with no step requiring a later step's output to already exist. A
+    standalone `--write-manifest --work-item-id <new-item>` invocation,
+    run **before** any bundle content has been generated for that item,
+    therefore refuses with the same `MissingRequiredBundleFileError`, naming
+    the resolved (possibly nonexistent) directory and the missing required
+    file(s) — it does not, and by construction cannot, "create and bind" a
+    bundle out of nothing.
+  - **`MANIFEST.md` present and its `work_item_id:` line equals the
+    resolved item**: agreement; the write proceeds as an ordinary
+    refresh.
+  - **`MANIFEST.md` present and either declares no `work_item_id:` line at
+    all (revision 17's own corrected text left exactly this branch
+    unhandled — every manifest in this repository today is in this state,
+    since `render_manifest_md` never emitted the field before this
+    revision) or declares one that disagrees with the resolved item**:
+    refuse with `BundleWorkItemMismatchError`, naming the resolved item,
+    the directory, and either "unbound" or the disagreeing value found.
+    Absence of the field is a distinct, explicitly fail-closed outcome —
+    never treated as "no information, proceed" — because that is
+    precisely the state that let `OPUS-R25-005`'s failure scenario survive
+    the first correction: an unbound manifest was neither "not present"
+    nor "names a different id," so neither branch fired and the write
+    proceeded unconditionally.
+  - **The one legitimate exception, named explicitly and scoped to
+    migration**: rebinding an existing, currently-unbound bundle directory
+    to the work item it has always actually belonged to is performed only
+    by the one-time migration step below (a separately-named, explicit
+    opt-in argument, never the ordinary write path's default behavior) —
+    so the first post-migration write to `.ai-review/current` cannot
+    silently overwrite a foreign identity, and no later invocation can
+    invoke the rebinding opt-in against an already-bound directory (that
+    case is the ordinary disagreement outcome above, refused).
+
+  A bundle directory's first-ever bound manifest write (whether by the
+  ordinary "absent" path or by the one-time migration rebinding) is what
+  binds it; every later write to that same directory must agree or fail
+  closed — foreign, partial, legacy, or ambiguous manifests all fail
+  closed by construction, since the only non-refusing outcomes are
+  "genuinely absent" and "present and agreeing." This directly prevents
+  the failure scenario `OPUS-R25-005` names — `--work-item-id v2-1-dry-run
+  --write-manifest`, run before `.ai-review/v2-1-dry-run/current` exists,
+  would otherwise overwrite `workflow-v2-1-core`'s own live
+  `.ai-review/current/MANIFEST.md` with a foreign digest — now refused,
+  naming the mismatch, instead of silently destructive; and it closes the
+  gap `OPUS-R26-001` found in revision 17's own version of this same fix.
+- The CLI's own read-only inspection path (no `--write-manifest`) prints
+  the same comparison as a warning rather than a hard refusal — read-only
+  mode already never mutates anything (`OPUS-R18-002`'s invariant,
+  unchanged), so there is nothing to protect there beyond an honest report.
+
+**`prepare-ai-review.sh` shares the same authoritative path** (new,
+`OPUS-R25-012`, resolves the affected-commands audit gap; corrected
+`OPUS-R26-002`). Revision 16's audit concluded no `.claude/commands/*.md`
+text needed to change because every command delegates by name to
+`scripts/workflow_fingerprint.py`/`workflow_state.py` — true, but
+incomplete: `scripts/prepare-ai-review.sh`, which is what `/milestone-plan`
+step 6 and `/apply-plan-review` step 7'.1 actually *run*, contains no
+reference to `workflow_fingerprint`, `--write-manifest`, or `MANIFEST`
+anywhere (confirmed by grep over the whole script) — `MANIFEST.md` is only
+ever produced by a separate, manual CLI invocation nothing forces to carry
+a matching `--work-item-id`.
+
+**One authoritative work-item selection rule, not two — and the work-item
+id is now required, not resolved, for the plan stage** (corrected,
+`OPUS-R26-002`; corrected again, `OPUS-R27-003`, which found the
+single-resolution rule right as far as it went but its consequences
+unstated). Revision 17's own fix specified the new step as `python3
+scripts/workflow_fingerprint.py <base-sha> --work-item-id
+<work-item-id-or-live-active> --write-manifest` — that hyphenated "or" is
+two rules, not one, and the script's own pre-existing directory choice
+(`WORK_ITEM_ID=${3:-}` at `:24`, then `ROOT_DIR=".ai-review/$WORK_ITEM_ID"`
+if set, else `ROOT_DIR=".ai-review"` at `:78-84`) reads only the first —
+so when the optional third argument is omitted, the bundle directory
+resolves one way and the manifest's `--work-item-id` resolves another.
+Revision 18 fixed the "or" by resolving the work-item id exactly once
+(third argument if given, else the live `active_work_item_id`) for both
+`ROOT_DIR` and `--write-manifest` — but `OPUS-R27-003` found three
+unstated consequences: because the resolved value is now never empty,
+`ROOT_DIR` could never take the flat branch again, silently retiring
+`.ai-review/current` and stranding migration step 6a; and, independent of
+both, the rule binds the *directory* and the *manifest* to each other
+while leaving the bundle's *content* — which `prepare-ai-review.sh`
+derives from `<base-sha>` and the whole working tree, never from the work
+item — bound to neither.
+
+Resolved by going one step further than "resolve once": **for `stage ==
+"plan"`, the work-item id is a required third argument to
+`prepare-ai-review.sh`, never resolved from the live `active_work_item_id`
+for this stage** — the two call sites that invoke it
+(`/milestone-plan` step 6, `/apply-plan-review` step 7'.1) always know the
+work item they're bundling, so requiring it costs nothing and removes the
+fallback branch entirely: there is no longer an "else" for `ROOT_DIR` and
+`--write-manifest` to disagree about, by construction, not by a
+post-hoc cross-check. `ROOT_DIR` for the plan stage is therefore always
+`.ai-review/<the-required-argument>/current`. **The flat,
+optional-third-argument layout is explicitly retained, unchanged, for
+every other stage** (`implementation`/`post-fix`/`functional-review`),
+where `MANIFEST.md` is never written and no directory/manifest binding
+ambiguity exists to resolve — this is the one legitimate case in which the
+flat branch remains reachable, named explicitly rather than left as an
+accidental survival.
+
+**Bundle content is bound to the resolved item too**, closing the third
+consequence: before generating any bundle content, `prepare-ai-review.sh`
+cross-checks the resolved item's own declared `base_commit`
+(`WORKFLOW_STATE.json`'s `work_items[<id>].base_commit`) against the base
+commit it was actually handed, and refuses on disagreement, naming both
+values. Three things this revision left unstated, corrected here
+(`OPUS-R28-006`):
+
+1. **Who reads it.** The read goes through a named helper, never a second,
+   ad hoc metadata reader: `python3 -c 'import workflow_fingerprint as
+   fingerprint; ...'` invoking
+   `fingerprint.resolve_plan_stage_metadata(repo_root, work_item_id)` — the
+   same resolver every other plan-stage read in this design routes through,
+   so the same `work_item_id` validation, `entry["work_item_id"]`
+   self-consistency assertion (step 3), path-grammar checks (step 6), and
+   uniqueness check (step 9) all run before the comparison is even made. An
+   inline `python3 -c 'json.load(...)'` reading `WORKFLOW_STATE.json`
+   directly would be exactly the second reader of plan-stage metadata this
+   design's own opening paragraph forbids.
+2. **What is compared.** `prepare-ai-review.sh` already distinguishes the
+   raw argument from the resolved commit: `REQUESTED_BASE_SHA=$1` (`:23`)
+   and `BASE_SHA=$(git rev-parse --verify "${BASE_SHA}^{commit}")` (`:47`).
+   The comparison is between the resolved item's declared `base_commit` and
+   the **resolved** `BASE_SHA` — never the raw `REQUESTED_BASE_SHA` — so an
+   abbreviated SHA (`162154d`) or a symbolic ref (`HEAD~14`) that `git
+   rev-parse` has always accepted still passes when it denotes the correct
+   commit; only a genuine disagreement between the two resolved, full
+   commit hashes refuses. The refusal message names both the requested form
+   and the resolved form, plus the declared value, so an operator who typed
+   a ref can see why it disagreed rather than being shown two full hashes
+   with no link back to what they typed.
+3. **What error.** The refusal exits non-zero with a distinct, greppable
+   message before any bundle content is written — a shell exit, not a
+   Python exception, since a shell script cannot raise
+   `BundleWorkItemMismatchError` directly. Condition 13's matrix row
+   (below) is amended to name both enforcement points explicitly: this
+   early script-level refusal (a non-zero exit, no exception object) and
+   the downstream `--write-manifest` check inside
+   `write_manifest_with_verified_identifiers` (which does raise
+   `BundleWorkItemMismatchError`) — the same underlying disagreement,
+   caught at two points, each emitting the form appropriate to where it
+   runs, not two different exception conditions.
+
+With the work-item id required and the base commit cross-checked against
+it through the one shared resolver, content, directory, and manifest all
+derive from and are checked against the one same resolved value.
+
+Concretely: for `stage == "plan"` only, `prepare-ai-review.sh` gains a
+final step invoking `python3 scripts/workflow_fingerprint.py <base-sha>
+--work-item-id <the-required-argument> --write-manifest` — the exact same
+CLI entry point, not a reimplementation — after the rest of the bundle is
+written, against the same required value `ROOT_DIR` already used earlier
+in the same script invocation. This is the one place the "no command-file
+text change" conclusion was actually wrong; corrected here rather than
+left standing. (`implementation`/`post-fix`/`functional-review` stages are
+unaffected — `MANIFEST.md` is a plan-stage-only artifact today, unchanged
+scope.)
+
+**Artifacts declarations file gets a real approval binding** (new,
+`OPUS-R25-006`). Today `scripts/workflow_fingerprint.py` (where the
+plan-stage sets currently live) is implementation-stage *protected*
+(`scripts/` is a `workflow-v2-1-core-artifacts.json` `protected_prefixes`
+entry) — changing the sets is bound by `technical_approval`. After
+migration, they live in `docs/ai-workflow/registry/<id>-artifacts.json`,
+which is a plan-stage *excluded* prefix and — unless carved out — would
+also be an implementation-stage excluded prefix (the file's own
+`excluded_prefixes` entry for `docs/ai-workflow/registry/` currently says
+"including this file itself"). Since the resolved `plan_stage` sets are
+hashed into `review_content_id` (unchanged, `OPUS-R8-014`'s original
+invariant), an editable-under-no-approval declarations file would let
+someone widen an exclusion and re-bless the resulting digest in the same
+session, with no gate ever having seen the classification change — the
+narrower, certain harm is that the file's own stated invariant ("editing
+this file never changes `review_content_id` or stales the plan approval")
+would simply be **false** for its new `plan_stage` key while remaining true
+for `implementation_stage`.
+
+**Fixed as a concrete, per-item self-referential entry, not a shared
+placeholder** (corrected, `OPUS-R26-004`; revision 17's own version of this
+fix specified the carve-out as an exact-path entry keyed literally
+`docs/ai-workflow/registry/<work_item_id>-artifacts.json` — but
+`load_implementation_stage_classification` loads `protected_paths` from
+**each work item's own** `<id>-artifacts.json` file
+(`workflow_fingerprint.py:915-947`; `DEFAULT_ARTIFACTS_PATH` is a per-file
+default, not a shared cross-item map), and `classify_path_implementation_stage`
+tests membership with a plain `if path in protected_paths` exact-match
+dictionary lookup, with no templating step anywhere
+(`workflow_fingerprint.py:939-947`, `:967`) — a key containing the literal
+characters `<work_item_id>` matches nothing real, so the file would fall
+through to the `docs/ai-workflow/registry/` excluded prefix and remain
+exactly as unprotected as before the fix, the correction silently absent):
+each work item's own `<id>-artifacts.json` declares, within its own
+`implementation_stage.protected_paths` section, the **concrete literal
+path to itself** — `workflow-v2-1-core`'s own file names
+`docs/ai-workflow/registry/workflow-v2-1-core-artifacts.json`, spelled out
+in full, not a template — checked first, before any prefix, the same
+pattern the immutable registry/mapping files already use.
+`generate_artifacts_declarations` (the "Creation path" subsection below)
+emits that self-referential concrete entry automatically as part of the
+default template for every new item, so the protection is general *by
+construction* — every item's own file protects itself without needing a
+placeholder the exact-match classifier could never resolve — rather than
+general by a shared literal that happens to be spelled with angle
+brackets. Migration step 2 transcribes `workflow-v2-1-core`'s own concrete
+entry (not the placeholder form); migration step 7 corrects the file's own
+`_comment` field and `load_implementation_stage_classification`'s
+docstring to state plainly that `plan_stage` edits *do* change
+`review_content_id` (bound by `plan_approval`) while `implementation_stage`
+edits do not (bound by `technical_approval` instead, via this exact-path,
+self-referential protection).
+
+**The implementation-stage `artifacts_path` gets the same generalization as
+the plan stage, not a surviving literal** (new, `OPUS-R27-002`; the same
+"one literal retired while a structurally identical sibling survived"
+pattern `OPUS-R26-003` named for the `base` positional, found a third time).
+`approval_review_content_id`'s `artifacts_path: Path =
+fingerprint.DEFAULT_ARTIFACTS_PATH` parameter (`scripts/workflow_state.py:654-660`)
+still defaults to the literal `docs/ai-workflow/registry/workflow-v2-1-core-artifacts.json`
+for `stage="implementation"`, and `approval_is_current` — the durability
+check for **every** work item's `technical_approval` — calls it with no
+`artifacts_path` argument at all (`:715-719`); `promote_legacy_work_item`
+carries the same literal default (`:2079`) while its own docstring already
+claims the opposite ("scoped to `work_item_id`'s own `artifacts_path`,"
+`:2095`). Since the implementation-stage projection hashes its own path
+sets exactly as the plan-stage one does, this reaches a hashed field for an
+arbitrary work item — `OPUS-R26-003`'s own escalation criterion. Corrected:
+`artifacts_path`, for `stage="implementation"`, is resolved per work item
+via `fingerprint.artifacts_path_for_work_item(work_item_id)` — the same
+helper the plan-stage resolver (above) already introduces, pure string
+templating, no new I/O path — for every caller (corrected, `OPUS-R28-001`;
+`OPUS-R27-002`'s own list named `implementing_entry_reachable`, which never
+reaches `approval_review_content_id` with `stage="implementation"` at all —
+it only calls `approval_is_current(..., stage="plan", ...)`, hardcoded — and
+omitted `verify_post_approval_manifest_match`, which does reach it, called
+with `stage=...` for either stage by `/approve-review` step 6a immediately
+after the technical-approval commit lands). The list is derived mechanically,
+not by inspection: every function whose body reaches
+`approval_review_content_id` resolves and passes it explicitly. Today that is
+exactly two call sites — `approval_is_current` (`workflow_state.py:715`) and
+`verify_post_approval_manifest_match` (`:760`) — both gain the explicit
+resolve-and-pass; `promote_legacy_work_item` is unaffected, since it calls
+`load_implementation_stage_classification` directly (`:2128`) and never goes
+through `approval_review_content_id`; `implementing_entry_reachable` is
+unaffected for the same reason, listed here only to state explicitly that it
+is plan-stage-only and needs no `artifacts_path` at all. The parameter's
+literal default is retired in the same migration step (step 6 below) as the
+plan-stage CLI literals. A second work item's
+`implementation_stage.protected_paths` — including the self-referential
+entry `OPUS-R26-004` just added above — is now actually read by something:
+editing `workflow-v2-1-core`'s own artifacts file leaves a second item's
+`technical_approval` untouched, and editing the second item's own file
+stales only its own approval, never `workflow-v2-1-core`'s.
+
+**Creation and resume path for a work item's declaration facts** (new,
+`OPUS-R25-004`, closes the ordering gap that left WF8b's S1 blocked one
+error deeper after the originally-specified fix; extended `OPUS-R26-003`
+to bring `base_commit` into scope; **retitled and extended, `OPUS-R28-002`
+— see the resume-branch bullet below, without which `v2-1-dry-run` itself,
+the very item S1 exercises, can never acquire these facts**). Three
+writers, one ordering, stated explicitly — this is the piece revision 16
+omitted entirely:
+
+- **`plan_path`/`registry_path`/`mapping_path`/`base_commit`, sole
+  writer**: `workflow_state.route_work_item`/`default_work_item` gain
+  `mapping_path: str | None` and `base_commit: str | None` parameters,
+  written into the entry alongside the existing `plan_path`/`registry_path`
+  ones — the same mechanism, not a new one, for both. `/milestone-plan`
+  step 1 `[2.1]` (which already derives a `work_item_id` slug and calls
+  `route_work_item`) is the one place all four facts are decided, before
+  anything downstream reads them. **This is the one command-file text
+  change this revision concedes is needed** — revision 16's "no
+  command-file text change" audit conclusion was wrong for
+  `/milestone-plan` specifically; corrected here rather than left standing.
+  (Revision 17 scoped `base_commit`'s writer out entirely — `route_work_item`
+  did not take it as a parameter, and `workflow-v2-1-core`'s own value was
+  set outside that function entirely — reasoning that it touched only the
+  four facts `WF8B-S1-001` was actually about. `OPUS-R26-003` found that
+  gap load-bearing, not merely deferred: with no resolved per-item
+  `base_commit`, the CLI's `base` positional had nowhere non-literal to
+  fall back to, so the literal default survived. Brought into scope here
+  rather than left open a second revision running.)
+- **The resume branch gains the same four writers, not just the creation
+  branch** (new, `OPUS-R28-002`; this is the finding's option (a), the
+  preferred, smallest, generalizing fix). `route_work_item`'s docstring
+  states plainly today that an id naming an existing non-terminal entry
+  resumes it and only `plan_revision`/`state_revision`/`last_transition`
+  advance (`workflow_state.py:1342-1345`); `default_work_item`, which
+  writes `plan_path`/`registry_path` (and, after this revision,
+  `mapping_path`/`base_commit`), is only ever called from the
+  `existing is None` branch (`:1370-1376`). `v2-1-dry-run` is exactly the
+  case this misses: it exists today (`WORKFLOW_STATE.json`, written by
+  commit `9317b1c`) with `phase: "PLANNING"` (non-terminal, so the resume
+  branch is taken), `registry_path: null`, `base_commit: null`, and no
+  `mapping_path` key — a pre-declared entry with no declaration facts yet,
+  which is precisely what WF8b's own entry step intentionally created it
+  as. Corrected: for each of `plan_path`/`registry_path`/`mapping_path`/
+  `base_commit`, `route_work_item`'s existing-entry branch (`:1377-1380`)
+  now takes each field as an optional argument and, per field
+  independently: if the stored value is `null` and a non-null argument is
+  supplied, writes it; if the stored value is non-null and the supplied
+  argument disagrees, raises `WorkItemDeclarationFactConflictError` (a
+  declaration fact is immutable once set, consistent with the existing
+  identity-field immutability rule at `:1344-1345`); if no argument is
+  supplied for a field, that field is left untouched. This makes
+  `/milestone-plan`'s step 1 `[2.1]` call the same for a fresh id and a
+  pre-declared non-terminal one — it always passes all four facts it just
+  derived, and the resume branch either accepts them (first time) or
+  silently no-ops on an exact repeat (idempotent re-run), and only raises
+  on a genuine conflict. `v2-1-dry-run` is not special-cased; it is simply
+  the first non-terminal entry this branch is ever exercised against for
+  real. (The finding's rejected alternative, option (b) — having migration
+  step 1 backfill `v2-1-dry-run`'s three null facts concretely as a one-off
+  — is not taken: it would close S1 specifically while leaving the general
+  resumed-item gap open for the next process work item created the same
+  way `v2-1-dry-run` was, which is worse, not smaller.)
+- **`<work_item_id>-artifacts.json`, sole writer and default template**:
+  written by `/milestone-plan` step 3 `[2.1]`, in the same pass as
+  `workflow_state.generate_registry`/`generate_mapping`/
+  `write_registry_and_mapping` already run, via a new
+  `workflow_state.generate_artifacts_declarations(work_item_id, plan_path,
+  registry_path, mapping_path)` helper. Default `plan_stage` template: the
+  item's own three artifact paths as `protected_paths` (satisfying step 11's
+  binding check by construction at creation time), plus
+  `workflow-v2-1-core`'s *current* `excluded_paths`/`excluded_prefixes` sets
+  inherited verbatim as a starting point — not because they are correct for
+  every future item unmodified (`OPUS-R25-004`'s own evidence: this
+  repository's real set took five review rounds to converge), but because
+  an inherited, previously-reviewed starting point fails closed on any
+  genuinely novel path exactly as before, and is strictly safer than an
+  empty or hand-authored one. **Stated obligation, not silently assumed
+  sufficient**: `/milestone-plan`'s own `SELF_REVIEWING_PLAN` step must
+  explicitly confirm the inherited set fits the new item's own plan (most
+  process items' plan-stage footprint is a strict subset of
+  `workflow-v2-1-core`'s, since they name fewer or no forward-looking
+  implementation-phase paths yet — but this is a review-time check, not an
+  automated one this revision specifies further).
+- **Ordering that breaks the circularity** (the review brief's own
+  question, answered directly): `/milestone-plan` step 1 `[2.1]` *declares*
+  the three paths (writes them into `WORKFLOW_STATE.json`, no file content
+  yet); step 3 `[2.1]` *populates* real content at those paths (registry,
+  mapping, and now the artifacts declarations file, all written before the
+  bundle exists); step 6 (bundle generation) is the first point anything
+  computes a plan-stage fingerprint. No step ever needs the fingerprint to
+  produce a path, and no step ever needs a path to already be fingerprintable
+  before it is written — the dependency graph is a straight line, not a
+  cycle, once "declare" and "populate" are named as two distinct,
+  ordered `/milestone-plan` actions instead of left implicit.
+- Bundle-directory identity for the *write* path is templated, never
+  existence-gated, but has **no creator other than the bundle-generation
+  step itself** (corrected, `OPUS-R27-004`, itself corrected `GPT-R29-002`:
+  revision 18's claim that `resolve_bundle_dir`'s existing scoped-else-flat
+  resolution was "sufficient" on its own was wrong for a different reason
+  than "it needs a creator" — that resolution only returns the scoped path
+  if it already exists, which would make the write path silently fall back
+  to the flat `.ai-review/current` for a genuinely new item; revision 19
+  then over-corrected by making `write_manifest_with_verified_identifiers`
+  itself a directory *creator*, which `GPT-R29-002` found impossible to
+  reconcile with the required-file bind precondition — a `mkdir -p`'d
+  directory has no `REVIEW_REQUEST.md`/`PLAN.md`/`DIFF.patch`/`TEST_RESULTS.md`
+  to compute `bundle_id` over). The corrected shape keeps only the part
+  that was actually right: `write_manifest_with_verified_identifiers`
+  **resolves** its own `bundle_dir` internally as
+  `.ai-review/<work_item_id>/current` by direct templating — never
+  `resolve_bundle_dir`'s existence-gated fallback — so the write path can
+  never target the wrong (flat) directory for a new item. It does **not**
+  create that directory or anything inside it; the directory and its
+  complete required-file content are `prepare-ai-review.sh`'s (or an
+  equivalent full bundle-generation step's) sole responsibility, exactly as
+  in every revision before 19's write-path-creator addition.
+  `resolve_bundle_dir`'s own scoped-else-flat resolution remains
+  sufficient, unchanged, for its original read-only/inspection use — the
+  bundle directory a work item's bundle lives in is still derived, not
+  stored state.
+
+**Fail-closed matrix, corrected and complete** (thirteen conditions, up
+from nine — the three revision-17 additions were `-003`'s path-binding,
+`-008`'s path grammar, and `-005`'s manifest binding; condition 8's
+uniqueness check was relocated and widened per `-007`; revision 18 adds
+condition 13 (`OPUS-R26-003`'s `base_commit` cross-check) and splits
+condition 12 into its three named outcomes rather than leaving the
+"present but unbound" case unhandled (`OPUS-R26-001`); every condition
+below has a named, independently exercised test, closing `OPUS-R25-009`'s
+original gap and `OPUS-R26-001`'s regression of it):
+
+1. Unknown `work_item_id` → `UnknownWorkItemError`.
+2. `work_item_type` other than `"process"` → `PlanStageNotApplicableError`.
+3. `plan_path`/`registry_path`/`mapping_path`/`base_commit` null, independently → `MissingPlanStageMetadataError` (extended, `OPUS-R26-003`: `base_commit` joins the other three nullable identity facts checked here, rather than having no fail-closed home of its own).
+4. `plan_path`/`registry_path`/`mapping_path` fails the shared path-grammar validator, independently → `InvalidPlanStageMetadataPathError`.
+5. No `<work_item_id>-artifacts.json` at the resolved source → `MissingWorkItemArtifactsDeclarationError`.
+6. Registry/mapping/artifacts file's own `work_item_id` disagreeing with the resolving key, independently → `RegistryWorkItemIdMismatchError`/`MappingWorkItemIdMismatchError`/`ArtifactsWorkItemIdMismatchError`.
+7. `plan_path`/`registry_path`/`mapping_path` not a member of the resolved protected-path set, or the three not pairwise distinct → `PlanStageMetadataNotProtectedError`.
+8. A non-null `plan_path`/`registry_path`/`mapping_path` claimed by more than one work item, independently per field → `DuplicateWorkItemArtifactPathError`.
+9. Registry/plan-title `plan_revision` disagreement → `PlanRevisionMismatchError` (existing mechanism, now exercised per item).
+10. A changed/untracked path outside the resolved work item's own protected/excluded sets → `UnclassifiedPathError` (existing mechanism, now correctly scoped per item).
+11. Commit-source resolution at a commit predating the schema-version-2 migration → correctly manifests as condition 3 or 5 above (pre-migration `WORKFLOW_STATE.json` genuinely has no `mapping_path` key; pre-migration `<id>-artifacts.json` genuinely has no `plan_stage` key) — **no new mechanism needed**; this is the deliberate, stated boundary the `OPUS-R25-013` row of the Round 25 disposition table above resolves, not a gap (corrected, `OPUS-R26-007`: this condition and "Backward compatibility" point 1 below previously cross-referenced each other for the substantive reasoning instead of both pointing at the disposition table row where it actually lives).
+12. `--write-manifest` targets a bundle directory whose existing `MANIFEST.md` disagrees with the resolved work item — corrected, `OPUS-R26-001`, to name the outcome revision 16/17 left unhandled; corrected again, `OPUS-R27-007`, which found "all **three** disagreeing sub-cases" an overcount against the two actually enumerated (the *three* count belongs to the outcomes in "Manifest/bundle bound to an explicit work item" above — absent/agrees/disagrees — of which exactly two disagree and fail closed here): (12a) present, declares a different `work_item_id`; (12b) present, declares **no** `work_item_id` at all (an unbound/legacy manifest — every manifest in this repository today, before the one-time migration rebinding step runs); both raise `BundleWorkItemMismatchError`, naming the resolved item and either the disagreeing value or "unbound". (An absent `MANIFEST.md` is not a fail-closed case at all — it is the ordinary first-write outcome, described in "Manifest/bundle bound to an explicit work item" above, not part of this matrix.)
+13. **(new, `OPUS-R26-003`; enforcement points named, `OPUS-R28-006`)** The resolved work item's own declared `base_commit` disagreeing with the resolved commit content is bound to — checked at **two** named points, both catching the same underlying disagreement: (a) `prepare-ai-review.sh`'s own early, script-level refusal, before any bundle content is generated, comparing against the resolved `BASE_SHA` (never the raw requested form) — a non-zero shell exit with a distinct, greppable message, not a Python exception; and (b) `MANIFEST.md`'s `base_commit` field, at write time inside `write_manifest_with_verified_identifiers`, disagreeing with the resolved work item's own declared `base_commit` (state/registry/CLI-argument/bundle/manifest sources must all agree) → `BundleWorkItemMismatchError` (the same exception condition 12 raises — a manifest whose declared identity, in any bound field, disagrees with the resolved item is one failure mode, not several). (a) is reachable first for any normal invocation; (b) remains the fail-closed backstop for any write path that reaches `write_manifest_with_verified_identifiers` without going through (a) first.
+
+**Backward compatibility, `workflow-v2-1-core` — corrected, mechanism-relative
+(`OPUS-R25-001`)**. Revision 16 required
+`compute_review_content_id_plan_stage_for_work_item` to reproduce
+`2b4d2e3b89c2b8f…` — revision 15's approved digest — "immediately after the
+migration." That is impossible by construction: `plan_revision` is a hashed
+field, `WORKFLOW_V2_PLAN.md` is protected, and this very revision changes
+both, so the reproducible digest the moment revision 17 is approved is
+necessarily this revision's own new value, never revision 15's or 16's.
+Requiring the old and new digest to be equal was the defect; the corrected
+invariant, stated in three parts:
+
+1. **The pre-revision approval remains historically discoverable, unchanged,
+   forever**: `WORKFLOW_STATE.json`'s `plan_approval` history is never
+   rewritten by this migration — the record documented in
+   `plan_approval.user_confirmation` (the `OPUS-R24-*` remediation note) and
+   every earlier approval remain exactly as committed, discoverable by the
+   same commit-trailer search `D-Commit-Provenance` already specifies. No
+   acceptance criterion or test requires recomputing an *old* approval's
+   digest from *new* code — the `OPUS-R25-013` row of the Round 25
+   disposition table above states why that would be undefined by design,
+   not merely unverified (corrected, `OPUS-R26-007`: this point and
+   fail-closed matrix condition 11 above previously cross-referenced each
+   other rather than both pointing at that table row, where the
+   substantive reasoning actually lives).
+2. **The migration's own correctness is proven mechanism-relatively, not by
+   literal digest**: on the same tree, at the same base commit, *before* the
+   `plan_revision` bump and any other content edit, the resolved-from-JSON
+   `plan_stage` sets and the pre-migration `PLAN_STAGE_PROTECTED`/
+   `PLAN_STAGE_EXCLUDED_PATHS`/`PLAN_STAGE_EXCLUDED_PREFIXES` Python
+   constants must produce byte-identical digests when compared directly
+   (compute both, assert equal, only then retire the constants as live
+   defaults). This is strictly stronger against a transcription error than
+   pinning a literal: a transcription mistake that happened to reproduce
+   `2b4d2e3b…` by coincidence would pass the old criterion and fail this
+   one.
+3. **`plan_approval` is updated only after binding approval, never by the
+   migration itself**: the migration (data + resolver code) lands and its
+   own tests (item 2 above) pass first; `WORKFLOW_STATE.json`'s
+   `plan_approval.approved_review_content_id` is written exactly once, by
+   `/approve-review plan`, against whatever `review_content_id` is current
+   at that moment — unchanged mechanism, the same one every prior revision
+   bump already used. No acceptance criterion states or implies the old and
+   new `approved_review_content_id` must ever be equal.
+
+**Affected commands, corrected** (`OPUS-R25-004`/`-012`; audit corrected
+and extended, `OPUS-R28-007`). Three of the five commands the finding
+originally named (`/review-plan`, `/record-manual-plan-review`,
+`/approve-review plan`) still require no text change — confirmed unchanged
+from revision 16's audit for those three. **`/milestone-plan`, `/apply-plan-review`,
+and `/prepare-review` all need text changes** — the "no text change" list
+was wrong for `/apply-plan-review` under this revision's own
+`prepare-ai-review.sh` change (step 8: the work-item id becomes required
+for `stage == "plan"`), and `/prepare-review` was never audited at all:
+
+- **`/milestone-plan`** (corrected, see "Creation path" above): step 1
+  `[2.1]` gains the three-path declaration, step 3 `[2.1]` gains the
+  artifacts-declarations-file write, **and** step 6's own
+  `prepare-ai-review.sh` invocation syntax
+  (`.claude/commands/milestone-plan.md:84`) changes `[work_item_id]`
+  (bracketed, reads as optional) to `<work_item_id>` (required) for the
+  plan stage.
+- **`/apply-plan-review`** (new to the changed list, `OPUS-R28-007`):
+  `.claude/commands/apply-plan-review.md:38`'s step 5 invocation gains the
+  same `[work_item_id]` → `<work_item_id>` correction; step 7'.2
+  (`.claude/commands/apply-plan-review.md:55`) prints
+  `./scripts/prepare-ai-review.sh <base-sha> plan` with **no** work-item id
+  at all — under this revision, that exact invocation refuses outright
+  (missing test 162's own asserted behaviour) — so it gains the required
+  argument too. This is an *implementation* edit owed to the fix session
+  that lands this revision's design, not a plan-text edit; it does not
+  reopen this revision's own "no `.claude/commands/` file is edited by this
+  revision" scope statement (below), which is about this plan-writing
+  session's own diff, not the deferred fix session's.
+- **`/prepare-review`** (new, unaudited call site found this round,
+  `OPUS-R28-007`): `.claude/commands/prepare-review.md:27`'s
+  `./scripts/prepare-ai-review.sh <base-sha> <stage> [work-item-id]`
+  states, in its own step 3, that the id is **required when `<stage>` is
+  `plan`** and remains optional for every other stage — this is the one
+  call site where an operator may genuinely have no work item in mind, so
+  it gets a stage-conditional statement rather than an unconditional
+  required argument.
+
+`scripts/prepare-ai-review.sh` itself (not a `.claude/commands/*.md` file,
+but the actual manifest-writing entry point every plan-stage bundle goes
+through) gains the `--write-manifest` call described above, plus the
+required-argument and `base_commit`-cross-check behavior migration step 8
+now specifies. `docs/ai-workflow/MILESTONE_WORKFLOW.md`
+(`MILESTONE_WORKFLOW.md:45`) and `docs/ai-workflow/REVIEW_PROTOCOL.md`
+(`REVIEW_PROTOCOL.md:11`), which also print bare `plan`-stage invocations,
+are covered by acceptance criterion 21 above, not restated here.
+
+**Migration, exact steps** (implementation, deferred to the dedicated fix
+session named in "Round 25 finding disposition" — not executed by this plan
+revision):
+
+1. Add `mapping_path` to `WORKFLOW_STATE.json`'s per-item schema (`D3`
+   below); backfill the three existing entries as revision 16 specified.
+   `route_work_item`/`default_work_item` gain the `mapping_path` **and**
+   `base_commit` parameters (extended, `OPUS-R26-003`: `base_commit` is
+   already a per-item schema field today — `workflow-v2-1-core`'s and
+   `v2-1-dry-run`'s entries both carry it, the latter `null` — only its
+   writer was missing; no schema addition needed, unlike `mapping_path`)
+   (see "Creation path" above). `WORKFLOW_STATE.json`'s `plan_revision`
+   field is declared a non-authoritative mirror (`D3` below) and its value
+   for `workflow-v2-1-core` is corrected to match the registry JSON's
+   whenever the two are found to disagree (this repository's own state,
+   right now, is such a case — corrected as part of this same migration
+   commit, not deferred).
+2. Migrate `docs/ai-workflow/registry/workflow-v2-1-core-artifacts.json`
+   exactly as revision 16 specified (`schema_version` 1 → 2,
+   `implementation_stage`/`plan_stage` sections), **plus**: add
+   `docs/ai-workflow/registry/workflow-v2-1-core-artifacts.json`'s own
+   **concrete, spelled-out path** (corrected, `OPUS-R26-004`: not the
+   `<work_item_id>` placeholder revision 17 specified, which the exact-match
+   classifier cannot resolve) as an implementation-stage `protected_paths`
+   exact-path entry, checked before the `docs/ai-workflow/registry/`
+   prefix — closing `OPUS-R25-006`. `generate_artifacts_declarations`
+   (step 8 below) emits the same self-referential concrete-path pattern for
+   every future item's own file, generalizing by construction rather than
+   by a template key.
+3. `load_implementation_stage_classification` reads from the
+   `implementation_stage` sub-key — unchanged from revision 16.
+4. Add `fingerprint.load_plan_stage_classification`,
+   `fingerprint.artifacts_path_for_work_item`, and the minimal
+   `WORKFLOW_STATE.json` reader `resolve_plan_stage_metadata` needs (all in
+   `workflow_fingerprint.py`, per the module-placement correction above).
+   `artifacts_path_for_work_item` is shared by both stages (extended,
+   `OPUS-R27-002`): the plan-stage resolver (step 5) and
+   `approval_review_content_id`'s `stage="implementation"` branch (step 6)
+   both call it, rather than the implementation stage keeping its own
+   separate literal default.
+5. Add `resolve_plan_stage_metadata`,
+   `compute_review_content_id_plan_stage_for_work_item`,
+   `compute_review_content_id_plan_stage_at_commit_for_work_item`, and the
+   fail-closed exception classes for all thirteen matrix conditions (nine
+   new classes total, unchanged in count from revision 17 — condition 13
+   reuses `BundleWorkItemMismatchError` rather than introducing a tenth:
+   `InvalidPlanStageMetadataPathError`, `PlanStageMetadataNotProtectedError`,
+   `BundleWorkItemMismatchError`, `PlanRevisionMirrorMismatchError`, plus the
+   five already named in revision 16 — `UnknownWorkItemError`,
+   `PlanStageNotApplicableError`, `MissingPlanStageMetadataError`,
+   `MissingWorkItemArtifactsDeclarationError`,
+   `RegistryWorkItemIdMismatchError`/`MappingWorkItemIdMismatchError`/
+   `ArtifactsWorkItemIdMismatchError`/`DuplicateWorkItemArtifactPathError`,
+   unchanged).
+6. Rewire the CLI's two `__main__` call sites (default `--work-item-id` now
+   `active_work_item_id`, not a literal, **for the read-only path only —
+   `--write-manifest` requires `--work-item-id` explicitly and refuses if
+   omitted, corrected `OPUS-R28-010`**; the `base` positional now resolves
+   from the requested item's own `base_commit`, required and fails closed
+   when `null` — corrected, `OPUS-R26-003`, retiring the second literal
+   default revision 17 left standing); `load_plan_revision`'s
+   `registry_path`/`plan_path` parameters become required, with no default,
+   retiring `DEFAULT_REGISTRY_PATH`/`DEFAULT_PLAN_PATH` as live defaults in
+   the same pass as `PLAN_STAGE_*` and `DEFAULT_ARTIFACTS_PATH` below (new,
+   `OPUS-R28-011`: these two literals were already named as confirmed
+   defects in the `WF8B-S1-001` disposition row above, alongside
+   `PLAN_STAGE_PROTECTED` and the `--work-item-id`/`base` argparse defaults,
+   but no migration step ever retired them — they remain live parameter
+   defaults on `workflow_fingerprint.py:474-475` today, and `__main__:1741`
+   calls `load_plan_revision(repo_root)` relying on them; kept only as
+   named migration-comparison fixtures if any test needs them, never as a
+   live fallback for any caller this migration reaches),
+   `write_manifest_with_verified_identifiers` (the `BundleWorkItemMismatchError`
+   check for both `work_item_id`, per condition 12's three named outcomes,
+   and `base_commit`, per new condition 13 — corrected, `OPUS-R26-001`/
+   `-003`), and `approval_review_content_id`'s `stage="plan"` branch
+   (dropping `protected`/`excluded_paths`/`excluded_prefixes` **and**
+   `plan_revision` — corrected from revision 16, which only dropped the
+   first three) to the new entry points. **The `stage="implementation"`
+   branch, `approval_is_current`, and `verify_post_approval_manifest_match`
+   are rewired in this same step** (corrected, `OPUS-R28-001`; `OPUS-R27-002`
+   named `implementing_entry_reachable` instead of
+   `verify_post_approval_manifest_match` — `implementing_entry_reachable`
+   only ever calls `approval_is_current(..., stage="plan", ...)`, hardcoded,
+   and never reaches `approval_review_content_id` with
+   `stage="implementation"`, so it needs no `artifacts_path` rewiring at all;
+   `verify_post_approval_manifest_match` does reach it and was omitted):
+   each of the two actual callers resolves `artifacts_path` via
+   `fingerprint.artifacts_path_for_work_item(work_item_id)` and passes it
+   explicitly, rather than relying on `artifacts_path`'s
+   `DEFAULT_ARTIFACTS_PATH` literal default, which is retired as a live
+   default for every caller in this same step (alongside the plan-stage
+   literals it already retires), not kept as a fallback for any caller
+   this migration reaches. `promote_legacy_work_item` needs no rewiring
+   either — it calls `load_implementation_stage_classification` directly
+   (`workflow_state.py:2128`), never through `approval_review_content_id`.
+7. Correct `workflow-v2-1-core-artifacts.json`'s own `_comment` field and
+   `load_implementation_stage_classification`'s docstring (`OPUS-R25-006`);
+   rewrite `scripts/workflow_fingerprint.py:361-365`'s "synthetic … borrows
+   the real process item's" comment (`OPUS-R25-011`); correct
+   `promote_legacy_work_item`'s own docstring, which already (falsely,
+   until step 6 above lands) claimed to be "scoped to `work_item_id`'s own
+   `artifacts_path`" (`OPUS-R27-002`).
+8. Extend `scripts/prepare-ai-review.sh`'s `plan`-stage path with the
+   `--write-manifest` call (`OPUS-R25-012`), resolving the work-item id
+   **exactly once** and using that single value for both `ROOT_DIR` and
+   `--write-manifest` (corrected, `OPUS-R26-002`, replacing revision 17's
+   two-rule "`<work-item-id-or-live-active>`" specification) — **the
+   work-item id becomes the script's required third argument for `stage ==
+   "plan"`, never resolved from the live `active_work_item_id` for this
+   stage** (corrected, `OPUS-R27-003`, closing the flat-layout-retirement
+   and stranded-step-8a gaps the "resolve once, else live-active" version
+   left open; the flat, optional-argument layout is unchanged for every
+   other stage), **and the resolved item's own declared `base_commit` is
+   cross-checked, via `fingerprint.resolve_plan_stage_metadata`, against the
+   resolved `BASE_SHA` — never the raw `<base-sha>` argument as typed —
+   before any bundle content is generated, refusing with a distinct,
+   greppable message on disagreement and naming both the requested and
+   resolved forms plus the declared value** (`OPUS-R27-003`, corrected
+   `OPUS-R28-006`, applying fail-closed matrix condition 13 as an early
+   script-level refusal); extend `/milestone-plan` step 1 `[2.1]`/step 3
+   `[2.1]` per "Creation path" above, including the new `base_commit`
+   parameter. **Also, in this same step** (folded in, `OPUS-R28-007`):
+   `.claude/commands/milestone-plan.md:84` and
+   `.claude/commands/apply-plan-review.md:38` change their
+   `prepare-ai-review.sh <base-sha> plan [work_item_id]` invocation syntax
+   to `<work_item_id>` (required); `apply-plan-review.md:55`'s step 7'.2
+   gains the argument outright; `.claude/commands/prepare-review.md:27`
+   states the id is required when `<stage>` is `plan`, optional otherwise —
+   see "Affected commands, corrected" above for the full per-file audit.
+8a. **One-time relocation and rebinding for the existing, currently-flat,
+    currently-unbound bundle directory** (new, `OPUS-R26-001`; retimed and
+    extended, `OPUS-R27-003`; **renumbered from `6a` to `8a` and rewritten,
+    `OPUS-R28-004`/`-005`, resolving five independent gaps the `6a` numbering
+    and text left open** — its own prose already said "runs after step 8
+    lands," contradicting its position between steps 6 and 7; the relocation
+    was unversioned, non-atomic, had no collision rule, no resumability, and
+    under-enumerated `.ai-review/`'s actual contents; and relocating
+    `.ai-review/feedback` conflicted with step 8's own flat-retention
+    carve-out for non-plan stages). Runs once, immediately after step 8
+    lands, because step 8 is what makes `workflow-v2-1-core`'s own
+    plan-stage `ROOT_DIR` resolve to `.ai-review/workflow-v2-1-core/current`
+    instead of the flat `.ai-review/current`.
+    - **Every entry under `.ai-review/` today, named explicitly, with its
+      disposition** (closing `OPUS-R28-004`'s under-enumeration gap — the
+      six entries this repository's own `.ai-review/` holds as of this
+      revision): `current/` — **moves**, to
+      `.ai-review/workflow-v2-1-core/current`; `feedback/` — **stays flat**
+      (corrected, `OPUS-R28-005`: `feedback/` is stage-agnostic —
+      `resolve_feedback_dir` takes no stage argument and step 8 retains the
+      flat layout, unchanged, for every stage but `plan`'s bundle directory;
+      relocating it would split the implementation/post-fix/functional-review
+      stages' feedback from their own still-flat bundles the moment this step
+      runs. This is the finding's option (b): the smaller edit, since it
+      reopens neither step 8's carve-out nor `resolve_feedback_dir`'s
+      contract. `resolve_feedback_dir`'s scoped branch remains correctly
+      unreachable until a future revision scopes every stage's bundle
+      directory, which this revision does not attempt); `review-bundle.tar.gz`
+      — **moves**, to `.ai-review/workflow-v2-1-core/review-bundle.tar.gz`
+      (it is written by `prepare-ai-review.sh`'s own `$ROOT_DIR/review-bundle.tar.gz`
+      line, so it follows `current/`'s relocation by construction once
+      `ROOT_DIR` itself resolves scoped — no separate move command needed);
+      `source/` — **stays**, unmoved (hardcoded as `.ai-review/source/*` in
+      `prepare-ai-review.sh`, named by `WFR-16`; moving it would require a
+      script change this revision does not make); `runtime/` — **stays**
+      (work-item-keyed internally, e.g. `WORKTREE_IDENTITY.json`/
+      `DRY_RUN_RESUME.json`, never flat-bundle content); any other
+      work-item-named directory already present (e.g. this repository's own
+      ad hoc `wf8b-fingerprint-remediation/`, created by a `/prepare-review`
+      invocation outside the milestone-workflow gates) — **stays**, unmoved
+      and untouched by this migration, which relocates only the one flat,
+      unbound `current/`+`review-bundle.tar.gz` pair this step exists for.
+    - **Collision-safe, fail-closed-after-interruption relocation** (label
+      corrected, `GPT-R29-005`: "atomic" and "resumable" overstated the
+      actual guarantee below — two separate `mv -n` operations are neither
+      atomic as a pair, nor resumable in the sense of an automated retry
+      completing the job; what the procedure actually guarantees is that an
+      interruption at any point leaves a state the next run's own
+      preconditions refuse to silently paper over, requiring the named
+      manual diagnosis this same bullet already describes, never an
+      automatic resume) (closing `OPUS-R28-004` items 3-4): before moving anything, verify the
+      destination (`.ai-review/workflow-v2-1-core/`) does not already exist
+      as a non-empty directory — a non-empty destination is a hard stop
+      requiring operator resolution, naming both paths, never a silent
+      nest-under-itself (`mv`'s default behavior when the destination
+      exists). `mkdir -p .ai-review/workflow-v2-1-core`, then move `current/`
+      and `review-bundle.tar.gz` into it with `mv -n` semantics (refuse
+      rather than overwrite if a same-named entry somehow already exists at
+      the destination). Immediately after the move, a verification sub-step
+      — run before the rebinding write below, not folded into it — asserts
+      the destination contains the same file set the source had (byte-count
+      or path-set comparison, not merely "exists") and that the source
+      directory is now absent; if either check fails, the migration stops
+      before the rebinding write, leaving the operator a diagnosable partial
+      state to resolve by hand rather than a bound-but-corrupt bundle. This
+      is what makes an interrupted move fail closed: per the first-write
+      rule (`OPUS-R28-008` below), an unbound directory with no `MANIFEST.md`
+      would otherwise bind on the very next write, including a partial one.
+    - **Rebinding**, unchanged in mechanism from the prior text:
+      `write_manifest_with_verified_identifiers` gains a separately-named,
+      explicit rebinding argument (never the default write path's behavior)
+      used exactly once, here, at the relocated path, invoked with
+      `--work-item-id workflow-v2-1-core`, binding the relocated, verified
+      `MANIFEST.md` — which, like every manifest in this repository today,
+      still declares no `work_item_id`, and has in fact always belonged to
+      `workflow-v2-1-core` — to its true owner before condition 12's
+      default-refuse-on-unbound rule would otherwise block every subsequent
+      write to it.
+    - Both `MILESTONE_WORKFLOW.md`'s and `REVIEW_PROTOCOL.md`'s printed
+      paths/invocation examples are updated in the same commit (mechanical,
+      not a design change) to show the scoped `current/`/`review-bundle.tar.gz`
+      paths and the still-flat `feedback/` path, so the two documents do not
+      themselves start claiming a layout this step didn't actually produce.
+      No other bundle directory exists yet to need this step; a future
+      migration that finds another pre-existing unbound directory repeats
+      this same one-time verify-move-verify-rebind procedure for it, naming
+      the directory and its true owner explicitly, never inferring one.
+9. Extend `scripts/workflow_test_harness.py` (`OPUS-R25-014`):
+   `write_plan_docs` also emits a per-item `<id>-artifacts.json` matching
+   its existing five-path fixture shape; `plan_stage_protected_paths` is
+   retired in favour of it; `workflow_test_harness_test.py`'s
+   "`workflow-v2-1-core` needs no override" case is restated in resolver
+   terms (the harness's existing three-fixed-plus-two-templated fixture
+   shape is the prior art this resolver design already follows).
+10. Run the full existing regression suite plus the new tests — **every
+    Missing-tests item owed to `WF8b`, items 141-166** (corrected,
+    `OPUS-R28-009`: revision 19 left this range at "141-163," unchanged
+    since round 26, while adding items 164 and 165 — the tests for
+    `OPUS-R27-002`/`OPUS-R28-001`'s and `OPUS-R27-003`/`OPUS-R28-004`/`-006`'s
+    own corrections — with no green-suite gate requiring either to run;
+    **item 166 joins this range this revision** (corrected, `GPT-R29-003`,
+    reversing `OPUS-R28-003`'s ownership split: item 166 was excluded on
+    the reasoning that a criterion and its sole automated-regression
+    verification need not land at the same checkpoint when the criterion
+    itself — item 166's data half — is independently satisfied by this
+    revision's own one-time sync; but `WF8a-ii`, the checkpoint the
+    verification half was assigned to, is already `COMPLETE`, and
+    checkpoint completion is never revoked to reopen it — see the
+    "Backward compatibility" discussion above's own precedent for `WF4a-i`.
+    That left a mandatory regression test with no reachable owner: the
+    remediation implementation this checkpoint-continuation work produces
+    could pass every other required test while never adding item 166 at
+    all, exactly the gap `GPT-R29-003`'s failure scenario describes.
+    Reassigned to this same continued `WF8b` scope instead of reopening
+    `WF8a-ii` — the smaller of the finding's two offered options, and the
+    one that matches the fact that this revision's own `OPUS-R28-003` fix
+    is what edited all 52 mapping rows the conformance test verifies in the
+    first place) — all green, with `workflow-v2-1-core`'s mechanism-relative
+    durability guard (backward-compatibility criterion 2 above) re-verified
+    immediately before and immediately after every step.
+11. Only then: implementation is complete, and this checkpoint-continuation
+    work (tracked as `WF8b`'s own continued scope, no new checkpoint ID)
+    enters its own `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`/
+    `AWAITING_TECHNICAL_APPROVAL` cycle — the ordinary implementation-review
+    gate every checkpoint's code already goes through. (Corrected,
+    `OPUS-R25-015`: revision 16's migration step 8 described a second
+    `/approve-review plan` round happening *after* implementation, directly
+    contradicting the "Restart discipline for S1" paragraph's own statement
+    that `/approve-review plan` runs immediately on **this** bundle's
+    `APPROVE`. There is exactly one plan-approval round for this design —
+    the one this bundle itself is seeking — and one implementation-review
+    round after the code lands; deleted the contradictory step rather than
+    reword it, since the restart-discipline paragraph already states the
+    correct sequence in full.)
+
+**Rollback.** Unchanged from revision 16: before the plan-approval commit,
+this is an in-progress, unapproved edit like any other — reverting it is a
+plain revert. After approval, no dedicated plan-revision-rollback mechanism
+exists (none has ever been needed across 16 prior revisions); if one is
+ever needed, it is a fresh plan revision that reverts this one's content,
+through the same review-and-approval cycle again. `D-Self-Governance`'s
+`Workflow-Rollback` trailer governs *activation* rollback (`"2.1"` →
+`"1"`), a different concern, unaffected by this section.
+
+**Acceptance criteria, exact — corrected and expanded:**
+
+1. **(corrected, `OPUS-R25-001`)** On the same tree, at the same base
+   commit, before the `plan_revision` bump or any other content edit, the
+   migrated `<work_item_id>-artifacts.json`'s `plan_stage` section, loaded
+   via `load_plan_stage_classification`, produces byte-identical
+   `protected_paths`/`excluded_paths`/`excluded_prefixes` to
+   `PLAN_STAGE_PROTECTED`/`PLAN_STAGE_EXCLUDED_PATHS`/`PLAN_STAGE_EXCLUDED_PREFIXES`,
+   verified by direct comparison, not by matching a hardcoded digest
+   literal.
+2. **(corrected, `OPUS-R25-002`)** After migration, `WORKFLOW_STATE.json`'s
+   `plan_revision` for every work item with a non-null `registry_path`
+   equals that registry's own `plan_revision` field exactly;
+   `approval_review_content_id` no longer accepts a `plan_revision`
+   parameter for `stage="plan"`.
+3. **(new, `OPUS-R25-003`)** A second synthetic work item's `plan_path`,
+   `registry_path`, and `mapping_path` are each a member of its own
+   resolved protected-path set, and the three are pairwise distinct;
+   mutating which file `plan_path` names (while leaving the protected set
+   unchanged) raises `PlanStageMetadataNotProtectedError` rather than
+   silently fingerprinting the wrong file. **(extended, `OPUS-R26-003`)**
+   The same second work item's `base_commit` is independently resolved,
+   non-null, and distinct from `workflow-v2-1-core`'s; a `null` value
+   raises `MissingPlanStageMetadataError` rather than falling back to any
+   other item's value.
+4. **(new, `OPUS-R25-004`; corrected, `OPUS-R28-002`)** `/milestone-plan
+   v2-1-dry-run` — naming, specifically, the **pre-existing non-terminal
+   entry** case: an id already present in `work_items` with `plan_path`
+   set but `registry_path`/`mapping_path`/`base_commit` still `null`,
+   exactly `v2-1-dry-run`'s own recorded state, which takes
+   `route_work_item`'s resume branch, not its creation branch — run end to
+   end through step 6, succeeds in generating a plan-stage bundle with no
+   `MissingPlanStageMetadataError`/`MissingWorkItemArtifactsDeclarationError`.
+   A separate, freshly-created process work item (creation branch) is a
+   distinct, independently-required case, not a substitute for this one —
+   the two branches write the four declaration facts through different code
+   paths and a fresh-item pass alone does not exercise the resume branch's
+   new per-field write-or-conflict rule. **(extended, `OPUS-R26-003`)** Both
+   runs also resolve a real, non-null `base_commit` for their respective
+   item, with no `MissingPlanStageMetadataError` raised for that field
+   either. **(extended, `OPUS-R28-002`)** Re-running the same
+   `/milestone-plan v2-1-dry-run` step 1 a second time with identical
+   derived facts is a no-op (idempotent); supplying a disagreeing value for
+   any already-non-null field raises `WorkItemDeclarationFactConflictError`,
+   naming the field and both values.
+5. **(new, `OPUS-R25-005`/`-012`)** `MANIFEST.md` records `work_item_id`,
+   `plan_revision`, `base_commit`, and `work_item_type` **(extended,
+   `OPUS-R26-003`, criterion 7 below)**; `--write-manifest` against a
+   bundle directory whose existing `MANIFEST.md` disagrees with the
+   resolved work item — whether it names a different `work_item_id`, names
+   none at all, or names a different `base_commit` — refuses with
+   `BundleWorkItemMismatchError`, naming the disagreement **(corrected,
+   `OPUS-R26-001`/`-003`: the "already bound to a different work item"
+   phrasing revision 17 used covered only one of these three cases)**;
+   `prepare-ai-review.sh`'s `plan`-stage invocation writes a `MANIFEST.md`
+   with no separate manual CLI step, resolving the work-item id **exactly
+   once** for both the bundle directory and the manifest **(corrected,
+   `OPUS-R26-002`)**.
+6. A second synthetic work item computes a `review_content_id` distinct
+   from `workflow-v2-1-core`'s at the same base commit, whose manifest
+   lists only its own three files.
+7. Mutating either fixture's own protected file changes only that
+   fixture's `review_content_id`; mutating the other's, or any
+   excluded/untouched path, changes neither.
+8. Every condition in the thirteen-condition fail-closed matrix above is
+   independently exercised and independently distinguishable by exception
+   type and message **(corrected, `OPUS-R26-001`/`-003`: twelve → thirteen,
+   condition 12 split into its three named outcomes)**.
+9. The CLI, invoked with `--work-item-id <second-item>`, prints that
+   item's own `plan_revision`/`protected_paths`/`review_content_id` — never
+   `workflow-v2-1-core`'s; **for the read-only inspection path**, omitting
+   the flag resolves to live `active_work_item_id`, never a hardcoded
+   literal. **(extended, `OPUS-R26-003`)** The same invocation, with no
+   `base` argument, computes against that item's own resolved
+   `base_commit` — never `workflow-v2-1-core`'s base commit, and never any
+   other literal. **(extended, `OPUS-R28-010`)** `--write-manifest` with
+   `--work-item-id` omitted refuses outright — a usage error, before
+   creating or writing anything — never silently resolving to the live
+   `active_work_item_id` and creating/binding that item's directory; the
+   live-default behavior above is scoped to the read-only path only.
+10. The six existing test files this finding names, plus
+    `workflow_test_harness_test.py`, all pass with no existing assertion
+    weakened or deleted to make this land; `plan_stage_protected_paths` is
+    retired without loss of coverage.
+11. S1, re-attempted from the beginning in a fresh session after this
+    revision and its implementation are both approved, produces a
+    `v2-1-dry-run`-specific `review_content_id`/manifest/bundle distinct
+    from `workflow-v2-1-core`'s, and the false-positive scenario the
+    finding describes no longer reproduces.
+
+**Acceptance criteria, revision 18 additions (`OPUS-R26-*`, resolving the
+review's own seven required-criteria list in full — each restates or
+cross-references one of criteria 1-11 above rather than introducing
+independent scope, so both numbering schemes stay traceable to the same
+design):**
+
+12. **(new, `OPUS-R26-001`)** Fail-closed matrix condition 12 has a stated,
+    independently tested outcome for an existing `MANIFEST.md` present but
+    declaring no `work_item_id` (refuses, naming "unbound" — never treated
+    as absent), and migration step 6a names the one-time rebinding for
+    `.ai-review/current` to `workflow-v2-1-core` explicitly.
+13. **(new, `OPUS-R26-002`; corrected, `OPUS-R27-003`/`OPUS-R28-006`)**
+    `prepare-ai-review.sh` resolves exactly one work-item id and uses it for
+    both the bundle directory and `--write-manifest` — stated and
+    implemented as one rule, never an "or" between an explicit argument and
+    the live active item. **For `stage == "plan"`, that one id is a
+    required argument, never resolved from the live `active_work_item_id`**;
+    the resolved item's own `base_commit`, read via
+    `fingerprint.resolve_plan_stage_metadata`, is cross-checked against the
+    resolved `BASE_SHA` (not the raw `<base-sha>` argument, so an
+    abbreviated SHA or symbolic ref still passes when correct) before any
+    bundle content is generated, refusing with a distinct exit and message
+    naming both forms; the flat layout remains reachable, unchanged, only
+    for every other stage.
+14. **(new, `OPUS-R26-003`; extended, `OPUS-R27-002`, `OPUS-R28-011`)** No
+    hardcoded literal naming one work item's identity fact remains
+    reachable by a computation for a different item — explicitly including
+    the `base` positional's former default, `approval_review_content_id`'s
+    `artifacts_path` default for `stage="implementation"`, **and
+    `load_plan_revision`'s `DEFAULT_REGISTRY_PATH`/`DEFAULT_PLAN_PATH`
+    parameter defaults** (new, `OPUS-R28-011`: named as confirmed defects
+    since the original `WF8B-S1-001` disposition row alongside
+    `PLAN_STAGE_PROTECTED` and the CLI argparse defaults, but never
+    actually retired by any migration step until this one) — and
+    `base_commit`'s writer (`route_work_item`/`default_work_item`) is
+    brought into scope, reconciling criteria 4, 5, and 11's own requirement
+    that a second item produce a real, reproducible bundle.
+15. **(new, `OPUS-R26-004`)** The artifacts-file approval binding is
+    specified as a concrete, per-item self-referential path the exact-match
+    classifier can actually match, emitted by the default template
+    (`generate_artifacts_declarations`) — never a `<work_item_id>`
+    placeholder.
+16. **(new, `OPUS-R26-005`)** Missing-test items 145, 157, and 159 are
+    mapped to requirements in the traceability table's evidence columns
+    (WFR-50, WFR-49, WFR-47 respectively).
+17. **(new, `OPUS-R26-006`/`-005`)** Items 161-163 are added; item 146's
+    stated sub-case count is corrected to seventeen and sub-case group
+    (4a-c) is disambiguated as three fields; items 152 and 153 gain the
+    sub-cases named above.
+18. **(new, `OPUS-R26-003`)** `MANIFEST.md` records `work_item_type`
+    alongside `work_item_id`/`plan_revision`/`base_commit` — it is exactly
+    as identity-bearing a hashed projection field
+    (`workflow_fingerprint.py:840`) as the other three, and its omission
+    was a usability gap the review found rather than a deliberate scoping
+    decision.
+
+**Acceptance criteria, revision 19 additions (`OPUS-R27-*`):**
+
+19. **(new, `OPUS-R27-001`; extended to all 52 rows, `OPUS-R28-003`)**
+    `workflow-v2-1-core-mapping.json`'s **every** `WFR-01`-`WFR-52`
+    `description` value matches its own table row (backtick markup, `**`
+    bold markup, and round-citation parentheticals stripped, em dash
+    normalized to `--`) — not only the six `WFR-47`-`WFR-52` rows revision
+    19 originally synced; 15 further rows were found diverged this round
+    (some substantively, not cosmetically — `WFR-24`'s two versions stated
+    opposite properties) and are corrected in this same revision. The
+    Checkpoint column is explicitly excluded from this criterion (see the
+    Requirements traceability intro paragraph's `OPUS-R28-003` note): it may
+    cite design-doc sections that `checkpoint_ids` cannot represent, so
+    criterion and test both scope to `description` only. A grep-based
+    conformance test (item 166, reassigned from `WF8a-ii` to this same
+    `WF8b` remediation, `GPT-R29-003` — `WF8a-ii` is already `COMPLETE` and
+    its completion is not reopened to give item 166 a home; see migration
+    step 10's corrected range) enforces this going forward, and the two
+    false "no JSON edit needed" claims (`OPUS-R26-005` disposition row;
+    revision-18 self-review notes) are corrected in place, not silently
+    superseded.
+20. **(new, `OPUS-R27-002`; caller list corrected, `OPUS-R28-001`)**
+    `approval_review_content_id`'s `artifacts_path` parameter for
+    `stage="implementation"` — and every caller that actually reaches it
+    (`approval_is_current`, `verify_post_approval_manifest_match` — not
+    `implementing_entry_reachable`, which only calls
+    `approval_is_current(..., stage="plan", ...)` and never needs
+    `artifacts_path`; `promote_legacy_work_item` calls
+    `load_implementation_stage_classification` directly and is likewise
+    unaffected) — resolves per work item via
+    `fingerprint.artifacts_path_for_work_item(work_item_id)`, never
+    `DEFAULT_ARTIFACTS_PATH`; a second work item's own
+    `implementation_stage.protected_paths` (including its self-referential
+    entry) is durability-checked against, and stales only, that item's own
+    `technical_approval`.
+21. **(new, `OPUS-R27-003`; corrected, `OPUS-R28-004`/`-005`)**
+    `prepare-ai-review.sh`'s `stage == "plan"` path requires an explicit
+    work-item-id argument (never resolves it from `active_work_item_id`),
+    and refuses before generating bundle content when the resolved item's
+    declared `base_commit` disagrees with the `<base-sha>` argument, naming
+    both — bundle content, directory, and manifest are all bound to the one
+    same resolved value; migration step 8a physically relocates only
+    `.ai-review/current` and `.ai-review/review-bundle.tar.gz` to
+    `workflow-v2-1-core`'s own scoped paths before rebinding — **not**
+    `.ai-review/feedback`, which stays flat (corrected, `OPUS-R28-005`: it
+    is stage-agnostic and step 8 retains the flat layout for every
+    non-`plan` stage, so relocating it would split feedback from the still-flat
+    bundles those stages generate) — with a non-empty-destination hard stop,
+    a post-move file-set verification before rebinding, and all six
+    `.ai-review/` entries' dispositions named explicitly (`source/`,
+    `runtime/`, and any other work-item-scoped directory stay; `feedback/`
+    stays; `current/` and `review-bundle.tar.gz` move) — closing
+    `OPUS-R28-004`'s atomicity/collision/resumability/enumeration gaps;
+    `MILESTONE_WORKFLOW.md`/`REVIEW_PROTOCOL.md` are updated to print the
+    relocated `current/`/`review-bundle.tar.gz` paths, the still-flat
+    `feedback/` path, and the required argument; **and** (new,
+    `OPUS-R28-007`) `.claude/commands/milestone-plan.md`,
+    `.claude/commands/apply-plan-review.md`, and
+    `.claude/commands/prepare-review.md` are updated per the "Affected
+    commands, corrected" audit above — the first two to `<work_item_id>`
+    (required) for the plan stage, the third to state the id is required
+    only when `<stage>` is `plan`.
+22. **(new, `OPUS-R27-004`; extended, `OPUS-R28-008`; corrected,
+    `GPT-R29-002`)** `write_manifest_with_verified_identifiers` resolves
+    `bundle_dir` internally from `work_item_id` rather than trusting a
+    caller-supplied path (never silently resolving into the flat
+    `.ai-review/current`), but is **not** a bundle-directory or
+    bundle-content creator — that remains `prepare-ai-review.sh`'s (or an
+    equivalent full-generation step's) sole responsibility, unchanged from
+    every revision before 19. **The bind precondition is one check, not
+    two** (corrected, `GPT-R29-002`, retracting the "just created by this
+    same call" disjunct, which specified an outcome — binding a directory
+    with no required files in it — the manifest algorithm cannot actually
+    produce, since `compute_bundle_id` hashes those same required files): a
+    standalone `--write-manifest --work-item-id <new-item>` invocation
+    against a resolved directory that does **not** already contain the
+    complete required generation file set refuses with
+    `MissingRequiredBundleFileError`, naming the missing file — whether
+    that directory is entirely absent (every required file trivially
+    missing) or exists but incomplete, e.g. left behind by an interrupted
+    prior generation run (some required files missing) — both the same
+    named exception, never a distinct "creates it" outcome and never a
+    partial bundle bound as authoritative. The **only** binding outcome is
+    a resolved directory that already contains the complete required file
+    set and has no `MANIFEST.md` yet — produced by `prepare-ai-review.sh`
+    (or an equivalent full-generation step) strictly before this
+    invocation, never by this invocation itself.
+23. **(new, `OPUS-R27-005`)** Missing test 162 asserts, without an
+    "either/or," that `scripts/prepare-ai-review.sh <base> plan` with no
+    third argument refuses outright for the plan stage.
+24. **(new, `OPUS-R27-006`)** `WFR-48`'s evidence column names a test for
+    each of the thirteen fail-closed matrix conditions, including 11
+    (item 145), 12 (items 152, 161), and 13 (item 163) — not only
+    conditions 1-10.
+25. **(new, `OPUS-R27-007`/`-008`/`-009`; extended, `OPUS-R28-012`)**
+    Fail-closed matrix condition 12's stated sub-case count matches its own
+    enumeration (two, not three); the "Restart discipline for S1" paragraph
+    exists exactly once, naming this revision's own current transition; the
+    `OPUS-R25-002` resolution evidence, the Round 26 scope-discipline
+    paragraph, the Requirements traceability intro paragraph, and
+    `REVIEW_REQUEST.md` all name the same set of changed requirement rows
+    and `WORKFLOW_STATE.json` fields as the actual diff. **(extended,
+    `OPUS-R28-012`)** No self-review note states a per-revision fact (what a
+    revision changed, what it did or did not implement, what invariant held
+    across it) using the bare phrase "this revision" outside a context that
+    unambiguously names which revision it means — either a `**Revision N's
+    own notes**` block heading or explicit in-sentence naming; a fact true
+    of every revision alike (e.g. the standing plan/implementation
+    separation) is stated once, as a standing invariant, not re-asserted
+    with "this revision" at every bump.
+
 ### D-Selection — checkpoint-selection algorithm (new, resolves OPUS-R6-012)
 
 WF2's "selection algorithm" was named in scope but never specified, and
@@ -1467,9 +3233,14 @@ same file and is never itself hashed. The naming pattern for any future
 work item's own registry is `docs/ai-workflow/registry/<work_item_id>-registry.json`
 — this round's concrete file is that pattern applied to
 `workflow-v2-1-core`, not a one-off exception (`GPT-R9-011`'s
-generalization remains WF4a-i's future scope: deriving the *protected set
-itself* from validated work-item metadata rather than the hardcoded
-constant this milestone's own plan stage still uses).
+generalization — deriving the *protected set itself* from validated
+work-item metadata rather than the hardcoded constant this milestone's own
+plan stage used through revision 15 — is now specified in full in
+`D-Fingerprint-Generalization`, resolving `WF8B-S1-001`; the corresponding
+per-work-item artifacts-declaration file lives at the same
+`docs/ai-workflow/registry/<work_item_id>-artifacts.json` path this
+section's naming pattern already established for the implementation-stage
+declarations, now carrying a sibling `plan_stage` section too).
 
 **Simplified from revision 7's design, and stated precisely** (revision 7
 described a separate `checkpoint_registry_hash` projection field, hashed
@@ -1506,6 +3277,14 @@ progress write can ever touch it.
   WF4b initializes and implementation sessions append to): implementation
   evidence, verification results, review findings, functional-verification
   outcomes.
+- **`mapping_path`** (new field, resolves `WF8B-S1-001`, full detail in
+  `D-Fingerprint-Generalization`/D3): the immutable mapping file's path is
+  now a stored per-item `WORKFLOW_STATE.json` field, mirroring
+  `registry_path` field-for-field, including its nullability — a work item
+  has a non-null `mapping_path` if and only if it has a non-null
+  `registry_path` (a work item without a checkpoint registry has no
+  requirement mapping either). Naming pattern unchanged:
+  `docs/ai-workflow/requirements/<work_item_id>-mapping.json`.
 
 ### D1 — Process vs. product routing (extended: multi-item schema, resolves OPUS-R6-006)
 
@@ -2197,7 +3976,7 @@ required user-performed integration will be exactly such an operation):
   active_work_item_id, work_items: {<id>: {work_item_type, work_item_kind,
   work_item_id, parent_work_item_id (null unless this is a broad-remediation
   child item, D-Functional-Remediation), plan_path, registry_path,
-  governing_workflow_version, phase, plan_revision, implementation_revision,
+  mapping_path, governing_workflow_version, phase, plan_revision, implementation_revision,
   functional_review_round,
   base_commit, reviewed_implementation_head, current_checkpoint_id,
   last_completed_checkpoint_id, checkpoints: {checkpoint_id: {status,
@@ -2236,7 +4015,17 @@ required user-performed integration will be exactly such an operation):
   and read by nothing) and `last_updated` (redundant with
   `last_transition`, read by nothing). Every remaining field has at least
   one documented reader elsewhere in this document. **Not tracked**:
-  `current_head_commit` (always derived live).
+  `current_head_commit` (always derived live). **`plan_revision`, authority
+  clarified (revision 17, resolves `OPUS-R25-002`)**: this field is a
+  non-authoritative display mirror of the registry JSON's own
+  `plan_revision` (at `registry_path`), never an independent source — the
+  plan-stage fingerprint functions read `plan_revision` from the registry
+  alone (`D-Fingerprint-Generalization`) and no longer accept it as a
+  caller-supplied parameter. The mirror is kept (cheap to read for
+  reporting/narrative purposes) and validated to agree with the registry
+  whenever `registry_path` is non-null, rather than removed outright,
+  since removing it would be a larger, unrelated schema change this
+  revision does not need to make.
 - **`.ai-review/runtime/WORKTREE_IDENTITY.json`** — gitignored,
   local-only: `repo_root`, `git_common_dir`, `worktree_root`,
   **`expected_dirty_paths_by_work_item: {work_item_id: {path, sha256}[]}`**
@@ -2285,7 +4074,28 @@ sub-record whose `verdict` is anything other than `APPROVE` — by the
 transition table in `D-Plan-Review-Stages`, only a completed `APPROVE` is
 ever recorded at either stage, so a stored `REVISE` or `BLOCK` can only
 mean the record was written by something other than `/review-plan`/
-`/record-manual-plan-review`, or hand-edited.
+`/record-manual-plan-review`, or hand-edited. **New (revision 16),
+resolves `WF8B-S1-001`, corrected this revision**: `mapping_path` and
+`registry_path` must agree on nullability — both non-null, or both null;
+never one without the other (revision 16's own wording of this rule stated
+the inverse condition by mistake — "`mapping_path` non-null when
+`registry_path` is null" — caught and fixed while extending this paragraph
+for `OPUS-R25-*`, not itself a reviewer finding). **New (revision 17,
+resolves `OPUS-R25-002`)**: `work_item["plan_revision"]` disagreeing with
+its own `registry_path`'s registry JSON `plan_revision` field, whenever
+`registry_path` is non-null (`PlanRevisionMirrorMismatchError` —
+`WORKFLOW_STATE.json`'s `plan_revision` is a non-authoritative display
+mirror, per `D-Fingerprint-Generalization`; the registry JSON alone is
+authoritative). **New (revision 17, resolves `OPUS-R25-007`, widened from
+revision 16's triple-equality wording)**: any non-null `plan_path`,
+`registry_path`, or `mapping_path` claimed by more than one `work_items`
+entry, checked independently per field rather than only as an identical
+three-field triple (`DuplicateWorkItemArtifactPathError`) — this is the
+write-time counterpart of the same check `resolve_plan_stage_metadata`
+itself now runs on the read path (`D-Fingerprint-Generalization`
+resolution step 9); the two are deliberately redundant, since a
+hand-edited or half-written state file that never passed through a state
+writer bypasses validator-only enforcement entirely.
 
 **Dirty in-progress resume, worktree-scoped** (unchanged): a clean
 (`COMPLETE`) checkpoint is portable anywhere; an `IN_PROGRESS` checkpoint's
@@ -2694,13 +4504,34 @@ context governance, subagent routing.
   starts immediately after `MILESTONE_COMPLETE` or waits for a
   product-milestone baseline first — the user's call, not assumed.
 
-## Requirements traceability (revision 15 — clean, self-contained; see the note under "Round 6 finding disposition" above for why this replaces rather than extends the old WFR-1–61 numbering)
+## Requirements traceability (revision 21 — clean, self-contained; see the note under "Round 6 finding disposition" above for why this replaces rather than extends the old WFR-1–61 numbering)
 
 Every requirement below is current as of this revision. Superseded
 requirements from earlier revisions (the pre-split single-`bundle_id`
 design, rounds 1-4) are not restated — see the note above for why. This
-table is a generated, human-readable view of
-`docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json` (created
+table's **Requirement column is a generated, human-readable view of**
+`docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json`'s own
+`description` field per row (corrected, `OPUS-R28-003`, which found 15 of
+52 rows diverged, some substantively — `WFR-24`'s two versions stated
+opposite properties — despite `OPUS-R27-001`'s own conformance-test claim;
+all 52 synced this revision, verified by direct comparison under the exact
+normalization missing test 166 states, not merely asserted). **The
+Checkpoint column is explicitly not part of that generated-view claim and
+is out of scope for missing test 166**, which compares `description`
+fields only: several Checkpoint-column entries name a design-doc section
+(`D3`, `D2`, `D-Registry`, `D4b`, `D-Legacy`) rather than, or alongside, a
+registry checkpoint id — `WFR-29`'s "D3, D2" is the sharpest example — and
+`docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json`'s own
+`checkpoint_ids` field cannot represent a design-doc reference at all: D3's
+validator requires every member to be a real registry checkpoint id (the
+bidirectional registry × mapping coverage check, `OPUS-R10-006`), so
+literally syncing the Checkpoint column into `checkpoint_ids` would either
+fail that validator or silently drop the non-checkpoint references. The
+table's Checkpoint column may therefore cite design sections for reader
+context beside, or instead of, the checkpoint(s) that actually implement a
+requirement; `checkpoint_ids` remains the sole authoritative,
+validator-enforced source for "which checkpoint owns this requirement," per
+`WFR-25`. (created
 revision 8, `GPT-R9-003`) — WFR-32 through WFR-35 were added then; WFR-36
 closed WF8a-i's coverage gap (`OPUS-R10-006`); WFR-37 through WFR-40 were
 added in revision 10, covering the two-stage plan-review protocol
@@ -2711,15 +4542,47 @@ revision 12; WFR-45 was added in revision 13, covering the repository-wide
 classification obligation `OPUS-R16-001` required; WFR-46 was added in
 revision 14, covering the generator-contract fixes `OPUS-R18-001`/`-002`/
 `-003`/`-005` required — already implemented against the frozen prototype
-today, the same class as WFR-42/-45. **No new requirement this round**:
-`OPUS-R20-001`/`-002`/`-003` extend WFR-45/-46's evidence with
+today, the same class as WFR-42/-45. Revision 15 added no new requirement:
+`OPUS-R20-001`/`-002`/`-003` extended WFR-45/-46's evidence with
 forward-looking obligations owed to `WF4a-i` (missing-test items 138-140)
-rather than adding new requirements. Every requirement now maps to at
-least one checkpoint and every checkpoint owns at least one requirement —
-verified by direct query against the JSON files, not by inspection
-(re-run and confirmed clean this round: zero unmapped requirements, zero
-unowned checkpoints, zero dangling `depends_on`, topological order still
-valid).
+rather than adding new requirements. **WFR-47 through WFR-50 were added in
+revision 16** (`WF8B-S1-001`), covering `D-Fingerprint-Generalization`'s
+per-work-item metadata resolution, its fail-closed matrix, and
+`workflow-v2-1-core`'s own backward-compatibility guarantee — **wording
+corrected in revision 17** (`OPUS-R25-001`/`-002`) where revision 16's text
+depended on the now-corrected backward-compatibility criterion or the now-
+single-sourced `plan_revision`. **WFR-51 and WFR-52 were added in revision
+17** (`OPUS-R25-004`/`-005`/`-008`), covering the creation-path ordering
+for a new work item and the manifest/bundle work-item binding — both real
+gaps revision 16's own requirement set left uncovered, not merely
+under-specified. **Revision 18 adds no new requirement** (`OPUS-R26-*`):
+every round-26 correction is a within-scope fix to `D-Fingerprint-Generalization`'s
+existing mechanism, not a new obligation class — WFR-47's, WFR-49's, and
+WFR-50's own evidence columns gain missing-test items 145/157/159 (three
+items that existed since revision 16/17 but traced to no requirement,
+`OPUS-R26-005`), and WFR-47, WFR-48, WFR-49, WFR-50, WFR-51, and WFR-52's
+descriptions are extended to name the `base_commit`/`prepare-ai-review.sh`
+single-rule corrections (`OPUS-R26-002`/`-003`) their own checkpoint
+(`WF4a-i`) already owned — **six rows, corrected `OPUS-R27-009`: this
+paragraph, `REVIEW_REQUEST.md`, and the Round 26 scope-discipline paragraph
+each previously named a different subset (five rows, omitting WFR-48, or
+just WFR-49/WFR-52) of the same actual six-row diff**. **Revision 19
+likewise adds no new requirement** (`OPUS-R27-*`): `WFR-47`-`WFR-52`'s
+table-row *content* was already correct as of revision 18; what revision 19
+fixes is that `workflow-v2-1-core-mapping.json`'s own `description` values
+had never been synced to it (`OPUS-R27-001` — the `OPUS-R26-005` disposition
+row's and the revision-18 self-review notes' claim that they already were
+was false, corrected in place, not silently superseded), and `WFR-48`'s
+evidence column, which owns the thirteen-condition fail-closed matrix, gains
+missing-test items 145, 152, 161, and 163 — coverage for conditions 11-13
+that existed since revision 17/18 but had been recorded only under
+`WFR-49`/`WFR-50`, never under the requirement that actually owns the
+matrix (`OPUS-R27-006`).
+Every requirement now maps to at least one checkpoint and every checkpoint
+owns at least one requirement — verified by direct query against the JSON
+files, not by inspection (re-run and confirmed clean this round: zero
+unmapped requirements, zero unowned checkpoints, zero dangling
+`depends_on`, topological order still valid).
 
 | Req ID | Requirement | Checkpoint(s) | Verification |
 |---|---|---|---|
@@ -2769,8 +4632,14 @@ valid).
 | WFR-44 | Manual-ingestion validation is `review_content_id`-equality-hard, `bundle_id`-equality-advisory; the ledger records the feedback's actual `bundle_id` in both cases | WF4a-iv | A wrapper-only regeneration between upload and paste does not block ingestion (warns only); a `review_content_id` change does block it; the ledger's recorded `bundle_id` matches the feedback's, not the current recomputed one, when they differ (`OPUS-R14-005`) |
 | WFR-45 | Plan-stage classification covers every path any concurrent operation (not only this work item's own checkpoints) may write; a path this work item's plan declares out of scope is explicitly excluded, never merely unmentioned | WF4a-i | A write to `docs/ACTIVE_MILESTONE.md`/`docs/ROADMAP.md`/`docs/milestones/`/`docs/ai-workflow/archive/` while this work item is mid-sequence neither raises nor changes `review_content_id`; a genuinely novel path still fails closed (`OPUS-R16-001`) — **done**, `test_117_120_...`, `test_096` (extended); widened to `app/`, `docs/adr/`, `docs/agent-context/`, `gradle/`, `config/`, `.github/`, and five top-level product docs (`OPUS-R18-004`) — **done**, `test_133`/`test_134`/`test_135`; a genuinely novel path still fails closed, `test_057`/`test_034`/`test_035`/`test_095` (corrected to a path outside every named set); root-level build files deliberately remain unclassified/fail-closed (`OPUS-R20-002`) — **owed**, item 139; the implementation-stage projection must classify a representative source file oppositely from the plan-stage one, derived independently rather than adapted (`OPUS-R20-003`) — **owed**, item 140, `WF4a-i` |
 | WFR-46 | `MANIFEST.md` writing is read-only by default and requires an explicit, separately-named invocation; both `bundle_id` and `review_content_id` are computed last and asserted idempotent before the manifest is considered final; `plan_revision` is sourced from the registry JSON, not a caller-supplied literal, and cross-checked against the plan document's declared revision; `REVIEW_REQUEST.md` states `review_content_id` and bundle generation asserts it agrees with `MANIFEST.md` | WF4a-i | `__main__` contains no unconditional write (`test_130`); a read-only invocation leaves `.ai-review/current/` byte-identical (`test_128`); a protected-path edit between compute and recompute is caught (`test_126`); double generation is idempotent for both identifiers (`test_127`); `load_plan_revision` reads the registry and rejects a title/registry disagreement (`test_131`/`test_132`); `REVIEW_REQUEST.md`/`MANIFEST.md` agreement is enforced (`test_137`) — all **done** (`OPUS-R18-001`/`-002`/`-003`/`-005`); the write sequence itself is atomic across the idempotence check, not only across the pre-write `REVIEW_REQUEST.md` check (`OPUS-R20-001`) — **owed**, item 138, `WF4a-i` |
+| WFR-47 | Plan-stage `work_item_type`, `plan_path`, `registry_path`, `mapping_path`, `base_commit`, the protected/excluded path sets, and `plan_revision` are all resolved per `work_item_id` from one authoritative, validated source each (`WORKFLOW_STATE.json` and `<work_item_id>-artifacts.json`), never a hardcoded default naming a single work item, and never from two disagreeing sources (corrected `OPUS-R25-002`/`-010`: `plan_revision` is registry-only; the resolver lives in `workflow_fingerprint.py`, not `workflow_state.py`, so no call site can silently keep the old defaults; extended `OPUS-R26-003`: `base_commit` joins the resolved-per-item fact set, closing the one field revision 17 still let fall back to a literal) | WF4a-i | `compute_review_content_id_plan_stage_for_work_item`/`_at_commit_for_work_item` resolve every value from `resolve_plan_stage_metadata`; the CLI's `--work-item-id` (defaulting to live `active_work_item_id`) and its `base` positional (defaulting to the resolved item's own `base_commit`, never a literal) and `workflow_state.approval_review_content_id`'s `stage="plan"` branch (no `plan_revision` parameter) all route through it (`WF8B-S1-001`, `OPUS-R25-002`/`-010`, `OPUS-R26-003`) — **owed**, items 141, 147, 149-150, 159, 163-164 |
+| WFR-48 | Unknown, incomplete, mismatched, duplicated, or cross-wired work-item plan-stage metadata fails closed, independently distinguishable by exception type — including a declared path that is not actually a member of the protected set it claims, and a path that fails a repo-relative/no-traversal/no-symlink grammar check (corrected/extended `OPUS-R25-003`/`-008`/`-009`) | WF4a-i | Each of the thirteen fail-closed matrix conditions in `D-Fingerprint-Generalization` raises its own named exception (`WF8B-S1-001`, `OPUS-R25-003`/`-008`/`-009`, `OPUS-R26-001`/`-003`) — **owed**, items 145-148, 152, 158, 161, 163 (corrected `OPUS-R27-006`: conditions 11-13's own sole coverage had been recorded only under `WFR-50`/`WFR-49`, never under this requirement, which actually owns the matrix) |
+| WFR-49 | A second, real work item computes a plan-stage `review_content_id` distinct from `workflow-v2-1-core`'s — including its own `base_commit`, never core's — whose manifest, `MANIFEST.md`'s own `work_item_id`/`base_commit` fields, and `--write-manifest` output all contain/name only its own declared files/identity; mutating either work item's protected content changes only that item's identifier; a `--write-manifest` invocation targeting a bundle directory whose existing manifest disagrees with the resolved item (a different `work_item_id`, no `work_item_id` at all, or a different `base_commit`) refuses; `prepare-ai-review.sh` resolves the work-item id once and uses it consistently for the directory and the manifest it writes (corrected/extended `OPUS-R25-004`/`-005`/`-012`, `OPUS-R26-001`/`-002`/`-003`) | WF4a-i | Cross-item fixture pair, both directions, plus creation-path/manifest-binding coverage (`WF8B-S1-001`, `OPUS-R25-004`/`-005`/`-012`, `OPUS-R26-001`/`-002`/`-003`) — **owed**, items 143-144, 149, 151-155, 157, 161-163, 165 |
+| WFR-50 | `workflow-v2-1-core`'s own plan-stage protected/excluded sets, and the migrated `<work_item_id>-artifacts.json`'s own approval binding, are reproduced/preserved exactly after the generalization — verified mechanism-relatively (migrated sets equal the pre-migration Python constants) rather than against an unreproducible literal digest, without a fresh review round required for the migration's data alone; commit-source resolution predating the schema-version-2 migration is a deliberate, tested boundary rather than a silent fallback (corrected `OPUS-R25-001`/`-006`/`-013`) | WF4a-i | Migrated `plan_stage` JSON equals the pre-migration Python constants item for item; `<work_item_id>-artifacts.json` classifies implementation-stage protected by exact path via its own concrete self-referential entry, not a placeholder (`WF8B-S1-001`, `OPUS-R25-001`/`-006`/`-013`, `OPUS-R26-004`) — **owed**, items 141-142, 145, 156, 160, 164 |
+| WFR-51 | A new process work item's `plan_path`/`registry_path`/`mapping_path`/`base_commit` and `<work_item_id>-artifacts.json` each have a named sole writer and a stated ordering (declare paths, then populate registry/mapping/artifacts content, then compute a fingerprint) that avoids circular dependency and fails closed on a partial definition (new, `OPUS-R25-004`; extended `OPUS-R26-003` to include `base_commit` among the sole-writer facts) | WF4a-i | `/milestone-plan v2-1-dry-run` end to end succeeds with no missing-metadata error, including a real, non-null `base_commit`; the default artifacts template satisfies the protected-set binding check by construction (`OPUS-R25-004`, `OPUS-R26-003`) — **owed**, items 154-155 |
+| WFR-52 | `MANIFEST.md` and every plan-stage bundle it accompanies are bound to an explicit `work_item_id` and `base_commit`; no command or script path (including `scripts/prepare-ai-review.sh`, which resolves the work-item id exactly once for both the bundle directory and the manifest) can silently write or overwrite a bundle/manifest belonging to a different or unspecified work item — including a bundle directory whose existing manifest declares no `work_item_id` at all, which fails closed rather than binding silently (new, `OPUS-R25-005`/`-012`; corrected/extended `OPUS-R26-001`/`-002`/`-003`) | WF4a-i | `BundleWorkItemMismatchError` on a cross-item write attempt, an unbound-manifest write attempt, and a `base_commit` disagreement; `prepare-ai-review.sh`'s `plan`-stage path writes `MANIFEST.md` itself, sharing one single resolved work-item id with its own bundle-directory choice (`OPUS-R25-005`/`-012`, `OPUS-R26-001`/`-002`/`-003`) — **owed**, items 152-153, 161-163, 165 |
 
-## Checkpoint registry (revision 15: 17 checkpoints, unchanged count — `WF4a-iv` (added revision 10) had its session target widened in revision 11; revisions 12 through 15 (`OPUS-R14-*`/`OPUS-R16-*`/`OPUS-R18-*`/`OPUS-R20-*`) touched no checkpoint's size or dependency, only `PLAN_STAGE_PROTECTED`/`PLAN_STAGE_EXCLUDED_*` classification, the registry JSON's own `plan_revision` field, and requirements owned by existing checkpoints; complexity scale defined; this table is a generated view of `docs/ai-workflow/registry/workflow-v2-1-core-registry.json`, D-Registry)
+## Checkpoint registry (revision 21: 17 checkpoints, unchanged count — `WF4a-iv` (added revision 10) had its session target widened in revision 11; revisions 12 through 21 (`OPUS-R14-*`/`OPUS-R16-*`/`OPUS-R18-*`/`OPUS-R20-*`/`WF8B-S1-001`/`OPUS-R25-*`/`OPUS-R26-*`/`OPUS-R27-*`/`OPUS-R28-*`/`GPT-R29-*`) touched no checkpoint's size or dependency, only `PLAN_STAGE_PROTECTED`/`PLAN_STAGE_EXCLUDED_*` classification (and, since revision 16, how that classification is *derived* per work item — `D-Fingerprint-Generalization`), the registry JSON's own `plan_revision` field, and requirements owned by existing checkpoints; complexity scale defined; this table is a generated view of `docs/ai-workflow/registry/workflow-v2-1-core-registry.json`, D-Registry)
 
 **Complexity scale** (resolves the undefined-units half of `OPUS-R6-023`):
 1-2 = Small (single, narrow file change, no cross-checkpoint coordination);
@@ -2805,7 +4674,7 @@ After WF8b: existing, unmodified `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` →
 `AWAITING_FUNCTIONAL_REVIEW` → `AWAITING_USER_ACCEPTANCE` →
 `MILESTONE_COMPLETE` gate sequence.
 
-## Missing tests (revision 15 — clean, continuous numbering; items 1-44 from revision 7, 45-54 from revision 8, 55-78 from revision 9, 79-93 from revision 10, 94-99 from revision 11, 100-116 from revision 12, 117-124 from revision 13, 125-137 from revision 14, 138-140 new this round, forward-looking obligations owed to `WF4a-i`; see the note under "Round 6 finding disposition" above)
+## Missing tests (revision 21 — clean, continuous numbering; items 1-44 from revision 7, 45-54 from revision 8, 55-78 from revision 9, 79-93 from revision 10, 94-99 from revision 11, 100-116 from revision 12, 117-124 from revision 13, 125-137 from revision 14, 138-140 from revision 15, 141-160 from revision 16/17, 161-163 from revision 18, 164-166 from revision 19 — no new numbered items this round; items 161, 166 corrected/extended in place this round (`GPT-R29-*`), items 149, 154, 164, 165 restated unchanged from revision 20, items 153, 162 restated unchanged from revision 19, items 146, 152 restated unchanged from revision 18, the rest of 141-160 restated unchanged from revision 17 — forward-looking obligations owed to `WF8b`'s continued scope, now including item 166 (reassigned from `WF8a-ii`, `GPT-R29-003`); see the note under "Round 6 finding disposition" above)
 
 Items already implemented and passing (prototype rounds, `scripts/workflow_fingerprint_test.py`/`_demo_test.py`) are marked **done**; the rest are checkpoint obligations.
 
@@ -2960,6 +4829,56 @@ Round 11's items (`GPT-R11-*`), continuing the numbering:
 138. a protected-path edit injected between the write and the recompute-and-assert step raises **and** leaves `MANIFEST.md` byte-identical to its pre-invocation state (`OPUS-R20-001`) → **owed to `WF4a-i`**;
 139. a root-level build file (`build.gradle.kts`/`settings.gradle.kts`/`gradlew`/`Makefile`) still raises `UnclassifiedPathError`, pinning the deliberate fail-closed decision recorded in D-Fingerprint (`OPUS-R20-002`) → **owed to `WF4a-i`**;
 140. the implementation-stage classification projection and the plan-stage projection classify a representative source file (e.g. `app/src/main/...`) oppositely — excluded at the plan stage, protected at the implementation stage (`OPUS-R20-003`) → **owed to `WF4a-i`**.
+
+Revision 16/17's items (`WF8B-S1-*`/`OPUS-R25-*`), continuing the
+numbering, all owed to the dedicated fix session tracked within `WF8b`'s
+own continued scope (unit, integration, negative, cross-item, manifest,
+bundle, approval-binding, and regression coverage, per
+`D-Fingerprint-Generalization`'s acceptance criteria). **Corrected this
+revision** (resolves `OPUS-R25-009`): items 141-151 as revision 16 stated
+them either pinned an unreproducible literal (142), undercounted the
+fail-closed matrix (146), or omitted coverage revision 17's own additions
+require; restated below in full rather than patched in place, so the list
+reads as one coherent set instead of a base list plus scattered
+corrections:
+
+141. `workflow-v2-1-core-artifacts.json`'s migrated `plan_stage` section, loaded via `load_plan_stage_classification`, equals `PLAN_STAGE_PROTECTED`/`PLAN_STAGE_EXCLUDED_PATHS`/`PLAN_STAGE_EXCLUDED_PREFIXES` exactly, item for item, compared directly rather than via a hardcoded digest literal, before either Python constant is retired as a live default (`WF8B-S1-001`, `OPUS-R25-001`/`-010`, unit/regression) → **owed to `WF8b`**;
+142. **(corrected, `OPUS-R25-001`)** `compute_review_content_id_plan_stage_for_work_item(repo_root, base, "workflow-v2-1-core")`, at the *same* base/content item 141 verifies, reproduces the *migrated* digest — never a hardcoded `2b4d2e3b89c2b8f...`/`f7aeff4985...` literal, which this revision's own approval necessarily invalidates the moment it is recorded (`WF8B-S1-001`, `OPUS-R25-001`, regression/approval-binding) → **owed to `WF8b`**;
+143. a second fixture work item (its own `plan_path`/`registry_path`/`mapping_path`, each a member of its own `<id>-artifacts.json` `plan_stage.protected_paths`, per resolution step 11) computes a `review_content_id` distinct from `workflow-v2-1-core`'s, whose manifest contains only its own declared files (`WF8B-S1-001`, `OPUS-R25-003`, integration/cross-item) → **owed to `WF8b`**;
+144. mutating fixture A's protected file changes only fixture A's `review_content_id`; mutating fixture B's, or an unrelated/excluded path, changes neither (`WF8B-S1-001`, cross-item/negative) → **owed to `WF8b`**;
+145. **(extended, `OPUS-R25-013`)** a commit-source computation (`compute_review_content_id_plan_stage_at_commit_for_work_item`) resolves metadata from the given commit, not from a subsequently-edited live `WORKFLOW_STATE.json` — committed one metadata state, edited `WORKFLOW_STATE.json` afterward to point elsewhere, and asserted the commit-source recomputation is unaffected; **and** invoked against a commit predating the schema-version-2 migration raises `MissingPlanStageMetadataError`/`MissingWorkItemArtifactsDeclarationError` (not a crash, not a silent fallback), confirming the deliberate pre-migration boundary rather than an unhandled case (`WF8B-S1-001`, `OPUS-R25-013`, unit/negative, the worktree/commit-source metadata-pinning invariant) → **owed to `WF8b`**;
+146. **(corrected, `OPUS-R26-006`, replacing revision 17's own "sixteen"/`(4a-c)` defects — the same class of error `OPUS-R25-009` raised against revision 16, reproduced in the round-17 correction)** each of the first eight fail-closed matrix conditions raises the documented exception, naming the offending work item and field, in independent sub-cases: (1) unknown work item; (2) non-`"process"` type; (3a-c) null `plan_path`/`registry_path`/`mapping_path`, independently; (4a-c) each of the three **fields** (`plan_path`/`registry_path`/`mapping_path`), independently, failing the path-grammar validator against the same representative rule violation, with the minimum rule-violation vector set named separately (absolute path, `../` traversal, non-tracked/symlinked target — at minimum, exercised at least once across the three fields, not a full 3×3 matrix); (5) missing artifacts-declarations file; (6a-c) registry/mapping/artifacts self-declared `work_item_id` mismatch, independently; (7a-b) a declared path not a member of the resolved protected set, and the three paths not pairwise distinct; (8a-c) a non-null `plan_path`/`registry_path`/`mapping_path` claimed by a second work item, independently per field — **seventeen** independent sub-cases total for conditions 1-8 (`WF8B-S1-001`, `OPUS-R25-003`/`-008`/`-009`, `OPUS-R26-006`, negative/exhaustive) → **owed to `WF8b`**;
+147. **(extended, `OPUS-R25-002`/`-012`)** condition 9 (registry/plan-title `plan_revision` disagreement) fails closed per work item, independent of any other item's own `plan_revision`; and a `WORKFLOW_STATE.json`/registry `plan_revision` mirror disagreement is rejected by `validate_state` (`PlanRevisionMirrorMismatchError`) before any fingerprint call runs (`OPUS-R25-002`/`-009`, negative) → **owed to `WF8b`**;
+148. **(extended, `OPUS-R25-009`)** condition 10 (`UnclassifiedPathError`) fails closed for a genuinely novel path scoped to a *second* fixture item specifically — not only re-verified against `workflow-v2-1-core`'s own existing regression fixtures — confirming the classifier is scoped per item rather than globally (`OPUS-R25-009`, negative) → **owed to `WF8b`**;
+149. the CLI's `--work-item-id <second-item>` prints that item's own resolved values end to end, with no `workflow-v2-1-core` literal appearing anywhere in output scoped to a different item; for the **read-only** path, omitting the flag resolves to the live `active_work_item_id`, never a hardcoded default; **and** (extended, `OPUS-R28-010`) `--write-manifest` with `--work-item-id` omitted refuses with a usage error before any directory is created or bound — never silently resolving to and writing the live `active_work_item_id`'s directory (`WF8B-S1-001`, `OPUS-R25-005`, `OPUS-R28-010`, integration/CLI/manifest + negative) → **owed to `WF8b`**;
+150. `approval_is_current`/`implementing_entry_reachable`/`verify_post_approval_manifest_match`, exercised against a second fixture item with its own `plan_approval` record, gate independently of `workflow-v2-1-core`'s record and content, with no `plan_revision` parameter passed by either caller (`WF8B-S1-001`, `OPUS-R25-002`, integration/approval-binding) → **owed to `WF8b`**;
+151. `write_manifest_with_verified_identifiers` invoked for a second fixture item writes a `MANIFEST.md` whose `work_item_id`/`plan_revision`/`base_commit`/`review_content_id`/`protected_paths` are that item's own, and the bundle's `files/` copies contain only that item's declared protected files (`WF8B-S1-001`, `OPUS-R25-005`, bundle) → **owed to `WF8b`**;
+152. **(extended, `OPUS-R25-005`, `OPUS-R26-001`)** `--write-manifest` invoked with `--work-item-id v2-1-dry-run` against a bundle directory whose existing `MANIFEST.md` already names `workflow-v2-1-core` raises `BundleWorkItemMismatchError`, naming both, and leaves the existing `MANIFEST.md` untouched (`OPUS-R25-005`, negative/manifest); **and**, the distinct sub-case `OPUS-R26-001` added: the same invocation against a bundle directory whose existing `MANIFEST.md` is present but declares **no** `work_item_id` at all (this repository's own current `.ai-review/current/MANIFEST.md`, before the one-time migration rebinding step runs) likewise raises `BundleWorkItemMismatchError`, naming "unbound" rather than silently proceeding — see also new test 161, which exercises this same sub-case as a standalone negative test against a byte-copy of the real file → **owed to `WF8b`**;
+153. **(extended, `OPUS-R25-012`, `OPUS-R26-002`; corrected, `OPUS-R27-003`/`-005`, replacing the argument-omitted sub-case, which described the pre-`OPUS-R27-003` "resolve once, else live-active" design rather than the required-argument design revision 19 adopts — see test 162, which now exercises the omitted-argument case standalone)** `scripts/prepare-ai-review.sh <base> plan <work-item-id>`, run end to end with its required third argument and no separate manual CLI invocation, writes `ROOT_DIR=.ai-review/<work-item-id>/current` and a `MANIFEST.md` naming that exact `work-item-id` and its own `review_content_id` — both derived from the one value resolved at the top of the script's own logic, never two different rules (`OPUS-R25-012`, `OPUS-R26-002`, integration/bundle) → **owed to `WF8b`**;
+154. **(new, `OPUS-R25-004`; corrected, `OPUS-R28-002`)** `/milestone-plan v2-1-dry-run` itself — the **pre-existing non-terminal entry** case, `registry_path`/`mapping_path`/`base_commit` still `null`, `route_work_item`'s resume branch — run end to end through bundle generation, succeeds with no `MissingPlanStageMetadataError`/`MissingWorkItemArtifactsDeclarationError`: the resume branch's new per-field write-or-conflict rule actually populates the four facts a pre-declared entry never got at creation time. **Separately**, a freshly-created process work item (creation branch) run the same way, as an independent case — the two are not interchangeable, since only the second exercises `default_work_item`'s existing write path and only the first exercises the new resume-branch write path. The creation-path ordering (declare paths, then populate registry/mapping/artifacts content, then fingerprint) actually closes the gap that left S1 blocked one error deeper for both cases (`WF8B-S1-001`, `OPUS-R25-004`, `OPUS-R28-002`, integration/end-to-end) → **owed to `WF8b`**;
+155. **(new, `OPUS-R25-004`)** the default `plan_stage` template `generate_artifacts_declarations` writes for a fresh work item names that item's own three artifact paths as `protected_paths`, satisfying condition 7 (matrix item 146) by construction at creation time, with no additional edit required before the item's own first plan-stage computation succeeds (`OPUS-R25-004`, unit) → **owed to `WF8b`**;
+156. **(new, `OPUS-R25-006`)** `docs/ai-workflow/registry/<work_item_id>-artifacts.json` classifies as implementation-stage *protected* (exact path, checked before the `docs/ai-workflow/registry/` prefix); editing its `plan_stage` key changes plan-stage `review_content_id`; editing its `implementation_stage` key does not — all three asserted directly, correcting the file's own stale `_comment` invariant claim (`OPUS-R25-006`, unit/regression) → **owed to `WF8b`**;
+157. **(new, `OPUS-R25-011`)** a `work_item_kind: "synthetic"` item (`v2-1-dry-run`) with `work_item_type: "process"` computes its own distinct plan-stage `review_content_id`, exercising the corrected resolution algorithm against the exact item the superseded code comment named (`WF8B-S1-001`, `OPUS-R25-011`, integration/regression) → **owed to `WF8b`**;
+158. **(new, `OPUS-R25-007`)** two work items declaring the same `plan_path` but different `registry_path`/`mapping_path` (a partial, not full-triple, collision) raise `DuplicateWorkItemArtifactPathError` from `resolve_plan_stage_metadata` itself, not only from `validate_state` — exercising the read-path relocation, not merely the write-path backstop (`OPUS-R25-007`, negative) → **owed to `WF8b`**;
+159. **(new, `OPUS-R25-014`)** `workflow_test_harness.py`'s `write_plan_docs` emits a valid per-item `<id>-artifacts.json` alongside its five fixture files, consumed successfully by `resolve_plan_stage_metadata` with no override needed for any harness-created item, including `workflow-v2-1-core` itself (`OPUS-R25-014`, unit/harness) → **owed to `WF8b`**;
+160. the full existing regression suite (`workflow_fingerprint_test.py`, `workflow_fingerprint_demo_test.py`, `workflow_state_test.py`, `workflow_state_demo_test.py`, `workflow_integration_test.py`, `workflow_test_harness_test.py`) passes unchanged in assertion count, plus items 141-159 above, and S1 (`docs/ai-workflow/dry-run/WF8B_SCENARIOS.md`), re-attempted from the beginning in a fresh session after this revision and its implementation are both independently reviewed and approved, produces a `v2-1-dry-run`-specific `review_content_id`/manifest/bundle distinct from `workflow-v2-1-core`'s, and the false-positive scenario `docs/ai-workflow/dry-run/WF8B_S1_FINDING_review_content_id_not_generalized.md` describes no longer reproduces (`WF8B-S1-001`, full-suite regression + end-to-end) → **owed to `WF8b`** (items 161-166 below, added by `OPUS-R26-*`/`OPUS-R27-*`/`OPUS-R28-*`/`GPT-R29-*`, are additional independent obligations, not folded into this item's own restated scope — the full-suite pass this item requires additionally includes them, per migration step 10 above, which is now explicit that its own range is 141-166; item 166 was `WF8a-ii`'s own obligation through revision 20, reassigned to this same `WF8b` scope by `GPT-R29-003` since `WF8a-ii` is already `COMPLETE` and cannot be reopened to give it a reachable owner).
+
+Revision 18's items (`OPUS-R26-*`), continuing the numbering — three new
+obligations the round-26 review named explicitly, none folded into any
+existing item above because each exercises a sub-case distinct from what
+141-160 already cover:
+
+161. **(new, `OPUS-R26-001`; extended, `OPUS-R27-004`/`OPUS-R28-008`; corrected, `GPT-R29-002`)** `--write-manifest` against a bundle directory whose existing `MANIFEST.md` is present but declares no `work_item_id` refuses (`BundleWorkItemMismatchError`, naming "unbound") and never silently overwrites, asserted against a byte-copy of this repository's own current `.ai-review/current/MANIFEST.md` — including that the check does not false-positive on the `work_item_id` substring inside line 21's own exclusion-justification prose, confirming the comparison parses the manifest's `field: value` header lines rather than substring-scanning (`OPUS-R26-001`, negative/manifest); **and**, the sub-case corrected `GPT-R29-002` (replacing `OPUS-R27-004`'s "creates and binds" sub-case, which asserted an outcome the manifest algorithm cannot produce — see acceptance criterion 22): `--write-manifest --work-item-id <new-item>`, invoked for a work item whose own scoped bundle directory (`.ai-review/<new-item>/current`) does not yet exist, refuses with `MissingRequiredBundleFileError`, naming the resolved directory and never silently creating it, resolving into, or writing `.ai-review/current` instead; **and** the sub-case `OPUS-R28-008` restated under the same single check, `GPT-R29-002`: `--write-manifest --work-item-id <new-item>` against a scoped bundle directory that already exists, is non-empty, and is missing a required generation file (simulating an interrupted prior `prepare-ai-review.sh` run) likewise refuses with `MissingRequiredBundleFileError`, naming the missing file — the same exception and the same check as the wholly-absent case, not a second mechanism, rather than binding the partial content; **and** the positive case, stated explicitly for the first time (`GPT-R29-002`): `--write-manifest --work-item-id <new-item>` against a scoped bundle directory that already contains the complete required generation file set (produced by a prior `prepare-ai-review.sh` run, or an equivalent full-generation fixture, that did not itself call `--write-manifest`) and has no `MANIFEST.md` yet binds it successfully → **owed to `WF8b`**;
+162. **(new, `OPUS-R26-002`; restated, `OPUS-R27-003`/`-005`, replacing the "either writes a matching manifest, or refuses naming both" phrasing, which accepted two mutually exclusive designs and could not fail under a regression to the rejected one)** `scripts/prepare-ai-review.sh <base> plan`, invoked with **no** third argument, refuses immediately — a usage/argument error, before writing any bundle content, `ROOT_DIR`, or manifest — because the plan stage's work-item id is a required argument, never resolved from the live `active_work_item_id`; there is therefore no fallback path left for `ROOT_DIR` and `--write-manifest` to disagree about, asserted as a positive, unambiguous property rather than an "or" (`OPUS-R26-002`, `OPUS-R27-003`/`-005`, integration/bundle) → **owed to `WF8b`**;
+163. **(new, `OPUS-R26-003`)** the CLI invoked for a second work item with no `base` positional does not compute against `workflow-v2-1-core`'s base commit: it resolves that item's own `base_commit`, or fails closed (`MissingPlanStageMetadataError`) when it is `null`; and `MANIFEST.md`'s `base_commit` field equals the resolved item's declared value, checked at write time (`OPUS-R26-003`, unit + manifest) → **owed to `WF8b`**.
+
+Round 27's items (`OPUS-R27-*`), continuing the numbering — three new
+obligations named explicitly, none folded into any existing item above
+because each exercises a scope distinct from what 141-163 already cover:
+
+164. **(new, `OPUS-R27-002`; extended, `OPUS-R28-001`)** `approval_is_current(stage="implementation")` **and** `verify_post_approval_manifest_match(stage="implementation")`, each exercised against a second work item, load that item's own `<id>-artifacts.json` — via `fingerprint.artifacts_path_for_work_item(work_item_id)`, never `DEFAULT_ARTIFACTS_PATH`: deleting the second item's own self-referential `implementation_stage.protected_paths` entry changes only its own implementation-stage `review_content_id` and stales only its own `technical_approval`; editing `workflow-v2-1-core`'s own artifacts file leaves the second item's approval untouched. `verify_post_approval_manifest_match` is the caller with no other coverage in this item — it is the one `/approve-review` step 6a actually invokes post-commit, for either stage (`OPUS-R27-002`, `OPUS-R28-001`, integration/approval-binding) → **owed to `WF8b`**;
+165. **(new, `OPUS-R27-003`; extended, `OPUS-R28-004`/`-006`)** `scripts/prepare-ai-review.sh <base> plan <id>` refuses, before generating any bundle content, when the resolved item's own declared `base_commit` (`WORKFLOW_STATE.json`'s `work_items[<id>].base_commit`) disagrees with the resolved `BASE_SHA` (not the raw `<base>` argument — an abbreviated SHA or symbolic ref that `git rev-parse` resolves correctly must still pass; only a genuine disagreement between the two resolved commits refuses), naming both resolved values — the content↔identity binding fail-closed matrix condition 13 already defines, applied here as an early script-level refusal via `fingerprint.resolve_plan_stage_metadata` (never a second, ad hoc metadata reader) rather than only a downstream manifest-write check. **Extended, `OPUS-R28-004`**: migration step 8a's relocation, run against a byte-copy of this repository's own real `.ai-review/current`/`review-bundle.tar.gz`, (a) refuses with both paths named when the destination already exists non-empty rather than nesting silently; (b) the post-move verification catches a simulated partial move (destination missing an expected file) and stops before the rebinding write, leaving the source-or-partial-destination state diagnosable rather than binding it (`OPUS-R27-003`, `OPUS-R28-004`, `OPUS-R28-006`, integration/bundle + negative) → **owed to `WF8b`**;
+166. **(new, `OPUS-R27-001`; scope reconciled with criterion 19, `OPUS-R28-003`; ownership reassigned, `GPT-R29-003`)** A grep-based conformance test over `docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json` and the Requirements traceability table above asserts that every `WFR-*` requirement's JSON `description` — **the description field only, never the Checkpoint column, which may legitimately cite a design-doc section instead of or alongside a registry checkpoint id and is explicitly out of scope for this test** — matches its rendered table row (backtick markup, `**` bold markup, em dash normalized to `--`, and trailing `(corrected/extended/new OPUS-R.../GPT-R...)` historical-citation parentheticals stripped from the table row before comparison, case-insensitive — the same normalization every other requirement's JSON description already applies implicitly, confirmed by inspection: no existing `description` field embeds a round citation). All 52 rows are already synced and independently verified by this same round (`OPUS-R28-003`) as part of criterion 19's data fix; this item is the **separate, ongoing** automated regression test that keeps them synced going forward — it does not re-do the one-time sync, which criterion 19 already requires and this fix session already performs — enforcing the "generated view" claim rather than merely asserting it, the same class as items 108/109/123, and what would have caught `OPUS-R27-001` during self-review (`OPUS-R27-001`, `OPUS-R28-003`, documentation-consistency lint) → **owed to `WF8b`** (corrected, `GPT-R29-003`: `OPUS-R28-003` split ownership between this item, kept with `WF8a-ii`, and criterion 19's data-correctness half, satisfied by this revision — but `WF8a-ii` is already `COMPLETE`, and checkpoint completion is never reopened to attach a new obligation to it, leaving this item with no reachable owner at all, exactly the gap the current review's own failure scenario describes: a remediation implementation could pass every other required test while this one is never added, since nothing scheduled it. Reassigned to this same `WF8b` continued-scope set that items 141-165 already belong to and included in migration step 10's required-green range alongside them — the smaller of the finding's two offered fixes, and consistent with `WF8b`, not `WF8a-ii`, being the checkpoint whose own `OPUS-R28-003` fix populated the 52 rows this test verifies).
 
 ## Usability concerns (resolves round 5/6's undispositioned per-gate reporting requirement, and GPT-R9-004's bootstrap-sequence requirement)
 
@@ -3133,8 +5052,87 @@ signature of a design that has converged, not one still churning. No
 further plan-review round is required; the next external review is the
 implementation-review gate.
 
-## Self-review notes (revision 15)
+## Self-review notes (revision 19)
 
+- **This revision's migration step 2** (transcribing `PLAN_STAGE_PROTECTED`/
+  `PLAN_STAGE_EXCLUDED_PATHS`/`PLAN_STAGE_EXCLUDED_PREFIXES`'s current
+  members into the migrated `workflow-v2-1-core-artifacts.json`) is a
+  manual transcription, not a mechanically generated one — a transcription
+  error would silently produce a *different* resolved set for
+  `workflow-v2-1-core`, changing its `review_content_id` without any design
+  intent behind the change. This is exactly why acceptance criterion 1 and
+  missing-test items 141-142 are the fix session's own **first**, blocking
+  step, verified before any other code change lands, rather than assumed
+  safe because it "should just be a copy."
+- **This revision does not retroactively document `OPUS-R24-*`'s
+  `docs/ai-workflow/dry-run/` exclusion in D-Fingerprint's own prose** (see
+  the "Round 25 finding disposition" note above) — that gap predates this
+  revision, is unrelated to `WF8B-S1-001`'s root cause, and fixing it here
+  would blur this revision's own scope-discipline boundary. Flagged
+  explicitly so it is not mistaken for an oversight of this revision
+  specifically, and left for whichever future revision next touches
+  D-Fingerprint's prose for an unrelated reason.
+- **(standing invariant, first stated revision 16, corrected from "this
+  revision" phrasing, `OPUS-R28-012`) Every revision of `WF8B-S1-001`'s
+  design, from revision 16 through the current one, specifies but does not
+  implement the fix** — consistent with this document's own
+  plan/implementation separation (`CLAUDE.md`'s git restrictions,
+  `MILESTONE_WORKFLOW.md`'s `PLANNING` vs. `IMPLEMENTING` states): every
+  file each such revision edits (`WORKFLOW_V2_PLAN.md`, the registry's
+  `plan_revision` field, the requirements mapping) is plan-stage content;
+  no file under `scripts/` or `.claude/commands/` changes. The dedicated
+  fix session that follows approval is where
+  `scripts/workflow_fingerprint.py`/`scripts/workflow_state.py` actually
+  change, under the ordinary implementation-review cycle. (This bullet
+  previously read "this revision," ambiguous as to which — the same
+  drift the two duplicated `active_work_item_id` paragraphs below had;
+  restated once, here, as the standing property it actually is, rather
+  than re-dated at every revision bump.)
+- **`base_commit`'s own writer, named as a deliberately out-of-scope gap in
+  revision 17, is closed in revision 18** (superseded note, kept for the
+  historical record rather than deleted — the original text is quoted
+  below): `OPUS-R26-003` found this gap load-bearing, not merely deferred
+  — with no resolved per-item `base_commit` to fall back to, the CLI's
+  `base` positional kept a hardcoded literal naming `workflow-v2-1-core`'s
+  own base commit, exactly the defect class this whole finding exists to
+  remove. `route_work_item`/`default_work_item` now take `base_commit` as
+  a parameter (the "Creation path" subsection), and the `base` positional
+  resolves from it (the "Effect on `--work-item-id`" subsection). Revision
+  17's original note: "`base_commit`'s own writer is a real, pre-existing
+  gap this revision does not close (`D-Fingerprint-Generalization`'s
+  'Creation path' section, resolving `OPUS-R25-004`, states this
+  explicitly rather than silently leaving it implied): `route_work_item`
+  does not take `base_commit` as a parameter today, and
+  `workflow-v2-1-core`'s own value was set outside that function's normal
+  path. Scoped out deliberately — the follow-up review request's own item
+  4 lists `plan_path`/`registry_path`/`mapping_path`/`plan_revision`/the
+  artifacts declaration/bundle-directory identity as what `/milestone-plan`
+  must initialize, and does not list `base_commit`. Naming the gap here
+  rather than quietly working around it keeps a future reviewer from
+  assuming it was already handled." — that last sentence's own judgment
+  proved correct: naming it here is exactly what let `OPUS-R26-003` find it
+  rather than have to rediscover it.
+- **This revision found and corrected a genuine wording bug in its own
+  prior text while extending it, not one the external review named**:
+  revision 16's `D3` validator-rules paragraph stated the `mapping_path`/
+  `registry_path` nullability-agreement rule backwards ("`mapping_path`
+  non-null when `registry_path` is null, or null when `registry_path` is
+  non-null" describes disagreement, not the agreement the rule actually
+  requires). Caught during this revision's own re-reading of the paragraph
+  it was extending, not flagged by `OPUS-R25-*` — recorded here because a
+  self-caught defect in already-"approved-pending" text is exactly the
+  kind of thing a later reader would otherwise have to rediscover the hard
+  way.
+- **The corrected design is materially larger than revision 16's** (twelve
+  fail-closed conditions instead of nine, nine new exception classes
+  instead of five, twenty test items instead of eleven, two new
+  requirements). This is not scope creep relative to `WF8B-S1-001` — every
+  addition traces to a specific `OPUS-R25-*` finding validated against the
+  actual repository (see the disposition table above), not to a
+  speculative hardening pass. Worth stating plainly rather than letting the
+  size increase go unremarked: a reviewer comparing revision 16 and 17 side
+  by side should expect roughly double the design text, all of it load-
+  bearing.
 - `docs/ai-workflow/WORKFLOW_V2_PLAN.md` and `WORKFLOW_V2_AUDIT.md` remain
   uncommitted through sixteen review rounds — correct per this
   milestone's own gate sequence (nothing commits before `/approve-review
@@ -3270,6 +5268,200 @@ implementation-review gate.
   138-140 are owed to `WF4a-i`, the checkpoint that will give
   `write_manifest_with_verified_identifiers` and the classification
   constants their first real implementation-stage caller.
+
+**Revision 18's own notes** (`OPUS-R26-*`):
+
+- **The pattern across all three `HIGH` findings this round is the same
+  one**: a corrected mechanism left exactly one branch of its own fail-closed
+  matrix unhandled (absent, differently-named, but not "present and
+  unbound" — `-001`), one resolution rule stated as two ("or" — `-002`), or
+  one literal retired while a structurally identical sibling literal (the
+  `base` positional) survived unexamined (`-003`). None of the three
+  required reopening any mechanism revision 16/17 froze; each is exactly
+  the class of gap this whole finding exists to eliminate, recurring one
+  layer deeper than the layer already fixed. Worth stating plainly, since
+  it is the same shape `WF8B-S1-001` itself named and the same shape
+  `OPUS-R25-005`/`-012` already partially closed: a corrected default is
+  not the same claim as an exhaustively corrected default, and this
+  revision's own job was to find the remaining exceptions to that claim,
+  not to re-litigate the claim itself.
+- **`OPUS-R26-005`'s "mirror the same additions into
+  `workflow-v2-1-core-mapping.json`" instruction was reasoned as satisfied
+  without a JSON edit — and that reasoning was half right, half wrong,
+  corrected this revision (`OPUS-R27-001`)**: the mapping file's own schema
+  (`D4b`, unchanged since revision 8) carries only `{description,
+  checkpoint_ids}` per requirement — no per-test evidence field exists for
+  any requirement, not only WFR-47/-49/-50 — so there was, and is, nothing
+  in that file's current format for a *test-item* addition to mirror into;
+  that half of the reasoning is correct and unchanged. What was wrong was
+  the separate, unstated assumption that the JSON's `description` values
+  were therefore already current: `OPUS-R27-001` found six table rows
+  rewritten in revision 18 (`WFR-47` through `WFR-52`) against a JSON left
+  completely untouched — `WFR-47`'s JSON description did not mention
+  `base_commit` at all. Revision 19 syncs all six `description` values to
+  their table-row content and adds a grep-based conformance test (item 166)
+  so the two kinds of "mirroring" (test-evidence, which the schema has no
+  field for; description content, which it does) are never conflated
+  again. Recorded here, rather than silently corrected, so a future reader
+  sees both what was right and what was wrong in the original reasoning.
+- **This revision, like revision 17, specifies but does not implement**
+  every `OPUS-R26-*` correction: no file under `scripts/` or
+  `.claude/commands/` is edited. The dedicated fix session that follows
+  approval implements all of revision 17's and revision 18's corrections
+  together, as one coherent design, under the ordinary
+  implementation-review/technical-approval cycle — there is no partial
+  implementation of revision 17 to reconcile against, since revision 17
+  itself was never approved.
+**Revision 19's own notes** (`OPUS-R27-*`):
+
+- **Two of this round's three `HIGH` findings (`-002`, `-003`) are the same
+  "one literal retired while a structurally identical sibling survived
+  unexamined" pattern `OPUS-R26-003` first named for the `base` positional**
+  — this time for `approval_review_content_id`'s implementation-stage
+  `artifacts_path` default, and for `prepare-ai-review.sh`'s own directory
+  resolution once its "or" was fixed but its consequences weren't traced
+  through. Worth stating plainly a second time: retiring a literal at one
+  call site does not retire the *class* of literal, and this revision's own
+  job, like revision 18's, was to keep looking for the remaining instances
+  rather than declare the class closed after the first fix.
+- **This revision chose a structurally different fix for `OPUS-R27-003`
+  than the "resolve once, else live-active" shape revision 18 used**: the
+  work-item id is now a *required* argument for the plan stage, not a
+  resolved one with a live-state fallback. The review itself offered this
+  as an equivalent option ("make the work-item id a required argument …
+  or, equivalently, cross-check …"); this revision does both — required
+  argument *and* the `base_commit` cross-check — because the two close
+  different halves of the same gap (which item; which content) and neither
+  alone closes both. This is a larger change to `prepare-ai-review.sh`'s
+  own contract than a minimal patch would have made, so it is called out
+  explicitly rather than left for a reader to notice by diffing against
+  revision 18's text.
+- **Missing test 162's restatement is a direct consequence of the
+  `OPUS-R27-003` design choice above, not an independent judgment call**:
+  the review's own suggested test text assumed the "resolve once, else
+  live-active" shape was kept and asked for a positive-plus-negative
+  assertion of single resolution. Once the work-item id became a required
+  argument instead, the fallback branch the suggested test was written to
+  distinguish no longer exists, so item 162 is restated as the simpler
+  property that actually corresponds to what was built — recorded here so
+  a future round doesn't read the divergence from the review's literal
+  suggested wording as an oversight.
+- **This revision, like revisions 17 and 18, specifies but does not
+  implement** every `OPUS-R27-*` correction: no file under `scripts/` or
+  `.claude/commands/` is edited. The dedicated fix session that follows
+  approval implements revisions 17, 18, and 19's corrections together, as
+  one coherent design, under the ordinary implementation-review/technical-
+  approval cycle.
+- **`active_work_item_id` remains `v2-1-dry-run`, `WF8b` remains
+  `IN_PROGRESS`, and S1 remains unexecuted** — corrected, `OPUS-R28-012`,
+  from two separately-drifting paragraphs (one under "Revision 18's own
+  notes," one here) that said the same thing twice, into this single
+  statement of the invariant: it has held, unchanged, across every review
+  and revision round from 17 through the current one (verified against the
+  working diff of `WORKFLOW_STATE.json` before each round's own review
+  began, not merely asserted each time) — `v2-1-dry-run`'s `phase:
+  "PLANNING"`, `plan_revision: 1`, empty `checkpoints`, `base_commit: null`
+  entry, exactly as WF8b's own entry step (`9317b1c`) created it.
+
+**Revision 20's own notes** (`OPUS-R28-*`):
+
+- **This round's dominant pattern was the same "one instance retired while
+  a structurally identical sibling survived" shape `OPUS-R26-003` first
+  named, recurring twice more**: `OPUS-R28-001` (the implementation-stage
+  `artifacts_path` caller list named the wrong sibling —
+  `implementing_entry_reachable` instead of
+  `verify_post_approval_manifest_match`) and `OPUS-R28-010` (the CLI's
+  `--work-item-id` live default, safe on the read-only path, was left
+  unexamined on the write path after `OPUS-R27-004` turned that same write
+  path into a directory creator). Recorded here because it is now the
+  fourth and fifth instance across four consecutive review rounds
+  (`OPUS-R26-003`, `-27-002`, `-27-003`, `-28-001`, `-28-010`) — worth
+  treating as a standing review heuristic for the fix session, not just a
+  pattern to note in passing: whenever a literal or a default is retired at
+  one call site, grep for every other caller of the same underlying
+  function before declaring the class closed.
+- **`OPUS-R28-002` is the finding that actually decides whether S1 can run**
+  and is resolved by generalizing `route_work_item`'s resume branch (the
+  finding's own preferred option (a)), not by hand-backfilling
+  `v2-1-dry-run`'s three null facts (option (b)). The smaller-looking option
+  (b) was rejected specifically because it is smaller only for this one
+  item — it leaves the same gap open for the next process work item created
+  the same way, which is a worse outcome than the larger, generalizing fix.
+- **`OPUS-R28-003`'s mapping-JSON sync was extended from the six rows
+  `OPUS-R27-001` covered to all 52** — 15 further rows had diverged,
+  independently verified by direct comparison against the table under the
+  exact normalization missing test 166 states (not merely re-asserted). The
+  Checkpoint column was deliberately left out of scope: several rows cite a
+  design-doc section instead of, or alongside, a registry checkpoint id
+  (`WFR-29`'s "D3, D2" being the sharpest example), which
+  `checkpoint_ids`'s own validator-enforced, checkpoint-only schema cannot
+  represent — stated as a scope decision, not silently left inconsistent.
+- **`OPUS-R28-004`/`-005`'s migration step (renumbered `6a` → `8a`) took the
+  finding's option (b) for the feedback-directory question**: `.ai-review/feedback`
+  stays flat rather than being relocated alongside `.ai-review/current`,
+  because it is stage-agnostic and step 8 retains the flat layout for every
+  non-`plan` stage — relocating it would have split feedback from the still-flat
+  implementation/post-fix/functional-review bundles the moment the step
+  ran. The larger option (a), scoping every stage's bundle directory, is
+  not taken; `resolve_feedback_dir`'s scoped branch remains correctly
+  unreachable until a future revision scopes every stage, which this one
+  does not attempt.
+- **This revision specifies but does not implement** any `OPUS-R28-*`
+  correction, consistent with the standing invariant restated once, above,
+  rather than re-asserted per revision: no file under `scripts/` or
+  `.claude/commands/` is edited by this revision itself — the dedicated fix
+  session that follows approval implements revisions 17 through 20's
+  corrections together, as one coherent design, under the ordinary
+  implementation-review/technical-approval cycle.
+- `active_work_item_id` remains `v2-1-dry-run`, `WF8b` remains
+  `IN_PROGRESS`, and S1 remains unexecuted — covered by the merged
+  standing-invariant statement above (`OPUS-R28-012`), not restated a third
+  time here.
+
+**Revision 21's own notes** (`GPT-R29-*`):
+
+- **Both `HIGH` findings this round are the same underlying shape as the
+  ones the last several rounds already named — a corrected mechanism whose
+  own internal pieces disagreed with each other**: `GPT-R29-001`'s resolver
+  read a fact in step 5 it never returned in step 13, so every consumer
+  described elsewhere in this same section as reading that fact through the
+  resolver had nothing to actually read; `GPT-R29-002`'s bind precondition
+  asserted an outcome ("creates and binds a brand-new directory") that the
+  very same function's required-file check makes impossible to reach. In
+  both cases the fix was not new mechanism but internal consistency: make
+  the resolver's own return value match what its own prose already claimed
+  it did, and make the bind precondition a single check instead of two
+  that quietly contradicted each other.
+- **`GPT-R29-002`'s fix removes capability revision 19 (`OPUS-R27-004`)
+  added, rather than repairing it** — worth stating plainly, since every
+  other correction across rounds 25-28 extended or narrowed a mechanism
+  without retracting one outright. A standalone `--write-manifest` can no
+  longer conjure a new, empty, bound bundle directory into existence; it
+  can only bind a directory some other step already fully populated. This
+  is a smaller, not a larger, surface than revision 19 specified — the
+  finding's own alternative (making `--write-manifest` "own the complete
+  bundle-generation operation") was available and was not taken, since it
+  would blur the generator/binder separation every revision since the
+  original prototype has kept.
+- **`GPT-R29-003` is resolved by moving an obligation, not by adding
+  mechanism**: item 166 already existed, already had a clear specification,
+  and already had a clear original owner (`WF8a-ii`) — the defect was
+  purely that the owner had since become unreachable (`COMPLETE`, never
+  reopened) while nothing updated the assignment to match. The same
+  "checkpoint completion is not revoked" rule this design already applies
+  to `WF4a-i` (see "Relationship to `WF4a-i`" above) is what makes
+  reassignment, not reopening, the correct fix here too.
+- **This revision, like revisions 17 through 20, specifies but does not
+  implement** any `GPT-R29-*` correction: no file under `scripts/` or
+  `.claude/commands/` is edited. The dedicated fix session that follows
+  approval implements revisions 17 through 21's corrections together, as
+  one coherent design, under the ordinary implementation-review/
+  technical-approval cycle.
+- `active_work_item_id` remains `v2-1-dry-run`, `WF8b` remains
+  `IN_PROGRESS`, and S1 remains unexecuted — covered by the merged
+  standing-invariant statement above (`OPUS-R28-012`), verified again
+  against this round's own bundle before this review began, not restated a
+  fourth time here.
 
 ## Explicit non-goals (unchanged from round 5)
 

@@ -11,7 +11,7 @@
       "registry_path": "docs/ai-workflow/registry/workflow-v2-1-core-registry.json",
       "governing_workflow_version": "1",
       "phase": "IMPLEMENTING",
-      "plan_revision": 15,
+      "plan_revision": 21,
       "implementation_revision": null,
       "functional_review_round": null,
       "base_commit": "162154d3e5e10eb65e109833acae4b4fb01fc5d6",
@@ -87,9 +87,9 @@
       "current_bundle_id": null,
       "plan_approval": {
         "status": "CURRENT",
-        "basis": "USER_OVERRIDE",
-        "reviewed_bundle_id": "5c35c19ac222bbc133a52efa36d733f6b3b6c9c00f0ebd58aba5b6e2e02883ce",
-        "approved_review_content_id": "2b4d2e3b89c2b8f243d89fcfb90fded67cc9cd003ba5feff3751d455fb3e49bf",
+        "basis": "EXTERNAL_APPROVE",
+        "reviewed_bundle_id": "fa03d43401233e2f2324e0494a917568a965bbb71d54a496bfe08a8f003fc3b8",
+        "approved_review_content_id": "b6d4ea6a8778321526fa5a3a6d2af17801f6187fd137680bbef8cce008ef95c0",
         "review_content_manifest": [
           {
             "path": "docs/TECHNICAL_DECISIONS.md",
@@ -107,33 +107,33 @@
             "path": "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
             "exists": true,
             "mode": "100644",
-            "blob": "17566291e554872d90abdcbf07baad353a149db1"
+            "blob": "ef87b03ca56546bb02d2777b4293697e1558f65a"
           },
           {
             "path": "docs/ai-workflow/registry/workflow-v2-1-core-registry.json",
             "exists": true,
             "mode": "100644",
-            "blob": "da2a1cb4b15ce043bd69a63bb661293fd64dc2ab"
+            "blob": "ea40d455a02d3d0172a06319b4d8752e809b572a"
           },
           {
             "path": "docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json",
             "exists": true,
             "mode": "100644",
-            "blob": "81fbf9c05c13b37df7d23fe54e47daf43ad17791"
+            "blob": "8ce425e5ea734c8b9b76e3d46c910fd36043d7d3"
           }
         ],
         "reviewed_content_commit": null,
         "legacy_evidence": null,
-        "user_confirmation": "Reconstructed during WF1a from the WF0 bootstrap commit (8f76175348d0f63e61f6c1a9997b5004a27430fe) and its approving .ai-review/feedback/REVIEW_FEEDBACK.md (Status: APPROVE) for work item workflow-v2-1-core's plan-approval stage -- the original verbatim conversational go-ahead text spans many external plan-review rounds under v1's apply-plan-review flow and is not preserved in Git, so it is not available to this reconstruction. Remediation recorded 2026-07-31 (still USER_OVERRIDE) for work item workflow-v2-1-core's plan-approval stage: approved_review_content_id updated to review_content_id 2b4d2e3b89c2b8f243d89fcfb90fded67cc9cd003ba5feff3751d455fb3e49bf per the binding-only remediation review in .ai-review/feedback/REVIEW_FEEDBACK.md (Opus 5, finding prefix OPUS-R24-*, Status: APPROVE, bundle_id 5c35c19ac222bbc133a52efa36d733f6b3b6c9c00f0ebd58aba5b6e2e02883ce; the superseded round-23 verdict is preserved beside it as REVIEW_FEEDBACK.opus-r23.md). Dry-run-evidence classification rationale: the identifier changed for one reason only -- docs/ai-workflow/dry-run/ was added to the plan-stage classifier's PLAN_STAGE_EXCLUDED_PREFIXES (scripts/workflow_fingerprint.py). That directory holds WF8b's own dry-run scenario checklist/execution evidence and the isolated synthetic v2-1-dry-run work item's plan/registry/mapping artifact tree -- operational evidence for a separate, throwaway work item, not design content for workflow-v2-1-core's own plan -- so it is excluded rather than protected, on the same reasoning as docs/ai-workflow/archive/ and docs/milestones/. Because excluded_prefixes is itself part of the hashed projection (OPUS-R8-014), widening it necessarily moves review_content_id even though no design content changed: all five protected plan-stage blobs are byte-identical to the prior approval's manifest, verified before recording. Fail-closed behavior is unchanged for every path outside the named sets.",
+        "user_confirmation": "plan Record the approved external plan review for workflow-v2-1-core Revision 21.\n\nValidate .ai-review/feedback/REVIEW_FEEDBACK.md using the repository's real\nbinding parser before changing anything.\n\nRequired binding:\n\n- Status: APPROVE\n- bundle_id:\n  fa03d43401233e2f2324e0494a917568a965bbb71d54a496bfe08a8f003fc3b8\n- review_content_id:\n  b6d4ea6a8778321526fa5a3a6d2af17801f6187fd137680bbef8cce008ef95c0\n- base commit:\n  162154d3e5e10eb65e109833acae4b4fb01fc5d6\n- work item:\n  workflow-v2-1-core\n- plan revision:\n  21\n\nUse the Workflow v1 external plan-approval path.\n\nDo not invoke /review-plan.\nDo not implement the remediation.\nDo not resume WF8b S1.\n\nRecord the approval, update plan_approval, create the required provenance\ncommit, verify approval discovery and the durability guard, and stop.\n",
         "waived_guarantees": [],
-        "recorded_at": "2026-07-31T23:43:37+01:00"
+        "recorded_at": "2026-08-02T23:53:27+01:00"
       },
       "technical_approval": null,
       "plan_review_stages": null,
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 17,
-      "last_transition": "2026-07-31T23:43:37+01:00"
+      "state_revision": 22,
+      "last_transition": "2026-08-02T23:53:27+01:00"
     },
     "milestone-8": {
       "work_item_type": "product",
