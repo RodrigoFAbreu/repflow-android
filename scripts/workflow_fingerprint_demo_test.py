@@ -59,7 +59,7 @@ class TestAgainstRealRepository(unittest.TestCase):
         # drift `test_plan_title_revision_matches_declared_plan_revision`
         # guards against is now structurally impossible here: there is no
         # second copy of the number left to drift.
-        plan_revision = wf.load_plan_revision(repo_root)
+        plan_revision = wf.load_plan_revision(repo_root, wf.DEFAULT_REGISTRY_PATH, wf.DEFAULT_PLAN_PATH)
         digest, projection = wf.compute_review_content_id_plan_stage(
             repo_root, BASE_COMMIT,
             work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=plan_revision,
@@ -155,7 +155,7 @@ class TestAgainstRealRepository(unittest.TestCase):
         existing = wf.read_manifest_identifiers(manifest_path)
         reported = existing.get("review_content_id")
         self.assertIsNotNone(reported, "MANIFEST.md must report review_content_id in the contract spelling")
-        plan_revision = wf.load_plan_revision(repo_root)
+        plan_revision = wf.load_plan_revision(repo_root, wf.DEFAULT_REGISTRY_PATH, wf.DEFAULT_PLAN_PATH)
         recomputed, _ = wf.compute_review_content_id_plan_stage(
             repo_root, BASE_COMMIT,
             work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=plan_revision,
@@ -184,7 +184,7 @@ class TestAgainstRealRepository(unittest.TestCase):
         m = re.search(r"\(Revision (\d+)\)", title_line)
         self.assertIsNotNone(m, f"title line has no '(Revision N)' marker: {title_line!r}")
         declared = int(m.group(1))
-        registry = wf.load_plan_revision(repo_root)
+        registry = wf.load_plan_revision(repo_root, wf.DEFAULT_REGISTRY_PATH, wf.DEFAULT_PLAN_PATH)
         self.assertEqual(
             declared, registry,
             f"title declares Revision {declared}, but the registry JSON's "

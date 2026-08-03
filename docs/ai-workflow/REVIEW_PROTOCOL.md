@@ -16,12 +16,24 @@ are defined in `docs/ai-workflow/MILESTONE_WORKFLOW.md`.
 
 `<base-sha>` is the commit the diff should be computed from — normally the
 milestone's starting commit (the last commit before this milestone's work
-began, e.g. the completion commit of the previous milestone).
+began, e.g. the completion commit of the previous milestone). For the
+`plan` stage, this must agree with the resolved work item's own declared
+`base_commit` (`WORKFLOW_STATE.json`'s `work_items[<id>].base_commit`) —
+the script refuses before generating any content on a genuine
+disagreement, naming both (`D-Fingerprint-Generalization`).
 
-`[work-item-id]` is optional. Passing it writes the bundle under the
-per-work-item layout (`.ai-review/<work-item-id>/`, see below). Omitting it
-writes the flat compatibility layout (`.ai-review/current/`,
-`.ai-review/feedback/`) directly under `.ai-review/`.
+The work-item-id argument is **required when `<stage>` is `plan`** — never
+resolved from the live `active_work_item_id` for that stage, since
+`MANIFEST.md`'s identity binding depends on it
+(`D-Fingerprint-Generalization`). It remains optional for every other
+stage (`implementation`/`post-fix`/`functional-review`): passing it writes
+the bundle under the per-work-item layout (`.ai-review/<work-item-id>/`,
+see below); omitting it writes the flat compatibility layout
+(`.ai-review/current/`, `.ai-review/feedback/`) directly under
+`.ai-review/`. For the `plan` stage, the script's own final step also
+writes `MANIFEST.md` (`scripts/workflow_fingerprint.py --write-manifest`,
+the same CLI entry point every other invocation uses, never a
+reimplementation) — no separate manual step is needed.
 
 The script is deterministic and safe to rerun: it always regenerates the
 git-derived files from current repository state, and leaves author-written
@@ -46,10 +58,18 @@ subdirectory). The resolution rule (implemented in
 `scripts/workflow_fingerprint.py`'s `resolve_bundle_dir`/
 `resolve_feedback_dir`, not left to prose alone) is: prefer
 `.ai-review/<work_item_id>/{current,feedback}/` if that directory already
-exists, else fall back to the flat path. This exists to cover this
-milestone's own remaining execution, which is still running out of the
-flat layout as WF5 lands; every new command invocation should prefer the
-scoped layout once it exists for a given work item.
+exists, else fall back to the flat path. `feedback/` is stage-agnostic and
+always follows this same scoped-else-flat rule, for every stage alike.
+
+For the **plan stage specifically**, the bundle directory is never the
+flat fallback: the work-item-id argument is required (above), so
+`ROOT_DIR`/`<bundle_dir>` always resolve to
+`.ai-review/<work_item_id>/current/` by construction
+(`D-Fingerprint-Generalization`). `workflow-v2-1-core`'s own historical
+flat `.ai-review/current/`/`.ai-review/review-bundle.tar.gz` were
+relocated to `.ai-review/workflow-v2-1-core/` as a one-time migration when
+this rule landed; `.ai-review/feedback/` was deliberately left flat (it is
+stage-agnostic and every non-plan stage's bundle is still flat too).
 
 `.ai-review/` is entirely gitignored, including `.ai-review/source/` —
 files a human places there as raw proposal material for Claude to read,

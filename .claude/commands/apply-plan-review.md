@@ -35,8 +35,9 @@ Enter the `REVISING_PLAN` state of `docs/ai-workflow/MILESTONE_WORKFLOW.md`.
    evidence (file path, line, existing test, or doc reference) directly in
    the plan doc's decisions section — not a separate rebuttal file.
 5. Update `<bundle_dir>/REVIEW_REQUEST.md` to reflect the revision and
-   rerun `./scripts/prepare-ai-review.sh <base-sha> plan [work_item_id]` to refresh the
-   bundle.
+   rerun `./scripts/prepare-ai-review.sh <base-sha> plan <work_item_id>` to refresh the
+   bundle (`work_item_id` is **required** for the plan stage, never
+   resolved from the live `active_work_item_id` -- `D-Fingerprint-Generalization`).
 6. If the `Status` was `BLOCK`, or if you made major structural changes to
    the plan, stay in `AWAITING_EXTERNAL_PLAN_REVIEW` and stop for another
    review round.
@@ -53,7 +54,7 @@ Enter the `REVISING_PLAN` state of `docs/ai-workflow/MILESTONE_WORKFLOW.md`.
        absent (`plan_approval_gate_reachable`'s recomputation rule — no
        explicit ledger clear performed or needed);
     2. the bundle is regenerated (`./scripts/prepare-ai-review.sh <base-sha>
-       plan`, same as step 5, unchanged mechanism);
+       plan <work_item_id>`, same as step 5, unchanged mechanism);
     3. call `workflow_state.transition_to_awaiting_local_plan_review(state,
        work_item_id, now)` and persist the returned state to
        `docs/ai-workflow/WORKFLOW_STATE.json`;

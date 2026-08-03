@@ -199,7 +199,7 @@ import subprocess
 import sys
 from pathlib import Path
 from types import MappingProxyType
-from typing import Mapping
+from typing import Mapping, NamedTuple
 
 # A bundle-verification run must never write bytecode into a bundle
 # directory it is hashing -- that would change bundle_id as a side effect
@@ -358,12 +358,93 @@ class FeedbackBundleMismatchError(Exception):
     concern applied to feedback matching rather than worktree/HEAD)."""
 
 
+# ---------------------------------------------------------------------------
+# D-Fingerprint-Generalization (Revision 21, `WF8B-S1-001`): per-work-item
+# plan-stage metadata resolution. `resolve_plan_stage_metadata` is the one
+# place a `work_item_id` turns into the facts needed to fingerprint its own
+# plan-stage content -- fail-closed matrix conditions 1-9, 11 below.
+# ---------------------------------------------------------------------------
+
+
+class UnknownWorkItemError(Exception):
+    """Raised when a `work_item_id` names no entry in `WORKFLOW_STATE.json`'s
+    `work_items` map, or a resolved entry's own `work_item_id` field
+    disagrees with the map key that resolved it — fail-closed matrix
+    condition 1."""
+
+
+class PlanStageNotApplicableError(Exception):
+    """Raised when the resolved work item's `work_item_type` is not
+    `"process"` — only a process work item has plan-stage content of its
+    own to fingerprint; `work_item_kind` is not consulted, so a
+    `"synthetic"`-kind process item resolves exactly like any other
+    process item — condition 2."""
+
+
+class MissingPlanStageMetadataError(Exception):
+    """Raised when the resolved work item's `plan_path`/`registry_path`/
+    `mapping_path`/`base_commit` is `null` — naming which field —
+    condition 3."""
+
+
+class InvalidPlanStageMetadataPathError(Exception):
+    """Raised when a declared `plan_path`/`registry_path`/`mapping_path`
+    fails the shared path-grammar validator: not repo-relative, uses a
+    non-POSIX separator, contains a `.`/`..` path component, names a
+    symlink, or does not exist as a tracked regular file at the resolved
+    source — condition 4."""
+
+
+class MissingWorkItemArtifactsDeclarationError(Exception):
+    """Raised when `<work_item_id>-artifacts.json` is absent at the
+    resolved source, or present but declares no `plan_stage` key —
+    condition 5 (the latter is also this finding's stated condition-11
+    pre-migration boundary: a pre-migration artifacts file has no
+    `plan_stage` key at all, which is not a distinct mechanism)."""
+
+
+class RegistryWorkItemIdMismatchError(Exception):
+    """Raised when the registry JSON's own `work_item_id` disagrees with
+    the map key that resolved it — condition 6."""
+
+
+class MappingWorkItemIdMismatchError(Exception):
+    """Mapping-JSON counterpart of `RegistryWorkItemIdMismatchError` —
+    condition 6."""
+
+
+class ArtifactsWorkItemIdMismatchError(Exception):
+    """Artifacts-declarations-JSON counterpart of
+    `RegistryWorkItemIdMismatchError` — condition 6."""
+
+
+class DuplicateWorkItemArtifactPathError(Exception):
+    """Raised when a non-null `plan_path`/`registry_path`/`mapping_path`
+    is claimed by more than one work item, checked independently per
+    field, not only as a triple — condition 8."""
+
+
+class PlanStageMetadataNotProtectedError(Exception):
+    """Raised when `plan_path`/`registry_path`/`mapping_path` is not a
+    member of the resolved protected-path set, or the three are not
+    pairwise distinct — condition 7."""
+
+
+class BundleWorkItemMismatchError(Exception):
+    """Raised when a bundle's existing `MANIFEST.md` disagrees with the
+    resolved work item — naming a different `work_item_id`, no
+    `work_item_id` at all ("unbound"), or a different `base_commit` —
+    conditions 12/13."""
+
+
 WORK_ITEM_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
-# D1's controlled vocabulary. "synthetic" (WF8b's dry-run item) is
-# deliberately not identity-bearing for the plan-stage fingerprint -- a
-# synthetic item never has plan-stage content of its own to fingerprint,
-# it borrows the real process item's.
+# D1's controlled vocabulary. "synthetic" (WF8b's dry-run item) is a
+# work_item_kind, not a work_item_type -- a "synthetic"-kind item whose
+# work_item_type is "process" (e.g. v2-1-dry-run) resolves and fingerprints
+# its own plan-stage content exactly like any other process item, once it
+# has plan_path/registry_path/mapping_path/base_commit declared
+# (D-Fingerprint-Generalization, OPUS-R25-011).
 WORK_ITEM_TYPES = frozenset({"process", "product"})
 
 
@@ -465,14 +546,67 @@ def _core_file_mode_enabled(repo_root: Path) -> bool:
 
 PLAN_TITLE_REVISION_RE = re.compile(r"\(Revision (\d+)\)")
 
+# Retired as live defaults (`OPUS-R28-011`): a bare `load_plan_revision(repo_root)`
+# call silently meant "workflow-v2-1-core", the same defect class this whole
+# revision exists to remove. Kept only as named migration-comparison
+# fixtures for hermetic tests that still want this milestone's own real
+# paths spelled out explicitly -- never a live fallback for any caller this
+# migration reaches (`load_plan_revision`'s two path parameters are
+# required, no default).
 DEFAULT_REGISTRY_PATH = Path("docs/ai-workflow/registry/workflow-v2-1-core-registry.json")
 DEFAULT_PLAN_PATH = Path("docs/ai-workflow/WORKFLOW_V2_PLAN.md")
 
 
+def _to_posix(path: Path | str) -> str:
+    return path.as_posix() if isinstance(path, Path) else str(path)
+
+
+def _read_bytes_at_source(repo_root: Path, rel_path: Path | str, at_commit: str | None) -> bytes:
+    """Read a tracked file's bytes either from the live working tree
+    (`at_commit is None`) or from a specific commit via `git show` -- the
+    one choice-of-source threaded through every read
+    `resolve_plan_stage_metadata` performs (missing-test item 145: a
+    commit-source computation never reads the live working tree or the
+    live `WORKFLOW_STATE.json` for any of these facts)."""
+    rel = _to_posix(rel_path)
+    if at_commit is None:
+        return (repo_root / rel).read_bytes()
+    result = subprocess.run(
+        ["git", "show", f"{at_commit}:{rel}"], cwd=repo_root, capture_output=True,
+    )
+    if result.returncode != 0:
+        raise FileNotFoundError(f"{rel!r} not found at {at_commit!r}")
+    return result.stdout
+
+
+def _path_exists_at_source(repo_root: Path, rel_path: Path | str, at_commit: str | None) -> bool:
+    rel = _to_posix(rel_path)
+    if at_commit is None:
+        full = repo_root / rel
+        return full.is_file() and not full.is_symlink()
+    result = subprocess.run(
+        ["git", "cat-file", "-e", f"{at_commit}:{rel}"], cwd=repo_root, capture_output=True,
+    )
+    return result.returncode == 0
+
+
+def _load_workflow_state_work_items(repo_root: Path, at_commit: str | None) -> tuple[dict, str | None]:
+    """The minimal `WORKFLOW_STATE.json` reader `resolve_plan_stage_metadata`
+    needs: parse the JSON, return `(work_items, active_work_item_id)`.
+    Deliberately does not import or reuse `workflow_state.validate_state`,
+    which stays `workflow_state.py`'s own, heavier concern (`OPUS-R25-010`'s
+    module-placement correction: this avoids the import cycle
+    `workflow_state.py` already has on this module)."""
+    data = json.loads(_read_bytes_at_source(repo_root, "docs/ai-workflow/WORKFLOW_STATE.json", at_commit))
+    return data.get("work_items", {}), data.get("active_work_item_id")
+
+
 def load_plan_revision(
     repo_root: Path,
-    registry_path: Path = DEFAULT_REGISTRY_PATH,
-    plan_path: Path = DEFAULT_PLAN_PATH,
+    registry_path: Path,
+    plan_path: Path,
+    *,
+    at_commit: str | None = None,
 ) -> int:
     """Read `plan_revision` from the tracked, protected registry JSON —
     already machine-written and already part of the hashed projection —
@@ -481,29 +615,249 @@ def load_plan_revision(
     Cross-checked against the plan document's own declared
     `(Revision N)` title so a registry/document disagreement fails
     bundle generation instead of binding an approval to the wrong
-    revision. `registry_path`/`plan_path` are relative to `repo_root`;
-    the defaults are this milestone's own real paths, overridable so
-    hermetic tests can exercise this against a scratch repo."""
-    registry_full = repo_root / registry_path
-    registry = json.loads(registry_full.read_text())
+    revision. `registry_path`/`plan_path` are relative to `repo_root` and
+    required -- no default (`OPUS-R28-011`), since a default here is
+    exactly one work item's own literal. `at_commit`, if given, reads both
+    files from that commit instead of the live working tree."""
+    registry_rel = _to_posix(registry_path)
+    plan_rel = _to_posix(plan_path)
+    registry = json.loads(_read_bytes_at_source(repo_root, registry_rel, at_commit))
     if "plan_revision" not in registry:
         raise PlanRevisionMismatchError(
-            f"{registry_full} has no 'plan_revision' field"
+            f"{registry_rel} has no 'plan_revision' field"
         )
     revision = registry["plan_revision"]
-    plan_full = repo_root / plan_path
-    title_line = plan_full.read_text().splitlines()[0]
+    title_line = _read_bytes_at_source(repo_root, plan_rel, at_commit).decode().splitlines()[0]
     match = PLAN_TITLE_REVISION_RE.search(title_line)
     if match is None:
         raise PlanRevisionMismatchError(
-            f"{plan_full} title has no '(Revision N)' marker: {title_line!r}"
+            f"{plan_rel} title has no '(Revision N)' marker: {title_line!r}"
         )
     if int(match.group(1)) != revision:
         raise PlanRevisionMismatchError(
-            f"registry {registry_full} declares plan_revision={revision!r}, "
-            f"but {plan_full} title declares Revision {match.group(1)}"
+            f"registry {registry_rel} declares plan_revision={revision!r}, "
+            f"but {plan_rel} title declares Revision {match.group(1)}"
         )
     return revision
+
+
+# ---------------------------------------------------------------------------
+# Path grammar for a declared plan_path/registry_path/mapping_path
+# (`OPUS-R25-008`): repo-relative, POSIX separators, no "."/".." component,
+# no symlink, exists as a tracked regular file at the resolved source.
+# Closes the traversal/aliasing gap a bare `repo_root / registry_path` join
+# would otherwise leave open.
+# ---------------------------------------------------------------------------
+
+
+def _validate_plan_stage_metadata_path(
+    repo_root: Path, field_name: str, value: str, at_commit: str | None,
+) -> None:
+    if value.startswith("/"):
+        raise InvalidPlanStageMetadataPathError(f"{field_name} {value!r} is not repo-relative")
+    if "\\" in value:
+        raise InvalidPlanStageMetadataPathError(f"{field_name} {value!r} must use POSIX separators")
+    parts = value.split("/")
+    if any(part in (".", "..", "") for part in parts):
+        raise InvalidPlanStageMetadataPathError(
+            f"{field_name} {value!r} must contain no '.'/'..' path component"
+        )
+    if at_commit is None:
+        full = repo_root / value
+        if full.is_symlink():
+            raise InvalidPlanStageMetadataPathError(f"{field_name} {value!r} names a symlink")
+        if not full.is_file():
+            raise InvalidPlanStageMetadataPathError(
+                f"{field_name} {value!r} does not exist as a tracked regular file"
+            )
+        tracked = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", "--", value],
+            cwd=repo_root, capture_output=True,
+        )
+        if tracked.returncode != 0:
+            raise InvalidPlanStageMetadataPathError(f"{field_name} {value!r} is not a tracked path")
+    else:
+        out = subprocess.run(
+            ["git", "ls-tree", at_commit, "--", value],
+            cwd=repo_root, check=True, capture_output=True, text=True,
+        ).stdout.strip()
+        if not out:
+            raise InvalidPlanStageMetadataPathError(
+                f"{field_name} {value!r} does not exist as a tracked regular file at {at_commit}"
+            )
+        meta, _, _found_path = out.partition("\t")
+        mode, obj_type, _blob = meta.split(" ")
+        if obj_type != "blob" or mode == "120000":
+            raise InvalidPlanStageMetadataPathError(
+                f"{field_name} {value!r} is not a regular file at {at_commit}"
+            )
+
+
+def artifacts_path_for_work_item(work_item_id: str) -> Path:
+    """Pure string templating, no I/O — shared by both the plan-stage
+    resolver and the implementation-stage `approval_review_content_id`
+    branch (`OPUS-R27-002`) — collision between two different
+    `work_item_id`s is structurally impossible since `work_items` map keys
+    are already unique."""
+    validate_work_item_id(work_item_id)
+    return Path(f"docs/ai-workflow/registry/{work_item_id}-artifacts.json")
+
+
+def load_plan_stage_classification(
+    repo_root: Path, artifacts_path: Path, *, at_commit: str | None = None,
+) -> tuple[frozenset[str], Mapping[str, str], Mapping[str, str]]:
+    """Load the plan-stage protected/excluded path and prefix sets from
+    `<work_item_id>-artifacts.json`'s `plan_stage` key -- the migrated,
+    generalized counterpart of the frozen `PLAN_STAGE_PROTECTED`/
+    `PLAN_STAGE_EXCLUDED_PATHS`/`PLAN_STAGE_EXCLUDED_PREFIXES` module
+    constants, which remain only as a named migration-comparison fixture
+    (missing-test item 141). A file present but missing its `plan_stage`
+    key (a pre-migration, schema-version-1 file) fails the same way as a
+    wholly absent file — condition 11's stated boundary, not a distinct
+    mechanism."""
+    rel = _to_posix(artifacts_path)
+    if not _path_exists_at_source(repo_root, rel, at_commit):
+        raise MissingWorkItemArtifactsDeclarationError(rel)
+    data = json.loads(_read_bytes_at_source(repo_root, rel, at_commit))
+    plan_stage = data.get("plan_stage")
+    if plan_stage is None:
+        raise MissingWorkItemArtifactsDeclarationError(f"{rel} has no 'plan_stage' key")
+    protected = frozenset(plan_stage.get("protected_paths", []))
+    excluded_paths = MappingProxyType(dict(plan_stage.get("excluded_paths", {})))
+    excluded_prefixes = MappingProxyType(dict(plan_stage.get("excluded_prefixes", {})))
+    _validate_exclusion_prefixes(excluded_prefixes)
+    return protected, excluded_paths, excluded_prefixes
+
+
+class PlanStageMetadata(NamedTuple):
+    """Named, immutable result of `resolve_plan_stage_metadata` — never a
+    positional tuple (`GPT-R29-001`): an added or reordered field is a
+    loud attribute-access error at every call site instead of a silent
+    positional misread."""
+
+    work_item_id: str
+    work_item_type: str
+    plan_path: str
+    registry_path: str
+    mapping_path: str
+    base_commit: str
+    plan_revision: int
+    protected_paths: frozenset[str]
+    excluded_paths: Mapping[str, str]
+    excluded_prefixes: Mapping[str, str]
+
+
+def resolve_plan_stage_metadata(
+    repo_root: Path, work_item_id: str, *, at_commit: str | None = None,
+) -> PlanStageMetadata:
+    """`D-Fingerprint-Generalization`'s thirteen-step resolution algorithm:
+    turns a bare `work_item_id` into every fact needed to fingerprint its
+    own plan-stage content, sourced entirely from `WORKFLOW_STATE.json`'s
+    `work_items[work_item_id]` entry and its own declared
+    `<work_item_id>-artifacts.json`, never from a literal naming any other
+    work item. Fails closed on every one of the thirteen matrix
+    conditions this design names (1-9, 11 raised directly here; 12-13 are
+    the manifest-write path's own concern, `write_manifest_with_verified_identifiers`)."""
+    validate_work_item_id(work_item_id)
+    work_items, _active = _load_workflow_state_work_items(repo_root, at_commit)
+    entry = work_items.get(work_item_id)
+    if entry is None:
+        raise UnknownWorkItemError(work_item_id)
+    if entry.get("work_item_id") != work_item_id:
+        raise UnknownWorkItemError(
+            f"work_items[{work_item_id!r}].work_item_id == {entry.get('work_item_id')!r}"
+        )
+    work_item_type = entry.get("work_item_type")
+    if work_item_type != "process":
+        raise PlanStageNotApplicableError(
+            f"{work_item_id!r} has work_item_type {work_item_type!r}, not 'process'"
+        )
+
+    declared = {
+        "plan_path": entry.get("plan_path"),
+        "registry_path": entry.get("registry_path"),
+        "mapping_path": entry.get("mapping_path"),
+        "base_commit": entry.get("base_commit"),
+    }
+    for field_name, value in declared.items():
+        if value is None:
+            raise MissingPlanStageMetadataError(f"{work_item_id}.{field_name} is null")
+    plan_path = declared["plan_path"]
+    registry_path = declared["registry_path"]
+    mapping_path = declared["mapping_path"]
+    base_commit = declared["base_commit"]
+
+    for field_name, value in (
+        ("plan_path", plan_path), ("registry_path", registry_path), ("mapping_path", mapping_path),
+    ):
+        _validate_plan_stage_metadata_path(repo_root, field_name, value, at_commit)
+
+    artifacts_path = artifacts_path_for_work_item(work_item_id)
+    artifacts_rel = _to_posix(artifacts_path)
+    if not _path_exists_at_source(repo_root, artifacts_rel, at_commit):
+        raise MissingWorkItemArtifactsDeclarationError(artifacts_rel)
+
+    registry_data = json.loads(_read_bytes_at_source(repo_root, registry_path, at_commit))
+    if registry_data.get("work_item_id") != work_item_id:
+        raise RegistryWorkItemIdMismatchError(
+            f"expected {work_item_id!r}, found {registry_data.get('work_item_id')!r}"
+        )
+    mapping_data = json.loads(_read_bytes_at_source(repo_root, mapping_path, at_commit))
+    if mapping_data.get("work_item_id") != work_item_id:
+        raise MappingWorkItemIdMismatchError(
+            f"expected {work_item_id!r}, found {mapping_data.get('work_item_id')!r}"
+        )
+    artifacts_data = json.loads(_read_bytes_at_source(repo_root, artifacts_rel, at_commit))
+    if artifacts_data.get("work_item_id") != work_item_id:
+        raise ArtifactsWorkItemIdMismatchError(
+            f"expected {work_item_id!r}, found {artifacts_data.get('work_item_id')!r}"
+        )
+
+    for other_id, other in work_items.items():
+        if other_id == work_item_id:
+            continue
+        for field_name, value in (
+            ("plan_path", plan_path), ("registry_path", registry_path), ("mapping_path", mapping_path),
+        ):
+            if other.get(field_name) is not None and other.get(field_name) == value:
+                raise DuplicateWorkItemArtifactPathError(
+                    f"{field_name} {value!r} is claimed by both {work_item_id!r} and {other_id!r}"
+                )
+
+    protected_paths, excluded_paths, excluded_prefixes = load_plan_stage_classification(
+        repo_root, artifacts_path, at_commit=at_commit,
+    )
+
+    for field_name, value in (
+        ("plan_path", plan_path), ("registry_path", registry_path), ("mapping_path", mapping_path),
+    ):
+        if value not in protected_paths:
+            raise PlanStageMetadataNotProtectedError(
+                f"{work_item_id}.{field_name} ({value!r}) is not a member of its own "
+                f"resolved plan-stage protected-path set"
+            )
+    if len({plan_path, registry_path, mapping_path}) != 3:
+        raise PlanStageMetadataNotProtectedError(
+            f"{work_item_id}'s plan_path/registry_path/mapping_path must be pairwise "
+            f"distinct: {plan_path!r}, {registry_path!r}, {mapping_path!r}"
+        )
+
+    plan_revision = load_plan_revision(
+        repo_root, Path(registry_path), Path(plan_path), at_commit=at_commit,
+    )
+
+    return PlanStageMetadata(
+        work_item_id=work_item_id,
+        work_item_type=work_item_type,
+        plan_path=plan_path,
+        registry_path=registry_path,
+        mapping_path=mapping_path,
+        base_commit=base_commit,
+        plan_revision=plan_revision,
+        protected_paths=protected_paths,
+        excluded_paths=excluded_paths,
+        excluded_prefixes=excluded_prefixes,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -894,6 +1248,41 @@ def compute_review_content_id_plan_stage_at_commit(
     return digest, projection
 
 
+def compute_review_content_id_plan_stage_for_work_item(
+    repo_root: Path, work_item_id: str, *, base: str | None = None,
+) -> tuple[str, dict]:
+    """Work-item-generic entry point (`D-Fingerprint-Generalization`):
+    resolves `work_item_id`'s own plan-stage metadata exactly once, then
+    computes its `review_content_id` from the resolved values -- never a
+    hardcoded literal naming any other work item. `base`, if given,
+    overrides the resolved item's own declared `base_commit`; omitted, it
+    is read from the one `resolve_plan_stage_metadata` call already made
+    here, never a second, independent read of `WORKFLOW_STATE.json`."""
+    metadata = resolve_plan_stage_metadata(repo_root, work_item_id)
+    base_to_use = base if base is not None else metadata.base_commit
+    return compute_review_content_id_plan_stage(
+        repo_root, base_to_use, metadata.work_item_type, metadata.work_item_id,
+        metadata.plan_revision, metadata.protected_paths,
+        metadata.excluded_paths, metadata.excluded_prefixes,
+    )
+
+
+def compute_review_content_id_plan_stage_at_commit_for_work_item(
+    repo_root: Path, work_item_id: str, commit: str, *, base: str | None = None,
+) -> tuple[str, dict]:
+    """Commit-source counterpart of
+    `compute_review_content_id_plan_stage_for_work_item`: resolves
+    `work_item_id`'s metadata *as declared at `commit`*, never from the
+    live working tree (missing-test item 145)."""
+    metadata = resolve_plan_stage_metadata(repo_root, work_item_id, at_commit=commit)
+    base_to_use = base if base is not None else metadata.base_commit
+    return compute_review_content_id_plan_stage_at_commit(
+        repo_root, base_to_use, commit, metadata.work_item_type, metadata.work_item_id,
+        metadata.plan_revision, metadata.protected_paths,
+        metadata.excluded_paths, metadata.excluded_prefixes,
+    )
+
+
 # ---------------------------------------------------------------------------
 # review_content_id — implementation stage (WF4a-i's own scope, deferred
 # from the plan-stage-only prototype: "there is no real changed-file diff
@@ -935,13 +1324,25 @@ def load_implementation_stage_classification(
     excluded_prefixes)`, each a path/prefix -> category-or-justification
     mapping, in the same shape `classify_path_implementation_stage`
     consumes. Every prefix key must end in `/` (validated, same rule as
-    `PLAN_STAGE_EXCLUDED_PREFIXES`)."""
+    `PLAN_STAGE_EXCLUDED_PREFIXES`).
+
+    Reads from the file's `implementation_stage` sub-key (schema_version 2,
+    `D-Fingerprint-Generalization` migration step 2/3) -- the counterpart
+    of `load_plan_stage_classification`'s `plan_stage` sub-key. A
+    pre-migration (schema_version 1, flat) file has no `implementation_stage`
+    key and fails closed the same way a wholly absent file would, per
+    condition 11's stated pre-migration boundary."""
     full = repo_root / artifacts_path
     data = json.loads(full.read_text())
-    protected_paths = MappingProxyType(dict(data.get("protected_paths", {})))
-    protected_prefixes = MappingProxyType(dict(data.get("protected_prefixes", {})))
-    excluded_paths = MappingProxyType(dict(data.get("excluded_paths", {})))
-    excluded_prefixes = MappingProxyType(dict(data.get("excluded_prefixes", {})))
+    implementation_stage = data.get("implementation_stage")
+    if implementation_stage is None:
+        raise MissingWorkItemArtifactsDeclarationError(
+            f"{full} has no 'implementation_stage' key"
+        )
+    protected_paths = MappingProxyType(dict(implementation_stage.get("protected_paths", {})))
+    protected_prefixes = MappingProxyType(dict(implementation_stage.get("protected_prefixes", {})))
+    excluded_paths = MappingProxyType(dict(implementation_stage.get("excluded_paths", {})))
+    excluded_prefixes = MappingProxyType(dict(implementation_stage.get("excluded_prefixes", {})))
     _validate_exclusion_prefixes(protected_prefixes)
     _validate_exclusion_prefixes(excluded_prefixes)
     return protected_paths, protected_prefixes, excluded_paths, excluded_prefixes
@@ -1529,6 +1930,10 @@ def render_manifest_md(
     excluded_paths: Mapping[str, str],
     excluded_prefixes: Mapping[str, str],
     bundle_id: str | None = None,
+    work_item_id: str | None = None,
+    work_item_type: str | None = None,
+    plan_revision: int | None = None,
+    base_commit: str | None = None,
     worktree_root: str | None = None,
     generation_head: str | None = None,
 ) -> str:
@@ -1538,6 +1943,17 @@ def render_manifest_md(
     `compute_bundle_id()` never invalidates the value just computed --
     the field is excluded from the hash by construction, not by
     convention.
+
+    `work_item_id`/`work_item_type`/`plan_revision`/`base_commit`, if
+    supplied, are written as plain `field: value` header lines
+    (`D-Fingerprint-Generalization`, `OPUS-R25-005`/`OPUS-R26-003`) --
+    ordinary hashed bundle content for `bundle_id` like every other bundle
+    file, never part of `review_content_id` (that digest is computed
+    before rendering, over the protected-path manifest only, unchanged).
+    A bundle with no self-declared `work_item_id` is exactly what let
+    `OPUS-R25-005`'s failure scenario stay silent -- `write_manifest_with_verified_identifiers`
+    reads this same field back (`_read_manifest_binding_fields`) to bind a
+    directory to the work item it belongs to.
 
     `worktree_root`/`generation_head`, if supplied, are written as plain
     diagnostic lines (`worktree_root: <path>` / `generation_head: <sha>`)
@@ -1550,6 +1966,14 @@ def render_manifest_md(
     if bundle_id is not None:
         lines.append(f"bundle_id: {bundle_id}")
     lines.append(f"review_content_id: {review_content_id}")
+    if work_item_id is not None:
+        lines.append(f"work_item_id: {work_item_id}")
+    if work_item_type is not None:
+        lines.append(f"work_item_type: {work_item_type}")
+    if plan_revision is not None:
+        lines.append(f"plan_revision: {plan_revision}")
+    if base_commit is not None:
+        lines.append(f"base_commit: {base_commit}")
     if worktree_root is not None:
         lines.append(f"worktree_root: {worktree_root}")
     if generation_head is not None:
@@ -1573,6 +1997,58 @@ def render_manifest_md(
 
 
 _MANIFEST_FIELD_RE = re.compile(r"^(bundle_id|review_content_id): ([0-9a-f]{64})$")
+_MANIFEST_WORK_ITEM_ID_LINE_RE = re.compile(r"^work_item_id: (\S+)$", re.MULTILINE)
+_MANIFEST_BASE_COMMIT_LINE_RE = re.compile(r"^base_commit: ([0-9a-f]{40})$", re.MULTILINE)
+
+
+def _read_manifest_binding_fields(manifest_path: Path) -> dict[str, str | None]:
+    """Read `MANIFEST.md`'s `work_item_id:`/`base_commit:` **header line**
+    specifically -- never a substring scan (`OPUS-R25-005`: this
+    repository's own real manifest names `work_item_id` only inside an
+    unrelated exclusion-justification sentence, a decoy a naive substring
+    reader would false-positive on). `None` for a field with no such
+    line -- including a wholly absent file."""
+    if not manifest_path.is_file():
+        return {"work_item_id": None, "base_commit": None}
+    content = manifest_path.read_text()
+    wid_match = _MANIFEST_WORK_ITEM_ID_LINE_RE.search(content)
+    base_match = _MANIFEST_BASE_COMMIT_LINE_RE.search(content)
+    return {
+        "work_item_id": wid_match.group(1) if wid_match else None,
+        "base_commit": base_match.group(1) if base_match else None,
+    }
+
+
+def _assert_manifest_binding_agrees(
+    manifest_path: Path, *, work_item_id: str, base_commit: str,
+) -> None:
+    """Fail-closed matrix conditions 12/13: an *existing* `MANIFEST.md`
+    must either be absent (the ordinary first-write case, handled by the
+    caller) or already agree with the resolved work item on both
+    `work_item_id` and `base_commit`. Disagreement -- including "present
+    but declares no `work_item_id` at all" (an unbound/legacy manifest) --
+    refuses, naming the resolved item, the directory, and either the
+    disagreeing value or "unbound"."""
+    if not manifest_path.is_file():
+        return
+    recorded = _read_manifest_binding_fields(manifest_path)
+    recorded_work_item_id = recorded["work_item_id"]
+    if recorded_work_item_id is None:
+        raise BundleWorkItemMismatchError(
+            f"{manifest_path} exists but declares no work_item_id (unbound); "
+            f"expected {work_item_id!r}"
+        )
+    if recorded_work_item_id != work_item_id:
+        raise BundleWorkItemMismatchError(
+            f"{manifest_path} is bound to work_item_id {recorded_work_item_id!r}, "
+            f"expected {work_item_id!r}"
+        )
+    recorded_base_commit = recorded["base_commit"]
+    if recorded_base_commit is not None and recorded_base_commit != base_commit:
+        raise BundleWorkItemMismatchError(
+            f"{manifest_path} is bound to base_commit {recorded_base_commit!r}, "
+            f"expected {base_commit!r} for work item {work_item_id!r}"
+        )
 
 
 def read_manifest_identifiers(manifest_path: Path) -> dict[str, str]:
@@ -1627,6 +2103,8 @@ def write_manifest_with_verified_identifiers(
     protected: frozenset[str] = PLAN_STAGE_PROTECTED,
     excluded_paths: Mapping[str, str] = PLAN_STAGE_EXCLUDED_PATHS,
     excluded_prefixes: Mapping[str, str] = PLAN_STAGE_EXCLUDED_PREFIXES,
+    *,
+    allow_rebind: bool = False,
 ) -> tuple[str, str]:
     """The **only** code path allowed to write `MANIFEST.md` (`OPUS-R18-002`
     — every other entry point, including the CLI's default invocation, is
@@ -1652,12 +2130,28 @@ def write_manifest_with_verified_identifiers(
     `MANIFEST.md` completely untouched rather than holding a placeholder
     or a since-falsified value. The final write itself goes through a
     temp file in the same directory and `os.replace()`, so even the write
-    step cannot leave a partially-written file behind. Returns
-    `(review_content_id, bundle_id)`."""
+    step cannot leave a partially-written file behind.
+
+    **Bound to an explicit work item** (`D-Fingerprint-Generalization`,
+    `OPUS-R25-005`): before any of the above, an *existing* `MANIFEST.md`
+    at `bundle_dir` must either be absent or already agree with
+    `work_item_id`/the resolved `base_commit` -- disagreement, or a
+    present-but-unbound manifest (no `work_item_id:` line at all, the
+    state of every manifest predating this revision), refuses with
+    `BundleWorkItemMismatchError` rather than silently proceeding. This
+    check is skipped entirely when `allow_rebind=True` -- the one
+    legitimate exception, scoped to the one-time migration that binds a
+    currently-unbound bundle directory to the work item it has always
+    actually belonged to, never the ordinary write path's default
+    behavior. Returns `(review_content_id, bundle_id)`."""
     manifest_path = bundle_dir / MANIFEST_FILENAME
+    base_full = resolve_base(repo_root, base)
+
+    if not allow_rebind:
+        _assert_manifest_binding_agrees(manifest_path, work_item_id=work_item_id, base_commit=base_full)
 
     digest, _projection = compute_review_content_id_plan_stage(
-        repo_root, base, work_item_type=work_item_type, work_item_id=work_item_id,
+        repo_root, base_full, work_item_type=work_item_type, work_item_id=work_item_id,
         plan_revision=plan_revision, protected=protected,
         excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,
     )
@@ -1672,6 +2166,8 @@ def write_manifest_with_verified_identifiers(
     placeholder_content = render_manifest_md(
         review_content_id=digest, protected=protected,
         excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,
+        work_item_id=work_item_id, work_item_type=work_item_type,
+        plan_revision=plan_revision, base_commit=base_full,
         worktree_root=worktree_root, generation_head=generation_head,
     ).encode()
     bundle_id, _entries = compute_bundle_id(
@@ -1682,6 +2178,8 @@ def write_manifest_with_verified_identifiers(
         review_content_id=digest, protected=protected,
         excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,
         bundle_id=bundle_id,
+        work_item_id=work_item_id, work_item_type=work_item_type,
+        plan_revision=plan_revision, base_commit=base_full,
         worktree_root=worktree_root, generation_head=generation_head,
     )
 
@@ -1706,33 +2204,91 @@ def write_manifest_with_verified_identifiers(
     return digest, bundle_id
 
 
+REQUIRED_GENERATION_FILES: frozenset[str] = frozenset(
+    {"REVIEW_REQUEST.md", "PLAN.md", "DIFF.patch", "TEST_RESULTS.md"}
+)
+
+
+def write_manifest_with_verified_identifiers_for_work_item(
+    repo_root: Path, work_item_id: str, *, base: str | None = None, allow_rebind: bool = False,
+) -> tuple[str, str]:
+    """Work-item-generic entry point for `write_manifest_with_verified_identifiers`
+    (`D-Fingerprint-Generalization`): resolves `bundle_dir` internally as
+    `.ai-review/<work_item_id>/current` by direct templating — never
+    `resolve_bundle_dir`'s existence-gated scoped-else-flat fallback, so
+    the write path can never target the wrong (flat) directory for a new
+    item. Does **not** create that directory or anything inside it: the
+    bind precondition is that the resolved directory already contains the
+    complete required generation file set `prepare-ai-review.sh` (or an
+    equivalent full-generation step) writes — `REVIEW_REQUEST.md`,
+    `PLAN.md`, `DIFF.patch`, `TEST_RESULTS.md` — whether that directory is
+    entirely absent (every required file trivially missing) or exists but
+    incomplete (an interrupted prior generation run); both raise
+    `MissingRequiredBundleFileError`, naming the first missing file, never
+    a distinct "creates it" outcome (`GPT-R29-002`, acceptance criterion
+    22). `base`, if given, overrides the resolved item's own declared
+    `base_commit` (used for the one-time migration rebind, where the
+    bundle's real base commit is `workflow-v2-1-core`'s own -- never a
+    silent default for any other caller)."""
+    resolved_bundle_dir = repo_root / ".ai-review" / work_item_id / "current"
+    missing = sorted(
+        f for f in REQUIRED_GENERATION_FILES if not (resolved_bundle_dir / f).is_file()
+    )
+    if missing:
+        raise MissingRequiredBundleFileError(missing)
+
+    metadata = resolve_plan_stage_metadata(repo_root, work_item_id)
+    base_to_use = base if base is not None else metadata.base_commit
+
+    return write_manifest_with_verified_identifiers(
+        repo_root, resolved_bundle_dir, base_to_use,
+        metadata.work_item_type, metadata.work_item_id, metadata.plan_revision,
+        metadata.protected_paths, metadata.excluded_paths, metadata.excluded_prefixes,
+        allow_rebind=allow_rebind,
+    )
+
+
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
         description=(
-            "Compute this milestone's plan-stage review_content_id/bundle_id. "
-            "Read-only by default (OPUS-R18-002): prints both identifiers and "
-            "writes nothing. Pass --write-manifest to (re)generate "
-            "MANIFEST.md -- the one invocation that mutates the bundle "
-            "directory; a reviewer inspecting a bundle should never need it."
+            "Compute a work item's plan-stage review_content_id/bundle_id "
+            "(D-Fingerprint-Generalization). Read-only by default "
+            "(OPUS-R18-002): prints identifiers and writes nothing. Pass "
+            "--write-manifest to (re)generate MANIFEST.md -- the one "
+            "invocation that mutates the bundle directory; a reviewer "
+            "inspecting a bundle should never need it."
         )
     )
     parser.add_argument(
-        "base", nargs="?", default="162154d3e5e10eb65e109833acae4b4fb01fc5d6",
-        help="base commit/ref (default: this milestone's own base commit)",
+        "base", nargs="?", default=None,
+        help=(
+            "base commit/ref override (default: the resolved work item's "
+            "own declared base_commit -- never a literal naming any other "
+            "item, OPUS-R26-003)"
+        ),
     )
     parser.add_argument(
         "--write-manifest", action="store_true",
         help="write MANIFEST.md (the only invocation that writes anything)",
     )
     parser.add_argument(
-        "--work-item-id", default="workflow-v2-1-core",
+        "--work-item-id", default=None,
         help=(
-            "work item whose bundle directory to resolve (default: this "
-            "milestone's own work item). Resolves via resolve_bundle_dir "
-            "-- .ai-review/<id>/current if it exists, else the flat "
-            "compatibility path .ai-review/current"
+            "work item to resolve. For the read-only inspection path, "
+            "omitted resolves to the live active_work_item_id "
+            "(WORKFLOW_STATE.json), never a hardcoded literal "
+            "(OPUS-R25-005). For --write-manifest, this argument is "
+            "required and is never defaulted (OPUS-R28-010)."
+        ),
+    )
+    parser.add_argument(
+        "--rebind", action="store_true",
+        help=(
+            "one-time migration use only: bind an existing, currently-"
+            "unbound MANIFEST.md to --work-item-id instead of refusing on "
+            "disagreement. Never the ordinary write path's default."
         ),
     )
     args = parser.parse_args()
@@ -1743,16 +2299,41 @@ if __name__ == "__main__":
             check=True, capture_output=True, text=True,
         ).stdout.strip()
     )
-    plan_revision = load_plan_revision(repo_root)
-    digest, projection = compute_review_content_id_plan_stage(
-        repo_root, args.base,
-        work_item_type="process",
-        work_item_id="workflow-v2-1-core",
-        plan_revision=plan_revision,
+
+    if args.write_manifest:
+        if not args.work_item_id:
+            raise SystemExit(
+                "error: --work-item-id is required with --write-manifest "
+                "-- never resolved from the live active_work_item_id on the write path"
+            )
+        digest, bundle_id = write_manifest_with_verified_identifiers_for_work_item(
+            repo_root, args.work_item_id, base=args.base, allow_rebind=args.rebind,
+        )
+        manifest_path = repo_root / ".ai-review" / args.work_item_id / "current" / MANIFEST_FILENAME
+        print("=== wrote MANIFEST.md ===")
+        print(f"work_item_id: {args.work_item_id}")
+        print(f"wrote: {manifest_path}")
+        print(f"review_content_id (write -> recompute -> equal): {digest}")
+        print(f"bundle_id (write -> recompute -> equal): {bundle_id}")
+        raise SystemExit(0)
+
+    work_item_id = args.work_item_id
+    if work_item_id is None:
+        _work_items, active_work_item_id = _load_workflow_state_work_items(repo_root, None)
+        if active_work_item_id is None:
+            raise SystemExit(
+                "error: --work-item-id was omitted and WORKFLOW_STATE.json "
+                "has no active_work_item_id to fall back to"
+            )
+        work_item_id = active_work_item_id
+
+    digest, projection = compute_review_content_id_plan_stage_for_work_item(
+        repo_root, work_item_id, base=args.base,
     )
-    print("=== compute_review_content_id_plan_stage ===")
+    print("=== compute_review_content_id_plan_stage_for_work_item ===")
+    print(f"work_item_id: {work_item_id}")
     print(f"base_commit (resolved, full): {projection['base_commit']}")
-    print(f"plan_revision (from registry JSON, cross-checked against plan title): {plan_revision}")
+    print(f"plan_revision (from registry JSON, cross-checked against plan title): {projection['plan_revision']}")
     print(f"review_content_id: {digest}")
     print(f"protected_paths: {projection['protected_paths']}")
     print(f"excluded_paths: {projection['excluded_paths']}")
@@ -1761,23 +2342,9 @@ if __name__ == "__main__":
     for entry in projection["review_content_manifest"]:
         print(f"  {entry}")
 
-    bundle_dir = repo_root / resolve_bundle_dir(repo_root, args.work_item_id)
+    bundle_dir = repo_root / resolve_bundle_dir(repo_root, work_item_id)
     manifest_path = bundle_dir / "MANIFEST.md"
     print()
-
-    if args.write_manifest:
-        if not bundle_dir.is_dir():
-            raise SystemExit(f"error: no bundle directory at {bundle_dir} -- run scripts/prepare-ai-review.sh first")
-        digest, bundle_id = write_manifest_with_verified_identifiers(
-            repo_root, bundle_dir, args.base,
-            work_item_type="process", work_item_id="workflow-v2-1-core",
-            plan_revision=plan_revision,
-        )
-        print("=== wrote MANIFEST.md ===")
-        print(f"wrote: {manifest_path}")
-        print(f"review_content_id (write -> recompute -> equal): {digest}")
-        print(f"bundle_id (write -> recompute -> equal): {bundle_id}")
-        raise SystemExit(0)
 
     print("=== read-only bundle inspection (no files written) ===")
     if not bundle_dir.is_dir():

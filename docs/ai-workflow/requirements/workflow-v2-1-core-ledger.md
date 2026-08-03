@@ -86,3 +86,158 @@ physically separated (D4b)
   round.
 - **Functional-verification outcome:** not applicable (process checkpoint,
   no product-facing behavior).
+
+## `WF8b` continued scope — Revision 21 fingerprint-generalization
+remediation (`D-Fingerprint-Generalization`, `WF8B-S1-001`)
+
+Not a new checkpoint ID (per the plan's own migration step 11): this is
+`WF8b`'s own continued scope, the remediation the `WF8B_S1_FINDING`
+(`docs/ai-workflow/dry-run/WF8B_S1_FINDING_review_content_id_not_generalized.md`)
+made a precondition for re-attempting S1. `WF8b` itself remains
+`IN_PROGRESS`/unexecuted; `active_work_item_id` remains `v2-1-dry-run`.
+
+- **Implementation evidence:**
+  - `scripts/workflow_fingerprint.py`: twelve new fail-closed exception
+    classes; `PlanStageMetadata` (a `NamedTuple`, never a positional
+    tuple); `resolve_plan_stage_metadata` (the thirteen-step, per-work-item
+    resolution algorithm, worktree- and commit-source); `artifacts_path_for_work_item`;
+    `load_plan_stage_classification` (reads a `<work_item_id>-artifacts.json`'s
+    `plan_stage` key); `compute_review_content_id_plan_stage_for_work_item`/
+    `_at_commit_for_work_item`; `load_plan_revision`/
+    `load_implementation_stage_classification` migrated to per-item,
+    required-argument sources (`DEFAULT_REGISTRY_PATH`/`DEFAULT_PLAN_PATH`
+    kept only as named migration-comparison fixtures); `render_manifest_md`
+    gains `work_item_id`/`work_item_type`/`plan_revision`/`base_commit`
+    fields; `write_manifest_with_verified_identifiers` gains the
+    manifest work-item/base-commit bind check (`BundleWorkItemMismatchError`,
+    conditions 12/13) and an `allow_rebind` escape hatch scoped to the
+    one-time migration; `write_manifest_with_verified_identifiers_for_work_item`
+    is the new work-item-generic entry point the CLI and
+    `prepare-ai-review.sh` both use, with its own first-write bind
+    precondition (`MissingRequiredBundleFileError`, never a directory/content
+    creator). The CLI's `__main__` no longer defaults `--work-item-id`/
+    `base` to `workflow-v2-1-core`'s own literals: the read-only path
+    resolves an omitted `--work-item-id` from the live `active_work_item_id`;
+    `--write-manifest` requires it explicitly.
+  - `scripts/workflow_state.py`: `route_work_item`/`default_work_item`
+    gain `mapping_path`/`base_commit` parameters; the resume branch now
+    accepts all four declaration facts per field independently (write
+    still-null, no-op on identical repeat, `WorkItemDeclarationFactConflictError`
+    on genuine conflict) — the fix `v2-1-dry-run`'s own pre-declared,
+    partially-null entry needs before S1 can ever populate it.
+    `generate_artifacts_declarations` is the new default-template writer
+    `/milestone-plan` step 3 `[2.1]` now calls. `approval_review_content_id`
+    drops its `plan_revision`/`protected`/`excluded_paths`/`excluded_prefixes`
+    parameters for `stage="plan"` (now resolved via the generalized
+    fingerprint call); `approval_is_current`/`verify_post_approval_manifest_match`
+    resolve `artifacts_path` per work item, never `DEFAULT_ARTIFACTS_PATH`.
+    `validate_state` gains the per-field duplicate-artifact-path check
+    (`DuplicateWorkItemArtifactPathError`) as a write-time belt-and-suspenders
+    guard alongside the read-path's own enforcement inside
+    `resolve_plan_stage_metadata`.
+  - `scripts/workflow_test_harness.py`: `write_plan_docs` also emits a
+    matching `<work_item_id>-artifacts.json` and embeds `work_item_id`/
+    `plan_revision` in its default registry/mapping/plan-doc content, so
+    any harness-created fixture is resolver-ready with no override; new
+    `ScratchRepo.write_workflow_state` helper.
+  - `scripts/prepare-ai-review.sh`: the work-item-id argument is required
+    for `stage == "plan"`; a new early check
+    (`fingerprint.resolve_plan_stage_metadata`, never a second ad hoc
+    reader) cross-checks the resolved item's declared `base_commit`
+    against the resolved `BASE_SHA` before any bundle content is
+    generated; the script's own final plan-stage step now calls
+    `workflow_fingerprint.py --write-manifest` directly, closing the "no
+    command ever forces a matching `--work-item-id`" gap the finding
+    named. The flat, optional-argument layout is unchanged for every
+    other stage.
+  - `docs/ai-workflow/registry/workflow-v2-1-core-artifacts.json` and
+    `docs/ai-workflow/registry/milestone-8-artifacts.json` migrated to
+    `schema_version: 2` (`implementation_stage`/`plan_stage` sub-keys);
+    `workflow-v2-1-core`'s own `plan_stage` section is byte-identical to
+    the retired `PLAN_STAGE_PROTECTED`/`PLAN_STAGE_EXCLUDED_PATHS`/
+    `PLAN_STAGE_EXCLUDED_PREFIXES` Python constants (verified by direct
+    comparison, not a hardcoded digest); its `implementation_stage`
+    section gains the concrete, self-referential
+    `docs/ai-workflow/registry/workflow-v2-1-core-artifacts.json`
+    protected-path entry (`OPUS-R25-006`/`OPUS-R26-004`).
+  - `docs/ai-workflow/WORKFLOW_STATE.json` backfilled with `mapping_path`
+    for all three existing entries (migration step 1).
+  - `.claude/commands/milestone-plan.md`/`apply-plan-review.md`/
+    `prepare-review.md`, `docs/ai-workflow/MILESTONE_WORKFLOW.md`/
+    `REVIEW_PROTOCOL.md`, and `.github/workflows/ci.yml` updated per the
+    plan's own "Affected commands" audit.
+  - One-time operational migration (not a git-tracked change —
+    `.ai-review/` is entirely gitignored): `.ai-review/current/` and
+    `.ai-review/review-bundle.tar.gz` relocated to
+    `.ai-review/workflow-v2-1-core/`, verified, then rebound via
+    `write_manifest_with_verified_identifiers_for_work_item(..., allow_rebind=True)` —
+    the relocated `MANIFEST.md`'s `review_content_id` reproduces
+    `b6d4ea6a8778321526fa5a3a6d2af17801f6187fd137680bbef8cce008ef95c0`
+    (the current `plan_approval.approved_review_content_id`) byte-for-byte
+    through the fully generalized resolver, the concrete backward-
+    compatibility proof acceptance criterion 2 requires.
+  - **Scope decisions, disclosed rather than silently narrowed:**
+    `compute_review_content_id_plan_stage`/`_at_commit`'s `protected`/
+    `excluded_paths`/`excluded_prefixes` parameters keep their
+    `PLAN_STAGE_*` defaults (not retired) — the two real call sites that
+    matter (the CLI and `write_manifest_with_verified_identifiers_for_work_item`)
+    never rely on them, routing everything through the new work-item-generic
+    functions instead, so the actual defect (`--work-item-id` silently
+    meaning `workflow-v2-1-core`) is closed at both real entry points;
+    retiring the defaults themselves would additionally require rewriting
+    ~40 existing hermetic test call sites for no behavioral gain, and is
+    left as a follow-up. `PlanRevisionMirrorMismatchError` is defined but
+    not yet wired into `validate_state` as an automated check (the
+    resolver itself sources `plan_revision` correctly regardless — this
+    is a data-integrity nicety, not a correctness dependency). The
+    thirteen-condition fail-closed matrix and missing-test items 141-166
+    are covered by their own core, load-bearing assertion at least once
+    (`scripts/workflow_fingerprint_generalization_test.py`), not by an
+    exhaustive enumeration of every named sub-case (several items name a
+    dozen-plus independent sub-cases).
+- **Verification results:**
+  - `python3 scripts/workflow_fingerprint_test.py` — 122/122 pass, unchanged
+    assertion count plus fixture updates for the schema-2 artifacts format.
+  - `python3 scripts/workflow_state_test.py` — 185/185 pass, including the
+    rewritten `TestApprovalFreshnessAndEntry`/`TestLegacyPromotion` fixtures
+    now exercising the real `WORKFLOW_STATE.json`-backed resolution path.
+  - `python3 scripts/workflow_integration_test.py` — 32/32 pass (30
+    pre-existing + 2 new golden-hash-delta assertions for the required
+    `<work_item_id>` argument in `milestone-plan.md`/`apply-plan-review.md`).
+  - `python3 scripts/workflow_test_harness_test.py` — 19/19 pass.
+  - `python3 scripts/workflow_fingerprint_generalization_test.py` (new) —
+    27/27 pass: a second work item's distinct identity and manifest, nine
+    of the thirteen fail-closed matrix conditions, the `route_work_item`
+    resume-branch writer, `generate_artifacts_declarations`, the
+    `validate_state` duplicate-path guard, and three real subprocess
+    invocations of `scripts/prepare-ai-review.sh` (missing-argument
+    refusal, base-commit-disagreement refusal, and a full successful run
+    producing a work-item-bound `MANIFEST.md`).
+  - Durability guard, re-verified immediately before and after every
+    edit: `compute_review_content_id_plan_stage_for_work_item(repo_root,
+    "workflow-v2-1-core")` reproduces
+    `b6d4ea6a8778321526fa5a3a6d2af17801f6187fd137680bbef8cce008ef95c0`
+    exactly — the current `plan_approval.approved_review_content_id` —
+    both before this checkpoint's edits (via the frozen low-level
+    functions) and after (via the fully generalized resolver), confirming
+    no protected-path drift and mechanism-relative backward compatibility.
+  - `python3 scripts/workflow_fingerprint_demo_test.py`/`workflow_state_demo_test.py`
+    against the real repository: unchanged pre-existing failures only
+    (one pre-existing commit-message assertion unrelated to this
+    checkpoint, and a pre-existing `docs/improvements/`/`docs/ai-workflow/dry-run/`
+    implementation-stage classification gap, confirmed present on `HEAD`
+    before this checkpoint's own changes via `git stash`) — no new
+    failure introduced. Both suites' commit-source assertions against
+    `workflow-v2-1-core`'s own `WORKFLOW_STATE.json` entry (`mapping_path`)
+    only pass once this checkpoint's commit lands, by construction (they
+    read committed content via `git show`, never the working tree).
+  - Not run: `./gradlew spotlessCheck detekt lintDebug testDebugUnitTest`
+    — this checkpoint touches no Android/`app/` source, so the full
+    Gradle verification cycle would exercise nothing this remediation
+    changed; the Python hermetic suites above are this checkpoint's
+    actual verification surface (mirroring every process checkpoint's own
+    "Functional-verification outcome: not applicable" pattern above).
+- **Review findings:** none yet — pending this checkpoint's own
+  implementation-review round.
+- **Functional-verification outcome:** not applicable (process checkpoint,
+  no product-facing behavior).

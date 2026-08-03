@@ -692,10 +692,14 @@ class TestLegacyPromotion(unittest.TestCase):
 
     def _write_artifacts(self, repo):
         (repo.root / self.ARTIFACTS_REL).write_text(json.dumps({
-            "protected_paths": {self.PROTECTED_PATH: "product code"},
-            "protected_prefixes": {},
-            "excluded_paths": {"artifacts.json": "declarations file"},
-            "excluded_prefixes": {"docs/": "docs"},
+            "schema_version": 2,
+            "work_item_id": "milestone-8",
+            "implementation_stage": {
+                "protected_paths": {self.PROTECTED_PATH: "product code"},
+                "protected_prefixes": {},
+                "excluded_paths": {"artifacts.json": "declarations file"},
+                "excluded_prefixes": {"docs/": "docs"},
+            },
         }))
         _run(["git", "add", str(self.ARTIFACTS_REL)], cwd=repo.root)
         _run(["git", "commit", "-q", "-m", "add artifact declarations"], cwd=repo.root)
@@ -1214,11 +1218,15 @@ class TestApprovalTrailerDiscovery(unittest.TestCase):
 class TestApprovalFreshnessAndEntry(unittest.TestCase):
     """Uses the module's own real `PLAN_STAGE_PROTECTED`/
     `PLAN_STAGE_EXCLUDED_PREFIXES` defaults rather than a fabricated
-    classification: `docs/TECHNICAL_DECISIONS.md` stands in for "the plan
-    document" (a real protected path), and checkpoint-commit scaffolding
-    lives under `scripts/` (a real excluded prefix), so no override
-    plumbing is needed and the scenario matches this milestone's own
-    actual classification."""
+    classification: the five real `workflow-v2-1-core` paths stand in as
+    `"wi"`'s own declared plan/registry/mapping paths, and checkpoint-
+    commit scaffolding lives under `scripts/` (a real excluded prefix), so
+    the scenario matches this milestone's own actual classification.
+    `D-Fingerprint-Generalization`: every approval-freshness function now
+    routes through `resolve_plan_stage_metadata`, so `"wi"`'s own
+    `WORKFLOW_STATE.json` entry and `wi-artifacts.json` declaration are
+    committed alongside the plan docs, exactly mirroring the real
+    repository's own layout for a second work item."""
 
     # One representative real protected path (the plan-stage manifest
     # requires every entry in PLAN_STAGE_PROTECTED to exist, fail-closed --
@@ -1226,6 +1234,13 @@ class TestApprovalFreshnessAndEntry(unittest.TestCase):
     # this is the one it later edits to simulate a post-approval plan
     # revision).
     PLAN_DOC = "docs/ai-workflow/WORKFLOW_V2_PLAN.md"
+    REGISTRY_PATH = "docs/ai-workflow/registry/workflow-v2-1-core-registry.json"
+    MAPPING_PATH = "docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json"
+    ARTIFACTS_PATH = "docs/ai-workflow/registry/wi-artifacts.json"
+    STATE_PATH = "docs/ai-workflow/WORKFLOW_STATE.json"
+
+    def _plan_doc_content(self, plan_revision, body="plan v1"):
+        return f"# Plan (Revision {plan_revision})\n\n{body}\n"
 
     def _plan_stage_worktree_id(self, repo, plan_revision=1):
         digest, _ = fingerprint.compute_review_content_id_plan_stage(
@@ -1248,11 +1263,49 @@ class TestApprovalFreshnessAndEntry(unittest.TestCase):
         for rel_path in fingerprint.PLAN_STAGE_PROTECTED:
             full = repo.root / rel_path
             full.parent.mkdir(parents=True, exist_ok=True)
-            if not full.exists():
+            if rel_path == self.PLAN_DOC:
+                full.write_text(self._plan_doc_content(plan_revision))
+            elif rel_path == self.REGISTRY_PATH:
+                full.write_text(json.dumps({
+                    "work_item_id": "wi", "plan_revision": plan_revision, "checkpoints": [],
+                }))
+            elif rel_path == self.MAPPING_PATH:
+                full.write_text(json.dumps({"work_item_id": "wi", "requirements": {}}))
+            elif not full.exists():
                 full.write_text(f"placeholder for {rel_path}\n")
             _run(["git", "add", rel_path], cwd=repo.root)
-        (repo.root / self.PLAN_DOC).write_text("plan v1\n")
-        _run(["git", "add", self.PLAN_DOC], cwd=repo.root)
+
+        artifacts_full = repo.root / self.ARTIFACTS_PATH
+        artifacts_full.parent.mkdir(parents=True, exist_ok=True)
+        artifacts_full.write_text(json.dumps({
+            "schema_version": 2,
+            "work_item_id": "wi",
+            "plan_stage": {
+                "protected_paths": sorted(fingerprint.PLAN_STAGE_PROTECTED),
+                "excluded_paths": dict(fingerprint.PLAN_STAGE_EXCLUDED_PATHS),
+                "excluded_prefixes": dict(fingerprint.PLAN_STAGE_EXCLUDED_PREFIXES),
+            },
+        }))
+        _run(["git", "add", self.ARTIFACTS_PATH], cwd=repo.root)
+
+        state_full = repo.root / self.STATE_PATH
+        state_full.parent.mkdir(parents=True, exist_ok=True)
+        state_full.write_text(json.dumps({
+            "schema_version": 1,
+            "active_work_item_id": "wi",
+            "work_items": {
+                "wi": {
+                    "work_item_id": "wi",
+                    "work_item_type": "process",
+                    "plan_path": self.PLAN_DOC,
+                    "registry_path": self.REGISTRY_PATH,
+                    "mapping_path": self.MAPPING_PATH,
+                    "base_commit": repo.base,
+                },
+            },
+        }))
+        _run(["git", "add", self.STATE_PATH], cwd=repo.root)
+
         review_content_id = self._plan_stage_worktree_id(repo, plan_revision)
         _run(["git", "commit", "-q", "-m",
               "approve plan\n\nWorkflow-Plan-Approval: " + review_content_id + "\nWorkflow-Work-Item: wi"],
@@ -1288,7 +1341,11 @@ class TestApprovalFreshnessAndEntry(unittest.TestCase):
             _, _, work_item = self._approve_plan(repo)
             self._commit_checkpoint(repo, 1)
             self.assertTrue(ws.implementing_entry_reachable(repo.root, work_item, repo.base))
-            self._commit_at_path(repo, self.PLAN_DOC, "plan v2 -- edited after checkpoint\n", "edit plan post-checkpoint")
+            self._commit_at_path(
+                repo, self.PLAN_DOC,
+                self._plan_doc_content(work_item["plan_revision"], "plan v2 -- edited after checkpoint"),
+                "edit plan post-checkpoint",
+            )
             self.assertFalse(ws.implementing_entry_reachable(repo.root, work_item, repo.base))
             self.assertFalse(
                 ws.approval_is_current(repo.root, work_item, stage="plan", base_commit=repo.base)

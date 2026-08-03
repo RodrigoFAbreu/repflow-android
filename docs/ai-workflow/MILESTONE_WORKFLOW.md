@@ -42,12 +42,15 @@ condition, and whether Claude stops.
 ### AWAITING_EXTERNAL_PLAN_REVIEW
 
 - **Entry**: self-review is complete.
-- **Allowed actions**: run `scripts/prepare-ai-review.sh <base-sha> plan` to
-  export the bundle. No implementation.
-- **Artifacts**: `.ai-review/current/` (plan stage) and
-  `.ai-review/review-bundle.tar.gz`.
+- **Allowed actions**: run `scripts/prepare-ai-review.sh <base-sha> plan
+  <work_item_id>` to export the bundle -- `work_item_id` is **required**
+  for the plan stage, never resolved from the live `active_work_item_id`
+  (`D-Fingerprint-Generalization`). No implementation.
+- **Artifacts**: `.ai-review/<work_item_id>/current/` (plan stage) and
+  `.ai-review/<work_item_id>/review-bundle.tar.gz`.
 - **Exit**: external reviewer places feedback at
-  `.ai-review/feedback/REVIEW_FEEDBACK.md`.
+  `.ai-review/feedback/REVIEW_FEEDBACK.md` (feedback stays flat, stage-
+  agnostic, unlike the plan-stage bundle directory itself).
 - **Stop for user/reviewer?** Yes — hard gate. Claude must stop here.
 
 ### REVISING_PLAN

@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
 # Build a review bundle under .ai-review/<work-item-id>/current/ (or the
-# flat .ai-review/current/ compatibility path if no work-item-id is given)
-# and archive it. See docs/ai-workflow/REVIEW_PROTOCOL.md.
+# flat .ai-review/current/ compatibility path for a non-plan stage with no
+# work-item-id given) and archive it. See docs/ai-workflow/REVIEW_PROTOCOL.md.
 #
 # Usage: scripts/prepare-ai-review.sh <base-sha> <stage> [work-item-id]
 #   stage: plan | implementation | post-fix | functional-review
-#   work-item-id: optional. Omitted -> the flat .ai-review/current/
-#     compatibility layout. Given -> .ai-review/<work-item-id>/current/
+#   work-item-id: REQUIRED for stage "plan" (D-Fingerprint-Generalization,
+#     OPUS-R27-003) -- never resolved from the live active_work_item_id for
+#     this stage, since MANIFEST.md's identity binding depends on it.
+#     Optional for every other stage: omitted -> the flat .ai-review/current/
+#     compatibility layout; given -> .ai-review/<work-item-id>/current/
 #     (WF5's relayout, D-Bundle-Manifest).
 set -euo pipefail
 
 usage() {
   echo "Usage: $0 <base-sha> <stage> [work-item-id]" >&2
   echo "  stage: plan | implementation | post-fix | functional-review" >&2
+  echo "  work-item-id: required for stage 'plan'; optional otherwise" >&2
   exit 1
 }
 
@@ -33,6 +37,11 @@ case "$STAGE" in
     ;;
 esac
 
+if [[ "$STAGE" == "plan" && -z "$WORK_ITEM_ID" ]]; then
+  echo "error: work-item-id is required for stage 'plan' (D-Fingerprint-Generalization) -- never resolved from the live active_work_item_id" >&2
+  usage
+fi
+
 if [[ -n "$WORK_ITEM_ID" ]] && ! [[ "$WORK_ITEM_ID" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]]; then
   echo "error: work-item-id '$WORK_ITEM_ID' does not match ^[a-z0-9][a-z0-9_-]{0,63}\$" >&2
   exit 1
@@ -47,6 +56,49 @@ cd "$REPO_ROOT"
 if ! BASE_SHA=$(git rev-parse --verify "${BASE_SHA}^{commit}" 2>/dev/null); then
   echo "error: base-sha '$REQUESTED_BASE_SHA' does not resolve to a commit" >&2
   exit 1
+fi
+
+# --- plan-stage-only: cross-check the resolved work item's own declared
+# base_commit against the resolved BASE_SHA before generating any bundle
+# content (fail-closed matrix condition 13, OPUS-R27-003/OPUS-R28-006).
+# Routed through fingerprint.resolve_plan_stage_metadata -- the same
+# resolver every other plan-stage read in this design uses -- never a
+# second, ad hoc metadata reader.
+if [[ "$STAGE" == "plan" ]]; then
+  PLAN_STAGE_BASE_CHECK=$(
+    PYTHONPATH="$REPO_ROOT/scripts:${PYTHONPATH:-}" python3 - "$WORK_ITEM_ID" "$BASE_SHA" "$REPO_ROOT" <<'PYEOF'
+import sys
+from pathlib import Path
+import workflow_fingerprint as fingerprint
+
+work_item_id, base_sha, repo_root = sys.argv[1], sys.argv[2], Path(sys.argv[3])
+try:
+    metadata = fingerprint.resolve_plan_stage_metadata(repo_root, work_item_id)
+except Exception as exc:  # noqa: BLE001 -- surfaced verbatim to the operator below
+    print(f"error::{type(exc).__name__}: {exc}")
+    sys.exit(0)
+if metadata.base_commit != base_sha:
+    print(f"mismatch::{metadata.base_commit}")
+    sys.exit(0)
+print("ok")
+PYEOF
+  )
+  case "$PLAN_STAGE_BASE_CHECK" in
+    ok) ;;
+    mismatch::*)
+      DECLARED_BASE_COMMIT=${PLAN_STAGE_BASE_CHECK#mismatch::}
+      echo "error: work item '$WORK_ITEM_ID' declares base_commit '$DECLARED_BASE_COMMIT', but the requested base '$REQUESTED_BASE_SHA' resolves to '$BASE_SHA' -- refusing to generate bundle content for a disagreeing base (D-Fingerprint-Generalization, fail-closed matrix condition 13)" >&2
+      exit 1
+      ;;
+    error::*)
+      echo "error: could not resolve work item '$WORK_ITEM_ID's plan-stage metadata: ${PLAN_STAGE_BASE_CHECK#error::}" >&2
+      exit 1
+      ;;
+    *)
+      echo "error: unexpected plan-stage base-commit check output: $PLAN_STAGE_BASE_CHECK" >&2
+      exit 1
+      ;;
+  esac
 fi
 
 HEAD_SHA=$(git rev-parse HEAD)
@@ -76,6 +128,9 @@ trap cleanup EXIT
 # fallback (D-Bundle-Manifest, resolves OPUS-R6-021): a work-item-id
 # argument opts into the new per-work-item layout; omitting it keeps
 # writing the flat legacy layout, for any caller not yet passing one.
+# For stage "plan", WORK_ITEM_ID is always non-empty here (enforced above),
+# so ROOT_DIR always resolves scoped -- there is no "else" left to disagree
+# with --write-manifest's own resolution below (OPUS-R26-002/OPUS-R27-003).
 if [[ -n "$WORK_ITEM_ID" ]]; then
   ROOT_DIR=".ai-review/$WORK_ITEM_ID"
 else
@@ -176,6 +231,20 @@ if [[ -s "$CONTEXT_FILES_LIST" ]]; then
       echo "warning: context file listed but not found: $ctx_path" >&2
     fi
   done < "$CONTEXT_FILES_LIST"
+fi
+
+# --- plan-stage-only: write MANIFEST.md as this script's own final content
+# step, before archiving, so the archived bundle actually contains it
+# (D-Fingerprint-Generalization, OPUS-R25-012, resolves the affected-
+# commands audit gap: MANIFEST.md was previously only ever produced by a
+# separate, manual CLI invocation nothing forced to carry a matching
+# --work-item-id). Same CLI entry point as every other invocation, not a
+# reimplementation; REVIEW_REQUEST.md must already state the same
+# review_content_id (OPUS-R18-005, unchanged precondition) -- this call
+# does not relax it.
+if [[ "$STAGE" == "plan" ]]; then
+  python3 "$REPO_ROOT/scripts/workflow_fingerprint.py" "$BASE_SHA" \
+    --work-item-id "$WORK_ITEM_ID" --write-manifest
 fi
 
 # --- archive ---

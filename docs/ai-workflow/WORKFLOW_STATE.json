@@ -9,8 +9,9 @@
       "parent_work_item_id": null,
       "plan_path": "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
       "registry_path": "docs/ai-workflow/registry/workflow-v2-1-core-registry.json",
+      "mapping_path": "docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json",
       "governing_workflow_version": "1",
-      "phase": "IMPLEMENTING",
+      "phase": "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
       "plan_revision": 21,
       "implementation_revision": null,
       "functional_review_round": null,
@@ -132,8 +133,8 @@
       "plan_review_stages": null,
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 22,
-      "last_transition": "2026-08-02T23:53:27+01:00"
+      "state_revision": 23,
+      "last_transition": "2026-08-03T00:00:00+01:00"
     },
     "milestone-8": {
       "work_item_type": "product",
@@ -142,6 +143,7 @@
       "parent_work_item_id": null,
       "plan_path": "docs/milestones/completed/milestone-8-execution.md",
       "registry_path": null,
+      "mapping_path": null,
       "governing_workflow_version": "1",
       "phase": "LEGACY_READY",
       "plan_revision": 1,
@@ -210,6 +212,7 @@
       "parent_work_item_id": null,
       "plan_path": "docs/ai-workflow/dry-run/v2-1-dry-run-plan.md",
       "registry_path": null,
+      "mapping_path": null,
       "governing_workflow_version": "2.1",
       "phase": "PLANNING",
       "plan_revision": 1,

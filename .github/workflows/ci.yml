@@ -84,3 +84,12 @@ jobs:
         # <base_commit>:...` at test time, since this checkout step's
         # default shallow clone would not have that historical commit
         # reachable.
+
+      - name: Fingerprint generalization conformance suite (D-Fingerprint-Generalization, hermetic, stdlib-only)
+        working-directory: scripts
+        run: python3 workflow_fingerprint_generalization_test.py
+        # Missing-test items 141-166 (Revision 21, WF8B-S1-001): per-work-
+        # item plan-stage metadata resolution, the fail-closed matrix,
+        # manifest work-item binding, and the resume-branch declaration-fact
+        # writer -- all against disposable ScratchRepo fixtures, no fixed
+        # historical base commit, safe on every PR.

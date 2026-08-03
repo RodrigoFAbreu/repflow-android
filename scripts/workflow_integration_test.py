@@ -466,12 +466,12 @@ class TestVersion21OnlyCommandsRefuseCleanlyForV1(unittest.TestCase):
 # below, for the two files where a real pre-v2.1 copy is actually
 # available to diff against.
 _GOLDEN_COMMAND_FILE_SHA256 = {
-    "milestone-plan.md": "660c5347df0b8553b039f549a5c0b280d99609ed47ecb8a365e4d6a47dd7130b",
+    "milestone-plan.md": "082a444fac6193493af7da5307f3008d6684a19456fb57af297dbfa21d4082a6",
     "milestone-implement.md": "c6aa36b8a07e780e6ee4ffc6caca06688e40f101c65fd87833fc5d90411af92c",
     "approve-review.md": "a77a81e0a66601dd5369b7d8f7344333cd3937666f2acc30cc06f32dcc1281a1",
     "accept-milestone.md": "32e1a728ddeb1d914c2d2561a7ae9c36bde8e29906215a75924502a1ddf85606",
     "prepare-functional-review.md": "1bb174ce443a60b551c0082f3d702c1a9a60de67580a03f2aba7e9937a31dce8",
-    "apply-plan-review.md": "c4dd2b680f8d6ad39fd333ef9c0996f3c63dfcd85a375d1deadd69a4126451aa",
+    "apply-plan-review.md": "f79febd0ef769d72bc3ec065a55a536203b533d23db4cc3d9b7854b8d49b8834",
     "apply-implementation-review.md": "96772a51cfe315560983c573483bf66ccf38793e31aedb1b5cbc9003f1367234",
     "review-plan.md": "4cc5a74389c9714cf23fb7ed51bc3da5623bf99268ce118c1c2d59b995519c89",
     "record-manual-plan-review.md": "0ce7893e968c412c41e3aca1afdfb8dca7d0060bbd0f38c2a6ec15c7b32669da",
@@ -565,6 +565,17 @@ class TestGoldenV1BehaviorAgainstPreV21BaseCommit(unittest.TestCase):
     argument to `prepare-ai-review.sh`, both WF5) and the additive
     `[2.1]`-tagged sub-steps this milestone interleaved.
 
+    `/milestone-plan`'s step 6 is a **third, genuine (not cosmetic)**
+    delta, added by `D-Fingerprint-Generalization` (Revision 21,
+    `WF8B-S1-001`): `prepare-ai-review.sh`'s work-item-id argument for the
+    plan stage becomes `<work_item_id>` (required), not `[work_item_id]`
+    (optional) -- this is a real behavior change for a `"1"`-governed item
+    too (`workflow-v2-1-core` itself now always passes its own id), not
+    reversible by `_normalize_v1_path_variables`'s cosmetic substitution.
+    Step 6 is therefore excluded from the byte-equality hash below (same
+    pattern `/apply-plan-review`'s own step-1 `WFR-03` addition uses) and
+    separately asserted present, unconditional, and stated as required.
+
     The base-commit text is embedded here as a **literal sha256
     constant** rather than fetched via `git show` at test time, since a
     shallow CI checkout (this repository's `actions/checkout@v4` step
@@ -592,23 +603,48 @@ class TestGoldenV1BehaviorAgainstPreV21BaseCommit(unittest.TestCase):
     def test_milestone_plan_v1_steps_equal_pre_v21_base_commit_modulo_known_renames(self):
         current = _command_text("milestone-plan.md")
         steps = _extract_numbered_steps(current)
+        # Step 6 excluded: D-Fingerprint-Generalization's required
+        # <work_item_id> argument is a genuine v1-visible behavior change,
+        # asserted separately below, not folded into this byte-equality
+        # comparison (see this class's own docstring).
         normalized = "".join(
             _normalize_v1_path_variables(_strip_bracketed_2_1_bullets(steps[n]))
-            for n in "1234567"
+            for n in "123457"
         )
         self.assertEqual(
             hashlib.sha256(normalized.encode()).hexdigest(),
-            "b88757a7fa6562533a51ff797f976b7e176932f74990ad4fc379195d5c54f384",
+            "c9d325c869a4395796d855bbf52d73a6c47061ce040593bda3c70c7793704dbf",
         )
 
+    def test_milestone_plan_step6_requires_work_item_id_for_plan_stage(self):
+        current = _command_text("milestone-plan.md")
+        steps = _extract_numbered_steps(current)
+        step6 = steps["6"]
+        self.assertIn("prepare-ai-review.sh <base-sha> plan <work_item_id>", step6)
+        self.assertNotIn("[work_item_id]", step6)
+        self.assertIn("required", step6)
+
     def test_apply_plan_review_v1_steps_2_to_6_equal_pre_v21_base_commit_modulo_known_renames(self):
+        # Step 5 excluded: D-Fingerprint-Generalization's required
+        # <work_item_id> argument is a genuine v1-visible behavior change
+        # here too (same reasoning as milestone-plan.md's step 6 above),
+        # asserted separately below rather than folded into this
+        # byte-equality comparison.
         current = _command_text("apply-plan-review.md")
         steps = _extract_numbered_steps(current)
-        normalized = "".join(_normalize_v1_path_variables(steps[n]) for n in "23456")
+        normalized = "".join(_normalize_v1_path_variables(steps[n]) for n in "2346")
         self.assertEqual(
             hashlib.sha256(normalized.encode()).hexdigest(),
-            "25fbc9217963fefe44229b5af4ba027a26bce6a64ed2c88f2d5f2106264e86b4",
+            "06f1c04f0593946201dfcab1bad03dd3930e82037767b885a1c38099e6c9483c",
         )
+
+    def test_apply_plan_review_step5_requires_work_item_id_for_plan_stage(self):
+        current = _command_text("apply-plan-review.md")
+        steps = _extract_numbered_steps(current)
+        step5 = steps["5"]
+        self.assertIn("prepare-ai-review.sh <base-sha> plan <work_item_id>", step5)
+        self.assertNotIn("[work_item_id]", step5)
+        self.assertIn("required", step5)
 
     def test_apply_plan_review_step1_wfr03_addition_is_present_and_version_unconditional(self):
         current = _command_text("apply-plan-review.md")

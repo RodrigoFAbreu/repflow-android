@@ -38,12 +38,21 @@ compatibility path.
    - **[2.1]** Derive a `work_item_id` slug from the milestone (matching
      `^[a-z0-9][a-z0-9_-]{0,63}$`, e.g. `milestone-9`), or reuse the
      existing entry's id if resuming a milestone already present in
-     `work_items`. Call `workflow_state.route_work_item(...)` (D1's
+     `work_items`. **Declare** (not yet populate) this milestone's own
+     `plan_path`/`registry_path`/`mapping_path`/`base_commit` --
+     `docs/ai-workflow/WORKFLOW_V2_PLAN.md`-equivalent, `docs/ai-workflow/registry/<work_item_id>-registry.json`,
+     `docs/ai-workflow/requirements/<work_item_id>-mapping.json`, and the
+     resolved base commit respectively (`D-Fingerprint-Generalization`).
+     Call `workflow_state.route_work_item(...)`, passing all four, (D1's
      create-or-resume routing: creates a fresh `work_items[id]` entry
      fixing `governing_workflow_version` from the config default at this
      moment, or advances `plan_revision`/`state_revision` on an existing
-     non-terminal entry; refuses a terminal-phase id reuse) and persist
-     the returned state to `docs/ai-workflow/WORKFLOW_STATE.json`.
+     non-terminal entry -- the same call also idempotently accepts these
+     four facts on a *resumed*, pre-declared entry that still has some or
+     all of them `null`, e.g. a synthetic dry-run item created with only
+     `plan_path` set; refuses a terminal-phase id reuse, and refuses a
+     genuine conflict on an already-non-null fact) and persist the
+     returned state to `docs/ai-workflow/WORKFLOW_STATE.json`.
 2. Load only documentation relevant to that milestone: the linked execution
    guide, the reference guide only for unresolved detail, and any of
    `docs/DOMAIN_GLOSSARY.md`, `docs/UX_FLOWS.md`,
@@ -61,13 +70,22 @@ compatibility path.
      (validates D-Selection's topological-order rule and D3's
      bidirectional coverage rule at generation time, never left to be
      discovered at review time) and
-     `workflow_state.write_registry_and_mapping(...)` to write
+     `workflow_state.write_registry_and_mapping(...)` to **populate** real
+     content at the paths step 1 `[2.1]` just declared:
      `docs/ai-workflow/registry/<work_item_id>-registry.json` and
      `docs/ai-workflow/requirements/<work_item_id>-mapping.json` — the
      sole writer either file should ever have (D-Registry). Embed
      `workflow_state.render_registry_markdown(registry)`'s output as the
      plan document's own generated, human-readable checkpoint table —
-     never hand-edited, never itself hashed.
+     never hand-edited, never itself hashed. In the same pass, call
+     `workflow_state.generate_artifacts_declarations(work_item_id, plan_path,
+     registry_path, mapping_path)` and write its result to
+     `docs/ai-workflow/registry/<work_item_id>-artifacts.json` — the
+     default `plan_stage` classification template
+     (`D-Fingerprint-Generalization`), never left for a later approval
+     command to invent. `SELF_REVIEWING_PLAN` (step 4) must confirm the
+     inherited `excluded_paths`/`excluded_prefixes` actually fit this
+     item's own plan footprint before the bundle is generated.
 4. Enter `SELF_REVIEWING_PLAN`: critically check the plan for missing
    requirements, migration risk, usability gaps, unnecessary complexity, and
    missing tests. Revise the plan in place — do not write a separate
@@ -81,6 +99,8 @@ compatibility path.
      reviewer genuinely needs beyond the plan itself;
    - write `<bundle_dir>/REVIEW_REQUEST.md` per the format in
      `docs/ai-workflow/REVIEW_PROTOCOL.md` (stage: `plan`);
-   - run `./scripts/prepare-ai-review.sh <base-sha> plan [work_item_id]`.
+   - run `./scripts/prepare-ai-review.sh <base-sha> plan <work_item_id>`
+     (`work_item_id` is **required** for the plan stage, never resolved
+     from the live `active_work_item_id` -- `D-Fingerprint-Generalization`).
 7. Report the bundle location and **stop**. Do not implement anything. This
    is a hard gate — wait for `<feedback_dir>/REVIEW_FEEDBACK.md`.

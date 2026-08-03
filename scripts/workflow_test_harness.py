@@ -59,6 +59,7 @@ this module makes no real-repository claims of its own.
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import tempfile
@@ -142,17 +143,38 @@ class ScratchRepo:
     def write_plan_docs(
         self,
         work_item_id: str = "wi",
-        plan_text: str = "plan v1\n",
+        plan_text: str | None = None,
         audit_text: str = "audit v1\n",
         decisions_text: str = "decisions v1\n",
-        registry_text: str = '{"checkpoints": []}\n',
-        mapping_text: str = '{"requirements": {}}\n',
+        registry_text: str | None = None,
+        mapping_text: str | None = None,
+        plan_revision: int = 1,
     ) -> None:
         """Seeds the five plan-stage protected files at their real
         repository-relative paths for the given `work_item_id`, mirroring
         this repository's own layout (`docs/ai-workflow/registry/
         <work_item_id>-registry.json` / `.../requirements/
-        <work_item_id>-mapping.json`)."""
+        <work_item_id>-mapping.json`), **plus** (`OPUS-R25-014`,
+        `D-Fingerprint-Generalization`) a matching per-item
+        `<work_item_id>-artifacts.json` declaring this same five-path
+        fixture shape as its own `plan_stage.protected_paths` -- so
+        `resolve_plan_stage_metadata`, given a `WORKFLOW_STATE.json` entry
+        naming these same paths, resolves this fixture with no override
+        needed, for `work_item_id="workflow-v2-1-core"` (`plan_stage_protected_paths`'s
+        historical override plumbing) included. Defaulted `registry_text`/
+        `mapping_text` embed `work_item_id`/`plan_revision` fields (never
+        omitted, since `resolve_plan_stage_metadata` requires both); a
+        caller passing an explicit `registry_text`/`mapping_text` overriding
+        this default is responsible for embedding its own `work_item_id`
+        field if it exercises the resolver."""
+        if plan_text is None:
+            plan_text = f"# Plan (Revision {plan_revision})\n\nplan v1\n"
+        if registry_text is None:
+            registry_text = json.dumps({
+                "work_item_id": work_item_id, "plan_revision": plan_revision, "checkpoints": [],
+            }) + "\n"
+        if mapping_text is None:
+            mapping_text = json.dumps({"work_item_id": work_item_id, "requirements": {}}) + "\n"
         (self.root / "docs" / "ai-workflow").mkdir(parents=True, exist_ok=True)
         (self.root / "docs" / "ai-workflow" / "WORKFLOW_V2_PLAN.md").write_text(plan_text)
         (self.root / "docs" / "ai-workflow" / "WORKFLOW_V2_AUDIT.md").write_text(audit_text)
@@ -163,6 +185,24 @@ class ScratchRepo:
         requirements_dir = self.root / "docs" / "ai-workflow" / "requirements"
         requirements_dir.mkdir(parents=True, exist_ok=True)
         (requirements_dir / f"{work_item_id}-mapping.json").write_text(mapping_text)
+        artifacts = {
+            "schema_version": 2,
+            "work_item_id": work_item_id,
+            "plan_stage": {
+                "protected_paths": sorted(plan_stage_protected_paths(work_item_id)),
+                "excluded_paths": {
+                    ".gitignore": "repository housekeeping, not design content",
+                    "docs/ai-workflow/WORKFLOW_STATE.json": "runtime-mutable per-work-item state",
+                    "docs/ai-workflow/WORKFLOW_CONFIG.json": "runtime-mutable repository-level config",
+                },
+                "excluded_prefixes": {
+                    "docs/ai-workflow/registry/": "non-immutable registry artifacts, including this item's own artifacts-declarations file",
+                    "docs/ai-workflow/requirements/": "non-immutable requirements artifacts",
+                    "scripts/": "workflow tooling scripts, present or future",
+                },
+            },
+        }
+        (registry_dir / f"{work_item_id}-artifacts.json").write_text(json.dumps(artifacts) + "\n")
 
     def commit_plan_docs_as_base(self) -> None:
         """Commits every currently-written/untracked file and advances
@@ -173,6 +213,26 @@ class ScratchRepo:
         _run(["git", "add", "-A"], cwd=self.root)
         _run(["git", "commit", "-q", "-m", "settle plan docs"], cwd=self.root)
         self.base = self.head()
+
+    def write_workflow_state(
+        self, *, active_work_item_id: str | None = None, **work_items: dict,
+    ) -> None:
+        """Writes `docs/ai-workflow/WORKFLOW_STATE.json` declaring the
+        given `work_items` (each already a full per-item dict, e.g. from
+        `workflow_state.default_work_item`), for tests exercising
+        `resolve_plan_stage_metadata`/`route_work_item`/`validate_state`
+        against a real, on-disk state file rather than an in-memory dict
+        alone (`D-Fingerprint-Generalization`). Not committed by this call
+        -- callers needing a commit-source read call `git add`/`git commit`
+        (or `commit_plan_docs_as_base`) themselves, same as every other
+        fixture file this harness writes."""
+        state_path = self.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json"
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(json.dumps({
+            "schema_version": 1,
+            "active_work_item_id": active_work_item_id,
+            "work_items": work_items,
+        }))
 
 
 def plan_stage_protected_paths(work_item_id: str = "wi") -> frozenset[str]:

@@ -1708,14 +1708,18 @@ class TestImplementationStageClassification(unittest.TestCase):
     plan-stage projection -- missing-test item 140."""
 
     def _write_artifacts_declarations(self, repo, **overrides):
-        data = {
-            "schema_version": 1,
+        implementation_stage = {
             "protected_prefixes": {"app/": "source"},
             "protected_paths": {},
             "excluded_prefixes": {},
             "excluded_paths": {},
         }
-        data.update(overrides)
+        implementation_stage.update(overrides)
+        data = {
+            "schema_version": 2,
+            "work_item_id": "workflow-v2-1-core",
+            "implementation_stage": implementation_stage,
+        }
         artifacts_dir = repo.root / "docs" / "ai-workflow" / "registry"
         artifacts_dir.mkdir(parents=True, exist_ok=True)
         (artifacts_dir / "workflow-v2-1-core-artifacts.json").write_text(json.dumps(data))

@@ -1,38 +1,27 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "work_item_id": "milestone-8",
   "_comment": "Implementation-stage classification declarations for the milestone-8 legacy import (D-Legacy phase 1, WF-M8a), consumed by scripts/workflow_fingerprint.py's load_implementation_stage_classification(). Originally scoped to what actually changed between milestone-8's own base commit (2d09ec02252848124d0e1accfbefb57dc8561872, the commit before its plan doc was committed) and its reviewed head (dc4381a348c114ec4967174c4e6a76ac00b1a537, the round-4-approved commit docs/ACTIVE_MILESTONE.md records as integrated). 'protected' means the content technical_approval binds to (source, test, build, migration files); 'excluded' means design/tracking documentation that is not itself an implementation deliverable, mirroring workflow-v2-1-core-artifacts.json's own category discipline. Any path named in neither set fails closed (UnclassifiedPathError). Widened at D-Legacy phase 2 (WF-M8b): the repository is multi-work-item, and workflow-v2-1-core's own concurrent process-tooling commits (its commands, scripts, and docs/ai-workflow/ content) land in this same base_commit..HEAD range without ever being milestone-8's own implementation deliverable -- excluded here by prefix, symmetric with workflow-v2-1-core-artifacts.json's own docs/milestones/ exclusion for the reverse direction. IMPORTANT: this widening deliberately changes what any_commit_scoped hash recomputation over the *original* base_commit..reviewed_content_commit window produces (the full classification config is embedded in that hash's own projection, so any edit here -- even excluded-only -- changes it), which is exactly why WF-M8b's own promotion-time freshness check (promote_legacy_work_item, any_protected_path_changed_since) is a direct protected/excluded-path existence check over reviewed_content_commit..HEAD, never a hash-reproduction comparison against the already-fixed, never-recomputed approved_review_content_id stored in WORKFLOW_STATE.json. workflow_state_demo_test.py's TestLegacyImportAgainstRealMilestone8 proves the stored ID still reproduces from the declarations *as WF-M8a originally authored them* (commit 2baf7bcfdd12006335e65f7fbae41e5d1fa4a8e3), not from this file's current, later-widened content.",
-  "protected_prefixes": {
-    "app/":
-      "product source, test, and Room schema/migration content Milestone 8 changed (CP0-CP16, P0)",
-    "gradle/":
-      "product build/dependency configuration Milestone 8 changed (gradle/libs.versions.toml)"
-  },
-  "protected_paths": {},
-  "excluded_prefixes": {
-    ".claude/commands/":
-      "workflow-v2-1-core's own workflow-command files -- a concurrent process work item's tooling, out of scope for milestone-8's product implementation (WF-M8b)",
-    "scripts/":
-      "workflow-v2-1-core's own tooling scripts (fingerprint/state modules and tests), same reasoning as .claude/commands/ above",
-    "docs/ai-workflow/":
-      "workflow-v2-1-core's own plan/state/registry/requirements/workflow-doc content, including this declarations file itself -- out of scope for milestone-8's product implementation",
-    "docs/milestones/":
-      "product milestone plan/execution artifacts, including this milestone's own doc (wherever archived) and any other product milestone's docs -- not an implementation deliverable, replaces the narrower now-stale docs/milestones/active/ exact paths this file listed at import time",
-    ".github/":
-      "operational GitHub/CI configuration -- milestone-8 never protected any CI file as part of its own reviewed scope; later CI wiring is a concurrent work item's own change"
-  },
-  "excluded_paths": {
-    ".gitignore":
-      "repository housekeeping, not an implementation deliverable",
-    "CLAUDE.md":
-      "process-command depointer edits implement a concurrent work item's design, not milestone-8's own implementation deliverable",
-    "docs/ACTIVE_MILESTONE.md":
-      "product-milestone narrative, not an implementation deliverable -- its final accepted/waived-review wording legitimately lands in a commit after the reviewed head",
-    "docs/ROADMAP.md":
-      "product milestone ordering, not an implementation deliverable",
-    "docs/TECHNICAL_DECISIONS.md":
-      "design-decision record, not an implementation deliverable",
-    "docs/improvements/FUNCTIONAL_FEATURE_AUDIT.md":
-      "product feature-tracking document, not source/test/build content"
+  "implementation_stage": {
+    "protected_prefixes": {
+      "app/": "product source, test, and Room schema/migration content Milestone 8 changed (CP0-CP16, P0)",
+      "gradle/": "product build/dependency configuration Milestone 8 changed (gradle/libs.versions.toml)"
+    },
+    "protected_paths": {},
+    "excluded_prefixes": {
+      ".claude/commands/": "workflow-v2-1-core's own workflow-command files -- a concurrent process work item's tooling, out of scope for milestone-8's product implementation (WF-M8b)",
+      "scripts/": "workflow-v2-1-core's own tooling scripts (fingerprint/state modules and tests), same reasoning as .claude/commands/ above",
+      "docs/ai-workflow/": "workflow-v2-1-core's own plan/state/registry/requirements/workflow-doc content, including this declarations file itself -- out of scope for milestone-8's product implementation",
+      "docs/milestones/": "product milestone plan/execution artifacts, including this milestone's own doc (wherever archived) and any other product milestone's docs -- not an implementation deliverable, replaces the narrower now-stale docs/milestones/active/ exact paths this file listed at import time",
+      ".github/": "operational GitHub/CI configuration -- milestone-8 never protected any CI file as part of its own reviewed scope; later CI wiring is a concurrent work item's own change"
+    },
+    "excluded_paths": {
+      ".gitignore": "repository housekeeping, not an implementation deliverable",
+      "CLAUDE.md": "process-command depointer edits implement a concurrent work item's design, not milestone-8's own implementation deliverable",
+      "docs/ACTIVE_MILESTONE.md": "product-milestone narrative, not an implementation deliverable -- its final accepted/waived-review wording legitimately lands in a commit after the reviewed head",
+      "docs/ROADMAP.md": "product milestone ordering, not an implementation deliverable",
+      "docs/TECHNICAL_DECISIONS.md": "design-decision record, not an implementation deliverable",
+      "docs/improvements/FUNCTIONAL_FEATURE_AUDIT.md": "product feature-tracking document, not source/test/build content"
+    }
   }
 }

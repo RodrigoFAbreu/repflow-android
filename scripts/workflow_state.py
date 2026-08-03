@@ -383,6 +383,22 @@ class WorkItemTerminalReuseError(Exception):
     terminal phase -- ids are not reused after `MILESTONE_COMPLETE` (D1)."""
 
 
+class WorkItemDeclarationFactConflictError(Exception):
+    """Raised when `route_work_item`'s resume branch is supplied a
+    `plan_path`/`registry_path`/`mapping_path`/`base_commit` value that
+    disagrees with an already-non-null stored value -- a declaration fact
+    is immutable once set (`D-Fingerprint-Generalization`, `OPUS-R28-002`),
+    consistent with the existing identity-field immutability rule."""
+
+
+class PlanRevisionMirrorMismatchError(Exception):
+    """Raised when `WORKFLOW_STATE.json`'s own `plan_revision` field for a
+    work item disagrees with that item's own registry JSON's
+    `plan_revision` -- `WORKFLOW_STATE.json`'s copy is a non-authoritative
+    display mirror only (`OPUS-R25-002`), and a divergence between the two
+    is a data-integrity defect, not a legitimate state."""
+
+
 class InvalidApprovalRecordError(Exception):
     """Raised when a `plan_approval`/`technical_approval` record does not
     match D2's shape, including the plan-stage's permanently-null
@@ -653,11 +669,7 @@ def verify_checkpoint_completions(
 
 def approval_review_content_id(
     repo_root: Path, *, stage: str, base_commit: str, work_item_type: str,
-    work_item_id: str, plan_revision: int | None = None, head: str = "HEAD",
-    protected: frozenset[str] = fingerprint.PLAN_STAGE_PROTECTED,
-    excluded_paths: Mapping[str, str] = fingerprint.PLAN_STAGE_EXCLUDED_PATHS,
-    excluded_prefixes: Mapping[str, str] = fingerprint.PLAN_STAGE_EXCLUDED_PREFIXES,
-    artifacts_path: Path = fingerprint.DEFAULT_ARTIFACTS_PATH,
+    work_item_id: str, head: str = "HEAD", artifacts_path: Path,
 ) -> str:
     """Recomputes the current `review_content_id` at `head` for the given
     approval `stage`, commit-source (never worktree-source -- this checks
@@ -670,17 +682,26 @@ def approval_review_content_id(
     test/build/migration/workflow-command files, WF4a-i's scope), loaded
     from the tracked artifact-declarations file rather than adapted from
     the plan-stage sets (`OPUS-R20-003`: the two stages' sets are
-    near-inverses, never derived from one another). `plan_revision` is
-    required for `stage="plan"` and ignored for `stage="implementation"`
-    -- `implementation_revision` is never part of either projection
-    (D-States: "meaningless before implementation starts and mutating
-    during it")."""
+    near-inverses, never derived from one another).
+
+    `stage="plan"` no longer accepts a `plan_revision` parameter
+    (`OPUS-R25-002`, `D-Fingerprint-Generalization`): the resolved value
+    comes from `fingerprint.compute_review_content_id_plan_stage_at_commit_for_work_item`'s
+    own call into `resolve_plan_stage_metadata`, sourcing
+    `work_item_type`/`plan_revision`/the protected-path sets entirely from
+    `WORKFLOW_STATE.json`/`<work_item_id>-artifacts.json` -- never a
+    caller-supplied literal naming any other work item's identity.
+    `artifacts_path` is required (no default -- `DEFAULT_ARTIFACTS_PATH`
+    is retired as a live default here) and used only for
+    `stage="implementation"`; both actual callers
+    (`approval_is_current`/`verify_post_approval_manifest_match`) resolve
+    it per work item via `fingerprint.artifacts_path_for_work_item(work_item_id)`
+    (`OPUS-R27-002`). `implementation_revision` is never part of either
+    projection (D-States: "meaningless before implementation starts and
+    mutating during it")."""
     if stage == "plan":
-        if plan_revision is None:
-            raise ValueError("plan_revision is required for stage='plan'")
-        digest, _ = fingerprint.compute_review_content_id_plan_stage_at_commit(
-            repo_root, base_commit, head, work_item_type, work_item_id, plan_revision,
-            protected, excluded_paths, excluded_prefixes,
+        digest, _ = fingerprint.compute_review_content_id_plan_stage_at_commit_for_work_item(
+            repo_root, work_item_id, head, base=base_commit,
         )
         return digest
     if stage == "implementation":
@@ -707,7 +728,10 @@ def approval_is_current(
     plan-document edit after a checkpoint commit changes the plan-stage
     projection, so this returns `False`. Missing-test item 11: an
     `implementation_revision` bump touches no hashed field of either
-    projection, so this keeps returning `True`."""
+    projection, so this keeps returning `True`. Missing-test item 150: a
+    second work item's own `plan_approval`/`technical_approval` record
+    gates independently of `workflow-v2-1-core`'s (`D-Fingerprint-
+    Generalization`)."""
     record_field = "plan_approval" if stage == "plan" else "technical_approval"
     record = work_item.get(record_field)
     if record is None or record.get("status") != "CURRENT":
@@ -715,7 +739,8 @@ def approval_is_current(
     current_id = approval_review_content_id(
         repo_root, stage=stage, base_commit=base_commit,
         work_item_type=work_item["work_item_type"], work_item_id=work_item["work_item_id"],
-        plan_revision=work_item.get("plan_revision"), head=head,
+        head=head,
+        artifacts_path=fingerprint.artifacts_path_for_work_item(work_item["work_item_id"]),
     )
     return current_id == record["approved_review_content_id"]
 
@@ -760,7 +785,8 @@ def verify_post_approval_manifest_match(
     actual = approval_review_content_id(
         repo_root, stage=stage, base_commit=base_commit,
         work_item_type=work_item["work_item_type"], work_item_id=work_item["work_item_id"],
-        plan_revision=work_item.get("plan_revision"), head=commit,
+        head=commit,
+        artifacts_path=fingerprint.artifacts_path_for_work_item(work_item["work_item_id"]),
     )
     if actual != expected:
         raise PostApprovalManifestMismatchError(
@@ -1279,6 +1305,50 @@ def write_registry_and_mapping(
     (repo_root / mapping_path).write_text(json.dumps(mapping, indent=2) + "\n")
 
 
+def generate_artifacts_declarations(
+    work_item_id: str, plan_path: str, registry_path: str, mapping_path: str,
+) -> dict:
+    """The default `<work_item_id>-artifacts.json` template
+    (`D-Fingerprint-Generalization`, `OPUS-R25-004`): the item's own three
+    artifact paths as `plan_stage.protected_paths` (satisfying
+    `resolve_plan_stage_metadata`'s path-to-role binding check by
+    construction at creation time), `workflow-v2-1-core`'s *current*
+    `excluded_paths`/`excluded_prefixes` inherited verbatim as a starting
+    point (not because they are correct for every future item unmodified,
+    but because an inherited, previously-reviewed set fails closed on any
+    genuinely novel path exactly as before, and is strictly safer than an
+    empty or hand-authored one -- `SELF_REVIEWING_PLAN` must confirm the
+    inherited set actually fits the new item's own plan). Also emits the
+    file's own concrete, self-referential `implementation_stage.protected_paths`
+    entry (`OPUS-R25-006`/`OPUS-R26-004`) so the file protects itself under
+    `technical_approval` by construction, the same pattern
+    `workflow-v2-1-core-artifacts.json`'s own migrated entry uses."""
+    validate_work_item_id(work_item_id)
+    own_artifacts_path = str(fingerprint.artifacts_path_for_work_item(work_item_id).as_posix())
+    return {
+        "schema_version": 2,
+        "work_item_id": work_item_id,
+        "plan_stage": {
+            "protected_paths": sorted({plan_path, registry_path, mapping_path}),
+            "excluded_paths": dict(fingerprint.PLAN_STAGE_EXCLUDED_PATHS),
+            "excluded_prefixes": dict(fingerprint.PLAN_STAGE_EXCLUDED_PREFIXES),
+        },
+        "implementation_stage": {
+            "protected_paths": {
+                own_artifacts_path:
+                    "this file's own concrete, spelled-out path -- an editable-under-"
+                    "no-approval declarations file would let someone widen an "
+                    "exclusion and re-bless the resulting digest in the same "
+                    "session, with no gate ever having seen the classification "
+                    "change (OPUS-R25-006, OPUS-R26-004)",
+            },
+            "protected_prefixes": {},
+            "excluded_paths": {},
+            "excluded_prefixes": {},
+        },
+    }
+
+
 # ---------------------------------------------------------------------------
 # D1: work-item routing (create-or-resume) and completion/reset
 # ---------------------------------------------------------------------------
@@ -1288,12 +1358,16 @@ def default_work_item(
     *, work_item_id: str, work_item_type: str, work_item_kind: str,
     plan_path: str, registry_path: str | None, governing_workflow_version: str,
     plan_revision: int, last_transition: str,
+    mapping_path: str | None = None, base_commit: str | None = None,
 ) -> dict:
     """D3's full per-item field list, defaulted for a freshly created work
     item (D1). `governing_workflow_version` is the caller's concern to fix
     from the then-current repository-level default -- this function never
     reads config itself (D-Self-Governance: fixed at creation, never
-    re-read afterward)."""
+    re-read afterward). `mapping_path`/`base_commit` (`D-Fingerprint-
+    Generalization`) are the third and fourth declaration facts a process
+    work item needs to fingerprint its own plan-stage content -- the same
+    mechanism as `plan_path`/`registry_path`, not a new one."""
     validate_work_item_id(work_item_id)
     validate_work_item_type(work_item_type)
     if work_item_kind not in WORK_ITEM_KINDS:
@@ -1305,12 +1379,13 @@ def default_work_item(
         "parent_work_item_id": None,
         "plan_path": plan_path,
         "registry_path": registry_path,
+        "mapping_path": mapping_path,
         "governing_workflow_version": governing_workflow_version,
         "phase": "PLANNING",
         "plan_revision": plan_revision,
         "implementation_revision": None,
         "functional_review_round": None,
-        "base_commit": None,
+        "base_commit": base_commit,
         "reviewed_implementation_head": None,
         "current_checkpoint_id": None,
         "last_completed_checkpoint_id": None,
@@ -1330,6 +1405,7 @@ def route_work_item(
     state: dict, config: dict, *, work_item_id: str, work_item_type: str,
     work_item_kind: str, plan_path: str, registry_path: str,
     plan_revision: int, now: str,
+    mapping_path: str | None = None, base_commit: str | None = None,
 ) -> dict:
     """D1's routing text, in full: `/milestone-plan` creates or updates the
     item under `work_items[id]`. Returns a new state dict (does not mutate
@@ -1340,9 +1416,22 @@ def route_work_item(
       `default_workflow_version` (validated against `supported_versions`,
       `OPUS-R6-024`) and never re-read afterward.
     - An id naming an existing *non-terminal* entry resumes it: only
-      `plan_revision`/`state_revision`/`last_transition` advance --
-      identity fields (`work_item_type`/`kind`/`governing_workflow_version`/
-      `parent_work_item_id`) are immutable after creation.
+      `plan_revision`/`state_revision`/`last_transition` advance
+      unconditionally -- identity fields (`work_item_type`/`kind`/
+      `governing_workflow_version`/`parent_work_item_id`) are immutable
+      after creation. **`mapping_path`/`base_commit`, and now
+      `plan_path`/`registry_path` too, on the resume branch** (new,
+      `D-Fingerprint-Generalization`, `OPUS-R28-002`): for each of the
+      four declaration facts, independently, if the stored value is
+      `null` and a non-null argument is supplied here, it is written; if
+      the stored value is non-null and the supplied argument disagrees,
+      `WorkItemDeclarationFactConflictError` (a declaration fact is
+      immutable once set); if no argument is supplied for a field, that
+      field is left untouched. This makes the resume branch usable for a
+      pre-declared, non-terminal entry that has some or all of these four
+      facts still `null` (e.g. `v2-1-dry-run`, created with only
+      `plan_path` set) -- the same call this function's caller makes for
+      a fresh id also works, idempotently, for a resumed one.
     - An id naming an existing *terminal* entry is a hard error: ids are
       not reused after `MILESTONE_COMPLETE`.
     - `active_work_item_id` is set to this id only if no other item is
@@ -1373,8 +1462,23 @@ def route_work_item(
             registry_path=registry_path,
             governing_workflow_version=config["default_workflow_version"],
             plan_revision=plan_revision, last_transition=now,
+            mapping_path=mapping_path, base_commit=base_commit,
         )
     else:
+        for field_name, supplied in (
+            ("plan_path", plan_path), ("registry_path", registry_path),
+            ("mapping_path", mapping_path), ("base_commit", base_commit),
+        ):
+            if supplied is None:
+                continue
+            stored = existing.get(field_name)
+            if stored is None:
+                existing[field_name] = supplied
+            elif stored != supplied:
+                raise WorkItemDeclarationFactConflictError(
+                    f"{work_item_id}.{field_name} is already {stored!r}, "
+                    f"cannot set to {supplied!r}"
+                )
         existing["plan_revision"] = plan_revision
         existing["state_revision"] = existing.get("state_revision", 1) + 1
         existing["last_transition"] = now
@@ -2224,6 +2328,25 @@ def validate_state(state: dict, *, registry: dict | None = None) -> None:
                 f"work_items[{work_item_id!r}].parent_work_item_id names "
                 f"{parent_id!r}, which is not a known work item"
             )
+
+    # D-Fingerprint-Generalization (`OPUS-R25-007`): a non-null plan_path/
+    # registry_path/mapping_path may not be claimed by more than one work
+    # item, checked independently per field, not only as a triple. This is
+    # a write-time, whole-map structural belt-and-suspenders check --
+    # `resolve_plan_stage_metadata`'s own step 9 is the read path's actual
+    # enforcement point, run per lookup; this one catches a hand-edited or
+    # half-written state file that never passed through `route_work_item`.
+    for field_name in ("plan_path", "registry_path", "mapping_path"):
+        seen: dict[str, str] = {}
+        for work_item_id, work_item in work_items.items():
+            value = work_item.get(field_name)
+            if value is None:
+                continue
+            if value in seen:
+                raise fingerprint.DuplicateWorkItemArtifactPathError(
+                    f"{field_name} {value!r} is claimed by both {seen[value]!r} and {work_item_id!r}"
+                )
+            seen[value] = work_item_id
 
     active_id = state.get("active_work_item_id")
     if active_id is not None:
