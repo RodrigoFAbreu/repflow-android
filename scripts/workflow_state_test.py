@@ -431,6 +431,143 @@ class TestStateValidation(unittest.TestCase):
             with self.assertRaises(ws.PlanRevisionMirrorMismatchError):
                 ws.validate_state(state, registry=core_registry, repo_root=root)
 
+    # -- GPT-R32-001: whole-state registry_path resolution must go through
+    # the shared safe-path resolver, not a bare `repo_root / registry_path`
+    # join. --
+
+    def test_repo_root_check_rejects_absolute_registry_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_registry_file(root, "registry/a.json", work_item_id="a", plan_revision=3)
+            state = _base_state(
+                a=_base_work_item(work_item_id="a", registry_path="/etc/passwd", plan_revision=3),
+            )
+            with self.assertRaises(ws.MissingRegistryForPlanRevisionMirrorCheckError):
+                ws.validate_state(state, repo_root=root)
+
+    def test_repo_root_check_rejects_dot_dot_traversal_registry_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            outside = root.parent / "foreign.json"
+            outside.write_text(json.dumps({"work_item_id": "a", "plan_revision": 3, "checkpoints": []}))
+            try:
+                (root / "registry").mkdir(parents=True, exist_ok=True)
+                state = _base_state(
+                    a=_base_work_item(
+                        work_item_id="a", registry_path="registry/../../foreign.json", plan_revision=3,
+                    ),
+                )
+                with self.assertRaises(ws.MissingRegistryForPlanRevisionMirrorCheckError):
+                    ws.validate_state(state, repo_root=root)
+            finally:
+                outside.unlink()
+
+    def test_repo_root_check_rejects_symlinked_registry_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_registry_file(root, "registry/real.json", work_item_id="a", plan_revision=3)
+            link = root / "registry" / "a.json"
+            link.symlink_to(root / "registry" / "real.json")
+            state = _base_state(
+                a=_base_work_item(work_item_id="a", registry_path="registry/a.json", plan_revision=3),
+            )
+            with self.assertRaises(ws.MissingRegistryForPlanRevisionMirrorCheckError):
+                ws.validate_state(state, repo_root=root)
+
+    def test_repo_root_check_rejects_non_regular_file_registry_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "registry").mkdir(parents=True, exist_ok=True)
+            state = _base_state(
+                # "registry" itself is a directory, not a regular file.
+                a=_base_work_item(work_item_id="a", registry_path="registry", plan_revision=3),
+            )
+            with self.assertRaises(ws.MissingRegistryForPlanRevisionMirrorCheckError):
+                ws.validate_state(state, repo_root=root)
+
+    # -- GPT-R32-002: a registry with no valid plan_revision must fail
+    # closed, not be silently treated as "nothing to compare". --
+
+    def test_repo_root_check_rejects_registry_missing_plan_revision_field(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            full = root / "registry" / "a.json"
+            full.parent.mkdir(parents=True, exist_ok=True)
+            full.write_text(json.dumps({"work_item_id": "a", "checkpoints": []}))
+            state = _base_state(
+                a=_base_work_item(work_item_id="a", registry_path="registry/a.json", plan_revision=3),
+            )
+            with self.assertRaises(ws.InvalidRegistryPlanRevisionError):
+                ws.validate_state(state, repo_root=root)
+
+    def test_repo_root_check_rejects_registry_with_null_plan_revision(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            full = root / "registry" / "a.json"
+            full.parent.mkdir(parents=True, exist_ok=True)
+            full.write_text(json.dumps({"work_item_id": "a", "plan_revision": None, "checkpoints": []}))
+            state = _base_state(
+                a=_base_work_item(work_item_id="a", registry_path="registry/a.json", plan_revision=3),
+            )
+            with self.assertRaises(ws.InvalidRegistryPlanRevisionError):
+                ws.validate_state(state, repo_root=root)
+
+    def test_repo_root_check_rejects_registry_with_string_plan_revision(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            full = root / "registry" / "a.json"
+            full.parent.mkdir(parents=True, exist_ok=True)
+            full.write_text(json.dumps({"work_item_id": "a", "plan_revision": "3", "checkpoints": []}))
+            state = _base_state(
+                a=_base_work_item(work_item_id="a", registry_path="registry/a.json", plan_revision=3),
+            )
+            with self.assertRaises(ws.InvalidRegistryPlanRevisionError):
+                ws.validate_state(state, repo_root=root)
+
+    def test_repo_root_check_rejects_registry_with_boolean_plan_revision(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            full = root / "registry" / "a.json"
+            full.parent.mkdir(parents=True, exist_ok=True)
+            full.write_text(json.dumps({"work_item_id": "a", "plan_revision": True, "checkpoints": []}))
+            state = _base_state(
+                # bool is an int subclass in Python -- must still be rejected.
+                a=_base_work_item(work_item_id="a", registry_path="registry/a.json", plan_revision=1),
+            )
+            with self.assertRaises(ws.InvalidRegistryPlanRevisionError):
+                ws.validate_state(state, repo_root=root)
+
+    def test_repo_root_check_rejects_registry_with_out_of_range_plan_revision(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_registry_file(root, "registry/a.json", work_item_id="a", plan_revision=0)
+            state = _base_state(
+                a=_base_work_item(work_item_id="a", registry_path="registry/a.json", plan_revision=0),
+            )
+            with self.assertRaises(ws.InvalidRegistryPlanRevisionError):
+                ws.validate_state(state, repo_root=root)
+
+    # -- GPT-R32-003: the loaded registry must declare the exact state
+    # work-item ID -- cross-wiring two items must not pass just because
+    # their revision numbers happen to agree. --
+
+    def test_repo_root_check_rejects_cross_wired_registry_with_matching_revision(self):
+        # Distinct registry_path values per item (so the pre-existing
+        # write-time duplicate-path check does not itself catch this), but
+        # item b's own registry file was hand-edited/copied and its content
+        # still declares work_item_id "a" -- the exact "validate one
+        # artifact while trusting another identity" defect class.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_registry_file(root, "registry/a.json", work_item_id="a", plan_revision=21)
+            self._write_registry_file(root, "registry/b.json", work_item_id="a", plan_revision=21)
+            state = _base_state(
+                a=_base_work_item(work_item_id="a", registry_path="registry/a.json", plan_revision=21),
+                b=_base_work_item(work_item_id="b", registry_path="registry/b.json", plan_revision=21),
+            )
+            with self.assertRaises(fingerprint.RegistryWorkItemIdMismatchError):
+                ws.validate_state(state, repo_root=root)
+
     def test_corrupt_json_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "state.json"

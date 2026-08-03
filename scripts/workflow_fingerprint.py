@@ -665,9 +665,14 @@ def load_plan_revision(
 # ---------------------------------------------------------------------------
 
 
-def _validate_plan_stage_metadata_path(
-    repo_root: Path, field_name: str, value: str, at_commit: str | None,
-) -> None:
+def _validate_repo_relative_path_grammar(field_name: str, value: str) -> None:
+    """Pure string-level path-grammar check shared by every declared
+    repo-relative path in this design (`GPT-R32-001`): repo-relative (no
+    leading `/`), POSIX separators only, no empty/`.`/`..` path component.
+    Touches no filesystem -- callers needing the exists/symlink/tracked
+    layers on top of this add those themselves, since what "safely
+    resolved" means past the string grammar differs by caller (a live
+    working-tree file vs. a specific historical commit's tree)."""
     if value.startswith("/"):
         raise InvalidPlanStageMetadataPathError(f"{field_name} {value!r} is not repo-relative")
     if "\\" in value:
@@ -677,14 +682,35 @@ def _validate_plan_stage_metadata_path(
         raise InvalidPlanStageMetadataPathError(
             f"{field_name} {value!r} must contain no '.'/'..' path component"
         )
+
+
+def _validate_repo_relative_file(repo_root: Path, field_name: str, value: str) -> Path:
+    """Grammar plus filesystem-safety validation for a repo-relative path
+    resolved against the live working tree: applies
+    `_validate_repo_relative_path_grammar`, then rejects a symlink or a
+    path that is not an existing regular file, and returns the resolved
+    `Path` so callers don't re-join `repo_root / value` themselves. Does
+    not check git-tracking -- see `_validate_plan_stage_metadata_path` for
+    the stricter, tracked-metadata variant plan-stage callers need; this
+    one is also the safe resolver `workflow_state.validate_state`'s
+    whole-state registry check reuses (`GPT-R32-001`) instead of a second,
+    weaker `repo_root / registry_path` join."""
+    _validate_repo_relative_path_grammar(field_name, value)
+    full = repo_root / value
+    if full.is_symlink():
+        raise InvalidPlanStageMetadataPathError(f"{field_name} {value!r} names a symlink")
+    if not full.is_file():
+        raise InvalidPlanStageMetadataPathError(
+            f"{field_name} {value!r} does not exist as a regular file"
+        )
+    return full
+
+
+def _validate_plan_stage_metadata_path(
+    repo_root: Path, field_name: str, value: str, at_commit: str | None,
+) -> None:
     if at_commit is None:
-        full = repo_root / value
-        if full.is_symlink():
-            raise InvalidPlanStageMetadataPathError(f"{field_name} {value!r} names a symlink")
-        if not full.is_file():
-            raise InvalidPlanStageMetadataPathError(
-                f"{field_name} {value!r} does not exist as a tracked regular file"
-            )
+        _validate_repo_relative_file(repo_root, field_name, value)
         tracked = subprocess.run(
             ["git", "ls-files", "--error-unmatch", "--", value],
             cwd=repo_root, capture_output=True,
@@ -692,6 +718,7 @@ def _validate_plan_stage_metadata_path(
         if tracked.returncode != 0:
             raise InvalidPlanStageMetadataPathError(f"{field_name} {value!r} is not a tracked path")
     else:
+        _validate_repo_relative_path_grammar(field_name, value)
         out = subprocess.run(
             ["git", "ls-tree", at_commit, "--", value],
             cwd=repo_root, check=True, capture_output=True, text=True,

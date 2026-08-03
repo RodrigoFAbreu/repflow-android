@@ -405,7 +405,20 @@ class MissingRegistryForPlanRevisionMirrorCheckError(Exception):
     non-null `registry_path` whose file does not exist or is unreadable at
     `repo_root` -- fails closed rather than silently skipping that item's
     own mirror check, which would let "omitted registry coverage" pass as
-    if it had been verified."""
+    if it had been verified. Also raised when `registry_path` fails the
+    shared safe-path resolver (`GPT-R32-001`): an absolute path, a `../`
+    traversal, a symlink, or any other repository-boundary escape is
+    exactly as unusable a "registry" as one that is simply missing."""
+
+
+class InvalidRegistryPlanRevisionError(Exception):
+    """Raised by `validate_state`'s `repo_root`-driven whole-state
+    plan-revision-mirror check (`GPT-R32-002`) when a work item's own
+    registry resolves but its `plan_revision` field is missing, `null`, not
+    an integer (including `bool`, which Python's `int` subclasses), or
+    below the schema's minimum of 1. A malformed registry cannot satisfy
+    Revision 21's state-mirror invariant, so this fails closed instead of
+    silently treating "no revision to compare" as "nothing to check"."""
 
 
 class InvalidApprovalRecordError(Exception):
@@ -2339,9 +2352,19 @@ def validate_state(state: dict, *, registry: dict | None = None, repo_root: Path
     `repo_root`), independent of whichever single `registry` a caller
     happened to also pass -- so a caller validating `workflow-v2-1-core`'s
     own registry can no longer leave a different work item's stale mirror
-    undetected. A declared `registry_path` that does not exist or is
-    unreadable fails closed (`MissingRegistryForPlanRevisionMirrorCheckError`)
-    rather than being silently skipped; a `null` `registry_path` remains
+    undetected. `registry_path` is resolved through
+    `fingerprint._validate_repo_relative_file`, the same safe-path
+    resolver plan-stage metadata uses (`GPT-R32-001`) -- an absolute path,
+    a `../` traversal, a symlink, or a path that does not exist as a
+    regular file all fail closed as
+    `MissingRegistryForPlanRevisionMirrorCheckError` rather than silently
+    reading whatever `repo_root / registry_path` happens to join to. The
+    loaded registry must also declare the exact same `work_item_id` as the
+    state-map key that named it (`RegistryWorkItemIdMismatchError`,
+    `GPT-R32-003`) and a valid integer `plan_revision >= 1`
+    (`InvalidRegistryPlanRevisionError`, `GPT-R32-002`) -- neither
+    cross-wired registry ownership nor a malformed revision are silently
+    treated as "nothing to check". A `null` `registry_path` remains
     exempt, by design, from any mirror check at all."""
     if state.get("schema_version") != SCHEMA_VERSION:
         raise CorruptJsonError(f"unknown state schema_version: {state.get('schema_version')!r}")
@@ -2387,7 +2410,19 @@ def validate_state(state: dict, *, registry: dict | None = None, repo_root: Path
             registry_path = work_item.get("registry_path")
             if registry_path is None:
                 continue
-            registry_full = repo_root / registry_path
+            # GPT-R32-001: reuse the authoritative repo-relative safe-path
+            # resolver (grammar, symlink, existence) instead of a bare
+            # `repo_root / registry_path` join, which a `../` traversal or
+            # an absolute path could escape.
+            try:
+                registry_full = fingerprint._validate_repo_relative_file(
+                    repo_root, "registry_path", registry_path,
+                )
+            except fingerprint.InvalidPlanStageMetadataPathError as exc:
+                raise MissingRegistryForPlanRevisionMirrorCheckError(
+                    f"work_items[{work_item_id!r}].registry_path {registry_path!r} "
+                    f"failed safe-path resolution: {exc}"
+                ) from exc
             try:
                 registry_bytes = registry_full.read_text()
             except OSError as exc:
@@ -2396,9 +2431,31 @@ def validate_state(state: dict, *, registry: dict | None = None, repo_root: Path
                     f"does not exist or is unreadable at {registry_full}"
                 ) from exc
             registry_data = json.loads(registry_bytes)
+
+            # GPT-R32-003: the loaded registry must declare the exact same
+            # work_item_id as the state-map key that named it -- otherwise
+            # item A could point at item B's registry and pass whenever the
+            # two happened to share a revision number.
+            registry_work_item_id = registry_data.get("work_item_id")
+            if registry_work_item_id != work_item_id:
+                raise fingerprint.RegistryWorkItemIdMismatchError(
+                    f"work_items[{work_item_id!r}].registry_path {registry_path!r} "
+                    f"declares work_item_id {registry_work_item_id!r}, expected {work_item_id!r}"
+                )
+
+            # GPT-R32-002: a registry with no valid `plan_revision` cannot
+            # satisfy Revision 21's state-mirror invariant -- fail closed
+            # rather than silently `continue`-ing past unverified coverage.
             registry_plan_revision = registry_data.get("plan_revision")
-            if registry_plan_revision is None:
-                continue
+            if (
+                not isinstance(registry_plan_revision, int)
+                or isinstance(registry_plan_revision, bool)
+                or registry_plan_revision < 1
+            ):
+                raise InvalidRegistryPlanRevisionError(
+                    f"work_items[{work_item_id!r}].registry_path {registry_path!r} has no "
+                    f"valid 'plan_revision' (an integer >= 1): found {registry_plan_revision!r}"
+                )
             state_plan_revision = work_item.get("plan_revision")
             if state_plan_revision != registry_plan_revision:
                 raise PlanRevisionMirrorMismatchError(
