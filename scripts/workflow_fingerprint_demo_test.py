@@ -63,6 +63,8 @@ class TestAgainstRealRepository(unittest.TestCase):
         digest, projection = wf.compute_review_content_id_plan_stage(
             repo_root, BASE_COMMIT,
             work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=plan_revision,
+            protected=wf.PLAN_STAGE_PROTECTED, excluded_paths=wf.PLAN_STAGE_EXCLUDED_PATHS,
+            excluded_prefixes=wf.PLAN_STAGE_EXCLUDED_PREFIXES,
         )
         manifest = projection["review_content_manifest"]
         # 5: the concise two-stage plan-review guide's path
@@ -94,6 +96,42 @@ class TestAgainstRealRepository(unittest.TestCase):
         print(f"[demonstration] review_content_id = {digest}")
         for entry in manifest:
             print(f"[demonstration] {entry['path']}: {entry['blob']}")
+
+    def test_141_migrated_artifacts_plan_stage_equals_frozen_python_constants(self):
+        """Missing-test item 141 (`OPUS-R25-001`/`-010`): the real migrated
+        `workflow-v2-1-core-artifacts.json`'s `plan_stage` section, loaded
+        via `load_plan_stage_classification`, equals `PLAN_STAGE_PROTECTED`/
+        `PLAN_STAGE_EXCLUDED_PATHS`/`PLAN_STAGE_EXCLUDED_PREFIXES` exactly,
+        item for item, compared directly rather than via a hardcoded
+        digest literal -- required before either Python constant is
+        retired as a live default."""
+        repo_root = _repo_root()
+        protected, excluded_paths, excluded_prefixes = wf.load_plan_stage_classification(
+            repo_root, wf.artifacts_path_for_work_item("workflow-v2-1-core"),
+        )
+        self.assertEqual(protected, wf.PLAN_STAGE_PROTECTED)
+        self.assertEqual(dict(excluded_paths), dict(wf.PLAN_STAGE_EXCLUDED_PATHS))
+        self.assertEqual(dict(excluded_prefixes), dict(wf.PLAN_STAGE_EXCLUDED_PREFIXES))
+
+    def test_142_generalized_resolver_reproduces_the_migrated_digest_not_a_hardcoded_literal(self):
+        """Missing-test item 142 (`OPUS-R25-001`, corrected): the
+        generalized, per-work-item resolver must reproduce exactly the
+        same digest the frozen-default plan-stage function computes at
+        the same base/content -- computed fresh from both paths here,
+        never a hardcoded literal this revision's own approval
+        necessarily invalidates the moment it is recorded."""
+        repo_root = _repo_root()
+        digest_generalized, _ = wf.compute_review_content_id_plan_stage_for_work_item(
+            repo_root, "workflow-v2-1-core", base=BASE_COMMIT,
+        )
+        plan_revision = wf.load_plan_revision(repo_root, wf.DEFAULT_REGISTRY_PATH, wf.DEFAULT_PLAN_PATH)
+        digest_frozen_defaults, _ = wf.compute_review_content_id_plan_stage(
+            repo_root, BASE_COMMIT,
+            work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=plan_revision,
+            protected=wf.PLAN_STAGE_PROTECTED, excluded_paths=wf.PLAN_STAGE_EXCLUDED_PATHS,
+            excluded_prefixes=wf.PLAN_STAGE_EXCLUDED_PREFIXES,
+        )
+        self.assertEqual(digest_generalized, digest_frozen_defaults)
 
     def test_demonstration_bundle_id_against_current_bundle(self):
         repo_root = _repo_root()
@@ -159,6 +197,8 @@ class TestAgainstRealRepository(unittest.TestCase):
         recomputed, _ = wf.compute_review_content_id_plan_stage(
             repo_root, BASE_COMMIT,
             work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=plan_revision,
+            protected=wf.PLAN_STAGE_PROTECTED, excluded_paths=wf.PLAN_STAGE_EXCLUDED_PATHS,
+            excluded_prefixes=wf.PLAN_STAGE_EXCLUDED_PREFIXES,
         )
         self.assertEqual(
             reported, recomputed,

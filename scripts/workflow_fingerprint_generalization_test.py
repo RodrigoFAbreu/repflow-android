@@ -138,6 +138,86 @@ class TestSecondWorkItemProducesDistinctIdentity(unittest.TestCase):
             self.assertNotIn("workflow-v2-1-core", manifest_text)
 
 
+class TestSyntheticWorkItemKind(unittest.TestCase):
+    """Missing-test item 157 (`OPUS-R25-011`): a `work_item_kind:
+    "synthetic"` item (mirroring the real `v2-1-dry-run`) with
+    `work_item_type: "process"` computes its own distinct plan-stage
+    `review_content_id` through the corrected resolution algorithm --
+    exercising the exact item the superseded code comment named."""
+
+    def test_synthetic_kind_process_type_item_computes_its_own_id(self):
+        with h.ScratchRepo() as repo:
+            (repo.root / ".gitignore").write_text(".ai-review/\n")
+            repo.write_plan_docs(work_item_id="v2-1-dry-run", plan_revision=1)
+            repo.write_workflow_state(
+                active_work_item_id="v2-1-dry-run",
+                **{"v2-1-dry-run": ws.default_work_item(
+                    work_item_id="v2-1-dry-run", work_item_type="process", work_item_kind="synthetic",
+                    plan_path="docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+                    registry_path="docs/ai-workflow/registry/v2-1-dry-run-registry.json",
+                    mapping_path="docs/ai-workflow/requirements/v2-1-dry-run-mapping.json",
+                    base_commit=repo.base, governing_workflow_version="2.1",
+                    plan_revision=1, last_transition="t0",
+                )},
+            )
+            repo.commit_plan_docs_as_base()
+            digest, projection = fingerprint.compute_review_content_id_plan_stage_for_work_item(
+                repo.root, "v2-1-dry-run",
+            )
+            self.assertEqual(projection["work_item_id"], "v2-1-dry-run")
+            self.assertNotEqual(digest, "")
+
+
+class TestCommitSourceMetadataPinning(unittest.TestCase):
+    """Missing-test item 145 (`OPUS-R25-013`): `compute_review_content_id_
+    plan_stage_at_commit_for_work_item` resolves metadata from the given
+    commit, not from a subsequently-edited live `WORKFLOW_STATE.json`; and
+    fails closed, not silently, against a pre-migration commit."""
+
+    def test_commit_source_recomputation_unaffected_by_a_later_live_edit(self):
+        with h.ScratchRepo() as repo:
+            _write_second_item(repo, "second-item")
+            repo.commit_plan_docs_as_base()
+            pinned_commit = repo.base
+            digest_at_commit, _ = fingerprint.compute_review_content_id_plan_stage_at_commit_for_work_item(
+                repo.root, "second-item", pinned_commit,
+            )
+            state_path = repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json"
+            state = json.loads(state_path.read_text())
+            state["work_items"]["second-item"]["plan_revision"] = 999
+            repo.commit_files("edit live state after pinning", {
+                "docs/ai-workflow/WORKFLOW_STATE.json": json.dumps(state),
+            })
+            digest_recomputed, _ = fingerprint.compute_review_content_id_plan_stage_at_commit_for_work_item(
+                repo.root, "second-item", pinned_commit,
+            )
+            self.assertEqual(
+                digest_at_commit, digest_recomputed,
+                "commit-source recomputation must be pinned to the given commit, "
+                "unaffected by a later live-state edit",
+            )
+
+    def test_pre_migration_commit_fails_closed_not_a_silent_fallback(self):
+        with h.ScratchRepo() as repo:
+            _write_second_item(repo, "second-item")
+            repo.commit_plan_docs_as_base()
+            pre_migration_commit = repo.base
+            (repo.root / "docs" / "ai-workflow" / "registry" / "second-item-artifacts.json").unlink()
+            post_removal_commit = repo.commit_files(
+                "remove artifacts file (simulates a pre-migration commit)", {},
+            )
+            with self.assertRaises(fingerprint.MissingWorkItemArtifactsDeclarationError):
+                fingerprint.compute_review_content_id_plan_stage_at_commit_for_work_item(
+                    repo.root, "second-item", post_removal_commit,
+                )
+            # The earlier, pre-removal commit must still resolve fine --
+            # confirms the failure is scoped to the commit that actually
+            # predates the migration, not a global break.
+            fingerprint.compute_review_content_id_plan_stage_at_commit_for_work_item(
+                repo.root, "second-item", pre_migration_commit,
+            )  # must not raise
+
+
 class TestFailClosedMatrix(unittest.TestCase):
     """A representative subset of the thirteen-condition fail-closed
     matrix (items 146-148, 150, 152, 161-163)."""
@@ -225,6 +305,31 @@ class TestFailClosedMatrix(unittest.TestCase):
             third = dict(state["work_items"]["second-item"])
             third["work_item_id"] = "third-item"
             state["work_items"]["third-item"] = third  # same plan_path/registry_path/mapping_path
+            state_path.write_text(json.dumps(state))
+            repo.commit_plan_docs_as_base()
+            with self.assertRaises(fingerprint.DuplicateWorkItemArtifactPathError):
+                fingerprint.resolve_plan_stage_metadata(repo.root, "second-item")
+
+    def test_158_partial_collision_same_plan_path_only_raises_from_resolver_itself(self):
+        """Missing-test item 158 (`OPUS-R25-007`): two work items
+        declaring the same `plan_path` but different `registry_path`/
+        `mapping_path` (a partial, not full-triple, collision) raise
+        `DuplicateWorkItemArtifactPathError` from `resolve_plan_stage_metadata`
+        itself -- exercising the read-path relocation, not only
+        `validate_state`'s own write-path backstop (already covered by
+        `test_duplicate_registry_path_across_two_items_fails_validate_state`
+        below)."""
+        with h.ScratchRepo() as repo:
+            _write_second_item(repo, "second-item")
+            state_path = repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json"
+            state = json.loads(state_path.read_text())
+            third = dict(state["work_items"]["second-item"])
+            third["work_item_id"] = "third-item"
+            third["registry_path"] = "docs/ai-workflow/registry/third-item-registry.json"
+            third["mapping_path"] = "docs/ai-workflow/requirements/third-item-mapping.json"
+            # plan_path is deliberately left identical to second-item's own
+            # -- only one of the three fields collides.
+            state["work_items"]["third-item"] = third
             state_path.write_text(json.dumps(state))
             repo.commit_plan_docs_as_base()
             with self.assertRaises(fingerprint.DuplicateWorkItemArtifactPathError):

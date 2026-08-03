@@ -74,6 +74,8 @@ class TestScratchRepoPlanDocs(unittest.TestCase):
             digest, projection = fingerprint.compute_review_content_id_plan_stage(
                 repo.root, repo.base, work_item_type="process", work_item_id="wi", plan_revision=1,
                 protected=h.plan_stage_protected_paths("wi"),
+                excluded_paths=h.plan_stage_excluded_paths(),
+                excluded_prefixes=h.plan_stage_excluded_prefixes(),
             )
             self.assertEqual(len(digest), 64)
             self.assertEqual(projection["plan_revision"], 1)
@@ -85,11 +87,13 @@ class TestScratchRepoPlanDocs(unittest.TestCase):
             protected = h.plan_stage_protected_paths("wi")
             first, _ = fingerprint.compute_review_content_id_plan_stage(
                 repo.root, repo.base, work_item_type="process", work_item_id="wi", plan_revision=1,
-                protected=protected,
+                protected=protected, excluded_paths=h.plan_stage_excluded_paths(),
+                excluded_prefixes=h.plan_stage_excluded_prefixes(),
             )
             second, _ = fingerprint.compute_review_content_id_plan_stage(
                 repo.root, repo.base, work_item_type="process", work_item_id="wi", plan_revision=1,
-                protected=protected,
+                protected=protected, excluded_paths=h.plan_stage_excluded_paths(),
+                excluded_prefixes=h.plan_stage_excluded_prefixes(),
             )
             self.assertEqual(first, second)
 
@@ -103,12 +107,14 @@ class TestScratchRepoPlanDocs(unittest.TestCase):
             protected = h.plan_stage_protected_paths("wi")
             before, _ = fingerprint.compute_review_content_id_plan_stage(
                 repo.root, repo.base, work_item_type="process", work_item_id="wi", plan_revision=1,
-                protected=protected,
+                protected=protected, excluded_paths=h.plan_stage_excluded_paths(),
+                excluded_prefixes=h.plan_stage_excluded_prefixes(),
             )
             (repo.root / "docs" / "ai-workflow" / "WORKFLOW_V2_PLAN.md").write_text("plan v2\n")
             after, _ = fingerprint.compute_review_content_id_plan_stage(
                 repo.root, repo.base, work_item_type="process", work_item_id="wi", plan_revision=1,
-                protected=protected,
+                protected=protected, excluded_paths=h.plan_stage_excluded_paths(),
+                excluded_prefixes=h.plan_stage_excluded_prefixes(),
             )
             self.assertNotEqual(before, after)
 
@@ -122,6 +128,9 @@ class TestScratchRepoPlanDocs(unittest.TestCase):
             digest, _ = fingerprint.compute_review_content_id_plan_stage(
                 repo.root, repo.base, work_item_type="process",
                 work_item_id="workflow-v2-1-core", plan_revision=1,
+                protected=fingerprint.PLAN_STAGE_PROTECTED,
+                excluded_paths=fingerprint.PLAN_STAGE_EXCLUDED_PATHS,
+                excluded_prefixes=fingerprint.PLAN_STAGE_EXCLUDED_PREFIXES,
             )
             self.assertEqual(len(digest), 64)
 

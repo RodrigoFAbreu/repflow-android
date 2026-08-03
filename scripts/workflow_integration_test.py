@@ -922,6 +922,114 @@ class TestReviewPlanWriteSetConsistencyLint(unittest.TestCase):
             self.assertNotIn("ledger", write_sets["BLOCK"], source_name)
 
 
+def _strip_trailing_citation_parenthetical(cell: str) -> str:
+    """Strips a single trailing `(corrected/extended/new OPUS-R.../GPT-
+    R...)` historical-citation parenthetical from a table cell, if
+    present -- balance-aware (scanning backward from the end so an
+    earlier, substantive parenthetical elsewhere in the same cell, e.g.
+    `WFR-47`'s "(`WORKFLOW_STATE.json` and `<work_item_id>-artifacts.json`)",
+    is never touched). Missing-test item 166's own stated normalization."""
+    cell = cell.rstrip()
+    if not cell.endswith(")"):
+        return cell
+    depth = 0
+    for i in range(len(cell) - 1, -1, -1):
+        ch = cell[i]
+        if ch == ")":
+            depth += 1
+        elif ch == "(":
+            depth -= 1
+            if depth == 0:
+                inner = cell[i + 1 : -1]
+                if re.match(r"(?i)^(corrected|extended|new)\b.*(OPUS-R|GPT-R)", inner):
+                    return cell[:i].rstrip()
+                return cell
+    return cell
+
+
+def _normalize_requirement_cell(cell: str) -> str:
+    """Item 166's exact normalization: backtick markup, `**` bold markup,
+    and a trailing citation parenthetical stripped; em dash normalized to
+    `--`; case-insensitive; whitespace collapsed."""
+    cell = _strip_trailing_citation_parenthetical(cell)
+    cell = cell.replace("`", "").replace("**", "")
+    cell = cell.replace("—", "--")
+    cell = re.sub(r"\s+", " ", cell).strip()
+    return cell.lower()
+
+
+def _normalize_json_description(description: str) -> str:
+    return re.sub(r"\s+", " ", description).strip().lower()
+
+
+class TestRequirementsMappingTableConformance(unittest.TestCase):
+    """Missing-test item 166 (`OPUS-R27-001`, `OPUS-R28-003`, ownership
+    reassigned to `WF8b` by `GPT-R29-003`): a grep-based conformance test
+    over `docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json`
+    and the Requirements traceability table asserts every `WFR-*`
+    requirement's JSON `description` matches its rendered table row's
+    Requirement column, under the normalization the table's own
+    introductory prose states -- the ongoing regression guard that keeps
+    the two synced going forward, not the one-time data sync itself
+    (already performed, revision 21). The Checkpoint column is out of
+    scope by the same prose (it may cite a design-doc section instead of
+    or alongside a registry checkpoint id)."""
+
+    def setUp(self):
+        self.plan_text = (_repo_root() / "docs" / "ai-workflow" / "WORKFLOW_V2_PLAN.md").read_text()
+        self.mapping = json.loads(
+            (_repo_root() / "docs" / "ai-workflow" / "requirements"
+             / "workflow-v2-1-core-mapping.json").read_text()
+        )
+
+    def _table_rows(self) -> dict[str, str]:
+        rows = re.findall(r"^\| (WFR-\d+) \|(.*)\|.*\|.*\|$", self.plan_text, re.MULTILINE)
+        return {req_id: requirement_cell for req_id, requirement_cell in rows}
+
+    def test_every_wfr_row_description_matches_json_exactly(self):
+        table_rows = self._table_rows()
+        requirements = self.mapping["requirements"]
+        # Sanity: the extraction itself found all 52 rows, not an empty
+        # or partial set (which would make the per-row loop below vacuous).
+        self.assertEqual(len(table_rows), 52)
+        self.assertEqual(set(table_rows), set(requirements))
+        mismatches = []
+        for req_id, table_cell in table_rows.items():
+            table_normalized = _normalize_requirement_cell(table_cell)
+            json_normalized = _normalize_json_description(requirements[req_id]["description"])
+            if table_normalized != json_normalized:
+                mismatches.append((req_id, table_normalized, json_normalized))
+        self.assertEqual(
+            mismatches, [],
+            f"{len(mismatches)} WFR row(s) diverged from their JSON description: "
+            f"{[m[0] for m in mismatches]}",
+        )
+
+    def test_normalization_catches_a_real_divergence_not_vacuously_true(self):
+        """The positive test above proves nothing if the normalization is
+        so loose it can never fail. Confirms it actually distinguishes a
+        genuinely different description from the real WFR-01 row."""
+        table_cell = self._table_rows()["WFR-01"]
+        real_json_description = self.mapping["requirements"]["WFR-01"]["description"]
+        tampered_description = real_json_description + " and something else entirely"
+        self.assertNotEqual(
+            _normalize_requirement_cell(table_cell),
+            _normalize_json_description(tampered_description),
+        )
+
+    def test_trailing_citation_parenthetical_is_stripped_but_substantive_one_is_not(self):
+        """WFR-47's own real table cell exercises both halves of the
+        normalization rule at once: a substantive parenthetical
+        mid-sentence (naming its two authoritative sources) must survive,
+        while the trailing `(corrected ...)` citation parenthetical must
+        not."""
+        cell = self._table_rows()["WFR-47"]
+        normalized = _normalize_requirement_cell(cell)
+        self.assertIn("(workflow_state.json and <work_item_id>-artifacts.json)", normalized)
+        self.assertNotIn("corrected", normalized)
+        self.assertNotIn("opus-r25-002", normalized)
+
+
 # ---------------------------------------------------------------------------
 # GPT-R11-009: the two-stage plan-review ledger, exercised end to end
 # against a real ScratchRepo. workflow_state_test.py's own
@@ -944,6 +1052,8 @@ class TestTwoStagePlanReviewIntegration(unittest.TestCase):
             review_content_id, _ = fingerprint.compute_review_content_id_plan_stage(
                 repo.root, repo.base, work_item_type="process", work_item_id="wi",
                 plan_revision=1, protected=protected,
+                excluded_paths=h.plan_stage_excluded_paths(),
+                excluded_prefixes=h.plan_stage_excluded_prefixes(),
             )
             state = h.base_state(wi=h.base_work_item(
                 work_item_id="wi", governing_workflow_version="2.1",
@@ -985,6 +1095,8 @@ class TestTwoStagePlanReviewIntegration(unittest.TestCase):
             old_id, _ = fingerprint.compute_review_content_id_plan_stage(
                 repo.root, repo.base, work_item_type="process", work_item_id="wi",
                 plan_revision=1, protected=protected,
+                excluded_paths=h.plan_stage_excluded_paths(),
+                excluded_prefixes=h.plan_stage_excluded_prefixes(),
             )
             state = h.base_state(wi=h.base_work_item(
                 work_item_id="wi", governing_workflow_version="2.1",
@@ -1003,6 +1115,8 @@ class TestTwoStagePlanReviewIntegration(unittest.TestCase):
             new_id, _ = fingerprint.compute_review_content_id_plan_stage(
                 repo.root, repo.base, work_item_type="process", work_item_id="wi",
                 plan_revision=1, protected=protected,
+                excluded_paths=h.plan_stage_excluded_paths(),
+                excluded_prefixes=h.plan_stage_excluded_prefixes(),
             )
             self.assertNotEqual(old_id, new_id)
 

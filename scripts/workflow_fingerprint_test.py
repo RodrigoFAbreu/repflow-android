@@ -111,13 +111,37 @@ class ScratchRepo:
         self.base = self.head()
 
     def compute(self, base=None, **overrides):
+        """The core-specific fixture helper `GPT-R30-005` asks for: this
+        class's own docstring already scopes it to `workflow-v2-1-core`'s
+        real layout, so its `protected`/`excluded_paths`/`excluded_prefixes`
+        defaults (retired from the low-level production function itself)
+        live here instead, explicitly, rather than silently on the
+        function every generic caller shares."""
         kwargs = dict(
             work_item_type="process",
             work_item_id="workflow-v2-1-core",
             plan_revision=7,
+            protected=wf.PLAN_STAGE_PROTECTED,
+            excluded_paths=wf.PLAN_STAGE_EXCLUDED_PATHS,
+            excluded_prefixes=wf.PLAN_STAGE_EXCLUDED_PREFIXES,
         )
         kwargs.update(overrides)
         return wf.compute_review_content_id_plan_stage(self.root, base or self.base, **kwargs)
+
+    def compute_at_commit(self, commit, base=None, **overrides):
+        """Commit-source counterpart of `compute()` -- same core-specific
+        fixture defaults, explicit here rather than borrowed from the
+        (now default-free) low-level function (`GPT-R30-005`)."""
+        kwargs = dict(
+            work_item_type="process",
+            work_item_id="workflow-v2-1-core",
+            plan_revision=7,
+            protected=wf.PLAN_STAGE_PROTECTED,
+            excluded_paths=wf.PLAN_STAGE_EXCLUDED_PATHS,
+            excluded_prefixes=wf.PLAN_STAGE_EXCLUDED_PREFIXES,
+        )
+        kwargs.update(overrides)
+        return wf.compute_review_content_id_plan_stage_at_commit(self.root, base or self.base, commit, **kwargs)
 
     def head(self) -> str:
         return subprocess.run(
@@ -566,10 +590,7 @@ class TestWorktreeCommitParity(unittest.TestCase):
             worktree_id, worktree_projection = repo.compute()
             _run(["git", "add", "-A"], cwd=repo.root)
             _run(["git", "commit", "-q", "-m", "plan-approval"], cwd=repo.root)
-            commit_id, commit_projection = wf.compute_review_content_id_plan_stage_at_commit(
-                repo.root, repo.base, repo.head(),
-                work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=7,
-            )
+            commit_id, commit_projection = repo.compute_at_commit(repo.head())
             self.assertEqual(
                 worktree_projection["review_content_manifest"],
                 commit_projection["review_content_manifest"],
@@ -636,10 +657,7 @@ class TestCommitSourceClassification(unittest.TestCase):
             _run(["git", "add", "-A"], cwd=repo.root)
             _run(["git", "commit", "-q", "-m", "sneaks in an unclassified file"], cwd=repo.root)
             with self.assertRaises(wf.UnclassifiedPathError):
-                wf.compute_review_content_id_plan_stage_at_commit(
-                    repo.root, repo.base, repo.head(),
-                    work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=7,
-                )
+                repo.compute_at_commit(repo.head())
 
     def test_035_both_entry_points_reject_the_same_unclassified_input(self):
         """`app/` is now an excluded prefix (OPUS-R18-004); a genuinely
@@ -654,10 +672,7 @@ class TestCommitSourceClassification(unittest.TestCase):
             _run(["git", "add", "-A"], cwd=repo.root)
             _run(["git", "commit", "-q", "-m", "commit it"], cwd=repo.root)
             with self.assertRaises(wf.UnclassifiedPathError):
-                wf.compute_review_content_id_plan_stage_at_commit(
-                    repo.root, repo.base, repo.head(),
-                    work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=7,
-                )
+                repo.compute_at_commit(repo.head())
 
 
 class TestFileModeParity(unittest.TestCase):
@@ -673,10 +688,7 @@ class TestFileModeParity(unittest.TestCase):
             worktree_id, worktree_projection = repo.compute()
             _run(["git", "add", "-A"], cwd=repo.root)
             _run(["git", "commit", "-q", "-m", "plan-approval"], cwd=repo.root)
-            commit_id, commit_projection = wf.compute_review_content_id_plan_stage_at_commit(
-                repo.root, repo.base, repo.head(),
-                work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=7,
-            )
+            commit_id, commit_projection = repo.compute_at_commit(repo.head())
             self.assertEqual(
                 worktree_projection["review_content_manifest"],
                 commit_projection["review_content_manifest"],
@@ -706,10 +718,7 @@ class TestFileModeParity(unittest.TestCase):
             worktree_id, worktree_projection = repo.compute()
             _run(["git", "add", "-A"], cwd=repo.root)
             _run(["git", "commit", "-q", "-m", "plan-approval"], cwd=repo.root)
-            commit_id, commit_projection = wf.compute_review_content_id_plan_stage_at_commit(
-                repo.root, repo.base, repo.head(),
-                work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=7,
-            )
+            commit_id, commit_projection = repo.compute_at_commit(repo.head())
             plan_entry = [
                 e for e in worktree_projection["review_content_manifest"]
                 if e["path"].endswith("PLAN.md")

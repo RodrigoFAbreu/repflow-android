@@ -326,6 +326,31 @@ class TestStateValidation(unittest.TestCase):
         })
         ws.validate_state(_base_state(wi=wi), registry=registry)  # must not raise
 
+    def test_plan_revision_mirror_mismatch_rejected(self):
+        # Missing-test item 147 (`OPUS-R25-002`/`-009`, `GPT-R30-004`):
+        # WORKFLOW_STATE.json's own plan_revision field for a work item is
+        # a non-authoritative mirror of the registry's own plan_revision --
+        # a hand-edited or stale mirror must fail closed before any
+        # fingerprint call runs, not silently diverge.
+        registry = {"work_item_id": "wi", "plan_revision": 5, "checkpoints": []}
+        wi = _base_work_item(plan_revision=4)
+        with self.assertRaises(ws.PlanRevisionMirrorMismatchError):
+            ws.validate_state(_base_state(wi=wi), registry=registry)
+
+    def test_plan_revision_mirror_match_accepted(self):
+        registry = {"work_item_id": "wi", "plan_revision": 5, "checkpoints": []}
+        wi = _base_work_item(plan_revision=5)
+        ws.validate_state(_base_state(wi=wi), registry=registry)  # must not raise
+
+    def test_plan_revision_mirror_check_skipped_for_unrelated_registry(self):
+        # A registry naming a work item absent from this state (e.g. a
+        # different work item's registry passed by mistake, or a registry
+        # with no `work_item_id` at all, matching every pre-existing test
+        # above) must not raise -- there is nothing to mirror-check.
+        registry = {"work_item_id": "some-other-item", "plan_revision": 999, "checkpoints": []}
+        wi = _base_work_item(plan_revision=1)
+        ws.validate_state(_base_state(wi=wi), registry=registry)  # must not raise
+
     def test_corrupt_json_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "state.json"
@@ -1243,8 +1268,15 @@ class TestApprovalFreshnessAndEntry(unittest.TestCase):
         return f"# Plan (Revision {plan_revision})\n\n{body}\n"
 
     def _plan_stage_worktree_id(self, repo, plan_revision=1):
+        # This class's own docstring already documents deliberately
+        # reusing the module's real PLAN_STAGE_* defaults as "wi"'s own
+        # fixture -- now passed explicitly since the low-level function no
+        # longer defaults them itself (`GPT-R30-005`).
         digest, _ = fingerprint.compute_review_content_id_plan_stage(
             repo.root, repo.base, "process", "wi", plan_revision,
+            fingerprint.PLAN_STAGE_PROTECTED,
+            fingerprint.PLAN_STAGE_EXCLUDED_PATHS,
+            fingerprint.PLAN_STAGE_EXCLUDED_PREFIXES,
         )
         return digest
 
@@ -1388,6 +1420,178 @@ class TestApprovalFreshnessAndEntry(unittest.TestCase):
             with self.assertRaises(ws.PostApprovalManifestMismatchError):
                 ws.verify_post_approval_manifest_match(
                     repo.root, work_item, stage="plan", base_commit=repo.base, commit=approval_sha,
+                )
+
+
+class TestImplementationStageApprovalSecondItem(unittest.TestCase):
+    """Missing-test item 164 (`OPUS-R27-002`/`OPUS-R28-001`, `GPT-R30-004`
+    correction #7): `approval_is_current(stage="implementation")` and
+    `verify_post_approval_manifest_match(stage="implementation")`, each
+    exercised against two distinct work items (never `workflow-v2-1-core`
+    alone), load each item's own `<id>-artifacts.json` via
+    `fingerprint.artifacts_path_for_work_item` -- never `DEFAULT_ARTIFACTS_PATH`.
+    Unlike the plan stage, neither function's `stage="implementation"`
+    branch reads `plan_path`/`registry_path`/`mapping_path` at all
+    (`approval_review_content_id`'s own implementation branch), so this
+    fixture needs no full plan-stage scaffolding -- only each item's own
+    artifacts declaration and a real committed source file to change."""
+
+    def _write_implementation_stage_artifacts(self, repo, work_item_id: str) -> str:
+        """Each item gets a disjoint protected exact-path set (never a
+        shared prefix) so a change to one item's own protected file is
+        unambiguously `excluded` (not merely unclassified) under a
+        *different* item's own sets -- proving real independence rather
+        than accidental non-interference from an always-unclassified path."""
+        artifacts_path = f"docs/ai-workflow/registry/{work_item_id}-artifacts.json"
+        full = repo.root / artifacts_path
+        full.parent.mkdir(parents=True, exist_ok=True)
+        full.write_text(json.dumps({
+            "schema_version": 2,
+            "work_item_id": work_item_id,
+            "implementation_stage": {
+                "protected_paths": {
+                    artifacts_path: "self-referential declarations file",
+                    f"scripts/{work_item_id}_tool.py": "this item's own tooling change",
+                },
+                "protected_prefixes": {},
+                "excluded_paths": {},
+                "excluded_prefixes": {
+                    "scripts/": "any other item's own tooling files, or this item's own non-protected scripts",
+                    "docs/": "plan-stage-governed design content",
+                },
+            },
+        }))
+        _run(["git", "add", artifacts_path], cwd=repo.root)
+        return artifacts_path
+
+    def _approve_implementation(self, repo, work_item_id: str):
+        self._write_implementation_stage_artifacts(repo, work_item_id)
+        tool_path = f"scripts/{work_item_id}_tool.py"
+        full = repo.root / tool_path
+        full.parent.mkdir(parents=True, exist_ok=True)
+        full.write_text("print('v1')\n")
+        _run(["git", "add", tool_path], cwd=repo.root)
+        _run(["git", "commit", "-q", "-m", f"seed {work_item_id}"], cwd=repo.root)
+        commit = repo.head()
+        digest = ws.approval_review_content_id(
+            repo.root, stage="implementation", base_commit=repo.base,
+            work_item_type="process", work_item_id=work_item_id, head=commit,
+            artifacts_path=fingerprint.artifacts_path_for_work_item(work_item_id),
+        )
+        work_item = {
+            "work_item_id": work_item_id, "work_item_type": "process",
+            "technical_approval": {"status": "CURRENT", "approved_review_content_id": digest},
+        }
+        return commit, work_item
+
+    def test_approval_is_current_gates_independently_per_item(self):
+        with ScratchRepo() as repo:
+            commit_a, work_item_a = self._approve_implementation(repo, "workflow-v2-1-core")
+            commit_b, work_item_b = self._approve_implementation(repo, "second-item")
+            self.assertTrue(
+                ws.approval_is_current(
+                    repo.root, work_item_a, stage="implementation", base_commit=repo.base, head=commit_a,
+                )
+            )
+            self.assertTrue(
+                ws.approval_is_current(
+                    repo.root, work_item_b, stage="implementation", base_commit=repo.base, head=commit_b,
+                )
+            )
+
+    def test_verify_post_approval_manifest_match_succeeds_for_second_item(self):
+        with ScratchRepo() as repo:
+            commit, work_item = self._approve_implementation(repo, "second-item")
+            ws.verify_post_approval_manifest_match(
+                repo.root, work_item, stage="implementation", base_commit=repo.base, commit=commit,
+            )  # must not raise
+
+    def test_editing_workflow_v2_1_cores_own_artifacts_file_leaves_second_item_untouched(self):
+        with ScratchRepo() as repo:
+            commit_core, work_item_core = self._approve_implementation(repo, "workflow-v2-1-core")
+            commit_second, work_item_second = self._approve_implementation(repo, "second-item")
+            # Widen workflow-v2-1-core's own self-referential artifacts
+            # declaration -- changes only its own implementation-stage
+            # review_content_id.
+            core_artifacts_path = repo.root / "docs/ai-workflow/registry/workflow-v2-1-core-artifacts.json"
+            core_data = json.loads(core_artifacts_path.read_text())
+            core_data["implementation_stage"]["excluded_paths"]["README.md"] = "newly excluded"
+            core_artifacts_path.write_text(json.dumps(core_data))
+            _run(["git", "add", "docs/ai-workflow/registry/workflow-v2-1-core-artifacts.json"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "widen workflow-v2-1-core's own artifacts file"], cwd=repo.root)
+            new_head = repo.head()
+
+            self.assertFalse(
+                ws.approval_is_current(
+                    repo.root, work_item_core, stage="implementation", base_commit=repo.base, head=new_head,
+                ),
+                "workflow-v2-1-core's own approval must stale on its own artifacts-file edit",
+            )
+            self.assertTrue(
+                ws.approval_is_current(
+                    repo.root, work_item_second, stage="implementation", base_commit=repo.base, head=new_head,
+                ),
+                "a different item's approval must be untouched by workflow-v2-1-core's own artifacts-file edit",
+            )
+
+    def test_changed_implementation_file_stales_approval(self):
+        with ScratchRepo() as repo:
+            _, work_item = self._approve_implementation(repo, "second-item")
+            tool_path = repo.root / "scripts/second-item_tool.py"
+            tool_path.write_text("print('v2')\n")
+            _run(["git", "add", "scripts/second-item_tool.py"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "change second-item's own protected tool file"], cwd=repo.root)
+            new_head = repo.head()
+            self.assertFalse(
+                ws.approval_is_current(
+                    repo.root, work_item, stage="implementation", base_commit=repo.base, head=new_head,
+                )
+            )
+
+    def test_excluded_implementation_file_does_not_stale_approval(self):
+        with ScratchRepo() as repo:
+            _, work_item = self._approve_implementation(repo, "second-item")
+            # Matches second-item's own excluded_prefixes ("scripts/"),
+            # and is not its own declared protected path.
+            unrelated_path = repo.root / "scripts/unrelated_helper.py"
+            unrelated_path.write_text("print('unrelated')\n")
+            _run(["git", "add", "scripts/unrelated_helper.py"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "add an excluded-prefix script file"], cwd=repo.root)
+            new_head = repo.head()
+            self.assertTrue(
+                ws.approval_is_current(
+                    repo.root, work_item, stage="implementation", base_commit=repo.base, head=new_head,
+                )
+            )
+
+    def test_wrong_artifacts_declaration_missing_file_fails_closed(self):
+        with ScratchRepo() as repo:
+            with self.assertRaises(fingerprint.MissingWorkItemArtifactsDeclarationError):
+                ws.approval_review_content_id(
+                    repo.root, stage="implementation", base_commit=repo.base,
+                    work_item_type="process", work_item_id="second-item", head=repo.base,
+                    artifacts_path=fingerprint.artifacts_path_for_work_item("second-item"),
+                )
+
+    def test_wrong_artifacts_declaration_missing_implementation_stage_key_fails_closed(self):
+        with ScratchRepo() as repo:
+            artifacts_path = "docs/ai-workflow/registry/second-item-artifacts.json"
+            full = repo.root / artifacts_path
+            full.parent.mkdir(parents=True, exist_ok=True)
+            # Pre-migration, schema-version-1-shaped file: no
+            # implementation_stage key at all -- the same fail-closed
+            # boundary as a wholly absent file, not a distinct mechanism.
+            full.write_text(json.dumps({
+                "schema_version": 1, "work_item_id": "second-item", "plan_stage": {},
+            }))
+            _run(["git", "add", artifacts_path], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "pre-migration artifacts file"], cwd=repo.root)
+            head = repo.head()
+            with self.assertRaises(fingerprint.MissingWorkItemArtifactsDeclarationError):
+                ws.approval_review_content_id(
+                    repo.root, stage="implementation", base_commit=repo.base,
+                    work_item_type="process", work_item_id="second-item", head=head,
+                    artifacts_path=fingerprint.artifacts_path_for_work_item("second-item"),
                 )
 
 
