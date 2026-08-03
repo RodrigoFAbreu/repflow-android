@@ -2357,6 +2357,27 @@ def validate_state(state: dict, *, registry: dict | None = None) -> None:
             )
 
     if registry is not None:
+        # D-Fingerprint-Generalization (`OPUS-R25-002`/`-009`, missing-test
+        # item 147): `WORKFLOW_STATE.json`'s own `plan_revision` field is a
+        # non-authoritative display mirror of the registry's own
+        # `plan_revision` (the authoritative value `load_plan_revision`
+        # resolves from). A caller-supplied `registry` names the work item
+        # it belongs to via its own `work_item_id` field; if that item is
+        # present in `state`, the two must agree before any fingerprint
+        # call runs, so a stale/hand-edited mirror fails closed here rather
+        # than silently letting a later command act on the wrong revision.
+        registry_work_item_id = registry.get("work_item_id")
+        registry_plan_revision = registry.get("plan_revision")
+        if registry_work_item_id is not None and registry_plan_revision is not None:
+            mirrored_work_item = work_items.get(registry_work_item_id)
+            if mirrored_work_item is not None:
+                state_plan_revision = mirrored_work_item.get("plan_revision")
+                if state_plan_revision != registry_plan_revision:
+                    raise PlanRevisionMirrorMismatchError(
+                        f"work_items[{registry_work_item_id!r}].plan_revision "
+                        f"(state mirror) == {state_plan_revision!r}, but registry "
+                        f"declares plan_revision == {registry_plan_revision!r}"
+                    )
         depends_on_by_id = {entry["id"]: entry.get("depends_on", []) for entry in registry["checkpoints"]}
         for work_item in work_items.values():
             checkpoints = work_item.get("checkpoints", {})
