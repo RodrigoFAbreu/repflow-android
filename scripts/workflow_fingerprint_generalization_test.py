@@ -26,6 +26,7 @@ import json
 import shutil
 import stat
 import subprocess
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -953,26 +954,54 @@ class TestPrepareAiReviewShPlanStageRequiredArgument(unittest.TestCase):
 class TestBundleRelocation(unittest.TestCase):
     """Missing-test item 165's relocation/migration sub-cases
     (`OPUS-R27-003`, `OPUS-R28-004`/`-006`): `relocate_flat_bundle_to_scoped_layout`
-    and its `verify_relocation_file_set_complete` post-move check, run
-    against a byte-copy of this repository's own real bundle content, per
-    the item's own required wording."""
+    and its `verify_relocation_file_set_complete` post-move check.
 
-    def _copy_real_bundle_as_flat(self, dest_repo_root: Path) -> Path:
-        real_root = _REAL_SCRIPTS_DIR.parent / ".ai-review" / "workflow-v2-1-core"
+    Exercised against a bundle fixture built entirely inside the test's own
+    temporary directory, never against this repository's own (gitignored)
+    `.ai-review/` state: a clean checkout -- exactly what runs this
+    module's committed CI job -- has no such directory, so reading it here
+    made the "hermetic" suite this module's own header docstring promises
+    fail outside a developer worktree that happened to hold a live bundle
+    (`GPT-R34-001`). The fixture still has real, non-trivial byte content
+    (its `MANIFEST.md` is rendered through the production
+    `render_manifest_md` helper) and a nested `files/` subtree, so
+    relocation exercises the same directory shape a real bundle has --
+    item 165 needs realistic content shape here, not byte-identity with
+    any specific real bundle."""
+
+    def _build_synthetic_bundle_fixture(self, dest_repo_root: Path) -> Path:
         flat_dir = dest_repo_root / ".ai-review" / "current"
-        shutil.copytree(real_root / "current", flat_dir)
-        real_archive = real_root / "review-bundle.tar.gz"
-        if real_archive.is_file():
-            shutil.copy(real_archive, dest_repo_root / ".ai-review" / "review-bundle.tar.gz")
+        files_dir = flat_dir / "files" / "scripts"
+        files_dir.mkdir(parents=True)
+        manifest_content = fingerprint.render_manifest_md(
+            review_content_id="a" * 64,
+            protected=frozenset({"scripts/example.py"}),
+            excluded_paths={},
+            excluded_prefixes={},
+            bundle_id="b" * 64,
+            work_item_id="second-item",
+            work_item_type="process",
+            plan_revision=1,
+            base_commit="c" * 40,
+        )
+        (flat_dir / "MANIFEST.md").write_text(manifest_content)
+        for name in sorted(fingerprint.REQUIRED_GENERATION_FILES):
+            (flat_dir / name).write_text(f"synthetic {name} content for relocation fixture\n")
+        (files_dir / "example.py").write_text("print('synthetic bundle fixture content')\n")
+        (files_dir / "another.py").write_text("VALUE = 42\n")
+
+        archive_path = dest_repo_root / ".ai-review" / "review-bundle.tar.gz"
+        with tarfile.open(archive_path, "w:gz") as tar:
+            tar.add(flat_dir, arcname="current")
         return flat_dir
 
     def test_relocation_succeeds_and_verifies_complete_move(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / ".ai-review").mkdir()
-            flat_dir = self._copy_real_bundle_as_flat(root)
+            flat_dir = self._build_synthetic_bundle_fixture(root)
             source_files = {p.relative_to(flat_dir).as_posix() for p in flat_dir.rglob("*") if p.is_file()}
-            self.assertTrue(source_files, "the real bundle byte-copy must be non-empty")
+            self.assertTrue(source_files, "the synthetic bundle fixture must be non-empty")
 
             fingerprint.relocate_flat_bundle_to_scoped_layout(root, "second-item")
 
@@ -986,7 +1015,7 @@ class TestBundleRelocation(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / ".ai-review").mkdir()
-            self._copy_real_bundle_as_flat(root)
+            self._build_synthetic_bundle_fixture(root)
             dest_dir = root / ".ai-review" / "second-item" / "current"
             dest_dir.mkdir(parents=True)
             (dest_dir / "PRE_EXISTING.txt").write_text("already here\n")
