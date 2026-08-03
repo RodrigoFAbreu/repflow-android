@@ -97,7 +97,7 @@ class TestAgainstRealRepository(unittest.TestCase):
 
     def test_demonstration_bundle_id_against_current_bundle(self):
         repo_root = _repo_root()
-        bundle_dir = repo_root / ".ai-review" / "current"
+        bundle_dir = repo_root / ".ai-review" / "workflow-v2-1-core" / "current"
         if not bundle_dir.is_dir():
             self.skipTest("no .ai-review/current bundle present in this checkout")
         bid, entries = wf.compute_bundle_id(bundle_dir)
@@ -119,7 +119,7 @@ class TestAgainstRealRepository(unittest.TestCase):
         bundle's own `MANIFEST.md` must recompute unchanged from that same
         bundle directory."""
         repo_root = _repo_root()
-        bundle_dir = repo_root / ".ai-review" / "current"
+        bundle_dir = repo_root / ".ai-review" / "workflow-v2-1-core" / "current"
         manifest_path = bundle_dir / "MANIFEST.md"
         if not manifest_path.is_file():
             self.skipTest("no MANIFEST.md present in this checkout's bundle")
@@ -148,7 +148,7 @@ class TestAgainstRealRepository(unittest.TestCase):
         bundle's manifest stated a review_content_id that no revision
         number reproduced."""
         repo_root = _repo_root()
-        bundle_dir = repo_root / ".ai-review" / "current"
+        bundle_dir = repo_root / ".ai-review" / "workflow-v2-1-core" / "current"
         manifest_path = bundle_dir / "MANIFEST.md"
         if not manifest_path.is_file():
             self.skipTest("no MANIFEST.md present in this checkout's bundle")
@@ -198,7 +198,7 @@ class TestAgainstRealRepository(unittest.TestCase):
         entry in PLAN_STAGE_PROTECTED must have a real copy under the
         generated bundle's files/ directory, not just a manifest entry."""
         repo_root = _repo_root()
-        files_dir = repo_root / ".ai-review" / "current" / "files"
+        files_dir = repo_root / ".ai-review" / "workflow-v2-1-core" / "current" / "files"
         if not files_dir.is_dir():
             self.skipTest("no .ai-review/current/files present in this checkout")
         for path in sorted(wf.PLAN_STAGE_PROTECTED):
