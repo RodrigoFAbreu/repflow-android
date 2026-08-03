@@ -11,8 +11,8 @@
       "registry_path": "docs/ai-workflow/registry/workflow-v2-1-core-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json",
       "governing_workflow_version": "1",
-      "phase": "AWAITING_FUNCTIONAL_REVIEW",
-      "plan_revision": 21,
+      "phase": "IMPLEMENTING",
+      "plan_revision": 27,
       "implementation_revision": 4,
       "functional_review_round": null,
       "base_commit": "162154d3e5e10eb65e109833acae4b4fb01fc5d6",
@@ -89,8 +89,8 @@
       "plan_approval": {
         "status": "CURRENT",
         "basis": "EXTERNAL_APPROVE",
-        "reviewed_bundle_id": "fa03d43401233e2f2324e0494a917568a965bbb71d54a496bfe08a8f003fc3b8",
-        "approved_review_content_id": "b6d4ea6a8778321526fa5a3a6d2af17801f6187fd137680bbef8cce008ef95c0",
+        "reviewed_bundle_id": "8484f8729b02f18672fff922de55f764188f8650c28ac945df55dea8365326c7",
+        "approved_review_content_id": "68eed7ec85fdaf9fcc219c7007cd991d0b0e737ee4fee3030b9f4594393c7749",
         "review_content_manifest": [
           {
             "path": "docs/TECHNICAL_DECISIONS.md",
@@ -108,26 +108,26 @@
             "path": "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
             "exists": true,
             "mode": "100644",
-            "blob": "ef87b03ca56546bb02d2777b4293697e1558f65a"
+            "blob": "b4f32caa9a91ef81b615fc4d6abe57d67010ba51"
           },
           {
             "path": "docs/ai-workflow/registry/workflow-v2-1-core-registry.json",
             "exists": true,
             "mode": "100644",
-            "blob": "ea40d455a02d3d0172a06319b4d8752e809b572a"
+            "blob": "68d91c8ecfafa1c884e8240dd0c7d74339d5e7d4"
           },
           {
             "path": "docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json",
             "exists": true,
             "mode": "100644",
-            "blob": "8ce425e5ea734c8b9b76e3d46c910fd36043d7d3"
+            "blob": "e7e2b6520f26466d3d7367c7a0ddffa9bd0d7242"
           }
         ],
         "reviewed_content_commit": null,
         "legacy_evidence": null,
-        "user_confirmation": "plan Record the approved external plan review for workflow-v2-1-core Revision 21.\n\nValidate .ai-review/feedback/REVIEW_FEEDBACK.md using the repository's real\nbinding parser before changing anything.\n\nRequired binding:\n\n- Status: APPROVE\n- bundle_id:\n  fa03d43401233e2f2324e0494a917568a965bbb71d54a496bfe08a8f003fc3b8\n- review_content_id:\n  b6d4ea6a8778321526fa5a3a6d2af17801f6187fd137680bbef8cce008ef95c0\n- base commit:\n  162154d3e5e10eb65e109833acae4b4fb01fc5d6\n- work item:\n  workflow-v2-1-core\n- plan revision:\n  21\n\nUse the Workflow v1 external plan-approval path.\n\nDo not invoke /review-plan.\nDo not implement the remediation.\nDo not resume WF8b S1.\n\nRecord the approval, update plan_approval, create the required provenance\ncommit, verify approval discovery and the durability guard, and stop.\n",
+        "user_confirmation": "I confirm plan approval for workflow-v2-1-core, revision 27",
         "waived_guarantees": [],
-        "recorded_at": "2026-08-02T23:53:27+01:00"
+        "recorded_at": "2026-08-03T22:47:12+01:00"
       },
       "technical_approval": {
         "status": "CURRENT",
@@ -241,8 +241,8 @@
       "plan_review_stages": null,
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 28,
-      "last_transition": "2026-08-03T15:35:42+01:00"
+      "state_revision": 35,
+      "last_transition": "2026-08-03T22:47:12+01:00"
     },
     "milestone-8": {
       "work_item_type": "product",

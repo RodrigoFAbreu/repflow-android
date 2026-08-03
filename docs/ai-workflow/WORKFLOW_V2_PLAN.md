@@ -1,4 +1,4 @@
-# Workflow v2.1 core — Refined Plan (Revision 21)
+# Workflow v2.1 core — Refined Plan (Revision 27)
 
 Status: plan review complete — round 20 (`OPUS-R20-*`) returned
 `Status: APPROVE`, no blocking or important findings, against revision 14.
@@ -7,6 +7,123 @@ path), this revision is reported ready for implementation; the command
 does not auto-start `/milestone-implement` and no further plan-review
 round is required. Process/tooling milestone only — no product code, no
 `docs/ROADMAP.md`/`docs/ACTIVE_MILESTONE.md` changes, no Milestone 9.
+
+**Revision 22** (see "WF8b finding disposition (revision 21 → 22)"
+below): self-discovered, continued `WF8b` scope, exactly like revisions
+16 and 21 before it. Fixes
+`docs/ai-workflow/dry-run/WF8B_FINDING_continued_scope_remediation_no_nonterminal_return_path.md`:
+a continued-scope implementation round that leaves its parent checkpoint
+(`WF8b`) incomplete had no safe, non-terminal way to be functionally
+accepted — the documented `AWAITING_FUNCTIONAL_REVIEW → AWAITING_USER_ACCEPTANCE
+→ /accept-milestone → MILESTONE_COMPLETE` path, walked as written, would
+mark the whole 17-checkpoint item complete while `WF8b` itself remains
+unexecuted. See the decision section `D-Scoped-Remediation-Acceptance`
+below for the full design, which critically revises the finding's own
+proposed mechanism (no new phase is introduced — see that section's
+"Departures from the finding's proposed design" subsection for why).
+External plan review of this revision (`GPT-R36-*`) returned `Status:
+REVISE`, two blocking and one important finding.
+
+**Revision 23** (see "WF8b finding disposition (revision 22 → 23)"
+below): applied `GPT-R36-001`/`-002`/`-003` to
+`D-Scoped-Remediation-Acceptance`: `complete_work_item`'s registry guard
+became fail-closed against an omitted or foreign registry argument (not
+merely a caller convention); `/accept-scoped-remediation` gained its own
+dedicated, metadata-only provenance commit before reporting success,
+matching the durability precedent `plan_approval`/`technical_approval`/
+`WF-Activate` already set, rather than a plain, uncommitted state write;
+and the `scoped_remediation_acceptance` evidence schema was bound directly
+to the accepted round's `implementation_revision`,
+`reviewed_implementation_head`, and a committed digest of the
+functional-review checklist actually walked, not only the
+technical-approval content id. External plan review of this revision
+(`GPT-R37-*`) returned `Status: REVISE`, three blocking and one important
+finding.
+
+**Revision 24** (see "WF8b finding disposition (revision 23 → 24)"
+below): applied `GPT-R37-001`/`-002`/`-003`/`-004` to
+`D-Scoped-Remediation-Acceptance`: `complete_work_item` no longer accepts
+a caller-supplied `registry` dict at all — it resolves and loads the work
+item's own `registry_path` itself (reusing `D3`'s existing
+safe-path/tracked/parse registry loader), so a fabricated matching-ID
+dict can no longer substitute for the authoritative file;
+`/accept-scoped-remediation`'s replay identity is now keyed per round
+(`outstanding_checkpoint_id`/`implementation_revision`, discovered via a
+new `Workflow-Scoped-Remediation-Acceptance` trailer search) instead of
+per checkpoint, so an exact replay is idempotently reported ahead of the
+ordinary phase guard while a distinct, later-reviewed round against the
+same still-outstanding checkpoint is permitted rather than permanently
+refused; every "nine-field"/"nine fields" reference to the
+`scoped_remediation_acceptance` entry schema is corrected to the ten
+fields the schema has actually always shown; and the pre-commit evidence
+guard now refuses an uncommitted (staged or unstaged) edit to the
+functional-review checklist path before computing or recording its blob,
+checked both at first read and again immediately before the provenance
+commit. External plan review of this revision (`GPT-R38-*`) returned
+`Status: REVISE`, two blocking and one important finding.
+
+**Revision 25** (see "WF8b finding disposition (revision 24 → 25)"
+below): applied `GPT-R38-001`/`-002`/`-003` to
+`D-Scoped-Remediation-Acceptance`: `/prepare-functional-review` now
+creates a dedicated, metadata-only checklist-evidence commit (a new
+`Workflow-Functional-Checklist` trailer, idempotent by content) before
+stopping for the user, so the documented preparation flow actually
+produces the clean, committed checklist `/accept-scoped-remediation`'s
+pre-commit evidence guard requires, rather than leaving that guard
+permanently unsatisfiable; replay/duplicate classification for
+`/accept-scoped-remediation` is now performed by one shared resolver
+function, called identically by the entry guard and the provenance-commit
+step, that always loads and compares the discovered commit's own recorded
+round fields before ever reporting a replay — a matching trailer key
+alone is no longer sufficient; and the entry guard's ordering is now
+stated explicitly: current-turn user confirmation is validated before any
+replay classification runs, for both a first execution and an exact
+replay alike. External plan review of this revision (`GPT-R39-*`)
+returned `Status: REVISE`, two blocking findings.
+
+**Revision 26** (see "WF8b finding disposition (revision 25 → 26)"
+below): applies
+`GPT-R39-001`/`-002` to `D-Scoped-Remediation-Acceptance`: the
+`Workflow-Functional-Checklist` trailer's value now embeds the committed
+checklist blob itself (`<work_item_id>/<implementation_revision>/<blob>`),
+so a legitimately revised checklist for the same round produces a
+distinct, unambiguous trailer value instead of colliding with the
+generic exactly-one-match contract that a same-round content revision
+would otherwise trip; discovery becomes a round-scoped enumeration that
+selects the first-parent-nearest-to-`HEAD` evidence commit as the round's
+current evidence, with genuine duplicate-content ambiguity still refused
+exactly as every other trailer scheme here already does; and
+`resolve_scoped_remediation_round` now loads and compares the full
+canonical set of round-binding identity fields — including the live
+active work-item pointer, the checklist path, and the acceptance-record
+schema version/shape — rather than the three-field subset revision 25
+compared, returning a dedicated malformed-record result when the schema
+itself is unsupported or incomplete. External plan review of this
+revision (`GPT-R40-*`) returned `Status: REVISE`, one blocking and one
+important finding.
+
+**Revision 27 (this revision, pending its own external plan review — see
+"WF8b finding disposition (revision 26 → 27)" below)**: applies
+`GPT-R40-001`/`-002` to `D-Scoped-Remediation-Acceptance`: acceptance is
+no longer bound to whichever checklist evidence commit happens to be
+newest at accept time. The required `scoped_remediation` user
+confirmation must now explicitly name the exact
+`Workflow-Functional-Checklist` evidence commit SHA and checklist blob
+`/prepare-functional-review` reported to the user; `/accept-scoped-remediation`
+resolves that named commit, verifies it belongs to the exact live round
+and its trailer blob matches its own committed blob, and refuses outright
+— naming both the confirmed and the current evidence — when a newer
+evidence commit for the round exists, rather than silently substituting
+it. The `scoped_remediation_acceptance` schema grows an eleventh field,
+`functional_checklist_evidence_commit`, alongside the existing
+`functional_checklist_blob`, and `acceptance_record_version` advances to
+`2`; `resolve_scoped_remediation_round`'s canonical comparison set grows
+to eight fields to match. No automatic migration of an earlier
+confirmation to newer evidence exists anywhere in this design: a
+corrected checklist always requires a fresh `/prepare-functional-review`
+report and a fresh, explicitly-bound user confirmation. Not yet
+implemented; not yet approved. No other design choice from revision 22,
+23, 24, 25, or 26 is reopened.
 
 Base commit: `162154d`.
 
@@ -1412,7 +1529,972 @@ two-stage plan-review protocol, the registry/mapping *file format*,
 design text; the dedicated fix session that follows approval is where the
 code actually changes.
 
-## Decisions (revision 21)
+## WF8b finding disposition (revision 21 → 22) — continued-scope remediation had no non-terminal return path (self-discovered, `WF8B-002`)
+
+**Origin**: discovered while closing out the functional review of
+`WF8B_S1_FINDING_review_content_id_not_generalized.md`'s own remediation
+(implementation revision 4), in the gap between "the user has just
+functionally accepted this round's five checks" and "record that
+acceptance and resume `WF8b`." Full analysis:
+`docs/ai-workflow/dry-run/WF8B_FINDING_continued_scope_remediation_no_nonterminal_return_path.md`.
+
+**The defect, restated precisely**: `apply_technical_approval`
+(`scripts/workflow_state.py:1820-1831`) unconditionally sets `phase =
+"AWAITING_FUNCTIONAL_REVIEW"` — correct and unchanged for an ordinary,
+terminal implementation round, but it has never distinguished that case
+from a **continued-scope** round (like the `WF8B-S1-001` fix just
+approved) that leaves the item's own last checkpoint (`WF8b`) still
+incomplete. Walking the documented path from there —
+`AWAITING_FUNCTIONAL_REVIEW → AWAITING_USER_ACCEPTANCE → /accept-milestone
+→ MILESTONE_COMPLETE` — as written, with nothing in code refusing it,
+would mark all 17 checkpoints of `workflow-v2-1-core` complete while
+`WF8b`, the manual multi-session dry run this whole document exists to
+gate, has never been executed. `complete_work_item`
+(`scripts/workflow_state.py:1538-1563`) checks only for incomplete child
+work items — it performs no check at all against the item's **own**
+registry/checkpoint completeness. No `*_gate_reachable` function exists
+for `AWAITING_USER_ACCEPTANCE` (unlike the plan/technical-approval gates),
+so nothing in code today enforces that `/accept-milestone` is even called
+from the phase the workflow document names as its precondition.
+
+**This is not hypothetical for this milestone specifically**: `WF8b`'s own
+scenarios S8/S10 (`docs/ai-workflow/dry-run/WF8B_SCENARIOS.md`) already
+model further continued-scope remediation rounds happening mid-dry-run —
+every one of them would hit this identical gap without this fix.
+
+### Critical evaluation of the finding's own proposed design
+
+The finding document proposes (§§1-7 of its "Minimum required remediation
+scope"): a new phase `AWAITING_SCOPED_REMEDIATION_ACCEPTANCE`, entered
+directly from `apply_technical_approval` in place of
+`AWAITING_FUNCTIONAL_REVIEW` whenever the round is non-terminal, plus a
+new `/accept-scoped-remediation` command and matching `/accept-milestone`
+guard. Evaluated against the repository's actual, current behavior rather
+than accepted as written, that design has two real problems:
+
+1. **It silently removes functional review for every future continued-
+   scope round.** Placing the terminal/non-terminal branch inside
+   `apply_technical_approval` itself means a non-terminal round would
+   transition straight from technical approval to "scoped remediation
+   acceptance," **never passing through `AWAITING_FUNCTIONAL_REVIEW` at
+   all** — no functional-review checklist would ever be written or walked
+   for that round. This directly contradicts what already, correctly,
+   happened for the very fix this finding is about: a five-check manual
+   functional-review checklist for `WF8B-S1-001`'s remediation was written
+   at `AWAITING_FUNCTIONAL_REVIEW` and independently walked by the user
+   before this finding was even discovered (see
+   `docs/ACTIVE_MILESTONE.md`'s "`workflow-v2-1-core` — functional review
+   checklist" section, still current). A design that would have prevented
+   that from happening again is a regression, not a fix.
+2. **Its own `/accept-milestone` guard ("refuse unless phase ==
+   `AWAITING_USER_ACCEPTANCE`") is unreachable as written.** Grep across
+   `scripts/workflow_state.py` confirms `AWAITING_USER_ACCEPTANCE` is
+   named only in exception/error-message text and docstrings — no
+   function anywhere ever writes it to a work item's `phase`. This is a
+   real, pre-existing gap (it predates this entire Workflow v2.1 project;
+   `AWAITING_FUNCTIONAL_REVIEW`/`AWAITING_USER_ACCEPTANCE` are both
+   inherited, unchanged, from the original `MILESTONE_WORKFLOW.md`). Gating
+   `/accept-milestone` on a phase value nothing ever produces would make
+   the command permanently unreachable — for every terminal item, not
+   only `WF8b`'s — the moment this fix landed. Fixing that separate,
+   decade-old gap (giving `AWAITING_USER_ACCEPTANCE` a real writer) is out
+   of scope for this finding and not attempted here; instead, the guard
+   below is written against the phase value this repository's tooling
+   actually produces today.
+
+### Simplified design: no new phase
+
+Both problems above trace to the same root choice: deciding
+terminal-vs-non-terminal **once, early, at `apply_technical_approval`
+time**, and encoding the answer as a phase. This revision instead defers
+that decision to **the moment a human actually tries to accept** —
+inside each accept command's own entry guard — recomputing
+`select_next_checkpoint(work_item, registry)` fresh every time, exactly
+the discriminator the finding itself identifies as "already answering
+this question correctly and for free." This eliminates the new phase
+entirely:
+
+- `apply_technical_approval` is **not modified at all** — not merely
+  "byte-identical on the terminal branch" (the finding's own regression
+  bar), but literally untouched, for every round, terminal or not.
+  Functional review always runs, exactly as today, for a continued-scope
+  round exactly as for a terminal one.
+- `AWAITING_SCOPED_REMEDIATION_ACCEPTANCE` is not added to `KNOWN_PHASES`,
+  `MILESTONE_WORKFLOW.md` gains no new state section, and the hard-gate
+  count stays at **6**, unchanged.
+- Both new commands below operate directly from the phase this repository
+  actually writes and has always written at this point —
+  `AWAITING_FUNCTIONAL_REVIEW` — discriminated by a freshly recomputed
+  terminal/non-terminal check, not by which phase value happens to be on
+  disk.
+
+**New helper** (`scripts/workflow_state.py`, alongside `select_next_checkpoint`):
+
+```python
+def registry_completion_status(work_item: dict, registry: dict) -> tuple[bool, str | None]:
+    """Returns (is_terminal, outstanding_checkpoint_id). is_terminal is
+    True iff select_next_checkpoint(work_item, registry) is None (every
+    registry checkpoint COMPLETE); outstanding_checkpoint_id is None in
+    that case, else the checkpoint id select_next_checkpoint would
+    return, or -- when it instead raises NoCheckpointReadyError -- the
+    specific blocked checkpoint's id (NoCheckpointReadyError gains a
+    structured `checkpoint_id` attribute alongside its existing message,
+    so callers never parse prose to recover it). The single call site
+    complete_work_item, milestone_complete_gate_reachable's caller,
+    scoped_remediation_gate_reachable's caller, and
+    apply_scoped_remediation_acceptance all share -- never four
+    independent re-derivations of the same terminal/non-terminal
+    question."""
+```
+
+**Two new, non-circular gate-reachability functions**, mirroring
+`approval_gate_reachable`/`technical_approval_gate_reachable`'s existing
+pattern (D-States) exactly — precomputed booleans in, no field read
+twice:
+
+```python
+def milestone_complete_gate_reachable(*, phase: str, is_terminal: bool) -> bool:
+    """/accept-milestone's entry condition. Reachable when is_terminal
+    (this item's own registry has no incomplete checkpoint left) and
+    phase is AWAITING_FUNCTIONAL_REVIEW or AWAITING_USER_ACCEPTANCE.
+    AWAITING_FUNCTIONAL_REVIEW is included deliberately, not loosely: no
+    function in this codebase has ever written AWAITING_USER_ACCEPTANCE
+    (confirmed by grep -- a pre-existing gap, not introduced or widened
+    here), so gating solely on the latter would make /accept-milestone
+    permanently unreachable for every item, not only WF8b's. If a future,
+    separate fix ever gives AWAITING_USER_ACCEPTANCE a real writer, this
+    function already accepts it without change."""
+    return phase in ("AWAITING_FUNCTIONAL_REVIEW", "AWAITING_USER_ACCEPTANCE") and is_terminal
+
+
+def scoped_remediation_gate_reachable(*, phase: str, is_terminal: bool) -> bool:
+    """/accept-scoped-remediation's mirror-image entry condition:
+    reachable only from AWAITING_FUNCTIONAL_REVIEW (functional review has
+    already run for this round, exactly as for a terminal one) while
+    is_terminal is False -- an incomplete checkpoint remains. A terminal
+    registry refuses here, naming /accept-milestone as the correct command
+    instead of silently accepting a scoped acceptance nothing needs."""
+    return phase == "AWAITING_FUNCTIONAL_REVIEW" and not is_terminal
+```
+
+**`complete_work_item` gains the registry-based guard the finding's root-
+cause analysis names** (defense in depth alongside `/accept-milestone`'s
+own guard, the same "same defect class, fix both sides" reasoning
+`D-Functional-Remediation`'s existing parent-completion block already
+established for `GPT-R9-016`):
+
+```python
+def complete_work_item(state: dict, work_item_id: str, now: str, *, registry: dict | None = None) -> dict:
+    """... unchanged incomplete_children check ...
+    New: if registry is not None (the caller loads it from
+    work_item['registry_path'] whenever that field is non-null; a
+    registry-less item, e.g. the legacy milestone-8 shape, passes None and
+    skips this check entirely -- nothing to be incomplete against), compute
+    is_terminal via registry_completion_status and raise
+    IncompleteOwnCheckpointsError, naming the outstanding checkpoint, if
+    not is_terminal. This closes the exact gap the finding names: nothing
+    today checks this item's own registry/checkpoint completeness before
+    MILESTONE_COMPLETE."""
+```
+
+**`/accept-milestone`** gains one new step: compute `registry` (from
+`registry_path`, or `None`) and `is_terminal` via
+`registry_completion_status`, and refuse via
+`milestone_complete_gate_reachable` before doing anything else, naming
+the actual phase and the outstanding checkpoint on refusal. Every other
+step is unchanged.
+
+**New command, `/accept-scoped-remediation [work_item_id]`** — mirrors
+`/accept-milestone`'s user-only construction exactly (`disable-model-invocation:
+true`; refuses without literal current-turn confirmation text naming the
+work item and a new, third stage string):
+
+- `APPROVAL_STAGES` (`scripts/workflow_state.py:145`) extends from
+  `frozenset({"plan", "implementation", "acceptance"})` to add
+  `"scoped_remediation"` — a fourth, textually non-interchangeable stage
+  keyword. Confirmation text written for `stage="acceptance"` (the real,
+  terminal milestone acceptance) can never satisfy
+  `stage="scoped_remediation"`, and vice versa — this is what makes
+  "reuse of terminal milestone acceptance as scoped acceptance" (the
+  finding's own replay-safety requirement) structurally impossible, not
+  merely discouraged.
+- **Entry guard**: resolve the target item, load its registry, compute
+  `is_terminal` fresh (never threaded from an earlier call), and refuse
+  via `scoped_remediation_gate_reachable` unless it returns `True`. Also
+  refuse unless `work_item["technical_approval"]["status"] == "CURRENT"`
+  — if a bounded-fix round happened after technical approval but before
+  this command ran, `mark_technical_approval_stale` would already have
+  flipped this to `STALE`, and a superseded revision must never be
+  scoped-accepted (the finding's own first replay-safety requirement).
+- **New function**, `apply_scoped_remediation_acceptance(state,
+  work_item_id, registry, *, user_confirmation, now)`: builds and appends
+  one entry to `work_item["scoped_remediation_acceptance"]` (a list,
+  created empty if absent — a single checkpoint may need more than one
+  continued-scope round, matching `WF8B-S1-001`'s own five-round
+  implementation-review history):
+
+  ```json
+  {
+    "outstanding_checkpoint_id": "WF8b",
+    "active_work_item_id_at_acceptance": "v2-1-dry-run",
+    "technical_approval_review_content_id": "8f9ea8cc60192bbbecfb7ed092c1dc79739047c7616ea4e2cddd8b68ecd0c9ed",
+    "user_confirmation": "<verbatim>",
+    "recorded_at": "<timestamp>"
+  }
+  ```
+
+  Deliberately smaller than the finding's own proposed shape: no `status`
+  field (the finding's schema included one, always `"CURRENT"` — every
+  entry here is an immutable historical fact the moment it is appended,
+  nothing later mutates it, so an enum with one ever-observed value adds
+  surface with no invariant to enforce); `active_work_item_id_at_open`
+  renamed to `active_work_item_id_at_acceptance` (there is no longer a
+  separate "open" moment to distinguish from "acceptance," since the
+  branch decision itself moved to acceptance time). Sets `phase =
+  "IMPLEMENTING"`. Leaves `checkpoints`/`current_checkpoint_id`/
+  `active_work_item_id`/`plan_approval`/`technical_approval`/
+  `functional_acceptance_status` completely untouched — `technical_approval`
+  and `functional_acceptance_status` remain reserved for the item's own
+  eventual, genuinely terminal round, exactly as the finding specifies.
+  No dedicated provenance commit is required (unlike `plan_approval`/
+  `technical_approval`/`WF-Activate`'s trailer-carrying commits) — this
+  follows the same lighter precedent already used for
+  `mark_technical_approval_stale`/`record_bundle_generation`/checkpoint
+  transitions: a plain `WORKFLOW_STATE.json` write, swept into whatever
+  commit follows.
+- Report and stop: name the outstanding checkpoint and that a fresh
+  session should resume it via that checkpoint's own driver (for `WF8b`,
+  `/bootstrap-workflow-v2`).
+
+**Why this satisfies every replay/staleness requirement the finding lists,
+without a bespoke check for most of them**:
+
+- *Superseded implementation revision*: refused by the `technical_approval.status
+  == "CURRENT"` check above.
+- *Acceptance after the checkpoint has changed*: not a special case —
+  `is_terminal` is recomputed fresh at accept time, so if the outstanding
+  checkpoint was completed out-of-band before this command ran,
+  `is_terminal` is already `True` and `scoped_remediation_gate_reachable`
+  refuses, redirecting to `/accept-milestone` instead. Stronger than the
+  finding's own design, which threads a value computed back at
+  `apply_technical_approval` time and would need a separate staleness
+  check to catch this.
+- *Duplicate acceptance with different evidence*: free from the phase
+  guard alone — a successful call flips `phase` to `IMPLEMENTING`
+  immediately, so a second attempt fails
+  `scoped_remediation_gate_reachable` on phase alone, no bespoke
+  duplicate-detector needed.
+- *Acceptance when no incomplete parent checkpoint remains*: exactly the
+  `is_terminal == True` refusal above.
+- *Reuse of terminal milestone acceptance as scoped acceptance*: refused
+  structurally by the `APPROVAL_STAGES` stage-string separation.
+
+**Resume behavior** (finding item 5): after `/accept-scoped-remediation`
+succeeds, `WF8b` remains absent from `checkpoints` (never touched by this
+mechanism), `phase` is `IMPLEMENTING`, and `active_work_item_id` is
+untouched. `/bootstrap-workflow-v2` — which hardcodes its target to
+`workflow-v2-1-core` regardless of `active_work_item_id` (D-Bootstrap) —
+re-derives `WF8b` as the next checkpoint via its own existing step 3
+(`select_next_checkpoint`'s identical rule), in a fresh session, from
+disk alone, with **no new pointer or marker file**. This is materially
+simpler than the finding's own §5 proposal (which would have introduced a
+distinct "interrupted synthetic item" bookkeeping concept) precisely
+because nothing about `WF8b`'s own registry/checkpoint state was ever
+touched by the detour in the first place.
+
+### Departures from the finding's proposed design (summary)
+
+1. No new `AWAITING_SCOPED_REMEDIATION_ACCEPTANCE` phase — the terminal/
+   non-terminal decision moves from `apply_technical_approval` (early,
+   threaded) to each accept command's own entry guard (late, recomputed).
+2. `apply_technical_approval` is untouched, not merely "byte-identical on
+   the terminal branch" — this also means functional review is never
+   skipped for a continued-scope round, closing the regression problem 1
+   above found in the finding's own design.
+3. `/accept-milestone`'s new guard is written against
+   `AWAITING_FUNCTIONAL_REVIEW` (the phase this repository's code actually
+   produces), not solely `AWAITING_USER_ACCEPTANCE` (which no code writes
+   — a separate, pre-existing, explicitly out-of-scope gap, flagged here
+   rather than silently worked around).
+4. `scoped_remediation_acceptance` entries drop the `status` field and
+   rename `active_work_item_id_at_open` to `..._at_acceptance` (no
+   separate "open" moment exists once the decision point moved).
+5. No dedicated provenance commit for `/accept-scoped-remediation`
+   (lighter precedent, matching `mark_technical_approval_stale`).
+6. Four of the finding's five replay/staleness requirements fall out of
+   the design above for free, rather than needing dedicated checks.
+
+**Scope discipline**: this revision adds `D-Scoped-Remediation-Acceptance`
+(new decision, below); extends `D-Functional-Remediation`'s existing
+"parent acceptance blocks on an incomplete child" reasoning to the item's
+own registry (a natural continuation of the same defect class,
+`GPT-R9-016`); amends `MILESTONE_WORKFLOW.md`'s `MILESTONE_COMPLETE`
+section with an "Own-checkpoint-completion block" paragraph mirroring its
+existing "Parent-completion block" one, and its `AWAITING_FUNCTIONAL_REVIEW`
+section with a note on the two distinct exits; adds five new requirements
+(`WFR-53`-`WFR-57`); adds missing-test items 167-179. It does not reopen
+the identity algorithm, the two-stage plan-review protocol, the registry/
+mapping file formats, `D-Bootstrap`, or `D-Legacy`. No file under
+`scripts/` or `.claude/commands/` is edited by this revision — every
+change above is design text; the dedicated fix session that follows
+approval is where the code actually changes (this revision explicitly
+does not implement the mechanism, per the same discipline every prior
+plan-only revision in this document has followed).
+
+**Known, expected, temporary test breakage from adding `WFR-53`-`WFR-57`
+alone** (owed to `WF8b`'s own continued scope, same owner as item 166
+itself, `GPT-R29-003`): item 166's own conformance test
+(`workflow_integration_test.py::test_every_wfr_row_description_matches_json_exactly`)
+hardcodes a sanity assertion that exactly 52 `WFR-*` rows exist —
+verified, by direct re-run, to be the **only** new failure this revision
+introduces (`workflow_state_test.py`/`workflow_state_demo_test.py`/
+`workflow_fingerprint_test.py`/`workflow_fingerprint_generalization_test.py`/
+`workflow_test_harness_test.py` all remain green; the demo suite's two
+pre-existing, unrelated real-repository-timing failures — `plan_approval`'s
+discoverable-commit-body check and `reviewed_implementation_head`'s
+live-HEAD check, both already failing identically before this revision,
+confirmed by re-running against a stash of this revision's own changes —
+are untouched by it). The per-row content comparison itself (the actual
+regression guard item 166 exists for) was independently re-verified,
+outside the test file, to pass cleanly for all 57 rows including the five
+new ones — only the hardcoded `52` literal is stale. Updating it is
+scripts/ code, deferred to the dedicated implementation session per the
+"no file under scripts/ is edited by this revision" rule stated above,
+the same standing precedent `WFR-47`-`WFR-52` themselves already
+established when they were first plan-drafted.
+
+## WF8b finding disposition (revision 22 → 23) — external plan review found two blocking gaps in the acceptance-time split (`GPT-R36-001`/`-002`/`-003`)
+
+**Origin**: independent external plan review of revision 22
+(`GPT-R36-*`), verdict `REVISE`. Full feedback:
+`.ai-review/workflow-v2-1-core/feedback/REVIEW_FEEDBACK.md` (bound to plan
+revision 22, `review_content_id` `1fc2357e04e929bc240c925c3870bf5a085e38bdf1dc9c05318cb6665765218f`,
+`bundle_id` `c8f2c8a2b61043f4c7206fc9620f6204aaf7ef4ff6dd5357648dc9bbdd3e2b1f`).
+All three findings validated against the actual repository before being
+applied (not accepted on the finding's own premise alone) — see below per
+finding. None of revision 22's other design choices are reopened; the
+review's own "Confirmed strengths" section endorses them unchanged.
+
+### GPT-R36-001 — `complete_work_item`'s registry guard was fail-open, not fail-closed (blocking, accepted)
+
+Confirmed against the repository: revision 22's text specified only a
+*caller convention* ("the caller loads it from `work_item["registry_path"]`
+whenever that field is non-null"), with nothing inside `complete_work_item`
+itself preventing a direct call from passing `registry=None` for a
+registry-backed item. `scripts/workflow_state.py`'s current
+`complete_work_item(state, work_item_id, now)` (line 1538) confirms there
+is no registry parameter at all today, so nothing pre-existing narrows
+this. The failure scenario is real: any caller bypassing or predating
+`/accept-milestone`'s own command-level guard reaches `complete_work_item`
+directly with `registry=None`, and the intended check silently no-ops.
+
+**Fix adopted**: `complete_work_item` itself, not only its callers, now
+distinguishes three cases from its own parameters alone, fail-closed:
+
+1. `work_item["registry_path"]` is `None` — genuinely registry-less (e.g.
+   `milestone-8`'s legacy shape). `registry` is not inspected; behavior is
+   unchanged, vacuously terminal (item 178, unchanged).
+2. `work_item["registry_path"]` is not `None` and `registry is None` — the
+   omitted-registry case the finding names. Raises a new
+   `RegistryCoverageError`, naming the work item and its declared
+   `registry_path`, instead of silently falling into case 1's treatment.
+3. `work_item["registry_path"]` is not `None`, `registry` is provided, but
+   `registry.get("work_item_id") != work_item_id` — a foreign or
+   mismatched registry (every registry JSON file already declares its own
+   `work_item_id` at the top level — confirmed against
+   `docs/ai-workflow/registry/workflow-v2-1-core-registry.json`'s own
+   `work_item_id` field). Raises the same `RegistryCoverageError`, naming
+   both the expected and the foreign registry's declared id.
+
+Only once none of the above fire does `registry_completion_status` run and
+(unchanged) raise `IncompleteOwnCheckpointsError` for a non-terminal
+registry.
+
+The finding's fourth named case — "an item whose registry cannot be
+loaded or validated" — is a caller-side (command-level) concern:
+`complete_work_item` only ever receives an already-parsed dict, never a
+path; a load/parse failure surfaces at whichever command resolves
+`registry_path` from disk (`/accept-milestone`'s own step, unchanged from
+revision 22), the same place `D3`'s existing whole-state registry
+validation already surfaces an unreadable or malformed registry file.
+Stated explicitly here rather than left implicit, closing the gap without
+adding file I/O to `complete_work_item`'s own signature.
+
+### GPT-R36-002 — `/accept-scoped-remediation`'s acceptance must be a committed, not a pending, fact (blocking, accepted)
+
+Confirmed: revision 22 explicitly chose "a plain `WORKFLOW_STATE.json`
+write... swept into whatever commit follows," citing
+`mark_technical_approval_stale`/`record_bundle_generation`/checkpoint
+transitions as precedent. That precedent is real (confirmed by reading
+those functions), but it does not fit here: every one of those writes is
+either reversible, recomputed idempotently from other durable facts, or
+immediately superseded by the very next step in the same session — none
+of them is the durable record of a **user-authorized gate**, unlike
+`plan_approval`/`technical_approval`/`WF-Activate`, which this same
+document already describes as carrying "trailer-carrying commits" for
+exactly that reason (confirmed: `.claude/commands/approve-review.md`
+writes a dedicated commit with `Workflow-Plan-Approval`/
+`Workflow-Technical-Approval` + `review_content_id` + `Workflow-Work-Item`
+trailers). `/accept-scoped-remediation`'s user confirmation is exactly
+that class of fact, not a checkpoint-transition or a staleness flag, so
+the lighter precedent does not apply and the finding's durability concern
+is accepted.
+
+**Fix adopted**: `/accept-scoped-remediation` now creates its own
+dedicated, metadata-only provenance commit — no production/test changes,
+mirroring the existing plan/technical-approval commit shape — carrying a
+`Workflow-Scoped-Remediation-Acceptance: <work_item_id>/<outstanding_checkpoint_id>`
+trailer, before reporting success. The command:
+
+- refuses to report success if the commit cannot be created — the state
+  write and the commit happen together or not at all, a single
+  all-or-nothing step, never two independently-observable ones;
+- verifies the worktree is clean immediately after the commit;
+- is idempotent for a replay of the identical accepted round: if a
+  matching `Workflow-Scoped-Remediation-Acceptance` trailer for this exact
+  `work_item_id`/`outstanding_checkpoint_id`/`implementation_revision`
+  combination is already the most recent one reachable, it reports the
+  existing commit rather than creating a duplicate;
+- refuses a conflicting duplicate: a second attempt naming a *different*
+  accepted round against the same still-outstanding checkpoint (before
+  the first is resumed) is rejected, naming the already-recorded commit.
+
+Fresh-session bootstrap (`/bootstrap-workflow-v2`) resumes an outstanding
+checkpoint only by reading the committed `WORKFLOW_STATE.json` — its
+existing, unchanged behavior; it has never read uncommitted working-tree
+state. This is what makes "crash before the commit" and "crash after the
+commit" both safe by construction, rather than by a new bespoke recovery
+path: before the commit, the prior phase (`AWAITING_FUNCTIONAL_REVIEW`) is
+still what a fresh session's committed state shows, so a retry from there
+is exactly the ordinary, already-defined guard path; after the commit, the
+resumed phase (`IMPLEMENTING`) is what a fresh session reads, and
+`select_next_checkpoint` re-derives `WF8b` from the committed registry
+state exactly as revision 22 already specified.
+
+### GPT-R36-003 — the acceptance record must bind to the exact evidence accepted, not just the technical approval (important, accepted)
+
+Confirmed: revision 22's schema (five fields) names only
+`technical_approval_review_content_id`, not the round's
+`implementation_revision`, `reviewed_implementation_head`, or any identity
+for the functional-review checklist itself — which this same document's
+own `AWAITING_FUNCTIONAL_REVIEW` section places at
+`docs/ACTIVE_MILESTONE.md`, a file with no dedicated approval record of
+its own. Unlike `technical_approval`, nothing already stales this schema
+if the checklist changes after the user walks it.
+
+**Fix adopted**: the `scoped_remediation_acceptance` entry schema gains
+four fields, becoming:
+
+```json
+{
+  "outstanding_checkpoint_id": "WF8b",
+  "active_work_item_id_at_acceptance": "v2-1-dry-run",
+  "implementation_revision": 4,
+  "reviewed_implementation_head": "7bef596dd95c7f35f1dcc0eedd9a91d98d592ab8",
+  "technical_approval_review_content_id": "8f9ea8cc60192bbbecfb7ed092c1dc79739047c7616ea4e2cddd8b68ecd0c9ed",
+  "functional_checklist_path": "docs/ACTIVE_MILESTONE.md",
+  "functional_checklist_blob": "<git blob sha of functional_checklist_path at the acceptance commit>",
+  "user_confirmation": "<verbatim>",
+  "recorded_at": "<timestamp>",
+  "acceptance_record_version": 1
+}
+```
+
+`implementation_revision` and `reviewed_implementation_head` are read live
+from the work item's own top-level fields at acceptance time (both
+already have a single existing writer each — `apply_technical_approval`
+and the bundle generator respectively, `WFR-22` — this adds no second
+writer for either). `functional_checklist_blob` is computed via
+`git rev-parse HEAD:<functional_checklist_path>` immediately before the
+acceptance commit — a committed blob identity, not a working-tree hash,
+so it cannot be produced by an uncommitted edit and is stable once
+recorded. `acceptance_record_version` is `1` for every entry this design
+produces; it exists so a future schema change can distinguish old- and
+new-shape entries without guessing from field presence alone.
+
+The entry guard gains one more refusal, alongside the existing
+phase/terminal/`technical_approval.status` checks (all still recomputed
+fresh, never threaded): immediately before recording, it re-reads
+`work_item["reviewed_implementation_head"]` and
+`git rev-parse HEAD:<functional_checklist_path>` and refuses — naming both
+the expected and the current value — if either has changed since the
+values about to be recorded were computed earlier in the same invocation.
+This guards the single-invocation window between "read the evidence" and
+"commit the acceptance," the same class of check `WFR-21`'s existing
+plan-approval durability guard already performs for a different stage.
+It is deliberately not a cross-invocation staleness check against a
+previously recorded entry (there is no prior entry to be stale against on
+a first acceptance for a given round); the cross-invocation guarantee is
+instead the ordinary phase-guard duplicate-refusal `GPT-R36-002`'s fix
+above already establishes.
+
+**Scope discipline (revision 23)**: this revision fixes exactly the two
+blocking and one important finding above, entirely within
+`D-Scoped-Remediation-Acceptance`. It does not reopen the "no new phase"
+decision, `apply_technical_approval`'s untouched status, the
+`MILESTONE_COMPLETE` own-checkpoint block's location, or any other design
+choice from revision 22 — all endorsed unchanged by `GPT-R36-*`'s own
+"Confirmed strengths" section. `WFR-53` and `WFR-56` are amended in
+place; `WFR-58` and `WFR-59` are added (no requirement is removed or
+renumbered). Missing-test items 180-186 are added. No file under
+`scripts/` or `.claude/commands/` is edited by this revision either — same
+discipline as revision 22, deferred to the same future dedicated
+implementation session.
+
+## WF8b finding disposition (revision 23 → 24) — external plan review found the registry trust boundary, the replay/phase-guard ordering, the schema field count, and the checklist cleanliness precondition all still unsafe (`GPT-R37-001`/`-002`/`-003`/`-004`)
+
+**Origin**: independent external plan review of revision 23 (`GPT-R37-*`),
+verdict `REVISE`. Full feedback:
+`.ai-review/workflow-v2-1-core/feedback/REVIEW_FEEDBACK.md` (bound to plan
+revision 23, `review_content_id`
+`8e3464bdf5c7c2920bd47fd77f16cdda97bb7d9c929b04f53fd77b17dd8ac4ba`,
+`bundle_id`
+`ebcae14f2185676791a1499269cb6338617c7a37f228a7035cec155bfab98dd0`). All
+four findings validated against the actual repository before being
+applied — see below per finding. None of revision 22/23's other design
+choices are reopened; the review's own "Confirmed strengths" section
+endorses them unchanged.
+
+### GPT-R37-001 — `complete_work_item` still trusted an unproven caller-supplied registry (blocking, accepted)
+
+Confirmed against the repository: revision 23's own three-case guard
+(quoted in the review) decides everything from `registry.get("work_item_id")
+== work_item_id` — a property any in-memory dict can declare regardless of
+its provenance. Nothing in revision 23's text, and nothing `complete_work_item`
+itself does, ever reads `work_item["registry_path"]` from disk or compares
+the supplied dict's identity against that file. A caller (direct or via a
+bug in `/accept-milestone` predating its own gate) can therefore construct
+`{"work_item_id": "workflow-v2-1-core", ...all checkpoints marked
+COMPLETE...}` by hand and pass it straight through, even while the real
+`docs/ai-workflow/registry/workflow-v2-1-core-registry.json` on disk still
+shows an incomplete `WF8b` — exactly the failure scenario the finding
+walks. This is the same defect class `GPT-R36-001` fixed one layer up
+(fail-open on an omitted argument); this time the gap is one layer deeper
+(fail-open on the argument's own unverified *content*).
+
+**Fix adopted**: remove the trust boundary instead of tightening a check
+on it. `complete_work_item` no longer accepts a `registry` argument at
+all — see the amended `D-Scoped-Remediation-Acceptance` text below for the
+full `repo_root`-based contract, which reuses `D3`'s own existing
+whole-state registry loader rather than inventing a second one. A
+fabricated dict is no longer representable as an input to this function in
+the first place, which is a stronger guarantee than any content check on a
+caller-supplied one could give.
+
+### GPT-R37-002 — replay semantics contradicted the phase guard and over-refused legitimate later rounds (blocking, accepted)
+
+Confirmed against the repository: revision 23 specified, in the same
+section, that (a) success sets `phase = "IMPLEMENTING"`, (b) the entry
+guard requires `phase == "AWAITING_FUNCTIONAL_REVIEW"`, and (c) "a replay
+naming the identical ... round ... reports that existing commit instead of
+creating a duplicate." Read in the only order revision 23's own prose
+presents them (entry guard first, replay-detection as part of the
+provenance-commit step after), an identical replay is a second invocation
+arriving with `phase == IMPLEMENTING` — it fails (b) before ever reaching
+(c), so (c) describes behavior no invocation could actually exercise. This
+is a real ordering bug, not a documentation nitpick: it means the "replayed
+acceptance is idempotent" guarantee `WFR-58`/item 182 promise was
+unimplementable as revision 23 specified it. Separately, revision 23's
+provenance-commit paragraph refused "a second attempt naming a *different*
+accepted round against the same still-outstanding checkpoint" unconditionally
+— but `WF8b` (this very milestone's own long-running checkpoint, per its
+own dry-run history) can legitimately need more than one reviewed
+remediation round while still incomplete, exactly as revision 22's
+original list-shaped `scoped_remediation_acceptance` schema already
+assumed. Revision 23's own trailer, keyed only by
+`<work_item_id>/<outstanding_checkpoint_id>`, made every round after the
+first collide with it by construction, forcing the over-broad refusal.
+
+**Fix adopted**: two changes, both in `D-Scoped-Remediation-Acceptance`
+below. First, the entry guard now performs replay detection *before* the
+ordinary phase/terminal/technical-approval-status checks, keyed off
+`registry_completion_status`'s output alone (computable independent of
+`phase`) — an exact-round replay is recognized and reported idempotently
+regardless of the live phase, resolving the ordering contradiction.
+Second, the trailer's discovery key becomes
+`<outstanding_checkpoint_id>/<implementation_revision>` instead of
+`<work_item_id>/<outstanding_checkpoint_id>` — since `implementation_revision`
+has exactly one existing writer that only ever advances
+(`apply_technical_approval`, `WFR-22`), each genuinely new round gets a
+distinct, non-colliding key automatically, so accepting a second
+legitimate round for the same checkpoint needs no bespoke permission and a
+same-key collision (which can now only mean corrupted or hand-edited
+state, never two legitimate rounds) is the only case still refused as a
+conflicting duplicate.
+
+### GPT-R37-003 — the acceptance schema's "nine-field" text was internally inconsistent with its own displayed ten-field JSON (blocking specification defect, accepted)
+
+Confirmed against the repository: the JSON block revision 23 itself
+displays for `scoped_remediation_acceptance` (`outstanding_checkpoint_id`,
+`active_work_item_id_at_acceptance`, `implementation_revision`,
+`reviewed_implementation_head`, `technical_approval_review_content_id`,
+`functional_checklist_path`, `functional_checklist_blob`,
+`user_confirmation`, `recorded_at`, `acceptance_record_version`) has ten
+keys, counted directly. `WFR-56`'s test column and missing-test items 171
+and 185 all instead say "exact nine-field set"/"full nine-field set." A
+test written against the schema and a test written against the stated
+count cannot both pass against a single implementation.
+
+**Fix adopted**: the displayed ten-field schema is the correct, canonical
+one (it is what revision 22's original five fields plus revision 23's four
+added fields plus `acceptance_record_version` actually sum to); every
+"nine-field" reference is corrected to "ten-field" — `WFR-56`'s test
+column and missing-test items 171 and 185 below, plus the schema
+paragraph itself, which now states the five-plus-four-plus-one arithmetic
+explicitly so a future count drift is a visible arithmetic error, not a
+silent one-off.
+
+### GPT-R37-004 — the evidence guard could bind to a committed blob while the user reviewed dirty working-tree content (important, accepted)
+
+Confirmed against the repository: revision 23's pre-commit evidence guard
+computes `git rev-parse HEAD:<functional_checklist_path>` — a committed
+blob lookup that does not consult the working tree at all — and its
+single-invocation re-read check compares that same `HEAD:path` value to
+itself a second time. If `docs/ACTIVE_MILESTONE.md` has an uncommitted
+edit, both reads return the identical, older committed blob; the
+re-read check cannot distinguish "nothing changed" from "the user reviewed
+content this command never looked at." The failure scenario is real and
+not covered by any existing check: a checklist edited-but-not-committed,
+reviewed and accepted by the user in that state, is recorded under the
+older committed identity, with no record anywhere of what was actually
+walked.
+
+**Fix adopted**: the pre-commit evidence guard gains a cleanliness
+precondition — refuse outright, before computing or recording any blob,
+whenever `functional_checklist_path` has a staged or unstaged change
+relative to `HEAD`. This is checked twice, matching the existing
+single-invocation-window pattern: once at the guard's first read, and
+again immediately before the provenance commit, since a dirty edit landing
+in that gap is exactly as unreviewed as one present from the start.
+
+**Scope discipline (revision 24)**: this revision fixes exactly the three
+blocking and one important finding above, entirely within
+`D-Scoped-Remediation-Acceptance`. It does not reopen the "no new phase"
+decision, `apply_technical_approval`'s untouched status,
+`GPT-R36-002`'s dedicated-provenance-commit requirement, the
+`MILESTONE_COMPLETE` own-checkpoint block's location, or any other design
+choice from revision 22/23 — all endorsed unchanged by `GPT-R37-*`'s own
+"Confirmed strengths" section. `WFR-53`, `WFR-55` (test column only),
+`WFR-56` (test column only), `WFR-58`, and `WFR-59` are amended in place
+(no requirement is removed, added, or renumbered). Missing-test items 170,
+171, 176, 178, 182-186 are amended and items 187-190 are added. No file
+under `scripts/` or `.claude/commands/` is edited by this revision either
+— same discipline as revisions 22/23, deferred to the same future
+dedicated implementation session.
+
+## WF8b finding disposition (revision 24 → 25) — external plan review found the checklist-evidence precondition unsatisfiable by any documented command, the replay short-circuit unvalidated against its own recorded fields, and the confirmation/replay ordering unspecified (`GPT-R38-001`/`-002`/`-003`)
+
+**Origin**: independent external plan review of revision 24 (`GPT-R38-*`),
+verdict `REVISE`. Full feedback:
+`.ai-review/workflow-v2-1-core/feedback/REVIEW_FEEDBACK.md` (bound to plan
+revision 24, `review_content_id`
+`bc9af716cd19b2c72bdebd1815e73bf91d959b73201c4e31238bba4821a0bc8f`,
+`bundle_id`
+`7440c19ff3d49db241c5645b3a541b44be65036cb0ea087c2458e19783a586e5`). All
+three findings validated against the actual repository before being
+applied — see below per finding. None of revision 22/23/24's other design
+choices are reopened; the review's own "Confirmed strengths" section
+endorses them unchanged.
+
+### GPT-R38-001 — the clean-checklist precondition made the documented functional-review flow unreachable (blocking, accepted)
+
+Confirmed against the repository, two ways. First, textually:
+`.claude/commands/prepare-functional-review.md` writes the checklist into
+`docs/ACTIVE_MILESTONE.md` (step 3) and stops at the user gate (step 5) —
+no step in that file creates a commit, and no other documented command is
+authorized to commit `docs/ACTIVE_MILESTONE.md` on this item's behalf
+between preparation and acceptance. Second, live in this very working
+tree: `git status` at the start of this revision showed
+`docs/ACTIVE_MILESTONE.md` modified and uncommitted — the exact
+functional-review checklist for this item's own `WF8b` continued-scope
+round, written by a real `/prepare-functional-review` invocation, sitting
+exactly in the state revision 24's own pre-commit evidence guard would
+refuse. This is not a hypothetical failure scenario; it is this session's
+starting state, reproducing the finding directly.
+
+**Fix adopted**: give the checklist a real writer instead of only a
+reader-side guard. `/prepare-functional-review` gains a required,
+dedicated, metadata-only checklist-evidence commit — see the amended
+`D-Scoped-Remediation-Acceptance` text below for the full trailer/
+idempotency contract, modeled directly on the existing
+`Workflow-Scoped-Remediation-Acceptance` trailer scheme rather than a new
+mechanism. `/accept-scoped-remediation`'s own pre-commit evidence guard is
+unchanged in its dirty-check policy (still correct, per the review's own
+"Confirmed strengths" note) and gains one additional check: a discoverable
+checklist-evidence commit must exist for the exact round being accepted,
+naming `/prepare-functional-review` as the remedy when it does not.
+
+### GPT-R38-002 — replay was reported before the plan proved the existing acceptance record matched the live round (blocking, accepted)
+
+Confirmed against the repository: revision 24's entry guard (quoted in the
+review) stops and reports success the moment a trailer for
+`<outstanding_checkpoint_id>/<implementation_revision>` is *discovered* —
+before any comparison of that commit's own recorded
+`reviewed_implementation_head`/`technical_approval_review_content_id`/
+`functional_checklist_blob` against the live values ever runs. The
+"conflicting duplicate" comparison revision 24 also specifies exists only
+in the provenance-commit paragraph, restated there as "case 1's own
+lookup" — but case 1's own lookup, as the entry guard actually specifies
+it, already reports success and stops. A round key
+(`outstanding_checkpoint_id`/`implementation_revision`) proves only that a
+commit exists for this pairing, never that its recorded evidence agrees
+with what is about to be recorded again — a hand-edited or corrupted
+acceptance record with a matching key would be silently treated as a
+valid idempotent replay.
+
+**Fix adopted**: collapse the two descriptions into one function,
+`resolve_scoped_remediation_round`, called identically by both the entry
+guard and the provenance-commit step (see the amended
+`D-Scoped-Remediation-Acceptance` text below) — there is no longer a
+cheaper "key exists" path that skips the comparison; only a full
+load-and-compare against the discovered commit's own recorded fields may
+report `ExactReplay`.
+
+### GPT-R38-003 — replay ordering did not clearly preserve the user-only confirmation requirement (important, accepted)
+
+Confirmed against the repository: `/accept-scoped-remediation` is
+specified as user-only via `validate_user_confirmation(...,
+stage="scoped_remediation")`, but revision 24's own entry-guard ordering
+places replay detection ahead of any stated confirmation check, and no
+sentence in that revision says whether current-turn confirmation is
+validated before or after the replay short-circuit. A command described
+as user-only whose replay path never actually says a confirmation check
+runs is a real specification gap, not merely stylistic: an implementation
+written literally from revision 24's ordering could report a replay's
+existing commit as success without ever calling
+`validate_user_confirmation` for that invocation.
+
+**Fix adopted**: state the ordering explicitly. Current-turn user
+confirmation for `stage="scoped_remediation"` is validated first, before
+target resolution's replay classification runs at all — identically for a
+first execution and an exact replay. A separate, explicitly out-of-scope
+read-only status command (not built by this revision, no finding requires
+it) is named as the correct home for confirmation-free replay inspection,
+if that UX is ever wanted.
+
+**Scope discipline (revision 25)**: this revision fixes exactly the two
+blocking and one important finding above, entirely within
+`D-Scoped-Remediation-Acceptance` (extended to include
+`/prepare-functional-review`'s own checklist-evidence commit, since
+`GPT-R38-001`'s fix has no other coherent home). It does not reopen the
+"no new phase" decision, `apply_technical_approval`'s untouched status,
+`GPT-R36-002`/`GPT-R37-002`'s per-round trailer keying, the ten-field
+acceptance schema, the `MILESTONE_COMPLETE` own-checkpoint block's
+location, or any other design choice from revision 22/23/24 — all
+endorsed unchanged by `GPT-R38-*`'s own "Confirmed strengths" section.
+`WFR-58` and `WFR-59` are amended in place; a new `WFR-60` is added
+(no existing requirement is removed or renumbered). Missing-test items
+176, 182, 186, 190 are amended and items 191-196 are added. No file under
+`scripts/` or `.claude/commands/` is edited by this revision either — same
+discipline as revisions 22/23/24, deferred to the same future dedicated
+implementation session.
+
+## WF8b finding disposition (revision 25 → 26) — external plan review found the checklist-evidence trailer scheme self-contradictory and the replay resolver's comparison incomplete (`GPT-R39-001`/`-002`)
+
+**Origin**: independent external plan review of revision 25 (`GPT-R39-*`),
+verdict `REVISE`. Full feedback:
+`.ai-review/workflow-v2-1-core/feedback/REVIEW_FEEDBACK.md` (bound to plan
+revision 25, `review_content_id`
+`fe68a6f53699c848c6ad140d3c874ea2586282396f1facfa7c905ceb745c6379`,
+`bundle_id`
+`4093d80f9770ecab318d52204b5a18cae3063f485d3ce32ba3db2914e9396c9c`). Both
+findings validated against the actual repository before being applied —
+see below per finding. Neither reopens any earlier revision's other design
+choices; the review's own "Confirmed strengths" section endorses them
+unchanged.
+
+### GPT-R39-001 — the checklist-evidence trailer scheme specified two incompatible outcomes for the same history (blocking, accepted)
+
+Confirmed against the plan text itself: revision 25 specifies checklist
+evidence keyed by the bare round value
+`<work_item_id>/<implementation_revision>` (old §"`/prepare-functional-review`
+gains a required checklist-evidence commit"), with a changed checklist for
+the same round producing a *new, distinct* commit carrying that *same*
+value — while also specifying that discovery "reuses `_discover_trailer_commits`'s
+existing generic machinery... mirroring `discover_scoped_remediation_commits`/
+`AmbiguousScopedRemediationTrailerError` exactly." But `D-Commit-Provenance`'s
+own generic contract (unchanged since revision 6) requires *exactly one*
+first-parent-reachable match per (trailer key, value, work-item) triple, and
+its tie-break exists only for a legitimate rebase/cherry-pick/merge
+duplicating one logical event onto a second commit — content-identical to
+the original, never a genuine revision. A corrected checklist is not that:
+it is a second, content-*different* commit sharing the first's exact
+trailer value, which is precisely the history the generic contract's own
+"more than one commit still qualifies... this is genuine ambiguity, not a
+duplicate to resolve automatically" clause stops on. The plan asserted both
+"discovery selects the newer commit" and "mirrors a contract that refuses
+on exactly this history" for the same event — mutually incompatible, exactly
+as the review found.
+
+**Fix adopted**: give checklist-evidence commits a content-scoped trailer
+value instead of a bare round value, so a content revision is a different
+*key*, not a second match for the same key — the generic exactly-one-match
+contract no longer needs to treat it as ambiguous, because it no longer
+looks ambiguous at the Git level. See the amended
+`D-Scoped-Remediation-Acceptance` text below for the full trailer/discovery
+contract.
+
+### GPT-R39-002 — exact-replay classification compared three fields out of the acceptance record's ten (blocking, accepted)
+
+Confirmed against the plan text: revision 25's `resolve_scoped_remediation_round`
+step 3 compares only `reviewed_implementation_head`,
+`technical_approval_review_content_id`, and `functional_checklist_blob`
+against `live_fields` before reporting `ExactReplay`. The
+`scoped_remediation_acceptance` entry itself (`D-Scoped-Remediation-Acceptance`'s
+ten-field schema) also records `outstanding_checkpoint_id`,
+`active_work_item_id_at_acceptance`, `implementation_revision`,
+`functional_checklist_path`, and `acceptance_record_version` — none of
+which the resolver's comparison ever reads. `outstanding_checkpoint_id`/
+`implementation_revision` are implicitly matched only insofar as they form
+the discovery trailer's own key (trusting the trailer's word, not the
+recorded entry's own fields, for exactly the kind of hand-edited-record
+case `GPT-R38-002` already established must not be trusted); the live
+active work-item pointer, the checklist path, and the record's own schema
+version/shape are never checked at all. A hand-edited or corrupted entry
+whose `active_work_item_id_at_acceptance`, `functional_checklist_path`, or
+`acceptance_record_version` disagreed with what a genuine replay would
+produce right now would still be reported `ExactReplay` — the same class
+of false-positive-idempotency gap `GPT-R38-002` closed for the
+three-field subset, left open for the other seven fields.
+
+**Fix adopted**: compare the full canonical set of round-binding identity
+and schema fields, not a subset — see the amended
+`D-Scoped-Remediation-Acceptance` text below for the complete field list
+and the new malformed-record result. "Exact replay" now means what it
+says: every field the operation would write if it ran again right now
+matches every field already recorded, not merely the three fields revision
+25 happened to check.
+
+**Scope discipline (revision 26)**: this revision fixes exactly the two
+blocking findings above, entirely within `D-Scoped-Remediation-Acceptance`.
+It does not reopen the "no new phase" decision, `apply_technical_approval`'s
+untouched status, the per-round trailer keying's *checkpoint*/*revision*
+axes (only the checklist trailer's *value* shape changes), the ten-field
+acceptance schema (unchanged in field count — comparison coverage changes,
+not the schema itself), the `MILESTONE_COMPLETE` own-checkpoint block's
+location, the confirmation-before-replay ordering, or any other design
+choice from revision 22/23/24/25 — all endorsed unchanged by `GPT-R39-*`'s
+own "Confirmed strengths" section. `WFR-58`, `WFR-59`, and `WFR-60` are
+amended in place (`WFR-56`'s ten-field schema itself is unchanged — only
+comparison/discovery coverage changes, not what is recorded; no existing
+requirement is removed or renumbered). Missing-test item 189 is amended
+and items 197-206 are added. No file under `scripts/` or
+`.claude/commands/` is edited by this revision either — same discipline as
+revisions 22/23/24/25, deferred to the same future dedicated
+implementation session.
+
+## WF8b finding disposition (revision 26 → 27) — external plan review found acceptance bound to the newest checklist evidence rather than the evidence the user actually reviewed (`GPT-R40-001`/`-002`)
+
+**Origin**: independent external plan review of revision 26 (`GPT-R40-*`),
+verdict `REVISE`. Full feedback:
+`.ai-review/workflow-v2-1-core/feedback/REVIEW_FEEDBACK.md` (bound to plan
+revision 26, `review_content_id`
+`5f03a65075e531f3883e47590714dab23e40a8a946b524a161e0a000384dca9c`,
+`bundle_id`
+`541a8927e0635ab47bc3b2fa64991dfb85e58b88f6391c86ad1c32f55244bc65`). Both
+findings validated against the actual repository before being applied —
+see below per finding. Neither reopens any earlier revision's other design
+choices; the review's own "Confirmed strengths" section endorses them
+unchanged.
+
+### GPT-R40-001 — acceptance is bound to the newest checklist evidence, not to the checklist evidence the user actually reviewed (blocking, accepted)
+
+Confirmed against the plan text itself. Revision 26's own
+`discover_current_functional_checklist_evidence` always resolves the
+round's *current* (first-parent-nearest) evidence commit, and the
+pre-commit evidence guard binds `functional_checklist_blob` to whatever
+that lookup returns at accept time — there is no reader anywhere in
+revision 26's design that compares the discovered evidence against
+anything the user was actually shown. The `scoped_remediation`
+confirmation itself is validated only by the generic
+`validate_user_confirmation` — it must literally name the work item and
+the stage, nothing more specific. Missing-test item 200 states the
+consequence plainly: "a `Workflow-Functional-Checklist` evidence commit
+created after `/prepare-functional-review` already reported an earlier
+commit's SHA to the user becomes the round's current evidence for a
+subsequent `/accept-scoped-remediation` invocation — discovery always
+binds to what is live at accept time, never a stale pointer to what was
+originally reported." That is exactly the gap the review names: a
+user who reviewed and confirmed checklist A can have their confirmation
+silently applied to a later, un-reviewed checklist B, if B's evidence
+commit lands before `/accept-scoped-remediation` runs. Visibility of a
+new `/prepare-functional-review` report is not evidence the user walked
+and accepted that new report, and the earlier confirmation text remains
+textually valid against `validate_user_confirmation`'s generic check
+either way.
+
+**Fix adopted**: bind the user gate to an explicit checklist-evidence
+identity, per the review's required contract. `/prepare-functional-review`
+already reports the exact evidence commit SHA and checklist blob to the
+user (revision 25, `GPT-R38-001`, unchanged). The required
+`scoped_remediation` confirmation text must now additionally contain that
+exact evidence commit SHA and blob as explicit, parsed binding fields —
+mirroring the binding-field convention `REVIEW_FEEDBACK.md`'s own
+`Reviewed bundle ID:`/`Reviewed base commit:`/`Work item:` fields already
+establish for external review feedback, and that `plan_approval`/
+`technical_approval`'s own recorded `user_confirmation` text already
+follows informally. `/accept-scoped-remediation` parses those fields,
+resolves the named commit via
+`discover_functional_checklist_commits`, verifies it belongs to the exact
+live round and that its own committed blob matches the named blob, and
+then compares it against the round's current evidence
+(`discover_current_functional_checklist_evidence`): if they disagree, the
+confirmation is stale and acceptance refuses outright, naming both the
+confirmed and the current evidence identity and instructing the user to
+review the newer report and reconfirm — never silently substituting the
+newer evidence for the reviewed one. See the amended
+`D-Scoped-Remediation-Acceptance` text below for the full parser,
+verification, and refusal contract.
+
+### GPT-R40-002 — store the checklist evidence commit identity, not only its blob (important, accepted)
+
+Confirmed against the plan text: the ten-field
+`scoped_remediation_acceptance` schema (`D-Scoped-Remediation-Acceptance`,
+revision 23 `GPT-R36-003`) records `functional_checklist_blob` but no
+field for the `Workflow-Functional-Checklist` evidence commit SHA. Once
+revision 26 introduced multiple, distinct, coexisting checklist-evidence
+commits per round (an older, superseded one and a newer, corrected one,
+each with its own distinct trailer value), a bare blob no longer
+identifies which of those commits — which provenance event, which
+trailer, which position in the round's supersession history — was
+actually selected for review. Two genuinely different evidence commits
+could in principle carry the same checklist bytes at different points in
+a round's history (a revert back to earlier content), making the blob
+alone ambiguous as a provenance pointer even though it remains sufficient
+as a content check.
+
+**Fix adopted**: add `functional_checklist_evidence_commit` as an
+eleventh recorded field, alongside the unchanged
+`functional_checklist_blob`, to the exact schema, live first-write
+validation, exact-replay comparison, and conflicting-duplicate
+classification alike — never only to a subset of those four surfaces.
+`acceptance_record_version` advances from `1` to `2` to mark the accepted
+record shape change, per the review's own suggestion; no version-1 record
+exists anywhere (nothing implementing `D-Scoped-Remediation-Acceptance`
+has shipped yet — `scripts/workflow_state.py`'s `APPROVAL_STAGES` does not
+yet include `"scoped_remediation"` at all), so no migration path is
+needed. See the amended `D-Scoped-Remediation-Acceptance` text below.
+
+**Scope discipline (revision 27)**: this revision fixes exactly the one
+blocking and one important finding above, entirely within
+`D-Scoped-Remediation-Acceptance`'s evidence-binding contract. It does
+not reopen the "no new phase" decision, `apply_technical_approval`'s
+untouched status, the per-round trailer keying, the content-scoped
+checklist-trailer value shape (`GPT-R39-001`, unchanged), the schema/
+version malformed-record check's own structure (only the version number
+and field count it checks change), the `MILESTONE_COMPLETE`
+own-checkpoint block's location, the confirmation-before-replay ordering,
+or any other design choice from revision 22/23/24/25/26 — all endorsed
+unchanged by `GPT-R40-*`'s own "Confirmed strengths" section. `WFR-56`,
+`WFR-58`, `WFR-59`, and `WFR-60` are amended in place; no existing
+requirement is removed or renumbered. Missing-test items 199, 200, 205,
+and 206 are amended and new items are added covering the stale-
+confirmation refusal path. No file under `scripts/` or `.claude/commands/`
+is edited by this revision either — same discipline as revisions
+22/23/24/25/26, deferred to the same future dedicated implementation
+session.
+
+## Decisions (revision 22)
 
 ### D-Bootstrap — one-time Workflow-v1-to-v2.1 transition (new, resolves GPT-R9-004)
 
@@ -4381,6 +5463,639 @@ verification cleaner: import and adoption are independently testable.
 
 **Dependency** (unchanged): WF4c depends on WF4a-iii.
 
+### D-Scoped-Remediation-Acceptance — non-terminal acceptance path for continued-scope remediation (new, resolves `WF8B-002`; hardened, resolves `GPT-R36-001`/`-002`/`-003`, `GPT-R37-001`/`-002`/`-003`/`-004`, `GPT-R38-001`/`-002`/`-003`, `GPT-R39-001`/`-002`, `GPT-R40-001`/`-002`)
+
+See "WF8b finding disposition (revision 21 → 22)" above for the full
+critical evaluation and rationale (including why this design deliberately
+does not add the phase the originating finding proposed), "WF8b finding
+disposition (revision 22 → 23)" above for the three corrections external
+plan review found necessary before this design was safe to implement,
+"WF8b finding disposition (revision 23 → 24)" above for the further four
+corrections that same review round found still unsafe, "WF8b finding
+disposition (revision 24 → 25)" above for the two blocking and one
+important correction found after that, "WF8b finding disposition
+(revision 25 → 26)" above for the two blocking trailer/replay-comparison
+corrections found after that, and "WF8b finding disposition (revision
+26 → 27)" above for the one blocking and one important
+evidence-binding correction found after that. This section is the
+authoritative, standalone spec, revisions 23, 24, 25, 26, and 27's
+corrections folded directly in rather than left as separate patches to
+read alongside it.
+
+**No new phase.** `AWAITING_FUNCTIONAL_REVIEW` continues to be entered
+unconditionally by `apply_technical_approval` for every implementation
+round, terminal or not — that function is untouched by this decision.
+Terminal-vs-non-terminal is decided at acceptance time, not approval time,
+by recomputing `select_next_checkpoint(work_item, registry)` fresh inside
+each accept command's own entry guard.
+
+**New helper**, `registry_completion_status(work_item, registry) ->
+(is_terminal, outstanding_checkpoint_id)` — the sole place this
+terminal/non-terminal question is answered; every other function below
+consumes its result rather than re-deriving it. `NoCheckpointReadyError`
+gains a structured `checkpoint_id` attribute so this helper never parses
+its own exception's message text.
+
+**Two new gate functions**, mirroring `approval_gate_reachable`/
+`technical_approval_gate_reachable`'s existing non-circular pattern
+(D-States): `milestone_complete_gate_reachable(*, phase, is_terminal)` —
+`True` iff `is_terminal` and `phase in ("AWAITING_FUNCTIONAL_REVIEW",
+"AWAITING_USER_ACCEPTANCE")` (the latter included for forward
+compatibility only — no function in this codebase has ever written it,
+confirmed by grep, a pre-existing gap this decision does not attempt to
+close); `scoped_remediation_gate_reachable(*, phase, is_terminal)` —
+`True` iff `phase == "AWAITING_FUNCTIONAL_REVIEW"` and `not is_terminal`.
+
+**`complete_work_item` gains a `repo_root` parameter and loses its
+`registry` parameter entirely, closing the trust gap `GPT-R37-001` found**
+(revision 24, correcting revision 23's `GPT-R36-001` fix: a fail-closed
+check on a *caller-supplied* dict still trusts that dict's own claimed
+`work_item_id` — a direct caller can fabricate an in-memory registry
+declaring the right `work_item_id` with every checkpoint marked complete,
+and nothing in the revision-23 contract could tell that fabrication apart
+from the real file. The fix is not a stricter check on the argument; it is
+removing the argument). `complete_work_item(state, work_item_id, now, *,
+repo_root: Path)` now resolves its own authority, reusing exactly the same
+loader `D3`'s whole-state mirror check already established (`GPT-R32-001`/
+`GPT-R33-002`/`-004`, `fingerprint._validate_plan_stage_metadata_path` +
+read + `json.loads` + `work_item_id`-field check) rather than inventing a
+second one:
+
+1. `work_item["registry_path"]` is `None` (a registry-less item, e.g. the
+   legacy `milestone-8` shape) — no load is attempted; unchanged,
+   vacuously terminal.
+2. `registry_path` is not `None`. Resolve it via the shared safe-path/
+   tracked-file validator; read and `json.loads` it. A failure at any of
+   safe-path resolution, existence/readability, or JSON-object parsing
+   raises `RegistryCoverageError`, naming the work item and its declared
+   `registry_path` and the specific failure — the exact same failure modes
+   `D3`'s mirror check already fails closed on, now also enforced at the
+   one place that actually gates `MILESTONE_COMPLETE`.
+3. The loaded registry's own `work_item_id` field disagrees with the
+   `work_item_id` being completed — the same `RegistryCoverageError`,
+   naming both the expected and the foreign registry's declared id. Since
+   the registry was loaded from the item's own declared `registry_path`,
+   not supplied by the caller, this case can now only mean the on-disk
+   file itself is misconfigured or cross-linked — never a caller-side
+   substitution, which is no longer representable at all.
+
+Only when none of the above fire does it compute `is_terminal` via
+`registry_completion_status` and raise `IncompleteOwnCheckpointsError`,
+naming the outstanding checkpoint, when `not is_terminal` — independent
+of, and in addition to, the existing `incomplete_children` check. This is
+the direct fix for both the original finding's root cause (nothing
+previously checked an item's own registry/checkpoint completeness before
+`MILESTONE_COMPLETE`) and `GPT-R37-001`'s root cause (nothing today can
+prove a caller-supplied dict *is* the authoritative file, so the helper
+must stop accepting one): the loaded registry is now provably the item's
+own declared file, not merely a dict that claims to be.
+
+**`/accept-milestone`** gains one new step: resolve the item's own
+`registry`/`is_terminal` (loaded the same way, for its own early,
+user-facing refusal message — this pre-flight load is advisory only, not
+a security boundary, since `complete_work_item` itself re-resolves and
+re-validates the authoritative file independently before ever writing
+`MILESTONE_COMPLETE`) and refuse via `milestone_complete_gate_reachable`
+before any other action, naming the actual phase and the outstanding
+checkpoint on refusal; its later call to `complete_work_item` passes
+`repo_root`, not a `registry` argument. Every other step of the command is
+unchanged.
+
+**`/prepare-functional-review` gains a required checklist-evidence
+commit** (revision 25, `GPT-R38-001`, closing the gap that made
+`/accept-scoped-remediation`'s pre-commit evidence guard permanently
+unsatisfiable: nothing in the documented flow ever committed the checklist
+that guard requires clean; trailer value shape corrected revision 26,
+`GPT-R39-001`, below). After writing the checklist into
+`functional_checklist_path` (`docs/ACTIVE_MILESTONE.md`, that command's
+existing step 3, unchanged) and before stopping at the user gate (step
+5), the command creates one dedicated, metadata-only commit — containing
+only that file's change, no production/test changes — carrying a new
+`Workflow-Functional-Checklist: <work_item_id>/<implementation_revision>/<checklist_blob>`
+trailer plus the ordinary `Workflow-Work-Item` trailer
+(`implementation_revision` read live from `work_item['implementation_revision']`
+at generation time; `checklist_blob` the full `git hash-object` blob SHA of
+the checklist content about to be committed).
+
+**Content-scoped trailer value, not a bare round value** (revision 26,
+`GPT-R39-001`, correcting revision 25's design: a bare
+`<work_item_id>/<implementation_revision>` value made a legitimate
+same-round content revision indistinguishable, at the Git level, from the
+genuine duplicate-commit ambiguity `D-Commit-Provenance`'s generic
+exactly-one-match contract exists to catch — the plan could not
+simultaneously claim "a changed checklist produces a new commit for this
+round" and "discovery mirrors a contract that refuses more than one
+reachable match for the same value"). Embedding the checklist's own
+committed blob in the trailer value makes each distinct piece of content
+its own exact key: two commits genuinely share a trailer *value* only when
+they carry byte-identical checklist content, which is exactly the
+duplicate-event case `D-Commit-Provenance`'s tie-break already exists to
+resolve (a rebase/cherry-pick copying the same content onto a second
+commit) — a real content revision is now a different key outright, never a
+second match for the same key. This is what makes `AmbiguousFunctionalChecklistTrailerError`
+(below) a genuine ambiguity signal again, not a routine outcome of ordinary
+use.
+
+**Round-scoped discovery, two layers** (revision 26, `GPT-R39-001`):
+- `discover_functional_checklist_commits(repo_root, work_item_id,
+  base_commit, head) -> {"<work_item_id>/<implementation_revision>/<blob>":
+  commit_sha}`: the existing generic, unmodified
+  `_discover_trailer_commits`/`AmbiguousFunctionalChecklistTrailerError`
+  machinery (mirroring `discover_scoped_remediation_commits`/
+  `AmbiguousScopedRemediationTrailerError` exactly), operating on the full,
+  now content-scoped trailer value — raises only for a genuine
+  identical-content duplicate reachable by more than one first-parent path
+  after the existing tie-break, never for an ordinary content revision.
+- **New function**, `discover_current_functional_checklist_evidence(repo_root,
+  work_item_id, base_commit, head, implementation_revision) ->
+  {"commit_sha": ..., "blob": ...} | None`: enumerates every
+  `Workflow-Functional-Checklist` trailer whose value starts with
+  `<work_item_id>/<implementation_revision>/` (a round-scoped prefix scan,
+  not a single exact-key lookup), resolving each distinct value through
+  `discover_functional_checklist_commits` above, and returns the entry
+  whose commit is first-parent-nearest to `head` — the round's *current*
+  evidence. Multiple historical evidence commits for the same round (an
+  older, superseded checklist plus a newer, corrected one) coexist without
+  ambiguity by construction, since each has its own distinct trailer value;
+  "current" is simply the most recent one reachable, exactly the ordinary
+  tie-break semantics every ordinal-keyed trailer scheme here already uses,
+  now applied across a family of keys sharing a round prefix instead of to
+  one key. `None` if no evidence commit exists for the round at all.
+
+Idempotent by *content*, not merely by round key — this is what makes the
+mechanism safe to rerun after an interruption or a genuine checklist
+revision: compute the intended checklist content's blob and call
+`discover_current_functional_checklist_evidence` for this exact round.
+- No result, or the result's `blob` differs from the freshly written
+  content's blob: create the commit normally, carrying the new
+  content-scoped trailer value. A checklist genuinely revised after the
+  user requests changes produces a new, authoritative evidence commit,
+  discoverable ahead of the earlier one, without any special-casing.
+- The result's `blob` already matches the freshly written content's blob
+  exactly: nothing to commit — report the existing commit idempotently
+  rather than create an empty one. This is also what makes an
+  *interrupted* preparation safe to retry: if step 3's file write already
+  landed but the commit step did not complete, rerunning the command
+  reproduces identical content and either finds nothing new to commit
+  (already committed by a prior partial run) or completes the commit that
+  didn't happen yet — never a duplicate.
+
+Report the exact commit SHA and its committed blob hash to the user
+alongside the existing `<feedback_dir>/FUNCTIONAL_REVIEW.md` instruction
+(step 4), so the user knows precisely which committed content they are
+being asked to review — not merely "the current file," which could
+otherwise drift before or after that message is read, **and instruct the
+user that their `scoped_remediation` confirmation to
+`/accept-scoped-remediation` must name this exact commit SHA and blob**
+(revision 27, `GPT-R40-001`, below — the reported identity is not merely
+informational; it is what the user is required to cite back). After a
+successful preparation, `functional_checklist_path` is clean at `HEAD` by
+construction (the write and the commit happen in the same invocation, and
+no later step touches the file), which is what makes
+`/accept-scoped-remediation`'s pre-commit evidence guard satisfiable by
+the normal, documented flow for the first time. A checklist that changes
+after the user has reviewed one reported commit produces a new evidence
+commit that becomes the round's *current* evidence for discovery purposes
+(unchanged from revision 26) — but, as of revision 27, current-ness alone
+is never sufficient to bind an existing confirmation to it: see
+`/accept-scoped-remediation`'s confirmation-evidence-binding check below
+for why visibility of a new report is not, by itself, proof the user
+reviewed it.
+
+`/accept-milestone`'s own terminal functional-review evidence lifecycle
+is unaffected and out of scope here: it does not read
+`functional_checklist_blob` today, this revision does not add that read,
+and `functional_acceptance_status` remains unwritten by any function in
+this codebase — a pre-existing gap noted since `D-States`, not one this
+revision's own finding requires closing.
+
+**New command, `/accept-scoped-remediation [work_item_id]`** —
+`disable-model-invocation: true`, mirroring `/accept-milestone`'s
+construction exactly:
+
+- `APPROVAL_STAGES` extends to `frozenset({"plan", "implementation",
+  "acceptance", "scoped_remediation"})` — a fourth stage keyword,
+  textually non-interchangeable with `"acceptance"` in
+  `validate_user_confirmation`'s existing exact-substring check. This
+  alone makes "reuse of terminal milestone acceptance as scoped
+  acceptance" structurally impossible.
+- **New function**, `parse_scoped_remediation_confirmation_binding_fields(text)
+  -> {"functional_checklist_evidence_commit": str, "functional_checklist_evidence_blob":
+  str}`** (revision 27, `GPT-R40-001`)**: the `scoped_remediation` stage's
+  own binding-field parser, mirroring the pattern
+  `REVIEW_PROTOCOL.md`'s `Reviewed bundle ID:`/`Reviewed base commit:`/
+  `Work item:` fields already establish for external review feedback
+  (`parse_review_feedback_binding_fields`). Requires two explicit fields
+  in the confirmation text — `Functional checklist evidence commit:
+  <sha>` and `Functional checklist evidence blob: <blob>` — each a
+  full, well-formed 40-hex Git object ID; missing or malformed:
+  `UserConfirmationRejectedError`, naming which field is missing or
+  malformed. This is what makes the confirmation itself name a specific
+  reviewed evidence identity rather than only the work item and stage
+  `validate_user_confirmation`'s existing generic check already requires
+  — `/prepare-functional-review`'s reported commit SHA and blob (above)
+  are exactly what the user is instructed to copy into these two fields.
+- **New function**, `resolve_scoped_remediation_round(repo_root,
+  work_item_id, base_commit, head, outstanding_checkpoint_id,
+  implementation_revision, live_fields) -> RoundResolution` (revision 25,
+  `GPT-R38-002`, replacing revision 24's two separate descriptions of the
+  same classification — an entry-guard short-circuit on key existence
+  alone, and a provenance-commit "three outcomes" contract that a
+  key-existence short-circuit could never actually reach; comparison
+  coverage completed revision 26, `GPT-R39-002`, below): the **single**
+  place replay/duplicate classification happens, called identically by the
+  entry guard below and the provenance-commit step, never a second copy of
+  the logic. It always performs the full lookup-and-compare in one pass —
+  there is no cheaper "key exists" path that skips the comparison. Using
+  `discover_scoped_remediation_commits(repo_root, work_item_id,
+  base_commit, head)` to look up
+  `f"{outstanding_checkpoint_id}/{implementation_revision}"`:
+  1. No commit found: `NoExistingRound()`.
+  2. `AmbiguousScopedRemediationTrailerError` raised by the discovery call
+     itself (more than one first-parent-reachable commit for the same
+     round key — a pre-existing generic failure mode every other trailer
+     scheme here already has): `AmbiguousHistory(round_key)`, propagated as
+     a named result rather than left to raise uncaught, so both call sites
+     handle it identically.
+  3. A commit is found: load that commit's own committed
+     `WORKFLOW_STATE.json` at that SHA (`git show
+     <commit>:docs/ai-workflow/WORKFLOW_STATE.json`), locate the
+     `scoped_remediation_acceptance` list entry whose own recorded
+     `outstanding_checkpoint_id`/`implementation_revision` fields equal the
+     round key's own two components — never merely trusting the trailer
+     value alone for the fields the entry itself also records (revision 26,
+     `GPT-R39-002`: the trailer proves a commit exists for this round key;
+     it does not prove the committed entry's own fields agree with that
+     key, which is exactly the gap a hand-edited or corrupted record could
+     exploit).
+     - **Schema/version check, first** (revision 26, `GPT-R39-002`;
+       version and field count updated revision 27, `GPT-R40-002`): if no
+       entry matches by round key, if `acceptance_record_version` is
+       not `2` (the only version this design produces as of revision 27
+       — no version-1 record exists anywhere, since nothing implementing
+       this mechanism has shipped yet, so no migration path is needed),
+       or if the entry's key set is not exactly the eleven documented
+       fields (`WFR-56`) — no fewer, no unexpected extra — or if
+       `recorded_at`/`user_confirmation` are missing or not well-formed
+       non-empty strings:
+       `MalformedAcceptanceRecord(commit_sha, reason)`, naming which check
+       failed. This is checked before any field-by-field comparison below,
+       since an unsupported or incomplete schema shape cannot be compared
+       against `live_fields` meaningfully at all.
+     - **Full canonical field comparison** (revision 26, `GPT-R39-002`,
+       replacing revision 25's three-field subset; widened to eight fields
+       revision 27, `GPT-R40-002`): compare the entry's own
+       `outstanding_checkpoint_id`, `implementation_revision`,
+       `reviewed_implementation_head`, `technical_approval_review_content_id`,
+       `functional_checklist_path`, `functional_checklist_blob`,
+       `functional_checklist_evidence_commit`, and
+       `active_work_item_id_at_acceptance` against `live_fields`'s
+       corresponding eight keys (`live_fields` gains
+       `outstanding_checkpoint_id`, `implementation_revision`,
+       `functional_checklist_path` — always the fixed constant
+       `docs/ACTIVE_MILESTONE.md` — `functional_checklist_evidence_commit`
+       — the confirmation-bound evidence commit SHA the entry guard's
+       confirmation-evidence-binding check below already resolved and
+       verified equals the round's current evidence (`GPT-R40-001`) — and
+       `active_work_item_id` — the live global pointer read from
+       `WORKFLOW_STATE.json` at classification time, *not* the resolved
+       target argument, so that a replay genuinely reproduces what the
+       operation would write if it ran again right now; both call sites
+       already have all eight values in scope). `recorded_at` is validated
+       as present/well-formed above but never compared to a live value (it
+       is a historical timestamp by definition); the entry's own
+       `user_confirmation` is validated as a well-formed prior acceptance
+       record above, never re-validated against the *current* invocation's
+       confirmation text, which `validate_user_confirmation` already
+       checks separately as a current-turn authorization gate (unchanged
+       from revision 25). Every one of the eight compared fields agrees:
+       `ExactReplay(commit_sha)`. At least one disagrees:
+       `ConflictingDuplicate(commit_sha, differing_fields)`, naming which
+       field(s) — this is also how a changed `active_work_item_id`
+       (`GPT-R39-002`'s own failure scenario: the live pointer has since
+       moved to a different work item while the same round remains
+       discoverable), a wrong `functional_checklist_path`, and a
+       confirmation now bound to a different evidence commit than what
+       was originally recorded (`GPT-R40-002`'s own failure scenario) are
+       refused, rather than silently reported as replay.
+- **Entry guard, confirmation-first, then evidence-binding, then
+  replay-first** (revision 25, `GPT-R38-002`/`-003`, replacing revision
+  24's ordering, which never stated whether current-turn confirmation was
+  validated before the replay short-circuit and whose replay short-circuit
+  itself trusted a matching key alone; evidence-binding step inserted
+  revision 27, `GPT-R40-001`): resolve the target item (named argument, or
+  `active_work_item_id`). **Validate current-turn user confirmation**
+  (`validate_user_confirmation(text, work_item_id=..., stage=
+  "scoped_remediation")`) **before anything else below** — identically for
+  a first execution and an exact replay, so a replay can never report
+  success without the same user-only gate a first execution requires
+  (`GPT-R38-003`; a confirmation-free, read-only inspection of an
+  already-accepted round is explicitly out of scope for this command — it
+  would need its own separate, non-accepting status command, not built by
+  this revision). `UserConfirmationRejectedError` stops here exactly as
+  `/accept-milestone`'s own guard does.
+
+  **Then, before the registry loads** (revision 27, `GPT-R40-001`): call
+  `parse_scoped_remediation_confirmation_binding_fields(text)` — missing
+  or malformed evidence-identity fields stop here, identically for a first
+  execution and a replay, for the same reason confirmation validation
+  itself runs first. This step and the "confirmation-evidence-binding
+  check" the pre-commit evidence guard below performs are the same check,
+  described once there and referenced here — see that guard for the full
+  discoverability/currency verification. Only once the confirmation's
+  named evidence is verified current does the registry load proceed.
+
+  Only then: load the registry;
+  compute `is_terminal`/`outstanding_checkpoint_id` fresh via
+  `registry_completion_status` — always computable regardless of the
+  current `phase`, since it depends only on the registry and
+  `select_next_checkpoint`, never on `phase` itself. Then:
+  1. If `is_terminal`, refuse, naming `/accept-milestone` as the correct
+     command instead (unchanged from revision 22/23).
+  2. Otherwise, call `resolve_scoped_remediation_round(...)` with the live
+     round identity (`outstanding_checkpoint_id`, `implementation_revision`)
+     and the full `live_fields` set the resolver now compares (revision 26,
+     `GPT-R39-002`; widened revision 27, `GPT-R40-002`): `reviewed_implementation_head`,
+     `technical_approval_review_content_id`, `functional_checklist_blob`
+     (computed the same way the pre-commit evidence guard below computes
+     them), `functional_checklist_evidence_commit` (the confirmation-bound
+     evidence commit SHA the evidence-binding check above already verified
+     equals the round's current evidence), `functional_checklist_path`
+     (the fixed constant), `active_work_item_id` (the live global pointer,
+     read fresh here — not the resolved target argument), plus
+     `outstanding_checkpoint_id`/`implementation_revision` themselves for
+     the entry's own field comparison:
+     - `ExactReplay(commit_sha)`: report `commit_sha` as the idempotent
+       result and stop, before the phase/`technical_approval.status`
+       checks below ever run — a replay's own `phase` is `IMPLEMENTING`,
+       not `AWAITING_FUNCTIONAL_REVIEW`, by construction, so it must never
+       reach an ordinary-entry-guard phase check at all. Provably a
+       replay, not merely key-matched, because the resolver already
+       compared the discovered commit's own recorded fields, the full
+       canonical set (`GPT-R39-002`), against the live ones.
+     - `ConflictingDuplicate(commit_sha, differing_fields)`: refuse,
+       naming `commit_sha` and the specific disagreeing field(s) — never
+       silently treated as success. This is also how a changed
+       `active_work_item_id` or `functional_checklist_path` is refused
+       (revision 26, `GPT-R39-002`), not silently reported as replay.
+     - `MalformedAcceptanceRecord(commit_sha, reason)` (revision 26,
+       `GPT-R39-002`, new): refuse, naming `commit_sha` and the specific
+       schema defect — an unsupported `acceptance_record_version`, a
+       missing/extra field, or a missing/malformed `recorded_at`/
+       `user_confirmation` — never treated as either a replay or an
+       ordinary conflicting duplicate, since the record's own shape cannot
+       be trusted enough to compare field values from at all.
+     - `AmbiguousHistory(round_key)`: refuse, naming the round key and
+       that manual history inspection is required — the same failure mode
+       every other trailer scheme here already has.
+     - `NoExistingRound()`: proceed to step 3.
+  3. (No matching round recorded — a first attempt at this round, or a
+     genuinely new round for a checkpoint that was scoped-accepted before
+     under a different `implementation_revision`): refuse via
+     `scoped_remediation_gate_reachable` unless it returns `True`, and
+     refuse unless `work_item["technical_approval"]["status"] ==
+     "CURRENT"` (a `STALE` technical approval — a bounded-fix round landed
+     after approval but before this command ran — must never be
+     scoped-accepted). A distinct new round reaches this branch with
+     `phase == AWAITING_FUNCTIONAL_REVIEW` precisely because
+     `apply_technical_approval` and a fresh functional review already ran
+     again for it — the ordinary gate accepts it exactly as it would any
+     other round, with no separate "is this checkpoint's second round"
+     special case.
+- **Pre-commit evidence guard** (`GPT-R36-003`, extended `GPT-R37-004`,
+  extended `GPT-R38-001`, discovery call corrected revision 26
+  `GPT-R39-001`, confirmation-evidence-binding check added revision 27
+  `GPT-R40-001`): immediately before building the entry below (and once
+  more, per the "repeats" paragraph below), four checks run in order.
+
+  1. **Discoverability**: require a `Workflow-Functional-Checklist`
+     evidence commit to be discoverable for the exact live round via
+     `discover_current_functional_checklist_evidence` (the round-scoped,
+     content-identity-aware lookup — not a single exact-key lookup, since
+     the trailer's value now embeds the checklist blob, `GPT-R39-001`) —
+     refuse, naming the missing round key and `/prepare-functional-review`
+     as the remedy, if none is found (`GPT-R38-001`: this proves the
+     checklist evidence about to be bound was actually produced by that
+     command's own dedicated commit, not merely whatever happens to be
+     clean at `HEAD`).
+  2. **Confirmation-evidence binding, new** (`GPT-R40-001`): let `current`
+     be the discoverability check's own result (`{"commit_sha": ...,
+     "blob": ...}`). Compare it against the confirmation's parsed
+     `functional_checklist_evidence_commit`/`functional_checklist_evidence_blob`
+     (parsed by the entry guard's own confirmation-evidence-binding step
+     above, or re-parsed identically here on the pre-provenance-commit
+     repeat). Refuse — `StaleFunctionalChecklistConfirmationError`, naming
+     both the confirmed identity and `current`'s identity, and instructing
+     the user to review the newer `/prepare-functional-review` report and
+     reconfirm — unless every one of the following holds:
+     - the confirmed commit SHA equals `current["commit_sha"]` exactly;
+     - the confirmed blob equals `current["blob"]` exactly;
+     - `git rev-parse <confirmed_commit>:<functional_checklist_path>`
+       (the commit's own actually-committed content, read independently of
+       the trailer value) also equals the confirmed blob — a defense
+       against a hand-crafted or corrupted trailer whose embedded blob
+       component disagrees with what that commit actually committed,
+       refused as `MalformedFunctionalChecklistEvidenceError` naming the
+       commit and both blob values if it does not.
+     There is deliberately no path that accepts a confirmation naming an
+     earlier, superseded evidence commit, even though that commit remains
+     independently discoverable and was genuinely what an earlier
+     `/prepare-functional-review` invocation reported — this is the
+     review's own required contract (`GPT-R40-001`). A corrected checklist
+     always requires a fresh report and a fresh, explicitly re-bound
+     confirmation; there is no automatic migration of an existing
+     confirmation onto newer evidence anywhere in this design.
+  3. **Clean working tree**: require `functional_checklist_path` to have
+     no staged or unstaged working-tree change relative to `HEAD` (`git
+     status --porcelain -- <path>` empty) — refuse outright, naming the
+     path, if it is dirty; a working-tree edit the user may have just read
+     and accepted is never silently replaced by an older committed blob.
+  4. **Cross-invocation value agreement**: only once all three checks
+     above pass, re-read `work_item["reviewed_implementation_head"]` and
+     compute `git rev-parse HEAD:<functional_checklist_path>`
+     (`functional_checklist_path` fixed at `docs/ACTIVE_MILESTONE.md`, the
+     path `MILESTONE_WORKFLOW.md`'s `AWAITING_FUNCTIONAL_REVIEW` section
+     already names). Refuse, naming both the expected and current value,
+     if either has changed since first read earlier in this same
+     invocation — the single-invocation window `WFR-21`'s existing
+     plan-approval durability guard already treats the same way for a
+     different stage.
+
+  **All four checks repeat immediately before the provenance commit**
+  (not only at this first read): a working-tree edit, or a superseding
+  `Workflow-Functional-Checklist` commit, landing in the gap between the
+  first read and the commit is exactly as unreviewed as one present from
+  the start — including a superseding commit that would make the
+  confirmation's own, previously-verified-current evidence identity stale
+  by the time of the actual write (`GPT-R40-001`'s own race window,
+  closed by re-running check 2 a second time, not only checks 1/3/4) — and
+  the cross-invocation value-agreement check alone (comparing `HEAD:path`
+  to `HEAD:path`) cannot detect a dirty tree either, since both reads ignore
+  the working tree by construction.
+- **New function**, `apply_scoped_remediation_acceptance(state,
+  work_item_id, registry, *, user_confirmation, now)`: appends one entry
+  to `work_item["scoped_remediation_acceptance"]` (a list, created empty
+  if absent):
+
+  ```json
+  {
+    "outstanding_checkpoint_id": "<from registry_completion_status>",
+    "active_work_item_id_at_acceptance": "<live active_work_item_id>",
+    "implementation_revision": "<live work_item['implementation_revision']>",
+    "reviewed_implementation_head": "<live work_item['reviewed_implementation_head']>",
+    "technical_approval_review_content_id": "<technical_approval.approved_review_content_id>",
+    "functional_checklist_path": "docs/ACTIVE_MILESTONE.md",
+    "functional_checklist_blob": "<git rev-parse HEAD:<functional_checklist_path> at the acceptance commit>",
+    "functional_checklist_evidence_commit": "<the confirmation-bound Workflow-Functional-Checklist evidence commit SHA, verified current by the pre-commit evidence guard>",
+    "user_confirmation": "<verbatim>",
+    "recorded_at": "<timestamp>",
+    "acceptance_record_version": 2
+  }
+  ```
+
+  Eleven fields total (`GPT-R37-003` originally corrected a stale
+  nine-field count to ten; `GPT-R40-002` adds an eleventh,
+  `functional_checklist_evidence_commit`, revision 27): the five
+  revision 22 originally defined
+  (`outstanding_checkpoint_id`/`active_work_item_id_at_acceptance`/
+  `technical_approval_review_content_id`/`user_confirmation`/
+  `recorded_at`), plus four fields revision 23 added (`GPT-R36-003`):
+  `implementation_revision`, `reviewed_implementation_head`,
+  `functional_checklist_path`, `functional_checklist_blob` —
+  `implementation_revision`/`reviewed_implementation_head` each already
+  have exactly one existing writer (`apply_technical_approval`/the bundle
+  generator, `WFR-22`); reading them here adds no second writer for
+  either. `functional_checklist_blob` is a *committed* blob identity
+  (`git rev-parse HEAD:...`), not a working-tree hash, so it cannot be
+  produced by an uncommitted edit — and, as of revision 24 (`GPT-R37-004`),
+  the pre-commit evidence guard above refuses outright rather than compute
+  it at all while the path is dirty. Plus one field revision 23 also added,
+  `acceptance_record_version` (`2` for every entry this design produces as
+  of revision 27, `GPT-R40-002` — `1` was never produced by any shipped
+  code, since nothing implementing this mechanism exists yet), so a future
+  schema change can distinguish shapes without guessing from field
+  presence. Plus one final field revision 27 adds
+  (`GPT-R40-002`): `functional_checklist_evidence_commit` — the exact
+  `Workflow-Functional-Checklist` evidence commit SHA the pre-commit
+  evidence guard's confirmation-evidence-binding check (above) verified
+  the user's confirmation named and that this acceptance is binding to; a
+  blob alone no longer identifies which of possibly several
+  content-distinct evidence commits for the round was the one actually
+  reviewed, once revision 26 made multiple such commits coexist without
+  ambiguity. Five plus four plus one plus one is eleven, not ten.
+
+  Sets `phase = "IMPLEMENTING"`. Leaves `checkpoints`/
+  `current_checkpoint_id`/`active_work_item_id`/`plan_approval`/
+  `technical_approval`/`functional_acceptance_status` completely
+  untouched.
+- **Dedicated provenance commit, required** (`GPT-R36-002`, replacing
+  revision 22's "no dedicated commit" choice; trailer keying corrected
+  revision 24, `GPT-R37-002`): the state write above and a metadata-only
+  commit — no production/test changes — carrying
+  `Workflow-Scoped-Remediation-Acceptance: <outstanding_checkpoint_id>/<implementation_revision>`
+  (plus the ordinary `Workflow-Work-Item: <work_item_id>` trailer every
+  provenance commit already carries) happen together or not at all;
+  success is reported only once the commit exists and the worktree is
+  verified clean. Revision 22's `mark_technical_approval_stale`/
+  `record_bundle_generation` precedent does not transfer here: unlike
+  those recomputable/superseded writes, this is a user-authorized gate's
+  durable record — the same class `plan_approval`/`technical_approval`/
+  `WF-Activate` already commit via a dedicated trailer, not the lighter
+  class.
+
+  **The trailer's discovery key is `<outstanding_checkpoint_id>/<implementation_revision>`,
+  not `<work_item_id>/<outstanding_checkpoint_id>`** (revision 23's shape,
+  corrected): keying purely by checkpoint made every later round for the
+  same still-incomplete checkpoint collide with the first, which is what
+  forced revision 23 to refuse them outright — the wrong fix for a real
+  requirement (`WF8b` may legitimately need more than one reviewed
+  remediation round, revision 22's own list-based
+  `scoped_remediation_acceptance` schema already assumed this). Keying by
+  `implementation_revision` instead — a field with exactly one existing
+  writer, `apply_technical_approval`, that only ever advances, `WFR-22` —
+  makes each round's trailer value distinct by construction, reusing
+  `_discover_trailer_commits`'s existing generic exactly-one-match-per-
+  value/first-parent-tie-break machinery (`discover_checkpoint_commits`/
+  `discover_approval_commits`'s own shared helper) unmodified, with a new
+  `discover_scoped_remediation_commits(repo_root, work_item_id,
+  base_commit, head) -> {"<checkpoint_id>/<implementation_revision>":
+  commit_sha}` wrapper alongside them and a new
+  `AmbiguousScopedRemediationTrailerError` mirroring
+  `AmbiguousApprovalTrailerError`.
+
+  **Immediately before creating the commit, call
+  `resolve_scoped_remediation_round(...)` again with the same live
+  values** (revision 25, `GPT-R38-002`, replacing revision 24's separate
+  "three outcomes" restatement, which described the same classification a
+  second time rather than sharing the entry guard's own call — the exact
+  duplication that let the entry guard's cheaper, unvalidated
+  short-circuit silently determine behavior on its own). The entry guard's
+  own call above may be arbitrarily far in wall-clock time before this
+  actual write — the same single-invocation-window concern
+  `WFR-21`/the pre-commit evidence guard above already treat this way for
+  other fields:
+  1. `NoExistingRound()`: create the commit normally. This is what makes
+     multiple legitimate rounds for the same checkpoint possible — each
+     genuinely new `implementation_revision` gets its own distinct round
+     key, so nothing about accepting round two ever references or
+     conflicts with round one's own commit.
+  2. `ExactReplay(commit_sha)`: a round accepted by a concurrent or prior
+     invocation landed in the gap since the entry guard's own check —
+     report `commit_sha`, create nothing, exactly as the entry guard's
+     equivalent case, never silently duplicated.
+  3. `ConflictingDuplicate`/`AmbiguousHistory`/`MalformedAcceptanceRecord`
+     (the last new, revision 26, `GPT-R39-002`): refuse, exactly as the
+     entry guard's equivalent case above — never silently overwritten.
+
+  There is exactly one classification contract, `resolve_scoped_remediation_round`'s
+  own, stated once and referenced by name at both call sites — not narrated
+  twice with room for the two narrations to disagree.
+- **Exit**: report the outstanding checkpoint, the acceptance commit, and
+  that a fresh session should resume it via that checkpoint's own driver —
+  stop.
+
+**Resume**: `checkpoints`/`active_work_item_id` were never touched by
+this mechanism, so the outstanding checkpoint's own driver (e.g.
+`/bootstrap-workflow-v2` for `WF8b`) re-derives it deterministically, in a
+fresh session, from disk alone, via its own existing selection logic — no
+new pointer or marker file. Because the acceptance is now a required
+commit (`GPT-R36-002`), a fresh session reading only committed state can
+never observe an acceptance that "almost happened": before the commit,
+committed state still shows `AWAITING_FUNCTIONAL_REVIEW`, the same
+already-defined guard path; after it, committed state shows `IMPLEMENTING`
+and the outstanding checkpoint is re-derived exactly as before.
+
+**Replay/staleness safety**: superseded-revision, duplicate-acceptance,
+changed-checkpoint, and terminal-reuse cases are each covered without a
+bespoke check per case — see "WF8b finding disposition (revision 21 →
+22)" above for the point-by-point reasoning. Omitted/foreign-registry
+coverage, commit durability, and evidence-binding are each covered by the
+corresponding `GPT-R36-*` fix above — see "WF8b finding disposition
+(revision 22 → 23)" for that point-by-point reasoning. Registry-trust,
+per-round replay/duplicate-refusal ordering, the schema field count, and
+dirty-checklist evidence are each covered by the corresponding `GPT-R37-*`
+fix above — see "WF8b finding disposition (revision 23 → 24)" for that
+point-by-point reasoning. Checklist-evidence durability, replay
+classification's own correctness (not just its ordering), and
+confirmation-before-replay ordering are each covered by the corresponding
+`GPT-R38-*` fix above — see "WF8b finding disposition (revision 24 → 25)"
+for that point-by-point reasoning. Checklist-evidence trailer ambiguity
+and exact-replay comparison completeness are each covered by the
+corresponding `GPT-R39-*` fix above — see "WF8b finding disposition
+(revision 25 → 26)" for that point-by-point reasoning. Time-of-review/
+time-of-acceptance evidence substitution and the missing evidence-commit
+provenance field are each covered by the corresponding `GPT-R40-*` fix
+above — see "WF8b finding disposition (revision 26 → 27)" for that
+point-by-point reasoning.
+
+**Dependency**: extends `WF4c` (`D-Functional-Remediation`,
+`complete_work_item`'s existing home), `WF4a-ii` (`/accept-milestone`'s
+existing home), and, as of revision 25, `WF-M8b`
+(`/prepare-functional-review`'s existing home, already extended once for
+`D-Legacy` phase 2's adoption-selector logic); `WF2`'s existing
+`D-Selection`/`select_next_checkpoint` machinery is reused unmodified,
+never re-implemented.
+
 ### D-Bundle-Manifest (revised: real worktree-staleness fix, portability vs. local staleness split, NUL-safe parsing, binaries/unusual paths, relayout migration)
 
 `REVIEW_PROTOCOL.md`'s feedback structure requires `Reviewed bundle ID:`
@@ -4504,7 +6219,78 @@ context governance, subagent routing.
   starts immediately after `MILESTONE_COMPLETE` or waits for a
   product-milestone baseline first — the user's call, not assumed.
 
-## Requirements traceability (revision 21 — clean, self-contained; see the note under "Round 6 finding disposition" above for why this replaces rather than extends the old WFR-1–61 numbering)
+## Requirements traceability (revision 23 — clean, self-contained; see the note under "Round 6 finding disposition" above for why this replaces rather than extends the old WFR-1–61 numbering)
+
+**WFR-53 through WFR-57 were added in revision 22** (`WF8B-002`,
+`D-Scoped-Remediation-Acceptance`), covering `complete_work_item`'s new
+own-registry-completeness guard, the two new gate-reachability functions,
+the new `/accept-scoped-remediation` command and its
+`scoped_remediation_acceptance` evidence schema, and the fresh-session
+resume guarantee — owned by `WF4c` (extends `D-Functional-Remediation`'s
+existing "parent acceptance blocks on an incomplete child" reasoning to
+the item's own registry), `WF4a-ii` (`/accept-milestone`'s existing
+home), and `WF2` (`select_next_checkpoint`'s existing home, reused
+unmodified) respectively — no new checkpoint, matching the precedent
+`WFR-47`-`WFR-52` already set of attributing continued-`WF8b`-scope
+requirements to whichever already-complete checkpoint actually owns the
+touched subsystem. **`WFR-53` and `WFR-56` were amended, and `WFR-58`/
+`WFR-59` added, in revision 23** (`GPT-R36-001`/`-002`/`-003`,
+`D-Scoped-Remediation-Acceptance`'s hardening): `WFR-53` gained the
+fail-closed omitted/foreign-registry guard, `WFR-56` gained the four
+additional evidence-binding fields, `WFR-58` covers the required
+provenance commit and its idempotency/duplicate-refusal, and `WFR-59`
+covers refusing acceptance against stale checklist/head evidence — all
+four owned by `WF4c`, the same checkpoint `WFR-53`/`-55`/`-56` already
+belong to; no new checkpoint added. **`WFR-53`, `WFR-55` (test column),
+`WFR-56` (test column), `WFR-58`, and `WFR-59` were further amended in
+place in revision 24** (`GPT-R37-001`/`-002`/`-003`/`-004`): `WFR-53` now
+describes `complete_work_item` loading its own registry from `repo_root`
+rather than trusting a caller-supplied one, `WFR-58` now describes
+per-round (not per-checkpoint) replay identity checked ahead of the
+ordinary phase guard, and `WFR-59` now includes the outright dirty-
+checklist refusal — no requirement added, removed, or renumbered.
+**`WFR-58` and `WFR-59` were further amended in place, and a new `WFR-60`
+added, in revision 25** (`GPT-R38-001`/`-002`/`-003`,
+`D-Scoped-Remediation-Acceptance`'s further hardening): `WFR-58` now
+describes replay/duplicate classification as one shared resolver function
+that always loads and compares a discovered commit's own recorded fields
+— never a matching trailer key alone — called identically by both the
+entry guard and the provenance-commit step, plus current-turn
+confirmation validated before that classification runs for a first
+execution and a replay alike; `WFR-59` now also requires a discoverable
+checklist-evidence commit for the exact round, not only a clean working
+tree; `WFR-60` is new, covering `/prepare-functional-review`'s own
+checklist-evidence commit — owned by `WF4c` (`WFR-58`/`-59`, same
+checkpoint as before) and `WF4c`/`WF-M8b` jointly (`WFR-60`,
+`/prepare-functional-review`'s existing home); no requirement removed or
+renumbered. **`WFR-58`, `WFR-59`, and `WFR-60` were further amended in
+place in revision 26** (`GPT-R39-001`/`-002`): `WFR-58` now describes the
+shared resolver comparing the full seven-field canonical set (not the
+three-field subset revision 25 checked) plus the acceptance record's own
+schema version/shape, refusing an unsupported or incomplete record as a
+dedicated malformed-record result; `WFR-59` now states that acceptance
+always binds to a round's *current* checklist evidence, never an earlier
+one a user may have been shown first; `WFR-60` now describes the
+checklist-evidence trailer's value as content-scoped
+(`<work_item_id>/<implementation_revision>/<checklist_blob>`), so a
+legitimate same-round content revision is a distinct trailer key rather
+than a second match the generic exactly-one-match contract would refuse
+as ambiguous — owned by the same checkpoints as before; no requirement
+added, removed, or renumbered. **`WFR-56`, `WFR-58`, `WFR-59`, and
+`WFR-60` were further amended in place in revision 27** (`GPT-R40-001`/
+`-002`): `WFR-56` now includes an eleventh recorded field,
+`functional_checklist_evidence_commit`; `WFR-58` now describes the shared
+resolver comparing the full eight-field canonical set (adding
+`functional_checklist_evidence_commit` to revision 26's seven); `WFR-59`
+is corrected to state the opposite of revision 26's binding claim —
+acceptance binds only to the exact evidence commit the current-turn
+confirmation itself names, verified equal to the round's current
+evidence, and refuses as a stale confirmation rather than silently
+rebinding when a newer evidence commit exists; `WFR-60` now states that
+the reported evidence identity is what the required confirmation must
+cite back, not merely informational — owned by the same checkpoints as
+before (`WF4c`; `WF4c`/`WF-M8b` jointly for `WFR-60`); no requirement
+added, removed, or renumbered.
 
 Every requirement below is current as of this revision. Superseded
 requirements from earlier revisions (the pre-split single-`bundle_id`
@@ -4638,8 +6424,16 @@ unmapped requirements, zero unowned checkpoints, zero dangling
 | WFR-50 | `workflow-v2-1-core`'s own plan-stage protected/excluded sets, and the migrated `<work_item_id>-artifacts.json`'s own approval binding, are reproduced/preserved exactly after the generalization — verified mechanism-relatively (migrated sets equal the pre-migration Python constants) rather than against an unreproducible literal digest, without a fresh review round required for the migration's data alone; commit-source resolution predating the schema-version-2 migration is a deliberate, tested boundary rather than a silent fallback (corrected `OPUS-R25-001`/`-006`/`-013`) | WF4a-i | Migrated `plan_stage` JSON equals the pre-migration Python constants item for item; `<work_item_id>-artifacts.json` classifies implementation-stage protected by exact path via its own concrete self-referential entry, not a placeholder (`WF8B-S1-001`, `OPUS-R25-001`/`-006`/`-013`, `OPUS-R26-004`) — **owed**, items 141-142, 145, 156, 160, 164 |
 | WFR-51 | A new process work item's `plan_path`/`registry_path`/`mapping_path`/`base_commit` and `<work_item_id>-artifacts.json` each have a named sole writer and a stated ordering (declare paths, then populate registry/mapping/artifacts content, then compute a fingerprint) that avoids circular dependency and fails closed on a partial definition (new, `OPUS-R25-004`; extended `OPUS-R26-003` to include `base_commit` among the sole-writer facts) | WF4a-i | `/milestone-plan v2-1-dry-run` end to end succeeds with no missing-metadata error, including a real, non-null `base_commit`; the default artifacts template satisfies the protected-set binding check by construction (`OPUS-R25-004`, `OPUS-R26-003`) — **owed**, items 154-155 |
 | WFR-52 | `MANIFEST.md` and every plan-stage bundle it accompanies are bound to an explicit `work_item_id` and `base_commit`; no command or script path (including `scripts/prepare-ai-review.sh`, which resolves the work-item id exactly once for both the bundle directory and the manifest) can silently write or overwrite a bundle/manifest belonging to a different or unspecified work item — including a bundle directory whose existing manifest declares no `work_item_id` at all, which fails closed rather than binding silently (new, `OPUS-R25-005`/`-012`; corrected/extended `OPUS-R26-001`/`-002`/`-003`) | WF4a-i | `BundleWorkItemMismatchError` on a cross-item write attempt, an unbound-manifest write attempt, and a `base_commit` disagreement; `prepare-ai-review.sh`'s `plan`-stage path writes `MANIFEST.md` itself, sharing one single resolved work-item id with its own bundle-directory choice (`OPUS-R25-005`/`-012`, `OPUS-R26-001`/`-002`/`-003`) — **owed**, items 152-153, 161-163, 165 |
+| WFR-53 | `complete_work_item` refuses to reach `MILESTONE_COMPLETE` while any of the work item's own registry checkpoints remain incomplete or `IN_PROGRESS`, independent of, and in addition to, the existing incomplete-child-work-item check; for a registry-backed item it loads that item's own `registry_path` itself from `repo_root` (the same safe-path/tracked/parse validation `D3`'s whole-state mirror check already performs), never accepting a caller-supplied registry object, and refuses when that file cannot be resolved, read, or parsed, or when its declared `work_item_id` does not match the item being completed | WF4c | `IncompleteOwnCheckpointsError` raised when the on-disk registry has one incomplete, dependency-satisfied checkpoint and, separately, when one is blocked on unmet dependencies; a fully-complete on-disk registry (and a registry-less item, `registry_path: null`) still completes; `RegistryCoverageError` raised when `registry_path` fails safe-path resolution or the file is missing/unreadable/malformed, and separately when the loaded registry declares a foreign `work_item_id`; a fabricated in-memory dict can no longer be substituted for the file at all, since `complete_work_item` no longer accepts one — **owed**, items 168-170, 178, 183-184, 187 |
+| WFR-54 | `/accept-milestone` and `/accept-scoped-remediation` each have a named, non-circular gate-reachability guard (`milestone_complete_gate_reachable`/`scoped_remediation_gate_reachable`) computed from the item's own phase and a freshly recomputed terminal/non-terminal check, never from an intermediate phase value written earlier | WF4a-ii | `/accept-milestone` refused, naming the actual phase and the outstanding checkpoint, when the registry is non-terminal (both the selectable and `NoCheckpointReadyError`-blocked cases); succeeds unchanged when terminal (regression guard) — **owed**, items 167-169 |
+| WFR-55 | A continued-scope implementation round that leaves its parent checkpoint incomplete can be functionally accepted via `/accept-scoped-remediation`, distinctly and non-interchangeably from `/accept-milestone`'s terminal acceptance, and returns the item to `IMPLEMENTING` without disturbing `checkpoints`/`current_checkpoint_id`/`active_work_item_id`/`plan_approval`/`technical_approval`/`functional_acceptance_status`; the acceptance is durably recorded by the command's own dedicated, metadata-only provenance commit before success is reported, never left as an uncommitted state write | WF4c | Happy path appends exactly one `scoped_remediation_acceptance` entry, flips `phase`, and creates the provenance commit; wrong-phase refusal (`IMPLEMENTING`, `AWAITING_TECHNICAL_APPROVAL`, `MILESTONE_COMPLETE`); refusal when the registry is actually terminal; refusal when `technical_approval.status != CURRENT`, each for a genuinely new attempt; replay/duplicate semantics themselves are `WFR-58`'s own scope, not this row's — **owed**, items 171-176, 179-180 |
+| WFR-56 | `scoped_remediation_acceptance` is an additive, append-only evidence list distinct from `technical_approval`/`functional_acceptance_status`, naming the outstanding checkpoint, the accepted round's `implementation_revision` and `reviewed_implementation_head`, the functional-review checklist's path, a committed content digest, and the exact `Workflow-Functional-Checklist` evidence commit SHA that digest was drawn from (revision 27, `GPT-R40-002`), `technical_approval.approved_review_content_id`, the verbatim user confirmation, the live `active_work_item_id` at acceptance time, and an acceptance-record schema version | WF4c | Schema assertion on the appended entry's exact eleven-field set (field count corrected revision 24, `GPT-R37-003`; eleventh field added revision 27, `GPT-R40-002`); `technical_approval`/`functional_acceptance_status` byte-identical before/after a successful scoped acceptance — **owed**, items 171, 185 |
+| WFR-57 | A fresh session invoking a checkpoint's own driver after scoped-remediation acceptance deterministically re-selects the same outstanding checkpoint via the existing `select_next_checkpoint` algorithm, with no new pointer or marker file | WF2 | This exact finding's own reproduction, end to end: an item with `technical_approval` freshly `CURRENT` while a registry checkpoint remains incomplete can never reach `MILESTONE_COMPLETE` via any documented command sequence without first passing through `/accept-scoped-remediation` and returning to `IMPLEMENTING`, from which a fresh, disk-only session re-selects `WF8b` — **owed**, item 177, 179 |
+| WFR-58 | `accept-scoped-remediation` creates its own dedicated, metadata-only provenance commit -- naming the work item, outstanding checkpoint, and accepted round's `implementation_revision` in a discoverable trailer -- before reporting success, never a plain state write swept into whatever commit follows; replay/duplicate classification is performed by one shared resolver function, called identically by the entry guard and the provenance-commit step, that loads and compares the discovered commit's own recorded round fields -- the full canonical set (`outstanding_checkpoint_id`, `implementation_revision`, `reviewed_implementation_head`, `technical_approval_review_content_id`, `functional_checklist_path`, `functional_checklist_blob`, `functional_checklist_evidence_commit`, `active_work_item_id_at_acceptance`), not a subset (widened to eight fields revision 27, `GPT-R40-002`), plus the record's own schema version/shape (revision 26, `GPT-R39-002`; version number updated revision 27, `GPT-R40-002`) -- before ever reporting a replay -- a matching trailer key alone is never sufficient; current-turn user confirmation for the `scoped_remediation` stage is validated before that classification runs, identically for a first execution and an exact replay; an exact-round replay reports the existing commit idempotently regardless of the current phase, a distinct later-reviewed round against the same still-outstanding checkpoint is permitted through the ordinary entry guard rather than refused, a same-round collision whose recorded fields disagree (including a changed active work-item pointer, checklist path, or checklist evidence commit, `GPT-R40-002`) is refused as a conflicting duplicate, an unsupported acceptance-record schema version or shape is refused as a dedicated malformed-record result (revision 26, `GPT-R39-002`), and an ambiguous multi-commit history for the same round key is refused rather than guessed; fresh-session bootstrap resumes only from the committed acceptance, never from an uncommitted working-tree state, and a crash before the commit leaves the prior phase authoritative | WF4c | Provenance commit created and its trailer named (including `implementation_revision`) before success is reported; a simulated crash leaving only an uncommitted state write is treated as if the acceptance never happened; an exact replay of the identical accepted round is recognized only after the shared resolver loads and compares the discovered commit's own recorded fields, the full canonical set including `functional_checklist_evidence_commit`, against the live ones, reporting the existing commit rather than duplicating it, even though the live phase is no longer `AWAITING_FUNCTIONAL_REVIEW`; a distinct, later-reviewed round against the same still-outstanding checkpoint (a new `implementation_revision` reached via a fresh technical approval and functional review) is accepted, not refused; a same-round collision whose recorded fields disagree with what is being recorded is refused as a conflicting duplicate, naming the already-recorded commit, including a changed live `active_work_item_id`, a wrong `functional_checklist_path`, or a disagreeing `functional_checklist_evidence_commit`; an unsupported `acceptance_record_version` or an incomplete/extra field set is refused as `MalformedAcceptanceRecord`, never silently compared as if well-formed; an ambiguous multi-commit history for the same round key is refused; missing or stale current-turn confirmation is refused identically for a first execution and an exact replay — **owed**, items 180-182, 188-189, 191-193, 196, 201-205, 213 |
+| WFR-59 | The `scoped_remediation_acceptance` record binds to the exact functional-review checklist content and reviewed implementation head the user actually accepted: acceptance is refused outright, before any digest is computed or recorded, unless a `Workflow-Functional-Checklist` evidence commit is discoverable for the exact live round, and while the checklist path has a staged or unstaged working-tree change (checked at first read and again immediately before the provenance commit); once clean, acceptance is further refused when the current checklist's committed digest, the current `reviewed_implementation_head`, or the current `technical_approval` no longer match what is being recorded, rather than silently accepting against stale evidence; **the evidence bound is always the exact evidence commit the current-turn `scoped_remediation` confirmation itself names, verified reachable for the exact round and content-consistent with its own trailer -- never merely "whichever evidence commit happens to be current" (revision 27, `GPT-R40-001`, reversing revision 26's "always binds to current, never an earlier one" claim): if the confirmation names an earlier, superseded evidence commit while a newer one exists, acceptance refuses as a stale confirmation, naming both identities, rather than silently rebinding to the newer evidence; a confirmation naming a commit that does not belong to the round, or whose own committed content disagrees with its trailer's embedded blob, is refused identically to a missing-evidence confirmation; a corrected checklist always requires a fresh `/prepare-functional-review` report and a fresh, explicitly re-bound confirmation before acceptance can proceed** | WF4c | The recorded entry's `functional_checklist_blob`/`functional_checklist_evidence_commit`/`reviewed_implementation_head` match what was live at acceptance time; acceptance is refused, naming the missing round key, when no `Workflow-Functional-Checklist` evidence commit is discoverable for the exact round; a staged or unstaged edit to the checklist path is refused outright, both at first read and if introduced immediately before the commit; a simulated checklist edit or new implementation head landing between functional review and acceptance is refused, naming the expected and current value; a confirmation naming the round's current evidence commit succeeds; a confirmation naming a superseded evidence commit is refused as stale, naming both identities, and only a fresh confirmation naming the new current commit succeeds; a confirmation naming a wrong-round, foreign, or trailer-inconsistent commit is refused — **owed**, items 185-186, 190, 194, 199-200, 207-212 |
+| WFR-60 | `/prepare-functional-review` creates a dedicated, metadata-only checklist-evidence commit before stopping for the user, carrying a discoverable `Workflow-Functional-Checklist: <work_item_id>/<implementation_revision>/<checklist_blob>` trailer -- the checklist's own committed blob embedded in the trailer value, not a bare round value (revision 26, `GPT-R39-001`, so that a legitimate same-round content revision is a distinct trailer key, never a second match for the bare round key the generic exactly-one-match contract would otherwise treat as ambiguous); it is idempotent by content -- an unchanged checklist re-commits nothing, a changed checklist for the same round produces a new, distinct, discoverable commit under its own trailer value -- so an interrupted preparation is always safe to retry; round-scoped discovery resolves the most recent reachable evidence commit for a round as current, while a genuine identical-content duplicate for the same round (two commits, the same blob) is still refused as ambiguous exactly as every other trailer scheme here already does; **the reported commit SHA and blob are not merely informational — the command instructs the user that their `scoped_remediation` confirmation to `/accept-scoped-remediation` must name this exact identity (revision 27, `GPT-R40-001`)** | WF4c, WF-M8b | A first preparation creates the checklist-evidence commit and reports its SHA/blob; rerunning with identical content reports the existing commit and creates nothing new; rerunning with changed content creates a new, distinct commit under its own trailer value for the same round, discoverable ahead of the earlier one, with the earlier commit still separately discoverable by its own value; two commits sharing the exact same trailer value (identical checklist content) reachable via more than one first-parent path are refused as ambiguous; a simulated interruption between the checklist write and the commit is safe to retry with no duplicate commit; the exact `WF8b` checklist flow, including a mid-flow checklist correction requiring a second explicit confirmation, reaches scoped acceptance from a clean tree with no manual out-of-contract commit — **owed**, items 191, 195, 197-198, 206, 214 |
 
-## Checkpoint registry (revision 21: 17 checkpoints, unchanged count — `WF4a-iv` (added revision 10) had its session target widened in revision 11; revisions 12 through 21 (`OPUS-R14-*`/`OPUS-R16-*`/`OPUS-R18-*`/`OPUS-R20-*`/`WF8B-S1-001`/`OPUS-R25-*`/`OPUS-R26-*`/`OPUS-R27-*`/`OPUS-R28-*`/`GPT-R29-*`) touched no checkpoint's size or dependency, only `PLAN_STAGE_PROTECTED`/`PLAN_STAGE_EXCLUDED_*` classification (and, since revision 16, how that classification is *derived* per work item — `D-Fingerprint-Generalization`), the registry JSON's own `plan_revision` field, and requirements owned by existing checkpoints; complexity scale defined; this table is a generated view of `docs/ai-workflow/registry/workflow-v2-1-core-registry.json`, D-Registry)
+## Checkpoint registry (revision 26: 17 checkpoints, unchanged count — `WF4a-iv` (added revision 10) had its session target widened in revision 11; revisions 12 through 26 (`OPUS-R14-*`/`OPUS-R16-*`/`OPUS-R18-*`/`OPUS-R20-*`/`WF8B-S1-001`/`OPUS-R25-*`/`OPUS-R26-*`/`OPUS-R27-*`/`OPUS-R28-*`/`GPT-R29-*`/`WF8B-002`/`GPT-R36-*`/`GPT-R37-*`/`GPT-R38-*`/`GPT-R39-*`) touched no checkpoint's size or dependency, only `PLAN_STAGE_PROTECTED`/`PLAN_STAGE_EXCLUDED_*` classification (and, since revision 16, how that classification is *derived* per work item — `D-Fingerprint-Generalization`), the registry JSON's own `plan_revision` field, and requirements owned by existing checkpoints; complexity scale defined; this table is a generated view of `docs/ai-workflow/registry/workflow-v2-1-core-registry.json`, D-Registry). **Revision 22** (`D-Scoped-Remediation-Acceptance`) adds `WFR-53`-`WFR-57`, owned by `WF4c`/`WF4a-ii`/`WF2` — same pattern as `WF8B-S1-001`'s own `WFR-47`-`WFR-52` (owned by `WF4a-i`). **Revision 23** (`GPT-R36-001`/`-002`/`-003`) amends `WFR-53`/`WFR-56` and adds `WFR-58`/`WFR-59`, all owned by `WF4c`. **Revision 24** (`GPT-R37-001`/`-002`/`-003`/`-004`) amends `WFR-53`/`WFR-55`/`WFR-56`/`WFR-58`/`WFR-59` in place (no new requirement added or renumbered), all owned by `WF4c`. **Revision 25** (`GPT-R38-001`/`-002`/`-003`) amends `WFR-58`/`WFR-59` in place and adds `WFR-60`, owned by `WF4c` (`WFR-58`/`-59`) and `WF4c`/`WF-M8b` jointly (`WFR-60`) — no checkpoint's own name/scope text changes, including `WF8b`'s own row below, unchanged. **Revision 26** (`GPT-R39-001`/`-002`) amends `WFR-58`/`WFR-59`/`WFR-60` in place (no new requirement added or renumbered; `WFR-56`'s schema itself is untouched), owned by `WF4c` (`WFR-58`/`-59`) and `WF4c`/`WF-M8b` jointly (`WFR-60`) — no checkpoint's own name/scope text changes.
 
 **Complexity scale** (resolves the undefined-units half of `OPUS-R6-023`):
 1-2 = Small (single, narrow file change, no cross-checkpoint coordination);
@@ -4674,7 +6468,7 @@ After WF8b: existing, unmodified `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` →
 `AWAITING_FUNCTIONAL_REVIEW` → `AWAITING_USER_ACCEPTANCE` →
 `MILESTONE_COMPLETE` gate sequence.
 
-## Missing tests (revision 21 — clean, continuous numbering; items 1-44 from revision 7, 45-54 from revision 8, 55-78 from revision 9, 79-93 from revision 10, 94-99 from revision 11, 100-116 from revision 12, 117-124 from revision 13, 125-137 from revision 14, 138-140 from revision 15, 141-160 from revision 16/17, 161-163 from revision 18, 164-166 from revision 19 — no new numbered items this round; items 161, 166 corrected/extended in place this round (`GPT-R29-*`), items 149, 154, 164, 165 restated unchanged from revision 20, items 153, 162 restated unchanged from revision 19, items 146, 152 restated unchanged from revision 18, the rest of 141-160 restated unchanged from revision 17 — forward-looking obligations owed to `WF8b`'s continued scope, now including item 166 (reassigned from `WF8a-ii`, `GPT-R29-003`); see the note under "Round 6 finding disposition" above)
+## Missing tests (revision 26 — clean, continuous numbering; items 1-44 from revision 7, 45-54 from revision 8, 55-78 from revision 9, 79-93 from revision 10, 94-99 from revision 11, 100-116 from revision 12, 117-124 from revision 13, 125-137 from revision 14, 138-140 from revision 15, 141-160 from revision 16/17, 161-163 from revision 18, 164-166 from revision 19, 167-179 from revision 22 (`WF8B-002`), 180-186 from revision 23 (`GPT-R36-*`), 187-190 from revision 24 (`GPT-R37-*`), 191-196 from revision 25 (`GPT-R38-*`), 197-206 from revision 26 (`GPT-R39-*`) — no new numbered items in revision 20 or 21; items 161, 166 corrected/extended in revision 21 (`GPT-R29-*`); items 170, 171, 176, 178, 182-186 amended in revision 24; item 189 amended in revision 26 — forward-looking obligations owed to `WF8b`'s continued scope, now including items 167-206; see the note under "Round 6 finding disposition" above)
 
 Items already implemented and passing (prototype rounds, `scripts/workflow_fingerprint_test.py`/`_demo_test.py`) are marked **done**; the rest are checkpoint obligations.
 
@@ -4879,6 +6673,70 @@ because each exercises a scope distinct from what 141-163 already cover:
 164. **(new, `OPUS-R27-002`; extended, `OPUS-R28-001`)** `approval_is_current(stage="implementation")` **and** `verify_post_approval_manifest_match(stage="implementation")`, each exercised against a second work item, load that item's own `<id>-artifacts.json` — via `fingerprint.artifacts_path_for_work_item(work_item_id)`, never `DEFAULT_ARTIFACTS_PATH`: deleting the second item's own self-referential `implementation_stage.protected_paths` entry changes only its own implementation-stage `review_content_id` and stales only its own `technical_approval`; editing `workflow-v2-1-core`'s own artifacts file leaves the second item's approval untouched. `verify_post_approval_manifest_match` is the caller with no other coverage in this item — it is the one `/approve-review` step 6a actually invokes post-commit, for either stage (`OPUS-R27-002`, `OPUS-R28-001`, integration/approval-binding) → **owed to `WF8b`**;
 165. **(new, `OPUS-R27-003`; extended, `OPUS-R28-004`/`-006`)** `scripts/prepare-ai-review.sh <base> plan <id>` refuses, before generating any bundle content, when the resolved item's own declared `base_commit` (`WORKFLOW_STATE.json`'s `work_items[<id>].base_commit`) disagrees with the resolved `BASE_SHA` (not the raw `<base>` argument — an abbreviated SHA or symbolic ref that `git rev-parse` resolves correctly must still pass; only a genuine disagreement between the two resolved commits refuses), naming both resolved values — the content↔identity binding fail-closed matrix condition 13 already defines, applied here as an early script-level refusal via `fingerprint.resolve_plan_stage_metadata` (never a second, ad hoc metadata reader) rather than only a downstream manifest-write check. **Extended, `OPUS-R28-004`**: migration step 8a's relocation, run against a byte-copy of this repository's own real `.ai-review/current`/`review-bundle.tar.gz`, (a) refuses with both paths named when the destination already exists non-empty rather than nesting silently; (b) the post-move verification catches a simulated partial move (destination missing an expected file) and stops before the rebinding write, leaving the source-or-partial-destination state diagnosable rather than binding it (`OPUS-R27-003`, `OPUS-R28-004`, `OPUS-R28-006`, integration/bundle + negative) → **owed to `WF8b`**;
 166. **(new, `OPUS-R27-001`; scope reconciled with criterion 19, `OPUS-R28-003`; ownership reassigned, `GPT-R29-003`)** A grep-based conformance test over `docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json` and the Requirements traceability table above asserts that every `WFR-*` requirement's JSON `description` — **the description field only, never the Checkpoint column, which may legitimately cite a design-doc section instead of or alongside a registry checkpoint id and is explicitly out of scope for this test** — matches its rendered table row (backtick markup, `**` bold markup, em dash normalized to `--`, and trailing `(corrected/extended/new OPUS-R.../GPT-R...)` historical-citation parentheticals stripped from the table row before comparison, case-insensitive — the same normalization every other requirement's JSON description already applies implicitly, confirmed by inspection: no existing `description` field embeds a round citation). All 52 rows are already synced and independently verified by this same round (`OPUS-R28-003`) as part of criterion 19's data fix; this item is the **separate, ongoing** automated regression test that keeps them synced going forward — it does not re-do the one-time sync, which criterion 19 already requires and this fix session already performs — enforcing the "generated view" claim rather than merely asserting it, the same class as items 108/109/123, and what would have caught `OPUS-R27-001` during self-review (`OPUS-R27-001`, `OPUS-R28-003`, documentation-consistency lint) → **owed to `WF8b`** (corrected, `GPT-R29-003`: `OPUS-R28-003` split ownership between this item, kept with `WF8a-ii`, and criterion 19's data-correctness half, satisfied by this revision — but `WF8a-ii` is already `COMPLETE`, and checkpoint completion is never reopened to attach a new obligation to it, leaving this item with no reachable owner at all, exactly the gap the current review's own failure scenario describes: a remediation implementation could pass every other required test while this one is never added, since nothing scheduled it. Reassigned to this same `WF8b` continued-scope set that items 141-165 already belong to and included in migration step 10's required-green range alongside them — the smaller of the finding's two offered fixes, and consistent with `WF8b`, not `WF8a-ii`, being the checkpoint whose own `OPUS-R28-003` fix populated the 52 rows this test verifies).
+
+**Items 167-179 (new, revision 22, `WF8B-002`, `D-Scoped-Remediation-Acceptance`)**:
+
+167. `/accept-milestone` succeeds unchanged when `is_terminal` (`select_next_checkpoint` returns `None`) and phase is `AWAITING_FUNCTIONAL_REVIEW` — the regression guard proving the new guard does not disturb the one path that must never break → WF4a-ii;
+168. `/accept-milestone` refuses, naming the actual phase and the outstanding checkpoint, when `select_next_checkpoint` returns a selectable checkpoint id (non-terminal, not blocked) — this exact finding's own reproduction shape → WF4a-ii;
+169. `/accept-milestone` refuses identically when `select_next_checkpoint` instead raises `NoCheckpointReadyError` (blocked, non-terminal) — the outstanding checkpoint named is the blocked one, not a selectable one → WF4a-ii;
+170. `complete_work_item` itself (not only the `/accept-milestone` command layer) raises `IncompleteOwnCheckpointsError` directly when its own on-disk registry load is non-terminal, independent of `incomplete_children` — a direct unit test, defense-in-depth from the command-level guard → WF4c;
+171. `/accept-scoped-remediation` happy path: non-terminal registry, `technical_approval.status == CURRENT`, correct confirmation text → appends exactly one `scoped_remediation_acceptance` entry with the exact ten fields (revision 23, `GPT-R36-003`, field count corrected revision 24, `GPT-R37-003`), sets `phase` to `IMPLEMENTING`, and leaves `checkpoints`/`current_checkpoint_id`/`active_work_item_id`/`plan_approval`/`technical_approval`/`functional_acceptance_status` byte-identical to before the call → WF4c;
+172. `/accept-scoped-remediation` refuses when phase is not `AWAITING_FUNCTIONAL_REVIEW` — three distinct negative cases: `IMPLEMENTING`, `AWAITING_TECHNICAL_APPROVAL`, `MILESTONE_COMPLETE` → WF4c;
+173. `/accept-scoped-remediation` refuses when the registry is actually terminal (`select_next_checkpoint` returns `None`), naming `/accept-milestone` as the correct command instead — the "reuse of terminal acceptance as scoped acceptance" case, refused structurally by `scoped_remediation_gate_reachable` alone → WF4c;
+174. `/accept-scoped-remediation` refuses when `technical_approval.status != "CURRENT"` (a bounded-fix round landed after technical approval but before this command ran) — the superseded-implementation-revision case → WF4c;
+175. `validate_user_confirmation`'s `stage="scoped_remediation"` text is non-interchangeable with `stage="acceptance"` text naming the same `work_item_id` — a string satisfying one stage keyword never satisfies the other, extending the existing non-novelty-check property (`OPUS-R10-010`/`GPT-R11-004`) to the fourth `APPROVAL_STAGES` member → WF4a-ii;
+176. a second invocation of `/accept-scoped-remediation` immediately after a first success, naming the identical round, with correct current-turn `scoped_remediation` confirmation supplied, is recognized as an exact-round replay before the ordinary phase guard runs (`phase` is now `IMPLEMENTING`) and idempotently reports the existing acceptance commit rather than erroring or duplicating it (revision 24, `GPT-R37-002`, correcting revision 22's "refuses via the ordinary phase guard alone" framing, which never actually reaches a duplicate-detection question since the phase guard alone would already refuse; revision 25, `GPT-R38-002`, further correcting that the replay is recognized only via `resolve_scoped_remediation_round`'s own load-and-compare, never a bare trailer-key match) → WF4c;
+177. fresh-session resume: after `/accept-scoped-remediation`, a brand-new process re-reading `WORKFLOW_STATE.json`/the registry from disk alone (no in-memory carryover) re-selects the same outstanding checkpoint via `select_next_checkpoint`/`/bootstrap-workflow-v2`'s own step 3 — no new pointer or marker file exists to read → WF2;
+178. `complete_work_item` performs no registry load at all for a work item with `registry_path: null` (the legacy `milestone-8` shape) — vacuously terminal, unchanged behavior from before this fix → WF4c;
+179. this exact finding's own end-to-end integration test: an item with `technical_approval` freshly `CURRENT` while a registry checkpoint remains incomplete can never reach `MILESTONE_COMPLETE` via any documented command sequence without first passing through `/accept-scoped-remediation` and returning to `IMPLEMENTING` → WF4c, WF2.
+
+**Items 180-186 (new, revision 23, `GPT-R36-001`/`-002`/`-003`,
+`D-Scoped-Remediation-Acceptance`'s hardening; 182-186 amended and
+187-190 added in revision 24, `GPT-R37-001`/`-002`/`-003`/`-004`; 176
+(above), 182, and 186 further amended and 191-196 added in revision 25,
+`GPT-R38-001`/`-002`/`-003`; 189 further amended and 197-206 added in
+revision 26, `GPT-R39-001`/`-002`; 185, 199, 200 (replaced), 203, 205,
+and 206 further amended and 207-214 added in revision 27, `GPT-R40-001`/
+`-002`, the same decision's further hardening)**:
+
+180. `/accept-scoped-remediation` creates a dedicated, metadata-only provenance commit before reporting success, carrying a discoverable `Workflow-Scoped-Remediation-Acceptance: <outstanding_checkpoint_id>/<implementation_revision>` trailer (plus the ordinary `Workflow-Work-Item` trailer naming the work item, revision 24 correction, `GPT-R37-002`); the state write and the commit succeed together or not at all — simulated commit failure leaves neither in effect → WF4c;
+181. a fresh session's `/bootstrap-workflow-v2` resumes an outstanding checkpoint only from a *committed* scoped-remediation acceptance — a simulated crash leaving the acceptance as an uncommitted working-tree write is treated exactly as if the acceptance never happened, not as a completed one → WF4c, WF2;
+182. `/accept-scoped-remediation` is idempotent for a replay of the exact same accepted round, keyed by `outstanding_checkpoint_id`/`implementation_revision` (a matching trailer is discovered *and* its own recorded fields agree with the live values, per `resolve_scoped_remediation_round`: no new commit created, the existing commit reported, no error), regardless of the current phase — revision 24, `GPT-R37-002`, replacing the checkpoint-only keying and unconditional "differently-accepted round" refusal revision 23 specified (see items 188-189 below for the corrected, round-scoped behavior); revision 25, `GPT-R38-002`, further correcting that a matching trailer alone, without the field comparison, is never sufficient → WF4c;
+183. `complete_work_item` raises a dedicated `RegistryCoverageError` (not `IncompleteOwnCheckpointsError`) when called for a registry-backed work item (non-null `registry_path`) whose own registry file fails safe-path resolution, is missing/unreadable, or is malformed/non-object JSON → WF4c;
+184. `complete_work_item` raises the same `RegistryCoverageError` when the loaded on-disk registry's own declared `work_item_id` does not match the work item being completed — the foreign/mismatched-registry case → WF4c;
+185. the `scoped_remediation_acceptance` entry records `implementation_revision`, `reviewed_implementation_head`, the functional-review checklist's path, a committed blob digest of that checklist, and the exact `Workflow-Functional-Checklist` evidence commit SHA that digest was drawn from, alongside the five fields revision 22 already defined and the new `acceptance_record_version` — a schema assertion on the full eleven-field set (count corrected revision 24, `GPT-R37-003`; eleventh field added revision 27, `GPT-R40-002`) → WF4c;
+186. `/accept-scoped-remediation` refuses when the live `reviewed_implementation_head` or the checklist's current committed digest disagree with the values about to be recorded (simulating a checklist edit or a new implementation head landing between functional review and acceptance), naming the expected and current value — this check is reachable at all only once a discoverable checklist-evidence commit for the round exists (revision 25, `GPT-R38-001`; see item 194 below for the refusal when it does not) → WF4c;
+187. `complete_work_item`'s signature carries no `registry` parameter at all — a caller cannot substitute a fabricated in-memory dict with a matching `work_item_id` for the authoritative on-disk file, closing the exact bypass class `GPT-R37-001` demonstrated → WF4c;
+188. a genuinely new, later-reviewed remediation round (a distinct `implementation_revision`, reached via a fresh `apply_technical_approval` and functional review) against the same still-outstanding checkpoint `/accept-scoped-remediation` already accepted once is permitted, appending a second `scoped_remediation_acceptance` entry and creating a second provenance commit, rather than refused as a conflicting duplicate → WF4c;
+189. a same-round collision — the discovered trailer's `outstanding_checkpoint_id`/`implementation_revision` match the round about to be recorded, but the existing commit's recorded `reviewed_implementation_head`, `technical_approval_review_content_id`, `functional_checklist_path`, `functional_checklist_blob`, or `active_work_item_id_at_acceptance` disagree with the live values (revision 26, `GPT-R39-002`, widened from the three-field subset revision 25 compared) — is refused as a conflicting duplicate, naming the already-recorded commit and the specific disagreeing field, distinct from the exact-replay case in item 182 above → WF4c;
+190. `/accept-scoped-remediation` refuses outright, before computing or recording any blob, when the functional-review checklist path has a staged or unstaged working-tree change relative to `HEAD` — both at the guard's first read and, separately, immediately before the provenance commit if the tree became dirty in between → WF4c;
+191. end to end: `/prepare-functional-review`'s checklist-evidence commit followed by `/accept-scoped-remediation` lets the exact `WF8b` checklist flow — write checklist, commit it, walk it, accept it — reach scoped acceptance starting from a clean tree, with no manual out-of-contract commit anywhere in the sequence → WF4c, WF-M8b;
+192. `resolve_scoped_remediation_round` reports `ExactReplay` only after loading and comparing the discovered commit's own recorded `scoped_remediation_acceptance` entry against the live round's fields — a hand-edited or corrupted state entry whose trailer key matches but whose recorded fields disagree is refused as a conflicting duplicate, not silently treated as an idempotent replay → WF4c;
+193. `resolve_scoped_remediation_round` reports `AmbiguousHistory` when `discover_scoped_remediation_commits` itself raises `AmbiguousScopedRemediationTrailerError` (more than one first-parent-reachable commit for the same round key), refused identically whether encountered by the entry guard's own call or the provenance-commit step's pre-write re-check → WF4c;
+194. `/accept-scoped-remediation` refuses outright, naming the missing round key and `/prepare-functional-review` as the remedy, when no `Workflow-Functional-Checklist` evidence commit is discoverable for the exact live round — checked, and failing, before the plain dirty-working-tree refusal (item 190) is ever reached → WF4c;
+195. `/prepare-functional-review`'s checklist-evidence commit is idempotent by content: rerunning with an unchanged checklist creates nothing new and reports the previously-created commit; rerunning with a changed checklist for the same round creates a new, distinct commit, discoverable ahead of the earlier one; a simulated interruption between the checklist file write and the commit is safe to retry with no duplicate commit produced → WF4c, WF-M8b;
+196. current-turn user confirmation for `stage="scoped_remediation"` is validated before any replay classification runs — missing, stale, wrong-work-item, or wrong-stage (e.g. `"acceptance"`) confirmation text is refused identically whether the live round would otherwise resolve to `ExactReplay` or proceed through the ordinary entry guard as a new acceptance → WF4c;
+197. two `Workflow-Functional-Checklist` evidence commits for the same round sharing byte-identical checklist content (a genuine duplicate, not a revision) both first-parent reachable are refused as ambiguous by `discover_functional_checklist_commits`/`discover_current_functional_checklist_evidence`, exactly as `discover_scoped_remediation_commits` refuses its own duplicate trailer, never silently picked between (revision 26, `GPT-R39-001`) → WF-M8b;
+198. two `Workflow-Functional-Checklist` evidence commits for the same round with genuinely distinct checklist content (an older commit, then a corrected, newer commit) coexist without ambiguity — each discoverable by its own distinct trailer value — and `discover_current_functional_checklist_evidence` reports the newer as the round's current evidence (revision 26, `GPT-R39-001`) → WF-M8b;
+199. `/accept-scoped-remediation`'s pre-commit evidence guard and `apply_scoped_remediation_acceptance`'s recorded `functional_checklist_blob`/`functional_checklist_evidence_commit` bind to the round's current checklist-evidence commit (item 198's newer one) **only when the current-turn `scoped_remediation` confirmation itself names that current commit** (revision 27, `GPT-R40-001`, narrowing revision 26's unconditional binding claim); a confirmation still naming a stale, superseded evidence commit for the same round is refused rather than silently upgraded → WF4c;
+200. **(replaced, revision 27, `GPT-R40-001`, reversing revision 26's claim)** a `Workflow-Functional-Checklist` evidence commit created after `/prepare-functional-review` already reported an earlier commit's SHA to the user, and after the user already gave a `scoped_remediation` confirmation naming that earlier commit, does **not** become authorized for that confirmation: a subsequent `/accept-scoped-remediation` invocation supplying the same, unmodified confirmation text refuses as a stale confirmation, naming both the confirmed and the current evidence identity, rather than silently binding to the newer evidence — discovery may still identify the newer commit as the round's *current* evidence for `/prepare-functional-review`'s own idempotency purposes (item 195, unchanged), but current-ness alone never authorizes an existing confirmation to it → WF4c, WF-M8b;
+201. `resolve_scoped_remediation_round` refuses as `ConflictingDuplicate` when the discovered commit's recorded `active_work_item_id_at_acceptance` disagrees with the live global `active_work_item_id` at classification time even though the round's other fields all agree — the changed-active-pointer case (revision 26, `GPT-R39-002`) → WF4c;
+202. `resolve_scoped_remediation_round` refuses as `ConflictingDuplicate` when the discovered commit's recorded `functional_checklist_path` disagrees with the live fixed constant — the wrong-checklist-path case (revision 26, `GPT-R39-002`) → WF4c;
+203. `resolve_scoped_remediation_round` reports `MalformedAcceptanceRecord` when the discovered commit's own `scoped_remediation_acceptance` entry declares an `acceptance_record_version` other than `2` (version updated revision 27, `GPT-R40-002`; no version-1 record exists anywhere, since nothing implementing this mechanism has shipped yet), is missing a documented field or carries an unexpected extra one, or has a missing/malformed `recorded_at`/`user_confirmation` — never silently treated as a replay or an ordinary conflicting duplicate (revision 26, `GPT-R39-002`) → WF4c;
+204. `resolve_scoped_remediation_round` refuses as `ConflictingDuplicate` when the discovered commit's own recorded `outstanding_checkpoint_id`/`implementation_revision` fields disagree with the round key that discovered it — the hand-edited-entry-vs-trailer-key mismatch case (revision 26, `GPT-R39-002`) → WF4c;
+205. an exact replay with every one of the eight canonically compared fields (`outstanding_checkpoint_id`, `implementation_revision`, `reviewed_implementation_head`, `technical_approval_review_content_id`, `functional_checklist_path`, `functional_checklist_blob`, `functional_checklist_evidence_commit`, `active_work_item_id_at_acceptance`) matching the live values is still reported `ExactReplay` — a regression guard proving the widened comparison does not turn a genuine replay into a false conflicting-duplicate refusal (revision 26, `GPT-R39-002`; widened to eight fields revision 27, `GPT-R40-002`) → WF4c;
+206. this exact `WF8b` continued-scope flow, end to end, with a checklist correction between preparation and acceptance (two `/prepare-functional-review` invocations producing two distinct evidence commits for the same round): the user's first confirmation, naming the original evidence commit, is refused once the corrected commit becomes current; only after a second `/prepare-functional-review` report and a second, explicit `scoped_remediation` confirmation naming the corrected commit does scoped acceptance succeed, bound to the corrected evidence — no manual out-of-contract commit, no false ambiguity, no false replay, and no silent binding to unreviewed evidence (revision 26, `GPT-R39-001`/`-002`; corrected revision 27, `GPT-R40-001`, to require the second confirmation rather than assume discovery alone suffices) → WF4c, WF-M8b.
+
+**Items 207-214 (new, revision 27, `GPT-R40-001`/`-002`, `D-Scoped-Remediation-Acceptance`'s evidence-binding hardening)**:
+
+207. `/accept-scoped-remediation`'s confirmation-evidence-binding check succeeds, and acceptance proceeds, when the `scoped_remediation` confirmation names evidence commit A's exact SHA and blob and A remains the round's current (only) checklist-evidence commit — the ordinary happy path, unaffected by this revision → WF4c;
+208. a second, distinct `Workflow-Functional-Checklist` evidence commit B, created for the same round after the user's confirmation named commit A, makes that confirmation stale: `/accept-scoped-remediation` refuses, naming both A (confirmed) and B (current), rather than silently binding to B — this exact finding's own reproduction (`GPT-R40-001`) → WF4c;
+209. after the user receives a fresh `/prepare-functional-review` report for commit B and supplies a new `scoped_remediation` confirmation naming B's exact SHA and blob, `/accept-scoped-remediation` succeeds and binds to B — proving item 208's refusal is not a permanent block, only a requirement for a fresh, explicitly re-bound confirmation → WF4c;
+210. `parse_scoped_remediation_confirmation_binding_fields` refuses a confirmation missing either the `Functional checklist evidence commit:` or `Functional checklist evidence blob:` field, or containing a malformed (non-40-hex) value for either, naming which field failed — checked before the registry loads, identically for a first execution and a replay → WF4c;
+211. the pre-commit evidence guard refuses when a confirmation names a commit SHA that is discoverable for the round but whose actual `git rev-parse <commit>:<functional_checklist_path>` content disagrees with both the confirmed blob and the trailer's own embedded blob component — the hand-crafted-trailer case (`GPT-R40-001`) → WF4c;
+212. the pre-commit evidence guard refuses when a confirmation names an evidence commit SHA that does not belong to the exact live round at all (wrong `work_item_id`, wrong `implementation_revision`, or simply not a `Workflow-Functional-Checklist` commit) — refused identically to the missing-evidence case, naming the confirmed commit and the expected round key → WF4c;
+213. `resolve_scoped_remediation_round`'s exact-replay comparison validates the recorded `functional_checklist_evidence_commit` as an eighth canonical field, not only `functional_checklist_blob` — a hand-edited or corrupted record whose `functional_checklist_evidence_commit` disagrees with what a genuine replay would record right now, while every other field agrees, is refused as a conflicting duplicate rather than reported `ExactReplay` (`GPT-R40-002`) → WF4c;
+214. this exact `WF8b` continued-scope flow's own end-to-end reproduction of the finding's failure scenario: a checklist correction landing between the user's review and `/accept-scoped-remediation`'s invocation is refused rather than silently accepted, and only a second, fresh confirmation explicitly naming the corrected commit reaches scoped acceptance — the full `GPT-R40-001` failure scenario, defeated → WF4c, WF-M8b.
 
 ## Usability concerns (resolves round 5/6's undispositioned per-gate reporting requirement, and GPT-R9-004's bootstrap-sequence requirement)
 
@@ -5462,6 +7320,44 @@ implementation-review gate.
   standing-invariant statement above (`OPUS-R28-012`), verified again
   against this round's own bundle before this review began, not restated a
   fourth time here.
+
+**Revision 22's own notes** (`WF8B-002`, self-discovered):
+
+- **This revision is deliberately smaller than the finding it fixes
+  proposed** — see "WF8b finding disposition (revision 21 → 22)"'s own
+  "Critical evaluation of the finding's own proposed design" subsection
+  above for the full reasoning. In short: the finding's own proposed new
+  phase, entered directly from `apply_technical_approval`, would have
+  silently skipped functional review for every future continued-scope
+  round — the opposite of what actually, correctly happened for the very
+  remediation this finding is about. No new phase is added here; the
+  terminal/non-terminal decision moves to each accept command's own entry
+  guard instead, recomputed fresh every time from `select_next_checkpoint`
+  — the same discriminator the finding itself names.
+- **The finding's own `/accept-milestone` guard proposal (`phase ==
+  AWAITING_USER_ACCEPTANCE`) is flagged, not adopted as written**: no
+  function in this codebase has ever written that phase value (confirmed
+  by grep) — a real, pre-existing gap predating this entire project, not
+  introduced or widened here. Adopting the finding's guard literally would
+  have made `/accept-milestone` permanently unreachable for every terminal
+  item the moment this fix landed, not only `WF8b`'s. The guard specified
+  here checks the phase this repository's tooling actually produces
+  (`AWAITING_FUNCTIONAL_REVIEW`), while still accepting
+  `AWAITING_USER_ACCEPTANCE` for forward compatibility should a future,
+  separate fix ever give it a real writer.
+- **This revision, like revisions 16-21, specifies but does not implement**
+  the fix: no file under `scripts/` or `.claude/commands/` is edited. The
+  dedicated fix session that follows approval implements it under the
+  ordinary implementation-review/technical-approval cycle.
+- `active_work_item_id` remains `v2-1-dry-run`, `WF8b` remains absent from
+  `checkpoints` (not `COMPLETE`), and S1 remains unexecuted —
+  `docs/ai-workflow/WORKFLOW_STATE.json`'s `technical_approval`/
+  `checkpoints`/`functional_acceptance_status` are untouched by this
+  revision; only `phase` (to `AWAITING_EXTERNAL_PLAN_REVIEW`, for this
+  plan revision's own review cycle), `plan_revision`, `state_revision`,
+  and `last_transition` change, exactly mirroring how revisions 16-21
+  themselves cycled the item's `phase` through a fresh plan-review round
+  while `WF8b` sat untouched throughout.
 
 ## Explicit non-goals (unchanged from round 5)
 
