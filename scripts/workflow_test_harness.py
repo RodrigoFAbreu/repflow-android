@@ -254,6 +254,31 @@ def plan_stage_protected_paths(work_item_id: str = "wi") -> frozenset[str]:
     })
 
 
+def plan_stage_excluded_paths() -> Mapping[str, str]:
+    """The plan-stage excluded-path set `write_plan_docs`'s fixture
+    actually writes into `<work_item_id>-artifacts.json` (`GPT-R30-005`):
+    a caller passing an explicit `protected` for a `work_item_id` other
+    than `workflow-v2-1-core` must pass its own matching
+    `excluded_paths`/`excluded_prefixes` too, never
+    `PLAN_STAGE_EXCLUDED_PATHS`/`PLAN_STAGE_EXCLUDED_PREFIXES` (that
+    module default is retired for exactly this reason -- it is
+    `workflow-v2-1-core`'s own set, not a generic fixture default)."""
+    return {
+        ".gitignore": "repository housekeeping, not design content",
+        "docs/ai-workflow/WORKFLOW_STATE.json": "runtime-mutable per-work-item state",
+        "docs/ai-workflow/WORKFLOW_CONFIG.json": "runtime-mutable repository-level config",
+    }
+
+
+def plan_stage_excluded_prefixes() -> Mapping[str, str]:
+    """Prefix counterpart of `plan_stage_excluded_paths` -- see there."""
+    return {
+        "docs/ai-workflow/registry/": "non-immutable registry artifacts, including this item's own artifacts-declarations file",
+        "docs/ai-workflow/requirements/": "non-immutable requirements artifacts",
+        "scripts/": "workflow tooling scripts, present or future",
+    }
+
+
 def base_work_item(**overrides: object) -> dict:
     """A minimal work-item dict accepted by
     `workflow_state.validate_state`/`_validate_work_item`. `**overrides`
@@ -267,6 +292,12 @@ def base_work_item(**overrides: object) -> dict:
         "phase": "IMPLEMENTING",
         "checkpoints": {},
         "plan_review_stages": None,
+        # Matches `base_registry`'s own default `plan_revision=1`
+        # (`GPT-R30-004`, `PlanRevisionMirrorMismatchError`): a fixture
+        # combining both builders' defaults with neither overridden must
+        # not spuriously fail `validate_state`'s state/registry mirror
+        # check.
+        "plan_revision": 1,
     }
     work_item.update(overrides)
     return work_item

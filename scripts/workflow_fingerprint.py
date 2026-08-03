@@ -1175,17 +1175,27 @@ def compute_review_content_id_plan_stage(
     work_item_type: str,
     work_item_id: str,
     plan_revision: int,
-    protected: frozenset[str] = PLAN_STAGE_PROTECTED,
-    excluded_paths: Mapping[str, str] = PLAN_STAGE_EXCLUDED_PATHS,
-    excluded_prefixes: Mapping[str, str] = PLAN_STAGE_EXCLUDED_PREFIXES,
+    protected: frozenset[str],
+    excluded_paths: Mapping[str, str],
+    excluded_prefixes: Mapping[str, str],
 ) -> tuple[str, dict]:
     """No identity-bearing scalar has a default (OPUS-R8-010): the caller
     must supply `work_item_type`/`work_item_id`/`plan_revision` explicitly.
     `work_item_id` is validated against the slug grammar. The protected and
     exclusion sets are themselves part of the hashed projection
     (OPUS-R8-014), so editing either changes `review_content_id` even when
-    no file content changes. `work_item_type` is validated against the
-    controlled vocabulary (GPT-R9-014)."""
+    no file content changes -- and, for the same reason, `GPT-R30-005`
+    retired their former `PLAN_STAGE_*` defaults: a generic caller
+    omitting them used to silently compute `workflow-v2-1-core`'s own
+    identity instead of failing loudly. Every production entry point
+    (`compute_review_content_id_plan_stage_for_work_item` and its
+    commit-source counterpart) already resolves and passes its own
+    work item's sets explicitly, so this is a no-op for real callers;
+    fixtures that genuinely want `workflow-v2-1-core`'s own sets pass
+    `PLAN_STAGE_PROTECTED`/`PLAN_STAGE_EXCLUDED_PATHS`/`PLAN_STAGE_EXCLUDED_PREFIXES`
+    explicitly (or, in the hermetic unit suite, via `ScratchRepo.compute()`'s
+    own explicitly-scoped defaults). `work_item_type` is validated against
+    the controlled vocabulary (GPT-R9-014)."""
     validate_work_item_id(work_item_id)
     validate_work_item_type(work_item_type)
     base_full = resolve_base(repo_root, base)
@@ -1216,15 +1226,16 @@ def compute_review_content_id_plan_stage_at_commit(
     work_item_type: str,
     work_item_id: str,
     plan_revision: int,
-    protected: frozenset[str] = PLAN_STAGE_PROTECTED,
-    excluded_paths: Mapping[str, str] = PLAN_STAGE_EXCLUDED_PATHS,
-    excluded_prefixes: Mapping[str, str] = PLAN_STAGE_EXCLUDED_PREFIXES,
+    protected: frozenset[str],
+    excluded_paths: Mapping[str, str],
+    excluded_prefixes: Mapping[str, str],
 ) -> tuple[str, dict]:
     """The commit-source counterpart of `compute_review_content_id_plan_stage`,
     used for post-approval-commit parity verification: same projection
     shape, snapshot read from a commit instead of the working tree, and
     (OPUS-R8-005) the same fail-closed classification precondition, scoped
-    to `base..commit`."""
+    to `base..commit`. Same no-default discipline as the worktree-source
+    function above (`GPT-R30-005`)."""
     validate_work_item_id(work_item_id)
     validate_work_item_type(work_item_type)
     base_full = resolve_base(repo_root, base)
@@ -1331,8 +1342,15 @@ def load_implementation_stage_classification(
     of `load_plan_stage_classification`'s `plan_stage` sub-key. A
     pre-migration (schema_version 1, flat) file has no `implementation_stage`
     key and fails closed the same way a wholly absent file would, per
-    condition 11's stated pre-migration boundary."""
+    condition 11's stated pre-migration boundary. A wholly absent file
+    (`GPT-R30-003`/`-004`, "wrong artifacts declarations") raises the
+    same `MissingWorkItemArtifactsDeclarationError` its plan-stage
+    sibling (`load_plan_stage_classification`) already does for the
+    equivalent absent-file case -- never a raw, undocumented
+    `FileNotFoundError` leaking past this function's own contract."""
     full = repo_root / artifacts_path
+    if not full.is_file():
+        raise MissingWorkItemArtifactsDeclarationError(_to_posix(artifacts_path))
     data = json.loads(full.read_text())
     implementation_stage = data.get("implementation_stage")
     if implementation_stage is None:
@@ -1962,7 +1980,14 @@ def render_manifest_md(
     `review_content_id` at all. Repository-local commands read them back
     via `assert_local_generation_matches`; an external reviewer treats
     them as informational only (`WFR-17`)."""
-    lines = ["# Bundle Manifest", ""]
+    # `stage: plan` is hardcoded, not a parameter: this function has
+    # exactly one production caller (`write_manifest_with_verified_
+    # identifiers`, the plan-stage writer) -- the implementation-stage
+    # counterpart is `render_manifest_md_implementation_stage`, an
+    # independent function per this codebase's established per-stage
+    # split (`OPUS-R20-003`), never a shared code path with a stage
+    # parameter a caller could pass wrong (`GPT-R30-002`).
+    lines = ["# Bundle Manifest", "", "stage: plan"]
     if bundle_id is not None:
         lines.append(f"bundle_id: {bundle_id}")
     lines.append(f"review_content_id: {review_content_id}")
@@ -2248,6 +2273,210 @@ def write_manifest_with_verified_identifiers_for_work_item(
     )
 
 
+def render_manifest_md_implementation_stage(
+    *,
+    review_content_id: str,
+    protected_paths: Mapping[str, str],
+    protected_prefixes: Mapping[str, str],
+    excluded_paths: Mapping[str, str],
+    excluded_prefixes: Mapping[str, str],
+    bundle_id: str | None = None,
+    work_item_id: str | None = None,
+    work_item_type: str | None = None,
+    base_commit: str | None = None,
+    reviewed_implementation_head: str | None = None,
+    worktree_root: str | None = None,
+    generation_head: str | None = None,
+) -> str:
+    """Implementation-stage counterpart of `render_manifest_md` — an
+    independent function, not a shared code path with a `stage`
+    parameter a caller could pass wrong, matching `classify_path_
+    implementation_stage`'s own precedent (`OPUS-R20-003`). The
+    implementation-stage classification is a four-set (protected paths,
+    protected prefixes, excluded paths, excluded prefixes) mapping to
+    justification strings, so every section is rendered with its
+    justification, and there is a "Protected prefixes" section the plan
+    stage has no counterpart for. Always states `stage: implementation`
+    (`GPT-R30-002`) — this function has no other caller. `
+    reviewed_implementation_head`, if supplied, is the exact commit
+    `review_content_id` was computed against (`compute_review_content_id_
+    implementation_stage_at_commit`'s own `commit` argument) — a plain
+    header line, never part of the hashed projection itself, same
+    diagnostic-only discipline as `worktree_root`/`generation_head`
+    (`WFR-17`)."""
+    lines = ["# Bundle Manifest", "", "stage: implementation"]
+    if bundle_id is not None:
+        lines.append(f"bundle_id: {bundle_id}")
+    lines.append(f"review_content_id: {review_content_id}")
+    if work_item_id is not None:
+        lines.append(f"work_item_id: {work_item_id}")
+    if work_item_type is not None:
+        lines.append(f"work_item_type: {work_item_type}")
+    if base_commit is not None:
+        lines.append(f"base_commit: {base_commit}")
+    if reviewed_implementation_head is not None:
+        lines.append(f"reviewed_implementation_head: {reviewed_implementation_head}")
+    if worktree_root is not None:
+        lines.append(f"worktree_root: {worktree_root}")
+    if generation_head is not None:
+        lines.append(f"generation_head: {generation_head}")
+    lines.append("")
+    lines.append("## Protected paths")
+    if protected_paths:
+        for path, reason in sorted(protected_paths.items()):
+            lines.append(f"- `{path}` — {reason}")
+    else:
+        lines.append("(none)")
+    lines.append("")
+    lines.append("## Protected prefixes (directories)")
+    if protected_prefixes:
+        for path, reason in sorted(protected_prefixes.items()):
+            lines.append(f"- `{path}` — {reason}")
+    else:
+        lines.append("(none)")
+    lines.append("")
+    lines.append("## Excluded paths (exact match)")
+    if excluded_paths:
+        for path, reason in sorted(excluded_paths.items()):
+            lines.append(f"- `{path}` — {reason}")
+    else:
+        lines.append("(none)")
+    lines.append("")
+    lines.append("## Excluded prefixes (directories)")
+    if excluded_prefixes:
+        for path, reason in sorted(excluded_prefixes.items()):
+            lines.append(f"- `{path}` — {reason}")
+    else:
+        lines.append("(none)")
+    return "\n".join(lines) + "\n"
+
+
+def write_manifest_with_verified_identifiers_implementation_stage(
+    repo_root: Path,
+    bundle_dir: Path,
+    base: str,
+    head: str,
+    work_item_type: str,
+    work_item_id: str,
+    protected_paths: Mapping[str, str],
+    protected_prefixes: Mapping[str, str],
+    excluded_paths: Mapping[str, str],
+    excluded_prefixes: Mapping[str, str],
+    *,
+    allow_rebind: bool = False,
+) -> tuple[str, str]:
+    """Implementation-stage counterpart of `write_manifest_with_verified_
+    identifiers` (`GPT-R30-001`/`-002`) — the only code path allowed to
+    write an implementation-stage `MANIFEST.md`. `review_content_id` is
+    computed via `compute_review_content_id_implementation_stage_at_commit`,
+    commit-source and anchored at `head` (the final reviewed
+    implementation HEAD) rather than worktree-source, so the identifier
+    is reproducible from a fresh clone or archive extraction and does not
+    depend on uncommitted local state — the defect `GPT-R30-001` reported
+    (a stale, hand-carried plan-stage manifest reused for an
+    implementation bundle) cannot recur, since this is the only writer
+    and it always recomputes both identifiers fresh, in memory, before
+    any write, exactly mirroring the plan-stage writer's own write
+    sequence (idempotence-checked, atomic replace). `head` becomes the
+    written `reviewed_implementation_head` field and the diagnostic-only
+    `generation_head` alike, so both agree by construction rather than by
+    convention. Returns `(review_content_id, bundle_id)`."""
+    manifest_path = bundle_dir / MANIFEST_FILENAME
+    base_full = resolve_base(repo_root, base)
+    head_full = resolve_base(repo_root, head)
+
+    if not allow_rebind:
+        _assert_manifest_binding_agrees(manifest_path, work_item_id=work_item_id, base_commit=base_full)
+
+    digest, _projection = compute_review_content_id_implementation_stage_at_commit(
+        repo_root, base_full, head_full, work_item_type, work_item_id,
+        protected_paths, protected_prefixes, excluded_paths, excluded_prefixes,
+    )
+    assert_review_request_states_review_content_id(bundle_dir, digest)
+
+    worktree_root, generation_head = current_worktree_root_and_head(repo_root)
+
+    placeholder_content = render_manifest_md_implementation_stage(
+        review_content_id=digest, protected_paths=protected_paths, protected_prefixes=protected_prefixes,
+        excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,
+        work_item_id=work_item_id, work_item_type=work_item_type, base_commit=base_full,
+        reviewed_implementation_head=head_full,
+        worktree_root=worktree_root, generation_head=generation_head,
+    ).encode()
+    bundle_id, _entries = compute_bundle_id(
+        bundle_dir, manifest_content_override=placeholder_content
+    )
+
+    final_content = render_manifest_md_implementation_stage(
+        review_content_id=digest, protected_paths=protected_paths, protected_prefixes=protected_prefixes,
+        excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,
+        bundle_id=bundle_id,
+        work_item_id=work_item_id, work_item_type=work_item_type, base_commit=base_full,
+        reviewed_implementation_head=head_full,
+        worktree_root=worktree_root, generation_head=generation_head,
+    )
+
+    recomputed_bundle_id, _ = compute_bundle_id(
+        bundle_dir, manifest_content_override=final_content.encode()
+    )
+    if recomputed_bundle_id != bundle_id:
+        raise BundleIdNotIdempotentError(bundle_id, recomputed_bundle_id)
+
+    recomputed_digest, _ = compute_review_content_id_implementation_stage_at_commit(
+        repo_root, base_full, head_full, work_item_type, work_item_id,
+        protected_paths, protected_prefixes, excluded_paths, excluded_prefixes,
+    )
+    if recomputed_digest != digest:
+        raise ReviewContentIdNotIdempotentError(digest, recomputed_digest)
+
+    tmp_path = bundle_dir / f".{MANIFEST_FILENAME}.tmp-{os.getpid()}"
+    tmp_path.write_text(final_content)
+    os.replace(tmp_path, manifest_path)
+
+    return digest, bundle_id
+
+
+def write_manifest_with_verified_identifiers_implementation_stage_for_work_item(
+    repo_root: Path, work_item_id: str, base: str, *, head: str = "HEAD", allow_rebind: bool = False,
+) -> tuple[str, str]:
+    """Work-item-generic entry point for `write_manifest_with_verified_
+    identifiers_implementation_stage`, mirroring the plan-stage wrapper's
+    own bind precondition: the resolved `.ai-review/<work_item_id>/current`
+    directory must already contain the complete required generation file
+    set (`REQUIRED_GENERATION_FILES`) before this call, or it refuses with
+    `MissingRequiredBundleFileError`, naming the first missing file —
+    never a distinct "creates it" outcome. `base` is required, with no
+    resolved default: unlike the plan stage, there is no `WORKFLOW_STATE.json`-
+    declared implementation-stage base commit to fall back to — the only
+    real caller (`prepare-ai-review.sh`) already has it, as every stage's
+    own required first positional argument."""
+    resolved_bundle_dir = repo_root / ".ai-review" / work_item_id / "current"
+    missing = sorted(
+        f for f in REQUIRED_GENERATION_FILES if not (resolved_bundle_dir / f).is_file()
+    )
+    if missing:
+        raise MissingRequiredBundleFileError(missing)
+
+    work_items, _active = _load_workflow_state_work_items(repo_root, None)
+    entry = work_items.get(work_item_id)
+    if entry is None:
+        raise UnknownWorkItemError(work_item_id)
+    work_item_type = entry.get("work_item_type")
+    if work_item_type is None:
+        raise UnknownWorkItemError(f"work_items[{work_item_id!r}].work_item_type is null")
+
+    artifacts_path = artifacts_path_for_work_item(work_item_id)
+    protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
+        load_implementation_stage_classification(repo_root, artifacts_path)
+    )
+
+    return write_manifest_with_verified_identifiers_implementation_stage(
+        repo_root, resolved_bundle_dir, base, head, work_item_type, work_item_id,
+        protected_paths, protected_prefixes, excluded_paths, excluded_prefixes,
+        allow_rebind=allow_rebind,
+    )
+
+
 if __name__ == "__main__":
     import argparse
 
@@ -2291,6 +2520,17 @@ if __name__ == "__main__":
             "disagreement. Never the ordinary write path's default."
         ),
     )
+    parser.add_argument(
+        "--stage", choices=["plan", "implementation"], default="plan",
+        help=(
+            "which manifest to (re)generate with --write-manifest "
+            "(GPT-R30-001/002). 'plan' (default) is the only mode every "
+            "existing caller uses. 'implementation' requires the "
+            "positional base argument (no resolved default -- the caller "
+            "always already has it) and anchors review_content_id at the "
+            "current HEAD, recorded as reviewed_implementation_head."
+        ),
+    )
     args = parser.parse_args()
 
     repo_root = Path(
@@ -2306,11 +2546,22 @@ if __name__ == "__main__":
                 "error: --work-item-id is required with --write-manifest "
                 "-- never resolved from the live active_work_item_id on the write path"
             )
-        digest, bundle_id = write_manifest_with_verified_identifiers_for_work_item(
-            repo_root, args.work_item_id, base=args.base, allow_rebind=args.rebind,
-        )
+        if args.stage == "implementation":
+            if not args.base:
+                raise SystemExit(
+                    "error: the base positional argument is required with "
+                    "--write-manifest --stage implementation -- there is no "
+                    "resolved implementation-stage base commit to fall back to"
+                )
+            digest, bundle_id = write_manifest_with_verified_identifiers_implementation_stage_for_work_item(
+                repo_root, args.work_item_id, args.base, allow_rebind=args.rebind,
+            )
+        else:
+            digest, bundle_id = write_manifest_with_verified_identifiers_for_work_item(
+                repo_root, args.work_item_id, base=args.base, allow_rebind=args.rebind,
+            )
         manifest_path = repo_root / ".ai-review" / args.work_item_id / "current" / MANIFEST_FILENAME
-        print("=== wrote MANIFEST.md ===")
+        print(f"=== wrote MANIFEST.md (stage: {args.stage}) ===")
         print(f"work_item_id: {args.work_item_id}")
         print(f"wrote: {manifest_path}")
         print(f"review_content_id (write -> recompute -> equal): {digest}")

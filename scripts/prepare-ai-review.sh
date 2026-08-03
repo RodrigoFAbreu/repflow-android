@@ -233,8 +233,8 @@ if [[ -s "$CONTEXT_FILES_LIST" ]]; then
   done < "$CONTEXT_FILES_LIST"
 fi
 
-# --- plan-stage-only: write MANIFEST.md as this script's own final content
-# step, before archiving, so the archived bundle actually contains it
+# --- write MANIFEST.md as this script's own final content step, before
+# archiving, so the archived bundle actually contains it
 # (D-Fingerprint-Generalization, OPUS-R25-012, resolves the affected-
 # commands audit gap: MANIFEST.md was previously only ever produced by a
 # separate, manual CLI invocation nothing forced to carry a matching
@@ -242,14 +242,80 @@ fi
 # reimplementation; REVIEW_REQUEST.md must already state the same
 # review_content_id (OPUS-R18-005, unchanged precondition) -- this call
 # does not relax it.
+#
+# Implementation/post-fix stages get their own implementation-stage
+# manifest here too (GPT-R30-001/002): a scoped bundle (WORK_ITEM_ID
+# given) previously carried no manifest of its own at these stages,
+# silently reusing whatever MANIFEST.md the plan stage had already
+# written to the same directory -- a stale plan-stage identity with a
+# pre-implementation generation_head, bound to the plan-stage
+# review_content_id rather than a digest over the reviewed implementation
+# diff. --stage implementation anchors review_content_id at $HEAD_SHA
+# (the final reviewed implementation HEAD, recorded as
+# reviewed_implementation_head), computed fresh every run, exactly like
+# the plan stage's own manifest.
 if [[ "$STAGE" == "plan" ]]; then
   python3 "$REPO_ROOT/scripts/workflow_fingerprint.py" "$BASE_SHA" \
     --work-item-id "$WORK_ITEM_ID" --write-manifest
+elif [[ ( "$STAGE" == "implementation" || "$STAGE" == "post-fix" ) && -n "$WORK_ITEM_ID" ]]; then
+  python3 "$REPO_ROOT/scripts/workflow_fingerprint.py" "$BASE_SHA" \
+    --work-item-id "$WORK_ITEM_ID" --stage implementation --write-manifest
 fi
 
 # --- archive ---
 ARCHIVE="$ROOT_DIR/review-bundle.tar.gz"
 tar -czf "$ARCHIVE" -C "$ROOT_DIR" current
+
+# --- reproducibility check (D-Fingerprint-Generalization, GPT-R30-001/003):
+# when a manifest was written above, require bundle_id equality across
+# three independent computations -- the value MANIFEST.md itself declares,
+# a fresh recomputation directly over $BUNDLE_DIR, and a fresh
+# recomputation over the archive's own extracted content -- so a stale or
+# non-reproducible archive fails closed here instead of being discovered
+# only by an external reviewer's own independent recomputation.
+if [[ -f "$BUNDLE_DIR/MANIFEST.md" ]]; then
+  REPRO_CHECK=$(
+    PYTHONPATH="$REPO_ROOT/scripts:${PYTHONPATH:-}" python3 - "$BUNDLE_DIR" "$ARCHIVE" <<'PYEOF'
+import sys
+import tarfile
+import tempfile
+from pathlib import Path
+
+import workflow_fingerprint as fingerprint
+
+bundle_dir, archive = Path(sys.argv[1]), Path(sys.argv[2])
+
+recorded = fingerprint.read_manifest_identifiers(bundle_dir / "MANIFEST.md")
+recorded_bundle_id = recorded.get("bundle_id")
+if recorded_bundle_id is None:
+    print("status: error")
+    print("message: MANIFEST.md has no recorded bundle_id")
+    sys.exit(0)
+
+ondisk_bundle_id, _ = fingerprint.compute_bundle_id(bundle_dir)
+
+with tempfile.TemporaryDirectory() as tmp:
+    with tarfile.open(archive) as tf:
+        tf.extractall(tmp)
+    extracted_bundle_id, _ = fingerprint.compute_bundle_id(Path(tmp) / "current")
+
+if recorded_bundle_id == ondisk_bundle_id == extracted_bundle_id:
+    print("status: ok")
+    print(f"bundle_id: {recorded_bundle_id}")
+else:
+    print("status: mismatch")
+    print(f"manifest_bundle_id: {recorded_bundle_id}")
+    print(f"ondisk_bundle_id: {ondisk_bundle_id}")
+    print(f"extracted_bundle_id: {extracted_bundle_id}")
+PYEOF
+  )
+  REPRO_STATUS=$(printf '%s\n' "$REPRO_CHECK" | sed -n 's/^status: //p')
+  if [[ "$REPRO_STATUS" != "ok" ]]; then
+    echo "error: bundle archive is not reproducible -- on-disk, archived, and extracted identifiers must all agree:" >&2
+    printf '%s\n' "$REPRO_CHECK" >&2
+    exit 1
+  fi
+fi
 
 echo "Bundle ready:"
 echo "  stage:        $STAGE"
