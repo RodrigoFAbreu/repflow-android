@@ -40,22 +40,43 @@ missing, ask for it and stop — do not proceed on an inferred "yes."
 2. Confirm final verification already passed (from the last
    `/milestone-implement` or `/apply-implementation-review` run); rerun only
    if the working tree changed since.
-2a. **Parent-completion block** (`D-Functional-Remediation`, `WF4c`,
-    resolves `GPT-R9-016`): if this work item has a
-    `docs/ai-workflow/WORKFLOW_STATE.json` entry, call
-    `workflow_state.complete_work_item(state, work_item_id, now=<now>)`.
-    `IncompleteChildWorkItemError` stops here — report every named
-    still-incomplete child work item verbatim and do not proceed past this
-    point (no `ROADMAP.md`/`ACTIVE_MILESTONE.md` update, no completion
-    commit); the user must drive each named child through its own full
-    cycle to `MILESTONE_COMPLETE` before re-invoking this command. On
-    success, persist the returned state (the work item's `phase` is now
-    `MILESTONE_COMPLETE`; `active_work_item_id` resets to `null` if it
-    pointed here) as part of the completion commit in step 6 — the
-    original item's own registry/mapping/completed-checkpoint history is
-    untouched by this call, by construction. A work item with no state
-    entry (an ordinary `"1"` item that never got one) has no children by
-    construction — skip this call entirely.
+2a. **Terminal-reachability pre-flight, then parent-/own-checkpoint-
+    completion block** (`D-Functional-Remediation`, `WF4c`, resolves
+    `GPT-R9-016`; extended `D-Scoped-Remediation-Acceptance`, resolves
+    `WF8B-002`, hardened `GPT-R37-001`): if this work item has a
+    `docs/ai-workflow/WORKFLOW_STATE.json` entry:
+    - First, an **advisory, user-facing pre-flight refusal** (not a
+      security boundary — `complete_work_item` itself re-resolves and
+      re-validates the authoritative registry independently below, so this
+      is purely for a clearer early message): call
+      `workflow_state.resolve_own_registry_completion_status(repo_root,
+      work_item)` to get `(is_terminal, outstanding_checkpoint_id)`, then
+      `workflow_state.milestone_complete_gate_reachable(phase=work_item["phase"],
+      is_terminal=is_terminal)`. `False` stops here — report the actual
+      `phase` and, if `not is_terminal`, name `outstanding_checkpoint_id`
+      and point at `/accept-scoped-remediation` as the correct command
+      instead; do not proceed past this point.
+    - Otherwise, call `workflow_state.complete_work_item(state, work_item_id,
+      now=<now>, repo_root=<repo_root>)` — note the parameter change: this
+      no longer accepts a caller-supplied `registry` dict at all; it
+      resolves and loads the item's own `registry_path` itself,
+      authoritatively, from disk. `IncompleteChildWorkItemError` stops here
+      — report every named still-incomplete child work item verbatim.
+      `RegistryCoverageError` stops here — the item's own declared
+      registry failed to resolve, read, parse, or declare the expected
+      `work_item_id`; report the specific failure verbatim, this is a data-
+      integrity defect, never silently treated as "nothing to check."
+      `IncompleteOwnCheckpointsError` stops here — report the named
+      outstanding checkpoint and point at `/accept-scoped-remediation`.
+      None of these three stops perform any `ROADMAP.md`/`ACTIVE_MILESTONE.md`
+      update or completion commit. On success, persist the returned state
+      (the work item's `phase` is now `MILESTONE_COMPLETE`;
+      `active_work_item_id` resets to `null` if it pointed here) as part
+      of the completion commit in step 6 — the original item's own
+      registry/mapping/completed-checkpoint history is untouched by this
+      call, by construction. A work item with no state entry (an ordinary
+      `"1"` item that never got one) has no children and no registry by
+      construction — skip this entire step.
 3. Update `docs/ROADMAP.md` to mark the milestone complete.
 4. Update `docs/ACTIVE_MILESTONE.md`: move this milestone's summary into the
    factual "complete" state, clear the active plan section.

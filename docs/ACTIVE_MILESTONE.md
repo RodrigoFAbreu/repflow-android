@@ -80,8 +80,36 @@ the user explicitly initiates that work.
 This section is unrelated to the roadmap/Milestone 8 content above. It
 tracks the separate, non-product process work item `workflow-v2-1-core`
 (see `docs/ai-workflow/WORKFLOW_V2_PLAN.md`,
-`docs/ai-workflow/WORKFLOW_STATE.json`), currently at
-`AWAITING_FUNCTIONAL_REVIEW` per `docs/ai-workflow/MILESTONE_WORKFLOW.md`.
+`docs/ai-workflow/WORKFLOW_STATE.json`).
+
+**Status note (2026-08-04)**: the checklist below (five checks) was
+independently re-verified and the user gave explicit functional
+acceptance of it in conversation — but before that acceptance could be
+recorded, a separate finding was discovered
+(`docs/ai-workflow/dry-run/WF8B_FINDING_continued_scope_remediation_no_nonterminal_return_path.md`):
+the workflow tooling had no safe, non-terminal way to record acceptance
+of a continued-scope round (like this one) while the item's own last
+checkpoint (`WF8b`) remains incomplete. A plan revision
+(`D-Scoped-Remediation-Acceptance` in `docs/ai-workflow/WORKFLOW_V2_PLAN.md`)
+fixing that gap went through six external plan-review rounds (22 through
+27), each round's findings applied in place within the same section —
+`GPT-R36-001`/`-002`/`-003` (fail-open registry guard, uncommitted
+acceptance, unbound evidence), `GPT-R37-*`, `GPT-R38-*`, `GPT-R39-*`, and
+`GPT-R40-001`/`-002` (the required evidence-binding: a `scoped_remediation`
+confirmation must now name the exact `/prepare-functional-review`-reported
+checklist-evidence commit SHA and blob) — until Revision 27 came back
+`Status: APPROVE` with zero blocking/important findings and was recorded
+as `plan_approval` (commit `c132185`). This revision's own implementation
+(the `complete_work_item` own-registry guard, the functional-checklist
+evidence trailer/guard machinery, the new `/accept-scoped-remediation`
+command, and the extensive test suite covering every named scenario) has
+now landed as continued `WF4c` scope and is awaiting its own external
+implementation review — `phase` remains `IMPLEMENTING` until that review
+and `/approve-review implementation` complete; `AWAITING_FUNCTIONAL_REVIEW`
+is not yet re-entered. The checklist below is preserved unchanged; the
+user's acceptance of it has **not** been recorded anywhere yet
+(deliberately) and will be, via `/accept-scoped-remediation`, once this
+round's technical approval lands.
 
 **Context**: checkpoint `WF8b` (manual multi-session dry run) began
 against the synthetic work item `v2-1-dry-run`, but its first scenario

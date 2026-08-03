@@ -259,6 +259,31 @@ re-enters manual-external review without a fresh local pass first.
 - **Exit**: user performs functional testing and places findings at
   `.ai-review/feedback/FUNCTIONAL_REVIEW.md`.
 - **Stop for user/reviewer?** Yes — hard gate. Claude must stop here.
+- **Two distinct next commands once functional review is clean**
+  (`D-Scoped-Remediation-Acceptance`, resolves `WF8B-002`): for a work item
+  with a `docs/ai-workflow/WORKFLOW_STATE.json` entry, which command is
+  reachable next depends on whether the item's own registry still has an
+  incomplete checkpoint — `workflow_state.select_next_checkpoint(work_item,
+  registry)`, recomputed fresh, never a phase value written earlier. If
+  every checkpoint is `COMPLETE` (terminal), `/accept-milestone` is the
+  correct next command, exactly as before. If a checkpoint remains
+  incomplete (a continued-scope implementation round, e.g. a fix landed
+  as extra scope on an already-approved checkpoint while the item's own
+  last checkpoint is still outstanding), `/accept-scoped-remediation` is
+  the correct next command instead — it records the user's functional
+  acceptance of this round specifically via its own dedicated,
+  metadata-only provenance commit (required before success is reported,
+  `D-Scoped-Remediation-Acceptance`'s revision-23 hardening,
+  `GPT-R36-002`), then returns `phase` to `IMPLEMENTING` so the outstanding
+  checkpoint can be resumed, without ever marking the whole item
+  `MILESTONE_COMPLETE`. Both commands are
+  user-only (`disable-model-invocation: true`, a literal confirmation
+  naming the work item and a stage keyword unique to each), and both now
+  carry a code-level gate-reachability guard
+  (`milestone_complete_gate_reachable`/`scoped_remediation_gate_reachable`)
+  refusing the wrong one for the wrong item. A work item with no state
+  entry (an ordinary `"1"` item that never got one) has no registry to
+  check — `/accept-milestone` is the only reachable command, unchanged.
 
 ### FIXING_FUNCTIONAL_FINDINGS
 
@@ -333,6 +358,26 @@ re-enters manual-external review without a fresh local pass first.
   `/accept-milestone` refuses outright, naming every still-incomplete
   child, rather than completing a parent whose broad remediation work is
   still open in a child item elsewhere.
+- **Own-checkpoint-completion block** (`D-Scoped-Remediation-Acceptance`,
+  resolves `WF8B-002`): for a work item with a
+  `docs/ai-workflow/WORKFLOW_STATE.json` entry and a non-null
+  `registry_path`, this state is additionally unreachable while the
+  item's **own** registry has any checkpoint that is not `COMPLETE`
+  (including one still `IN_PROGRESS`) — `complete_work_item` computes this
+  via `select_next_checkpoint`, independent of, and in addition to, the
+  parent-completion block above. This guard is fail-closed by construction
+  (revision 23, `GPT-R36-001`): a registry-backed item's registry argument
+  must be explicitly supplied and must declare that item's own
+  `work_item_id`, or `complete_work_item` itself refuses
+  (`RegistryCoverageError`) rather than silently treating an omitted or
+  foreign registry as "nothing to check." `/accept-milestone` refuses outright,
+  naming the actual phase and the outstanding checkpoint, rather than
+  completing an item whose own last checkpoint has never been attempted.
+  This is the same defect class the parent-completion block already
+  resolves, applied to the item's own registry instead of a child work
+  item's: see `D-Scoped-Remediation-Acceptance` for the full design and
+  `/accept-scoped-remediation` for the non-terminal acceptance path this
+  block exists alongside.
 - **Allowed actions**: final verification confirmation; update
   `docs/ROADMAP.md` and `docs/ACTIVE_MILESTONE.md`; archive the milestone's
   plans to `docs/milestones/completed/`; create the final completion commit
@@ -361,6 +406,13 @@ by `/approve-review`'s mechanism-independent user-only guard
 `user_confirmation`) — only the user can exit either gate, never Claude
 autonomously. `/accept-milestone` carries the same guard for
 `AWAITING_USER_ACCEPTANCE`.
+
+`/accept-scoped-remediation` (`D-Scoped-Remediation-Acceptance`, resolves
+`WF8B-002`) is not a seventh hard gate: it is a second, mutually exclusive
+user-only command reachable from the same `AWAITING_FUNCTIONAL_REVIEW`
+gate as `/accept-milestone`, discriminated by whether the item's own
+registry still has an incomplete checkpoint — never a new phase. The hard
+gate count stays exactly **6**.
 
 For a `governing_workflow_version: "2.1"` work item, the edge from
 `REVISING_PLAN` to `AWAITING_PLAN_APPROVAL` is further refined into

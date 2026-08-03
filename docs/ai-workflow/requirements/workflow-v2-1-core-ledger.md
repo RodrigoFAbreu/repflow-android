@@ -241,3 +241,123 @@ made a precondition for re-attempting S1. `WF8b` itself remains
   implementation-review round.
 - **Functional-verification outcome:** not applicable (process checkpoint,
   no product-facing behavior).
+
+## `WF4c` continued scope — Revision 27 `D-Scoped-Remediation-Acceptance`
+(resolves `WF8B-002`; hardened `GPT-R36-001`/`-002`/`-003`,
+`GPT-R37-001`/`-002`/`-003`/`-004`, `GPT-R38-001`/`-002`/`-003`,
+`GPT-R39-001`/`-002`, `GPT-R40-001`/`-002`)
+
+Not a new checkpoint ID: this is `WF4c`'s own continued scope, first
+implementation of the non-terminal scoped-remediation acceptance path
+`WFR-53` through `WFR-60` describe (owned by `WF4c`/`WF4a-ii`/`WF2`/
+`WF-M8b`). `WF8b` itself remains outstanding/unexecuted; `active_work_item_id`
+remains `v2-1-dry-run`.
+
+- **Implementation evidence:**
+  - `scripts/workflow_state.py`: `APPROVAL_STAGES` gains a fourth
+    `"scoped_remediation"` keyword; `FUNCTIONAL_CHECKLIST_PATH`/
+    `SCOPED_REMEDIATION_ACCEPTANCE_FIELDS`/`_SCOPED_REMEDIATION_COMPARISON_FIELD_MAP`
+    constants. `NoCheckpointReadyError` gains a structured `checkpoint_id`
+    attribute. `registry_completion_status` (the sole terminal/non-terminal
+    resolver), `milestone_complete_gate_reachable`/
+    `scoped_remediation_gate_reachable` (the two new, mutually exclusive
+    gate functions), and `resolve_own_registry_completion_status` (the
+    single, `repo_root`-driven, fail-closed own-registry loader —
+    `RegistryCoverageError` on any resolution/read/parse/identity
+    failure). `complete_work_item` gains a required `repo_root` keyword
+    parameter and loses any registry-dict parameter entirely (never had
+    one in this from-scratch implementation, closing `GPT-R37-001`'s trust
+    gap at the point of first implementation rather than as a later fix);
+    it now also raises `IncompleteOwnCheckpointsError` when the item's own
+    registry is non-terminal, independent of the pre-existing
+    `incomplete_children` check. `discover_scoped_remediation_commits`/
+    `discover_functional_checklist_commits` (both thin wrappers over the
+    existing generic `_discover_trailer_commits`, with their own
+    `AmbiguousScopedRemediationTrailerError`/
+    `AmbiguousFunctionalChecklistTrailerError`) and
+    `discover_current_functional_checklist_evidence` (the round-scoped,
+    content-identity-aware, nearest-to-`head` lookup, revision 26's
+    content-scoped trailer value). `build_scoped_remediation_live_snapshot`/
+    `verify_functional_checklist_evidence` (the four-check pre-commit
+    evidence guard, callable identically at entry-guard and pre-commit
+    time with a shared reference snapshot; `MissingFunctionalChecklistEvidenceError`/
+    `StaleFunctionalChecklistConfirmationError`/
+    `MalformedFunctionalChecklistEvidenceError`/
+    `DirtyFunctionalChecklistPathError`/`ScopedRemediationLiveValueChangedError`).
+    `parse_scoped_remediation_confirmation_binding_fields` (revision 27's
+    binding-field parser, reusing `UserConfirmationRejectedError`).
+    `NoExistingRound`/`ExactReplay`/`ConflictingDuplicate`/
+    `MalformedAcceptanceRecord`/`AmbiguousHistory` (the five typed outcome
+    classes) and `resolve_scoped_remediation_round` (the single replay/
+    duplicate classifier, eight-field canonical comparison).
+    `build_scoped_remediation_live_fields`/`apply_scoped_remediation_acceptance`
+    (the eleven-field acceptance-entry writer; pure, no commit side
+    effect — the caller commits it).
+  - `.claude/commands/accept-milestone.md`: step 2a gains the terminal-
+    reachability pre-flight (`resolve_own_registry_completion_status` +
+    `milestone_complete_gate_reachable`) and the updated
+    `complete_work_item(..., repo_root=...)` call, naming the three new
+    stop conditions (`RegistryCoverageError`/`IncompleteOwnCheckpointsError`
+    alongside the pre-existing `IncompleteChildWorkItemError`).
+  - `.claude/commands/prepare-functional-review.md`: new step 3a creates
+    or reuses the dedicated, content-idempotent `Workflow-Functional-
+    Checklist` evidence commit; step 4 reports the exact commit SHA/blob
+    and instructs the user their `scoped_remediation` confirmation must
+    name it verbatim.
+  - `.claude/commands/accept-scoped-remediation.md` (new): the full
+    user-only, `disable-model-invocation: true` command implementing the
+    entry guard (confirmation-first, then evidence-binding, then
+    replay-first), the pre-commit evidence guard's three call sites, and
+    the dedicated `Workflow-Scoped-Remediation-Acceptance` provenance
+    commit.
+  - No change to `docs/ai-workflow/MILESTONE_WORKFLOW.md` beyond what was
+    already present in the worktree before this continued-scope round
+    (its `D-Scoped-Remediation-Acceptance` narrative already documents the
+    two-command discrimination mechanism at the level of detail this
+    round's evidence-binding refinement does not change). No change to the
+    registry or mapping file.
+- **Verification results:**
+  - `python3 scripts/workflow_state_test.py` — 280/280 pass (59 new,
+    covering `registry_completion_status`/gate-function truth tables;
+    `complete_work_item`'s own-registry guard, including the direct-
+    bypass-attempt and fabricated-caller-dict cases; every
+    `RegistryCoverageError` failure mode; functional-checklist trailer
+    discovery including round-scoping, corrected-revision precedence,
+    interrupted-preparation idempotency, and genuine ambiguity; the
+    four-check evidence guard including stale-after-correction, fresh-
+    after-correction, malformed-trailer, dirty-tree, and both cross-
+    invocation drift cases; confirmation binding-field parsing; every
+    `resolve_scoped_remediation_round` outcome (no-existing-round, exact
+    replay, conflicting duplicate for wrong active pointer/evidence
+    commit/checklist path, malformed record for unsupported version/wrong
+    field set/missing `recorded_at`, ambiguous history, distinct-revision-
+    is-a-new-round); `apply_scoped_remediation_acceptance`'s field shape,
+    phase transition, untouched-field guarantees, and pure-no-side-effect
+    property; and full end-to-end scenarios mirroring `WF8b`'s own shape
+    — first acceptance, fresh-session-resumed exact replay, conflicting
+    duplicate on a moved active pointer, wrong evidence commit/blob
+    refused as stale, wrong work item never finding evidence, and the
+    terminal-registry/`` /accept-milestone`` handoff).
+  - `python3 scripts/workflow_integration_test.py` — 35/35 pass (the
+    known hardcoded `WFR` row-count sanity assertion updated from the
+    stale 52 to the actual, already-current 60; both edited command
+    files' golden content hashes updated to reflect this round's changes).
+  - `python3 scripts/workflow_fingerprint_test.py` — 122/122 pass,
+    unchanged. `python3 scripts/workflow_fingerprint_generalization_test.py`
+    — 51/51 pass, unchanged. `python3 scripts/workflow_test_harness_test.py`
+    — 19/19 pass, unchanged.
+  - `python3 scripts/workflow_state_demo_test.py` against the real
+    repository: three pre-existing failures, confirmed present via `git
+    stash` before this round's own changes (all tied to
+    `reviewed_implementation_head` and the plan-approval trailer not yet
+    matching live `HEAD` mid-round — expected to clear once this round's
+    own implementation-stage bundle is generated and `record_bundle_generation`
+    runs) — no new failure introduced.
+  - Not run: `./gradlew spotlessCheck detekt lintDebug testDebugUnitTest`
+    — this round touches no Android/`app/` source; the Python hermetic
+    suites above are this round's actual verification surface (mirroring
+    the `WF8b` continued-scope section above).
+- **Review findings:** none yet — pending this round's own
+  implementation-review round.
+- **Functional-verification outcome:** not applicable (process checkpoint,
+  no product-facing behavior).

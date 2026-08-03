@@ -99,6 +99,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import re
 import subprocess
 from pathlib import Path
 from typing import Mapping
@@ -142,7 +143,55 @@ WAIVED_GUARANTEES = frozenset({"no_bundle_id", "no_telemetry"})
 # sentence names in the same breath without itself enumerating a third
 # stage keyword (a real gap in the plan text, resolved here rather than
 # left unimplemented -- flagged to the user in this checkpoint's report).
-APPROVAL_STAGES = frozenset({"plan", "implementation", "acceptance"})
+# "scoped_remediation" (D-Scoped-Remediation-Acceptance, resolves
+# WF8B-002) is a fourth stage keyword, textually non-interchangeable with
+# "acceptance" in validate_user_confirmation's existing exact-substring
+# check -- this alone makes reuse of terminal milestone acceptance as
+# scoped acceptance structurally impossible.
+APPROVAL_STAGES = frozenset({"plan", "implementation", "acceptance", "scoped_remediation"})
+
+# The functional-review checklist's fixed location (MILESTONE_WORKFLOW.md's
+# AWAITING_FUNCTIONAL_REVIEW section names this path) -- never read from
+# any work item's own fields, so a hand-edited or foreign path can never
+# substitute for it.
+FUNCTIONAL_CHECKLIST_PATH = "docs/ACTIVE_MILESTONE.md"
+
+# D-Scoped-Remediation-Acceptance's eleven documented fields for a
+# scoped_remediation_acceptance list entry (revision 27, GPT-R40-002: five
+# revision 22 originally defined, plus four revision 23 added, plus
+# acceptance_record_version, plus functional_checklist_evidence_commit).
+SCOPED_REMEDIATION_ACCEPTANCE_FIELDS = frozenset({
+    "outstanding_checkpoint_id",
+    "active_work_item_id_at_acceptance",
+    "implementation_revision",
+    "reviewed_implementation_head",
+    "technical_approval_review_content_id",
+    "functional_checklist_path",
+    "functional_checklist_blob",
+    "functional_checklist_evidence_commit",
+    "user_confirmation",
+    "recorded_at",
+    "acceptance_record_version",
+})
+
+# resolve_scoped_remediation_round's full canonical comparison set (revision
+# 27, GPT-R40-002, widened from six to eight fields): maps each compared
+# entry field to the live_fields key it is compared against -- the two
+# differ in name for exactly one field, since a committed entry's own
+# active_work_item_id_at_acceptance is compared against the *current* live
+# active_work_item_id, not a field of the same name.
+_SCOPED_REMEDIATION_COMPARISON_FIELD_MAP = {
+    "outstanding_checkpoint_id": "outstanding_checkpoint_id",
+    "implementation_revision": "implementation_revision",
+    "reviewed_implementation_head": "reviewed_implementation_head",
+    "technical_approval_review_content_id": "technical_approval_review_content_id",
+    "functional_checklist_path": "functional_checklist_path",
+    "functional_checklist_blob": "functional_checklist_blob",
+    "functional_checklist_evidence_commit": "functional_checklist_evidence_commit",
+    "active_work_item_id_at_acceptance": "active_work_item_id",
+}
+
+_GIT_OBJECT_ID_RE = re.compile(r"^[0-9a-f]{40}$")
 
 # D-Plan-Review-Stages' verdict/state transition table: the only three
 # verdicts either `/review-plan` or `/record-manual-plan-review` ever
@@ -261,7 +310,16 @@ class NoCheckpointReadyError(Exception):
     """D-Selection rule 4: raised when no checkpoint is `COMPLETE` yet none
     is selectable either -- every remaining checkpoint has an incomplete
     dependency. Names the blocked checkpoint and its unmet dependencies
-    rather than ever silently idling."""
+    rather than ever silently idling.
+
+    Carries a structured `checkpoint_id` attribute (revision 27,
+    `D-Scoped-Remediation-Acceptance`) naming the specific blocked
+    checkpoint, so `registry_completion_status` never has to parse this
+    exception's own message text to recover it."""
+
+    def __init__(self, message: str, checkpoint_id: str) -> None:
+        super().__init__(message)
+        self.checkpoint_id = checkpoint_id
 
 
 class WorktreeIdentityMissingError(Exception):
@@ -511,6 +569,99 @@ class DanglingParentWorkItemError(Exception):
     writer that sets `parent_work_item_id`
     (`create_remediation_child_work_item`) also creates the parent-naming
     entry in the same state dict."""
+
+
+# ---------------------------------------------------------------------------
+# D-Scoped-Remediation-Acceptance (new, resolves `WF8B-002`; hardened,
+# resolves `GPT-R36-001`/`-002`/`-003`, `GPT-R37-001`/`-002`/`-003`/`-004`,
+# `GPT-R38-001`/`-002`/`-003`, `GPT-R39-001`/`-002`, `GPT-R40-001`/`-002`):
+# the non-terminal acceptance path for continued-scope remediation landed
+# as extra scope on an already-COMPLETE checkpoint while the work item's
+# own last checkpoint is still outstanding.
+# ---------------------------------------------------------------------------
+
+
+class RegistryCoverageError(Exception):
+    """`complete_work_item`'s fail-closed own-registry resolution guard
+    (revision 24, `GPT-R37-001`, correcting revision 23's `GPT-R36-001`
+    fix, which was fail-closed only against a caller-supplied dict, not
+    against the trust gap of accepting one at all): the work item's own
+    declared `registry_path` must resolve via the shared tracked-metadata
+    safe-path validator, exist, be readable, parse as a JSON object, and
+    declare this exact work item's own `work_item_id` -- any failure
+    refuses outright rather than silently treating an unresolvable or
+    foreign registry as "nothing to check.\""""
+
+
+class IncompleteOwnCheckpointsError(Exception):
+    """`complete_work_item`'s own-checkpoint-completion block
+    (`D-Scoped-Remediation-Acceptance`, resolves `WF8B-002`): raised when
+    the work item's own registry has an incomplete checkpoint --
+    `MILESTONE_COMPLETE` is unreachable until every one of the item's own
+    checkpoints is `COMPLETE`, independent of, and in addition to, the
+    pre-existing `incomplete_children` check. Names the outstanding
+    checkpoint."""
+
+
+class AmbiguousScopedRemediationTrailerError(Exception):
+    """Raised when more than one commit in range carries the same
+    `Workflow-Scoped-Remediation-Acceptance`/`Workflow-Work-Item` trailer
+    pair and the first-parent-ancestor tie-break does not resolve to
+    exactly one -- the same genuine-ambiguity recovery every other trailer
+    scheme in this module already has."""
+
+
+class AmbiguousFunctionalChecklistTrailerError(Exception):
+    """Raised when more than one commit in range carries the same
+    `Workflow-Functional-Checklist`/`Workflow-Work-Item` trailer pair and
+    the first-parent-ancestor tie-break does not resolve to exactly one --
+    a genuine identical-content duplicate reachable by more than one
+    first-parent path (e.g. a rebase/cherry-pick), never a routine outcome
+    of an ordinary content revision (revision 26, `GPT-R39-001`: the
+    trailer value embeds the checklist's own committed blob, so a real
+    content revision is a distinct key outright)."""
+
+
+class MissingFunctionalChecklistEvidenceError(Exception):
+    """The pre-commit evidence guard's discoverability check (`GPT-R38-001`):
+    raised when no `Workflow-Functional-Checklist` evidence commit is
+    discoverable for the exact live round -- names the missing round key
+    and `/prepare-functional-review` as the remedy."""
+
+
+class StaleFunctionalChecklistConfirmationError(Exception):
+    """The pre-commit evidence guard's confirmation-evidence-binding check
+    (revision 27, `GPT-R40-001`): raised when the user's confirmation names
+    an evidence commit/blob that is not the round's current evidence --
+    names both the confirmed and current identity, and instructs the user
+    to review the newer `/prepare-functional-review` report and
+    reconfirm. There is deliberately no automatic migration of an existing
+    confirmation onto newer evidence."""
+
+
+class MalformedFunctionalChecklistEvidenceError(Exception):
+    """The pre-commit evidence guard's confirmation-evidence-binding check,
+    third clause (revision 27, `GPT-R40-001`): raised when a commit's own
+    actually-committed content at `functional_checklist_path` does not
+    match the blob its own `Workflow-Functional-Checklist` trailer names --
+    a defense against a hand-crafted or corrupted trailer."""
+
+
+class DirtyFunctionalChecklistPathError(Exception):
+    """The pre-commit evidence guard's clean-working-tree check
+    (`GPT-R37-004`): raised when `functional_checklist_path` has a staged
+    or unstaged working-tree change relative to `HEAD` -- a working-tree
+    edit the user may have just read and accepted is never silently
+    replaced by an older committed blob."""
+
+
+class ScopedRemediationLiveValueChangedError(Exception):
+    """The pre-commit evidence guard's cross-invocation value-agreement
+    check, fourth clause: raised when `reviewed_implementation_head` or
+    `functional_checklist_path`'s committed content at `HEAD` has changed
+    since this same invocation's own earlier read -- the single-invocation
+    window `WFR-21`'s existing plan-approval durability guard already
+    treats the same way for a different stage."""
 
 
 def _run(args: list[str], cwd: Path) -> str:
@@ -889,7 +1040,8 @@ def select_next_checkpoint(work_item: dict, registry: dict) -> str | None:
     raise NoCheckpointReadyError(
         f"no checkpoint is currently selectable: {blocked['id']!r} is the first "
         f"incomplete entry in registry order, blocked on incomplete "
-        f"dependencies {unmet}"
+        f"dependencies {unmet}",
+        checkpoint_id=blocked["id"],
     )
 
 
@@ -1535,7 +1687,118 @@ def incomplete_children(state: dict, work_item_id: str) -> list[str]:
     ]
 
 
-def complete_work_item(state: dict, work_item_id: str, now: str) -> dict:
+def registry_completion_status(work_item: dict, registry: dict) -> tuple[bool, str | None]:
+    """`D-Scoped-Remediation-Acceptance`'s new helper: the sole place the
+    terminal/non-terminal question is answered -- every other function in
+    this section consumes its result rather than re-deriving it. Returns
+    `(is_terminal, outstanding_checkpoint_id)`: `(True, None)` when
+    `select_next_checkpoint` reports every registry checkpoint already
+    `COMPLETE`; `(False, <checkpoint_id>)` otherwise, whether the next
+    checkpoint is simply unselected yet (`select_next_checkpoint` returns
+    an id) or blocked (`NoCheckpointReadyError`, whose own structured
+    `checkpoint_id` attribute is read directly rather than parsed from its
+    message text)."""
+    try:
+        next_checkpoint_id = select_next_checkpoint(work_item, registry)
+    except NoCheckpointReadyError as exc:
+        return False, exc.checkpoint_id
+    if next_checkpoint_id is None:
+        return True, None
+    return False, next_checkpoint_id
+
+
+def milestone_complete_gate_reachable(*, phase: str, is_terminal: bool) -> bool:
+    """`D-Scoped-Remediation-Acceptance`'s gate function, mirroring
+    `approval_gate_reachable`/`technical_approval_gate_reachable`'s
+    existing non-circular pattern (D-States): `True` iff `is_terminal` and
+    `phase` is `AWAITING_FUNCTIONAL_REVIEW` or `AWAITING_USER_ACCEPTANCE`
+    (the latter included for forward compatibility only -- no function in
+    this codebase writes it, a pre-existing gap this decision does not
+    attempt to close)."""
+    return is_terminal and phase in ("AWAITING_FUNCTIONAL_REVIEW", "AWAITING_USER_ACCEPTANCE")
+
+
+def scoped_remediation_gate_reachable(*, phase: str, is_terminal: bool) -> bool:
+    """`D-Scoped-Remediation-Acceptance`'s second gate function: `True` iff
+    `phase == "AWAITING_FUNCTIONAL_REVIEW"` and `not is_terminal` -- mutually
+    exclusive with `milestone_complete_gate_reachable` by construction,
+    since exactly one of `is_terminal`/`not is_terminal` holds at once."""
+    return phase == "AWAITING_FUNCTIONAL_REVIEW" and not is_terminal
+
+
+def resolve_own_registry_completion_status(repo_root: Path, work_item: dict) -> tuple[bool, str | None]:
+    """The single place a work item's own registry is resolved and loaded
+    to answer `registry_completion_status` (`D-Scoped-Remediation-
+    Acceptance`, revision 24, `GPT-R37-001`): `complete_work_item`'s
+    authoritative gate and `/accept-milestone`'s/`/accept-scoped-
+    remediation`'s own advisory pre-flight reads all call this one
+    function rather than each re-deriving the resolution/loading logic.
+
+    `work_item["registry_path"]` is `None` (a registry-less item, e.g. the
+    legacy `milestone-8` shape): no load is attempted, vacuously terminal
+    -- `(True, None)`.
+
+    Otherwise the path is resolved via the same shared tracked-metadata
+    safe-path validator `D3`'s whole-state mirror check already uses
+    (`fingerprint._validate_plan_stage_metadata_path`), read, and parsed as
+    JSON. A failure at safe-path resolution, existence/readability, or
+    JSON-object parsing raises `RegistryCoverageError`, naming the work
+    item and its declared `registry_path` and the specific failure. The
+    loaded registry's own `work_item_id` field disagreeing with the work
+    item actually being resolved is the same `RegistryCoverageError`,
+    naming both the expected and the foreign registry's declared id --
+    since the registry was loaded from the item's own declared
+    `registry_path`, not supplied by any caller, this case can now only
+    mean the on-disk file itself is misconfigured or cross-linked, never a
+    caller-side substitution (closing the trust gap `GPT-R37-001` found in
+    revision 23's caller-supplied-dict design)."""
+    work_item_id = work_item["work_item_id"]
+    registry_path = work_item.get("registry_path")
+    if registry_path is None:
+        return True, None
+
+    try:
+        fingerprint._validate_plan_stage_metadata_path(
+            repo_root, "registry_path", registry_path, at_commit=None,
+        )
+    except fingerprint.InvalidPlanStageMetadataPathError as exc:
+        raise RegistryCoverageError(
+            f"work_items[{work_item_id!r}].registry_path {registry_path!r} failed "
+            f"safe-path resolution: {exc}"
+        ) from exc
+
+    registry_full = repo_root / registry_path
+    try:
+        registry_bytes = registry_full.read_text()
+    except OSError as exc:
+        raise RegistryCoverageError(
+            f"work_items[{work_item_id!r}].registry_path {registry_path!r} does not "
+            f"exist or is unreadable at {registry_full}"
+        ) from exc
+    try:
+        registry_data = json.loads(registry_bytes)
+    except json.JSONDecodeError as exc:
+        raise RegistryCoverageError(
+            f"work_items[{work_item_id!r}].registry_path {registry_path!r} is not "
+            f"valid JSON: {exc}"
+        ) from exc
+    if not isinstance(registry_data, dict):
+        raise RegistryCoverageError(
+            f"work_items[{work_item_id!r}].registry_path {registry_path!r} does not "
+            f"contain a JSON object (found {type(registry_data).__name__})"
+        )
+
+    registry_work_item_id = registry_data.get("work_item_id")
+    if registry_work_item_id != work_item_id:
+        raise RegistryCoverageError(
+            f"work_items[{work_item_id!r}].registry_path {registry_path!r} declares "
+            f"work_item_id {registry_work_item_id!r}, expected {work_item_id!r}"
+        )
+
+    return registry_completion_status(work_item, registry_data)
+
+
+def complete_work_item(state: dict, work_item_id: str, now: str, *, repo_root: Path) -> dict:
     """D1's completion/reset text: on `MILESTONE_COMPLETE` (or
     process-completion archival), the entry's phase becomes terminal and,
     if it was `active_work_item_id`, that pointer resets to `null` so the
@@ -1545,13 +1808,32 @@ def complete_work_item(state: dict, work_item_id: str, now: str) -> dict:
     D-Functional-Remediation's "parent acceptance blocks on an incomplete
     child" rule (resolves `GPT-R9-016`, `WFR-35`): refuses outright, naming
     every still-incomplete child, rather than completing a parent whose
-    broad remediation work is still open elsewhere."""
+    broad remediation work is still open elsewhere.
+
+    `D-Scoped-Remediation-Acceptance`'s own-checkpoint-completion block
+    (resolves `WF8B-002`, hardened `GPT-R37-001`): independent of, and in
+    addition to, the child-completion check above, this now also resolves
+    and loads the work item's **own** registry authoritatively (never a
+    caller-supplied dict -- `resolve_own_registry_completion_status`,
+    `repo_root`-driven) and refuses via `IncompleteOwnCheckpointsError`,
+    naming the outstanding checkpoint, when the item's own registry has any
+    checkpoint that is not `COMPLETE`."""
     blocking = incomplete_children(state, work_item_id)
     if blocking:
         raise IncompleteChildWorkItemError(
             f"{work_item_id!r} cannot reach MILESTONE_COMPLETE while child work "
             f"item(s) {blocking} have not themselves reached MILESTONE_COMPLETE"
         )
+
+    work_item = state["work_items"][work_item_id]
+    is_terminal, outstanding_checkpoint_id = resolve_own_registry_completion_status(repo_root, work_item)
+    if not is_terminal:
+        raise IncompleteOwnCheckpointsError(
+            f"{work_item_id!r} cannot reach MILESTONE_COMPLETE -- its own checkpoint "
+            f"{outstanding_checkpoint_id!r} is not COMPLETE (use /accept-scoped-remediation "
+            f"if this is a continued-scope remediation round, or complete the checkpoint first)"
+        )
+
     new_state = copy.deepcopy(state)
     work_item = new_state["work_items"][work_item_id]
     work_item["phase"] = "MILESTONE_COMPLETE"
@@ -1886,6 +2168,452 @@ def record_bundle_generation(state: dict, work_item_id: str, *, stage: str, head
     work_item["implementation_revision"] = (work_item.get("implementation_revision") or 0) + 1
     work_item["state_revision"] = work_item.get("state_revision", 1) + 1
     work_item["last_transition"] = now
+    return new_state
+
+
+# ---------------------------------------------------------------------------
+# D-Scoped-Remediation-Acceptance continued: functional-checklist evidence
+# trailer discovery (`/prepare-functional-review`'s new dedicated commit),
+# the pre-commit evidence guard, `/accept-scoped-remediation`'s confirmation
+# binding-field parser, round replay/duplicate classification, and the
+# acceptance record writer.
+# ---------------------------------------------------------------------------
+
+
+def discover_scoped_remediation_commits(
+    repo_root: Path, work_item_id: str, base_commit: str, head: str = "HEAD",
+) -> dict[str, str]:
+    """Every commit reachable in `base_commit..head` carrying an exact
+    `Workflow-Scoped-Remediation-Acceptance: <outstanding_checkpoint_id>/
+    <implementation_revision>` + `Workflow-Work-Item: <work_item_id>`
+    trailer pair (revision 23, `GPT-R37-002`'s corrected keying: by
+    `implementation_revision`, not `work_item_id`, so each round for the
+    same still-incomplete checkpoint gets its own distinct key). Returns
+    `{"<checkpoint_id>/<implementation_revision>": commit_sha}`."""
+    return _discover_trailer_commits(
+        repo_root, "Workflow-Scoped-Remediation-Acceptance", work_item_id, base_commit, head,
+        ambiguous_error_cls=AmbiguousScopedRemediationTrailerError,
+    )
+
+
+def discover_functional_checklist_commits(
+    repo_root: Path, work_item_id: str, base_commit: str, head: str = "HEAD",
+) -> dict[str, str]:
+    """Every commit reachable in `base_commit..head` carrying an exact
+    `Workflow-Functional-Checklist: <work_item_id>/<implementation_revision>/
+    <checklist_blob>` + `Workflow-Work-Item: <work_item_id>` trailer pair
+    (revision 26, `GPT-R39-001`'s content-scoped trailer value). Returns
+    `{"<work_item_id>/<implementation_revision>/<blob>": commit_sha}` --
+    raises only for a genuine identical-*content* duplicate reachable by
+    more than one first-parent path, never for an ordinary content
+    revision, since each distinct checklist content is its own distinct
+    key by construction."""
+    return _discover_trailer_commits(
+        repo_root, "Workflow-Functional-Checklist", work_item_id, base_commit, head,
+        ambiguous_error_cls=AmbiguousFunctionalChecklistTrailerError,
+    )
+
+
+def discover_current_functional_checklist_evidence(
+    repo_root: Path, work_item_id: str, base_commit: str, head: str, implementation_revision: int,
+) -> dict[str, str] | None:
+    """Revision 26 (`GPT-R39-001`)'s round-scoped, content-identity-aware
+    lookup: enumerates every `Workflow-Functional-Checklist` trailer value
+    starting with the round-scoped prefix `<work_item_id>/
+    <implementation_revision>/` (not a single exact-key lookup, since the
+    trailer value also embeds the checklist's own blob), and returns the
+    entry whose commit is nearest `head` -- the round's *current* evidence.
+    Multiple historical evidence commits for the same round (an older,
+    superseded checklist plus a newer, corrected one) coexist without
+    ambiguity by construction, since each has its own distinct trailer
+    value. Returns `{"commit_sha": ..., "blob": ...}`, or `None` if no
+    evidence commit exists for the round at all."""
+    matches = discover_functional_checklist_commits(repo_root, work_item_id, base_commit, head)
+    prefix = f"{work_item_id}/{implementation_revision}/"
+    candidates = {value: commit for value, commit in matches.items() if value.startswith(prefix)}
+    if not candidates:
+        return None
+    commit_to_blob = {commit: value[len(prefix):] for value, commit in candidates.items()}
+    for commit in _first_parent_commits_ordered(repo_root, head):
+        if commit in commit_to_blob:
+            return {"commit_sha": commit, "blob": commit_to_blob[commit]}
+    # Every candidate is reachable in base_commit..head (the discovery call
+    # above already proved that) but none sits on head's first-parent
+    # chain -- fail closed to the most-recently-committed candidate by
+    # ordinary base_commit..head log order rather than silently dropping
+    # a genuinely reachable evidence commit.
+    ordered_any = _run(["git", "log", "--format=%H", f"{base_commit}..{head}"], cwd=repo_root).splitlines()
+    for commit in ordered_any:
+        if commit in commit_to_blob:
+            return {"commit_sha": commit, "blob": commit_to_blob[commit]}
+    return None  # pragma: no cover - unreachable: candidates is non-empty and drawn from this same range
+
+
+def build_scoped_remediation_live_snapshot(
+    repo_root: Path, work_item: dict, *, checklist_path: str = FUNCTIONAL_CHECKLIST_PATH,
+) -> dict:
+    """The pre-commit evidence guard's cross-invocation reference point:
+    captured once, early in `/accept-scoped-remediation`'s own invocation
+    (before the entry guard's registry load), and passed unchanged into
+    every later call of `verify_functional_checklist_evidence` so its
+    fourth check can detect a value that changed mid-invocation."""
+    return {
+        "reviewed_implementation_head": work_item.get("reviewed_implementation_head"),
+        "checklist_blob_at_head": _run(
+            ["git", "rev-parse", f"HEAD:{checklist_path}"], cwd=repo_root,
+        ).strip(),
+    }
+
+
+def verify_functional_checklist_evidence(
+    repo_root: Path, work_item: dict, *, base_commit: str, head: str,
+    confirmed_commit: str, confirmed_blob: str, expected_live_snapshot: dict,
+    checklist_path: str = FUNCTIONAL_CHECKLIST_PATH,
+) -> dict:
+    """The pre-commit evidence guard's four ordered checks (`GPT-R36-003`,
+    extended `GPT-R37-004`, extended `GPT-R38-001`, discovery corrected
+    revision 26 `GPT-R39-001`, confirmation-evidence-binding check added
+    revision 27 `GPT-R40-001`). Callers run this once, before building the
+    scoped-remediation acceptance entry (with `expected_live_snapshot`
+    captured moments earlier via `build_scoped_remediation_live_snapshot`),
+    and once more, immediately before the provenance commit, passing the
+    *same* `expected_live_snapshot` both times -- a working-tree edit or a
+    superseding evidence commit landing in the gap between the two calls is
+    exactly as unreviewed as one present from the start.
+
+    1. **Discoverability**: a `Workflow-Functional-Checklist` evidence
+       commit must be discoverable for the exact live round --
+       `MissingFunctionalChecklistEvidenceError` naming the missing round
+       key and `/prepare-functional-review` as the remedy.
+    2. **Confirmation-evidence binding**: the confirmed commit/blob must
+       equal the round's current evidence exactly --
+       `StaleFunctionalChecklistConfirmationError`, naming both identities,
+       otherwise. The commit's own actually-committed content at
+       `checklist_path` must also equal the confirmed blob --
+       `MalformedFunctionalChecklistEvidenceError` otherwise.
+    3. **Clean working tree**: `checklist_path` must have no staged or
+       unstaged change relative to `HEAD` -- `DirtyFunctionalChecklistPathError`
+       otherwise.
+    4. **Cross-invocation value agreement**: `reviewed_implementation_head`
+       and `checklist_path`'s committed blob at `HEAD` must both still
+       equal `expected_live_snapshot` -- `ScopedRemediationLiveValueChangedError`
+       otherwise.
+
+    Returns the discoverability check's own `{"commit_sha", "blob"}` result
+    on success."""
+    work_item_id = work_item["work_item_id"]
+    implementation_revision = work_item["implementation_revision"]
+
+    current = discover_current_functional_checklist_evidence(
+        repo_root, work_item_id, base_commit, head, implementation_revision,
+    )
+    if current is None:
+        raise MissingFunctionalChecklistEvidenceError(
+            f"no Workflow-Functional-Checklist evidence commit found for "
+            f"{work_item_id}/{implementation_revision} -- run /prepare-functional-review first"
+        )
+
+    if confirmed_commit != current["commit_sha"] or confirmed_blob != current["blob"]:
+        raise StaleFunctionalChecklistConfirmationError(
+            f"user_confirmation names evidence commit {confirmed_commit!r}/blob "
+            f"{confirmed_blob!r}, but the round's current evidence is "
+            f"{current['commit_sha']!r}/{current['blob']!r} -- review the newer "
+            f"/prepare-functional-review report and reconfirm"
+        )
+
+    actual_blob = _run(
+        ["git", "rev-parse", f"{confirmed_commit}:{checklist_path}"], cwd=repo_root,
+    ).strip()
+    if actual_blob != confirmed_blob:
+        raise MalformedFunctionalChecklistEvidenceError(
+            f"commit {confirmed_commit} actually committed blob {actual_blob!r} at "
+            f"{checklist_path!r}, but its Workflow-Functional-Checklist trailer names "
+            f"blob {confirmed_blob!r}"
+        )
+
+    status = _run(["git", "status", "--porcelain", "--", checklist_path], cwd=repo_root)
+    if status.strip():
+        raise DirtyFunctionalChecklistPathError(
+            f"{checklist_path} has uncommitted changes -- commit or discard them before "
+            f"accepting scoped remediation"
+        )
+
+    live_now = build_scoped_remediation_live_snapshot(repo_root, work_item, checklist_path=checklist_path)
+    if live_now != expected_live_snapshot:
+        raise ScopedRemediationLiveValueChangedError(
+            f"reviewed_implementation_head or {checklist_path}'s committed content "
+            f"changed since this invocation began: expected {expected_live_snapshot}, "
+            f"found {live_now}"
+        )
+    return current
+
+
+def parse_scoped_remediation_confirmation_binding_fields(text: str) -> dict[str, str]:
+    """The `scoped_remediation` stage's own binding-field parser (revision
+    27, `GPT-R40-001`), mirroring the pattern `REVIEW_PROTOCOL.md`'s
+    `Reviewed bundle ID:`/`Reviewed base commit:`/`Work item:` fields
+    already establish for external review feedback
+    (`parse_review_feedback_binding_fields`). Requires two explicit fields
+    in the confirmation text -- `Functional checklist evidence commit:
+    <sha>` and `Functional checklist evidence blob: <blob>` -- each a
+    full, well-formed 40-hex Git object id; missing or malformed:
+    `UserConfirmationRejectedError`, naming which field is missing or
+    malformed."""
+    fields: dict[str, str] = {}
+    for key, label in (
+        ("functional_checklist_evidence_commit", "Functional checklist evidence commit"),
+        ("functional_checklist_evidence_blob", "Functional checklist evidence blob"),
+    ):
+        match = re.search(rf"{re.escape(label)}:\s*(\S*)", text)
+        if not match or not match.group(1):
+            raise UserConfirmationRejectedError(
+                f"user_confirmation is missing the required {label!r} field"
+            )
+        value = match.group(1)
+        if not _GIT_OBJECT_ID_RE.match(value):
+            raise UserConfirmationRejectedError(
+                f"user_confirmation's {label!r} field {value!r} is not a well-formed "
+                f"40-hex Git object id"
+            )
+        fields[key] = value
+    return fields
+
+
+class NoExistingRound:
+    """`resolve_scoped_remediation_round` outcome: no commit carries this
+    exact round's `Workflow-Scoped-Remediation-Acceptance` trailer yet --
+    a first attempt, or a genuinely new round for a checkpoint scoped-
+    accepted before under a different `implementation_revision`."""
+
+    def __repr__(self) -> str:
+        return "NoExistingRound()"
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, NoExistingRound)
+
+
+class ExactReplay:
+    """`resolve_scoped_remediation_round` outcome: a commit exists for this
+    round and its own committed acceptance entry agrees with every live
+    field -- a provable replay, safe to report idempotently."""
+
+    def __init__(self, commit_sha: str) -> None:
+        self.commit_sha = commit_sha
+
+    def __repr__(self) -> str:
+        return f"ExactReplay({self.commit_sha!r})"
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, ExactReplay) and other.commit_sha == self.commit_sha
+
+
+class ConflictingDuplicate:
+    """`resolve_scoped_remediation_round` outcome: a commit exists for this
+    round but at least one canonical field disagrees with the live values
+    -- never silently treated as a replay."""
+
+    def __init__(self, commit_sha: str, differing_fields: list[str]) -> None:
+        self.commit_sha = commit_sha
+        self.differing_fields = differing_fields
+
+    def __repr__(self) -> str:
+        return f"ConflictingDuplicate({self.commit_sha!r}, {self.differing_fields!r})"
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            isinstance(other, ConflictingDuplicate)
+            and other.commit_sha == self.commit_sha
+            and other.differing_fields == self.differing_fields
+        )
+
+
+class MalformedAcceptanceRecord:
+    """`resolve_scoped_remediation_round` outcome: a commit exists for this
+    round but its own committed acceptance entry's schema cannot be
+    trusted enough to compare field values from at all."""
+
+    def __init__(self, commit_sha: str, reason: str) -> None:
+        self.commit_sha = commit_sha
+        self.reason = reason
+
+    def __repr__(self) -> str:
+        return f"MalformedAcceptanceRecord({self.commit_sha!r}, {self.reason!r})"
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            isinstance(other, MalformedAcceptanceRecord)
+            and other.commit_sha == self.commit_sha
+            and other.reason == self.reason
+        )
+
+
+class AmbiguousHistory:
+    """`resolve_scoped_remediation_round` outcome: more than one first-
+    parent-reachable commit carries this exact round's trailer -- the same
+    genuine-ambiguity recovery every other trailer scheme here already
+    has; manual history inspection is required."""
+
+    def __init__(self, round_key: str) -> None:
+        self.round_key = round_key
+
+    def __repr__(self) -> str:
+        return f"AmbiguousHistory({self.round_key!r})"
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, AmbiguousHistory) and other.round_key == self.round_key
+
+
+def resolve_scoped_remediation_round(
+    repo_root: Path, work_item_id: str, base_commit: str, head: str,
+    outstanding_checkpoint_id: str, implementation_revision: int, live_fields: dict,
+) -> NoExistingRound | ExactReplay | ConflictingDuplicate | MalformedAcceptanceRecord | AmbiguousHistory:
+    """The **single** place replay/duplicate classification happens
+    (revision 25, `GPT-R38-002`; comparison coverage completed revision 26,
+    `GPT-R39-002`; widened revision 27, `GPT-R40-002`) -- called identically
+    by `/accept-scoped-remediation`'s entry guard and its provenance-commit
+    step, never a second copy of the logic. Always performs the full
+    lookup-and-compare in one pass; there is no cheaper "key exists" path
+    that skips the comparison.
+
+    `live_fields` must carry the eight keys
+    `_SCOPED_REMEDIATION_COMPARISON_FIELD_MAP` names: `outstanding_checkpoint_id`,
+    `implementation_revision`, `reviewed_implementation_head`,
+    `technical_approval_review_content_id`, `functional_checklist_path`,
+    `functional_checklist_blob`, `functional_checklist_evidence_commit`,
+    `active_work_item_id`."""
+    round_key = f"{outstanding_checkpoint_id}/{implementation_revision}"
+    try:
+        matches = discover_scoped_remediation_commits(repo_root, work_item_id, base_commit, head)
+    except AmbiguousScopedRemediationTrailerError:
+        return AmbiguousHistory(round_key)
+
+    commit_sha = matches.get(round_key)
+    if commit_sha is None:
+        return NoExistingRound()
+
+    state_json = _run(
+        ["git", "show", f"{commit_sha}:{DEFAULT_STATE_PATH.as_posix()}"], cwd=repo_root,
+    )
+    try:
+        committed_state = json.loads(state_json)
+    except json.JSONDecodeError as exc:
+        return MalformedAcceptanceRecord(
+            commit_sha, f"committed {DEFAULT_STATE_PATH} is not valid JSON: {exc}",
+        )
+
+    entries = (
+        committed_state.get("work_items", {}).get(work_item_id, {}).get("scoped_remediation_acceptance") or []
+    )
+    entry = None
+    for candidate in entries:
+        if (
+            candidate.get("outstanding_checkpoint_id") == outstanding_checkpoint_id
+            and candidate.get("implementation_revision") == implementation_revision
+        ):
+            entry = candidate
+            break
+    if entry is None:
+        return MalformedAcceptanceRecord(
+            commit_sha, f"no scoped_remediation_acceptance entry matches round key {round_key!r}",
+        )
+
+    # Schema/version check, first (revision 26, GPT-R39-002; version/field
+    # count updated revision 27, GPT-R40-002) -- an unsupported or
+    # incomplete schema shape cannot be compared against live_fields
+    # meaningfully at all.
+    if entry.get("acceptance_record_version") != 2:
+        return MalformedAcceptanceRecord(
+            commit_sha,
+            f"unsupported acceptance_record_version: {entry.get('acceptance_record_version')!r}",
+        )
+    if set(entry.keys()) != SCOPED_REMEDIATION_ACCEPTANCE_FIELDS:
+        return MalformedAcceptanceRecord(
+            commit_sha,
+            f"entry field set does not match the eleven documented fields: {sorted(entry.keys())}",
+        )
+    recorded_at = entry.get("recorded_at")
+    user_confirmation = entry.get("user_confirmation")
+    if not isinstance(recorded_at, str) or not recorded_at:
+        return MalformedAcceptanceRecord(commit_sha, "recorded_at is missing or not a well-formed non-empty string")
+    if not isinstance(user_confirmation, str) or not user_confirmation:
+        return MalformedAcceptanceRecord(
+            commit_sha, "user_confirmation is missing or not a well-formed non-empty string",
+        )
+
+    # Full canonical field comparison (revision 26, GPT-R39-002, widened
+    # revision 27, GPT-R40-002): recorded_at/user_confirmation are
+    # validated above but never compared to a live value -- recorded_at is
+    # a historical timestamp by definition, and user_confirmation's
+    # *current*-turn counterpart is already checked separately by
+    # validate_user_confirmation.
+    differing = [
+        entry_field for entry_field, live_key in _SCOPED_REMEDIATION_COMPARISON_FIELD_MAP.items()
+        if entry.get(entry_field) != live_fields.get(live_key)
+    ]
+    if differing:
+        return ConflictingDuplicate(commit_sha, differing)
+    return ExactReplay(commit_sha)
+
+
+def build_scoped_remediation_live_fields(
+    state: dict, work_item_id: str, *, outstanding_checkpoint_id: str,
+    functional_checklist_evidence_commit: str, functional_checklist_blob: str,
+) -> dict:
+    """Builds the eight-key `live_fields` dict `resolve_scoped_remediation_round`
+    compares a committed entry against -- read fresh at classification
+    time, never cached across the entry guard's two `resolve_scoped_remediation_round`
+    call sites (the entry guard itself, and the provenance-commit step)."""
+    work_item = state["work_items"][work_item_id]
+    return {
+        "outstanding_checkpoint_id": outstanding_checkpoint_id,
+        "implementation_revision": work_item["implementation_revision"],
+        "reviewed_implementation_head": work_item.get("reviewed_implementation_head"),
+        "technical_approval_review_content_id": (
+            (work_item.get("technical_approval") or {}).get("approved_review_content_id")
+        ),
+        "functional_checklist_path": FUNCTIONAL_CHECKLIST_PATH,
+        "functional_checklist_blob": functional_checklist_blob,
+        "functional_checklist_evidence_commit": functional_checklist_evidence_commit,
+        "active_work_item_id": state.get("active_work_item_id"),
+    }
+
+
+def apply_scoped_remediation_acceptance(
+    state: dict, work_item_id: str, *, outstanding_checkpoint_id: str,
+    functional_checklist_evidence_commit: str, functional_checklist_blob: str,
+    user_confirmation: str, now: str,
+) -> dict:
+    """Appends one entry to `work_item["scoped_remediation_acceptance"]` (a
+    list, created empty if absent) -- the eleven documented fields
+    (`SCOPED_REMEDIATION_ACCEPTANCE_FIELDS`). Sets `phase = "IMPLEMENTING"`.
+    Leaves `checkpoints`/`current_checkpoint_id`/`active_work_item_id`/
+    `plan_approval`/`technical_approval`/`functional_acceptance_status`
+    completely untouched -- this function's caller (`/accept-scoped-
+    remediation`) is responsible for creating the dedicated, metadata-only
+    provenance commit this write and the returned state must land in
+    together."""
+    work_item = state["work_items"][work_item_id]
+    entry = {
+        "outstanding_checkpoint_id": outstanding_checkpoint_id,
+        "active_work_item_id_at_acceptance": state.get("active_work_item_id"),
+        "implementation_revision": work_item["implementation_revision"],
+        "reviewed_implementation_head": work_item["reviewed_implementation_head"],
+        "technical_approval_review_content_id": work_item["technical_approval"]["approved_review_content_id"],
+        "functional_checklist_path": FUNCTIONAL_CHECKLIST_PATH,
+        "functional_checklist_blob": functional_checklist_blob,
+        "functional_checklist_evidence_commit": functional_checklist_evidence_commit,
+        "user_confirmation": user_confirmation,
+        "recorded_at": now,
+        "acceptance_record_version": 2,
+    }
+    assert set(entry.keys()) == SCOPED_REMEDIATION_ACCEPTANCE_FIELDS  # internal consistency, never user-facing
+
+    new_state = copy.deepcopy(state)
+    new_work_item = new_state["work_items"][work_item_id]
+    new_work_item.setdefault("scoped_remediation_acceptance", []).append(entry)
+    new_work_item["phase"] = "IMPLEMENTING"
+    new_work_item["state_revision"] = new_work_item.get("state_revision", 1) + 1
+    new_work_item["last_transition"] = now
     return new_state
 
 

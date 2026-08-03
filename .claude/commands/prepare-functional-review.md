@@ -60,7 +60,52 @@ Enter the `AWAITING_FUNCTIONAL_REVIEW` state of
 3. Put the checklist in `docs/ACTIVE_MILESTONE.md` under a "Functional review
    checklist" section (or link to a short file from there) — do not create a
    second, separate status document.
+3a. **Checklist-evidence provenance commit, required** (`D-Scoped-
+    Remediation-Acceptance`, revision 25 `GPT-R38-001`, content-scoped
+    trailer value revision 26 `GPT-R39-001`): if this work item has a
+    `docs/ai-workflow/WORKFLOW_STATE.json` entry, create or reuse a
+    dedicated, content-idempotent provenance commit for the checklist just
+    written — the evidence `/accept-scoped-remediation`'s confirmation
+    guard requires, closing the gap that would otherwise make that guard
+    permanently unsatisfiable.
+    1. Compute the checklist file's intended committed blob:
+       `git hash-object docs/ACTIVE_MILESTONE.md` (the content just written
+       in step 3, not yet committed).
+    2. Read `implementation_revision` live from
+       `work_item["implementation_revision"]`.
+    3. Call `workflow_state.discover_current_functional_checklist_evidence(
+       repo_root, work_item_id, base_commit, head=<current HEAD>,
+       implementation_revision=<that value>)`.
+       - No result, or its `"blob"` differs from step 1's freshly computed
+         blob: stage and commit **only** `docs/ACTIVE_MILESTONE.md` (no
+         production/test changes) with a commit body carrying
+         `Workflow-Functional-Checklist: <work_item_id>/<implementation_revision>/<checklist_blob>`
+         + the ordinary `Workflow-Work-Item: <work_item_id>` trailer, where
+         `<checklist_blob>` is step 1's computed blob (which, once
+         committed, is exactly the commit's own `HEAD:docs/ACTIVE_MILESTONE.md`
+         blob). This is what makes an interrupted preparation safe to
+         retry: rerunning after the file write already landed but the
+         commit did not either finds nothing new to commit (already
+         committed by the prior partial run) or completes the commit that
+         didn't happen yet — never a duplicate.
+       - The result's `"blob"` already equals step 1's freshly computed
+         blob exactly: nothing to commit — this is the existing, current
+         evidence commit; do not create an empty commit.
+    4. Record the resulting (existing or newly created) commit SHA and its
+       committed blob as this invocation's checklist-evidence identity.
 4. State clearly that findings should be placed at
-   `<feedback_dir>/FUNCTIONAL_REVIEW.md`.
+   `<feedback_dir>/FUNCTIONAL_REVIEW.md`, and report the exact checklist
+   evidence commit SHA and blob from step 3a to the user, so they know
+   precisely which committed content they are reviewing (never merely "the
+   current file," which could otherwise drift before or after this
+   message is read). **Instruct the user explicitly**: if this work item's
+   own registry still has an incomplete checkpoint (a continued-scope
+   remediation round), their `scoped_remediation` confirmation to
+   `/accept-scoped-remediation` must name this exact commit SHA and blob
+   verbatim (`Functional checklist evidence commit: <sha>` /
+   `Functional checklist evidence blob: <blob>`) — a confirmation naming
+   an earlier, superseded evidence identity is refused as stale, even
+   though that earlier commit remains independently discoverable; there is
+   no automatic migration of an existing confirmation onto newer evidence.
 5. Report and **stop**. This is a hard gate for the user to perform manual
    testing.

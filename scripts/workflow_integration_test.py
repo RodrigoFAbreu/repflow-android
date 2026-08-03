@@ -469,8 +469,8 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     "milestone-plan.md": "082a444fac6193493af7da5307f3008d6684a19456fb57af297dbfa21d4082a6",
     "milestone-implement.md": "c6aa36b8a07e780e6ee4ffc6caca06688e40f101c65fd87833fc5d90411af92c",
     "approve-review.md": "a77a81e0a66601dd5369b7d8f7344333cd3937666f2acc30cc06f32dcc1281a1",
-    "accept-milestone.md": "32e1a728ddeb1d914c2d2561a7ae9c36bde8e29906215a75924502a1ddf85606",
-    "prepare-functional-review.md": "1bb174ce443a60b551c0082f3d702c1a9a60de67580a03f2aba7e9937a31dce8",
+    "accept-milestone.md": "b20355327e560b09518e5305979bc844acb989a0b11fd6a6be00a9d750a9e9f4",
+    "prepare-functional-review.md": "37844421e1c63917d7970c8cdd00d6945d06c3a168eb7fb3be51205deb35fee3",
     "apply-plan-review.md": "f79febd0ef769d72bc3ec065a55a536203b533d23db4cc3d9b7854b8d49b8834",
     "apply-implementation-review.md": "96772a51cfe315560983c573483bf66ccf38793e31aedb1b5cbc9003f1367234",
     "review-plan.md": "4cc5a74389c9714cf23fb7ed51bc3da5623bf99268ce118c1c2d59b995519c89",
@@ -989,9 +989,12 @@ class TestRequirementsMappingTableConformance(unittest.TestCase):
     def test_every_wfr_row_description_matches_json_exactly(self):
         table_rows = self._table_rows()
         requirements = self.mapping["requirements"]
-        # Sanity: the extraction itself found all 52 rows, not an empty
-        # or partial set (which would make the per-row loop below vacuous).
-        self.assertEqual(len(table_rows), 52)
+        # Sanity: the extraction itself found all 60 rows (WFR-01 through
+        # WFR-60, the current count as of revision 27's D-Scoped-
+        # Remediation-Acceptance -- WFR-53 through WFR-60 added/amended by
+        # revisions 22/23/25 on top of the original 52), not an empty or
+        # partial set (which would make the per-row loop below vacuous).
+        self.assertEqual(len(table_rows), 60)
         self.assertEqual(set(table_rows), set(requirements))
         mismatches = []
         for req_id, table_cell in table_rows.items():

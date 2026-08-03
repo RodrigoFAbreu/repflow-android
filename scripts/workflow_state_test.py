@@ -21,6 +21,7 @@ Stdlib-only. Run: python3 scripts/workflow_state_test.py
 
 from __future__ import annotations
 
+import copy
 import json
 import subprocess
 import tempfile
@@ -1012,7 +1013,7 @@ class TestWorkItemCompletion(unittest.TestCase):
     def test_completing_active_item_resets_pointer(self):
         state = _base_state(wi=_base_work_item(phase="AWAITING_USER_ACCEPTANCE"))
         state["active_work_item_id"] = "wi"
-        new_state = ws.complete_work_item(state, "wi", now="t")
+        new_state = ws.complete_work_item(state, "wi", now="t", repo_root=Path("."))
         self.assertEqual(new_state["work_items"]["wi"]["phase"], "MILESTONE_COMPLETE")
         self.assertIsNone(new_state["active_work_item_id"])
         ws.validate_state(new_state)  # a completed, unpointed item is valid
@@ -1023,7 +1024,7 @@ class TestWorkItemCompletion(unittest.TestCase):
             other=_base_work_item(work_item_id="other", phase="AWAITING_USER_ACCEPTANCE"),
         )
         state["active_work_item_id"] = "active"
-        new_state = ws.complete_work_item(state, "other", now="t")
+        new_state = ws.complete_work_item(state, "other", now="t", repo_root=Path("."))
         self.assertEqual(new_state["active_work_item_id"], "active")
 
 
@@ -2845,7 +2846,7 @@ class TestParentCompletionBlocksOnIncompleteChild(unittest.TestCase):
             )},
         )
         with self.assertRaises(ws.IncompleteChildWorkItemError):
-            ws.complete_work_item(state, "parent", now="t2")
+            ws.complete_work_item(state, "parent", now="t2", repo_root=Path("."))
         # refusing must not have mutated the input
         self.assertEqual(state["work_items"]["parent"]["phase"], "AWAITING_USER_ACCEPTANCE")
 
@@ -2857,12 +2858,12 @@ class TestParentCompletionBlocksOnIncompleteChild(unittest.TestCase):
                 phase="MILESTONE_COMPLETE",
             )},
         )
-        new_state = ws.complete_work_item(state, "parent", now="t2")
+        new_state = ws.complete_work_item(state, "parent", now="t2", repo_root=Path("."))
         self.assertEqual(new_state["work_items"]["parent"]["phase"], "MILESTONE_COMPLETE")
 
     def test_complete_work_item_with_no_children_still_succeeds(self):
         state = _base_state(wi=_base_work_item(phase="AWAITING_USER_ACCEPTANCE"))
-        new_state = ws.complete_work_item(state, "wi", now="t2")
+        new_state = ws.complete_work_item(state, "wi", now="t2", repo_root=Path("."))
         self.assertEqual(new_state["work_items"]["wi"]["phase"], "MILESTONE_COMPLETE")
 
 
@@ -2878,6 +2879,955 @@ class TestDanglingParentWorkItem(unittest.TestCase):
             child=_base_work_item(work_item_id="child", parent_work_item_id="parent"),
         )
         ws.validate_state(state)  # must not raise
+
+
+# =============================================================================
+# D-Scoped-Remediation-Acceptance (revision 27, GPT-R40-001/-002; resolves
+# WF8B-002): registry_completion_status/gate functions, complete_work_item's
+# authoritative own-registry guard, the functional-checklist evidence
+# trailer/guard machinery, the confirmation binding-field parser, replay/
+# duplicate classification, and the acceptance record writer.
+# =============================================================================
+
+
+def _write(repo, rel_path, content):
+    full = repo.root / rel_path
+    full.parent.mkdir(parents=True, exist_ok=True)
+    full.write_text(content)
+    return full
+
+
+def _commit_paths(repo, rel_paths, subject, trailers=None):
+    for rel_path in rel_paths:
+        _run(["git", "add", rel_path], cwd=repo.root)
+    body = subject
+    if trailers:
+        body += "\n\n" + "\n".join(f"{k}: {v}" for k, v in trailers.items())
+    _run(["git", "commit", "-q", "-m", body], cwd=repo.root)
+    return repo.head()
+
+
+def _commit_empty(repo, subject, trailers=None):
+    body = subject
+    if trailers:
+        body += "\n\n" + "\n".join(f"{k}: {v}" for k, v in trailers.items())
+    _run(["git", "commit", "-q", "--allow-empty", "-m", body], cwd=repo.root)
+    return repo.head()
+
+
+class TestRegistryCompletionStatusAndGates(unittest.TestCase):
+    REGISTRY = {
+        "work_item_id": "wi", "plan_revision": 1,
+        "checkpoints": [{"id": "A", "depends_on": []}, {"id": "B", "depends_on": ["A"]}],
+    }
+
+    def test_terminal_when_every_checkpoint_complete(self):
+        work_item = _base_work_item(checkpoints={
+            "A": {"status": "COMPLETE"}, "B": {"status": "COMPLETE"},
+        })
+        is_terminal, outstanding = ws.registry_completion_status(work_item, self.REGISTRY)
+        self.assertTrue(is_terminal)
+        self.assertIsNone(outstanding)
+
+    def test_non_terminal_names_next_selectable_checkpoint(self):
+        work_item = _base_work_item(checkpoints={"A": {"status": "COMPLETE"}})
+        is_terminal, outstanding = ws.registry_completion_status(work_item, self.REGISTRY)
+        self.assertFalse(is_terminal)
+        self.assertEqual(outstanding, "B")
+
+    def test_non_terminal_names_blocked_checkpoint_via_structured_attribute(self):
+        registry = {
+            "work_item_id": "wi", "plan_revision": 1,
+            "checkpoints": [
+                {"id": "A", "depends_on": ["missing"]},
+                {"id": "missing", "depends_on": ["A"]},
+            ],
+        }
+        work_item = _base_work_item(checkpoints={})
+        is_terminal, outstanding = ws.registry_completion_status(work_item, registry)
+        self.assertFalse(is_terminal)
+        self.assertEqual(outstanding, "A")  # first incomplete entry in registry order
+
+    def test_milestone_complete_gate_reachable_truth_table(self):
+        self.assertTrue(ws.milestone_complete_gate_reachable(phase="AWAITING_FUNCTIONAL_REVIEW", is_terminal=True))
+        self.assertTrue(ws.milestone_complete_gate_reachable(phase="AWAITING_USER_ACCEPTANCE", is_terminal=True))
+        self.assertFalse(ws.milestone_complete_gate_reachable(phase="AWAITING_FUNCTIONAL_REVIEW", is_terminal=False))
+        self.assertFalse(ws.milestone_complete_gate_reachable(phase="IMPLEMENTING", is_terminal=True))
+
+    def test_scoped_remediation_gate_reachable_truth_table(self):
+        self.assertTrue(ws.scoped_remediation_gate_reachable(phase="AWAITING_FUNCTIONAL_REVIEW", is_terminal=False))
+        self.assertFalse(ws.scoped_remediation_gate_reachable(phase="AWAITING_FUNCTIONAL_REVIEW", is_terminal=True))
+        self.assertFalse(ws.scoped_remediation_gate_reachable(phase="IMPLEMENTING", is_terminal=False))
+
+    def test_gates_are_mutually_exclusive(self):
+        for phase in ("AWAITING_FUNCTIONAL_REVIEW", "AWAITING_USER_ACCEPTANCE", "IMPLEMENTING"):
+            for is_terminal in (True, False):
+                self.assertFalse(
+                    ws.milestone_complete_gate_reachable(phase=phase, is_terminal=is_terminal)
+                    and ws.scoped_remediation_gate_reachable(phase=phase, is_terminal=is_terminal)
+                )
+
+
+class TestCompleteWorkItemOwnRegistryGuard(unittest.TestCase):
+    """complete_work_item's authoritative, repo_root-driven own-registry
+    resolution (revision 24, GPT-R37-001) -- also exercises "direct
+    complete_work_item bypass attempts" and "/accept-milestone refusal with
+    incomplete checkpoints" (both route through this same guard) and
+    "successful final completion after all checkpoints are complete"."""
+
+    REGISTRY_PATH = "registry.json"
+
+    def _registry(self):
+        return {
+            "work_item_id": "wi", "plan_revision": 1,
+            "checkpoints": [{"id": "A", "depends_on": []}, {"id": "B", "depends_on": ["A"]}],
+        }
+
+    def _state(self, *, b_complete):
+        checkpoints = {"A": {"status": "COMPLETE"}}
+        if b_complete:
+            checkpoints["B"] = {"status": "COMPLETE"}
+        work_item = _base_work_item(
+            phase="AWAITING_USER_ACCEPTANCE", registry_path=self.REGISTRY_PATH, checkpoints=checkpoints,
+        )
+        return _base_state(wi=work_item)
+
+    def test_succeeds_when_own_registry_terminal(self):
+        with ScratchRepo() as repo:
+            _write(repo, self.REGISTRY_PATH, json.dumps(self._registry()))
+            _commit_paths(repo, [self.REGISTRY_PATH], "registry")
+            state = self._state(b_complete=True)
+            new_state = ws.complete_work_item(state, "wi", now="t", repo_root=repo.root)
+            self.assertEqual(new_state["work_items"]["wi"]["phase"], "MILESTONE_COMPLETE")
+
+    def test_raises_incomplete_own_checkpoints_when_own_registry_non_terminal(self):
+        """Direct complete_work_item bypass attempt: skipping
+        /accept-scoped-remediation and calling straight through must still
+        fail closed -- the same guard /accept-milestone's own pre-flight
+        relies on."""
+        with ScratchRepo() as repo:
+            _write(repo, self.REGISTRY_PATH, json.dumps(self._registry()))
+            _commit_paths(repo, [self.REGISTRY_PATH], "registry")
+            state = self._state(b_complete=False)
+            with self.assertRaises(ws.IncompleteOwnCheckpointsError):
+                ws.complete_work_item(state, "wi", now="t", repo_root=repo.root)
+            is_terminal, outstanding = ws.resolve_own_registry_completion_status(
+                repo.root, state["work_items"]["wi"],
+            )
+            self.assertFalse(is_terminal)
+            self.assertEqual(outstanding, "B")
+            self.assertFalse(
+                ws.milestone_complete_gate_reachable(phase="AWAITING_USER_ACCEPTANCE", is_terminal=is_terminal)
+            )
+
+    def test_registry_coverage_missing_file(self):
+        with ScratchRepo() as repo:
+            state = self._state(b_complete=True)  # registry.json never written
+            with self.assertRaises(ws.RegistryCoverageError):
+                ws.complete_work_item(state, "wi", now="t", repo_root=repo.root)
+
+    def test_registry_coverage_untracked_file(self):
+        with ScratchRepo() as repo:
+            _write(repo, self.REGISTRY_PATH, json.dumps(self._registry()))
+            # deliberately not `git add`/committed
+            state = self._state(b_complete=True)
+            with self.assertRaises(ws.RegistryCoverageError):
+                ws.complete_work_item(state, "wi", now="t", repo_root=repo.root)
+
+    def test_registry_coverage_malformed_json(self):
+        with ScratchRepo() as repo:
+            _write(repo, self.REGISTRY_PATH, "{not json")
+            _commit_paths(repo, [self.REGISTRY_PATH], "registry")
+            state = self._state(b_complete=True)
+            with self.assertRaises(ws.RegistryCoverageError):
+                ws.complete_work_item(state, "wi", now="t", repo_root=repo.root)
+
+    def test_registry_coverage_not_a_json_object(self):
+        with ScratchRepo() as repo:
+            _write(repo, self.REGISTRY_PATH, json.dumps([1, 2, 3]))
+            _commit_paths(repo, [self.REGISTRY_PATH], "registry")
+            state = self._state(b_complete=True)
+            with self.assertRaises(ws.RegistryCoverageError):
+                ws.complete_work_item(state, "wi", now="t", repo_root=repo.root)
+
+    def test_registry_coverage_wrong_work_item_id(self):
+        with ScratchRepo() as repo:
+            foreign = {**self._registry(), "work_item_id": "someone-else"}
+            _write(repo, self.REGISTRY_PATH, json.dumps(foreign))
+            _commit_paths(repo, [self.REGISTRY_PATH], "registry")
+            state = self._state(b_complete=True)
+            with self.assertRaises(ws.RegistryCoverageError):
+                ws.complete_work_item(state, "wi", now="t", repo_root=repo.root)
+
+    def test_registry_coverage_cannot_be_satisfied_by_a_fabricated_caller_dict(self):
+        """GPT-R37-001: complete_work_item no longer accepts a registry
+        argument at all -- there is no way to pass a fabricated
+        all-complete registry in, even though the on-disk file itself says
+        B is incomplete."""
+        with ScratchRepo() as repo:
+            _write(repo, self.REGISTRY_PATH, json.dumps(self._registry()))
+            _commit_paths(repo, [self.REGISTRY_PATH], "registry")
+            state = self._state(b_complete=False)
+            import inspect
+            self.assertNotIn("registry", inspect.signature(ws.complete_work_item).parameters)
+            with self.assertRaises(ws.IncompleteOwnCheckpointsError):
+                ws.complete_work_item(state, "wi", now="t", repo_root=repo.root)
+
+    def test_incomplete_children_checked_independently_of_own_checkpoints(self):
+        with ScratchRepo() as repo:
+            _write(repo, self.REGISTRY_PATH, json.dumps(self._registry()))
+            _commit_paths(repo, [self.REGISTRY_PATH], "registry")
+            state = self._state(b_complete=True)
+            state["work_items"]["child"] = _base_work_item(
+                work_item_id="child", parent_work_item_id="wi", phase="IMPLEMENTING",
+            )
+            with self.assertRaises(ws.IncompleteChildWorkItemError):
+                ws.complete_work_item(state, "wi", now="t", repo_root=repo.root)
+
+
+class TestFunctionalChecklistTrailerDiscovery(unittest.TestCase):
+    WI = "swi"
+    CHECKLIST_PATH = ws.FUNCTIONAL_CHECKLIST_PATH
+
+    def _seed(self, repo, content="checklist v1\n"):
+        _write(repo, self.CHECKLIST_PATH, content)
+        return _commit_paths(repo, [self.CHECKLIST_PATH], "seed checklist")
+
+    def _blob(self, repo, ref="HEAD"):
+        return subprocess.run(
+            ["git", "rev-parse", f"{ref}:{self.CHECKLIST_PATH}"],
+            cwd=repo.root, check=True, capture_output=True, text=True,
+        ).stdout.strip()
+
+    def _evidence_commit(self, repo, *, implementation_revision, blob=None):
+        blob = blob or self._blob(repo)
+        sha = _commit_empty(repo, "checklist evidence", trailers={
+            "Workflow-Functional-Checklist": f"{self.WI}/{implementation_revision}/{blob}",
+            "Workflow-Work-Item": self.WI,
+        })
+        return sha, blob
+
+    def test_no_evidence_returns_none(self):
+        with ScratchRepo() as repo:
+            self._seed(repo)
+            result = ws.discover_current_functional_checklist_evidence(repo.root, self.WI, repo.base, "HEAD", 1)
+            self.assertIsNone(result)
+
+    def test_single_evidence_is_discovered(self):
+        with ScratchRepo() as repo:
+            self._seed(repo)
+            sha, blob = self._evidence_commit(repo, implementation_revision=1)
+            result = ws.discover_current_functional_checklist_evidence(repo.root, self.WI, repo.base, "HEAD", 1)
+            self.assertEqual(result, {"commit_sha": sha, "blob": blob})
+
+    def test_round_scoped_prefix_does_not_cross_implementation_revisions(self):
+        with ScratchRepo() as repo:
+            self._seed(repo)
+            self._evidence_commit(repo, implementation_revision=1)
+            result = ws.discover_current_functional_checklist_evidence(repo.root, self.WI, repo.base, "HEAD", 2)
+            self.assertIsNone(result)
+
+    def test_corrected_checklist_produces_new_current_evidence_ahead_of_earlier(self):
+        """Unchanged and corrected checklist revisions: an unchanged
+        checklist content re-commits nothing (idempotency covered
+        separately); a genuinely corrected checklist produces a new,
+        distinct, discoverable evidence commit that becomes current, while
+        the earlier commit remains separately discoverable by its own
+        value (checklist preparation provenance)."""
+        with ScratchRepo() as repo:
+            self._seed(repo)
+            old_sha, old_blob = self._evidence_commit(repo, implementation_revision=1)
+            self._seed(repo, content="checklist v2 -- corrected\n")
+            new_sha, new_blob = self._evidence_commit(repo, implementation_revision=1)
+            self.assertNotEqual(old_blob, new_blob)
+            current = ws.discover_current_functional_checklist_evidence(repo.root, self.WI, repo.base, "HEAD", 1)
+            self.assertEqual(current, {"commit_sha": new_sha, "blob": new_blob})
+            # the earlier evidence is still independently discoverable
+            all_commits = ws.discover_functional_checklist_commits(repo.root, self.WI, repo.base, "HEAD")
+            self.assertEqual(all_commits[f"{self.WI}/1/{old_blob}"], old_sha)
+
+    def test_interrupted_preparation_is_safe_to_retry(self):
+        """An unchanged checklist re-committed twice (simulating a
+        preparation retried after interruption) must resolve to the exact
+        same current evidence both times -- discovery is idempotent by
+        content, never mistaking existing evidence for missing."""
+        with ScratchRepo() as repo:
+            self._seed(repo)
+            sha, blob = self._evidence_commit(repo, implementation_revision=1)
+            first = ws.discover_current_functional_checklist_evidence(repo.root, self.WI, repo.base, "HEAD", 1)
+            second = ws.discover_current_functional_checklist_evidence(repo.root, self.WI, repo.base, "HEAD", 1)
+            self.assertEqual(first, second)
+            self.assertEqual(first, {"commit_sha": sha, "blob": blob})
+
+    def test_ambiguous_functional_checklist_trailer_raises(self):
+        """Duplicate/ambiguous evidence history: two first-parent-reachable
+        commits carrying the exact same trailer value (identical checklist
+        content) is genuine ambiguity, never silently resolved (mirrors
+        TestCheckpointTrailerDiscovery.test_genuine_ambiguity_raises: two
+        commits on the same linear branch are both first-parent ancestors
+        of HEAD by construction, so the tie-break cannot narrow to one)."""
+        with ScratchRepo() as repo:
+            self._seed(repo)
+            blob = self._blob(repo)
+            self._evidence_commit(repo, implementation_revision=1, blob=blob)
+            self._evidence_commit(repo, implementation_revision=1, blob=blob)
+            with self.assertRaises(ws.AmbiguousFunctionalChecklistTrailerError):
+                ws.discover_functional_checklist_commits(repo.root, self.WI, repo.base, "HEAD")
+
+    def test_ambiguous_scoped_remediation_trailer_raises(self):
+        with ScratchRepo() as repo:
+            _commit_empty(repo, "round a", trailers={
+                "Workflow-Scoped-Remediation-Acceptance": "B/1", "Workflow-Work-Item": self.WI,
+            })
+            _commit_empty(repo, "round b", trailers={
+                "Workflow-Scoped-Remediation-Acceptance": "B/1", "Workflow-Work-Item": self.WI,
+            })
+            with self.assertRaises(ws.AmbiguousScopedRemediationTrailerError):
+                ws.discover_scoped_remediation_commits(repo.root, self.WI, repo.base, "HEAD")
+
+
+class TestFunctionalChecklistEvidenceGuard(unittest.TestCase):
+    WI = "swi"
+    CHECKLIST_PATH = ws.FUNCTIONAL_CHECKLIST_PATH
+
+    def _work_item(self, *, implementation_revision=1, reviewed_implementation_head):
+        return {
+            "work_item_id": self.WI,
+            "implementation_revision": implementation_revision,
+            "reviewed_implementation_head": reviewed_implementation_head,
+        }
+
+    def _seed(self, repo, content="checklist v1\n"):
+        _write(repo, self.CHECKLIST_PATH, content)
+        return _commit_paths(repo, [self.CHECKLIST_PATH], "seed checklist")
+
+    def _blob(self, repo, ref="HEAD"):
+        return subprocess.run(
+            ["git", "rev-parse", f"{ref}:{self.CHECKLIST_PATH}"],
+            cwd=repo.root, check=True, capture_output=True, text=True,
+        ).stdout.strip()
+
+    def _evidence_commit(self, repo, *, implementation_revision, blob=None):
+        blob = blob or self._blob(repo)
+        sha = _commit_empty(repo, "checklist evidence", trailers={
+            "Workflow-Functional-Checklist": f"{self.WI}/{implementation_revision}/{blob}",
+            "Workflow-Work-Item": self.WI,
+        })
+        return sha, blob
+
+    def test_happy_path_returns_current_evidence(self):
+        with ScratchRepo() as repo:
+            seed_sha = self._seed(repo)
+            sha, blob = self._evidence_commit(repo, implementation_revision=1)
+            work_item = self._work_item(reviewed_implementation_head=seed_sha)
+            snapshot = ws.build_scoped_remediation_live_snapshot(repo.root, work_item)
+            result = ws.verify_functional_checklist_evidence(
+                repo.root, work_item, base_commit=repo.base, head="HEAD",
+                confirmed_commit=sha, confirmed_blob=blob, expected_live_snapshot=snapshot,
+            )
+            self.assertEqual(result, {"commit_sha": sha, "blob": blob})
+
+    def test_missing_evidence(self):
+        with ScratchRepo() as repo:
+            seed_sha = self._seed(repo)
+            work_item = self._work_item(reviewed_implementation_head=seed_sha)
+            snapshot = ws.build_scoped_remediation_live_snapshot(repo.root, work_item)
+            with self.assertRaises(ws.MissingFunctionalChecklistEvidenceError):
+                ws.verify_functional_checklist_evidence(
+                    repo.root, work_item, base_commit=repo.base, head="HEAD",
+                    confirmed_commit="a" * 40, confirmed_blob="b" * 40, expected_live_snapshot=snapshot,
+                )
+
+    def test_stale_confirmation_after_correction_wrong_commit(self):
+        """A checklist corrected after the user's confirmation was drafted:
+        the confirmation still names the earlier evidence commit, which
+        must be refused as stale even though it remains independently
+        discoverable."""
+        with ScratchRepo() as repo:
+            self._seed(repo)
+            old_sha, old_blob = self._evidence_commit(repo, implementation_revision=1)
+            self._seed(repo, content="checklist v2 -- corrected\n")
+            new_sha, _ = self._evidence_commit(repo, implementation_revision=1)
+            work_item = self._work_item(reviewed_implementation_head=new_sha)
+            snapshot = ws.build_scoped_remediation_live_snapshot(repo.root, work_item)
+            with self.assertRaises(ws.StaleFunctionalChecklistConfirmationError):
+                ws.verify_functional_checklist_evidence(
+                    repo.root, work_item, base_commit=repo.base, head="HEAD",
+                    confirmed_commit=old_sha, confirmed_blob=old_blob, expected_live_snapshot=snapshot,
+                )
+
+    def test_fresh_confirmation_for_corrected_evidence_succeeds(self):
+        with ScratchRepo() as repo:
+            self._seed(repo)
+            self._evidence_commit(repo, implementation_revision=1)
+            self._seed(repo, content="checklist v2 -- corrected\n")
+            new_sha, new_blob = self._evidence_commit(repo, implementation_revision=1)
+            work_item = self._work_item(reviewed_implementation_head=new_sha)
+            snapshot = ws.build_scoped_remediation_live_snapshot(repo.root, work_item)
+            result = ws.verify_functional_checklist_evidence(
+                repo.root, work_item, base_commit=repo.base, head="HEAD",
+                confirmed_commit=new_sha, confirmed_blob=new_blob, expected_live_snapshot=snapshot,
+            )
+            self.assertEqual(result, {"commit_sha": new_sha, "blob": new_blob})
+
+    def test_stale_confirmation_wrong_blob_same_commit(self):
+        with ScratchRepo() as repo:
+            self._seed(repo)
+            sha, blob = self._evidence_commit(repo, implementation_revision=1)
+            work_item = self._work_item(reviewed_implementation_head=sha)
+            snapshot = ws.build_scoped_remediation_live_snapshot(repo.root, work_item)
+            with self.assertRaises(ws.StaleFunctionalChecklistConfirmationError):
+                ws.verify_functional_checklist_evidence(
+                    repo.root, work_item, base_commit=repo.base, head="HEAD",
+                    confirmed_commit=sha, confirmed_blob="f" * 40, expected_live_snapshot=snapshot,
+                )
+
+    def test_malformed_evidence_trailer_blob_disagrees_with_actual_commit(self):
+        """A hand-crafted or corrupted trailer whose embedded blob
+        component disagrees with what the commit actually committed."""
+        with ScratchRepo() as repo:
+            seed_sha = self._seed(repo)
+            real_blob = self._blob(repo)
+            fake_blob = "0" * 40
+            sha = _commit_empty(repo, "checklist evidence", trailers={
+                "Workflow-Functional-Checklist": f"{self.WI}/1/{fake_blob}",
+                "Workflow-Work-Item": self.WI,
+            })
+            work_item = self._work_item(reviewed_implementation_head=seed_sha)
+            snapshot = ws.build_scoped_remediation_live_snapshot(repo.root, work_item)
+            with self.assertRaises(ws.MalformedFunctionalChecklistEvidenceError):
+                ws.verify_functional_checklist_evidence(
+                    repo.root, work_item, base_commit=repo.base, head="HEAD",
+                    confirmed_commit=sha, confirmed_blob=fake_blob, expected_live_snapshot=snapshot,
+                )
+            self.assertNotEqual(fake_blob, real_blob)
+
+    def test_dirty_checklist_path_refused(self):
+        with ScratchRepo() as repo:
+            seed_sha = self._seed(repo)
+            sha, blob = self._evidence_commit(repo, implementation_revision=1)
+            (repo.root / self.CHECKLIST_PATH).write_text("uncommitted local edit\n")
+            work_item = self._work_item(reviewed_implementation_head=seed_sha)
+            snapshot = ws.build_scoped_remediation_live_snapshot(repo.root, work_item)
+            with self.assertRaises(ws.DirtyFunctionalChecklistPathError):
+                ws.verify_functional_checklist_evidence(
+                    repo.root, work_item, base_commit=repo.base, head="HEAD",
+                    confirmed_commit=sha, confirmed_blob=blob, expected_live_snapshot=snapshot,
+                )
+
+    def test_cross_invocation_reviewed_implementation_head_changed(self):
+        with ScratchRepo() as repo:
+            seed_sha = self._seed(repo)
+            sha, blob = self._evidence_commit(repo, implementation_revision=1)
+            work_item = self._work_item(reviewed_implementation_head=seed_sha)
+            snapshot = ws.build_scoped_remediation_live_snapshot(repo.root, work_item)
+            # simulate reviewed_implementation_head advancing mid-invocation
+            work_item["reviewed_implementation_head"] = "deadbeef" * 5
+            with self.assertRaises(ws.ScopedRemediationLiveValueChangedError):
+                ws.verify_functional_checklist_evidence(
+                    repo.root, work_item, base_commit=repo.base, head="HEAD",
+                    confirmed_commit=sha, confirmed_blob=blob, expected_live_snapshot=snapshot,
+                )
+
+    def test_cross_invocation_checklist_blob_changed(self):
+        with ScratchRepo() as repo:
+            seed_sha = self._seed(repo)
+            sha, blob = self._evidence_commit(repo, implementation_revision=1)
+            work_item = self._work_item(reviewed_implementation_head=seed_sha)
+            snapshot = ws.build_scoped_remediation_live_snapshot(repo.root, work_item)
+            self._seed(repo, content="a superseding commit landed mid-invocation\n")
+            new_sha, new_blob = self._evidence_commit(repo, implementation_revision=1)
+            with self.assertRaises(ws.ScopedRemediationLiveValueChangedError):
+                ws.verify_functional_checklist_evidence(
+                    repo.root, work_item, base_commit=repo.base, head="HEAD",
+                    confirmed_commit=new_sha, confirmed_blob=new_blob, expected_live_snapshot=snapshot,
+                )
+
+
+class TestScopedRemediationConfirmationParsing(unittest.TestCase):
+    COMMIT = "a" * 40
+    BLOB = "b" * 40
+
+    def test_success(self):
+        text = (
+            f"scoped_remediation confirmed for swi\n"
+            f"Functional checklist evidence commit: {self.COMMIT}\n"
+            f"Functional checklist evidence blob: {self.BLOB}\n"
+        )
+        fields = ws.parse_scoped_remediation_confirmation_binding_fields(text)
+        self.assertEqual(fields, {
+            "functional_checklist_evidence_commit": self.COMMIT,
+            "functional_checklist_evidence_blob": self.BLOB,
+        })
+
+    def test_missing_commit_field(self):
+        text = f"Functional checklist evidence blob: {self.BLOB}\n"
+        with self.assertRaises(ws.UserConfirmationRejectedError):
+            ws.parse_scoped_remediation_confirmation_binding_fields(text)
+
+    def test_missing_blob_field(self):
+        text = f"Functional checklist evidence commit: {self.COMMIT}\n"
+        with self.assertRaises(ws.UserConfirmationRejectedError):
+            ws.parse_scoped_remediation_confirmation_binding_fields(text)
+
+    def test_malformed_commit_not_hex(self):
+        text = (
+            f"Functional checklist evidence commit: not-a-real-sha\n"
+            f"Functional checklist evidence blob: {self.BLOB}\n"
+        )
+        with self.assertRaises(ws.UserConfirmationRejectedError):
+            ws.parse_scoped_remediation_confirmation_binding_fields(text)
+
+    def test_malformed_blob_wrong_length(self):
+        text = (
+            f"Functional checklist evidence commit: {self.COMMIT}\n"
+            f"Functional checklist evidence blob: abc123\n"
+        )
+        with self.assertRaises(ws.UserConfirmationRejectedError):
+            ws.parse_scoped_remediation_confirmation_binding_fields(text)
+
+
+class TestResolveScopedRemediationRound(unittest.TestCase):
+    WI = "swi"
+    STATE_PATH = ws.DEFAULT_STATE_PATH.as_posix()
+
+    def _live_fields(self, **overrides):
+        base = {
+            "outstanding_checkpoint_id": "B",
+            "implementation_revision": 1,
+            "reviewed_implementation_head": "r" * 40,
+            "technical_approval_review_content_id": "t" * 40,
+            "functional_checklist_path": ws.FUNCTIONAL_CHECKLIST_PATH,
+            "functional_checklist_blob": "c" * 40,
+            "functional_checklist_evidence_commit": "e" * 40,
+            "active_work_item_id": self.WI,
+        }
+        base.update(overrides)
+        return base
+
+    def _entry(self, **overrides):
+        live = self._live_fields()
+        entry = {
+            "outstanding_checkpoint_id": live["outstanding_checkpoint_id"],
+            "active_work_item_id_at_acceptance": live["active_work_item_id"],
+            "implementation_revision": live["implementation_revision"],
+            "reviewed_implementation_head": live["reviewed_implementation_head"],
+            "technical_approval_review_content_id": live["technical_approval_review_content_id"],
+            "functional_checklist_path": live["functional_checklist_path"],
+            "functional_checklist_blob": live["functional_checklist_blob"],
+            "functional_checklist_evidence_commit": live["functional_checklist_evidence_commit"],
+            "user_confirmation": "I confirm scoped_remediation for swi",
+            "recorded_at": "2026-01-01T00:00:00+00:00",
+            "acceptance_record_version": 2,
+        }
+        entry.update(overrides)
+        return entry
+
+    def _commit_round(self, repo, entry, *, round_key="B/1"):
+        state = {
+            "schema_version": 1, "active_work_item_id": self.WI,
+            "work_items": {self.WI: {"scoped_remediation_acceptance": [entry]}},
+        }
+        _write(repo, self.STATE_PATH, json.dumps(state))
+        return _commit_paths(repo, [self.STATE_PATH], "scoped remediation acceptance", trailers={
+            "Workflow-Scoped-Remediation-Acceptance": round_key, "Workflow-Work-Item": self.WI,
+        })
+
+    def test_no_existing_round(self):
+        with ScratchRepo() as repo:
+            result = ws.resolve_scoped_remediation_round(
+                repo.root, self.WI, repo.base, "HEAD", "B", 1, self._live_fields(),
+            )
+            self.assertEqual(result, ws.NoExistingRound())
+
+    def test_exact_replay(self):
+        with ScratchRepo() as repo:
+            self._commit_round(repo, self._entry())
+            result = ws.resolve_scoped_remediation_round(
+                repo.root, self.WI, repo.base, "HEAD", "B", 1, self._live_fields(),
+            )
+            self.assertIsInstance(result, ws.ExactReplay)
+            self.assertEqual(result.commit_sha, repo.head())
+
+    def test_conflicting_duplicate_wrong_active_pointer(self):
+        with ScratchRepo() as repo:
+            self._commit_round(repo, self._entry())
+            live = self._live_fields(active_work_item_id="a-different-item")
+            result = ws.resolve_scoped_remediation_round(repo.root, self.WI, repo.base, "HEAD", "B", 1, live)
+            self.assertIsInstance(result, ws.ConflictingDuplicate)
+            self.assertIn("active_work_item_id_at_acceptance", result.differing_fields)
+
+    def test_conflicting_duplicate_wrong_evidence_commit(self):
+        with ScratchRepo() as repo:
+            self._commit_round(repo, self._entry())
+            live = self._live_fields(functional_checklist_evidence_commit="f" * 40)
+            result = ws.resolve_scoped_remediation_round(repo.root, self.WI, repo.base, "HEAD", "B", 1, live)
+            self.assertIsInstance(result, ws.ConflictingDuplicate)
+            self.assertIn("functional_checklist_evidence_commit", result.differing_fields)
+
+    def test_conflicting_duplicate_wrong_checklist_path(self):
+        with ScratchRepo() as repo:
+            self._commit_round(repo, self._entry(functional_checklist_path="some/other/path.md"))
+            result = ws.resolve_scoped_remediation_round(
+                repo.root, self.WI, repo.base, "HEAD", "B", 1, self._live_fields(),
+            )
+            self.assertIsInstance(result, ws.ConflictingDuplicate)
+            self.assertIn("functional_checklist_path", result.differing_fields)
+
+    def test_malformed_unsupported_schema_version(self):
+        with ScratchRepo() as repo:
+            self._commit_round(repo, self._entry(acceptance_record_version=1))
+            result = ws.resolve_scoped_remediation_round(
+                repo.root, self.WI, repo.base, "HEAD", "B", 1, self._live_fields(),
+            )
+            self.assertIsInstance(result, ws.MalformedAcceptanceRecord)
+            self.assertIn("acceptance_record_version", result.reason)
+
+    def test_malformed_wrong_field_set(self):
+        with ScratchRepo() as repo:
+            bad_entry = self._entry()
+            del bad_entry["recorded_at"]
+            self._commit_round(repo, bad_entry)
+            result = ws.resolve_scoped_remediation_round(
+                repo.root, self.WI, repo.base, "HEAD", "B", 1, self._live_fields(),
+            )
+            self.assertIsInstance(result, ws.MalformedAcceptanceRecord)
+
+    def test_malformed_missing_recorded_at(self):
+        with ScratchRepo() as repo:
+            bad_entry = self._entry(recorded_at="")
+            # keep the field present (empty string) so the field-set check
+            # passes and the well-formedness check is what actually fires
+            bad_entry["recorded_at"] = ""
+            self._commit_round(repo, bad_entry)
+            result = ws.resolve_scoped_remediation_round(
+                repo.root, self.WI, repo.base, "HEAD", "B", 1, self._live_fields(),
+            )
+            self.assertIsInstance(result, ws.MalformedAcceptanceRecord)
+            self.assertIn("recorded_at", result.reason)
+
+    def test_malformed_no_matching_entry_for_round_key(self):
+        with ScratchRepo() as repo:
+            other_entry = self._entry(outstanding_checkpoint_id="A", implementation_revision=1)
+            self._commit_round(repo, other_entry, round_key="B/1")  # trailer/entry desync
+            result = ws.resolve_scoped_remediation_round(
+                repo.root, self.WI, repo.base, "HEAD", "B", 1, self._live_fields(),
+            )
+            self.assertIsInstance(result, ws.MalformedAcceptanceRecord)
+
+    def test_ambiguous_history(self):
+        with ScratchRepo() as repo:
+            # Two commits on the same linear branch, same round key: both
+            # are first-parent ancestors of HEAD by construction, so the
+            # tie-break cannot narrow to one (mirrors
+            # TestCheckpointTrailerDiscovery.test_genuine_ambiguity_raises).
+            # Ambiguity is raised purely from trailer matching, before
+            # WORKFLOW_STATE.json content is ever read, so --allow-empty
+            # commits suffice here.
+            _commit_empty(repo, "round a", trailers={
+                "Workflow-Scoped-Remediation-Acceptance": "B/1", "Workflow-Work-Item": self.WI,
+            })
+            _commit_empty(repo, "round b", trailers={
+                "Workflow-Scoped-Remediation-Acceptance": "B/1", "Workflow-Work-Item": self.WI,
+            })
+            result = ws.resolve_scoped_remediation_round(
+                repo.root, self.WI, repo.base, "HEAD", "B", 1, self._live_fields(),
+            )
+            self.assertIsInstance(result, ws.AmbiguousHistory)
+            self.assertEqual(result.round_key, "B/1")
+
+    def test_distinct_implementation_revision_is_a_new_round_not_a_replay(self):
+        """A genuinely new round for a checkpoint scoped-accepted before
+        under a different implementation_revision is NoExistingRound for
+        the new round key, never confused with the earlier one."""
+        with ScratchRepo() as repo:
+            self._commit_round(repo, self._entry(), round_key="B/1")
+            result = ws.resolve_scoped_remediation_round(
+                repo.root, self.WI, repo.base, "HEAD", "B", 2, self._live_fields(implementation_revision=2),
+            )
+            self.assertEqual(result, ws.NoExistingRound())
+
+
+class TestApplyScopedRemediationAcceptance(unittest.TestCase):
+    WI = "swi"
+
+    def _state(self):
+        work_item = _base_work_item(
+            work_item_id=self.WI, phase="AWAITING_FUNCTIONAL_REVIEW",
+            implementation_revision=3, reviewed_implementation_head="r" * 40,
+            technical_approval={"status": "CURRENT", "approved_review_content_id": "t" * 40},
+            plan_approval={"status": "CURRENT", "approved_review_content_id": "p" * 40},
+            functional_acceptance_status=None,
+            current_checkpoint_id=None,
+            checkpoints={"A": {"status": "COMPLETE"}, "B": {"status": "IN_PROGRESS"}},
+        )
+        state = _base_state(**{self.WI: work_item})
+        state["active_work_item_id"] = self.WI
+        return state
+
+    def test_entry_has_exactly_eleven_documented_fields(self):
+        state = self._state()
+        new_state = ws.apply_scoped_remediation_acceptance(
+            state, self.WI, outstanding_checkpoint_id="B",
+            functional_checklist_evidence_commit="e" * 40, functional_checklist_blob="c" * 40,
+            user_confirmation="I confirm scoped_remediation for swi", now="2026-01-01T00:00:00+00:00",
+        )
+        entries = new_state["work_items"][self.WI]["scoped_remediation_acceptance"]
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(set(entries[0].keys()), ws.SCOPED_REMEDIATION_ACCEPTANCE_FIELDS)
+        self.assertEqual(len(entries[0]), 11)
+        self.assertEqual(entries[0]["acceptance_record_version"], 2)
+        self.assertEqual(entries[0]["outstanding_checkpoint_id"], "B")
+        self.assertEqual(entries[0]["active_work_item_id_at_acceptance"], self.WI)
+
+    def test_sets_phase_implementing(self):
+        state = self._state()
+        new_state = ws.apply_scoped_remediation_acceptance(
+            state, self.WI, outstanding_checkpoint_id="B",
+            functional_checklist_evidence_commit="e" * 40, functional_checklist_blob="c" * 40,
+            user_confirmation="I confirm scoped_remediation for swi", now="t",
+        )
+        self.assertEqual(new_state["work_items"][self.WI]["phase"], "IMPLEMENTING")
+
+    def test_leaves_checkpoints_and_approvals_untouched(self):
+        state = self._state()
+        new_state = ws.apply_scoped_remediation_acceptance(
+            state, self.WI, outstanding_checkpoint_id="B",
+            functional_checklist_evidence_commit="e" * 40, functional_checklist_blob="c" * 40,
+            user_confirmation="I confirm scoped_remediation for swi", now="t",
+        )
+        old_wi = state["work_items"][self.WI]
+        new_wi = new_state["work_items"][self.WI]
+        self.assertEqual(new_wi["checkpoints"], old_wi["checkpoints"])
+        self.assertEqual(new_wi["current_checkpoint_id"], old_wi["current_checkpoint_id"])
+        self.assertEqual(new_wi["plan_approval"], old_wi["plan_approval"])
+        self.assertEqual(new_wi["technical_approval"], old_wi["technical_approval"])
+        self.assertEqual(new_wi["functional_acceptance_status"], old_wi["functional_acceptance_status"])
+        self.assertEqual(new_state["active_work_item_id"], state["active_work_item_id"])
+
+    def test_does_not_mark_any_checkpoint_complete(self):
+        state = self._state()
+        new_state = ws.apply_scoped_remediation_acceptance(
+            state, self.WI, outstanding_checkpoint_id="B",
+            functional_checklist_evidence_commit="e" * 40, functional_checklist_blob="c" * 40,
+            user_confirmation="I confirm scoped_remediation for swi", now="t",
+        )
+        self.assertEqual(new_state["work_items"][self.WI]["checkpoints"]["B"]["status"], "IN_PROGRESS")
+
+    def test_is_pure_no_side_effects_until_caller_persists_and_commits(self):
+        """Interrupted acceptance commit: the state write is a pure
+        in-memory transform. If the caller's own commit step never runs
+        (an interruption between the two), nothing at all was persisted --
+        neither the original nor the returned state dict is mutated as a
+        side effect, and no git commit exists until the caller creates
+        one."""
+        state = self._state()
+        original = copy.deepcopy(state)
+        ws.apply_scoped_remediation_acceptance(
+            state, self.WI, outstanding_checkpoint_id="B",
+            functional_checklist_evidence_commit="e" * 40, functional_checklist_blob="c" * 40,
+            user_confirmation="I confirm scoped_remediation for swi", now="t",
+        )
+        self.assertEqual(state, original)  # input untouched
+
+
+class TestScopedRemediationEndToEnd(unittest.TestCase):
+    """Full-flow scenarios exercising the entry guard (confirmation ->
+    evidence-binding -> registry load -> replay classification) and the
+    pre-commit evidence guard together, mirroring the exact WF8b shape:
+    checkpoint A complete, checkpoint B (the item's own last checkpoint)
+    outstanding while continued-scope work landed as extra scope on A."""
+
+    WI = "swi"
+    REGISTRY_PATH = "registry.json"
+    STATE_PATH = ws.DEFAULT_STATE_PATH.as_posix()
+    CHECKLIST_PATH = ws.FUNCTIONAL_CHECKLIST_PATH
+
+    def _registry(self):
+        return {
+            "work_item_id": self.WI, "plan_revision": 1,
+            "checkpoints": [{"id": "A", "depends_on": []}, {"id": "B", "depends_on": ["A"]}],
+        }
+
+    def _blob(self, repo, ref="HEAD"):
+        return subprocess.run(
+            ["git", "rev-parse", f"{ref}:{self.CHECKLIST_PATH}"],
+            cwd=repo.root, check=True, capture_output=True, text=True,
+        ).stdout.strip()
+
+    def _seed(self, repo, *, implementation_revision=1, checklist_content="checklist v1\n"):
+        _write(repo, self.REGISTRY_PATH, json.dumps(self._registry()))
+        _write(repo, self.CHECKLIST_PATH, checklist_content)
+        base_sha = _commit_paths(repo, [self.REGISTRY_PATH, self.CHECKLIST_PATH], "seed")
+        blob = self._blob(repo)
+        evidence_sha = _commit_empty(repo, "checklist evidence", trailers={
+            "Workflow-Functional-Checklist": f"{self.WI}/{implementation_revision}/{blob}",
+            "Workflow-Work-Item": self.WI,
+        })
+        work_item = {
+            "work_item_id": self.WI, "work_item_type": "process",
+            "registry_path": self.REGISTRY_PATH,
+            "base_commit": repo.base,
+            "implementation_revision": implementation_revision,
+            "reviewed_implementation_head": evidence_sha,
+            "technical_approval": {"status": "CURRENT", "approved_review_content_id": "t" * 40},
+            "phase": "AWAITING_FUNCTIONAL_REVIEW",
+            "checkpoints": {"A": {"status": "COMPLETE"}},
+        }
+        state = {"schema_version": 1, "active_work_item_id": self.WI, "work_items": {self.WI: work_item}}
+        return state, evidence_sha, blob
+
+    def _accept(self, repo, state, *, confirmed_commit, confirmed_blob, now="2026-01-01T00:00:00+00:00"):
+        """Simulates /accept-scoped-remediation's own orchestration
+        end-to-end, calling exactly the functions the command doc
+        specifies, in order."""
+        work_item = state["work_items"][self.WI]
+        confirmation_text = (
+            "I confirm scoped_remediation for swi\n"
+            f"Functional checklist evidence commit: {confirmed_commit}\n"
+            f"Functional checklist evidence blob: {confirmed_blob}\n"
+        )
+        ws.validate_user_confirmation(confirmation_text, work_item_id=self.WI, stage="scoped_remediation")
+        fields = ws.parse_scoped_remediation_confirmation_binding_fields(confirmation_text)
+        snapshot = ws.build_scoped_remediation_live_snapshot(repo.root, work_item)
+        current = ws.verify_functional_checklist_evidence(
+            repo.root, work_item, base_commit=work_item["base_commit"], head="HEAD",
+            confirmed_commit=fields["functional_checklist_evidence_commit"],
+            confirmed_blob=fields["functional_checklist_evidence_blob"],
+            expected_live_snapshot=snapshot,
+        )
+        is_terminal, outstanding = ws.resolve_own_registry_completion_status(repo.root, work_item)
+        self.assertFalse(is_terminal)
+        live_fields = ws.build_scoped_remediation_live_fields(
+            state, self.WI, outstanding_checkpoint_id=outstanding,
+            functional_checklist_evidence_commit=current["commit_sha"],
+            functional_checklist_blob=current["blob"],
+        )
+        resolution = ws.resolve_scoped_remediation_round(
+            repo.root, self.WI, work_item["base_commit"], "HEAD", outstanding,
+            work_item["implementation_revision"], live_fields,
+        )
+        if isinstance(resolution, ws.ExactReplay):
+            return resolution
+        if not isinstance(resolution, ws.NoExistingRound):
+            return resolution
+        self.assertTrue(
+            ws.scoped_remediation_gate_reachable(phase=work_item["phase"], is_terminal=is_terminal)
+        )
+        self.assertEqual(work_item["technical_approval"]["status"], "CURRENT")
+        ws.verify_functional_checklist_evidence(
+            repo.root, work_item, base_commit=work_item["base_commit"], head="HEAD",
+            confirmed_commit=fields["functional_checklist_evidence_commit"],
+            confirmed_blob=fields["functional_checklist_evidence_blob"],
+            expected_live_snapshot=snapshot,
+        )
+        new_state = ws.apply_scoped_remediation_acceptance(
+            state, self.WI, outstanding_checkpoint_id=outstanding,
+            functional_checklist_evidence_commit=current["commit_sha"],
+            functional_checklist_blob=current["blob"],
+            user_confirmation=confirmation_text, now=now,
+        )
+        ws.verify_functional_checklist_evidence(
+            repo.root, work_item, base_commit=work_item["base_commit"], head="HEAD",
+            confirmed_commit=fields["functional_checklist_evidence_commit"],
+            confirmed_blob=fields["functional_checklist_evidence_blob"],
+            expected_live_snapshot=snapshot,
+        )
+        _write(repo, self.STATE_PATH, json.dumps(new_state))
+        commit_sha = _commit_paths(repo, [self.STATE_PATH], "scoped remediation acceptance", trailers={
+            "Workflow-Scoped-Remediation-Acceptance": f"{outstanding}/{work_item['implementation_revision']}",
+            "Workflow-Work-Item": self.WI,
+        })
+        return new_state, commit_sha
+
+    def test_first_scoped_acceptance_mirrors_wf8b_shape(self):
+        with ScratchRepo() as repo:
+            state, evidence_sha, blob = self._seed(repo)
+            new_state, commit_sha = self._accept(
+                repo, state, confirmed_commit=evidence_sha, confirmed_blob=blob,
+            )
+            self.assertEqual(new_state["work_items"][self.WI]["phase"], "IMPLEMENTING")
+            entry = new_state["work_items"][self.WI]["scoped_remediation_acceptance"][0]
+            self.assertEqual(entry["outstanding_checkpoint_id"], "B")
+            self.assertEqual(entry["functional_checklist_evidence_commit"], evidence_sha)
+            status = subprocess.run(
+                ["git", "status", "--porcelain"], cwd=repo.root, check=True, capture_output=True, text=True,
+            ).stdout
+            self.assertEqual(status.strip(), "")  # worktree clean after success
+
+    def test_exact_replay_on_second_invocation(self):
+        with ScratchRepo() as repo:
+            state, evidence_sha, blob = self._seed(repo)
+            _new_state, first_commit = self._accept(
+                repo, state, confirmed_commit=evidence_sha, confirmed_blob=blob,
+            )
+            # Fresh-session resume: reload state from git-committed content
+            # (never carried over in-memory) and re-run the same confirmation.
+            resumed_state = json.loads(_run_capture(
+                ["git", "show", f"HEAD:{self.STATE_PATH}"], repo.root,
+            ))
+            result = self._accept(repo, resumed_state, confirmed_commit=evidence_sha, confirmed_blob=blob)
+            self.assertIsInstance(result, ws.ExactReplay)
+            self.assertEqual(result.commit_sha, first_commit)
+
+    def test_conflicting_duplicate_when_active_pointer_moved(self):
+        with ScratchRepo() as repo:
+            state, evidence_sha, blob = self._seed(repo)
+            self._accept(repo, state, confirmed_commit=evidence_sha, confirmed_blob=blob)
+            resumed_state = json.loads(_run_capture(["git", "show", f"HEAD:{self.STATE_PATH}"], repo.root))
+            resumed_state["active_work_item_id"] = "some-other-item"
+            result = self._accept(repo, resumed_state, confirmed_commit=evidence_sha, confirmed_blob=blob)
+            self.assertIsInstance(result, ws.ConflictingDuplicate)
+            self.assertIn("active_work_item_id_at_acceptance", result.differing_fields)
+
+    def test_wrong_evidence_commit_is_refused_as_stale(self):
+        with ScratchRepo() as repo:
+            state, evidence_sha, blob = self._seed(repo)
+            with self.assertRaises(ws.StaleFunctionalChecklistConfirmationError):
+                self._accept(repo, state, confirmed_commit="f" * 40, confirmed_blob=blob)
+
+    def test_wrong_evidence_blob_is_refused_as_stale(self):
+        with ScratchRepo() as repo:
+            state, evidence_sha, blob = self._seed(repo)
+            with self.assertRaises(ws.StaleFunctionalChecklistConfirmationError):
+                self._accept(repo, state, confirmed_commit=evidence_sha, confirmed_blob="f" * 40)
+
+    def test_wrong_work_item_confirmation_never_finds_evidence(self):
+        with ScratchRepo() as repo:
+            state, evidence_sha, blob = self._seed(repo)
+            other_work_item = {**state["work_items"][self.WI], "work_item_id": "other-item"}
+            with self.assertRaises(ws.MissingFunctionalChecklistEvidenceError):
+                ws.verify_functional_checklist_evidence(
+                    repo.root, other_work_item, base_commit=other_work_item["base_commit"], head="HEAD",
+                    confirmed_commit=evidence_sha, confirmed_blob=blob,
+                    expected_live_snapshot=ws.build_scoped_remediation_live_snapshot(repo.root, other_work_item),
+                )
+
+    def test_terminal_registry_refuses_scoped_gate(self):
+        """Once every checkpoint is COMPLETE, the scoped-remediation gate
+        is unreachable -- /accept-milestone is the correct command instead
+        (mutually exclusive with the non-terminal path this class
+        otherwise exercises)."""
+        with ScratchRepo() as repo:
+            state, evidence_sha, blob = self._seed(repo)
+            state["work_items"][self.WI]["checkpoints"]["B"] = {"status": "COMPLETE"}
+            work_item = state["work_items"][self.WI]
+            is_terminal, outstanding = ws.resolve_own_registry_completion_status(repo.root, work_item)
+            self.assertTrue(is_terminal)
+            self.assertIsNone(outstanding)
+            self.assertFalse(
+                ws.scoped_remediation_gate_reachable(phase=work_item["phase"], is_terminal=is_terminal)
+            )
+            self.assertTrue(
+                ws.milestone_complete_gate_reachable(phase=work_item["phase"], is_terminal=is_terminal)
+            )
+            # and /accept-milestone now succeeds via complete_work_item directly
+            new_state = ws.complete_work_item(state, self.WI, now="t", repo_root=repo.root)
+            self.assertEqual(new_state["work_items"][self.WI]["phase"], "MILESTONE_COMPLETE")
+
+
+def _run_capture(args, cwd):
+    return subprocess.run(args, cwd=cwd, check=True, capture_output=True, text=True).stdout
 
 
 if __name__ == "__main__":
