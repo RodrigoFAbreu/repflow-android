@@ -105,6 +105,10 @@ class TestAgainstRealRepository(unittest.TestCase):
         state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
         registry = json.loads((repo_root / "docs/ai-workflow/registry/workflow-v2-1-core-registry.json").read_text())
         ws.validate_state(state, registry=registry)
+        # GPT-R31-003: also exercise the whole-state plan-revision-mirror
+        # check against every real work item's own registry_path, not
+        # only workflow-v2-1-core's.
+        ws.validate_state(state, registry=registry, repo_root=repo_root)
 
     def test_real_state_file_checkpoint_completions_are_reachable(self):
         repo_root = _repo_root()
@@ -157,6 +161,40 @@ class TestAgainstRealRepository(unittest.TestCase):
                 f"{entry['path']} blob at the discovered approval commit {discovered} "
                 "does not match plan_approval.review_content_manifest",
             )
+
+    def test_reviewed_implementation_head_matches_live_head_right_now(self):
+        """GPT-R31-001: `record_bundle_generation`'s own state write must
+        not itself be a separate git commit -- that would move live HEAD
+        past the very commit it records, making `/approve-review`'s exact
+        `work_item["reviewed_implementation_head"] == <live HEAD SHA>`
+        freshness check (`approve-review.md` step 1) permanently
+        unsatisfiable without a further, unrelated commit. Left
+        uncommitted (an ordinary, allowed dirty state --
+        `WORKFLOW_STATE.json` dirtiness never blocks
+        `technical_approval_gate_reachable`, by construction of the
+        implementation-stage classification), the two must agree the
+        moment this state was written, proven here directly against the
+        real repository rather than asserted in prose. This is a
+        point-in-time proof, not a permanent invariant: it will correctly
+        stop holding once `/approve-review implementation` commits its
+        own approval trailer on top -- at that point `reviewed_implementation_head`
+        is a fixed historical record and live HEAD has moved past it by
+        design (`WFR-22`)."""
+        repo_root = _repo_root()
+        state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
+        item = state["work_items"][WORK_ITEM_ID]
+        live_head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_root, check=True, capture_output=True, text=True,
+        ).stdout.strip()
+        self.assertIsNotNone(
+            item["reviewed_implementation_head"],
+            "no bundle has ever been generated for this work item yet",
+        )
+        self.assertEqual(
+            item["reviewed_implementation_head"], live_head,
+            "reviewed_implementation_head must equal live HEAD while the "
+            "state write recording it remains uncommitted",
+        )
 
     def test_historical_wf0_plan_approval_remains_independently_discoverable(self):
         """WF0's own original Workflow-Plan-Approval identifier was

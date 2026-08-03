@@ -21,10 +21,12 @@ Stdlib-only. Run: python3 scripts/workflow_fingerprint_generalization_test.py
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import stat
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -118,6 +120,48 @@ class TestSecondWorkItemProducesDistinctIdentity(unittest.TestCase):
             )
             self.assertEqual(digest_explicit, digest_via_active)
 
+    def test_149_cli_subprocess_prints_no_workflow_v2_1_core_literal_for_a_second_item(self):
+        """Missing-test item 149's own real-subprocess half: a genuine
+        `python3 scripts/workflow_fingerprint.py --work-item-id
+        second-item` invocation's entire stdout must not name
+        `workflow-v2-1-core` anywhere, end to end through the real CLI,
+        not only through direct function calls."""
+        with h.ScratchRepo() as repo:
+            _write_second_item(repo, "second-item")
+            repo.commit_plan_docs_as_base()
+            scripts_dir = repo.root / "scripts"
+            scripts_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy(_REAL_SCRIPTS_DIR / "workflow_fingerprint.py", scripts_dir / "workflow_fingerprint.py")
+            result = subprocess.run(
+                ["python3", str(scripts_dir / "workflow_fingerprint.py"),
+                 "--work-item-id", "second-item"],
+                cwd=repo.root, capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("second-item", result.stdout)
+            self.assertNotIn("workflow-v2-1-core", result.stdout)
+
+    def test_149_write_manifest_with_work_item_id_omitted_refuses(self):
+        """OPUS-R28-010's own sub-case, real-subprocess: `--write-manifest`
+        with `--work-item-id` omitted refuses with a usage error, before
+        any directory is created or bound -- never silently resolving to
+        and writing the live `active_work_item_id`'s directory."""
+        with h.ScratchRepo() as repo:
+            _write_second_item(repo, "second-item")
+            repo.commit_plan_docs_as_base()
+            scripts_dir = repo.root / "scripts"
+            scripts_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy(_REAL_SCRIPTS_DIR / "workflow_fingerprint.py", scripts_dir / "workflow_fingerprint.py")
+            result = subprocess.run(
+                ["python3", str(scripts_dir / "workflow_fingerprint.py"),
+                 repo.base, "--write-manifest"],
+                cwd=repo.root, capture_output=True, text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("work-item-id is required", result.stderr)
+            self.assertFalse((repo.root / ".ai-review" / "second-item").exists())
+            self.assertFalse((repo.root / ".ai-review" / "current").exists())
+
     def test_151_manifest_write_for_second_item_names_only_its_own_files(self):
         with h.ScratchRepo() as repo:
             _write_second_item(repo, "second-item")
@@ -136,6 +180,44 @@ class TestSecondWorkItemProducesDistinctIdentity(unittest.TestCase):
             manifest_text = (bundle_dir / "MANIFEST.md").read_text()
             self.assertIn("work_item_id: second-item", manifest_text)
             self.assertNotIn("workflow-v2-1-core", manifest_text)
+
+
+class TestWorkflowV21CoreThroughTheNewResolver(unittest.TestCase):
+    """Missing-test item 159 (`OPUS-R25-014`): `workflow_test_harness.py`'s
+    `write_plan_docs` emits a valid per-item `<id>-artifacts.json`
+    consumed successfully by `resolve_plan_stage_metadata`/
+    `compute_review_content_id_plan_stage_for_work_item` with no override
+    needed, **including `workflow-v2-1-core` itself** -- the historically
+    hardcoded item, as opposed to `test_143`'s `second-item` and
+    `test_workflow_v2_1_core_itself_needs_no_protected_override`
+    (`workflow_test_harness_test.py`), which proves the same "no override
+    needed" property but only through the old, frozen-default
+    `compute_review_content_id_plan_stage`, never through the new
+    resolver at all."""
+
+    def test_workflow_v2_1_core_resolves_with_no_override_through_the_new_resolver(self):
+        with h.ScratchRepo() as repo:
+            (repo.root / ".gitignore").write_text(".ai-review/\n")
+            repo.write_plan_docs(work_item_id="workflow-v2-1-core", plan_revision=1)
+            repo.write_workflow_state(
+                active_work_item_id="workflow-v2-1-core",
+                **{"workflow-v2-1-core": ws.default_work_item(
+                    work_item_id="workflow-v2-1-core", work_item_type="process", work_item_kind="process",
+                    plan_path="docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+                    registry_path="docs/ai-workflow/registry/workflow-v2-1-core-registry.json",
+                    mapping_path="docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json",
+                    base_commit=repo.base, governing_workflow_version="1",
+                    plan_revision=1, last_transition="t0",
+                )},
+            )
+            repo.commit_plan_docs_as_base()
+            metadata = fingerprint.resolve_plan_stage_metadata(repo.root, "workflow-v2-1-core")
+            self.assertEqual(metadata.work_item_id, "workflow-v2-1-core")
+            digest, projection = fingerprint.compute_review_content_id_plan_stage_for_work_item(
+                repo.root, "workflow-v2-1-core",
+            )
+            self.assertEqual(projection["work_item_id"], "workflow-v2-1-core")
+            self.assertNotEqual(digest, "")
 
 
 class TestSyntheticWorkItemKind(unittest.TestCase):
@@ -256,6 +338,27 @@ class TestFailClosedMatrix(unittest.TestCase):
                 fingerprint.resolve_plan_stage_metadata(repo.root, "second-item")
             self.assertIn("base_commit", str(ctx.exception))
 
+    def _null_declared_field(self, field_name):
+        with h.ScratchRepo() as repo:
+            _write_second_item(repo, "second-item")
+            state_path = repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json"
+            state = json.loads(state_path.read_text())
+            state["work_items"]["second-item"][field_name] = None
+            state_path.write_text(json.dumps(state))
+            repo.commit_plan_docs_as_base()
+            with self.assertRaises(fingerprint.MissingPlanStageMetadataError) as ctx:
+                fingerprint.resolve_plan_stage_metadata(repo.root, "second-item")
+            self.assertIn(field_name, str(ctx.exception))
+
+    def test_condition_3a_null_plan_path(self):
+        self._null_declared_field("plan_path")
+
+    def test_condition_3b_null_registry_path(self):
+        self._null_declared_field("registry_path")
+
+    def test_condition_3c_null_mapping_path(self):
+        self._null_declared_field("mapping_path")
+
     def test_condition_4_invalid_path_grammar_absolute_path(self):
         with h.ScratchRepo() as repo:
             _write_second_item(repo, "second-item")
@@ -275,7 +378,36 @@ class TestFailClosedMatrix(unittest.TestCase):
             with self.assertRaises(fingerprint.MissingWorkItemArtifactsDeclarationError):
                 fingerprint.resolve_plan_stage_metadata(repo.root, "second-item")
 
-    def test_condition_6_registry_work_item_id_mismatch(self):
+    def test_condition_4b_invalid_path_grammar_registry_path_absolute(self):
+        """Condition 4's registry_path sub-case, independent of 4a's
+        plan_path sub-case above -- the same rule-violation vector (an
+        absolute path) exercised against a *different* one of the three
+        fields."""
+        with h.ScratchRepo() as repo:
+            _write_second_item(repo, "second-item")
+            state_path = repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json"
+            state = json.loads(state_path.read_text())
+            state["work_items"]["second-item"]["registry_path"] = "/etc/passwd"
+            state_path.write_text(json.dumps(state))
+            repo.commit_plan_docs_as_base()
+            with self.assertRaises(fingerprint.InvalidPlanStageMetadataPathError):
+                fingerprint.resolve_plan_stage_metadata(repo.root, "second-item")
+
+    def test_condition_4c_invalid_path_grammar_mapping_path_traversal(self):
+        """Condition 4's mapping_path sub-case, using the second named
+        rule-violation vector (a `../` traversal) rather than repeating
+        4a/4b's absolute-path vector a third time."""
+        with h.ScratchRepo() as repo:
+            _write_second_item(repo, "second-item")
+            state_path = repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json"
+            state = json.loads(state_path.read_text())
+            state["work_items"]["second-item"]["mapping_path"] = "../escape.json"
+            state_path.write_text(json.dumps(state))
+            repo.commit_plan_docs_as_base()
+            with self.assertRaises(fingerprint.InvalidPlanStageMetadataPathError):
+                fingerprint.resolve_plan_stage_metadata(repo.root, "second-item")
+
+    def test_condition_6a_registry_work_item_id_mismatch(self):
         with h.ScratchRepo() as repo:
             _write_second_item(repo, "second-item")
             registry_path = repo.root / "docs" / "ai-workflow" / "registry" / "second-item-registry.json"
@@ -286,7 +418,29 @@ class TestFailClosedMatrix(unittest.TestCase):
             with self.assertRaises(fingerprint.RegistryWorkItemIdMismatchError):
                 fingerprint.resolve_plan_stage_metadata(repo.root, "second-item")
 
-    def test_condition_7_declared_path_not_a_member_of_protected_set(self):
+    def test_condition_6b_mapping_work_item_id_mismatch(self):
+        with h.ScratchRepo() as repo:
+            _write_second_item(repo, "second-item")
+            mapping_path = repo.root / "docs" / "ai-workflow" / "requirements" / "second-item-mapping.json"
+            data = json.loads(mapping_path.read_text())
+            data["work_item_id"] = "someone-else"
+            mapping_path.write_text(json.dumps(data))
+            repo.commit_plan_docs_as_base()
+            with self.assertRaises(fingerprint.MappingWorkItemIdMismatchError):
+                fingerprint.resolve_plan_stage_metadata(repo.root, "second-item")
+
+    def test_condition_6c_artifacts_work_item_id_mismatch(self):
+        with h.ScratchRepo() as repo:
+            _write_second_item(repo, "second-item")
+            artifacts_path = repo.root / "docs" / "ai-workflow" / "registry" / "second-item-artifacts.json"
+            data = json.loads(artifacts_path.read_text())
+            data["work_item_id"] = "someone-else"
+            artifacts_path.write_text(json.dumps(data))
+            repo.commit_plan_docs_as_base()
+            with self.assertRaises(fingerprint.ArtifactsWorkItemIdMismatchError):
+                fingerprint.resolve_plan_stage_metadata(repo.root, "second-item")
+
+    def test_condition_7a_declared_path_not_a_member_of_protected_set(self):
         with h.ScratchRepo() as repo:
             _write_second_item(repo, "second-item")
             artifacts_path = repo.root / "docs" / "ai-workflow" / "registry" / "second-item-artifacts.json"
@@ -297,14 +451,65 @@ class TestFailClosedMatrix(unittest.TestCase):
             with self.assertRaises(fingerprint.PlanStageMetadataNotProtectedError):
                 fingerprint.resolve_plan_stage_metadata(repo.root, "second-item")
 
-    def test_condition_8_duplicate_path_claimed_by_two_items(self):
+    def test_condition_7b_three_paths_not_pairwise_distinct(self):
+        with h.ScratchRepo() as repo:
+            _write_second_item(repo, "second-item")
+            state_path = repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json"
+            state = json.loads(state_path.read_text())
+            # mapping_path collapsed onto registry_path's own value -- both
+            # remain members of the protected set (satisfying 7a), but the
+            # triple is no longer pairwise distinct.
+            state["work_items"]["second-item"]["mapping_path"] = (
+                state["work_items"]["second-item"]["registry_path"]
+            )
+            state_path.write_text(json.dumps(state))
+            repo.commit_plan_docs_as_base()
+            with self.assertRaises(fingerprint.PlanStageMetadataNotProtectedError):
+                fingerprint.resolve_plan_stage_metadata(repo.root, "second-item")
+
+    def test_condition_8a_duplicate_plan_path_claimed_by_two_items(self):
         with h.ScratchRepo() as repo:
             _write_second_item(repo, "second-item")
             state_path = repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json"
             state = json.loads(state_path.read_text())
             third = dict(state["work_items"]["second-item"])
             third["work_item_id"] = "third-item"
-            state["work_items"]["third-item"] = third  # same plan_path/registry_path/mapping_path
+            third["registry_path"] = "docs/ai-workflow/registry/third-item-registry.json"
+            third["mapping_path"] = "docs/ai-workflow/requirements/third-item-mapping.json"
+            # Only plan_path collides -- registry_path/mapping_path differ.
+            state["work_items"]["third-item"] = third
+            state_path.write_text(json.dumps(state))
+            repo.commit_plan_docs_as_base()
+            with self.assertRaises(fingerprint.DuplicateWorkItemArtifactPathError):
+                fingerprint.resolve_plan_stage_metadata(repo.root, "second-item")
+
+    def test_condition_8b_duplicate_registry_path_claimed_by_two_items(self):
+        with h.ScratchRepo() as repo:
+            _write_second_item(repo, "second-item")
+            state_path = repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json"
+            state = json.loads(state_path.read_text())
+            third = dict(state["work_items"]["second-item"])
+            third["work_item_id"] = "third-item"
+            third["plan_path"] = "docs/ai-workflow/third-item-plan.md"
+            third["mapping_path"] = "docs/ai-workflow/requirements/third-item-mapping.json"
+            # Only registry_path collides -- plan_path/mapping_path differ.
+            state["work_items"]["third-item"] = third
+            state_path.write_text(json.dumps(state))
+            repo.commit_plan_docs_as_base()
+            with self.assertRaises(fingerprint.DuplicateWorkItemArtifactPathError):
+                fingerprint.resolve_plan_stage_metadata(repo.root, "second-item")
+
+    def test_condition_8c_duplicate_mapping_path_claimed_by_two_items(self):
+        with h.ScratchRepo() as repo:
+            _write_second_item(repo, "second-item")
+            state_path = repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json"
+            state = json.loads(state_path.read_text())
+            third = dict(state["work_items"]["second-item"])
+            third["work_item_id"] = "third-item"
+            third["plan_path"] = "docs/ai-workflow/third-item-plan.md"
+            third["registry_path"] = "docs/ai-workflow/registry/third-item-registry.json"
+            # Only mapping_path collides -- plan_path/registry_path differ.
+            state["work_items"]["third-item"] = third
             state_path.write_text(json.dumps(state))
             repo.commit_plan_docs_as_base()
             with self.assertRaises(fingerprint.DuplicateWorkItemArtifactPathError):
@@ -367,6 +572,37 @@ class TestFailClosedMatrix(unittest.TestCase):
             with self.assertRaises(fingerprint.BundleWorkItemMismatchError):
                 fingerprint.write_manifest_with_verified_identifiers_for_work_item(repo.root, "second-item")
 
+    def test_152_manifest_bound_to_v2_1_dry_run_refuses_workflow_v2_1_core_write_and_leaves_it_untouched(self):
+        """Missing-test item 152's own exact literal names -- `v2-1-dry-run`
+        and `workflow-v2-1-core` -- rather than the generic `second-item`/
+        `some-other-item` placeholders `test_condition_12a` above uses,
+        plus the "leaves the existing MANIFEST.md untouched" assertion
+        neither `test_condition_12a`/`test_condition_12b` currently makes."""
+        with h.ScratchRepo() as repo:
+            _write_second_item(repo, "workflow-v2-1-core")
+            repo.commit_plan_docs_as_base()
+            bundle_dir = repo.root / ".ai-review" / "workflow-v2-1-core" / "current"
+            bundle_dir.mkdir(parents=True)
+            for name, content in (
+                ("REVIEW_REQUEST.md", "review_content_id: " + "a" * 64 + "\n"),
+                ("PLAN.md", "plan\n"), ("DIFF.patch", "\n"), ("TEST_RESULTS.md", "results\n"),
+            ):
+                (bundle_dir / name).write_text(content)
+            manifest_path = bundle_dir / "MANIFEST.md"
+            existing_manifest_content = "work_item_id: v2-1-dry-run\n"
+            manifest_path.write_text(existing_manifest_content)
+
+            with self.assertRaises(fingerprint.BundleWorkItemMismatchError) as ctx:
+                fingerprint.write_manifest_with_verified_identifiers_for_work_item(
+                    repo.root, "workflow-v2-1-core",
+                )
+            self.assertIn("v2-1-dry-run", str(ctx.exception))
+            self.assertIn("workflow-v2-1-core", str(ctx.exception))
+            self.assertEqual(
+                manifest_path.read_text(), existing_manifest_content,
+                "a refused write must leave the existing MANIFEST.md byte-for-byte untouched",
+            )
+
     def test_condition_12b_manifest_present_but_unbound_refuses(self):
         with h.ScratchRepo() as repo:
             _write_second_item(repo, "second-item")
@@ -378,10 +614,16 @@ class TestFailClosedMatrix(unittest.TestCase):
                 ("PLAN.md", "plan\n"), ("DIFF.patch", "\n"), ("TEST_RESULTS.md", "results\n"),
             ):
                 (bundle_dir / name).write_text(content)
-            (bundle_dir / "MANIFEST.md").write_text("# Bundle Manifest\n\nreview_content_id: " + "a" * 64 + "\n")
+            manifest_path = bundle_dir / "MANIFEST.md"
+            existing_manifest_content = "# Bundle Manifest\n\nreview_content_id: " + "a" * 64 + "\n"
+            manifest_path.write_text(existing_manifest_content)
             with self.assertRaises(fingerprint.BundleWorkItemMismatchError) as ctx:
                 fingerprint.write_manifest_with_verified_identifiers_for_work_item(repo.root, "second-item")
             self.assertIn("unbound", str(ctx.exception).lower() + repr(ctx.exception))
+            self.assertEqual(
+                manifest_path.read_text(), existing_manifest_content,
+                "a refused write must leave the existing unbound MANIFEST.md byte-for-byte untouched",
+            )
 
     def test_condition_13_base_commit_disagreement_refuses(self):
         with h.ScratchRepo() as repo:
@@ -495,6 +737,70 @@ class TestRouteWorkItemResumeBranchDeclarationFacts(unittest.TestCase):
                 mapping_path="docs/ai-workflow/requirements/v2-1-dry-run-like-mapping.json",
                 base_commit="b" * 40, plan_revision=1, now="t2",
             )
+
+    def test_creation_branch_end_to_end_through_real_bundle_generation(self):
+        """Item 154's own creation-branch case, run end to end (`OPUS-R25-004`,
+        `OPUS-R28-002`): unlike every other test in this suite, which
+        constructs its fixture's `WORKFLOW_STATE.json` entry directly via
+        `ws.default_work_item(...)` -- bypassing `route_work_item` entirely
+        -- this test calls `route_work_item` itself, for a `work_item_id`
+        genuinely absent from `state["work_items"]`, and follows through
+        to a real, successful `prepare-ai-review.sh` invocation. This is
+        not interchangeable with the resume-branch tests above: only the
+        creation branch (`default_work_item`'s own write path) is
+        exercised here."""
+        with h.ScratchRepo() as repo:
+            (repo.root / ".gitignore").write_text(".ai-review/\n")
+            work_item_id = "fresh-item"
+            repo.write_plan_docs(work_item_id=work_item_id, plan_revision=1)
+            repo.commit_plan_docs_as_base()
+
+            config = self._config()
+            state = {"schema_version": 1, "active_work_item_id": None, "work_items": {}}
+            self.assertNotIn(work_item_id, state["work_items"])
+            new_state = ws.route_work_item(
+                state, config, work_item_id=work_item_id, work_item_type="process",
+                work_item_kind="process",
+                plan_path="docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+                registry_path=f"docs/ai-workflow/registry/{work_item_id}-registry.json",
+                mapping_path=f"docs/ai-workflow/requirements/{work_item_id}-mapping.json",
+                base_commit=repo.base, plan_revision=1, now="t0",
+            )
+            entry = new_state["work_items"][work_item_id]
+            self.assertEqual(entry["registry_path"], f"docs/ai-workflow/registry/{work_item_id}-registry.json")
+            self.assertEqual(entry["base_commit"], repo.base)
+
+            state_path = repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json"
+            state_path.write_text(json.dumps(new_state))
+            subprocess.run(["git", "add", "-A"], cwd=repo.root, check=True, capture_output=True)
+            subprocess.run(
+                ["git", "commit", "-q", "-m", "route_work_item creation branch"],
+                cwd=repo.root, check=True, capture_output=True,
+            )
+
+            digest, _ = fingerprint.compute_review_content_id_plan_stage_for_work_item(
+                repo.root, work_item_id,
+            )
+            bundle_dir = repo.root / ".ai-review" / work_item_id / "current"
+            bundle_dir.mkdir(parents=True)
+            (bundle_dir / "REVIEW_REQUEST.md").write_text(f"stage: plan\nreview_content_id: {digest}\n")
+
+            scripts_dir = repo.root / "scripts"
+            scripts_dir.mkdir(parents=True, exist_ok=True)
+            for name in ("prepare-ai-review.sh", "workflow_fingerprint.py"):
+                dest = scripts_dir / name
+                shutil.copy(_REAL_SCRIPTS_DIR / name, dest)
+            script_path = scripts_dir / "prepare-ai-review.sh"
+            script_path.chmod(script_path.stat().st_mode | stat.S_IEXEC)
+
+            result = subprocess.run(
+                ["bash", str(script_path), repo.base, "plan", work_item_id],
+                cwd=repo.root, capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            manifest_text = (bundle_dir / "MANIFEST.md").read_text()
+            self.assertIn(f"work_item_id: {work_item_id}", manifest_text)
+            self.assertIn(f"review_content_id: {digest}", manifest_text)
 
 
 class TestArtifactsDeclarationsGenerator(unittest.TestCase):
@@ -635,7 +941,97 @@ class TestPrepareAiReviewShPlanStageRequiredArgument(unittest.TestCase):
             manifest_text = (bundle_dir / "MANIFEST.md").read_text()
             self.assertIn("work_item_id: second-item", manifest_text)
             self.assertIn(f"review_content_id: {digest}", manifest_text)
+            # Item 163's own positive half: MANIFEST.md's base_commit
+            # field must equal the resolved item's declared value,
+            # checked at write time -- not only that a *disagreeing* one
+            # refuses (test_163_base_commit_disagreement_refuses_before_any_content
+            # above only covers the negative half).
+            self.assertIn(f"base_commit: {repo.base}", manifest_text)
             self.assertTrue((repo.root / ".ai-review" / "second-item" / "review-bundle.tar.gz").is_file())
+
+
+class TestBundleRelocation(unittest.TestCase):
+    """Missing-test item 165's relocation/migration sub-cases
+    (`OPUS-R27-003`, `OPUS-R28-004`/`-006`): `relocate_flat_bundle_to_scoped_layout`
+    and its `verify_relocation_file_set_complete` post-move check, run
+    against a byte-copy of this repository's own real bundle content, per
+    the item's own required wording."""
+
+    def _copy_real_bundle_as_flat(self, dest_repo_root: Path) -> Path:
+        real_root = _REAL_SCRIPTS_DIR.parent / ".ai-review" / "workflow-v2-1-core"
+        flat_dir = dest_repo_root / ".ai-review" / "current"
+        shutil.copytree(real_root / "current", flat_dir)
+        real_archive = real_root / "review-bundle.tar.gz"
+        if real_archive.is_file():
+            shutil.copy(real_archive, dest_repo_root / ".ai-review" / "review-bundle.tar.gz")
+        return flat_dir
+
+    def test_relocation_succeeds_and_verifies_complete_move(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".ai-review").mkdir()
+            flat_dir = self._copy_real_bundle_as_flat(root)
+            source_files = {p.relative_to(flat_dir).as_posix() for p in flat_dir.rglob("*") if p.is_file()}
+            self.assertTrue(source_files, "the real bundle byte-copy must be non-empty")
+
+            fingerprint.relocate_flat_bundle_to_scoped_layout(root, "second-item")
+
+            self.assertFalse(flat_dir.exists(), "the flat source directory must be gone after relocation")
+            dest_dir = root / ".ai-review" / "second-item" / "current"
+            dest_files = {p.relative_to(dest_dir).as_posix() for p in dest_dir.rglob("*") if p.is_file()}
+            self.assertEqual(source_files, dest_files)
+            self.assertTrue((root / ".ai-review" / "second-item" / "review-bundle.tar.gz").is_file())
+
+    def test_relocation_refuses_when_destination_already_exists_non_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".ai-review").mkdir()
+            self._copy_real_bundle_as_flat(root)
+            dest_dir = root / ".ai-review" / "second-item" / "current"
+            dest_dir.mkdir(parents=True)
+            (dest_dir / "PRE_EXISTING.txt").write_text("already here\n")
+
+            with self.assertRaises(fingerprint.BundleRelocationDestinationExistsError) as ctx:
+                fingerprint.relocate_flat_bundle_to_scoped_layout(root, "second-item")
+            self.assertIn(str(dest_dir), str(ctx.exception))
+            # Refusal must be a hard stop before touching the source at all.
+            self.assertTrue((root / ".ai-review" / "current").is_dir())
+            self.assertEqual((dest_dir / "PRE_EXISTING.txt").read_text(), "already here\n")
+
+    def test_partial_move_missing_file_is_caught_by_post_move_verification(self):
+        # Simulates an interrupted move directly against the real
+        # verification function, rather than trying to interrupt
+        # shutil.move mid-flight: a destination missing one file the
+        # pre-move snapshot named.
+        with tempfile.TemporaryDirectory() as tmp:
+            dest_dir = Path(tmp) / "dest"
+            dest_dir.mkdir()
+            (dest_dir / "a.txt").write_bytes(b"a")
+            source_snapshot = {
+                "a.txt": hashlib.sha256(b"a").hexdigest(),
+                "b.txt": hashlib.sha256(b"b").hexdigest(),
+            }
+            with self.assertRaises(fingerprint.BundleRelocationPartialMoveError) as ctx:
+                fingerprint.verify_relocation_file_set_complete(source_snapshot, dest_dir)
+            self.assertIn("b.txt", str(ctx.exception))
+
+    def test_partial_move_content_mismatch_is_also_caught(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dest_dir = Path(tmp) / "dest"
+            dest_dir.mkdir()
+            (dest_dir / "a.txt").write_bytes(b"corrupted")
+            source_snapshot = {"a.txt": hashlib.sha256(b"original").hexdigest()}
+            with self.assertRaises(fingerprint.BundleRelocationPartialMoveError) as ctx:
+                fingerprint.verify_relocation_file_set_complete(source_snapshot, dest_dir)
+            self.assertIn("a.txt", str(ctx.exception))
+
+    def test_complete_move_verification_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dest_dir = Path(tmp) / "dest"
+            dest_dir.mkdir()
+            (dest_dir / "a.txt").write_bytes(b"same")
+            source_snapshot = {"a.txt": hashlib.sha256(b"same").hexdigest()}
+            fingerprint.verify_relocation_file_set_complete(source_snapshot, dest_dir)  # must not raise
 
 
 if __name__ == "__main__":

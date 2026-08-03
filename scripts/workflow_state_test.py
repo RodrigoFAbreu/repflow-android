@@ -351,6 +351,86 @@ class TestStateValidation(unittest.TestCase):
         wi = _base_work_item(plan_revision=1)
         ws.validate_state(_base_state(wi=wi), registry=registry)  # must not raise
 
+    def _write_registry_file(self, root: Path, rel_path: str, *, work_item_id: str, plan_revision: int) -> None:
+        full = root / rel_path
+        full.parent.mkdir(parents=True, exist_ok=True)
+        full.write_text(json.dumps({
+            "work_item_id": work_item_id, "plan_revision": plan_revision, "checkpoints": [],
+        }))
+
+    def test_repo_root_check_passes_when_every_applicable_items_mirror_matches(self):
+        # Missing-test requirement (GPT-R31-003): two process work items,
+        # each with its own registry_path and matching mirror.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_registry_file(root, "registry/a.json", work_item_id="a", plan_revision=3)
+            self._write_registry_file(root, "registry/b.json", work_item_id="b", plan_revision=7)
+            state = _base_state(
+                a=_base_work_item(work_item_id="a", registry_path="registry/a.json", plan_revision=3),
+                b=_base_work_item(work_item_id="b", registry_path="registry/b.json", plan_revision=7),
+            )
+            ws.validate_state(state, repo_root=root)  # must not raise
+
+    def test_repo_root_check_rejects_either_items_mismatch_independently(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_registry_file(root, "registry/a.json", work_item_id="a", plan_revision=3)
+            self._write_registry_file(root, "registry/b.json", work_item_id="b", plan_revision=7)
+
+            # item-a's own mirror disagrees; item-b's agrees.
+            state_a_bad = _base_state(
+                a=_base_work_item(work_item_id="a", registry_path="registry/a.json", plan_revision=999),
+                b=_base_work_item(work_item_id="b", registry_path="registry/b.json", plan_revision=7),
+            )
+            with self.assertRaises(ws.PlanRevisionMirrorMismatchError):
+                ws.validate_state(state_a_bad, repo_root=root)
+
+            # item-a's own mirror agrees; item-b's disagrees -- proves the
+            # check is not vacuously passing just because *some* item
+            # matches.
+            state_b_bad = _base_state(
+                a=_base_work_item(work_item_id="a", registry_path="registry/a.json", plan_revision=3),
+                b=_base_work_item(work_item_id="b", registry_path="registry/b.json", plan_revision=999),
+            )
+            with self.assertRaises(ws.PlanRevisionMirrorMismatchError):
+                ws.validate_state(state_b_bad, repo_root=root)
+
+    def test_repo_root_check_fails_closed_on_missing_registry_file_not_silently(self):
+        # "omitted registry coverage fails rather than silently skipping
+        # the check" (GPT-R31-003's own required test).
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = _base_state(
+                a=_base_work_item(work_item_id="a", registry_path="registry/does-not-exist.json", plan_revision=3),
+            )
+            with self.assertRaises(ws.MissingRegistryForPlanRevisionMirrorCheckError):
+                ws.validate_state(state, repo_root=root)
+
+    def test_repo_root_check_exempts_null_registry_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = _base_state(
+                a=_base_work_item(work_item_id="a", registry_path=None, plan_revision=1),
+            )
+            ws.validate_state(state, repo_root=root)  # must not raise
+
+    def test_repo_root_check_catches_a_different_items_stale_mirror_even_when_registry_param_names_another(self):
+        """The exact failure scenario GPT-R31-003 describes: passing only
+        `registry=` (core's own) lets a *different* item's stale mirror
+        through; passing `repo_root=` too must catch it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_registry_file(root, "registry/core.json", work_item_id="core", plan_revision=21)
+            self._write_registry_file(root, "registry/second.json", work_item_id="second", plan_revision=5)
+            state = _base_state(
+                core=_base_work_item(work_item_id="core", registry_path="registry/core.json", plan_revision=21),
+                second=_base_work_item(work_item_id="second", registry_path="registry/second.json", plan_revision=999),
+            )
+            core_registry = {"work_item_id": "core", "plan_revision": 21, "checkpoints": []}
+            ws.validate_state(state, registry=core_registry)  # passes -- the exact defect GPT-R31-003 flagged
+            with self.assertRaises(ws.PlanRevisionMirrorMismatchError):
+                ws.validate_state(state, registry=core_registry, repo_root=root)
+
     def test_corrupt_json_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "state.json"
@@ -1593,6 +1673,95 @@ class TestImplementationStageApprovalSecondItem(unittest.TestCase):
                     work_item_type="process", work_item_id="second-item", head=head,
                     artifacts_path=fingerprint.artifacts_path_for_work_item("second-item"),
                 )
+
+
+class TestImplementingEntryReachableSecondItem(unittest.TestCase):
+    """Missing-test item 150's third caller (`GPT-R31-002`):
+    `implementing_entry_reachable` -- as opposed to `approval_is_current`,
+    already exercised against a second item at the implementation stage
+    by `TestImplementationStageApprovalSecondItem` above -- gates
+    independently for a second, non-`"wi"`, non-`workflow-v2-1-core`
+    process work item's own `plan_approval` record, with no `plan_revision`
+    parameter passed."""
+
+    def test_second_items_plan_approval_is_reachable_via_implementing_entry_reachable(self):
+        with ScratchRepo() as repo:
+            work_item_id = "second-item"
+            plan_path_rel = f"docs/ai-workflow/{work_item_id}-plan.md"
+            registry_rel = f"docs/ai-workflow/registry/{work_item_id}-registry.json"
+            mapping_rel = f"docs/ai-workflow/requirements/{work_item_id}-mapping.json"
+            artifacts_rel = f"docs/ai-workflow/registry/{work_item_id}-artifacts.json"
+            state_rel = "docs/ai-workflow/WORKFLOW_STATE.json"
+            for rel, content in (
+                (plan_path_rel, "# Plan (Revision 1)\n\nplan v1\n"),
+                (registry_rel, json.dumps({"work_item_id": work_item_id, "plan_revision": 1, "checkpoints": []})),
+                (mapping_rel, json.dumps({"work_item_id": work_item_id, "requirements": {}})),
+                (artifacts_rel, json.dumps({
+                    "schema_version": 2, "work_item_id": work_item_id,
+                    "plan_stage": {
+                        "protected_paths": [plan_path_rel, registry_rel, mapping_rel],
+                        "excluded_paths": {
+                            state_rel: "runtime-mutable state",
+                            artifacts_rel: "non-immutable registry artifact",
+                        },
+                        "excluded_prefixes": {"scripts/": "checkpoint scaffolding"},
+                    },
+                })),
+                (state_rel, json.dumps({
+                    "schema_version": 1, "active_work_item_id": work_item_id,
+                    "work_items": {
+                        work_item_id: {
+                            "work_item_id": work_item_id, "work_item_type": "process",
+                            "plan_path": plan_path_rel, "registry_path": registry_rel,
+                            "mapping_path": mapping_rel, "base_commit": repo.base,
+                        },
+                    },
+                })),
+            ):
+                full = repo.root / rel
+                full.parent.mkdir(parents=True, exist_ok=True)
+                full.write_text(content)
+                _run(["git", "add", rel], cwd=repo.root)
+
+            protected = frozenset({plan_path_rel, registry_rel, mapping_rel})
+            excluded_paths = {state_rel: "runtime-mutable state", artifacts_rel: "non-immutable registry artifact"}
+            excluded_prefixes = {"scripts/": "checkpoint scaffolding"}
+            review_content_id, _ = fingerprint.compute_review_content_id_plan_stage(
+                repo.root, repo.base, "process", work_item_id, 1, protected, excluded_paths, excluded_prefixes,
+            )
+            _run(
+                ["git", "commit", "-q", "-m",
+                 f"approve plan\n\nWorkflow-Plan-Approval: {review_content_id}\n"
+                 f"Workflow-Work-Item: {work_item_id}"],
+                cwd=repo.root,
+            )
+            approval_sha = repo.head()
+
+            work_item = {
+                "work_item_id": work_item_id, "work_item_type": "process", "plan_revision": 1,
+                "plan_approval": {"status": "CURRENT", "approved_review_content_id": review_content_id},
+            }
+            self.assertTrue(
+                ws.implementing_entry_reachable(repo.root, work_item, repo.base),
+                "a second item's own plan_approval must be independently reachable, "
+                "with no plan_revision parameter passed to implementing_entry_reachable",
+            )
+
+            # A checkpoint commit for this second item must keep it
+            # reachable, exactly like TestApprovalFreshnessAndEntry proves
+            # for "wi" above -- proving the property generalizes, not
+            # only holds for one hardcoded item.
+            checkpoint_path = repo.root / "scripts" / f"{work_item_id}_checkpoint_1.txt"
+            checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+            checkpoint_path.write_text("checkpoint 1\n")
+            _run(["git", "add", "-A"], cwd=repo.root)
+            _run(
+                ["git", "commit", "-q", "-m",
+                 f"checkpoint 1\n\nWorkflow-Checkpoint: WF1\nWorkflow-Work-Item: {work_item_id}"],
+                cwd=repo.root,
+            )
+            self.assertTrue(ws.implementing_entry_reachable(repo.root, work_item, repo.base))
+            self.assertNotEqual(approval_sha, repo.head())
 
 
 # ---------------------------------------------------------------------------
