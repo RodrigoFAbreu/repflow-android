@@ -399,6 +399,15 @@ class PlanRevisionMirrorMismatchError(Exception):
     is a data-integrity defect, not a legitimate state."""
 
 
+class MissingRegistryForPlanRevisionMirrorCheckError(Exception):
+    """Raised by `validate_state`'s `repo_root`-driven whole-state
+    plan-revision-mirror check (`GPT-R31-003`) when a work item declares a
+    non-null `registry_path` whose file does not exist or is unreadable at
+    `repo_root` -- fails closed rather than silently skipping that item's
+    own mirror check, which would let "omitted registry coverage" pass as
+    if it had been verified."""
+
+
 class InvalidApprovalRecordError(Exception):
     """Raised when a `plan_approval`/`technical_approval` record does not
     match D2's shape, including the plan-stage's permanently-null
@@ -2311,11 +2320,29 @@ def _validate_work_item(work_item_id: str, work_item: dict) -> None:
     _validate_plan_review_stages(work_item)
 
 
-def validate_state(state: dict, *, registry: dict | None = None) -> None:
+def validate_state(state: dict, *, registry: dict | None = None, repo_root: Path | None = None) -> None:
     """D3's "Validator rejects" list, to the extent checkable from schema
     and (optionally) the registry alone. Corrupt/unparseable JSON is the
     caller's concern (`_load_json`/`CorruptJsonError`) -- this function
-    receives already-parsed data."""
+    receives already-parsed data.
+
+    `registry`, if given, is a single caller-supplied registry dict used
+    for the checkpoint-dependency check below and, if its own
+    `work_item_id` names a known item, that one item's plan-revision
+    mirror -- unchanged from before `GPT-R31-003`, kept for callers that
+    only ever validate one work item's checkpoints against its own
+    registry.
+
+    `repo_root`, if given, is the **whole-state** plan-revision-mirror
+    check `GPT-R31-003` requires: every work item with a non-null
+    `registry_path` has that path resolved and read from disk (relative to
+    `repo_root`), independent of whichever single `registry` a caller
+    happened to also pass -- so a caller validating `workflow-v2-1-core`'s
+    own registry can no longer leave a different work item's stale mirror
+    undetected. A declared `registry_path` that does not exist or is
+    unreadable fails closed (`MissingRegistryForPlanRevisionMirrorCheckError`)
+    rather than being silently skipped; a `null` `registry_path` remains
+    exempt, by design, from any mirror check at all."""
     if state.get("schema_version") != SCHEMA_VERSION:
         raise CorruptJsonError(f"unknown state schema_version: {state.get('schema_version')!r}")
 
@@ -2347,6 +2374,38 @@ def validate_state(state: dict, *, registry: dict | None = None) -> None:
                     f"{field_name} {value!r} is claimed by both {seen[value]!r} and {work_item_id!r}"
                 )
             seen[value] = work_item_id
+
+    if repo_root is not None:
+        # GPT-R31-003: the single-`registry`-param mirror check above only
+        # ever covers the one item that `registry` itself names -- a
+        # caller validating with only `workflow-v2-1-core`'s own registry
+        # never sees a *different* work item's stale mirror. This is the
+        # whole-state counterpart: every non-null `registry_path` in
+        # `state` is resolved and read from disk, independent of which
+        # single `registry` (if any) the caller also passed.
+        for work_item_id, work_item in work_items.items():
+            registry_path = work_item.get("registry_path")
+            if registry_path is None:
+                continue
+            registry_full = repo_root / registry_path
+            try:
+                registry_bytes = registry_full.read_text()
+            except OSError as exc:
+                raise MissingRegistryForPlanRevisionMirrorCheckError(
+                    f"work_items[{work_item_id!r}].registry_path {registry_path!r} "
+                    f"does not exist or is unreadable at {registry_full}"
+                ) from exc
+            registry_data = json.loads(registry_bytes)
+            registry_plan_revision = registry_data.get("plan_revision")
+            if registry_plan_revision is None:
+                continue
+            state_plan_revision = work_item.get("plan_revision")
+            if state_plan_revision != registry_plan_revision:
+                raise PlanRevisionMirrorMismatchError(
+                    f"work_items[{work_item_id!r}].plan_revision (state mirror) == "
+                    f"{state_plan_revision!r}, but registry {registry_path!r} declares "
+                    f"plan_revision == {registry_plan_revision!r}"
+                )
 
     active_id = state.get("active_work_item_id")
     if active_id is not None:

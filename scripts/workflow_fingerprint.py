@@ -195,6 +195,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -435,6 +436,20 @@ class BundleWorkItemMismatchError(Exception):
     resolved work item — naming a different `work_item_id`, no
     `work_item_id` at all ("unbound"), or a different `base_commit` —
     conditions 12/13."""
+
+
+class BundleRelocationDestinationExistsError(Exception):
+    """Raised by `relocate_flat_bundle_to_scoped_layout` (migration step
+    8a) when the destination `.ai-review/<work_item_id>/current/` already
+    exists and is non-empty -- refuses rather than nesting the flat
+    source directory inside it silently."""
+
+
+class BundleRelocationPartialMoveError(Exception):
+    """Raised by `relocate_flat_bundle_to_scoped_layout` when a post-move
+    verification finds the destination's file set or content disagrees
+    with the pre-move source snapshot -- an interrupted/partial move is
+    left diagnosable rather than bound to a manifest as if complete."""
 
 
 WORK_ITEM_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
@@ -1591,6 +1606,83 @@ def resolve_feedback_dir(repo_root: Path, work_item_id: str) -> Path:
     if (repo_root / scoped).is_dir():
         return scoped
     return Path(".ai-review/feedback")
+
+
+def _snapshot_directory_file_hashes(directory: Path) -> dict[str, str]:
+    """Every regular file under `directory`, keyed by POSIX-relative path,
+    mapped to its sha256 -- the pre-move snapshot
+    `relocate_flat_bundle_to_scoped_layout`'s post-move verification
+    compares the destination against."""
+    return {
+        p.relative_to(directory).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in sorted(directory.rglob("*")) if p.is_file()
+    }
+
+
+def verify_relocation_file_set_complete(
+    source_snapshot: Mapping[str, str], dest_dir: Path,
+) -> None:
+    """The post-move verification half of migration step 8a
+    (`OPUS-R28-004`/`-006`, missing-test item 165), factored out as its
+    own function so a partial/interrupted move can be exercised directly
+    against a hand-constructed destination, without having to actually
+    interrupt a real move mid-flight. `source_snapshot` is a path->sha256
+    mapping (`_snapshot_directory_file_hashes`'s own return shape),
+    captured *before* the move starts. Raises
+    `BundleRelocationPartialMoveError` naming every missing or
+    content-mismatched path -- never silently accepting a subset."""
+    dest_snapshot = _snapshot_directory_file_hashes(dest_dir) if dest_dir.is_dir() else {}
+    missing = sorted(set(source_snapshot) - set(dest_snapshot))
+    mismatched = sorted(
+        path for path in (set(source_snapshot) & set(dest_snapshot))
+        if source_snapshot[path] != dest_snapshot[path]
+    )
+    if missing or mismatched:
+        raise BundleRelocationPartialMoveError(
+            f"post-move verification failed for {dest_dir}: "
+            f"missing={missing!r}, content_mismatched={mismatched!r}"
+        )
+
+
+def relocate_flat_bundle_to_scoped_layout(repo_root: Path, work_item_id: str) -> None:
+    """One-time migration helper (`D-Fingerprint-Generalization` migration
+    step 8a, `OPUS-R27-003`/`-005`, missing-test item 165): moves the flat
+    `.ai-review/current/` directory and `.ai-review/review-bundle.tar.gz`
+    to `.ai-review/<work_item_id>/current/` and
+    `.ai-review/<work_item_id>/review-bundle.tar.gz`. Refuses with
+    `BundleRelocationDestinationExistsError`, naming both paths, if the
+    destination directory already exists and is non-empty, rather than
+    nesting the source inside it silently. Snapshots every source file's
+    content hash *before* moving anything, then calls
+    `verify_relocation_file_set_complete` against the real post-move
+    destination -- a move interrupted partway (crash, disk-full, etc.)
+    is caught here, diagnosably, before any caller proceeds to rebind a
+    manifest to it. Never touches `.ai-review/feedback/` (stage-agnostic,
+    stays flat, `OPUS-R28-005`) or any other `.ai-review/` entry
+    (`source/`, `runtime/`, another work item's own scoped directory)."""
+    validate_work_item_id(work_item_id)
+    flat_dir = repo_root / ".ai-review" / "current"
+    flat_archive = repo_root / ".ai-review" / "review-bundle.tar.gz"
+    dest_root = repo_root / ".ai-review" / work_item_id
+    dest_dir = dest_root / "current"
+    dest_archive = dest_root / "review-bundle.tar.gz"
+
+    if dest_dir.is_dir() and any(dest_dir.iterdir()):
+        raise BundleRelocationDestinationExistsError(
+            f"destination {dest_dir} already exists and is non-empty; "
+            f"refusing to relocate {flat_dir} into it"
+        )
+    if not flat_dir.is_dir():
+        raise MissingRequiredBundleFileError([str(flat_dir)])
+
+    source_snapshot = _snapshot_directory_file_hashes(flat_dir)
+
+    dest_root.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(flat_dir), str(dest_dir))
+    if flat_archive.is_file():
+        shutil.move(str(flat_archive), str(dest_archive))
+
+    verify_relocation_file_set_complete(source_snapshot, dest_dir)
 
 
 # ---------------------------------------------------------------------------
