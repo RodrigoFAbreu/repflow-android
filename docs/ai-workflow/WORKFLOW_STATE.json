@@ -11,12 +11,12 @@
       "registry_path": "docs/ai-workflow/registry/workflow-v2-1-core-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json",
       "governing_workflow_version": "1",
-      "phase": "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+      "phase": "AWAITING_FUNCTIONAL_REVIEW",
       "plan_revision": 21,
-      "implementation_revision": null,
+      "implementation_revision": 4,
       "functional_review_round": null,
       "base_commit": "162154d3e5e10eb65e109833acae4b4fb01fc5d6",
-      "reviewed_implementation_head": null,
+      "reviewed_implementation_head": "7bef596dd95c7f35f1dcc0eedd9a91d98d592ab8",
       "current_checkpoint_id": null,
       "last_completed_checkpoint_id": "WF-Activate",
       "checkpoints": {
@@ -129,12 +129,120 @@
         "waived_guarantees": [],
         "recorded_at": "2026-08-02T23:53:27+01:00"
       },
-      "technical_approval": null,
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "EXTERNAL_APPROVE",
+        "reviewed_bundle_id": "71c91d9b14815f8279aad5c3a1144c3ebe79fcc696306871de4e380fe56588ad",
+        "approved_review_content_id": "8f9ea8cc60192bbbecfb7ed092c1dc79739047c7616ea4e2cddd8b68ecd0c9ed",
+        "review_content_manifest": [
+          {
+            "path": ".claude/commands/apply-plan-review.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "12c56c40434d756f00df1db4829e7a30ff853455"
+          },
+          {
+            "path": ".claude/commands/milestone-plan.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "047e404477044b3996bff71c1570fcca7e7b916f"
+          },
+          {
+            "path": ".claude/commands/prepare-review.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "fa5f8a5b1386d2b20114fe83e74fb085430428ef"
+          },
+          {
+            "path": ".github/workflows/ci.yml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "955d3f1c8420482899e1ece5f0263a9e0264513e"
+          },
+          {
+            "path": "docs/ai-workflow/registry/workflow-v2-1-core-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "acf3c418b24e214fd2c9ac946a85e826827fd4cc"
+          },
+          {
+            "path": "scripts/prepare-ai-review.sh",
+            "exists": true,
+            "mode": "100755",
+            "blob": "e8d5cb775f3798c6efabfdd0a57a5de1cd645fa7"
+          },
+          {
+            "path": "scripts/workflow_fingerprint.py",
+            "exists": true,
+            "mode": "100755",
+            "blob": "5ac15afb54f7d4c60c1f1f55bccb93d4e3d92e11"
+          },
+          {
+            "path": "scripts/workflow_fingerprint_demo_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7c9985c76f271f39fc43a63e50c11547527d001f"
+          },
+          {
+            "path": "scripts/workflow_fingerprint_generalization_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5c80369b6e5e9937ba4e7d20dc83865b343030f8"
+          },
+          {
+            "path": "scripts/workflow_fingerprint_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "eb8726e2f853c8d84af5be3f44eacf19b31a9476"
+          },
+          {
+            "path": "scripts/workflow_integration_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "66a3470accf8637ec95f24995e975cd20d8158c7"
+          },
+          {
+            "path": "scripts/workflow_state.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7643da59b1393a7a7ef949df7e5ac95517a2f974"
+          },
+          {
+            "path": "scripts/workflow_state_demo_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "e55705157820b5c61ea8086dc5e5fa164cb90f38"
+          },
+          {
+            "path": "scripts/workflow_state_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "c5795d646e3d309fe30df0ad6a437e493aef0d96"
+          },
+          {
+            "path": "scripts/workflow_test_harness.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "4a522d83b99ee8d431004f7878bcd631e3638e89"
+          },
+          {
+            "path": "scripts/workflow_test_harness_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6f934d45e55d94c1f9472f6e08bd2531dac72683"
+          }
+        ],
+        "reviewed_content_commit": "7bef596dd95c7f35f1dcc0eedd9a91d98d592ab8",
+        "legacy_evidence": null,
+        "user_confirmation": "I explicitly approve the implementation stage for work item workflow-v2-1-core.",
+        "waived_guarantees": [],
+        "recorded_at": "2026-08-03T15:35:42+01:00"
+      },
       "plan_review_stages": null,
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 23,
-      "last_transition": "2026-08-03T00:00:00+01:00"
+      "state_revision": 28,
+      "last_transition": "2026-08-03T15:35:42+01:00"
     },
     "milestone-8": {
       "work_item_type": "product",
