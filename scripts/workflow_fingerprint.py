@@ -687,21 +687,42 @@ def _validate_repo_relative_path_grammar(field_name: str, value: str) -> None:
 def _validate_repo_relative_file(repo_root: Path, field_name: str, value: str) -> Path:
     """Grammar plus filesystem-safety validation for a repo-relative path
     resolved against the live working tree: applies
-    `_validate_repo_relative_path_grammar`, then rejects a symlink or a
-    path that is not an existing regular file, and returns the resolved
-    `Path` so callers don't re-join `repo_root / value` themselves. Does
-    not check git-tracking -- see `_validate_plan_stage_metadata_path` for
-    the stricter, tracked-metadata variant plan-stage callers need; this
-    one is also the safe resolver `workflow_state.validate_state`'s
+    `_validate_repo_relative_path_grammar`, then rejects a symlink at
+    *any* path component (not only the final one) or a path that is not
+    an existing regular file, and returns the resolved `Path` so callers
+    don't re-join `repo_root / value` themselves. Does not check
+    git-tracking -- see `_validate_plan_stage_metadata_path` for the
+    stricter, tracked-metadata variant plan-stage callers need; this one
+    is also the safe resolver `workflow_state.validate_state`'s
     whole-state registry check reuses (`GPT-R32-001`) instead of a second,
-    weaker `repo_root / registry_path` join."""
+    weaker `repo_root / registry_path` join.
+
+    `Path.is_symlink()` on the final joined path only ever inspects that
+    path's own last component -- an intermediate symlinked directory
+    (e.g. `registry -> /outside/somewhere` with `value ==
+    "registry/item.json"`) joins to a real, non-symlink regular file and
+    passed silently before this fix (`GPT-R33-001`). Every component is
+    now checked as the path is built up incrementally, and the fully
+    resolved path is additionally proven to remain inside the canonical
+    (symlink-resolved) repository root, so a component that is itself
+    reachable only by following an already-rejected symlink can never
+    launder its way back in through `Path.resolve()`."""
     _validate_repo_relative_path_grammar(field_name, value)
+    canonical_root = repo_root.resolve()
+    current = repo_root
+    for part in value.split("/"):
+        current = current / part
+        if current.is_symlink():
+            raise InvalidPlanStageMetadataPathError(f"{field_name} {value!r} names a symlink")
     full = repo_root / value
-    if full.is_symlink():
-        raise InvalidPlanStageMetadataPathError(f"{field_name} {value!r} names a symlink")
     if not full.is_file():
         raise InvalidPlanStageMetadataPathError(
             f"{field_name} {value!r} does not exist as a regular file"
+        )
+    resolved = full.resolve()
+    if resolved != canonical_root and canonical_root not in resolved.parents:
+        raise InvalidPlanStageMetadataPathError(
+            f"{field_name} {value!r} resolves outside the repository root"
         )
     return full
 

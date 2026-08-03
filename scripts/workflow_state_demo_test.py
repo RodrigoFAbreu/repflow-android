@@ -107,7 +107,11 @@ class TestAgainstRealRepository(unittest.TestCase):
         ws.validate_state(state, registry=registry)
         # GPT-R31-003: also exercise the whole-state plan-revision-mirror
         # check against every real work item's own registry_path, not
-        # only workflow-v2-1-core's.
+        # only workflow-v2-1-core's. Also serves as GPT-R33-002's required
+        # "all existing repository work items pass the tracked-path check"
+        # case: every real work item's registry_path is a Git-tracked
+        # file in this actual repository, so this call only stays green
+        # under the stricter tracked-file validator if that remains true.
         ws.validate_state(state, registry=registry, repo_root=repo_root)
 
     def test_real_state_file_checkpoint_completions_are_reachable(self):

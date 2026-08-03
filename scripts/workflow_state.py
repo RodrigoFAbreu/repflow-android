@@ -407,8 +407,16 @@ class MissingRegistryForPlanRevisionMirrorCheckError(Exception):
     own mirror check, which would let "omitted registry coverage" pass as
     if it had been verified. Also raised when `registry_path` fails the
     shared safe-path resolver (`GPT-R32-001`): an absolute path, a `../`
-    traversal, a symlink, or any other repository-boundary escape is
-    exactly as unusable a "registry" as one that is simply missing."""
+    traversal, a symlink at any path component, or any other
+    repository-boundary escape is exactly as unusable a "registry" as one
+    that is simply missing. Also raised when `registry_path` resolves to
+    an existing regular file that is not Git-tracked (`GPT-R33-002`) -- an
+    untracked file is absent from commits, review bundles, and approval
+    provenance, so it cannot serve as authoritative mirror-check content
+    even though it is readable. Also raised for a resolved registry file
+    whose content is malformed JSON or a JSON value that is not an object
+    (`GPT-R33-004`), instead of letting a raw `JSONDecodeError`/
+    `AttributeError` escape this check."""
 
 
 class InvalidRegistryPlanRevisionError(Exception):
@@ -2353,13 +2361,19 @@ def validate_state(state: dict, *, registry: dict | None = None, repo_root: Path
     happened to also pass -- so a caller validating `workflow-v2-1-core`'s
     own registry can no longer leave a different work item's stale mirror
     undetected. `registry_path` is resolved through
-    `fingerprint._validate_repo_relative_file`, the same safe-path
-    resolver plan-stage metadata uses (`GPT-R32-001`) -- an absolute path,
-    a `../` traversal, a symlink, or a path that does not exist as a
-    regular file all fail closed as
-    `MissingRegistryForPlanRevisionMirrorCheckError` rather than silently
-    reading whatever `repo_root / registry_path` happens to join to. The
-    loaded registry must also declare the exact same `work_item_id` as the
+    `fingerprint._validate_plan_stage_metadata_path`, the same *tracked*
+    metadata-path validator plan-stage resolution uses (`GPT-R32-001`,
+    tightened by `GPT-R33-002`) -- an absolute path, a `../` traversal, a
+    symlink at any path component, a path that does not exist as a
+    regular file, or a path that exists but is not a Git-tracked file all
+    fail closed as `MissingRegistryForPlanRevisionMirrorCheckError` rather
+    than silently reading whatever `repo_root / registry_path` happens to
+    join to (an untracked file would otherwise become the authoritative
+    comparison source for a mirror check meant to police tracked,
+    committed metadata). Malformed JSON or a JSON value that is not an
+    object fails the same way, by name, instead of a raw
+    `JSONDecodeError`/`AttributeError` (`GPT-R33-004`). The loaded
+    registry must also declare the exact same `work_item_id` as the
     state-map key that named it (`RegistryWorkItemIdMismatchError`,
     `GPT-R32-003`) and a valid integer `plan_revision >= 1`
     (`InvalidRegistryPlanRevisionError`, `GPT-R32-002`) -- neither
@@ -2410,19 +2424,25 @@ def validate_state(state: dict, *, registry: dict | None = None, repo_root: Path
             registry_path = work_item.get("registry_path")
             if registry_path is None:
                 continue
-            # GPT-R32-001: reuse the authoritative repo-relative safe-path
-            # resolver (grammar, symlink, existence) instead of a bare
-            # `repo_root / registry_path` join, which a `../` traversal or
-            # an absolute path could escape.
+            # GPT-R32-001/GPT-R33-002: reuse the authoritative *tracked*
+            # metadata-path validator (grammar, symlink, existence, git
+            # tracking) instead of the filesystem-only safe-path resolver.
+            # The filesystem-only helper alone would let an untracked JSON
+            # file dropped anywhere in the worktree become the
+            # authoritative comparison source for this state mirror --
+            # exactly as unusable a "registry" as a missing one, since it
+            # is absent from commits, review bundles, fresh sessions, and
+            # approval provenance.
             try:
-                registry_full = fingerprint._validate_repo_relative_file(
-                    repo_root, "registry_path", registry_path,
+                fingerprint._validate_plan_stage_metadata_path(
+                    repo_root, "registry_path", registry_path, at_commit=None,
                 )
             except fingerprint.InvalidPlanStageMetadataPathError as exc:
                 raise MissingRegistryForPlanRevisionMirrorCheckError(
                     f"work_items[{work_item_id!r}].registry_path {registry_path!r} "
                     f"failed safe-path resolution: {exc}"
                 ) from exc
+            registry_full = repo_root / registry_path
             try:
                 registry_bytes = registry_full.read_text()
             except OSError as exc:
@@ -2430,7 +2450,23 @@ def validate_state(state: dict, *, registry: dict | None = None, repo_root: Path
                     f"work_items[{work_item_id!r}].registry_path {registry_path!r} "
                     f"does not exist or is unreadable at {registry_full}"
                 ) from exc
-            registry_data = json.loads(registry_bytes)
+            # GPT-R33-004: malformed JSON or a well-formed value that is
+            # not a JSON object must fail through this check's own named,
+            # work-item-specific error, not a raw `JSONDecodeError`/
+            # `AttributeError` that bypasses the workflow's fail-closed
+            # error model.
+            try:
+                registry_data = json.loads(registry_bytes)
+            except json.JSONDecodeError as exc:
+                raise MissingRegistryForPlanRevisionMirrorCheckError(
+                    f"work_items[{work_item_id!r}].registry_path {registry_path!r} "
+                    f"is not valid JSON: {exc}"
+                ) from exc
+            if not isinstance(registry_data, dict):
+                raise MissingRegistryForPlanRevisionMirrorCheckError(
+                    f"work_items[{work_item_id!r}].registry_path {registry_path!r} "
+                    f"does not contain a JSON object (found {type(registry_data).__name__})"
+                )
 
             # GPT-R32-003: the loaded registry must declare the exact same
             # work_item_id as the state-map key that named it -- otherwise

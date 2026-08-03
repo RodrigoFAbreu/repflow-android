@@ -351,18 +351,33 @@ class TestStateValidation(unittest.TestCase):
         wi = _base_work_item(plan_revision=1)
         ws.validate_state(_base_state(wi=wi), registry=registry)  # must not raise
 
-    def _write_registry_file(self, root: Path, rel_path: str, *, work_item_id: str, plan_revision: int) -> None:
+    def _init_git_repo(self, root: Path) -> None:
+        """`validate_state`'s whole-state registry check now requires a
+        resolved `registry_path` to be a Git-tracked file (`GPT-R33-002`),
+        not merely present on disk -- every test below that expects its
+        fixture registry to actually be read must run inside a real (if
+        disposable) Git repository. `git add` alone (no commit, no
+        configured identity) is sufficient to make a path satisfy `git
+        ls-files --error-unmatch`."""
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+
+    def _write_registry_file(
+        self, root: Path, rel_path: str, *, work_item_id: str, plan_revision: int, track: bool = True,
+    ) -> None:
         full = root / rel_path
         full.parent.mkdir(parents=True, exist_ok=True)
         full.write_text(json.dumps({
             "work_item_id": work_item_id, "plan_revision": plan_revision, "checkpoints": [],
         }))
+        if track:
+            subprocess.run(["git", "add", rel_path], cwd=root, check=True)
 
     def test_repo_root_check_passes_when_every_applicable_items_mirror_matches(self):
         # Missing-test requirement (GPT-R31-003): two process work items,
         # each with its own registry_path and matching mirror.
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            self._init_git_repo(root)
             self._write_registry_file(root, "registry/a.json", work_item_id="a", plan_revision=3)
             self._write_registry_file(root, "registry/b.json", work_item_id="b", plan_revision=7)
             state = _base_state(
@@ -374,6 +389,7 @@ class TestStateValidation(unittest.TestCase):
     def test_repo_root_check_rejects_either_items_mismatch_independently(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            self._init_git_repo(root)
             self._write_registry_file(root, "registry/a.json", work_item_id="a", plan_revision=3)
             self._write_registry_file(root, "registry/b.json", work_item_id="b", plan_revision=7)
 
@@ -420,6 +436,7 @@ class TestStateValidation(unittest.TestCase):
         through; passing `repo_root=` too must catch it."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            self._init_git_repo(root)
             self._write_registry_file(root, "registry/core.json", work_item_id="core", plan_revision=21)
             self._write_registry_file(root, "registry/second.json", work_item_id="second", plan_revision=5)
             state = _base_state(
@@ -438,6 +455,7 @@ class TestStateValidation(unittest.TestCase):
     def test_repo_root_check_rejects_absolute_registry_path(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            self._init_git_repo(root)
             self._write_registry_file(root, "registry/a.json", work_item_id="a", plan_revision=3)
             state = _base_state(
                 a=_base_work_item(work_item_id="a", registry_path="/etc/passwd", plan_revision=3),
@@ -465,6 +483,7 @@ class TestStateValidation(unittest.TestCase):
     def test_repo_root_check_rejects_symlinked_registry_path(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            self._init_git_repo(root)
             self._write_registry_file(root, "registry/real.json", work_item_id="a", plan_revision=3)
             link = root / "registry" / "a.json"
             link.symlink_to(root / "registry" / "real.json")
@@ -473,6 +492,81 @@ class TestStateValidation(unittest.TestCase):
             )
             with self.assertRaises(ws.MissingRegistryForPlanRevisionMirrorCheckError):
                 ws.validate_state(state, repo_root=root)
+
+    # -- GPT-R33-001: a symlink at an *intermediate* path component must
+    # be rejected exactly like a symlinked final component -- checking
+    # only `Path.is_symlink()` on the fully joined path missed a symlinked
+    # parent directory entirely. --
+
+    def test_repo_root_check_rejects_intermediate_symlinked_directory_component_outside_repo(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_git_repo(root)
+            outside = root.parent / "outside_registry_target"
+            try:
+                outside.mkdir(parents=True, exist_ok=True)
+                (outside / "item.json").write_text(json.dumps({
+                    "work_item_id": "a", "plan_revision": 3, "checkpoints": [],
+                }))
+                # "registry" is not a symlink to a file -- it is a symlink
+                # to an entire directory *outside* the repository. The
+                # joined path `registry/item.json` is itself a real
+                # regular file, not a symlink, so a final-component-only
+                # check passes it straight through.
+                (root / "registry").symlink_to(outside, target_is_directory=True)
+                state = _base_state(
+                    a=_base_work_item(work_item_id="a", registry_path="registry/item.json", plan_revision=3),
+                )
+                with self.assertRaises(ws.MissingRegistryForPlanRevisionMirrorCheckError):
+                    ws.validate_state(state, repo_root=root)
+            finally:
+                (root / "registry").unlink()
+                (outside / "item.json").unlink()
+                outside.rmdir()
+
+    def test_repo_root_check_rejects_intermediate_symlinked_directory_component_inside_repo(self):
+        # The rule is "no symlink component", full stop -- not "no symlink
+        # component that happens to escape the repository". A symlinked
+        # directory that merely aliases another location *inside* the
+        # repository must be rejected too.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_git_repo(root)
+            self._write_registry_file(root, "real_registry/item.json", work_item_id="a", plan_revision=3)
+            (root / "registry").symlink_to(root / "real_registry", target_is_directory=True)
+            state = _base_state(
+                a=_base_work_item(work_item_id="a", registry_path="registry/item.json", plan_revision=3),
+            )
+            with self.assertRaises(ws.MissingRegistryForPlanRevisionMirrorCheckError):
+                ws.validate_state(state, repo_root=root)
+
+    def test_repo_root_check_rejects_nested_symlink_chain(self):
+        # The symlinked component is not the first one -- proves every
+        # component is checked as the path is walked, not only the head
+        # or the tail.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_git_repo(root)
+            self._write_registry_file(root, "real_registry/item.json", work_item_id="a", plan_revision=3)
+            (root / "dir1").mkdir()
+            (root / "dir1" / "link2").symlink_to(root / "real_registry", target_is_directory=True)
+            state = _base_state(
+                a=_base_work_item(work_item_id="a", registry_path="dir1/link2/item.json", plan_revision=3),
+            )
+            with self.assertRaises(ws.MissingRegistryForPlanRevisionMirrorCheckError):
+                ws.validate_state(state, repo_root=root)
+
+    def test_repo_root_check_accepts_legitimate_nested_path_with_no_symlinks(self):
+        # Regression guard for the two tests above: a real (non-symlinked)
+        # multi-component path must still validate cleanly.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_git_repo(root)
+            self._write_registry_file(root, "a/b/c/item.json", work_item_id="a", plan_revision=3)
+            state = _base_state(
+                a=_base_work_item(work_item_id="a", registry_path="a/b/c/item.json", plan_revision=3),
+            )
+            ws.validate_state(state, repo_root=root)  # must not raise
 
     def test_repo_root_check_rejects_non_regular_file_registry_path(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -491,9 +585,11 @@ class TestStateValidation(unittest.TestCase):
     def test_repo_root_check_rejects_registry_missing_plan_revision_field(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            self._init_git_repo(root)
             full = root / "registry" / "a.json"
             full.parent.mkdir(parents=True, exist_ok=True)
             full.write_text(json.dumps({"work_item_id": "a", "checkpoints": []}))
+            subprocess.run(["git", "add", "registry/a.json"], cwd=root, check=True)
             state = _base_state(
                 a=_base_work_item(work_item_id="a", registry_path="registry/a.json", plan_revision=3),
             )
@@ -503,9 +599,11 @@ class TestStateValidation(unittest.TestCase):
     def test_repo_root_check_rejects_registry_with_null_plan_revision(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            self._init_git_repo(root)
             full = root / "registry" / "a.json"
             full.parent.mkdir(parents=True, exist_ok=True)
             full.write_text(json.dumps({"work_item_id": "a", "plan_revision": None, "checkpoints": []}))
+            subprocess.run(["git", "add", "registry/a.json"], cwd=root, check=True)
             state = _base_state(
                 a=_base_work_item(work_item_id="a", registry_path="registry/a.json", plan_revision=3),
             )
@@ -515,9 +613,11 @@ class TestStateValidation(unittest.TestCase):
     def test_repo_root_check_rejects_registry_with_string_plan_revision(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            self._init_git_repo(root)
             full = root / "registry" / "a.json"
             full.parent.mkdir(parents=True, exist_ok=True)
             full.write_text(json.dumps({"work_item_id": "a", "plan_revision": "3", "checkpoints": []}))
+            subprocess.run(["git", "add", "registry/a.json"], cwd=root, check=True)
             state = _base_state(
                 a=_base_work_item(work_item_id="a", registry_path="registry/a.json", plan_revision=3),
             )
@@ -527,9 +627,11 @@ class TestStateValidation(unittest.TestCase):
     def test_repo_root_check_rejects_registry_with_boolean_plan_revision(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            self._init_git_repo(root)
             full = root / "registry" / "a.json"
             full.parent.mkdir(parents=True, exist_ok=True)
             full.write_text(json.dumps({"work_item_id": "a", "plan_revision": True, "checkpoints": []}))
+            subprocess.run(["git", "add", "registry/a.json"], cwd=root, check=True)
             state = _base_state(
                 # bool is an int subclass in Python -- must still be rejected.
                 a=_base_work_item(work_item_id="a", registry_path="registry/a.json", plan_revision=1),
@@ -540,6 +642,7 @@ class TestStateValidation(unittest.TestCase):
     def test_repo_root_check_rejects_registry_with_out_of_range_plan_revision(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            self._init_git_repo(root)
             self._write_registry_file(root, "registry/a.json", work_item_id="a", plan_revision=0)
             state = _base_state(
                 a=_base_work_item(work_item_id="a", registry_path="registry/a.json", plan_revision=0),
@@ -559,6 +662,7 @@ class TestStateValidation(unittest.TestCase):
         # artifact while trusting another identity" defect class.
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            self._init_git_repo(root)
             self._write_registry_file(root, "registry/a.json", work_item_id="a", plan_revision=21)
             self._write_registry_file(root, "registry/b.json", work_item_id="a", plan_revision=21)
             state = _base_state(
@@ -566,6 +670,98 @@ class TestStateValidation(unittest.TestCase):
                 b=_base_work_item(work_item_id="b", registry_path="registry/b.json", plan_revision=21),
             )
             with self.assertRaises(fingerprint.RegistryWorkItemIdMismatchError):
+                ws.validate_state(state, repo_root=root)
+
+    # -- GPT-R33-002: the whole-state registry check must require a
+    # *Git-tracked* regular file, not merely a readable one -- otherwise
+    # an untracked JSON file dropped anywhere in the worktree can become
+    # the authoritative comparison source, invisible to commits, review
+    # bundles, fresh sessions, and approval provenance. --
+
+    def test_repo_root_check_accepts_tracked_registry_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_git_repo(root)
+            self._write_registry_file(root, "registry/a.json", work_item_id="a", plan_revision=3, track=True)
+            state = _base_state(
+                a=_base_work_item(work_item_id="a", registry_path="registry/a.json", plan_revision=3),
+            )
+            ws.validate_state(state, repo_root=root)  # must not raise
+
+    def test_repo_root_check_rejects_untracked_registry_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_git_repo(root)
+            # An otherwise-valid registry file (right shape, right
+            # content, right location) that was simply never `git add`ed.
+            self._write_registry_file(root, "registry/a.json", work_item_id="a", plan_revision=3, track=False)
+            state = _base_state(
+                a=_base_work_item(work_item_id="a", registry_path="registry/a.json", plan_revision=3),
+            )
+            with self.assertRaises(ws.MissingRegistryForPlanRevisionMirrorCheckError):
+                ws.validate_state(state, repo_root=root)
+
+    def test_repo_root_check_rejects_registry_path_removed_from_index_but_left_in_worktree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_git_repo(root)
+            self._write_registry_file(root, "registry/a.json", work_item_id="a", plan_revision=3)
+            # Staged and tracked a moment ago; now untracked again while
+            # the file itself remains on disk unchanged -- the exact
+            # split-brain scenario GPT-R33-002 describes (worktree
+            # validates, committed repository does not).
+            subprocess.run(["git", "rm", "--cached", "-q", "registry/a.json"], cwd=root, check=True)
+            self.assertTrue((root / "registry" / "a.json").is_file())
+            state = _base_state(
+                a=_base_work_item(work_item_id="a", registry_path="registry/a.json", plan_revision=3),
+            )
+            with self.assertRaises(ws.MissingRegistryForPlanRevisionMirrorCheckError):
+                ws.validate_state(state, repo_root=root)
+
+    # -- GPT-R33-004: malformed or wrong-shape registry JSON must fail
+    # through this check's own named, work-item-specific error, not a raw
+    # JSONDecodeError/AttributeError. --
+
+    def test_repo_root_check_rejects_malformed_json_registry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_git_repo(root)
+            full = root / "registry" / "a.json"
+            full.parent.mkdir(parents=True, exist_ok=True)
+            full.write_text("{not valid json")
+            subprocess.run(["git", "add", "registry/a.json"], cwd=root, check=True)
+            state = _base_state(
+                a=_base_work_item(work_item_id="a", registry_path="registry/a.json", plan_revision=3),
+            )
+            with self.assertRaises(ws.MissingRegistryForPlanRevisionMirrorCheckError):
+                ws.validate_state(state, repo_root=root)
+
+    def test_repo_root_check_rejects_json_array_registry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_git_repo(root)
+            full = root / "registry" / "a.json"
+            full.parent.mkdir(parents=True, exist_ok=True)
+            full.write_text(json.dumps(["a", "plan_revision", 3]))
+            subprocess.run(["git", "add", "registry/a.json"], cwd=root, check=True)
+            state = _base_state(
+                a=_base_work_item(work_item_id="a", registry_path="registry/a.json", plan_revision=3),
+            )
+            with self.assertRaises(ws.MissingRegistryForPlanRevisionMirrorCheckError):
+                ws.validate_state(state, repo_root=root)
+
+    def test_repo_root_check_rejects_scalar_registry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_git_repo(root)
+            full = root / "registry" / "a.json"
+            full.parent.mkdir(parents=True, exist_ok=True)
+            full.write_text(json.dumps(3))
+            subprocess.run(["git", "add", "registry/a.json"], cwd=root, check=True)
+            state = _base_state(
+                a=_base_work_item(work_item_id="a", registry_path="registry/a.json", plan_revision=3),
+            )
+            with self.assertRaises(ws.MissingRegistryForPlanRevisionMirrorCheckError):
                 ws.validate_state(state, repo_root=root)
 
     def test_corrupt_json_fails_closed(self):
