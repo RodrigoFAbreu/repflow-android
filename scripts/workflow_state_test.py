@@ -3174,6 +3174,59 @@ class TestFunctionalChecklistTrailerDiscovery(unittest.TestCase):
             with self.assertRaises(ws.AmbiguousFunctionalChecklistTrailerError):
                 ws.discover_functional_checklist_commits(repo.root, self.WI, repo.base, "HEAD")
 
+    def test_evidence_only_on_merged_side_branch_raises(self):
+        """Evidence prepared on a side branch, then merged, without any
+        matching evidence commit on the resulting branch's first-parent
+        chain: the resolver must refuse rather than silently accepting the
+        side-branch commit by ordinary reachable-history order
+        (`GPT-R41-002`)."""
+        with ScratchRepo() as repo:
+            self._seed(repo)
+            _run(["git", "checkout", "-q", "-b", "side"], cwd=repo.root)
+            side_sha, side_blob = self._evidence_commit(repo, implementation_revision=1)
+            _run(["git", "checkout", "-q", "-"], cwd=repo.root)
+            _run(["git", "merge", "-q", "--no-ff", "-m", "merge side", "side"], cwd=repo.root)
+            with self.assertRaises(ws.NonFirstParentFunctionalChecklistEvidenceError) as ctx:
+                ws.discover_current_functional_checklist_evidence(repo.root, self.WI, repo.base, "HEAD", 1)
+            self.assertIn(side_sha, str(ctx.exception))
+
+    def test_two_side_branches_with_different_revisions_both_off_first_parent_raises(self):
+        """Two side branches, each carrying its own distinct checklist
+        revision for the same round, both merged without either becoming a
+        first-parent transition: still a refusal, not a pick between the
+        two off-first-parent candidates by log order."""
+        with ScratchRepo() as repo:
+            self._seed(repo)
+            _run(["git", "checkout", "-q", "-b", "side-a"], cwd=repo.root)
+            side_a_sha, _ = self._evidence_commit(repo, implementation_revision=1)
+            _run(["git", "checkout", "-q", "-"], cwd=repo.root)
+            _run(["git", "checkout", "-q", "-b", "side-b"], cwd=repo.root)
+            self._seed(repo, content="checklist v2 -- corrected\n")
+            side_b_sha, _ = self._evidence_commit(repo, implementation_revision=1)
+            _run(["git", "checkout", "-q", "-"], cwd=repo.root)
+            _run(["git", "merge", "-q", "--no-ff", "-m", "merge side-a", "side-a"], cwd=repo.root)
+            _run(["git", "merge", "-q", "--no-ff", "-m", "merge side-b", "side-b"], cwd=repo.root)
+            with self.assertRaises(ws.NonFirstParentFunctionalChecklistEvidenceError) as ctx:
+                ws.discover_current_functional_checklist_evidence(repo.root, self.WI, repo.base, "HEAD", 1)
+            self.assertIn(side_a_sha, str(ctx.exception))
+            self.assertIn(side_b_sha, str(ctx.exception))
+
+    def test_first_parent_evidence_wins_over_newer_side_branch_evidence(self):
+        """A first-parent evidence commit exists for the round; a *newer*
+        off-first-parent commit (a later-merged side branch) also carries
+        round-scoped evidence. The first-parent commit is still current --
+        first-parent standing is never overridden by recency."""
+        with ScratchRepo() as repo:
+            self._seed(repo)
+            main_sha, main_blob = self._evidence_commit(repo, implementation_revision=1)
+            _run(["git", "checkout", "-q", "-b", "side"], cwd=repo.root)
+            self._seed(repo, content="checklist v2 -- corrected\n")
+            self._evidence_commit(repo, implementation_revision=1)
+            _run(["git", "checkout", "-q", "-"], cwd=repo.root)
+            _run(["git", "merge", "-q", "--no-ff", "-m", "merge side", "side"], cwd=repo.root)
+            result = ws.discover_current_functional_checklist_evidence(repo.root, self.WI, repo.base, "HEAD", 1)
+            self.assertEqual(result, {"commit_sha": main_sha, "blob": main_blob})
+
     def test_ambiguous_scoped_remediation_trailer_raises(self):
         with ScratchRepo() as repo:
             _commit_empty(repo, "round a", trailers={

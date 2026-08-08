@@ -629,6 +629,21 @@ class MissingFunctionalChecklistEvidenceError(Exception):
     and `/prepare-functional-review` as the remedy."""
 
 
+class NonFirstParentFunctionalChecklistEvidenceError(Exception):
+    """Raised by `discover_current_functional_checklist_evidence` (revision
+    27 correction, `GPT-R41-002`) when evidence commits for the exact live
+    round exist somewhere in `base_commit..head`, but none sits on `head`'s
+    first-parent chain -- e.g. a merged side branch whose own evidence
+    commit was never carried onto the resulting branch's first-parent line.
+    Distinct from `MissingFunctionalChecklistEvidenceError`: evidence was
+    genuinely prepared, it just never became a first-parent workflow
+    transition, so the remedy is not \"run /prepare-functional-review\" but
+    an explicit re-provenance action (re-commit the evidence directly on the
+    first-parent line). Never silently resolved by ordinary reachable-history
+    order -- that would let side-branch evidence become authoritative
+    without ever appearing as a first-parent transition."""
+
+
 class StaleFunctionalChecklistConfirmationError(Exception):
     """The pre-commit evidence guard's confirmation-evidence-binding check
     (revision 27, `GPT-R40-001`): raised when the user's confirmation names
@@ -2227,7 +2242,13 @@ def discover_current_functional_checklist_evidence(
     superseded checklist plus a newer, corrected one) coexist without
     ambiguity by construction, since each has its own distinct trailer
     value. Returns `{"commit_sha": ..., "blob": ...}`, or `None` if no
-    evidence commit exists for the round at all."""
+    evidence commit exists for the round at all. Raises
+    `NonFirstParentFunctionalChecklistEvidenceError` (revision 27 correction,
+    `GPT-R41-002`) when round-scoped evidence commits exist in
+    `base_commit..head` but none sits on `head`'s first-parent chain --
+    e.g. evidence prepared on a side branch that was merged without ever
+    becoming a first-parent transition. Never falls back to picking one
+    such candidate by ordinary reachable-history order."""
     matches = discover_functional_checklist_commits(repo_root, work_item_id, base_commit, head)
     prefix = f"{work_item_id}/{implementation_revision}/"
     candidates = {value: commit for value, commit in matches.items() if value.startswith(prefix)}
@@ -2239,14 +2260,18 @@ def discover_current_functional_checklist_evidence(
             return {"commit_sha": commit, "blob": commit_to_blob[commit]}
     # Every candidate is reachable in base_commit..head (the discovery call
     # above already proved that) but none sits on head's first-parent
-    # chain -- fail closed to the most-recently-committed candidate by
-    # ordinary base_commit..head log order rather than silently dropping
-    # a genuinely reachable evidence commit.
-    ordered_any = _run(["git", "log", "--format=%H", f"{base_commit}..{head}"], cwd=repo_root).splitlines()
-    for commit in ordered_any:
-        if commit in commit_to_blob:
-            return {"commit_sha": commit, "blob": commit_to_blob[commit]}
-    return None  # pragma: no cover - unreachable: candidates is non-empty and drawn from this same range
+    # chain -- e.g. a merged side branch whose evidence commit never became
+    # a first-parent transition. Fail closed with a named, actionable error
+    # rather than picking one candidate by ordinary reachable-history order
+    # (GPT-R41-002): silently accepting a non-first-parent candidate would
+    # let side-branch evidence become authoritative despite the resolver's
+    # own first-parent contract.
+    raise NonFirstParentFunctionalChecklistEvidenceError(
+        f"{len(commit_to_blob)} evidence commit(s) found for {prefix.rstrip('/')} in "
+        f"{base_commit}..{head}, but none is on {head}'s first-parent chain: "
+        f"{sorted(commit_to_blob)} -- re-commit the checklist evidence directly on "
+        f"the first-parent line"
+    )
 
 
 def build_scoped_remediation_live_snapshot(
@@ -2284,7 +2309,9 @@ def verify_functional_checklist_evidence(
     1. **Discoverability**: a `Workflow-Functional-Checklist` evidence
        commit must be discoverable for the exact live round --
        `MissingFunctionalChecklistEvidenceError` naming the missing round
-       key and `/prepare-functional-review` as the remedy.
+       key and `/prepare-functional-review` as the remedy, or
+       `NonFirstParentFunctionalChecklistEvidenceError` (`GPT-R41-002`) if
+       round-scoped evidence exists only off `head`'s first-parent chain.
     2. **Confirmation-evidence binding**: the confirmed commit/blob must
        equal the round's current evidence exactly --
        `StaleFunctionalChecklistConfirmationError`, naming both identities,
