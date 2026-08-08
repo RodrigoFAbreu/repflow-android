@@ -13,10 +13,10 @@
       "governing_workflow_version": "1",
       "phase": "IMPLEMENTING",
       "plan_revision": 27,
-      "implementation_revision": 4,
+      "implementation_revision": 7,
       "functional_review_round": null,
       "base_commit": "162154d3e5e10eb65e109833acae4b4fb01fc5d6",
-      "reviewed_implementation_head": "7bef596dd95c7f35f1dcc0eedd9a91d98d592ab8",
+      "reviewed_implementation_head": "d6319129bc0a489627e3d6a5840b359fb7833b84",
       "current_checkpoint_id": null,
       "last_completed_checkpoint_id": "WF-Activate",
       "checkpoints": {
@@ -241,8 +241,8 @@
       "plan_review_stages": null,
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 35,
-      "last_transition": "2026-08-03T22:47:12+01:00"
+      "state_revision": 38,
+      "last_transition": "2026-08-08T14:50:00+01:00"
     },
     "milestone-8": {
       "work_item_type": "product",
