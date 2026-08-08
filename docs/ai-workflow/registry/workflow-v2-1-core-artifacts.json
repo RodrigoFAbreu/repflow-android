@@ -54,7 +54,8 @@
     },
     "protected_paths": {
       "docs/ai-workflow/registry/workflow-v2-1-core-artifacts.json": "this file's own concrete, spelled-out path (not a template) -- an editable-under-no-approval declarations file would let someone widen an exclusion and re-bless the resulting digest in the same session, with no gate ever having seen the classification change (OPUS-R25-006, OPUS-R26-004)",
-      ".github/workflows/ci.yml": "CI wiring is exactly the kind of build-tooling change technical_approval must bind to, even though the design decision it implements is separately protected at the plan stage"
+      ".github/workflows/ci.yml": "CI wiring is exactly the kind of build-tooling change technical_approval must bind to, even though the design decision it implements is separately protected at the plan stage",
+      "docs/ai-workflow/MILESTONE_WORKFLOW.md": "revision 27 (GPT-R41-001): this round's own 52-line addition documenting D-Scoped-Remediation-Acceptance's state-machine placement (the /accept-scoped-remediation discrimination rule, the own-checkpoint-completion block, the hard-gate-count note) is new workflow-contract design content written during implementation, not mechanical application of already-plan-approved text the way WF4a-ii's edits were -- it was also never captured in the plan-approval commit (c132185). Moved here from excluded_paths so technical_approval binds to it and a later edit stales approval; a future round whose MILESTONE_WORKFLOW.md edits are pure mechanical application of already-approved design may reconsider this classification, but must not silently revert it without recording why"
     },
     "excluded_prefixes": {
       "docs/ai-workflow/registry/": "plan-stage-governed registry/artifact-declaration files -- not an implementation deliverable in their own right. This file's own path is carved out above by exact path, checked first",
@@ -73,11 +74,10 @@
       "docs/PROJECT_BRIEF.md": "product-repo documentation, out of scope for this process work item",
       "docs/DOMAIN_GLOSSARY.md": "product-repo documentation, out of scope for this process work item",
       "docs/UX_FLOWS.md": "product-repo documentation, out of scope for this process work item",
-      "docs/ACTIVE_MILESTONE.md": "product-milestone narrative, out of scope for this process work item -- may be written by a concurrent product work item while this one is mid-implementation",
+      "docs/ACTIVE_MILESTONE.md": "product-milestone narrative, out of scope for this process work item -- may be written by a concurrent product work item while this one is mid-implementation. Revision 27 (GPT-R41-001) disclosure: this round's own status-note addition to this file (commit 7eaad8c) is pure narrative/status prose -- it documents this round's plan-review history and phase, defines no command routing or gate behavior, and duplicates nothing MILESTONE_WORKFLOW.md's own now-protected addition already binds. Left excluded, not moved to protected_paths, specifically to preserve OPUS-R16-001's fix (an unrelated concurrent product-milestone write to this same file, e.g. a Milestone-8 ROADMAP/ACTIVE_MILESTONE update, must never spuriously stale this work item's technical_approval) -- protecting the whole file would regress that. The round's exact bytes are still durably recorded: commit 7eaad8c is permanent git history and its blob hash for this path is named in this round's IMPLEMENTATION_SUMMARY.md as the reviewed narrative, satisfying auditability without path-level binding",
       "docs/ROADMAP.md": "product milestone ordering, same reasoning as docs/ACTIVE_MILESTONE.md above",
       "docs/ai-workflow/WORKFLOW_STATE.json": "runtime-mutable per-work-item state -- excluded so ordinary phase/checkpoint writes never stale technical_approval",
       "docs/ai-workflow/WORKFLOW_CONFIG.json": "runtime-mutable repository-level config, same reasoning as WORKFLOW_STATE.json above",
-      "docs/ai-workflow/MILESTONE_WORKFLOW.md": "plan-stage-governed workflow documentation, not an implementation deliverable",
       "docs/ai-workflow/REVIEW_PROTOCOL.md": "plan-stage-governed workflow documentation, not an implementation deliverable",
       "docs/ai-workflow/PLAN_REVIEW_WORKFLOW.md": "plan-stage-governed workflow documentation, not an implementation deliverable",
       "docs/ai-workflow/WORKFLOW_V2_PLAN.md": "plan-stage design content, already governed by the plan approval -- not an implementation deliverable",
