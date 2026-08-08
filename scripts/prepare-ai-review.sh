@@ -260,6 +260,47 @@ if [[ "$STAGE" == "plan" ]]; then
 elif [[ ( "$STAGE" == "implementation" || "$STAGE" == "post-fix" ) && -n "$WORK_ITEM_ID" ]]; then
   python3 "$REPO_ROOT/scripts/workflow_fingerprint.py" "$BASE_SHA" \
     --work-item-id "$WORK_ITEM_ID" --stage implementation --write-manifest
+
+  # --- reviewed-implementation-head consistency guard (GPT-R42-001): an
+  # implementation/post-fix bundle must not be finalized while
+  # WORKFLOW_STATE.json's own work_items[work_item_id].reviewed_implementation_head
+  # still disagrees with $HEAD_SHA, the exact commit this bundle was just
+  # generated at. record_bundle_generation (workflow_state.py) is that
+  # field's sole writer and must be called -- with its write persisted to
+  # the working tree, committed or not -- BEFORE this script's own
+  # manifest write above, never after; a bundle finalized while the two
+  # disagree is exactly the defect GPT-R42-001 found (an approved bundle
+  # whose own authoritative round identity pointed at a stale head).
+  # Skipped entirely for a work item with no WORKFLOW_STATE.json entry,
+  # same skip condition as the "record_bundle_generation" step this bundle
+  # generation precedes (docs/ai-workflow/REVIEW_PROTOCOL.md).
+  GUARD_CHECK=$(
+    python3 - "$REPO_ROOT" "$WORK_ITEM_ID" "$HEAD_SHA" <<'PYEOF'
+import json
+import sys
+from pathlib import Path
+
+repo_root, work_item_id, head_sha = sys.argv[1], sys.argv[2], sys.argv[3]
+state_path = Path(repo_root) / "docs/ai-workflow/WORKFLOW_STATE.json"
+state = json.loads(state_path.read_text())
+work_item = state.get("work_items", {}).get(work_item_id)
+if work_item is None:
+    print("status: skip")
+else:
+    recorded_head = work_item.get("reviewed_implementation_head")
+    if recorded_head == head_sha:
+        print("status: ok")
+    else:
+        print("status: mismatch")
+        print(f"recorded_head: {recorded_head}")
+PYEOF
+  )
+  GUARD_STATUS=$(printf '%s\n' "$GUARD_CHECK" | sed -n 's/^status: //p')
+  if [[ "$GUARD_STATUS" != "ok" && "$GUARD_STATUS" != "skip" ]]; then
+    echo "error: WORKFLOW_STATE.json work_items['$WORK_ITEM_ID'].reviewed_implementation_head does not match this bundle's generation head '$HEAD_SHA' -- call workflow_state.record_bundle_generation(..., stage=..., head='$HEAD_SHA') and persist the result to the working tree BEFORE regenerating this bundle (GPT-R42-001):" >&2
+    printf '%s\n' "$GUARD_CHECK" >&2
+    exit 1
+  fi
 fi
 
 # --- archive ---

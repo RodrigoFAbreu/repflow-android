@@ -951,6 +951,131 @@ class TestPrepareAiReviewShPlanStageRequiredArgument(unittest.TestCase):
             self.assertTrue((repo.root / ".ai-review" / "second-item" / "review-bundle.tar.gz").is_file())
 
 
+class TestPrepareAiReviewShImplementationStageHeadGuard(unittest.TestCase):
+    """GPT-R42-001: an implementation/post-fix bundle must not be
+    finalized while `WORKFLOW_STATE.json`'s own
+    `work_items[work_item_id].reviewed_implementation_head` disagrees
+    with the exact commit the bundle was actually generated at -- the
+    defect that let an already-generated bundle's own manifest declare
+    one reviewed head while the bundle's own copied `WORKFLOW_STATE.json`
+    snapshot still named an older one. Exercised end to end against a
+    real subprocess invocation of the actual script (copied into the
+    scratch repo, never a reimplementation), mirroring
+    `TestPrepareAiReviewShPlanStageRequiredArgument`'s technique for the
+    plan stage. The guard reads `WORKFLOW_STATE.json` straight off disk,
+    so these fixtures deliberately leave it uncommitted at generation
+    time -- exactly the pre-technical-approval convention
+    `record_bundle_generation`'s own docstring and this round's
+    `REVIEW_REQUEST.md` describe (the state write happens before the
+    bundle is finalized, not necessarily before it is committed)."""
+
+    def _install_scripts(self, repo):
+        scripts_dir = repo.root / "scripts"
+        scripts_dir.mkdir(parents=True, exist_ok=True)
+        for name in ("prepare-ai-review.sh", "workflow_fingerprint.py"):
+            dest = scripts_dir / name
+            shutil.copy(_REAL_SCRIPTS_DIR / name, dest)
+        script_path = scripts_dir / "prepare-ai-review.sh"
+        script_path.chmod(script_path.stat().st_mode | stat.S_IEXEC)
+        return script_path
+
+    def _seed_and_implement(self, repo, work_item_id="wi"):
+        """Settles the plan-stage fixture as `repo.base`, then adds one
+        more commit (`impl_head`) representing the reviewed implementation
+        content -- `impl.txt` is declared implementation-stage protected
+        so it classifies rather than raising `UnclassifiedPathError`.
+        Returns `impl_head`."""
+        (repo.root / ".gitignore").write_text(".ai-review/\n")
+        repo.write_plan_docs(work_item_id=work_item_id, plan_revision=1)
+        declarations = ws.generate_artifacts_declarations(
+            work_item_id, "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+            f"docs/ai-workflow/registry/{work_item_id}-registry.json",
+            f"docs/ai-workflow/requirements/{work_item_id}-mapping.json",
+        )
+        declarations["implementation_stage"]["protected_paths"]["impl.txt"] = "test fixture content"
+        artifacts_path = repo.root / "docs" / "ai-workflow" / "registry" / f"{work_item_id}-artifacts.json"
+        artifacts_path.write_text(json.dumps(declarations) + "\n")
+        repo.commit_plan_docs_as_base()
+        impl_head = repo.commit("implement thing", filename="impl.txt")
+        return impl_head
+
+    def _write_review_request(self, repo, work_item_id, base, impl_head):
+        protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
+            fingerprint.load_implementation_stage_classification(
+                repo.root, fingerprint.artifacts_path_for_work_item(work_item_id),
+            )
+        )
+        digest, _ = fingerprint.compute_review_content_id_implementation_stage_at_commit(
+            repo.root, base, impl_head, "process", work_item_id,
+            protected_paths, protected_prefixes, excluded_paths, excluded_prefixes,
+        )
+        bundle_dir = repo.root / ".ai-review" / work_item_id / "current"
+        bundle_dir.mkdir(parents=True)
+        (bundle_dir / "REVIEW_REQUEST.md").write_text(
+            f"stage: post-fix\nreview_content_id: {digest}\n"
+        )
+        return bundle_dir
+
+    def test_stale_reviewed_implementation_head_refuses_before_archiving(self):
+        with h.ScratchRepo() as repo:
+            work_item_id = "wi"
+            impl_head = self._seed_and_implement(repo, work_item_id)
+            self._write_review_request(repo, work_item_id, repo.base, impl_head)
+
+            entry = ws.default_work_item(
+                work_item_id=work_item_id, work_item_type="process", work_item_kind="process",
+                plan_path="docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+                registry_path=f"docs/ai-workflow/registry/{work_item_id}-registry.json",
+                mapping_path=f"docs/ai-workflow/requirements/{work_item_id}-mapping.json",
+                base_commit=repo.base, governing_workflow_version="1",
+                plan_revision=1, last_transition="t0",
+            )
+            entry["reviewed_implementation_head"] = "0" * 40
+            entry["implementation_revision"] = 1
+            repo.write_workflow_state(active_work_item_id=work_item_id, **{work_item_id: entry})
+
+            script_path = self._install_scripts(repo)
+            result = subprocess.run(
+                ["bash", str(script_path), repo.base, "post-fix", work_item_id],
+                cwd=repo.root, capture_output=True, text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("GPT-R42-001", result.stderr)
+            self.assertIn("reviewed_implementation_head", result.stderr)
+            # The guard runs after the manifest write (so a mismatch is
+            # still detected against the manifest that would have shipped)
+            # but before archiving -- no archive is ever produced for a
+            # bundle this guard refused.
+            self.assertFalse((repo.root / ".ai-review" / work_item_id / "review-bundle.tar.gz").is_file())
+
+    def test_matching_reviewed_implementation_head_succeeds(self):
+        with h.ScratchRepo() as repo:
+            work_item_id = "wi"
+            impl_head = self._seed_and_implement(repo, work_item_id)
+            bundle_dir = self._write_review_request(repo, work_item_id, repo.base, impl_head)
+
+            entry = ws.default_work_item(
+                work_item_id=work_item_id, work_item_type="process", work_item_kind="process",
+                plan_path="docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+                registry_path=f"docs/ai-workflow/registry/{work_item_id}-registry.json",
+                mapping_path=f"docs/ai-workflow/requirements/{work_item_id}-mapping.json",
+                base_commit=repo.base, governing_workflow_version="1",
+                plan_revision=1, last_transition="t0",
+            )
+            entry["reviewed_implementation_head"] = impl_head
+            entry["implementation_revision"] = 1
+            repo.write_workflow_state(active_work_item_id=work_item_id, **{work_item_id: entry})
+
+            script_path = self._install_scripts(repo)
+            result = subprocess.run(
+                ["bash", str(script_path), repo.base, "post-fix", work_item_id],
+                cwd=repo.root, capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            manifest_text = (bundle_dir / "MANIFEST.md").read_text()
+            self.assertIn(f"reviewed_implementation_head: {impl_head}", manifest_text)
+
+
 class TestBundleRelocation(unittest.TestCase):
     """Missing-test item 165's relocation/migration sub-cases
     (`OPUS-R27-003`, `OPUS-R28-004`/`-006`): `relocate_flat_bundle_to_scoped_layout`
