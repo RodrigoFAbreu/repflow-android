@@ -2425,6 +2425,7 @@ def render_manifest_md_implementation_stage(
     work_item_type: str | None = None,
     base_commit: str | None = None,
     reviewed_implementation_head: str | None = None,
+    implementation_revision: int | None = None,
     worktree_root: str | None = None,
     generation_head: str | None = None,
 ) -> str:
@@ -2443,7 +2444,15 @@ def render_manifest_md_implementation_stage(
     implementation_stage_at_commit`'s own `commit` argument) — a plain
     header line, never part of the hashed projection itself, same
     diagnostic-only discipline as `worktree_root`/`generation_head`
-    (`WFR-17`)."""
+    (`WFR-17`). `implementation_revision`, if supplied, is
+    `work_items[work_item_id].implementation_revision` at generation time
+    -- another plain, non-hashed header line (never part of the hashed
+    projection, matching `record_bundle_generation`'s own "never part of
+    either fingerprint projection" discipline), durably recording each
+    generation round's own revision so the *next* generation's own
+    round-identity preflight (`scripts/prepare-ai-review.sh`, GPT-R43-001)
+    has something to compare against without depending on
+    `WORKFLOW_STATE.json` history."""
     lines = ["# Bundle Manifest", "", "stage: implementation"]
     if bundle_id is not None:
         lines.append(f"bundle_id: {bundle_id}")
@@ -2456,6 +2465,8 @@ def render_manifest_md_implementation_stage(
         lines.append(f"base_commit: {base_commit}")
     if reviewed_implementation_head is not None:
         lines.append(f"reviewed_implementation_head: {reviewed_implementation_head}")
+    if implementation_revision is not None:
+        lines.append(f"implementation_revision: {implementation_revision}")
     if worktree_root is not None:
         lines.append(f"worktree_root: {worktree_root}")
     if generation_head is not None:
@@ -2504,6 +2515,7 @@ def write_manifest_with_verified_identifiers_implementation_stage(
     excluded_prefixes: Mapping[str, str],
     *,
     allow_rebind: bool = False,
+    implementation_revision: int | None = None,
 ) -> tuple[str, str]:
     """Implementation-stage counterpart of `write_manifest_with_verified_
     identifiers` (`GPT-R30-001`/`-002`) — the only code path allowed to
@@ -2540,7 +2552,7 @@ def write_manifest_with_verified_identifiers_implementation_stage(
         review_content_id=digest, protected_paths=protected_paths, protected_prefixes=protected_prefixes,
         excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,
         work_item_id=work_item_id, work_item_type=work_item_type, base_commit=base_full,
-        reviewed_implementation_head=head_full,
+        reviewed_implementation_head=head_full, implementation_revision=implementation_revision,
         worktree_root=worktree_root, generation_head=generation_head,
     ).encode()
     bundle_id, _entries = compute_bundle_id(
@@ -2552,7 +2564,7 @@ def write_manifest_with_verified_identifiers_implementation_stage(
         excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,
         bundle_id=bundle_id,
         work_item_id=work_item_id, work_item_type=work_item_type, base_commit=base_full,
-        reviewed_implementation_head=head_full,
+        reviewed_implementation_head=head_full, implementation_revision=implementation_revision,
         worktree_root=worktree_root, generation_head=generation_head,
     )
 
@@ -2613,7 +2625,7 @@ def write_manifest_with_verified_identifiers_implementation_stage_for_work_item(
     return write_manifest_with_verified_identifiers_implementation_stage(
         repo_root, resolved_bundle_dir, base, head, work_item_type, work_item_id,
         protected_paths, protected_prefixes, excluded_paths, excluded_prefixes,
-        allow_rebind=allow_rebind,
+        allow_rebind=allow_rebind, implementation_revision=entry.get("implementation_revision"),
     )
 
 

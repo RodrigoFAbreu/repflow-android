@@ -1010,7 +1010,7 @@ class TestPrepareAiReviewShImplementationStageHeadGuard(unittest.TestCase):
             protected_paths, protected_prefixes, excluded_paths, excluded_prefixes,
         )
         bundle_dir = repo.root / ".ai-review" / work_item_id / "current"
-        bundle_dir.mkdir(parents=True)
+        bundle_dir.mkdir(parents=True, exist_ok=True)  # a later round reuses round 1's own directory
         (bundle_dir / "REVIEW_REQUEST.md").write_text(
             f"stage: post-fix\nreview_content_id: {digest}\n"
         )
@@ -1042,10 +1042,10 @@ class TestPrepareAiReviewShImplementationStageHeadGuard(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("GPT-R42-001", result.stderr)
             self.assertIn("reviewed_implementation_head", result.stderr)
-            # The guard runs after the manifest write (so a mismatch is
-            # still detected against the manifest that would have shipped)
-            # but before archiving -- no archive is ever produced for a
-            # bundle this guard refused.
+            # The guard runs before any write to current/ (GPT-R43-003) --
+            # no MANIFEST.md and no archive are ever produced for a bundle
+            # this guard refused.
+            self.assertFalse((repo.root / ".ai-review" / work_item_id / "current" / "MANIFEST.md").is_file())
             self.assertFalse((repo.root / ".ai-review" / work_item_id / "review-bundle.tar.gz").is_file())
 
     def test_matching_reviewed_implementation_head_succeeds(self):
@@ -1074,6 +1074,180 @@ class TestPrepareAiReviewShImplementationStageHeadGuard(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             manifest_text = (bundle_dir / "MANIFEST.md").read_text()
             self.assertIn(f"reviewed_implementation_head: {impl_head}", manifest_text)
+
+    def _write_state_entry(self, repo, work_item_id, *, base, head, revision):
+        entry = ws.default_work_item(
+            work_item_id=work_item_id, work_item_type="process", work_item_kind="process",
+            plan_path="docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+            registry_path=f"docs/ai-workflow/registry/{work_item_id}-registry.json",
+            mapping_path=f"docs/ai-workflow/requirements/{work_item_id}-mapping.json",
+            base_commit=base, governing_workflow_version="1",
+            plan_revision=1, last_transition="t0",
+        )
+        entry["reviewed_implementation_head"] = head
+        entry["implementation_revision"] = revision
+        repo.write_workflow_state(active_work_item_id=work_item_id, **{work_item_id: entry})
+
+    def _generate_first_round(self, repo, work_item_id, script_path):
+        """Establishes a real, successful round-1 bundle (no prior
+        `MANIFEST.md` to compare against, so `implementation_revision`
+        advancement is unguarded for this call, same as the plan stage's
+        own creation branch) -- the fixture every GPT-R43-001/-003 test
+        below needs as its "previous round" starting point."""
+        impl_head = self._seed_and_implement(repo, work_item_id)
+        self._write_review_request(repo, work_item_id, repo.base, impl_head)
+        self._write_state_entry(repo, work_item_id, base=repo.base, head=impl_head, revision=1)
+        result = subprocess.run(
+            ["bash", str(script_path), repo.base, "implementation", work_item_id],
+            cwd=repo.root, capture_output=True, text=True,
+        )
+        assert result.returncode == 0, result.stderr
+        return impl_head
+
+    def test_new_head_with_stale_revision_refuses(self):
+        """GPT-R43-001: the head-only guard from GPT-R42-001 is satisfied
+        (state's reviewed_implementation_head matches the new commit), but
+        implementation_revision was left at the previous round's value --
+        must still refuse."""
+        with h.ScratchRepo() as repo:
+            work_item_id = "wi"
+            script_path = self._install_scripts(repo)
+            self._generate_first_round(repo, work_item_id, script_path)
+
+            impl_head_2 = repo.commit("second implementation change", filename="impl.txt")
+            self._write_review_request(repo, work_item_id, repo.base, impl_head_2)
+            self._write_state_entry(repo, work_item_id, base=repo.base, head=impl_head_2, revision=1)
+
+            result = subprocess.run(
+                ["bash", str(script_path), repo.base, "post-fix", work_item_id],
+                cwd=repo.root, capture_output=True, text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("GPT-R43-001", result.stderr)
+            self.assertIn("implementation_revision", result.stderr)
+
+    def test_new_head_with_correctly_advanced_revision_succeeds(self):
+        with h.ScratchRepo() as repo:
+            work_item_id = "wi"
+            script_path = self._install_scripts(repo)
+            self._generate_first_round(repo, work_item_id, script_path)
+
+            impl_head_2 = repo.commit("second implementation change", filename="impl.txt")
+            self._write_review_request(repo, work_item_id, repo.base, impl_head_2)
+            self._write_state_entry(repo, work_item_id, base=repo.base, head=impl_head_2, revision=2)
+
+            result = subprocess.run(
+                ["bash", str(script_path), repo.base, "post-fix", work_item_id],
+                cwd=repo.root, capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            manifest_text = (
+                repo.root / ".ai-review" / work_item_id / "current" / "MANIFEST.md"
+            ).read_text()
+            self.assertIn(f"reviewed_implementation_head: {impl_head_2}", manifest_text)
+            self.assertIn("implementation_revision: 2", manifest_text)
+
+    def test_new_head_with_revision_jump_greater_than_one_refuses(self):
+        """The finding's own "exactly one" requirement: a new head must
+        advance the revision by precisely 1, not 2 -- the exact mistake a
+        session that calls `record_bundle_generation` twice before its
+        first commit can make."""
+        with h.ScratchRepo() as repo:
+            work_item_id = "wi"
+            script_path = self._install_scripts(repo)
+            self._generate_first_round(repo, work_item_id, script_path)
+
+            impl_head_2 = repo.commit("second implementation change", filename="impl.txt")
+            self._write_review_request(repo, work_item_id, repo.base, impl_head_2)
+            self._write_state_entry(repo, work_item_id, base=repo.base, head=impl_head_2, revision=3)
+
+            result = subprocess.run(
+                ["bash", str(script_path), repo.base, "post-fix", work_item_id],
+                cwd=repo.root, capture_output=True, text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("GPT-R43-001", result.stderr)
+
+    def test_repeat_generation_of_same_round_is_idempotent(self):
+        """Regenerating for the exact same head the previous bundle
+        already named (no new commit) must succeed without requiring an
+        additional revision bump."""
+        with h.ScratchRepo() as repo:
+            work_item_id = "wi"
+            script_path = self._install_scripts(repo)
+            impl_head = self._generate_first_round(repo, work_item_id, script_path)
+
+            # Re-run for the identical head/revision -- nothing changed.
+            result = subprocess.run(
+                ["bash", str(script_path), repo.base, "post-fix", work_item_id],
+                cwd=repo.root, capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            manifest_text = (
+                repo.root / ".ai-review" / work_item_id / "current" / "MANIFEST.md"
+            ).read_text()
+            self.assertIn(f"reviewed_implementation_head: {impl_head}", manifest_text)
+            self.assertIn("implementation_revision: 1", manifest_text)
+
+    def test_repeat_generation_with_stale_revision_bump_refuses(self):
+        """The idempotent case's own negative half: regenerating for the
+        *same* head but with implementation_revision changed anyway must
+        still refuse -- a same-head regeneration is never itself a reason
+        to advance the revision."""
+        with h.ScratchRepo() as repo:
+            work_item_id = "wi"
+            script_path = self._install_scripts(repo)
+            impl_head = self._generate_first_round(repo, work_item_id, script_path)
+
+            self._write_state_entry(repo, work_item_id, base=repo.base, head=impl_head, revision=2)
+            result = subprocess.run(
+                ["bash", str(script_path), repo.base, "post-fix", work_item_id],
+                cwd=repo.root, capture_output=True, text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("GPT-R43-001", result.stderr)
+
+    def test_refused_regeneration_leaves_current_byte_identical(self):
+        """GPT-R43-003: a refused regeneration attempt must leave the
+        previously valid `current/` bundle byte-identical -- `current/` is
+        "the bundle currently under review" (REVIEW_PROTOCOL.md), not a
+        scratch directory a rejected generation may leave mutated."""
+        with h.ScratchRepo() as repo:
+            work_item_id = "wi"
+            script_path = self._install_scripts(repo)
+            self._generate_first_round(repo, work_item_id, script_path)
+
+            impl_head_2 = repo.commit("second implementation change", filename="impl.txt")
+            self._write_review_request(repo, work_item_id, repo.base, impl_head_2)
+            # Stale revision -- refused, same as test_new_head_with_stale_revision_refuses.
+            self._write_state_entry(repo, work_item_id, base=repo.base, head=impl_head_2, revision=1)
+
+            # Snapshot after this round's own author-prep (REVIEW_REQUEST.md
+            # is legitimately author-edited before every invocation, same
+            # as a real round) but before invoking the script -- isolates
+            # what the *script itself* does to current/ (and the archive
+            # already produced by round 1) on refusal.
+            bundle_dir = repo.root / ".ai-review" / work_item_id / "current"
+            archive = repo.root / ".ai-review" / work_item_id / "review-bundle.tar.gz"
+            self.assertTrue(archive.is_file())  # round 1 already produced it
+            before = {
+                p.relative_to(bundle_dir): p.read_bytes()
+                for p in bundle_dir.rglob("*") if p.is_file()
+            }
+            before_archive = archive.read_bytes()
+
+            result = subprocess.run(
+                ["bash", str(script_path), repo.base, "post-fix", work_item_id],
+                cwd=repo.root, capture_output=True, text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+
+            after = {
+                p.relative_to(bundle_dir): p.read_bytes()
+                for p in bundle_dir.rglob("*") if p.is_file()
+            }
+            self.assertEqual(before, after)
+            self.assertEqual(before_archive, archive.read_bytes())
 
 
 class TestBundleRelocation(unittest.TestCase):
