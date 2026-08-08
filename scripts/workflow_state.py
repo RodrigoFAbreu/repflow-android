@@ -593,6 +593,25 @@ class RegistryCoverageError(Exception):
     foreign registry as "nothing to check.\""""
 
 
+class StalePlanApprovalRegistryReadError(Exception):
+    """`resolve_own_registry_completion_status`'s fail-closed binding of
+    registry-derived terminality to the current plan approval (revision
+    27, `GPT-R43-002`, correcting `RegistryCoverageError`'s own gap: that
+    check proves the registry is safe/well-formed/self-declared, never
+    that its *bytes* are the ones `plan_approval` actually covers). Raised
+    when `plan_approval` is missing or not `CURRENT`, when `registry_path`
+    is not named in `plan_approval.review_content_manifest` at all, or
+    when the registry's live `git hash-object` blob disagrees with that
+    manifest's recorded blob for the same path -- the last case catches
+    both a dirty tracked registry edited after approval and a clean,
+    committed-but-unapproved registry mutation alike, since `git
+    hash-object` always reads the working tree's current bytes regardless
+    of commit status. Registry-derived terminality (`complete_work_item`,
+    and the advisory pre-flight `/accept-milestone`/
+    `/accept-scoped-remediation` both name) must never be trusted while
+    this would raise."""
+
+
 class IncompleteOwnCheckpointsError(Exception):
     """`complete_work_item`'s own-checkpoint-completion block
     (`D-Scoped-Remediation-Acceptance`, resolves `WF8B-002`): raised when
@@ -1766,7 +1785,16 @@ def resolve_own_registry_completion_status(repo_root: Path, work_item: dict) -> 
     `registry_path`, not supplied by any caller, this case can now only
     mean the on-disk file itself is misconfigured or cross-linked, never a
     caller-side substitution (closing the trust gap `GPT-R37-001` found in
-    revision 23's caller-supplied-dict design)."""
+    revision 23's caller-supplied-dict design).
+
+    Before the loaded registry's completion status is trusted, its live
+    bytes must also be exactly the ones the current `plan_approval`
+    covers (revision 27, `GPT-R43-002`) -- `_assert_registry_covered_by_
+    current_plan_approval` raises `StalePlanApprovalRegistryReadError`
+    otherwise, whether the registry is a dirty tracked edit made after
+    approval or a clean, committed-but-unapproved mutation. `RegistryCoverageError`
+    alone (the checks above) only proves the file is safe/well-formed/
+    self-declaring, never that it is the approved one."""
     work_item_id = work_item["work_item_id"]
     registry_path = work_item.get("registry_path")
     if registry_path is None:
@@ -1810,7 +1838,52 @@ def resolve_own_registry_completion_status(repo_root: Path, work_item: dict) -> 
             f"work_item_id {registry_work_item_id!r}, expected {work_item_id!r}"
         )
 
+    _assert_registry_covered_by_current_plan_approval(repo_root, work_item, registry_path)
+
     return registry_completion_status(work_item, registry_data)
+
+
+def _assert_registry_covered_by_current_plan_approval(
+    repo_root: Path, work_item: dict, registry_path: str,
+) -> None:
+    """`GPT-R43-002`'s own fix: the registry bytes
+    `resolve_own_registry_completion_status` is about to trust for
+    terminality must be exactly the bytes `plan_approval` covers, not
+    merely a safely-resolvable, well-formed, self-declaring tracked file.
+    Reuses `plan_approval.review_content_manifest`'s own per-path blob
+    record (already the durable, approval-time snapshot every plan
+    approval writes) rather than recomputing a whole fresh plan-stage
+    projection with a guessed `base_commit` -- this work item's own
+    continued-scope rounds compute that projection against the
+    plan-approval commit, not `work_item["base_commit"]`
+    (`REVIEW_REQUEST.md`'s own documented convention), so there is no
+    single `base_commit` value this helper could safely assume; a direct
+    blob comparison needs none."""
+    work_item_id = work_item["work_item_id"]
+    plan_approval = work_item.get("plan_approval")
+    if plan_approval is None or plan_approval.get("status") != "CURRENT":
+        raise StalePlanApprovalRegistryReadError(
+            f"work_items[{work_item_id!r}] has no CURRENT plan_approval -- "
+            f"registry-derived completion cannot be trusted"
+        )
+    manifest = plan_approval.get("review_content_manifest") or []
+    approved_entry = next(
+        (entry for entry in manifest if entry.get("path") == registry_path), None,
+    )
+    if approved_entry is None:
+        raise StalePlanApprovalRegistryReadError(
+            f"work_items[{work_item_id!r}].registry_path {registry_path!r} is not "
+            f"named in the current plan_approval.review_content_manifest -- cannot "
+            f"prove the read registry bytes are plan-approved"
+        )
+    live_blob = fingerprint._hash_object(repo_root, registry_path)
+    approved_blob = approved_entry.get("blob")
+    if live_blob != approved_blob:
+        raise StalePlanApprovalRegistryReadError(
+            f"work_items[{work_item_id!r}].registry_path {registry_path!r} live blob "
+            f"{live_blob!r} does not match the current plan_approval's recorded blob "
+            f"{approved_blob!r} -- the registry was modified after plan approval"
+        )
 
 
 def complete_work_item(state: dict, work_item_id: str, now: str, *, repo_root: Path) -> dict:

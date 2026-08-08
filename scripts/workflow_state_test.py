@@ -2915,6 +2915,34 @@ def _commit_empty(repo, subject, trailers=None):
     return repo.head()
 
 
+def _current_plan_approval_covering(repo, *tracked_paths):
+    """GPT-R43-002 fixture helper: a minimal `CURRENT` `plan_approval`
+    whose `review_content_manifest` names each of `tracked_paths` at its
+    *live* git blob hash -- satisfies `_assert_registry_covered_by_
+    current_plan_approval` for tests exercising `resolve_own_registry_
+    completion_status`/`complete_work_item` that are not themselves about
+    plan-approval currency. Each path must already be committed (its live
+    blob is read via `git hash-object`, which needs the file to exist)."""
+    return {
+        "status": "CURRENT",
+        "basis": "EXTERNAL_APPROVE",
+        "reviewed_bundle_id": "a" * 66,
+        "approved_review_content_id": "b" * 66,
+        "review_content_manifest": [
+            {
+                "path": path, "exists": True, "mode": "100644",
+                "blob": fingerprint._hash_object(repo.root, path),
+            }
+            for path in tracked_paths
+        ],
+        "reviewed_content_commit": None,
+        "legacy_evidence": None,
+        "user_confirmation": "test fixture approval",
+        "waived_guarantees": [],
+        "recorded_at": "t0",
+    }
+
+
 class TestRegistryCompletionStatusAndGates(unittest.TestCase):
     REGISTRY = {
         "work_item_id": "wi", "plan_revision": 1,
@@ -2983,12 +3011,13 @@ class TestCompleteWorkItemOwnRegistryGuard(unittest.TestCase):
             "checkpoints": [{"id": "A", "depends_on": []}, {"id": "B", "depends_on": ["A"]}],
         }
 
-    def _state(self, *, b_complete):
+    def _state(self, *, b_complete, plan_approval=None):
         checkpoints = {"A": {"status": "COMPLETE"}}
         if b_complete:
             checkpoints["B"] = {"status": "COMPLETE"}
         work_item = _base_work_item(
             phase="AWAITING_USER_ACCEPTANCE", registry_path=self.REGISTRY_PATH, checkpoints=checkpoints,
+            plan_approval=plan_approval,
         )
         return _base_state(wi=work_item)
 
@@ -2996,7 +3025,9 @@ class TestCompleteWorkItemOwnRegistryGuard(unittest.TestCase):
         with ScratchRepo() as repo:
             _write(repo, self.REGISTRY_PATH, json.dumps(self._registry()))
             _commit_paths(repo, [self.REGISTRY_PATH], "registry")
-            state = self._state(b_complete=True)
+            state = self._state(
+                b_complete=True, plan_approval=_current_plan_approval_covering(repo, self.REGISTRY_PATH),
+            )
             new_state = ws.complete_work_item(state, "wi", now="t", repo_root=repo.root)
             self.assertEqual(new_state["work_items"]["wi"]["phase"], "MILESTONE_COMPLETE")
 
@@ -3008,7 +3039,9 @@ class TestCompleteWorkItemOwnRegistryGuard(unittest.TestCase):
         with ScratchRepo() as repo:
             _write(repo, self.REGISTRY_PATH, json.dumps(self._registry()))
             _commit_paths(repo, [self.REGISTRY_PATH], "registry")
-            state = self._state(b_complete=False)
+            state = self._state(
+                b_complete=False, plan_approval=_current_plan_approval_covering(repo, self.REGISTRY_PATH),
+            )
             with self.assertRaises(ws.IncompleteOwnCheckpointsError):
                 ws.complete_work_item(state, "wi", now="t", repo_root=repo.root)
             is_terminal, outstanding = ws.resolve_own_registry_completion_status(
@@ -3067,7 +3100,9 @@ class TestCompleteWorkItemOwnRegistryGuard(unittest.TestCase):
         with ScratchRepo() as repo:
             _write(repo, self.REGISTRY_PATH, json.dumps(self._registry()))
             _commit_paths(repo, [self.REGISTRY_PATH], "registry")
-            state = self._state(b_complete=False)
+            state = self._state(
+                b_complete=False, plan_approval=_current_plan_approval_covering(repo, self.REGISTRY_PATH),
+            )
             import inspect
             self.assertNotIn("registry", inspect.signature(ws.complete_work_item).parameters)
             with self.assertRaises(ws.IncompleteOwnCheckpointsError):
@@ -3083,6 +3118,137 @@ class TestCompleteWorkItemOwnRegistryGuard(unittest.TestCase):
             )
             with self.assertRaises(ws.IncompleteChildWorkItemError):
                 ws.complete_work_item(state, "wi", now="t", repo_root=repo.root)
+
+
+class TestRegistryReadBoundToCurrentPlanApproval(unittest.TestCase):
+    """GPT-R43-002: `resolve_own_registry_completion_status` must prove
+    the registry bytes it is about to trust are exactly the ones the
+    current `plan_approval` covers -- `RegistryCoverageError` alone (safe
+    path, exists, readable, valid JSON, declares the right work_item_id)
+    never proved that. The registry's own two checkpoints (A, B) never
+    encode terminality themselves -- `registry_completion_status` derives
+    that from `work_item["checkpoints"]` against the registry's
+    dependency graph (same pattern `TestCompleteWorkItemOwnRegistryGuard`
+    uses) -- so `tag` is this fixture's only lever for varying the
+    registry's own bytes/blob."""
+
+    REGISTRY_PATH = "registry.json"
+
+    def _registry(self, *, tag="v1"):
+        return {
+            "work_item_id": "wi", "plan_revision": 1, "tag": tag,
+            "checkpoints": [{"id": "A", "depends_on": []}, {"id": "B", "depends_on": ["A"]}],
+        }
+
+    def _write_registry(self, repo, *, tag="v1"):
+        _write(repo, self.REGISTRY_PATH, json.dumps(self._registry(tag=tag)))
+
+    def _checkpoints(self, *, b_complete):
+        checkpoints = {"A": {"status": "COMPLETE"}}
+        if b_complete:
+            checkpoints["B"] = {"status": "COMPLETE"}
+        return checkpoints
+
+    def test_dirty_tracked_registry_after_approval_refuses(self):
+        with ScratchRepo() as repo:
+            self._write_registry(repo)
+            _commit_paths(repo, [self.REGISTRY_PATH], "registry")
+            plan_approval = _current_plan_approval_covering(repo, self.REGISTRY_PATH)
+            self._write_registry(repo, tag="tampered")  # dirty, never committed
+            work_item = _base_work_item(
+                registry_path=self.REGISTRY_PATH, plan_approval=plan_approval,
+                checkpoints=self._checkpoints(b_complete=False),
+            )
+            with self.assertRaises(ws.StalePlanApprovalRegistryReadError):
+                ws.resolve_own_registry_completion_status(repo.root, work_item)
+
+    def test_clean_committed_but_unapproved_mutation_refuses(self):
+        with ScratchRepo() as repo:
+            self._write_registry(repo)
+            _commit_paths(repo, [self.REGISTRY_PATH], "registry")
+            plan_approval = _current_plan_approval_covering(repo, self.REGISTRY_PATH)
+            self._write_registry(repo, tag="mutated")  # committed, no new plan-review round
+            _commit_paths(repo, [self.REGISTRY_PATH], "registry mutated post-approval")
+            work_item = _base_work_item(
+                registry_path=self.REGISTRY_PATH, plan_approval=plan_approval,
+                checkpoints=self._checkpoints(b_complete=False),
+            )
+            with self.assertRaises(ws.StalePlanApprovalRegistryReadError):
+                ws.resolve_own_registry_completion_status(repo.root, work_item)
+
+    def test_registry_restored_to_approved_bytes_succeeds(self):
+        with ScratchRepo() as repo:
+            self._write_registry(repo)
+            _commit_paths(repo, [self.REGISTRY_PATH], "registry")
+            plan_approval = _current_plan_approval_covering(repo, self.REGISTRY_PATH)
+            original_bytes = (repo.root / self.REGISTRY_PATH).read_text()
+            self._write_registry(repo, tag="mutated")
+            _commit_paths(repo, [self.REGISTRY_PATH], "mutate")
+            _write(repo, self.REGISTRY_PATH, original_bytes)
+            _commit_paths(repo, [self.REGISTRY_PATH], "restore to approved bytes")
+            work_item = _base_work_item(
+                registry_path=self.REGISTRY_PATH, plan_approval=plan_approval,
+                checkpoints=self._checkpoints(b_complete=False),
+            )
+            is_terminal, outstanding = ws.resolve_own_registry_completion_status(repo.root, work_item)
+            self.assertFalse(is_terminal)
+            self.assertEqual(outstanding, "B")
+
+    def test_newly_plan_approved_registry_revision_succeeds(self):
+        """A registry mutation covered by its own fresh plan_approval
+        (a real new plan-review/approval round, not merely a commit) must
+        be trusted, not treated as automatically stale."""
+        with ScratchRepo() as repo:
+            self._write_registry(repo, tag="revision-2")
+            _commit_paths(repo, [self.REGISTRY_PATH], "registry revision 2")
+            plan_approval = _current_plan_approval_covering(repo, self.REGISTRY_PATH)
+            work_item = _base_work_item(
+                registry_path=self.REGISTRY_PATH, plan_approval=plan_approval,
+                checkpoints=self._checkpoints(b_complete=True),
+            )
+            is_terminal, outstanding = ws.resolve_own_registry_completion_status(repo.root, work_item)
+            self.assertTrue(is_terminal)
+            self.assertIsNone(outstanding)
+
+    def test_terminal_routing_refuses_stale_plan_metadata(self):
+        """`complete_work_item` -- the function `/accept-milestone`'s own
+        pre-flight and terminal routing both name -- must refuse rather
+        than complete when the registry disagrees with `plan_approval`,
+        even though `work_item["checkpoints"]` alone would otherwise
+        read as terminal."""
+        with ScratchRepo() as repo:
+            self._write_registry(repo)
+            _commit_paths(repo, [self.REGISTRY_PATH], "registry")
+            plan_approval = _current_plan_approval_covering(repo, self.REGISTRY_PATH)
+            self._write_registry(repo, tag="tampered")
+            _commit_paths(repo, [self.REGISTRY_PATH], "tampered")
+            work_item = _base_work_item(
+                registry_path=self.REGISTRY_PATH, plan_approval=plan_approval,
+                phase="AWAITING_USER_ACCEPTANCE", checkpoints=self._checkpoints(b_complete=True),
+            )
+            state = _base_state(wi=work_item)
+            with self.assertRaises(ws.StalePlanApprovalRegistryReadError):
+                ws.complete_work_item(state, "wi", now="t", repo_root=repo.root)
+
+    def test_non_terminal_routing_refuses_stale_plan_metadata(self):
+        """`resolve_own_registry_completion_status` -- the same function
+        `/accept-scoped-remediation`'s own pre-flight calls (per
+        `TestScopedRemediationEndToEnd._accept`'s orchestration above) --
+        must refuse for the non-terminal path too, not only the terminal
+        one; staleness is about the bytes, not about which routing
+        outcome the tampered registry happens to produce."""
+        with ScratchRepo() as repo:
+            self._write_registry(repo)
+            _commit_paths(repo, [self.REGISTRY_PATH], "registry")
+            plan_approval = _current_plan_approval_covering(repo, self.REGISTRY_PATH)
+            self._write_registry(repo, tag="tampered-but-still-non-terminal")
+            _commit_paths(repo, [self.REGISTRY_PATH], "tampered, committed")
+            work_item = _base_work_item(
+                registry_path=self.REGISTRY_PATH, plan_approval=plan_approval,
+                checkpoints=self._checkpoints(b_complete=False),
+            )
+            with self.assertRaises(ws.StalePlanApprovalRegistryReadError):
+                ws.resolve_own_registry_completion_status(repo.root, work_item)
 
 
 class TestFunctionalChecklistTrailerDiscovery(unittest.TestCase):
@@ -3724,6 +3890,7 @@ class TestScopedRemediationEndToEnd(unittest.TestCase):
             "implementation_revision": implementation_revision,
             "reviewed_implementation_head": evidence_sha,
             "technical_approval": {"status": "CURRENT", "approved_review_content_id": "t" * 40},
+            "plan_approval": _current_plan_approval_covering(repo, self.REGISTRY_PATH),
             "phase": "AWAITING_FUNCTIONAL_REVIEW",
             "checkpoints": {"A": {"status": "COMPLETE"}},
         }
