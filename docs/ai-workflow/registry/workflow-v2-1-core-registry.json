@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "work_item_id": "workflow-v2-1-core",
-  "plan_revision": 27,
+  "plan_revision": 62,
   "checkpoints": [
     {
       "id": "WF0",
@@ -13,114 +13,164 @@
     {
       "id": "WF1a",
       "name": "State file schema: multi-item WORKFLOW_STATE.json (active_work_item_id + work_items map, work_item_kind field, checkpoints map as sole status source, governing_workflow_version) + WORKFLOW_CONFIG.json (repository-level default, pre-activation fail-safe, supported_versions enforcement) + local-only WORKTREE_IDENTITY.json + validator core",
-      "depends_on": ["WF0"],
+      "depends_on": [
+        "WF0"
+      ],
       "complexity": 5,
       "session_target": "1"
     },
     {
       "id": "WF1b",
       "name": "Work-item routing (D1, full text), product/process-milestone init/reset writing into the multi-item map, registry/mapping JSON format (D-Registry/D4b), work-item-ID slug grammar, dual-mode branch for /milestone-plan",
-      "depends_on": ["WF1a"],
+      "depends_on": [
+        "WF1a"
+      ],
       "complexity": 5,
       "session_target": "1"
     },
     {
       "id": "WF4a-i",
       "name": "Canonical fingerprint helpers wired into prepare-ai-review.sh/approve-review (the helpers themselves are built and twice-corrected as a prototype); deferred implementation-stage manifest and its real fixtures; generalize protected-path derivation beyond this one process plan",
-      "depends_on": ["WF1b"],
+      "depends_on": [
+        "WF1b"
+      ],
       "complexity": 6,
       "session_target": "1"
     },
     {
       "id": "WF4a-ii",
       "name": "Approval states (full D-States blocks applied to MILESTONE_WORKFLOW.md), entry/exit split for both new gates, mechanism-independent /approve-review and /accept-milestone user-only guard (verified against both exposure paths), REVISE-with-resolved-findings-can-approve gate, dual-mode branching for /approve-review/accept-milestone/apply-plan-review/apply-implementation-review, CLAUDE.md gate-count depointer",
-      "depends_on": ["WF4a-i"],
+      "depends_on": [
+        "WF4a-i"
+      ],
       "complexity": 6,
       "session_target": "1"
     },
     {
       "id": "WF4a-iii",
       "name": "Approval/checkpoint-completion Git-lifecycle: exact scoped commit-trailer helper with duplicate-trailer tie-break and recovery, per-stage approval-freshness rule, post-approval manifest-match verification",
-      "depends_on": ["WF4a-ii"],
+      "depends_on": [
+        "WF4a-ii"
+      ],
       "complexity": 6,
       "session_target": "1"
     },
     {
       "id": "WF4a-iv",
       "name": "Two-stage local-then-manual-external plan-review protocol (D-Plan-Review-Stages): AWAITING_LOCAL_PLAN_REVIEW/AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW states, durable plan_review_stages ledger, verdict/state transition table, model-independent /review-plan and /record-manual-plan-review commands, \"2.1\"-only revised /apply-plan-review exit step, concise docs/ai-workflow/PLAN_REVIEW_WORKFLOW.md operator guide. Mandatory internal commit boundary: states/ledger/validator/transition-table land first, /review-plan + /record-manual-plan-review + operator guide + integration tests land second",
-      "depends_on": ["WF4a-ii"],
+      "depends_on": [
+        "WF4a-ii"
+      ],
       "complexity": 6,
       "session_target": "1-2"
     },
     {
       "id": "WF-M8a",
       "name": "Milestone 8 legacy import (D-Legacy phase 1): dormant LEGACY_READY work-item entry, LEGACY_V1 record with a real backfilled approved_review_content_id and governing_workflow_version: \"1\", branch-reconciliation precondition, user-performed branch integration checklist",
-      "depends_on": ["WF1b"],
+      "depends_on": [
+        "WF1b"
+      ],
       "complexity": 4,
       "session_target": "1"
     },
     {
       "id": "WF-M8b",
       "name": "Milestone 8 adoption (D-Legacy phase 2): explicit work-item-id selector argument and dormant-to-active promotion logic on /prepare-functional-review, version transition \"1\" to \"2.1\", stale-legacy-approval-requires-fresh-review handling",
-      "depends_on": ["WF-M8a", "WF4a-ii", "WF4a-iii"],
+      "depends_on": [
+        "WF-M8a",
+        "WF4a-ii",
+        "WF4a-iii"
+      ],
       "complexity": 4,
       "session_target": "1"
     },
     {
       "id": "WF2",
       "name": "Resumable /milestone-implement: the stated four-rule selection algorithm (D-Selection), entry validation, worktree-scoped dirty-in-progress resume safety, WORKTREE_IDENTITY.json writer, checkpoint-complete-vs-all-complete semantics, dual-mode branching, checkpoint-completion trailers via WF4a-iii's helper",
-      "depends_on": ["WF1b", "WF4a-iii"],
+      "depends_on": [
+        "WF1b",
+        "WF4a-iii"
+      ],
       "complexity": 6,
       "session_target": "1"
     },
     {
       "id": "WF4b",
       "name": "Requirements: immutable mapping file + mutable ledger doc physically separated (D4b), functional-resolution ledger",
-      "depends_on": ["WF1b"],
+      "depends_on": [
+        "WF1b"
+      ],
       "complexity": 4,
       "session_target": "1"
     },
     {
       "id": "WF4c",
       "name": "General functional-remediation cycle (3-way branch; stale-before-edit ordering; child-work-item versioning for broad remediation; regenerates the post-fix bundle that advances reviewed_implementation_head)",
-      "depends_on": ["WF4a-iii"],
+      "depends_on": [
+        "WF4a-iii"
+      ],
       "complexity": 5,
       "session_target": "1"
     },
     {
       "id": "WF5",
       "name": "Review bundle v2 hardening: manifest (both fingerprint fns, never themselves inputs; worktree_root/HEAD recorded as diagnostic only), .ai-review/<work_item_id>/ relayout with a stated compatibility migration, NUL-safe -z parsing in prepare-ai-review.sh, binaries/unusual-path test vectors, detached-HEAD + base-SHA script fixes, feedback bundle-ID/base-commit/work-item fields + stale-feedback rejection, source-proposal exclusion, stage-completeness validation, external-portability vs. local-staleness split",
-      "depends_on": ["WF4a-i", "WF4b"],
+      "depends_on": [
+        "WF4a-i",
+        "WF4b"
+      ],
       "complexity": 6,
       "session_target": "1"
     },
     {
       "id": "WF8a-i",
       "name": "Automated conformance/fixture suite, part 1: CI wiring for the existing hermetic prototype suite (done), plus fixture harness scaffolding for the remaining checkpoints' own test needs",
-      "depends_on": ["WF1a", "WF1b", "WF4a-i"],
+      "depends_on": [
+        "WF1a",
+        "WF1b",
+        "WF4a-i"
+      ],
       "complexity": 4,
       "session_target": "1"
     },
     {
       "id": "WF8a-ii",
       "name": "Automated conformance/fixture suite, part 2: cross-checkpoint integration fixtures, dual-mode command behavior under both governing_workflow_version branches for every command in the completed enumeration, including the bootstrap command's own conformance test",
-      "depends_on": ["WF8a-i", "WF2", "WF4a-ii", "WF4a-iii", "WF4a-iv", "WF4b", "WF4c", "WF5", "WF-M8a", "WF-M8b"],
+      "depends_on": [
+        "WF8a-i",
+        "WF2",
+        "WF4a-ii",
+        "WF4a-iii",
+        "WF4a-iv",
+        "WF4b",
+        "WF4c",
+        "WF5",
+        "WF-M8a",
+        "WF-M8b"
+      ],
       "complexity": 6,
       "session_target": "1-2"
     },
     {
       "id": "WF-Activate",
       "name": "Sole activation boundary: validates WF8a-ii's conformance suite, flips WORKFLOW_CONFIG.json's repository-level default to 2.1, commits with a Workflow-Activation trailer; also owns the durable Workflow-Rollback trailer path and the latest-event missing-config recovery rule",
-      "depends_on": ["WF8a-ii"],
+      "depends_on": [
+        "WF8a-ii"
+      ],
       "complexity": 3,
       "session_target": "1"
     },
     {
       "id": "WF8b",
       "name": "Manual multi-session dry run: all round-1 scenarios + legacy-import + remediation-cycle + dirty-worktree-resume, run against the isolated synthetic v2.1-dry-run work item after activation, with durable active-pointer save/restore across session boundaries",
-      "depends_on": ["WF-Activate"],
+      "depends_on": [
+        "WF-Activate"
+      ],
       "complexity": 7,
-      "session_target": "multiple sessions, deliberately not 1"
+      "session_target": "multiple sessions, deliberately not 1",
+      "completion_obligations": [
+        "WFO-STATE-SERIALIZATION"
+      ]
     }
   ]
 }
