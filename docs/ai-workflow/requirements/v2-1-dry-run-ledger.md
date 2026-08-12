@@ -31,3 +31,29 @@ record of checkpoint status (D-Registry); nothing here overrides it.
   three scratch checkpoints are `COMPLETE`).
 - **Functional-verification outcome:** not applicable (process checkpoint,
   no product-facing behavior).
+
+## `S-CP2` — Scratch checkpoint 2: create dry-run scratch file B (left dirty for S13)
+
+- **Implementation evidence:** created
+  `docs/ai-workflow/dry-run/scratch/b.txt`, a single-line marker file, per
+  the plan's checkpoint acceptance criterion (`v2-1-dry-run-plan.md`'s
+  registry table row, WFR-DRY-2). The file and this checkpoint's
+  `IN_PROGRESS` transition were left uncommitted at the end of a prior
+  session (WF8b S6's second session) specifically to set up **S13**
+  (`docs/ai-workflow/dry-run/WF8B_SCENARIOS.md`) — same-worktree dirty
+  resume. This session resumed it: `[2.1 step 1a]`
+  `implementing_entry_reachable` returned `True`; `[1b]`
+  `select_next_checkpoint` returned `S-CP2`, matching the already-`IN_PROGRESS`
+  `current_checkpoint_id` (resume, not fresh start); `[1c]`
+  `verify_dirty_resume_safety` returned with no exception (same worktree
+  that started the work, matching `WORKTREE_IDENTITY.json` entry) —
+  S13's own success-path claim.
+- **Verification results:** file existence and one-line content confirmed
+  directly (`cat docs/ai-workflow/dry-run/scratch/b.txt`); no automated
+  test beyond this, per the plan's own "Missing tests: none beyond the
+  trivial file-existence check" self-review note.
+- **Review findings:** none yet — pending this checkpoint's own review
+  round (folded into S7's first implementation-stage bundle, once all
+  three scratch checkpoints are `COMPLETE`).
+- **Functional-verification outcome:** not applicable (process checkpoint,
+  no product-facing behavior).
