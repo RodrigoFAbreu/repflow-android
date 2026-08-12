@@ -347,8 +347,13 @@
       "base_commit": "e75a756d42751ef18eee842a958cc2c888086772",
       "reviewed_implementation_head": null,
       "current_checkpoint_id": null,
-      "last_completed_checkpoint_id": null,
-      "checkpoints": {},
+      "last_completed_checkpoint_id": "S-CP1",
+      "checkpoints": {
+        "S-CP1": {
+          "status": "COMPLETE",
+          "start_commit": "96dcf8769e854e4a63a59e826ce046ac200671ca"
+        }
+      },
       "current_bundle_id": null,
       "plan_approval": {
         "status": "CURRENT",
@@ -399,8 +404,8 @@
       },
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 13,
-      "last_transition": "2026-08-12T01:34:07+01:00"
+      "state_revision": 15,
+      "last_transition": "2026-08-12T09:12:00+01:00"
     }
   }
 }
