@@ -588,6 +588,82 @@ section below, not left implicit.
 - **Cleanup**: none — checkpoint 2's dirty state is intentionally carried
   into S13.
 
+- **Outcome (checkpoint 1, 2026-08-12, real, reached its own defined stop
+  boundary)**: ran for real in a fresh session (this session began via a
+  real `/clear`, resuming purely from repository state), against live HEAD
+  `96dcf8769e854e4a63a59e826ce046ac200671ca` — S5's approval commit itself,
+  confirming `IMPLEMENTING`'s entry condition holds at checkpoint 1 exactly
+  as it did at S5's exit. Real work performed, `[2.1 step 1]` in full:
+  **1a** `workflow_state.implementing_entry_reachable(repo_root, work_item,
+  base_commit)` returned `True`; **1b**
+  `workflow_state.select_next_checkpoint(work_item, registry)` returned
+  `"S-CP1"` (fresh start — `current_checkpoint_id` was `null`); **1c**
+  skipped (fresh start, not resume); **1d**
+  `workflow_state.transition_checkpoint_in_progress(...)` persisted to
+  `WORKFLOW_STATE.json` (`state_revision` 13 → 14) and
+  `workflow_state.write_worktree_identity(repo_root, "v2-1-dry-run",
+  now=...)` created this work item's first keyed entry in
+  `.ai-review/runtime/WORKTREE_IDENTITY.json`'s
+  `expected_dirty_paths_by_work_item` (gitignored, local-only, not
+  committed); **1e** created
+  `docs/ai-workflow/dry-run/scratch/a.txt` (the plan's own named checkpoint-1
+  deliverable, `docs/ai-workflow/dry-run/v2-1-dry-run-plan.md` line 1060's
+  `scratch/{a,b,c}.txt` naming) and
+  `docs/ai-workflow/requirements/v2-1-dry-run-ledger.md` (this process
+  item's `WF4b`-pattern mutable execution ledger, physically separate from
+  the immutable mapping file, created here since no prior checkpoint had
+  needed it yet), no test beyond file-existence per the plan's own
+  self-review note; **1f** one commit,
+  `ac1df008953b1ced594095a7034a6f2ec51799a4`, carrying
+  `Workflow-Checkpoint: S-CP1` + `Workflow-Work-Item: v2-1-dry-run`,
+  staging exactly the three checkpoint-owned paths (`git add --
+  <three paths>`, never `-A`) so the pre-existing untracked
+  `docs/ai-workflow/dry-run/verify_review_content_id.py` (present before
+  this session started, unrelated to this checkpoint) was correctly left
+  unstaged and uncommitted — confirmed by `git status --short` immediately
+  after; in the same commit, `workflow_state.complete_checkpoint(...)`
+  persisted `checkpoints["S-CP1"].status = "COMPLETE"`,
+  `current_checkpoint_id = null`, `last_completed_checkpoint_id = "S-CP1"`,
+  `phase` unchanged at `IMPLEMENTING` (correct — checkpoints 2/3 remain).
+  **1g**: stopped immediately, per this step's own instruction, without
+  touching checkpoint 2 or step 2 onward.
+
+  **One real defect caught and self-corrected before it reached a commit**:
+  the first `WORKFLOW_STATE.json` write used
+  `json.dumps(new_state, indent=2)` with its default `ensure_ascii=True`,
+  which re-escaped the file's existing literal `→` (U+2192) characters
+  elsewhere in the document (unrelated `blocking_decisions` prose) into
+  `→` — a real unrelated-content mutation this repo's own discipline
+  (`CLAUDE.md`: "Don't touch unrelated working-tree changes") forbids. Not
+  yet committed when noticed (`git diff -U0` review caught it); reverted
+  with `git checkout --` before any commit, and redone with
+  `ensure_ascii=False`, which reproduced a minimal, correctly-scoped diff
+  (verified with `git diff -U0` a second time: exactly the three
+  `v2-1-dry-run` fields this step intends to change, nothing else in the
+  6900-line state file touched). Recorded here rather than silently fixed,
+  per this document's own "capture the exact evidence... create a
+  remediation finding rather than hand-editing around it" discipline for
+  genuine defects — though this one was caught pre-commit by the operator
+  procedure itself (matching `git diff` output against intent before
+  committing), not by any gap in `workflow_state.py`'s own writers, so no
+  separate finding file is warranted: the generic lesson (never call
+  `json.dumps` against this repo's JSON files without `ensure_ascii=False`)
+  is noted here for any future WF8b session performing a raw state write
+  the same way.
+
+  **Verification, real and read-only, after the commit**:
+  `workflow_state.discover_checkpoint_commits(repo_root, "v2-1-dry-run",
+  base_commit)` returned exactly `{"S-CP1":
+  "ac1df008953b1ced594095a7034a6f2ec51799a4"}` — the trailer-discovery
+  mechanism finds this checkpoint's commit correctly, not merely that the
+  commit exists. `git show --name-only` on the commit lists exactly the
+  three intended paths.
+
+  **Not yet run**: checkpoint 2 (`S-CP2`) — its own fresh-session boundary
+  (this scenario's explicit "do not run both checkpoints in one
+  conversation" instruction) means it is the next scenario slice, from a
+  separate session, not a continuation of this one.
+
 ## S7 — External implementation review returning APPROVE
 
 - **Purpose**: prove `/milestone-implement` step 2-5 (self-review, full
