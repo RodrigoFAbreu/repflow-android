@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "work_item_id": "v2-1-dry-run",
+  "requirements": {
+    "WFR-DRY-1": {
+      "description": "Scratch checkpoint 1 exists and produces docs/ai-workflow/dry-run/scratch/a.txt, proving a trivial single-file checkpoint commits and is discoverable by its Workflow-Checkpoint trailer.",
+      "checkpoint_ids": [
+        "S-CP1"
+      ]
+    },
+    "WFR-DRY-2": {
+      "description": "Scratch checkpoint 2 exists and produces docs/ai-workflow/dry-run/scratch/b.txt; this is the checkpoint deliberately left IN_PROGRESS/dirty at the end of S6's second session, so S13 (same-worktree resume) has real uncommitted work to resume. S13 completes it; it is COMPLETE from that point on and is never reopened for a later scenario.",
+      "checkpoint_ids": [
+        "S-CP2"
+      ]
+    },
+    "WFR-DRY-3": {
+      "description": "Scratch checkpoint 3 exists and produces docs/ai-workflow/dry-run/scratch/c.txt. After S13 completes checkpoint 2, checkpoint 3 is started in worktree A and deliberately left IN_PROGRESS with no completion commit: it is the subject of S14 (mismatched-worktree refusal, which must make zero state mutation and therefore leaves it IN_PROGRESS) and then, unchanged, of S15 (interrupted-checkpoint recovery in a fresh session). S15's recovery decision completes it, so every scratch checkpoint is COMPLETE before S7's implementation review.",
+      "checkpoint_ids": [
+        "S-CP3"
+      ]
+    }
+  }
+}

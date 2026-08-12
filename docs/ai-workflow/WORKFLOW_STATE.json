@@ -340,7 +340,7 @@
       "registry_path": "docs/ai-workflow/registry/v2-1-dry-run-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/v2-1-dry-run-mapping.json",
       "governing_workflow_version": "2.1",
-      "phase": "AWAITING_PLAN_APPROVAL",
+      "phase": "IMPLEMENTING",
       "plan_revision": 5,
       "implementation_revision": null,
       "functional_review_round": null,
@@ -350,7 +350,37 @@
       "last_completed_checkpoint_id": null,
       "checkpoints": {},
       "current_bundle_id": null,
-      "plan_approval": null,
+      "plan_approval": {
+        "status": "CURRENT",
+        "basis": "USER_OVERRIDE",
+        "reviewed_bundle_id": "e90b8c90f050a67660c7202aee5326f64df019758140628ae827362ca0d09f27",
+        "approved_review_content_id": "79e5e1df81df92de3845e7c680718c46dcaf4d1df475ade351a023bfd88b2a8d",
+        "review_content_manifest": [
+          {
+            "path": "docs/ai-workflow/dry-run/v2-1-dry-run-plan.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "46af543fce3cbc804164fe65b526d61bd3a17991"
+          },
+          {
+            "path": "docs/ai-workflow/registry/v2-1-dry-run-registry.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "282e1311e293a46e815b838e8ddf47e77df3a25e"
+          },
+          {
+            "path": "docs/ai-workflow/requirements/v2-1-dry-run-mapping.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "c67ea2708620299a3a5668670423f74fadb00594"
+          }
+        ],
+        "reviewed_content_commit": null,
+        "legacy_evidence": null,
+        "user_confirmation": "/approve-review plan v2-1-dry-run",
+        "waived_guarantees": [],
+        "recorded_at": "2026-08-12T01:34:07+01:00"
+      },
       "technical_approval": null,
       "plan_review_stages": {
         "review_content_id": "79e5e1df81df92de3845e7c680718c46dcaf4d1df475ade351a023bfd88b2a8d",
@@ -369,8 +399,8 @@
       },
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 12,
-      "last_transition": "2026-08-12T00:24:31+01:00"
+      "state_revision": 13,
+      "last_transition": "2026-08-12T01:34:07+01:00"
     }
   }
 }

@@ -1,0 +1,91 @@
+{
+  "schema_version": 2,
+  "work_item_id": "v2-1-dry-run",
+  "plan_stage": {
+    "protected_paths": [
+      "docs/ai-workflow/dry-run/v2-1-dry-run-plan.md",
+      "docs/ai-workflow/registry/v2-1-dry-run-registry.json",
+      "docs/ai-workflow/requirements/v2-1-dry-run-mapping.json"
+    ],
+    "excluded_paths": {
+      ".gitignore": "repository housekeeping, not design content",
+      ".github/workflows/ci.yml": "operational CI wiring for the prototype's test suite -- the design decision it implements (stdlib-only Python, tested every PR) is recorded in the protected docs/TECHNICAL_DECISIONS.md; the workflow file itself also carries unrelated Android build/lint/test steps that must not stale this milestone's approval",
+      "docs/ai-workflow/WORKFLOW_STATE.json": "future runtime-mutable per-work-item state (WF1a) -- excluded so ordinary phase/progress writes never stale a plan approval",
+      "docs/ai-workflow/WORKFLOW_CONFIG.json": "future runtime-mutable repository-level config (WF1a/WF-Activate) -- same reasoning as WORKFLOW_STATE.json",
+      "CLAUDE.md": "WF4a-ii's gate-count depointer is a small mechanical edit that implements the design, not part of the design being reviewed here",
+      "docs/ai-workflow/REVIEW_PROTOCOL.md": "WF5's bundle-mechanics updates implement D-Bundle-Manifest, not design content themselves",
+      "docs/ai-workflow/MILESTONE_WORKFLOW.md": "WF4a-ii applies the already-reviewed D-States blocks verbatim; the design is reviewed here, the application of it is not",
+      "docs/ai-workflow/WORKFLOW_V2_PLAN.md": "workflow-v2-1-core's own plan document, which that work item holds as plan-stage PROTECTED and which generate_artifacts_declarations therefore never copied into this item's inherited exclusion set -- excluded here explicitly (LOCAL-DRY-R2-001's both-stages audit): WF8b records this dry run's own progress and findings in it, and a write to another work item's plan document must neither stale nor fail-closed this synthetic item's own plan bundle",
+      "docs/ai-workflow/WORKFLOW_V2_AUDIT.md": "workflow-v2-1-core's own audit document, plan-stage PROTECTED there and so absent from this item's inherited exclusion set -- excluded here for the same reason as WORKFLOW_V2_PLAN.md above (LOCAL-DRY-R2-001's both-stages audit)",
+      "docs/TECHNICAL_DECISIONS.md": "plan-stage PROTECTED for workflow-v2-1-core and so absent from this item's inherited exclusion set -- excluded here for the same reason as WORKFLOW_V2_PLAN.md above; this synthetic item introduces no toolchain/dependency/architecture decision of its own (see its plan's 'Open decisions' section)",
+      "docs/ai-workflow/PLAN_REVIEW_WORKFLOW.md": "the concise two-stage plan-review operator guide documents the already-reviewed design for operators (D-Plan-Review-Stages), it is not itself the design -- same reasoning as MILESTONE_WORKFLOW.md/REVIEW_PROTOCOL.md above. Moved here from PLAN_STAGE_PROTECTED (resolves OPUS-R14-001/-009): pre-declaring it protected while unwritten made D-States' 'checkpoints never touch protected documents' invariance false the moment WF4a-iv actually created it, since that creation is itself a checkpoint touching a protected path. Excluding it (like the other operator-facing docs above) means WF4a-iv can write it without staling the plan approval, and a plan-stage bundle never needs to tombstone a not-yet-written protected path in the first place",
+      "docs/ACTIVE_MILESTONE.md": "product-milestone narrative, explicitly out of scope for this process work item (CLAUDE.md's own routing) -- excluded, not unmentioned, so a concurrent product work item's write to it (e.g. Milestone 8 adoption/functional-review-checklist writes, D-Legacy phase 2) never blocks this work item's own classification, since active_work_item_id is a resume-focus pointer, not an execution lock (D1), and concurrent activity is the normal case (resolves OPUS-R16-001)",
+      "docs/ROADMAP.md": "product milestone ordering, same reasoning and same concurrent-work-item exposure as docs/ACTIVE_MILESTONE.md above (resolves OPUS-R16-001)",
+      "AGENTS.md": "product/repository content outside this process work item's declared scope -- concurrent work items (product milestones, functional-finding fixes, other tooling changes) may write here; fail-closed is preserved for any path outside this named set (resolves OPUS-R18-004)",
+      "README.md": "product/repository content outside this process work item's declared scope -- concurrent work items (product milestones, functional-finding fixes, other tooling changes) may write here; fail-closed is preserved for any path outside this named set (resolves OPUS-R18-004)",
+      "docs/PROJECT_BRIEF.md": "product/repository content outside this process work item's declared scope -- concurrent work items (product milestones, functional-finding fixes, other tooling changes) may write here; fail-closed is preserved for any path outside this named set (resolves OPUS-R18-004)",
+      "docs/DOMAIN_GLOSSARY.md": "product/repository content outside this process work item's declared scope -- concurrent work items (product milestones, functional-finding fixes, other tooling changes) may write here; fail-closed is preserved for any path outside this named set (resolves OPUS-R18-004)",
+      "docs/UX_FLOWS.md": "product/repository content outside this process work item's declared scope -- concurrent work items (product milestones, functional-finding fixes, other tooling changes) may write here; fail-closed is preserved for any path outside this named set (resolves OPUS-R18-004)"
+    },
+    "excluded_prefixes": {
+      ".claude/commands/": "workflow command files this milestone creates (the bootstrap command, /approve-review, /accept-milestone) or modifies (the eight existing v1 commands, per D-States/D-Self-Governance) -- implementation of the approved design, not the design itself",
+      "scripts/": "this milestone's own tooling scripts, present (the fingerprint prototype, reviewed as bundle evidence) and future (WF1a's state validator and any other workflow script) -- same reasoning as the prototype's own exclusion, generalized now that this milestone will create more of them",
+      "docs/ai-workflow/requirements/": "the mutable execution ledger (WF4b) and any other non-immutable requirements artifact -- the immutable mapping file itself is separately protected by exact path, checked first",
+      "docs/ai-workflow/registry/": "any future non-immutable registry artifact -- the immutable registry file itself is separately protected by exact path, checked first",
+      "docs/milestones/": "product milestone plan/execution artifacts (e.g. docs/milestones/completed/, written by /accept-milestone for any product work item, D-Legacy phase 2 included) -- explicitly out of scope for this process work item, same concurrent-work-item reasoning as docs/ACTIVE_MILESTONE.md/docs/ROADMAP.md above (resolves OPUS-R16-001)",
+      "docs/ai-workflow/archive/": "this work item's own completed-content archival (D1's process-completion archival), written at or after this work item's own MILESTONE_COMPLETE -- excluded, not protected, so that future write is never itself a plan-approval-staling event (resolves OPUS-R16-001, and closes the loop OPUS-R16-002 opens on retiming it)",
+      "docs/ai-workflow/dry-run/": "WF8b's own dry-run scenario checklist/evidence and the isolated synthetic v2-1-dry-run (and v2-1-dry-run-legacy) work items' entire plan/registry/mapping artifact tree -- operational execution evidence for a separate, throwaway work item, not design content for workflow-v2-1-core's own plan, so a write here must never stale this work item's plan approval",
+      "app/": "product/repository content outside this process work item's declared scope -- concurrent work items (product milestones, functional-finding fixes, other tooling changes) may write here; fail-closed is preserved for any path outside this named set (resolves OPUS-R18-004)",
+      "docs/adr/": "product/repository content outside this process work item's declared scope -- concurrent work items (product milestones, functional-finding fixes, other tooling changes) may write here; fail-closed is preserved for any path outside this named set (resolves OPUS-R18-004)",
+      "docs/agent-context/": "product/repository content outside this process work item's declared scope -- concurrent work items (product milestones, functional-finding fixes, other tooling changes) may write here; fail-closed is preserved for any path outside this named set (resolves OPUS-R18-004)",
+      "docs/improvements/": "product/repository content outside this process work item's declared scope -- concurrent work items (product milestones, functional-finding fixes, other tooling changes) may write here; fail-closed is preserved for any path outside this named set (resolves OPUS-R18-004)",
+      "gradle/": "product/repository content outside this process work item's declared scope -- concurrent work items (product milestones, functional-finding fixes, other tooling changes) may write here; fail-closed is preserved for any path outside this named set (resolves OPUS-R18-004)",
+      "config/": "product/repository content outside this process work item's declared scope -- concurrent work items (product milestones, functional-finding fixes, other tooling changes) may write here; fail-closed is preserved for any path outside this named set (resolves OPUS-R18-004)",
+      ".github/": "product/repository content outside this process work item's declared scope -- concurrent work items (product milestones, functional-finding fixes, other tooling changes) may write here; fail-closed is preserved for any path outside this named set (resolves OPUS-R18-004)"
+    }
+  },
+  "implementation_stage": {
+    "protected_paths": {
+      "docs/ai-workflow/registry/v2-1-dry-run-artifacts.json": "this file's own concrete, spelled-out path -- an editable-under-no-approval declarations file would let someone widen an exclusion and re-bless the resulting digest in the same session, with no gate ever having seen the classification change (OPUS-R25-006, OPUS-R26-004)"
+    },
+    "protected_prefixes": {
+      "docs/ai-workflow/dry-run/scratch/": "this synthetic item's only real implementation deliverable -- the one marker file each of S-CP1/S-CP2/S-CP3 creates. Protected so technical_approval binds to the content the implementation review actually reads, and so S8's deliberately-planted defect and its remediation genuinely move review_content_id. Checked before the broader docs/ai-workflow/dry-run/ exclusion below (classify_path_implementation_stage tests protected_paths, then protected_prefixes, then excluded_paths, then excluded_prefixes), the same 'the immutable artifact is separately protected, checked first' pattern plan_stage already uses for the registry and mapping files"
+    },
+    "excluded_paths": {
+      ".gitignore": "repository housekeeping, not implementation content of this item",
+      ".github/workflows/ci.yml": "CI wiring for workflow-v2-1-core's Python suite plus unrelated Android build/lint/test steps; this synthetic item never touches it and must not have another work item's CI edit stale its technical approval (also covered by the .github/ prefix below, named here explicitly because workflow-v2-1-core holds it implementation-stage PROTECTED)",
+      "docs/ai-workflow/WORKFLOW_STATE.json": "runtime-mutable per-work-item state -- every checkpoint transition writes it, so it must never be part of any stage's protected content (same reasoning as its plan_stage exclusion above)",
+      "docs/ai-workflow/WORKFLOW_CONFIG.json": "runtime-mutable repository-level config -- same reasoning as WORKFLOW_STATE.json",
+      "docs/ai-workflow/MILESTONE_WORKFLOW.md": "workflow-v2-1-core's implementation deliverable, held implementation-stage PROTECTED by that item; this synthetic item never writes it, and a WF4a/WF5 edit there must not stale this item's technical approval",
+      "docs/ai-workflow/REVIEW_PROTOCOL.md": "workflow-v2-1-core's implementation deliverable (its item 343 obligation), held implementation-stage PROTECTED by that item -- same reasoning as MILESTONE_WORKFLOW.md above",
+      "docs/ai-workflow/PLAN_REVIEW_WORKFLOW.md": "WF4a-iv's operator guide, workflow-v2-1-core's deliverable, not this item's",
+      "docs/ai-workflow/WORKFLOW_V2_PLAN.md": "workflow-v2-1-core's own plan document -- WF8b records this dry run's progress and findings in it while the dry run is live, so it must classify and must not be part of this item's protected content",
+      "docs/ai-workflow/WORKFLOW_V2_AUDIT.md": "workflow-v2-1-core's own audit document -- same reasoning as WORKFLOW_V2_PLAN.md above",
+      "docs/TECHNICAL_DECISIONS.md": "repository-wide decision record; this synthetic item introduces no toolchain/dependency/architecture decision of its own",
+      "CLAUDE.md": "repository guidance outside this synthetic item's declared footprint",
+      "AGENTS.md": "repository guidance outside this synthetic item's declared footprint",
+      "README.md": "product/repository content outside this synthetic item's declared footprint",
+      "docs/PROJECT_BRIEF.md": "product/repository content outside this synthetic item's declared footprint",
+      "docs/DOMAIN_GLOSSARY.md": "product/repository content outside this synthetic item's declared footprint",
+      "docs/UX_FLOWS.md": "product/repository content outside this synthetic item's declared footprint",
+      "docs/ACTIVE_MILESTONE.md": "product-milestone narrative; a concurrent product work item may write it, and active_work_item_id is a resume-focus pointer rather than an execution lock (D1), so concurrent activity is the normal case",
+      "docs/ROADMAP.md": "product milestone ordering -- same concurrent-work-item exposure as docs/ACTIVE_MILESTONE.md above"
+    },
+    "excluded_prefixes": {
+      "docs/ai-workflow/dry-run/": "this dry run's own scenario checklist, finding write-ups, plan document and reviewer-facing verification script -- operational evidence and plan-stage content, not implementation deliverables. The scratch/ deliverables under this same prefix are protected by the protected_prefixes entry above, which is checked first",
+      "docs/ai-workflow/registry/": "registry and artifact-declaration files generally -- this item's own declarations file is separately protected by exact path above, checked first; another work item's registry (e.g. workflow-v2-1-core's, which WF8b itself updates) must not stale this item's technical approval",
+      "docs/ai-workflow/requirements/": "requirements mappings and the mutable execution ledger (WF4b) -- same reasoning as docs/ai-workflow/registry/ above",
+      "docs/ai-workflow/archive/": "process-completion archival written at or after MILESTONE_COMPLETE -- never itself an approval-staling event",
+      ".claude/commands/": "workflow command files -- workflow-v2-1-core's deliverables, held implementation-stage PROTECTED by that item; this synthetic item only invokes them, never edits them",
+      "scripts/": "workflow tooling and its tests -- workflow-v2-1-core's deliverables, held implementation-stage PROTECTED by that item. This item is explicitly forbidden from editing them (doing so would stale that item's current technical_approval), so they are other people's content here",
+      "docs/milestones/": "product milestone plan/execution artifacts, written by /accept-milestone for product work items",
+      "docs/adr/": "product/repository content outside this synthetic item's declared footprint",
+      "docs/agent-context/": "product/repository content outside this synthetic item's declared footprint",
+      "docs/improvements/": "product/repository content outside this synthetic item's declared footprint",
+      "app/": "product code -- outside this synthetic item's declared footprint",
+      "gradle/": "build tooling -- outside this synthetic item's declared footprint",
+      "config/": "build/lint configuration -- outside this synthetic item's declared footprint",
+      ".github/": "CI and repository automation -- outside this synthetic item's declared footprint"
+    }
+  }
+}

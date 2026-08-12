@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "work_item_id": "v2-1-dry-run",
+  "plan_revision": 5,
+  "checkpoints": [
+    {
+      "id": "S-CP1",
+      "name": "Scratch checkpoint 1: create dry-run scratch file A",
+      "depends_on": [],
+      "complexity": 1,
+      "session_target": 1
+    },
+    {
+      "id": "S-CP2",
+      "name": "Scratch checkpoint 2: create dry-run scratch file B (left dirty for S13)",
+      "depends_on": [
+        "S-CP1"
+      ],
+      "complexity": 1,
+      "session_target": 1
+    },
+    {
+      "id": "S-CP3",
+      "name": "Scratch checkpoint 3: create dry-run scratch file C (left IN_PROGRESS in worktree A for S14, then S15)",
+      "depends_on": [
+        "S-CP2"
+      ],
+      "complexity": 1,
+      "session_target": 1
+    }
+  ]
+}
