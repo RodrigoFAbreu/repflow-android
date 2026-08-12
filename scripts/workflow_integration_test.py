@@ -468,7 +468,7 @@ class TestVersion21OnlyCommandsRefuseCleanlyForV1(unittest.TestCase):
 _GOLDEN_COMMAND_FILE_SHA256 = {
     "milestone-plan.md": "082a444fac6193493af7da5307f3008d6684a19456fb57af297dbfa21d4082a6",
     "milestone-implement.md": "c6aa36b8a07e780e6ee4ffc6caca06688e40f101c65fd87833fc5d90411af92c",
-    "approve-review.md": "a77a81e0a66601dd5369b7d8f7344333cd3937666f2acc30cc06f32dcc1281a1",
+    "approve-review.md": "384c3197c34798b72fcc988421db8b64d8c84697c6565658957fd5a76150d08f",
     "accept-milestone.md": "b20355327e560b09518e5305979bc844acb989a0b11fd6a6be00a9d750a9e9f4",
     "prepare-functional-review.md": "37844421e1c63917d7970c8cdd00d6945d06c3a168eb7fb3be51205deb35fee3",
     "apply-plan-review.md": "f79febd0ef769d72bc3ec065a55a536203b533d23db4cc3d9b7854b8d49b8834",
@@ -1140,6 +1140,439 @@ class TestTwoStagePlanReviewIntegration(unittest.TestCase):
             self.assertEqual(
                 state["work_items"]["wi"]["plan_review_stages"]["review_content_id"], old_id,
             )
+
+
+class TestPlanStageApprovalCommitMembership(unittest.TestCase):
+    """WF8b evidence (real `/approve-review plan v2-1-dry-run` S5
+    execution, 2026-08-12): the installed command's literal four-member
+    plan-stage commit set omits `<work_item_id>-artifacts.json`, so
+    `verify_post_approval_manifest_match` raises
+    `MissingWorkItemArtifactsDeclarationError` *after* the state write and
+    the commit, for any `"process"` work item whose declaration was never
+    previously committed -- not only `workflow-v2-1-core`'s own case
+    `D-Approval-Commits`' bootstrap procedure already covers. Exercises
+    `workflow_fingerprint.resolve_plan_stage_approval_commit_paths` and
+    `workflow_state.{stage_plan_approval_commit_paths,
+    verify_staged_blob_sha256, verify_committed_blob_sha256,
+    rollback_plan_approval_write}` end to end against real `ScratchRepo`
+    git repositories -- generic, never hardcoded to a specific
+    `work_item_id`."""
+
+    def _commit_base_without_artifacts(self, repo: h.ScratchRepo, work_item_id: str) -> None:
+        """Commits the plan/registry/mapping triad (plus a `.gitignore`
+        excluding `.ai-review/`, mirroring this real repository's own --
+        bundle-directory content must never itself become an unclassified
+        changed path) but deliberately leaves
+        `<work_item_id>-artifacts.json` untracked -- the exact real shape
+        `v2-1-dry-run` was in (never committed, present only in the
+        working tree) when S5 reproduced the defect."""
+        (repo.root / ".gitignore").write_text(".ai-review/\n")
+        paths = [
+            ".gitignore",
+            "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+            "docs/ai-workflow/WORKFLOW_V2_AUDIT.md",
+            "docs/TECHNICAL_DECISIONS.md",
+            f"docs/ai-workflow/registry/{work_item_id}-registry.json",
+            f"docs/ai-workflow/requirements/{work_item_id}-mapping.json",
+        ]
+        _run(["git", "add", "--", *paths], cwd=repo.root)
+        _run(["git", "commit", "-q", "-m", "settle plan docs, artifacts declaration pending"], cwd=repo.root)
+        repo.base = repo.head()
+
+    def _seed_bundle_capture(self, repo: h.ScratchRepo, work_item_id: str, artifacts_rel: str) -> Path:
+        """Writes `<bundle_dir>/files/<artifacts_rel>` with the working
+        tree's *current* bytes -- the same "final copies of changed
+        files" `scripts/prepare-ai-review.sh` always captures, fresh
+        (matching) by construction. Returns the captured file's path so a
+        test can mutate it to simulate staleness."""
+        bundle_dir = repo.root / ".ai-review" / work_item_id / "current"
+        captured = bundle_dir / "files" / artifacts_rel
+        captured.parent.mkdir(parents=True, exist_ok=True)
+        captured.write_bytes((repo.root / artifacts_rel).read_bytes())
+        return captured
+
+    def _write_state(self, repo: h.ScratchRepo, work_item_id: str, governing_workflow_version: str) -> dict:
+        work_item = h.base_work_item(
+            work_item_id=work_item_id, governing_workflow_version=governing_workflow_version,
+            phase="AWAITING_PLAN_APPROVAL", plan_path="docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+            registry_path=f"docs/ai-workflow/registry/{work_item_id}-registry.json",
+            mapping_path=f"docs/ai-workflow/requirements/{work_item_id}-mapping.json",
+            base_commit=repo.base,
+        )
+        repo.write_workflow_state(**{work_item_id: work_item})
+        return work_item
+
+    def test_declaration_never_committed_resolves_five_member_set(self):
+        """The real defect's exact fixture: reproduces
+        `MissingWorkItemArtifactsDeclarationError` on the *old* four-member
+        commit, and proves the resolved five-member set fixes it."""
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            repo.write_plan_docs(work_item_id=wi)
+            self._commit_base_without_artifacts(repo, wi)
+            self._write_state(repo, wi, "2.1")
+            artifacts_rel = f"docs/ai-workflow/registry/{wi}-artifacts.json"
+            self._seed_bundle_capture(repo, wi, artifacts_rel)
+
+            plan = fingerprint.resolve_plan_stage_approval_commit_paths(
+                repo.root, wi, Path("docs/ai-workflow/WORKFLOW_STATE.json"),
+            )
+            self.assertEqual(
+                set(plan.paths),
+                {
+                    "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+                    f"docs/ai-workflow/registry/{wi}-registry.json",
+                    f"docs/ai-workflow/requirements/{wi}-mapping.json",
+                    "docs/ai-workflow/WORKFLOW_STATE.json",
+                    artifacts_rel,
+                },
+            )
+            self.assertEqual(plan.artifacts_declaration_path, artifacts_rel)
+            expected_sha = hashlib.sha256((repo.root / artifacts_rel).read_bytes()).hexdigest()
+            self.assertEqual(plan.artifacts_declaration_sha256, expected_sha)
+
+            protected = h.plan_stage_protected_paths(wi)
+            review_content_id, _ = fingerprint.compute_review_content_id_plan_stage(
+                repo.root, repo.base, work_item_type="process", work_item_id=wi,
+                plan_revision=1, protected=protected,
+                excluded_paths=h.plan_stage_excluded_paths(),
+                excluded_prefixes=h.plan_stage_excluded_prefixes(),
+            )
+
+            # --- regression guard: the OLD four-member commit (the
+            # installed command's literal step-6 set, explicitly staged --
+            # never `git add -A`, which would sweep the pending
+            # declaration in and defeat the point of this fixture) really
+            # does reproduce MissingWorkItemArtifactsDeclarationError
+            # post-commit, exactly as the real S5 execution did ---
+            base_four = (
+                "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+                f"docs/ai-workflow/registry/{wi}-registry.json",
+                f"docs/ai-workflow/requirements/{wi}-mapping.json",
+                "docs/ai-workflow/WORKFLOW_STATE.json",
+            )
+            _run(["git", "add", "--", *base_four], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "old four-member commit"], cwd=repo.root)
+            old_commit = repo.head()
+            with self.assertRaises(fingerprint.MissingWorkItemArtifactsDeclarationError):
+                fingerprint.compute_review_content_id_plan_stage_at_commit_for_work_item(
+                    repo.root, wi, old_commit, base=repo.base,
+                )
+            _run(["git", "reset", "--hard", repo.base], cwd=repo.root)
+            self._write_state(repo, wi, "2.1")  # write_workflow_state doesn't survive the hard reset
+
+            # --- the fixed five-member commit succeeds end to end ---
+            ws.stage_plan_approval_commit_paths(repo.root, plan.paths)
+            ws.verify_staged_blob_sha256(repo.root, plan.artifacts_declaration_path, plan.artifacts_declaration_sha256)
+            _run(["git", "commit", "-q", "-m", "plan approval (five-member)"], cwd=repo.root)
+            new_commit = repo.head()
+            ws.assert_committed_path_set_matches(repo.root, new_commit, plan.paths)
+            ws.verify_committed_blob_sha256(
+                repo.root, new_commit, plan.artifacts_declaration_path, plan.artifacts_declaration_sha256,
+            )
+
+            record = ws.build_approval_record(
+                basis="EXTERNAL_APPROVE", stage="plan", user_confirmation=f"I confirm plan approval for {wi}, plan stage.",
+                now="t1", reviewed_bundle_id="b1", approved_review_content_id=review_content_id,
+                review_content_manifest=[{"path": "x", "exists": True, "mode": "100644", "blob": "y"}],
+            )
+            work_item = {**h.base_work_item(work_item_id=wi, governing_workflow_version="2.1"), "plan_approval": record}
+            ws.verify_post_approval_manifest_match(repo.root, work_item, stage="plan", base_commit=repo.base, commit=new_commit)
+
+            self.assertTrue(ws.approval_is_current(repo.root, work_item, stage="plan", base_commit=repo.base, head=new_commit))
+
+    def test_declaration_already_committed_and_unchanged_resolves_four_member_set(self):
+        """The ordinary, steady-state round -- every round after a work
+        item's first -- gains no gratuitous fifth member. Also the shape
+        `workflow-v2-1-core`'s own already-committed declaration is in on
+        every real round since its WFR-63 fix, proving this generic
+        resolver reproduces that already-approved bootstrap behavior
+        rather than regressing it."""
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            repo.write_plan_docs(work_item_id=wi)
+            repo.commit_plan_docs_as_base()  # commits the artifacts declaration too
+            self._write_state(repo, wi, "1")
+
+            plan = fingerprint.resolve_plan_stage_approval_commit_paths(
+                repo.root, wi, Path("docs/ai-workflow/WORKFLOW_STATE.json"),
+            )
+            self.assertEqual(
+                set(plan.paths),
+                {
+                    "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+                    f"docs/ai-workflow/registry/{wi}-registry.json",
+                    f"docs/ai-workflow/requirements/{wi}-mapping.json",
+                    "docs/ai-workflow/WORKFLOW_STATE.json",
+                },
+            )
+            self.assertIsNone(plan.artifacts_declaration_path)
+            self.assertIsNone(plan.artifacts_declaration_sha256)
+
+    def test_stale_declaration_between_preflight_and_commit_refuses_before_any_mutation(self):
+        """Condition 2 (freshness): a pending declaration whose bytes
+        moved on again after the bundle was generated must refuse -- no
+        staging, no commit, no state write -- rather than commit bytes no
+        reviewer ever saw."""
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            repo.write_plan_docs(work_item_id=wi)
+            self._commit_base_without_artifacts(repo, wi)
+            self._write_state(repo, wi, "2.1")
+            artifacts_rel = f"docs/ai-workflow/registry/{wi}-artifacts.json"
+            captured = self._seed_bundle_capture(repo, wi, artifacts_rel)
+            # the bundle captured an OLDER version than what's in the
+            # working tree right now (edited again after bundle generation).
+            captured.write_text("stale bundle-captured bytes\n")
+
+            status_before = _run(["git", "status", "--porcelain"], cwd=repo.root)
+            with self.assertRaises(fingerprint.StaleArtifactsDeclarationError):
+                fingerprint.resolve_plan_stage_approval_commit_paths(
+                    repo.root, wi, Path("docs/ai-workflow/WORKFLOW_STATE.json"),
+                )
+            status_after = _run(["git", "status", "--porcelain"], cwd=repo.root)
+            self.assertEqual(status_before, status_after)  # no mutation of any kind
+
+    def test_declaration_required_but_missing_from_worktree_fails_before_any_mutation(self):
+        """A `"process"` work item's plan-stage recomputation always
+        requires its own declaration to exist somewhere -- if it is
+        genuinely absent (never written at all, not merely uncommitted),
+        the pre-existing `resolve_plan_stage_metadata` check this
+        function reuses already fails closed, and this function never
+        masks that with a different, more permissive error."""
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            repo.write_plan_docs(work_item_id=wi)
+            (repo.root / f"docs/ai-workflow/registry/{wi}-artifacts.json").unlink()
+            self._commit_base_without_artifacts(repo, wi)
+            self._write_state(repo, wi, "2.1")
+
+            with self.assertRaises(fingerprint.MissingWorkItemArtifactsDeclarationError):
+                fingerprint.resolve_plan_stage_approval_commit_paths(
+                    repo.root, wi, Path("docs/ai-workflow/WORKFLOW_STATE.json"),
+                )
+
+    def test_unexpected_changed_staged_path_refuses_before_commit(self):
+        """A pre-existing, unrelated staged path with real changed content
+        (this work item's own leftover or a concurrent work item's write,
+        D1) must be caught and refused, never silently absorbed by a
+        later pathspec-free `git commit`."""
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            repo.write_plan_docs(work_item_id=wi)
+            self._commit_base_without_artifacts(repo, wi)
+            self._write_state(repo, wi, "2.1")
+            artifacts_rel = f"docs/ai-workflow/registry/{wi}-artifacts.json"
+            self._seed_bundle_capture(repo, wi, artifacts_rel)
+            plan = fingerprint.resolve_plan_stage_approval_commit_paths(
+                repo.root, wi, Path("docs/ai-workflow/WORKFLOW_STATE.json"),
+            )
+
+            (repo.root / "unrelated.txt").write_text("surprise\n")
+            _run(["git", "add", "unrelated.txt"], cwd=repo.root)
+
+            # Caught by the pre-staging index-isolation precondition --
+            # DirtyIndexBeforeStagingError, not the post-staging diff
+            # assertion, since the index is already dirty before this
+            # call's own `git add` runs at all.
+            with self.assertRaises(ws.DirtyIndexBeforeStagingError):
+                ws.stage_plan_approval_commit_paths(repo.root, plan.paths)
+            # nothing was committed
+            self.assertEqual(repo.head(), repo.base)
+
+    def test_restaging_unrelated_unchanged_content_is_a_true_no_op_not_a_gap(self):
+        """Corrects an earlier (wrong) assumption made and disproven while
+        stress-testing this fix: re-staging an unrelated path whose
+        content is byte-identical to `HEAD` produces an index entry
+        indistinguishable from `HEAD`'s own tree -- there is no separate
+        Git-level state to detect here at all, so `git diff --cached
+        HEAD` correctly reports nothing, neither before nor after. This
+        is not a security gap; it is confirmation that the pre-staging
+        precondition and the post-staging assertion are each checking a
+        real, distinguishable condition, not papering over one that
+        cannot occur."""
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            repo.write_plan_docs(work_item_id=wi)
+            self._commit_base_without_artifacts(repo, wi)
+            self._write_state(repo, wi, "2.1")
+            artifacts_rel = f"docs/ai-workflow/registry/{wi}-artifacts.json"
+            self._seed_bundle_capture(repo, wi, artifacts_rel)
+            plan = fingerprint.resolve_plan_stage_approval_commit_paths(
+                repo.root, wi, Path("docs/ai-workflow/WORKFLOW_STATE.json"),
+            )
+
+            _run(["git", "add", "docs/ai-workflow/WORKFLOW_V2_AUDIT.md"], cwd=repo.root)
+            self.assertEqual(
+                _run(["git", "diff", "--name-only", "--cached", "HEAD"], cwd=repo.root).strip(), "",
+            )
+            # Both checks correctly see nothing to refuse -- there is
+            # genuinely nothing there.
+            ws.stage_plan_approval_commit_paths(repo.root, plan.paths)
+
+    def test_precondition_does_not_reject_this_work_items_own_pending_intent_to_add_paths(self):
+        """Safety proof for the real defect this whole fix targets: the
+        real `v2-1-dry-run` repository state that reproduced
+        `MissingWorkItemArtifactsDeclarationError` had its own genuinely
+        new (never committed) plan/registry/mapping/declaration paths
+        sitting in the index as `git add -N` intent-to-add entries
+        (empty-blob placeholders) -- `/milestone-plan`'s own documented
+        staging step (S1's real evidence, `docs/ai-workflow/dry-run/
+        WF8B_SCENARIOS.md`), run long before `/approve-review` ever
+        executes. `git diff --cached --name-only HEAD` does not report
+        intent-to-add entries at all (verified directly below), so the
+        new pre-staging `DirtyIndexBeforeStagingError` precondition must
+        not mistake this work item's own legitimate pending paths for an
+        unrelated dirty index -- and this call's own subsequent `git add`
+        must still upgrade every one of them from an empty-blob
+        placeholder to its real content, exactly the four-or-five-member
+        commit the resolved plan calls for."""
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            (repo.root / ".gitignore").write_text(".ai-review/\n")
+            _run(["git", "add", ".gitignore"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "gitignore"], cwd=repo.root)
+            repo.base = repo.head()
+            repo.write_plan_docs(work_item_id=wi)  # plan/registry/mapping/artifacts all genuinely new
+            self._write_state(repo, wi, "2.1")
+            artifacts_rel = f"docs/ai-workflow/registry/{wi}-artifacts.json"
+
+            # Mark every plan-stage file intent-to-add -- /milestone-plan's
+            # own real staging step -- before the bundle even exists.
+            intent_to_add_paths = (
+                "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+                f"docs/ai-workflow/registry/{wi}-registry.json",
+                f"docs/ai-workflow/requirements/{wi}-mapping.json",
+                artifacts_rel,
+            )
+            _run(["git", "add", "-N", "--", *intent_to_add_paths], cwd=repo.root)
+            self.assertEqual(
+                _run(["git", "diff", "--name-only", "--cached", "HEAD"], cwd=repo.root).strip(), "",
+            )
+
+            self._seed_bundle_capture(repo, wi, artifacts_rel)
+            plan = fingerprint.resolve_plan_stage_approval_commit_paths(
+                repo.root, wi, Path("docs/ai-workflow/WORKFLOW_STATE.json"),
+            )
+            self.assertEqual(plan.artifacts_declaration_path, artifacts_rel)  # never committed -> pending
+
+            # Must not raise DirtyIndexBeforeStagingError, and must
+            # upgrade every intent-to-add placeholder to real content.
+            ws.stage_plan_approval_commit_paths(repo.root, plan.paths)
+            staged = set(_run(["git", "diff", "--name-only", "--cached", "HEAD"], cwd=repo.root).splitlines())
+            self.assertEqual(staged, set(plan.paths))
+
+    def test_wrong_staged_content_for_conditional_member_is_caught_before_commit(self):
+        """A race between pinning the fifth member's digest and staging
+        it (a hook, a concurrent edit) must be caught rather than let the
+        commit silently carry bytes that were never freshness-checked."""
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            repo.write_plan_docs(work_item_id=wi)
+            self._commit_base_without_artifacts(repo, wi)
+            self._write_state(repo, wi, "2.1")
+            artifacts_rel = f"docs/ai-workflow/registry/{wi}-artifacts.json"
+            self._seed_bundle_capture(repo, wi, artifacts_rel)
+            plan = fingerprint.resolve_plan_stage_approval_commit_paths(
+                repo.root, wi, Path("docs/ai-workflow/WORKFLOW_STATE.json"),
+            )
+
+            (repo.root / artifacts_rel).write_text("tampered after pinning\n")
+            ws.stage_plan_approval_commit_paths(repo.root, plan.paths)  # stages the tampered bytes
+            with self.assertRaises(ws.StagedBlobMismatchError):
+                ws.verify_staged_blob_sha256(
+                    repo.root, plan.artifacts_declaration_path, plan.artifacts_declaration_sha256,
+                )
+
+    def test_committed_path_set_mismatch_from_a_hook_editing_after_staging_is_caught(self):
+        """A structural, post-commit-only failure mode the pre-commit
+        staging checks cannot see by construction: a pre-commit hook
+        that edits and re-stages an extra file *after*
+        `stage_plan_approval_commit_paths` already verified the index,
+        but before `git commit` writes the final tree, produces a commit
+        whose own changed-path set is wider than what was verified.
+        `assert_committed_path_set_matches` is the only one of this
+        fix's checks positioned to catch it."""
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            repo.write_plan_docs(work_item_id=wi)
+            self._commit_base_without_artifacts(repo, wi)
+            self._write_state(repo, wi, "2.1")
+            artifacts_rel = f"docs/ai-workflow/registry/{wi}-artifacts.json"
+            self._seed_bundle_capture(repo, wi, artifacts_rel)
+            plan = fingerprint.resolve_plan_stage_approval_commit_paths(
+                repo.root, wi, Path("docs/ai-workflow/WORKFLOW_STATE.json"),
+            )
+            ws.stage_plan_approval_commit_paths(repo.root, plan.paths)
+
+            # Simulate a hook: stage one more, unrelated file directly via
+            # Git, bypassing this fix's own staging function entirely --
+            # exactly what a real pre-commit hook does.
+            (repo.root / "hook-added.txt").write_text("added by a hook\n")
+            _run(["git", "add", "hook-added.txt"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "commit widened by a hook"], cwd=repo.root)
+            new_commit = repo.head()
+
+            with self.assertRaises(ws.CommittedPathSetMismatchError):
+                ws.assert_committed_path_set_matches(repo.root, new_commit, plan.paths)
+
+    def test_rollback_before_commit_boundary_restores_state_bytes_exactly(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            repo.write_plan_docs(work_item_id=wi)
+            self._commit_base_without_artifacts(repo, wi)
+            self._write_state(repo, wi, "2.1")
+            state_path = Path("docs/ai-workflow/WORKFLOW_STATE.json")
+            pre_write_bytes = (repo.root / state_path).read_bytes()
+
+            (repo.root / state_path).write_bytes(pre_write_bytes + b"\n")  # simulate the state write
+            head_before = repo.head()
+
+            ws.rollback_plan_approval_write(repo.root, state_path, pre_write_bytes, commit_created=False)
+
+            self.assertEqual((repo.root / state_path).read_bytes(), pre_write_bytes)
+            self.assertEqual(repo.head(), head_before)  # no commit existed, none created
+
+    def test_rollback_after_commit_boundary_undoes_exactly_one_commit(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            repo.write_plan_docs(work_item_id=wi)
+            self._commit_base_without_artifacts(repo, wi)
+            self._write_state(repo, wi, "2.1")
+            state_path = Path("docs/ai-workflow/WORKFLOW_STATE.json")
+            pre_write_bytes = (repo.root / state_path).read_bytes()
+            head_before_write = repo.head()
+
+            (repo.root / state_path).write_bytes(pre_write_bytes + b"\n")  # the state write
+            _run(["git", "add", "--", str(state_path)], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "partial approval commit"], cwd=repo.root)
+            self.assertNotEqual(repo.head(), head_before_write)
+
+            ws.rollback_plan_approval_write(repo.root, state_path, pre_write_bytes, commit_created=True)
+
+            self.assertEqual(repo.head(), head_before_write)  # exactly one commit undone
+            self.assertEqual((repo.root / state_path).read_bytes(), pre_write_bytes)
+
+    def test_governing_version_does_not_change_resolution_generic_across_v1_and_v21(self):
+        """The resolver keys on `work_item_type == "process"`
+        (`resolve_plan_stage_metadata`'s own existing rule), never on
+        `governing_workflow_version` -- a `"1"` item (like
+        `workflow-v2-1-core` itself) and a `"2.1"` item both go through
+        the identical conditional-fifth-member logic."""
+        for governing_workflow_version in ("1", "2.1"):
+            with self.subTest(governing_workflow_version=governing_workflow_version):
+                with h.ScratchRepo() as repo:
+                    wi = "wi"
+                    repo.write_plan_docs(work_item_id=wi)
+                    self._commit_base_without_artifacts(repo, wi)
+                    self._write_state(repo, wi, governing_workflow_version)
+                    artifacts_rel = f"docs/ai-workflow/registry/{wi}-artifacts.json"
+                    self._seed_bundle_capture(repo, wi, artifacts_rel)
+
+                    plan = fingerprint.resolve_plan_stage_approval_commit_paths(
+                        repo.root, wi, Path("docs/ai-workflow/WORKFLOW_STATE.json"),
+                    )
+                    self.assertEqual(plan.artifacts_declaration_path, artifacts_rel)
 
 
 if __name__ == "__main__":

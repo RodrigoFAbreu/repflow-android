@@ -300,6 +300,77 @@ class PostApprovalManifestMismatchError(Exception):
     record's word alone."""
 
 
+class DirtyIndexBeforeStagingError(Exception):
+    """`/approve-review`'s Git index-isolation precondition: the index
+    already differs from `HEAD` *before* this invocation stages anything
+    of its own -- generalizes `D-Approval-Commits`' bootstrap
+    transaction's own index-isolation precondition (revision 54,
+    `GPT-R71-001`) to the ordinary `/approve-review plan` commit. Checked
+    *before* this call's own staging, giving a clearer diagnostic (a
+    pre-existing dirty index, distinct from this call's own staging
+    picking up something unexpected) for a path whose staged content
+    genuinely differs from `HEAD`. Deliberately does **not** claim
+    coverage for a re-staged, content-*unchanged* path: re-staging bytes
+    already identical to `HEAD` produces an index entry indistinguishable
+    from `HEAD`'s own tree, not a separate state this or any diff-based
+    check could detect -- confirmed empirically
+    (`test_restaging_unrelated_unchanged_content_is_a_true_no_op_not_a_gap`)
+    after an earlier draft of this docstring claimed otherwise. Also
+    confirmed not to reject this work item's own legitimate pending
+    intent-to-add paths (`/milestone-plan`'s own staging step, run before
+    `/approve-review`): `git diff --cached` does not report intent-to-add
+    entries either, so they pass this precondition exactly like a clean
+    index, and this call's own subsequent `git add` then stages their
+    real content
+    (`test_precondition_does_not_reject_this_work_items_own_pending_intent_to_add_paths`)."""
+
+
+class UnexpectedStagedPathSetError(Exception):
+    """`/approve-review`'s post-staging assertion: the Git index's staged
+    diff relative to `HEAD` names a path outside the resolved plan-stage
+    approval-commit member set -- generalizes `D-Approval-Commits`'
+    bootstrap transaction's own "exact staged-set assertion" (revision
+    54, `GPT-R71-001`) to the ordinary `/approve-review plan` commit, so
+    an unrelated staged-and-changed path (this work item's own leftover,
+    or a concurrent work item's, D1) is caught and refused rather than
+    silently absorbed by a pathspec-free `git commit`."""
+
+
+class StagedBlobMismatchError(Exception):
+    """The conditional fifth member's *staged* (Git index) blob does not
+    match the sha256 `resolve_plan_stage_approval_commit_paths` pinned
+    immediately after resolving it -- defense against a race between
+    resolution and staging, mirroring `D-Approval-Commits`' bootstrap's
+    own pre-commit declaration pin (revision 53, `GPT-R70-001`),
+    generalized here."""
+
+
+class CommittedBlobMismatchError(Exception):
+    """The conditional fifth member's *committed* blob does not match the
+    sha256 pinned before staging -- defense in depth beyond
+    `verify_post_approval_manifest_match`'s own full projection-digest
+    check, isolating exactly which member diverged if the two ever
+    disagree."""
+
+
+class CommittedPathSetMismatchError(Exception):
+    """The just-created commit's own changed-path set (relative to its
+    sole parent) names a path outside the resolved approval-commit member
+    set -- `D-Approval-Commits`' bootstrap transaction's own
+    "committed-path-set assertion" (missing-test item 347's own named
+    requirement), generalized here as a subset check (an expected member
+    byte-identical to the parent commit produces no entry at all, which
+    is correct, not an omission). Distinct from, and not redundant with,
+    `stage_plan_approval_commit_paths`'s pre-commit staged-diff checks:
+    those verify the *index* immediately before `git commit` runs, not
+    the commit `git commit` actually produces -- a pre-commit or
+    commit-msg hook that itself edits and re-stages files between that
+    verification and the commit's own tree write would defeat the
+    pre-commit checks alone but not this one (the same class of gap
+    `D-Approval-Commits` revision 56 independently found and fixed for
+    the bootstrap transaction)."""
+
+
 class NonTopologicalRegistryOrderError(Exception):
     """Raised when a registry's `checkpoints` array does not list every
     checkpoint after all of its own `depends_on` entries (D-Selection
@@ -1008,6 +1079,171 @@ def verify_post_approval_manifest_match(
             f"{work_item['work_item_id']}/{stage}: commit {commit} recomputes to "
             f"{actual!r}, expected {expected!r} (approved_review_content_id)"
         )
+
+
+# ---------------------------------------------------------------------------
+# `/approve-review plan`'s generic conditional-fifth-member commit
+# mechanics (missing-test item 347's "permanent `/approve-review`"
+# obligation, `D-Approval-Commits`' "Conditional fifth commit member"):
+# stage exactly the resolved member set, pin-then-verify the conditional
+# member's identity across staging and the commit, and provide a
+# deterministic rollback for a failure after the state write.
+# ---------------------------------------------------------------------------
+
+
+def _read_committed_bytes(repo_root: Path, commit: str, rel_path: str) -> bytes:
+    return subprocess.run(
+        ["git", "show", f"{commit}:{rel_path}"], cwd=repo_root, capture_output=True, check=True,
+    ).stdout
+
+
+def stage_plan_approval_commit_paths(repo_root: Path, paths: tuple[str, ...]) -> None:
+    """Stages exactly `paths` (`resolve_plan_stage_approval_commit_paths`'
+    resolved member set -- four or five, per work item, per round) for a
+    plain, pathspec-free `git commit` to pick up next. Two checks, both
+    against the same `git diff --name-only --cached HEAD` view (which
+    reports a path exactly when its staged content genuinely differs from
+    `HEAD` -- never for an unstaged intent-to-add marker, and never for a
+    re-staged, content-unchanged path, since neither produces a
+    distinguishable index state to report; see
+    `DirtyIndexBeforeStagingError`'s docstring):
+
+    1. **Pre-staging index-isolation precondition**
+       (`DirtyIndexBeforeStagingError`): that view must already be empty
+       before this call stages anything of its own -- an unrelated path
+       already staged *with real changed content* (this work item's own
+       leftover, or a concurrent work item's write, D1) fails closed here,
+       before a single `git add` of this call's own runs, giving a
+       clearer diagnostic than discovering it only after staging (mirrors
+       `D-Approval-Commits`' bootstrap transaction's own index-isolation
+       precondition, revision 54, `GPT-R71-001`, generalized here). Never
+       rejects this work item's own legitimate pending intent-to-add
+       paths (`/milestone-plan`'s own staging step) -- confirmed
+       empirically, not merely asserted.
+    2. **Post-staging diff assertion** (`UnexpectedStagedPathSetError`):
+       after `git add -- <paths>`, that same view must name no path
+       outside `paths` -- a *subset* check, not exact equality, since a
+       member whose bytes happen to already be byte-identical at `HEAD`
+       legitimately produces no diff entry at all (staging it is then a
+       correct no-op, not an omission); requiring every expected path to
+       appear would reject a coincidentally-unchanged member for no real
+       reason.
+
+    Never `git add -A`/`git add .`."""
+    dirty = _run(["git", "diff", "--name-only", "--cached", "HEAD"], cwd=repo_root)
+    already_staged = {line for line in dirty.splitlines() if line}
+    if already_staged:
+        raise DirtyIndexBeforeStagingError(
+            f"Git index already differs from HEAD before staging began: "
+            f"{sorted(already_staged)} -- resolve or unstage these first"
+        )
+    _run(["git", "add", "--", *paths], cwd=repo_root)
+    staged = _run(["git", "diff", "--name-only", "--cached", "HEAD"], cwd=repo_root)
+    actual = {line for line in staged.splitlines() if line}
+    expected = set(paths)
+    unexpected = actual - expected
+    if unexpected:
+        raise UnexpectedStagedPathSetError(
+            f"staged diff includes unexpected paths {sorted(unexpected)}, outside "
+            f"the resolved approval-commit member set {sorted(expected)}"
+        )
+
+
+def verify_staged_blob_sha256(repo_root: Path, rel_path: str, expected_sha256: str) -> None:
+    """Re-verifies the conditional fifth member's *staged* (Git index)
+    content against the sha256 `resolve_plan_stage_approval_commit_paths`
+    pinned right after resolving it -- call after
+    `stage_plan_approval_commit_paths`, before creating the commit, to
+    close the race window between resolution and staging. Raises
+    `StagedBlobMismatchError` on a mismatch."""
+    content = subprocess.run(
+        ["git", "show", f":{rel_path}"], cwd=repo_root, capture_output=True, check=True,
+    ).stdout
+    actual = hashlib.sha256(content).hexdigest()
+    if actual != expected_sha256:
+        raise StagedBlobMismatchError(
+            f"{rel_path}: staged blob sha256 {actual} does not match the sha256 "
+            f"{expected_sha256} pinned before staging"
+        )
+
+
+def verify_committed_blob_sha256(
+    repo_root: Path, commit: str, rel_path: str, expected_sha256: str,
+) -> None:
+    """Re-verifies the conditional fifth member's *committed* content
+    against the sha256 pinned before staging -- defense in depth beyond
+    `verify_post_approval_manifest_match`'s own full projection-digest
+    check (which would also catch this), isolating exactly which member
+    diverged if the two ever disagree. Raises `CommittedBlobMismatchError`
+    on a mismatch."""
+    actual = hashlib.sha256(_read_committed_bytes(repo_root, commit, rel_path)).hexdigest()
+    if actual != expected_sha256:
+        raise CommittedBlobMismatchError(
+            f"{rel_path} at {commit}: committed blob sha256 {actual} does not "
+            f"match the sha256 {expected_sha256} pinned before staging"
+        )
+
+
+def assert_committed_path_set_matches(
+    repo_root: Path, commit: str, expected_paths: tuple[str, ...],
+) -> None:
+    """The structural half of item 347's committed-path-set assertion:
+    `commit`'s own changed-path set relative to its sole parent
+    (`git diff-tree --no-commit-id --name-only -r`) must name no path
+    outside `expected_paths` -- a *subset* check, not exact equality, for
+    the same reason `stage_plan_approval_commit_paths`'s own post-staging
+    assertion is a subset check: an expected member whose bytes are
+    byte-identical to the parent commit produces no entry in the commit's
+    own diff at all (not a distinct, detectable tree state), so requiring
+    every expected path to appear would reject a coincidentally-unchanged
+    member for no real reason (confirmed empirically, the same way that
+    same false assumption was caught and corrected for the pre-commit
+    check earlier in this fix's own development --
+    `test_declaration_never_committed_resolves_five_member_set` first
+    caught this one too). Call immediately after the commit is created,
+    alongside `verify_post_approval_manifest_match` (step 6a): this
+    checks the commit's own tree shape, a hook-editing scenario the
+    pre-commit staging checks alone cannot see (a pre-commit/commit-msg
+    hook can still edit and re-stage a file after
+    `stage_plan_approval_commit_paths` already verified the index, before
+    `git commit` writes the final tree). Raises
+    `CommittedPathSetMismatchError` naming the unexpected paths and the
+    full expected set on a violation."""
+    changed = _run(["git", "diff-tree", "--no-commit-id", "--name-only", "-r", commit], cwd=repo_root)
+    actual = {line for line in changed.splitlines() if line}
+    expected = set(expected_paths)
+    unexpected = actual - expected
+    if unexpected:
+        raise CommittedPathSetMismatchError(
+            f"commit {commit}'s own changed-path set includes unexpected paths "
+            f"{sorted(unexpected)}, outside the resolved approval-commit member "
+            f"set {sorted(expected)}"
+        )
+
+
+def rollback_plan_approval_write(
+    repo_root: Path, state_path: Path, pre_write_bytes: bytes, *, commit_created: bool,
+) -> None:
+    """Deterministic recovery for a plan-approval attempt that fails after
+    `apply_plan_approval`'s state write but before
+    `verify_post_approval_manifest_match` succeeds (`/approve-review`
+    step 6b): `git reset` back to the commit immediately before this
+    invocation's own commit if one was created (undoing exactly that one
+    commit, never an earlier one -- mixed reset, so the working tree is
+    left untouched, only the branch ref and the index move), or a bare
+    `git reset` (unstage back to `HEAD`) if no commit was created yet;
+    then restores `state_path`'s working-tree bytes to `pre_write_bytes`
+    exactly -- the bytes captured immediately before `apply_plan_approval`
+    ran, this invocation's own first durable mutation. Leaves the
+    repository byte-identical to its state immediately before that first
+    mutation: no partial commit, no partial state write, safe to retry
+    from a fresh operator session. Never touches any other file this
+    invocation did not itself stage."""
+    if commit_created:
+        _run(["git", "reset", "HEAD~1"], cwd=repo_root)
+    else:
+        _run(["git", "reset", "HEAD"], cwd=repo_root)
+    (repo_root / state_path).write_bytes(pre_write_bytes)
 
 
 # ---------------------------------------------------------------------------

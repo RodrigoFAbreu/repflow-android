@@ -106,17 +106,89 @@ actually load-bearing control for the Skill exposure path, not mechanism
    `reviewed_content_commit` left unset for the plan stage (permanently
    null, `D-Approval-Commits`/`GPT-R9-006`) and set to the current
    `reviewed_implementation_head` for the implementation stage.
-5. **Write it**: `workflow_state.apply_plan_approval(...)` or
-   `apply_technical_approval(...)`, and persist the returned state to
-   `docs/ai-workflow/WORKFLOW_STATE.json`.
+4a. **Plan stage only — resolve the complete commit member set, before any
+    durable mutation** (`D-Approval-Commits`' "Conditional fifth commit
+    member", `GPT-R67-001`; generalized beyond `workflow-v2-1-core`'s own
+    case). **Scope note, read before assuming this retires anything**:
+    steps 4a/6/6a/6b below generalize the "Conditional fifth commit
+    member" contract's three numbered conditions plus the specific
+    hardening properties `D-Approval-Commits` revision 54/56 named
+    (Git index-isolation, pinned-blob verification, a committed-path-set
+    assertion, a plain pathspec-free commit, and a defined rollback) —
+    they do **not** carry the complete failure-atomicity transaction
+    (a durable, crash-resumable journal; the three-way `COMMITTED`/
+    `NOT_COMMITTED`/`AMBIGUOUS` outcome classifier sourced from durable
+    Git state rather than process exit status; index-pinned-blob
+    materialization) that missing-test item 347 additionally requires,
+    by its own explicit text, *before* `workflow-v2-1-core`'s own
+    "Bootstrap plan-approval procedure" may be retired. That procedure's
+    own stated condition — "until the command file is updated" — is
+    therefore **not yet satisfied by this revision**: it remains the
+    sole sanctioned path for `workflow-v2-1-core`'s own plan-stage
+    approvals. This revision closes the acute defect item 347 was
+    already tracking (a real, reproduced `/approve-review plan
+    v2-1-dry-run` failure — see `docs/ai-workflow/dry-run/
+    WF8B_SCENARIOS.md`'s S5 section) for every *other* `"process"` work
+    item, and narrows, but does not close, item 347 itself. Call
+    `workflow_fingerprint.resolve_plan_stage_approval_commit_paths(repo_root,
+    work_item_id, state_path=Path("docs/ai-workflow/WORKFLOW_STATE.json"))`.
+    This returns the plan doc, registry JSON, mapping file and
+    `WORKFLOW_STATE.json` (four members) plus, conditionally, this work
+    item's own `<work_item_id>-artifacts.json` declaration as a fifth —
+    included exactly when it is both pending (its working-tree bytes
+    differ from `HEAD`) and fresh (byte-identical to the copy the
+    just-recomputed bundle already captured). `StaleArtifactsDeclarationError`
+    means the declaration changed again after the bundle was generated —
+    stop and report it, naming both paths; do not stage, do not commit,
+    do not write approval state (identical in kind to a mismatched
+    `bundle_id`/`review_content_id` refusal one step earlier).
+    `MissingWorkItemArtifactsDeclarationError` here means this work item's
+    own declaration is genuinely absent from the working tree, not merely
+    uncommitted — the same fail-closed error step (2)'s recomputation
+    already raises for that case, never masked. If a fifth member is
+    resolved, capture its pinned sha256
+    (`resolve_plan_stage_approval_commit_paths`'s own return value) for
+    step 6's re-verification. Implementation stage: unchanged, no
+    resolution step — its four members are fixed.
+5. **Write it**: capture `docs/ai-workflow/WORKFLOW_STATE.json`'s current
+   working-tree bytes first (`pre_write_bytes` — needed only if step 6/6a
+   fails and step 6b's rollback runs). Then call
+   `workflow_state.apply_plan_approval(...)` or `apply_technical_approval(...)`,
+   and persist the returned state to `docs/ai-workflow/WORKFLOW_STATE.json`.
+   This is this invocation's own first durable mutation — step 4a already
+   ran and passed, so a plan-stage approval never reaches this write with
+   an unresolved or stale fifth member.
 6. **Create the approval commit**:
-   - Plan stage: one commit containing the approved plan doc(s), registry
-     JSON + generated Markdown view, `WORKFLOW_STATE.json`, and the
-     requirements mapping file together, carrying `Workflow-Plan-Approval:
-     <full review_content_id>` + `Workflow-Work-Item: <id>` trailers.
-   - Implementation stage: a metadata-only commit (zero production/test
-     changes) carrying `Workflow-Technical-Approval: <full
-     review_content_id>` + `Workflow-Work-Item: <id>`.
+   - Plan stage: stage *exactly* step 4a's resolved member set via
+     `workflow_state.stage_plan_approval_commit_paths(repo_root, paths)`
+     — never `git add -A`/`git add .`. This call itself checks, in order:
+     `DirtyIndexBeforeStagingError` if the Git index already differs from
+     `HEAD` *before* it stages anything of its own (an unrelated
+     already-staged path with real changed content — this work item's own
+     leftover, or a concurrent work item's write, D1 — caught earlier and
+     with a clearer diagnostic than discovering it only after staging;
+     never this work item's own legitimate pending intent-to-add paths
+     from `/milestone-plan`'s own staging step, and never a re-staged
+     path whose content is byte-identical to `HEAD`, since neither
+     produces a distinguishable index state at all); then, after staging,
+     `UnexpectedStagedPathSetError` if the resulting staged diff still
+     names any path outside the resolved set. Either means stop, report
+     it, and run step 6b's rollback rather than let a pathspec-free
+     commit absorb the unrelated path silently. If a fifth member was
+     resolved, immediately call
+     `workflow_state.verify_staged_blob_sha256(repo_root, path,
+     pinned_sha256)` to close the race window between resolution and
+     staging — `StagedBlobMismatchError` triggers the same stop-and-
+     rollback. Then create **one plain, pathspec-free `git commit`** (no
+     trailing `-- <paths>`: the whole point of the staged-set assertion
+     just above is that the index is now verified exactly right, and a
+     pathspec-limited commit would instead re-read current working-tree
+     bytes for those paths rather than the verified staged/pinned ones)
+     carrying `Workflow-Plan-Approval: <full review_content_id>` +
+     `Workflow-Work-Item: <id>` trailers.
+   - Implementation stage: unchanged — a metadata-only commit (zero
+     production/test changes) carrying `Workflow-Technical-Approval:
+     <full review_content_id>` + `Workflow-Work-Item: <id>`.
    This command only writes the trailer; it never needs to search for one
    itself. The exact scoped trailer *lookup* later durability/freshness
    checks use is `workflow_state.discover_plan_approval_commit`/
@@ -128,7 +200,34 @@ actually load-bearing control for the Skill exposure path, not mechanism
     `PostApprovalManifestMismatchError` means the committed content does
     not match what was reviewed — stop and report it; never silently
     accept it, and never let a mismatch reach the user as a successful
-    approval.
+    approval. Plan stage: also call
+    `workflow_state.assert_committed_path_set_matches(repo_root, commit,
+    paths)` (step 4a's resolved set) — the commit's own changed-path set
+    relative to its parent, a structural check distinct from step 6's
+    pre-commit staging checks: a pre-commit/commit-msg hook editing and
+    re-staging a file *after* those checks ran but before `git commit`
+    wrote the final tree would defeat them without this.
+    `CommittedPathSetMismatchError` runs step 6b. Plan stage, fifth
+    member present: also call
+    `workflow_state.verify_committed_blob_sha256(repo_root, commit, path,
+    pinned_sha256)` as further defense in depth, isolating exactly which
+    member diverged if it ever disagrees with the checks above. Any
+    failure here runs step 6b.
+6b. **Recovery, plan stage only, on any failure from step 6 onward**
+    (`workflow_state.rollback_plan_approval_write(repo_root, state_path,
+    pre_write_bytes, commit_created=...)`): `git reset` back to the
+    commit immediately before this invocation's own commit if one was
+    created (`commit_created=True` — undoes exactly that one commit,
+    never an earlier one), or a bare `git reset` if no commit was created
+    yet (`commit_created=False`); then restore
+    `docs/ai-workflow/WORKFLOW_STATE.json`'s working-tree bytes to
+    `pre_write_bytes` exactly. Leaves the repository byte-identical to
+    its state immediately before step 5's write — no partial commit, no
+    partial state write, safe to retry from a fresh operator session.
+    Report the original failure, not a generic one, after recovery
+    completes. Implementation stage has no equivalent step — its write
+    set was never widened by step 4a, so its existing failure surface is
+    unchanged.
 7. Report the new phase (`IMPLEMENTING` or `AWAITING_FUNCTIONAL_REVIEW`) and
    **stop**. Never chain into the next state's actions in the same
    invocation.

@@ -17,7 +17,7 @@
       "functional_review_round": null,
       "base_commit": "162154d3e5e10eb65e109833acae4b4fb01fc5d6",
       "reviewed_implementation_head": "20f89de3c030ebd89d69bcd5afffb830096f8c2b",
-      "current_checkpoint_id": null,
+      "current_checkpoint_id": "WF8b",
       "last_completed_checkpoint_id": "WF-Activate",
       "checkpoints": {
         "WF0": {
@@ -83,6 +83,10 @@
         "WF-Activate": {
           "status": "COMPLETE",
           "start_commit": "984a4736f9209ce1c92f6e7a4c76e4e184485f58"
+        },
+        "WF8b": {
+          "status": "IN_PROGRESS",
+          "start_commit": "e75a756d42751ef18eee842a958cc2c888086772"
         }
       },
       "current_bundle_id": null,
@@ -255,8 +259,8 @@
           ]
         }
       ],
-      "state_revision": 75,
-      "last_transition": "2026-08-11T13:02:20+01:00"
+      "state_revision": 76,
+      "last_transition": "2026-08-12T00:46:05+01:00"
     },
     "milestone-8": {
       "work_item_type": "product",
@@ -333,14 +337,14 @@
       "work_item_id": "v2-1-dry-run",
       "parent_work_item_id": null,
       "plan_path": "docs/ai-workflow/dry-run/v2-1-dry-run-plan.md",
-      "registry_path": null,
-      "mapping_path": null,
+      "registry_path": "docs/ai-workflow/registry/v2-1-dry-run-registry.json",
+      "mapping_path": "docs/ai-workflow/requirements/v2-1-dry-run-mapping.json",
       "governing_workflow_version": "2.1",
-      "phase": "PLANNING",
-      "plan_revision": 1,
+      "phase": "AWAITING_PLAN_APPROVAL",
+      "plan_revision": 5,
       "implementation_revision": null,
       "functional_review_round": null,
-      "base_commit": null,
+      "base_commit": "e75a756d42751ef18eee842a958cc2c888086772",
       "reviewed_implementation_head": null,
       "current_checkpoint_id": null,
       "last_completed_checkpoint_id": null,
@@ -348,11 +352,25 @@
       "current_bundle_id": null,
       "plan_approval": null,
       "technical_approval": null,
-      "plan_review_stages": null,
+      "plan_review_stages": {
+        "review_content_id": "79e5e1df81df92de3845e7c680718c46dcaf4d1df475ade351a023bfd88b2a8d",
+        "local_model_plan_review": {
+          "bundle_id": "e90b8c90f050a67660c7202aee5326f64df019758140628ae827362ca0d09f27",
+          "verdict": "APPROVE",
+          "round": 4,
+          "completed_at": "2026-08-12T00:13:38+01:00"
+        },
+        "manual_external_plan_review": {
+          "bundle_id": "e90b8c90f050a67660c7202aee5326f64df019758140628ae827362ca0d09f27",
+          "verdict": "APPROVE",
+          "round": 1,
+          "completed_at": "2026-08-12T00:24:31+01:00"
+        }
+      },
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 1,
-      "last_transition": "2026-07-31T19:25:00+01:00"
+      "state_revision": 12,
+      "last_transition": "2026-08-12T00:24:31+01:00"
     }
   }
 }

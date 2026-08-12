@@ -1,11 +1,46 @@
 # WF8b manual dry-run scenario checklist
 
-**Status:** approved by the user. S1 was attempted and blocked before any
-mutation by a real tooling defect (see S1's own "Outcome" note and
-`WF8B_S1_FINDING_review_content_id_not_generalized.md`) — no scenario has
-reached completion. S1 must be rerun from the beginning, in a fresh
-session, once that finding's remediation lands and is independently
-reviewed.
+**Status:** approved by the user. S1's first attempt was blocked before any
+mutation by a real tooling defect (see S1's own "Outcome (first attempt,
+blocked)" note and `WF8B_S1_FINDING_review_content_id_not_generalized.md`);
+that finding's remediation landed (revision 21, commit `584fc87`) and was
+independently reviewed through the plan's subsequent 41 further external
+review rounds (nothing in those rounds touched `D-Fingerprint-Generalization`
+itself again). S1 was rerun from the beginning in a fresh session on
+2026-08-11, after `workflow-v2-1-core`'s plan revision 62 became durably
+approved (commit `e75a756`), and reached its own defined stopping point —
+see S1's "Outcome (rerun, 2026-08-11)" note below. No scenario has yet
+reached full completion (S1 stops at a hard gate, `AWAITING_EXTERNAL_PLAN_REVIEW`,
+per `/milestone-plan`'s own step 7).
+
+**Current position as of plan revision 5 (2026-08-11).** The S1 gate named
+above is no longer the blocker: one genuine external plan-review round and
+three `local_model_plan_review` rounds have since completed, each returning
+`REVISE` and each applied through `/apply-plan-review`. Live identity, and
+the only identity any scenario may act on:
+
+| field | value |
+| --- | --- |
+| `phase` | `AWAITING_LOCAL_PLAN_REVIEW` (`/apply-plan-review`'s `"2.1"` exit) |
+| `plan_revision` | 5 |
+| `bundle_id` | recompute — revision 4's was `76b5fd49…996b34`, superseded by revision 5's regeneration |
+| `review_content_id` | recompute — revision 4's was `0652c528…c6ad5f`, superseded |
+| `plan_review_stages` | `null` (a `REVISE` verdict writes no ledger entry) |
+
+Never act on a `bundle_id`/`review_content_id` copied from this document:
+recompute both from the live bundle before every scenario, exactly as
+`/review-plan` and `/approve-review` do. The values above are labelled
+history, not inputs.
+
+**Feedback path — always resolved, never a literal.** Every verdict for
+this item goes to `<feedback_dir>/REVIEW_FEEDBACK.md`, where `<feedback_dir>`
+is `workflow_fingerprint.resolve_feedback_dir(repo_root, "v2-1-dry-run")`.
+That currently resolves to `.ai-review/v2-1-dry-run/feedback/`, because the
+scoped directory now exists; `/record-manual-plan-review` step 4 and
+`/apply-plan-review` step 1 read it through the same resolution, so a
+verdict pasted at the flat `.ai-review/feedback/` path would simply not be
+seen. The flat path still holds this item's superseded revision-1 external
+verdict and is read by nothing.
 
 **Scope note:** this document is dry-run *execution evidence* for the
 `workflow-v2-1-core` checkpoint `WF8b`. It records what will be manually
@@ -138,7 +173,8 @@ section below, not left implicit.
   created, containing a **small, deliberately scratch checkpoint registry**
   (recommend 3 trivial checkpoints — e.g. touching a throwaway file under
   `docs/ai-workflow/dry-run/scratch/` — sequenced so checkpoint 2 is the one
-  later left dirty for S13-S15); `docs/ai-workflow/registry/v2-1-dry-run-registry.json`
+  later left dirty for S13, and checkpoint 3 the one later left `IN_PROGRESS`
+  for S14 then S15); `docs/ai-workflow/registry/v2-1-dry-run-registry.json`
   and `docs/ai-workflow/requirements/v2-1-dry-run-mapping.json` created;
   `.ai-review/v2-1-dry-run/` (or flat-path fallback) bundle written;
   `docs/ai-workflow/WORKFLOW_STATE.json` updated. No commit yet — planning
@@ -151,7 +187,64 @@ section below, not left implicit.
   registry JSON is a valid topological order (`D-Selection` rule 3).
 - **Cleanup**: none this scenario — artifacts feed S2 onward.
 
-- **Outcome (attempted, blocked before mutation)**: `/milestone-plan
+- **Outcome (rerun, 2026-08-11, real, reached the defined stopping point)**:
+  ran for real, in a fresh session, against live repository state, after
+  independently confirming (`python3 scripts/workflow_fingerprint.py
+  <base> --work-item-id v2-1-dry-run`, read-only) that the revision-21
+  remediation holds: `protected_paths` correctly names `v2-1-dry-run`'s own
+  three files (`docs/ai-workflow/dry-run/v2-1-dry-run-plan.md`, its
+  registry, its mapping), never `workflow-v2-1-core`'s — the exact defect
+  below is fixed. Real work performed: `workflow_state.route_work_item(...)`
+  called with all four declaration facts (`plan_path`/`registry_path`/
+  `mapping_path`/`base_commit`, base pinned at live HEAD
+  `e75a756d42751ef18eee842a958cc2c888086772`), persisted to
+  `WORKFLOW_STATE.json`; a real 3-checkpoint scratch registry
+  (`S-CP1`→`S-CP2`→`S-CP3`, each a single throwaway file under
+  `docs/ai-workflow/dry-run/scratch/`, checkpoint 2 earmarked for S13's
+  dirty-resume scenario and checkpoint 3 for S14/S15's refusal and
+  interrupted-recovery scenarios) and its requirements mapping built via
+  `generate_registry`/`generate_mapping` (both validated D-Selection's
+  topological order and D3's bidirectional coverage at generation time) and
+  written via `write_registry_and_mapping`;
+  `generate_artifacts_declarations` written to
+  `docs/ai-workflow/registry/v2-1-dry-run-artifacts.json`; the plan doc
+  written at its declared path embedding `render_registry_markdown`'s
+  generated table. **Resolved ambiguity flagged in S2 below**: read
+  `docs/ai-workflow/MILESTONE_WORKFLOW.md`'s own "Hard gates summary"
+  before assuming anything — the `"2.1"` two-stage local/manual-external
+  protocol is stated there as "a refinement of the existing `REVISING_PLAN`
+  → `AWAITING_PLAN_APPROVAL` edge, not two additional hard gates layered on
+  top of it," and `AWAITING_LOCAL_PLAN_REVIEW`'s own entry condition
+  (`MILESTONE_WORKFLOW.md` line 81) is exactly "`REVISING_PLAN`'s exit
+  condition is met, or `/apply-plan-review` has just applied an accepted
+  plan edit" — no third entry from a first-ever plan bundle. So `phase` was
+  set to the literal `AWAITING_EXTERNAL_PLAN_REVIEW` (matching
+  `/milestone-plan`'s step 6 exactly as written, no `[2.1]` override exists
+  at that step), identical in kind to a `"1"` item's first round. This
+  means the checklist's own recommended order (S1 → S3 → S2 → S4) is
+  confirmed correct: S2 (`/review-plan`) is genuinely unreachable until a
+  `REVISE` round (S3) has run at least once. Bundle written and verified
+  real: `docs/ai-workflow/dry-run/v2-1-dry-run-plan.md` (registry/mapping
+  JSON tracked via `git add -N` so the fingerprint tool's tracked-path check
+  passes without committing anything — no command file states this staging
+  step explicitly, worth a plan/command-doc note but not itself a blocking
+  defect), `.ai-review/v2-1-dry-run/current/{PLAN.md,REVIEW_REQUEST.md,
+  CONTEXT_FILES.txt,CHANGED_FILES.txt,COMMITS.txt,DIFF.patch,MANIFEST.md,
+  files/}` all written by a real `./scripts/prepare-ai-review.sh
+  e75a756d42751ef18eee842a958cc2c888086772 plan v2-1-dry-run` invocation,
+  `review_content_id`/`bundle_id` both self-verified equal across
+  write/recompute/archive-extraction (the script's own built-in
+  reproducibility check, exit 0, no mismatch reported).
+  `docs/ai-workflow/WORKFLOW_STATE.json`'s `v2-1-dry-run` entry now records
+  `phase: AWAITING_EXTERNAL_PLAN_REVIEW`, `state_revision: 3`. **No
+  commit** — per this scenario's own "Expected files/commits" note above,
+  planning bundles are not committed until plan approval (S5). Stopped
+  here, at S1's own defined hard gate, per this session's own scope (one
+  checkpoint-slice of `WF8b` per session; S3/S2/S4 are next, none
+  user-gated, but require a genuine review verdict — real or realistically
+  simulated — which this session did not attempt to fabricate).
+
+- **Outcome (first attempt, blocked before mutation)**: `/milestone-plan
   v2-1-dry-run`'s step 6 depends on `scripts/workflow_fingerprint.py` to
   compute `review_content_id` and write `MANIFEST.md`. That script's
   `--work-item-id` flag affects only `resolve_bundle_dir` (which directory
@@ -172,9 +265,9 @@ section below, not left implicit.
   remediation scope in
   `docs/ai-workflow/dry-run/WF8B_S1_FINDING_review_content_id_not_generalized.md`.
   This is the deferred "generalize protected-path derivation beyond this
-  one process plan" scope from `WF4a-i`, surfacing for real. S1 is not
-  complete and must be rerun from the beginning, in a fresh session, once
-  the remediation lands and is independently reviewed.
+  one process plan" scope from `WF4a-i`, surfacing for real. Remediated at
+  revision 21 (commit `584fc87`); see the "Outcome (rerun, 2026-08-11...)"
+  note above for the successful rerun.
 
 ## S2 — Local model-independent plan review returning APPROVE
 
@@ -193,6 +286,80 @@ section below, not left implicit.
   `/apply-plan-review` round. Resolve this from
   `docs/ai-workflow/MILESTONE_WORKFLOW.md`'s actual state diagram before
   running S2 — do not assume.
+
+  **Resolved (2026-08-11, real, read-only verification, no state mutation)**:
+  they are **not** the same state, and `/review-plan` is genuinely
+  unreachable from `v2-1-dry-run`'s current phase. `MILESTONE_WORKFLOW.md`'s
+  "Hard gates summary" states explicitly: "For a
+  `governing_workflow_version: \"2.1\"` work item, the edge from
+  `REVISING_PLAN` to `AWAITING_PLAN_APPROVAL` is further refined into
+  `REVISING_PLAN → AWAITING_LOCAL_PLAN_REVIEW → ...` — a refinement of the
+  existing edge, not two additional hard gates layered on top of it." That
+  refinement applies only to the `REVISING_PLAN → AWAITING_PLAN_APPROVAL`
+  edge, never to `SELF_REVIEWING_PLAN → AWAITING_EXTERNAL_PLAN_REVIEW`.
+  `.claude/commands/milestone-plan.md` step 6/7 confirms this at the
+  command-contract level: no `[2.1]` sub-step exists at step 6 or 7, so a
+  `"2.1"` item's very first plan round enters `AWAITING_EXTERNAL_PLAN_REVIEW`
+  — hard gate 1 of 6, identical mechanism to a `"1"` item — exactly as S1's
+  own "Real approval gate" line already said ("this stops at the hard gate
+  for external plan review, same as any other `/milestone-plan` run"). The
+  only way to reach `AWAITING_LOCAL_PLAN_REVIEW` is via `REVISING_PLAN`'s
+  exit, which itself requires `<feedback_dir>/REVIEW_FEEDBACK.md` to
+  exist (`AWAITING_EXTERNAL_PLAN_REVIEW`'s own exit condition) — i.e. a
+  genuine external-review round against `v2-1-dry-run`'s current bundle,
+  not yet obtained. So **S2 and S3 both remain blocked on the same,
+  still-open S1 hard gate**, not on each other; S3 is not "next" in the
+  sense of being independently runnable right now.
+
+  **Superseded as of plan revision 4** (the analysis above stands; its
+  "not yet obtained" conclusion does not). That external round was
+  subsequently obtained and applied, and two `local_model_plan_review`
+  rounds have run since. The paragraphs below record what a 2026-08-11
+  session observed at plan revision 1 — dated evidence, not current state.
+  For current state see the status block at the top of this document.
+
+  Verified read-only, no mutation: live HEAD (`e75a756d42751ef18eee842a958cc2c888086772`)
+  still equals `v2-1-dry-run`'s recorded `base_commit`; a fresh
+  `scripts/workflow_fingerprint.py e75a756d42751ef18eee842a958cc2c888086772
+  --work-item-id v2-1-dry-run --stage plan` recompute reproduces
+  `MANIFEST.md` exactly — `bundle_id
+  d4a121549aca4dbf5b362545a63dc931623585b93415d0fa246e5fccd599f473`,
+  `review_content_id
+  861c9ab11f4b60004d5eba0c294af0434f423115d877f6381cf0ebaa5b00437c`,
+  `plan_revision 1`, `worktree_root`/`generation_head` both match current
+  state; `docs/ai-workflow/WORKFLOW_STATE.json`'s `v2-1-dry-run` entry is
+  unchanged (`phase: AWAITING_EXTERNAL_PLAN_REVIEW`, `state_revision: 3`).
+  `.ai-review/feedback/REVIEW_FEEDBACK.md` currently holds unrelated, stale
+  content — a real prior `external_plan_review` verdict for
+  `workflow-v2-1-core` revision 21 (`Work item: workflow-v2-1-core`,
+  `Reviewed bundle ID: fa03d434...`), not `v2-1-dry-run` — confirming no
+  external review of `v2-1-dry-run`'s bundle has been recorded yet under
+  any name. `workflow-v2-1-core`'s own Revision 62 plan-approval state
+  (`state_revision: 75`) was not read for any decision here beyond
+  confirming it is untouched, and was not modified.
+
+  **Exact next required action** (not performed this session — it is
+  user-gated in substance, even though no named command enforces
+  `disable-model-invocation` at this exact step): obtain a genuine external
+  plan-review verdict for the bundle at
+  `.ai-review/v2-1-dry-run/current/` (upload path, `bundle_id`, and
+  `review_content_id` as recomputed above) and place it at
+  `<feedback_dir>/REVIEW_FEEDBACK.md` — resolved via
+  `workflow_fingerprint.resolve_feedback_dir(repo_root, "v2-1-dry-run")`,
+  currently `.ai-review/v2-1-dry-run/feedback/`, never the flat
+  `.ai-review/feedback/` literal this note originally named — with
+  `Reviewer role: external_plan_review`, `Work item: v2-1-dry-run`, and the
+  three binding fields matching the **then-current recomputed** values, not
+  the revision-1 values recorded above. Only once that file exists does
+  `REVISING_PLAN`'s entry condition become reachable, and only then does
+  S3's own precondition (`REVISE` round from a fresh
+  `AWAITING_LOCAL_PLAN_REVIEW`) become satisfiable. Per this document's own
+  "Decisions locked in for execution" discipline, this session did not
+  fabricate or simulate that verdict.
+
+  (This required action was performed for plan revision 1 and has since
+  been superseded twice — see the status block. It is retained because the
+  *procedure* it states is the one every later external round follows.)
 - **Command invoked**: `/review-plan v2-1-dry-run` (real). Recommended in a
   fresh session per the command's own text (not a verified precondition).
 - **Expected state transition**: → `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW`.
@@ -274,10 +441,9 @@ section below, not left implicit.
 - **Purpose**: prove `/approve-review plan v2-1-dry-run` end to end for a
   `"2.1"` item: the `plan_approval_gate_reachable` `"2.1"` branch (requires
   the `plan_review_stages` ledger populated by S2/S4), the worktree/HEAD
-  staleness check, `resolve_approval_basis`, the approval commit (plan doc +
-  registry + mapping + `WORKFLOW_STATE.json` together, `Workflow-Plan-Approval`
-  + `Workflow-Work-Item` trailers), and the post-approval manifest-match
-  verification.
+  staleness check, `resolve_approval_basis`, the approval commit (the
+  member set below, `Workflow-Plan-Approval` + `Workflow-Work-Item`
+  trailers), and the post-approval manifest-match verification.
 - **Initial phase/state**: `AWAITING_PLAN_APPROVAL` (S4's exit).
 - **Command invoked**: `/approve-review plan v2-1-dry-run` — **user-only**,
   `disable-model-invocation: true`; requires the user's own literal
@@ -286,15 +452,107 @@ section below, not left implicit.
   the user must type the actual approval text when this scenario is
   reached.
 - **Expected state transition**: → `IMPLEMENTING`.
-- **Expected files/commits**: one commit containing the plan doc, registry
-  JSON + generated Markdown view, mapping JSON, `WORKFLOW_STATE.json`,
-  carrying `Workflow-Plan-Approval: <review_content_id>` +
-  `Workflow-Work-Item: v2-1-dry-run`.
+- **Expected files/commits**: **exactly five paths, no more and no fewer**,
+  in one commit carrying `Workflow-Plan-Approval: <review_content_id>` +
+  `Workflow-Work-Item: v2-1-dry-run`:
+
+  1. `docs/ai-workflow/dry-run/v2-1-dry-run-plan.md`
+  2. `docs/ai-workflow/registry/v2-1-dry-run-registry.json`
+  3. `docs/ai-workflow/requirements/v2-1-dry-run-mapping.json`
+  4. `docs/ai-workflow/WORKFLOW_STATE.json`
+  5. `docs/ai-workflow/registry/v2-1-dry-run-artifacts.json`
+
+  Member 5 is **resolved by the installed command itself**, not by an
+  operator-run manual procedure: the first real S5 attempt (see "Outcome"
+  below) reproduced exactly the failure the four-member set alone
+  produces, and the fix landed generically in
+  `scripts/workflow_fingerprint.py`
+  (`resolve_plan_stage_approval_commit_paths`) and
+  `.claude/commands/approve-review.md` (steps 4a/6/6a/6b) rather than as a
+  `v2-1-dry-run`-specific workaround — see
+  `WF8B_S5_FINDING_missing_artifacts_declaration_commit_member.md` for the
+  full root-cause/remediation record. There is no generated Markdown
+  registry view to commit for this item — the registry table lives inline
+  in the plan doc — so member 2 is the JSON alone.
+
+  The installed command's own step 4a now performs both of
+  `D-Approval-Commits`' "Conditional fifth commit member" conditions
+  itself, before any durable mutation — an operator retrying S5 does not
+  need to run either check by hand:
+
+  1. **Pending change** — the declaration's working-tree bytes differ from
+     its content at `HEAD` (or it is absent at `HEAD`). If unchanged, the
+     commit is the four-member set.
+  2. **Bundle freshness** — the working-tree declaration is byte-identical
+     to the copy the current bundle already captured
+     (`<bundle_dir>/files/docs/ai-workflow/registry/v2-1-dry-run-artifacts.json`).
+     A mismatch refuses outright (`StaleArtifactsDeclarationError`, naming
+     both paths) before staging, committing, or writing approval state —
+     committing bytes the reviewer never saw is the exact failure this
+     condition exists to prevent, and the declaration is the one member of
+     this set that is plan-stage *excluded*, so nothing else catches it.
+
+  The command also stages exactly the resolved set itself
+  (`workflow_state.stage_plan_approval_commit_paths`) — never a broad
+  `git add -A` — with its own index-isolation precondition and post-
+  staging assertion, so `verify_review_content_id.py` (deliberately
+  untracked) and this file (modified) are never swept in by construction,
+  not merely by operator care.
 - **Fresh-session boundary**: none required.
-- **Pass/fail evidence**: `verify_post_approval_manifest_match` raises
-  nothing; the commit's trailers are discoverable by
-  `workflow_state.discover_plan_approval_commit`.
+- **Pass/fail evidence**:
+  - `resolve_plan_stage_approval_commit_paths` resolved the five-member
+    set (member 5 = `docs/ai-workflow/registry/v2-1-dry-run-artifacts.json`,
+    pinned sha256 `02fef08e858008441e2dc8c326c26331c6507a15d37e7cd58049ad3a484c740e`),
+    or refused with a named stale path — recorded **before** staging;
+  - `verify_post_approval_manifest_match` raises nothing;
+  - `assert_committed_path_set_matches` and `verify_committed_blob_sha256`
+    (fifth member) both raise nothing;
+  - the commit's trailers are discoverable by
+    `workflow_state.discover_plan_approval_commit`;
+  - `git show --name-only --format= <commit>` lists exactly the five paths
+    above, and `git status --short` afterwards shows no leftover ` A` entry
+    for the declaration;
+  - the commit-source `review_content_id` recomputed at that commit equals
+    the `approved_review_content_id` just written to `plan_approval`;
+  - `approval_is_current(..., stage="plan", head=<commit>)` and
+    `implementing_entry_reachable(...)` both return `True` — S6 can start.
 - **Cleanup**: none.
+
+- **Outcome (first attempt, 2026-08-12, real, blocked after the commit,
+  safely rolled back)**: ran for real against live repository state, after
+  the user supplied the literal confirmation text. Steps 1–5 of the
+  then-installed (four-member) `/approve-review` all passed; step 6
+  created the literal four-member commit; step 6a's
+  `verify_post_approval_manifest_match` raised
+  `MissingWorkItemArtifactsDeclarationError` for
+  `docs/ai-workflow/registry/v2-1-dry-run-artifacts.json` — never
+  committed at any point in this item's history, only ever present in the
+  working tree. Per step 6a's own "never let a mismatch reach the user as
+  a successful approval" rule, the commit was reset (`git reset HEAD~1`)
+  and `WORKFLOW_STATE.json` restored to its exact pre-attempt bytes
+  (byte-diffed against a saved copy, not merely inspected) — full record
+  in `WF8B_S5_FINDING_missing_artifacts_declaration_commit_member.md`.
+  Per the user's explicit instruction, this was **not** worked around with
+  a manual `git add`/commit or a `v2-1-dry-run`-specific bootstrap
+  procedure: the generic defect was fixed in
+  `scripts/workflow_fingerprint.py`/`scripts/workflow_state.py`/
+  `.claude/commands/approve-review.md` instead (12 new hermetic tests,
+  `workflow_integration_test.py`'s `TestPlanStageApprovalCommitMembership`;
+  full suite green except one pre-existing, unrelated failure). This was
+  done as ordinary `workflow-v2-1-core` `WF8b` checkpoint implementation
+  work under the already-CURRENT Revision 62 plan approval — the design
+  being implemented (`D-Approval-Commits`' "Conditional fifth commit
+  member") was already fully specified and approved; only its
+  generalization beyond `workflow-v2-1-core`'s own one-off bootstrap
+  procedure was missing. **This does not close missing-test item 347** —
+  see the finding file's own explicit scope-boundary section — and does
+  not retire `workflow-v2-1-core`'s own Bootstrap plan-approval procedure.
+  `v2-1-dry-run` was left at `AWAITING_PLAN_APPROVAL`,
+  `plan_approval: null`, exactly as it was before this attempt; Revision
+  5's local/manual plan-review approvals are unaffected (the fix touches
+  no path in this item's own plan-stage protected or bundle-relevant
+  set). S5 was **not** forced through — a fresh operator session may
+  retry `/approve-review plan v2-1-dry-run` directly.
 
 ## S6 — Checkpoint implementation and fresh-session resume
 
@@ -335,10 +593,26 @@ section below, not left implicit.
 - **Purpose**: prove `/milestone-implement` step 2-5 (self-review, full
   verification, `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` bundle,
   `record_bundle_generation` writing `reviewed_implementation_head`) once
-  the scratch registry's remaining checkpoints (including the dirty one from
-  S13, resolved first) are all `COMPLETE`.
+  every scratch checkpoint is `COMPLETE` — checkpoint 1 and 2 from S6/S13,
+  and checkpoint 3 from S15's recovery decision, which is the last of the
+  three to close.
 - **Initial phase/state**: `IMPLEMENTING`, all scratch checkpoints
   `COMPLETE`.
+- **Precondition (implementation-stage classification)**: this is the dry
+  run's **first** implementation-stage bundle, so it is the first point at
+  which `v2-1-dry-run`'s own `implementation_stage` classification is
+  exercised. `docs/ai-workflow/registry/v2-1-dry-run-artifacts.json` must
+  classify every changed/untracked path — `classify_path_implementation_stage`
+  fails closed, and `_implementation_stage_protected_changed_paths` runs it
+  over the whole changed set, so a single unnamed path aborts generation
+  before any bundle file is written. The declaration was populated for this
+  in plan revision 3 (`LOCAL-DRY-R2-001`); the scratch marker files are
+  protected, everything else this item can touch is excluded. If this step
+  aborts with `UnclassifiedPathError`, the named path is a genuine gap in
+  that declaration — record it and re-plan, do not widen the declaration
+  ad hoc mid-run. **S6 has no such precondition**: it stops at one
+  checkpoint commit per session and generates no bundle, so nothing before
+  this scenario touches the implementation-stage classifier.
 - **Command invoked**: `/milestone-implement v2-1-dry-run` (real; this
   invocation is the one that finds every checkpoint `COMPLETE` and proceeds
   to step 2 onward, per the command's own note that this never happens in
@@ -533,7 +807,10 @@ section below, not left implicit.
 - **Command invoked**: `/milestone-implement v2-1-dry-run` (real), from a
   fresh session, in the **same** worktree.
 - **Expected state transition**: reports "resume," not "fresh start";
-  completes checkpoint 2 normally into S6/S7's flow.
+  completes checkpoint 2 normally into S6/S7's flow. **Checkpoint 2 is
+  `COMPLETE` from the end of this scenario onward** and is never the subject
+  of a later scenario — S14 and S15 use checkpoint 3, which this invocation's
+  own one-checkpoint hard stop leaves untouched.
 - **Real approval gate**: none.
 - **Fresh-session boundary**: **required** — this is the actual claim being
   tested.
@@ -542,11 +819,45 @@ section below, not left implicit.
   committed as checkpoint 2's completion commit.
 - **Cleanup**: none.
 
+### S14/S15 setup step (run after S13, in worktree A)
+
+S13 leaves no checkpoint `IN_PROGRESS`, so the state S14 and S15 both need is
+created here, once, by a real command: from a fresh session **in worktree A**,
+run `/milestone-implement v2-1-dry-run`. It fresh-starts checkpoint 3
+(`IN_PROGRESS`, `WORKTREE_IDENTITY.json` refreshed for worktree A) — then stop
+the session deliberately without completing it, exactly as S6 did for
+checkpoint 2.
+
+That single interrupted checkpoint 3 is the subject of S14 and then, unchanged,
+of S15. Reusing it across both is sound precisely because S14 is required to
+mutate nothing (its authorization point 3, verified immediately after the
+refusal). Record checkpoint 3's `status`/`start_commit` and
+`WORKTREE_IDENTITY.json` bytes here, so S14's no-mutation claim can be checked
+against a recorded before-state rather than asserted.
+
 ## S14 — Dirty IN_PROGRESS resume attempted from a mismatched worktree, refused
 
-- **Purpose**: prove `verify_dirty_resume_safety`'s failure path:
-  `WorktreeIdentityMismatchError` stops cleanly rather than silently
-  resuming or silently discarding.
+- **Purpose**: prove `verify_dirty_resume_safety`'s failure path stops cleanly
+  rather than silently resuming or silently discarding.
+
+  **Two distinct refusals, both required.** `.ai-review/` is gitignored
+  (`.gitignore:1`) and nothing under it is tracked, so a worktree created by
+  `git worktree add` has no `.ai-review/runtime/WORKTREE_IDENTITY.json` at
+  all. Run exactly as described below, worktree B therefore raises
+  **`WorktreeIdentityMissingError`**, not the mismatch error — verified
+  mechanically against real Git worktrees. Prove both:
+  - **S14a — missing identity**: invoke from worktree B as
+    `git worktree add` leaves it. Expect `WorktreeIdentityMissingError`
+    ("…not found — cannot resume … from a worktree with no local identity
+    record").
+  - **S14b — mismatched identity**: copy worktree A's
+    `.ai-review/runtime/WORKTREE_IDENTITY.json` into worktree B (the
+    realistic copied-workspace case), then invoke again. Expect
+    **`WorktreeIdentityMismatchError`** ("…records a different worktree's
+    identity than this one…"). Writing that one gitignored file inside the
+    throwaway worktree B is not a repository mutation and is removed with B
+    at S17; point 2's no-mutation rule is about authoritative state and
+    worktree A, both untouched here.
 - **Authorization (locked in, user-approved — see "Decisions locked in for
   execution" above)**: creating a second real Git worktree solely for this
   scenario is approved, subject to all of the following, each of which must
@@ -555,11 +866,15 @@ section below, not left implicit.
      `git worktree add /tmp/<scratch-path>/wf8b-s14-worktree -b
      wf8b-s14-scratch <current HEAD>` — never the branch or worktree any
      other scenario uses.
-  2. **No mutation from that worktree**: the only action taken from worktree
-     B is the single refused `/milestone-implement v2-1-dry-run` invocation
-     against a dummy checkpoint 3 (not checkpoint 2, to avoid disturbing
-     checkpoint 2's real in-progress work from S6/S13) — no commits, no
-     file edits, nothing else run from worktree B.
+  2. **No mutation from that worktree**: the only actions taken from worktree
+     B are the two refused `/milestone-implement v2-1-dry-run` invocations
+     (S14a and S14b) against checkpoint 3 — the one the "S14/S15 setup step"
+     above left `IN_PROGRESS` in worktree A — plus, between them, copying
+     worktree A's gitignored `WORKTREE_IDENTITY.json` into B to set up S14b.
+     Not checkpoint 2: S13 has already completed checkpoint 2, so it is
+     `COMPLETE` and not resumable at all by this point, which is why a second
+     dirty checkpoint exists. No commits, no tracked-file edits, no writes of
+     any kind outside worktree B, and nothing else run from worktree B.
   3. **Fail closed before mutation, verified**: confirm no commit and no
      `WORKFLOW_STATE.json`/`WORKTREE_IDENTITY.json` write occurred as a
      result of the refused invocation, checked immediately after the
@@ -571,19 +886,29 @@ section below, not left implicit.
      evidence (the exact error, naming both worktree identities), and
      cleanup (confirmation both the worktree and branch are gone) all go in
      this scenario's outcome notes once executed.
-- **Initial phase/state**: a checkpoint `IN_PROGRESS` with
-  `WORKTREE_IDENTITY.json` pointing at worktree A (the primary worktree);
-  command invoked from worktree B (the temporary one).
+- **Initial phase/state**: checkpoint 3 `IN_PROGRESS` with
+  `WORKTREE_IDENTITY.json` pointing at worktree A (the primary worktree), per
+  the "S14/S15 setup step" above; command invoked from worktree B (the
+  temporary one).
 - **Command invoked**: `/milestone-implement v2-1-dry-run` (real) from
-  worktree B, targeting a dummy checkpoint 3 left `IN_PROGRESS` in worktree A
-  for exactly this purpose.
+  worktree B, resolving to checkpoint 3.
 - **Expected state transition**: none — hard stop, no state mutation.
+  Checkpoint 3 must still be `IN_PROGRESS`, byte-for-byte as the setup step
+  recorded it, when this scenario ends; S15 depends on that.
 - **Real approval gate**: none.
 - **Fresh-session boundary**: not required (a fresh session in a different
   worktree already gets there naturally).
-- **Pass/fail evidence**: the error names both the expected and actual
-  worktree/`WORKTREE_IDENTITY.json` values; no commit, no state-file write —
-  verified per point 3 above, not just claimed.
+- **Pass/fail evidence**: the expected refusal class is raised for each of
+  S14a and S14b; no commit, no state-file write — verified per point 3 above,
+  not just claimed; and checkpoint 3 is still `IN_PROGRESS`, byte-identical to
+  the setup step's recorded before-state, afterwards.
+
+  Note the error *messages* name neither worktree's concrete identity — both
+  are descriptive ("a different worktree's identity than this one"). Do not
+  record "the error names both values" as evidence; it does not. To evidence
+  the identity comparison itself, print worktree B's
+  `.ai-review/runtime/WORKTREE_IDENTITY.json` alongside `git rev-parse
+  --show-toplevel --git-common-dir` from both worktrees and record those.
 - **Cleanup**: `git worktree remove` the temporary worktree and delete its
   branch (point 4 above), performed during S17; confirm `v2-1-dry-run`'s
   `WORKTREE_IDENTITY.json` entry for the primary worktree is unchanged from
@@ -596,14 +921,16 @@ section below, not left implicit.
   general `IN_PROGRESS`-with-no-completion-commit case): a session finding
   a checkpoint `IN_PROGRESS` with no completion commit reports last known
   state and requires an explicit user decision, never guessing.
-- **Initial phase/state**: a checkpoint left `IN_PROGRESS` with uncommitted
-  or partially-committed work, then the session ends without completing it
-  (simulate by simply stopping mid-checkpoint rather than finishing S13's
-  resume).
+- **Initial phase/state**: checkpoint 3 left `IN_PROGRESS` with uncommitted
+  or partially-committed work and no completion commit — the state the
+  "S14/S15 setup step" created and S14 provably did not disturb. No new setup
+  is performed here; that is the point of ordering S15 after S14.
 - **Command invoked**: `/milestone-implement v2-1-dry-run` (real) from a
-  fresh session.
-- **Expected state transition**: reports the interrupted checkpoint and
-  waits — does not auto-resume, does not auto-discard.
+  fresh session, in worktree A.
+- **Expected state transition**: reports the interrupted checkpoint 3 and
+  waits — does not auto-resume, does not auto-discard. Once the user chooses
+  resume, checkpoint 3 completes normally, leaving all three scratch
+  checkpoints `COMPLETE` for S7.
 - **Real approval gate**: the recovery decision itself (resume vs. discard)
   is effectively user-gated by design, even though no named command
   requires literal confirmation text here — treat the user's explicit
@@ -672,9 +999,11 @@ Scenarios are numbered to match the user's requested list, not necessarily
 run order. Recommended actual order, folding in the reorderings noted
 above: **S1 → S3 (REVISE round) → S2 (APPROVE round) → S4 → S5 → S6
 (checkpoint 1, fresh session) → S6 (checkpoint 2, fresh session, left dirty)
-→ S13 (resume, same worktree) → S14 (mismatched worktree, separate dummy
-checkpoint, then remove the temp worktree) → S15 (interrupted recovery,
-separate dummy checkpoint) → S7 → S8 → S9's approve-review implementation →
+→ S13 (resume and complete checkpoint 2, same worktree) → **S14/S15 setup**
+(fresh session in worktree A: start checkpoint 3, leave it `IN_PROGRESS`) →
+S14 (mismatched worktree, refused against that same checkpoint 3, then remove
+the temp worktree) → S15 (interrupted recovery of that same still-`IN_PROGRESS`
+checkpoint 3, completing it) → S7 → S8 → S9's approve-review implementation →
 S10 (functional finding, bounded remediation, forces a repeat of S8/S9's
 implementation-approval step) → S9's prepare-functional-review + accept →
 S11 (separate throwaway legacy item, any point after S1) → S12 (drift

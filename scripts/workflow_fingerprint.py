@@ -404,6 +404,15 @@ class MissingWorkItemArtifactsDeclarationError(Exception):
     `plan_stage` key at all, which is not a distinct mechanism)."""
 
 
+class StaleArtifactsDeclarationError(Exception):
+    """`D-Approval-Commits`' "Conditional fifth commit member" freshness
+    condition: raised when `<work_item_id>-artifacts.json`'s current
+    working-tree bytes are pending (differ from `HEAD`) but are *not*
+    byte-identical to the copy the current bundle already captured —
+    committing them would bind bytes no reviewer ever saw. Names both the
+    stale worktree path and the bundle's captured copy path."""
+
+
 class RegistryWorkItemIdMismatchError(Exception):
     """Raised when the registry JSON's own `work_item_id` disagrees with
     the map key that resolved it — condition 6."""
@@ -920,6 +929,94 @@ def resolve_plan_stage_metadata(
         protected_paths=protected_paths,
         excluded_paths=excluded_paths,
         excluded_prefixes=excluded_prefixes,
+    )
+
+
+class PlanApprovalCommitPlan(NamedTuple):
+    """Named, immutable result of `resolve_plan_stage_approval_commit_paths`
+    — the exact `git add`/commit member set plus the pinned identity of
+    the conditional fifth member, if any. `artifacts_declaration_path`/
+    `artifacts_declaration_sha256` are both `None` together (four-member
+    set) or both set together (five-member set) — never one without the
+    other, so a caller can branch on either field interchangeably."""
+
+    paths: tuple[str, ...]
+    artifacts_declaration_path: str | None
+    artifacts_declaration_sha256: str | None
+
+
+def resolve_plan_stage_approval_commit_paths(
+    repo_root: Path, work_item_id: str, state_path: Path,
+) -> PlanApprovalCommitPlan:
+    """`D-Approval-Commits`' "Conditional fifth commit member" contract
+    (`GPT-R67-001`, `WORKFLOW_V2_PLAN.md` revision 50), generalized to
+    every `"process"` work item's own plan-stage approval commit — never a
+    literal naming any specific work item (missing-test item 347's
+    "permanent `/approve-review`" obligation). Resolves the *complete*
+    member set a plan-stage approval commit must contain, so a caller can
+    check it — and refuse cleanly — **before its first durable mutation**
+    (`/approve-review` step 4a), rather than let a missing or stale
+    declaration surface for the first time at post-commit verification.
+
+    The base four members are this work item's own declared
+    `plan_path`/`registry_path`/`mapping_path` (`resolve_plan_stage_metadata`,
+    the same resolver step (1)'s `bundle_id`/`review_content_id`
+    recomputation already uses — never re-derived independently) plus
+    `state_path` (`docs/ai-workflow/WORKFLOW_STATE.json`, the approval
+    record itself). `<work_item_id>-artifacts.json` joins them as a fifth
+    member exactly when both of the following hold, checked in order —
+    otherwise the base four-member set is returned unchanged, which is
+    also the answer for a work item whose declaration is not itself
+    pending (the ordinary case on every round after its first):
+
+    1. **Pending-change condition**: the declaration's current
+       working-tree bytes differ from its content at `HEAD` (including
+       "absent at `HEAD`" as a difference) — an unchanged declaration is
+       never added, so an ordinary approval round never gains a
+       gratuitous fifth member.
+    2. **Freshness condition**: the declaration's current working-tree
+       bytes are byte-identical to the copy the current bundle already
+       captured (`<bundle_dir>/files/<path>` — the same "final copies of
+       changed files" `scripts/prepare-ai-review.sh` always writes,
+       excluded-path or not). A mismatch raises
+       `StaleArtifactsDeclarationError` naming both paths — committing
+       bytes the reviewer never saw is exactly what this condition exists
+       to prevent — rather than silently staging or silently dropping the
+       member.
+
+    Callers needing this work item's own bundle-captured copy to exist at
+    all (i.e. every "2.1" or `"1"` `"process"` work item plan-stage
+    approval) already got a hard failure earlier, at step (1)'s worktree-
+    source `resolve_plan_stage_metadata` call, if the declaration is
+    missing from the working tree entirely — `MissingWorkItemArtifactsDeclarationError`,
+    unchanged by this function, which never re-raises it: by the time this
+    function runs, the working-tree file is already known to exist."""
+    metadata = resolve_plan_stage_metadata(repo_root, work_item_id)
+    base_paths = (metadata.plan_path, metadata.registry_path, metadata.mapping_path, _to_posix(state_path))
+
+    artifacts_rel = _to_posix(artifacts_path_for_work_item(work_item_id))
+    worktree_bytes = (repo_root / artifacts_rel).read_bytes()
+    head_bytes = (
+        _read_bytes_at_source(repo_root, artifacts_rel, "HEAD")
+        if _path_exists_at_source(repo_root, artifacts_rel, "HEAD")
+        else None
+    )
+    if head_bytes == worktree_bytes:
+        # Condition 1 fails: unchanged since HEAD, no fifth member.
+        return PlanApprovalCommitPlan(base_paths, None, None)
+
+    bundle_dir = resolve_bundle_dir(repo_root, work_item_id)
+    captured_path = repo_root / bundle_dir / "files" / artifacts_rel
+    captured_bytes = captured_path.read_bytes() if captured_path.is_file() else None
+    if captured_bytes != worktree_bytes:
+        raise StaleArtifactsDeclarationError(
+            f"{artifacts_rel} is pending (differs from HEAD) but its working-tree "
+            f"bytes do not match the copy the current bundle captured at "
+            f"{captured_path} — regenerate the bundle before approving, or "
+            f"revert the declaration to what the bundle/reviewer actually saw"
+        )
+    return PlanApprovalCommitPlan(
+        base_paths + (artifacts_rel,), artifacts_rel, hashlib.sha256(worktree_bytes).hexdigest(),
     )
 
 
