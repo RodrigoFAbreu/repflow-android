@@ -25,6 +25,7 @@ import copy
 import json
 import subprocess
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -43,18 +44,47 @@ class ScratchRepo:
 
     def __enter__(self):
         self.root = Path(tempfile.mkdtemp(prefix="wf-state-test-"))
+        self._extra_worktrees: list[Path] = []
         _run(["git", "init", "-q"], cwd=self.root)
         _run(["git", "config", "user.email", "test@example.com"], cwd=self.root)
         _run(["git", "config", "user.name", "Test"], cwd=self.root)
+        # Mirrors the real repository's own .gitignore: `.ai-review/` (the
+        # WORKTREE_IDENTITY.json/.lock/checkpoint-claims home) is never
+        # tracked or reported as an untracked dirty path there, and a
+        # scratch repo without this ignores nothing, so
+        # `identity_document_lock`'s own lock file would otherwise leak
+        # into `_hash_dirty_paths`' snapshot.
+        (self.root / ".gitignore").write_text(".ai-review/\n")
         (self.root / "README.md").write_text("base\n")
-        _run(["git", "add", "README.md"], cwd=self.root)
+        _run(["git", "add", "README.md", ".gitignore"], cwd=self.root)
         _run(["git", "commit", "-q", "-m", "base"], cwd=self.root)
         self.base = self.head()
         return self
 
     def __exit__(self, *exc):
         import shutil
+        for path in self._extra_worktrees:
+            shutil.rmtree(path, ignore_errors=True)
         shutil.rmtree(self.root, ignore_errors=True)
+
+    def worktree(self, name: str) -> Path:
+        """A second **linked** worktree of this same repository, sharing
+        this repo's `git rev-parse --git-common-dir` -- what a real
+        second Claude Code session/worktree looks like to the claim/guard
+        mechanism. Cleaned up alongside `self.root`."""
+        path = self.root.parent / f"{self.root.name}-{name}"
+        _run(["git", "worktree", "add", "-q", "-b", name, str(path), "HEAD"], cwd=self.root)
+        self._extra_worktrees.append(path)
+        return path
+
+    def remove_worktree(self, path: Path) -> None:
+        """Deregisters a linked worktree the way an operator's own
+        `git worktree remove` would -- used by the abandoned-guard
+        recovery tests, which require the holder to no longer be in
+        `git worktree list`."""
+        _run(["git", "worktree", "remove", "--force", str(path)], cwd=self.root)
+        if path in self._extra_worktrees:
+            self._extra_worktrees.remove(path)
 
     def head(self) -> str:
         return subprocess.run(
@@ -4228,6 +4258,355 @@ class TestScopedRemediationEndToEnd(unittest.TestCase):
 
 def _run_capture(args, cwd):
     return subprocess.run(args, cwd=cwd, check=True, capture_output=True, text=True).stdout
+
+
+# ---------------------------------------------------------------------------
+# WF8b: D-Checkpoint-Ownership -- the shared claim record, the mutation/
+# handoff guard, the explicit takeover, and the abandoned-guard recovery.
+# ---------------------------------------------------------------------------
+
+
+class TestCheckpointClaimRecord(unittest.TestCase):
+    def test_claim_checkpoint_publishes_and_resolves(self):
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            self.assertEqual(claim["work_item_id"], "wi")
+            self.assertEqual(claim["checkpoint_id"], "CP")
+            self.assertEqual(claim["takeover_count"], 0)
+            self.assertEqual(ws.resolve_claim(repo.root, "wi"), claim)
+
+    def test_resolve_claim_absent_returns_none(self):
+        with ScratchRepo() as repo:
+            self.assertIsNone(ws.resolve_claim(repo.root, "wi"))
+
+    def test_claim_checkpoint_same_checkpoint_is_idempotent(self):
+        with ScratchRepo() as repo:
+            first = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            second = ws.claim_checkpoint(repo.root, "wi", "CP", now="t2")
+            self.assertEqual(first["owner_token"], second["owner_token"])
+
+    def test_claim_checkpoint_different_checkpoint_same_worktree_raises_state_mismatch(self):
+        with ScratchRepo() as repo:
+            ws.claim_checkpoint(repo.root, "wi", "CP1", now="t1")
+            with self.assertRaises(ws.CheckpointOwnershipStateMismatchError):
+                ws.claim_checkpoint(repo.root, "wi", "CP2", now="t2")
+
+    def test_claim_across_worktrees_raises_owned_by_other(self):
+        with ScratchRepo() as repo:
+            ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            wt2 = repo.worktree("b")
+            with self.assertRaises(ws.CheckpointOwnedByOtherWorktreeError):
+                ws.claim_checkpoint(wt2, "wi", "CP", now="t2")
+
+    def test_symlinked_claim_path_refuses_never_followed(self):
+        with ScratchRepo() as repo:
+            claims = ws.claims_dir(repo.root)
+            claims.mkdir(parents=True, exist_ok=True)
+            target = claims / "elsewhere.json"
+            target.write_text(json.dumps({"schema_version": ws.CLAIM_SCHEMA_VERSION}))
+            ws.claim_path(repo.root, "wi").symlink_to(target)
+            with self.assertRaises(ws.CheckpointOwnershipUnavailableError):
+                ws.resolve_claim(repo.root, "wi")
+            with self.assertRaises(ws.CheckpointOwnershipUnavailableError):
+                ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+
+    def test_observe_claim_never_raises_reports_symlink_with_domain_tagged_id(self):
+        with ScratchRepo() as repo:
+            claims = ws.claims_dir(repo.root)
+            claims.mkdir(parents=True, exist_ok=True)
+            target = claims / "elsewhere.json"
+            target.write_text("irrelevant")
+            ws.claim_path(repo.root, "wi").symlink_to(target)
+            oid, claim, error, unreadable = ws.observe_claim(repo.root, "wi")
+            self.assertIsNone(claim)
+            self.assertIsNotNone(error)
+            self.assertEqual(unreadable["kind"], "symlink")
+            self.assertNotEqual(oid, ws.ABSENT_OBSERVATION)
+
+    def test_release_checkpoint_is_compare_and_delete(self):
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            ws.release_checkpoint(repo.root, "wi", "CP", owner_token=claim["owner_token"], now="t2")
+            self.assertIsNone(ws.resolve_claim(repo.root, "wi"))
+
+    def test_release_checkpoint_from_foreign_worktree_refuses(self):
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            wt2 = repo.worktree("b")
+            with self.assertRaises(ws.CheckpointOwnedByOtherWorktreeError):
+                ws.release_checkpoint(wt2, "wi", "CP", owner_token=claim["owner_token"], now="t2")
+
+
+class TestCheckpointMutationGuard(unittest.TestCase):
+    def test_owner_mutation_happy_path_releases_guard(self):
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            token = claim["owner_token"]
+            with ws.owner_mutation(repo.root, "wi", token, checkpoint_id="CP",
+                                   step="1d", step_class=ws.ORDINARY, now="t2") as asserted:
+                self.assertEqual(asserted["owner_token"], token)
+            self.assertIsNone(ws.read_guard(repo.root, "wi"))
+
+    def test_owner_mutation_fences_displaced_owner_after_takeover(self):
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            token = claim["owner_token"]
+            wt2 = repo.worktree("b")
+            evidence = ws.takeover_evidence(wt2, "wi")
+            literal = ws.takeover_authorization_literal("wi", evidence, "CP")
+            ws.take_over_claim(wt2, "wi", "CP", now="t2", user_authorization=literal, evidence=evidence)
+            with self.assertRaises(ws.CheckpointOwnedByOtherWorktreeError):
+                ws.assert_claim_owner(repo.root, "wi", token)
+
+    def test_superseded_epoch_guard_reclaimed_with_no_authorization(self):
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            # A stale guard left by a session whose ownership has already
+            # rotated away -- the current claim's token is `claim
+            # ["owner_token"]`, not this one.
+            ws._publish_guard(repo.root, "wi", {
+                "lease_id": "stale-lease", "holder_owner_token": "bogus-old-token",
+                "holder_worktree_git_dir": "/nowhere", "work_item_id": "wi",
+                "checkpoint_id": "CP", "step": "old-step", "step_class": ws.ORDINARY,
+                "acquired_at": "t0",
+            })
+            lease = ws.acquire_guard(repo.root, "wi", holder_owner_token=claim["owner_token"],
+                                     checkpoint_id="CP", step="1d", step_class=ws.ORDINARY, now="t2")
+            self.assertNotEqual(lease["lease_id"], "stale-lease")
+            ws.release_guard(repo.root, "wi", lease)
+
+    def test_same_worktree_same_token_guard_reclaimed(self):
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            token = claim["owner_token"]
+            first = ws.acquire_guard(repo.root, "wi", holder_owner_token=token, checkpoint_id="CP",
+                                     step="1d", step_class=ws.DESTRUCTIVE, now="t2")
+            # Simulates a crashed/interrupted session in the *same* worktree
+            # re-entering the step without having released -- reclaimed with
+            # no authorization (rule 2), never a fence between sessions in
+            # one worktree.
+            second = ws.acquire_guard(repo.root, "wi", holder_owner_token=token, checkpoint_id="CP",
+                                      step="1d", step_class=ws.DESTRUCTIVE, now="t3")
+            self.assertNotEqual(second["lease_id"], first["lease_id"])
+            ws.release_guard(repo.root, "wi", second)
+
+    def test_destructive_guard_blocks_a_concurrent_owner_mutation(self):
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            token = claim["owner_token"]
+            ws.acquire_guard(repo.root, "wi", holder_owner_token=token, checkpoint_id="CP",
+                             step="1f-commit", step_class=ws.DESTRUCTIVE, now="t2")
+            with self.assertRaises(ws.CheckpointOwnershipUnavailableError):
+                ws.acquire_guard(repo.root, "wi", holder_owner_token="a-different-token",
+                                 checkpoint_id="CP", step="1d", step_class=ws.ORDINARY, now="t3")
+
+    def test_unknown_step_class_refuses(self):
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            with self.assertRaises(ws.CheckpointOwnershipUnavailableError):
+                ws.acquire_guard(repo.root, "wi", holder_owner_token=claim["owner_token"],
+                                 checkpoint_id="CP", step="1d", step_class="bogus", now="t2")
+
+
+class TestExplicitTakeover(unittest.TestCase):
+    def test_takeover_requires_exact_literal(self):
+        with ScratchRepo() as repo:
+            ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            wt2 = repo.worktree("b")
+            with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
+                ws.take_over_claim(wt2, "wi", "CP", now="t2", user_authorization="not the literal")
+
+    def test_takeover_rotates_token_and_establishes_taker_identity(self):
+        with ScratchRepo() as repo:
+            original = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            wt2 = repo.worktree("b")
+            evidence = ws.takeover_evidence(wt2, "wi")
+            literal = ws.takeover_authorization_literal("wi", evidence, "CP")
+            new_claim = ws.take_over_claim(wt2, "wi", "CP", now="t2",
+                                           user_authorization=literal, evidence=evidence)
+            self.assertNotEqual(new_claim["owner_token"], original["owner_token"])
+            self.assertEqual(new_claim["takeover_count"], 1)
+            self.assertEqual(new_claim["previous_owner_tokens"], [original["owner_token"]])
+            self.assertTrue(ws.claim_is_this_worktree(wt2, new_claim))
+            identity = json.loads((wt2 / ws.WORKTREE_IDENTITY_PATH).read_text())
+            self.assertIn("wi", identity["expected_dirty_paths_by_work_item"])
+
+    def test_takeover_of_absent_claim_uses_absent_observation(self):
+        with ScratchRepo() as repo:
+            wt2 = repo.worktree("b")
+            evidence = ws.takeover_evidence(wt2, "wi")
+            self.assertEqual(evidence["claim_observation_id"], ws.ABSENT_OBSERVATION)
+            literal = ws.takeover_authorization_literal("wi", evidence, "CP")
+            record = ws.take_over_claim(wt2, "wi", "CP", now="t2",
+                                        user_authorization=literal, evidence=evidence)
+            self.assertEqual(record["takeover_count"], 1)
+            self.assertNotIn("taken_over_from", record)
+
+    def test_takeover_refuses_on_destructive_guard(self):
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            ws.acquire_guard(repo.root, "wi", holder_owner_token=claim["owner_token"],
+                             checkpoint_id="CP", step="1f-commit", step_class=ws.DESTRUCTIVE, now="t2")
+            wt2 = repo.worktree("b")
+            evidence = ws.takeover_evidence(wt2, "wi")
+            literal = ws.takeover_authorization_literal("wi", evidence, "CP")
+            with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
+                ws.take_over_claim(wt2, "wi", "CP", now="t3", user_authorization=literal, evidence=evidence)
+
+    def test_takeover_refuses_on_stale_evidence(self):
+        with ScratchRepo() as repo:
+            ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            wt2 = repo.worktree("b")
+            stale_evidence = ws.takeover_evidence(wt2, "wi")
+            literal = ws.takeover_authorization_literal("wi", stale_evidence, "CP")
+            # The claim changes underneath the evidence the user reviewed --
+            # here, a takeover from a third worktree beats them to it.
+            wt3 = repo.worktree("c")
+            fresh_evidence = ws.takeover_evidence(wt3, "wi")
+            ws.take_over_claim(wt3, "wi", "CP", now="t2",
+                               user_authorization=ws.takeover_authorization_literal("wi", fresh_evidence, "CP"),
+                               evidence=fresh_evidence)
+            with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
+                ws.take_over_claim(wt2, "wi", "CP", now="t3",
+                                   user_authorization=literal, evidence=stale_evidence)
+
+    def test_takeover_refuses_when_claim_path_is_a_directory(self):
+        with ScratchRepo() as repo:
+            claim_path = ws.claim_path(repo.root, "wi")
+            claim_path.parent.mkdir(parents=True, exist_ok=True)
+            claim_path.mkdir()
+            wt2 = repo.worktree("b")
+            evidence = ws.takeover_evidence(wt2, "wi")
+            self.assertFalse(evidence["claim_replaceable"])
+            literal = ws.takeover_authorization_literal("wi", evidence, "CP")
+            with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
+                ws.take_over_claim(wt2, "wi", "CP", now="t2", user_authorization=literal, evidence=evidence)
+
+
+class TestAbandonedDestructiveGuardRecovery(unittest.TestCase):
+    def test_recovery_refuses_while_holder_still_registered(self):
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            ws.acquire_guard(repo.root, "wi", holder_owner_token=claim["owner_token"],
+                             checkpoint_id="CP", step="1f-commit", step_class=ws.DESTRUCTIVE, now="t2")
+            wt2 = repo.worktree("b")
+            evidence = ws.takeover_evidence(wt2, "wi")
+            literal = ws.abandoned_guard_recovery_authorization_literal("wi", evidence)
+            with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
+                ws.recover_abandoned_destructive_guard(wt2, "wi", "CP", now="t3",
+                                                        user_authorization=literal, evidence=evidence)
+
+    def test_recovery_refuses_on_non_destructive_guard(self):
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            ws.acquire_guard(repo.root, "wi", holder_owner_token=claim["owner_token"],
+                             checkpoint_id="CP", step="1d", step_class=ws.ORDINARY, now="t2")
+            wt2 = repo.worktree("b")
+            evidence = ws.takeover_evidence(wt2, "wi")
+            literal = ws.abandoned_guard_recovery_authorization_literal("wi", evidence)
+            with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
+                ws.recover_abandoned_destructive_guard(wt2, "wi", "CP", now="t3",
+                                                        user_authorization=literal, evidence=evidence)
+
+    def test_recovery_succeeds_once_holder_worktree_is_deregistered(self):
+        with ScratchRepo() as repo:
+            wt_holder = repo.worktree("holder")
+            claim = ws.claim_checkpoint(wt_holder, "wi", "CP", now="t1")
+            lease = ws.acquire_guard(wt_holder, "wi", holder_owner_token=claim["owner_token"],
+                                     checkpoint_id="CP", step="1f-commit", step_class=ws.DESTRUCTIVE, now="t2")
+            repo.remove_worktree(wt_holder)
+            evidence = ws.takeover_evidence(repo.root, "wi")
+            self.assertFalse(evidence["holder_registered"])
+            literal = ws.abandoned_guard_recovery_authorization_literal("wi", evidence)
+            record = ws.recover_abandoned_destructive_guard(
+                repo.root, "wi", "CP", now="t3", user_authorization=literal, evidence=evidence)
+            self.assertEqual(record["takeover_count"], 1)
+            self.assertEqual(
+                record["taken_over_from"]["recovered_from_abandoned_guard"]["lease_id"], lease["lease_id"])
+            # the abandoned guard is superseded by construction once the
+            # claim rotates -- the recovering worktree can acquire cleanly.
+            new_lease = ws.acquire_guard(repo.root, "wi", holder_owner_token=record["owner_token"],
+                                         checkpoint_id="CP", step="1d", step_class=ws.ORDINARY, now="t4")
+            ws.release_guard(repo.root, "wi", new_lease)
+
+
+class TestIdentityDocumentSerialization(unittest.TestCase):
+    """`OPUS-R86-002`'s lost-update fix: `identity_document_lock` plus the
+    single-`os.replace` publish in `_publish_worktree_identity`."""
+
+    def test_write_worktree_identity_leaves_no_temp_file(self):
+        with ScratchRepo() as repo:
+            ws.write_worktree_identity(repo.root, "wi", now="t1")
+            runtime_dir = repo.root / ".ai-review/runtime"
+            leftover = [p for p in runtime_dir.iterdir() if p.name.endswith(".tmp") or ".tmp-" in p.name]
+            self.assertEqual(leftover, [])
+
+    def test_concurrent_writes_for_different_work_items_do_not_lose_entries(self):
+        """Reproduces the plan's own repro in the fixed direction: through
+        revision 68 this lost 12/12 threaded trials; serialized under
+        `identity_document_lock`, every work item's entry survives."""
+        with ScratchRepo() as repo:
+            work_items = [f"wi-{i}" for i in range(10)]
+            errors: list[Exception] = []
+
+            def _write(work_item_id: str) -> None:
+                try:
+                    ws.write_worktree_identity(repo.root, work_item_id, now="t")
+                except Exception as exc:  # noqa: BLE001
+                    errors.append(exc)
+
+            threads = [threading.Thread(target=_write, args=(wi,)) for wi in work_items]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+            self.assertEqual(errors, [])
+            doc = json.loads((repo.root / ws.WORKTREE_IDENTITY_PATH).read_text())
+            self.assertEqual(set(doc["expected_dirty_paths_by_work_item"]), set(work_items))
+
+    def test_local_identity_observation_absent(self):
+        with ScratchRepo() as repo:
+            observed = ws.local_identity_observation(repo.root)
+            self.assertEqual(observed["state"], "absent")
+            self.assertEqual(observed["identity_observation_id"], ws.ABSENT_OBSERVATION)
+
+    def test_local_identity_observation_valid(self):
+        with ScratchRepo() as repo:
+            ws.write_worktree_identity(repo.root, "wi", now="t1")
+            observed = ws.local_identity_observation(repo.root)
+            self.assertEqual(observed["state"], "valid")
+
+    def test_local_identity_observation_undecidable_on_corrupt_document(self):
+        with ScratchRepo() as repo:
+            full = repo.root / ws.WORKTREE_IDENTITY_PATH
+            full.parent.mkdir(parents=True, exist_ok=True)
+            full.write_text("{not json")
+            observed = ws.local_identity_observation(repo.root)
+            self.assertEqual(observed["state"], "undecidable")
+
+    def test_repair_worktree_identity_discards_corrupt_document(self):
+        with ScratchRepo() as repo:
+            full = repo.root / ws.WORKTREE_IDENTITY_PATH
+            full.parent.mkdir(parents=True, exist_ok=True)
+            full.write_text("{not json")
+            document = ws.repair_worktree_identity(repo.root, "wi", now="t1")
+            self.assertIn("wi", document["expected_dirty_paths_by_work_item"])
+            ws.verify_dirty_resume_safety(repo.root, "wi")  # must not raise
+
+    def test_takeover_repairs_takers_own_corrupt_identity_under_explicit_authorization(self):
+        with ScratchRepo() as repo:
+            ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            wt2 = repo.worktree("b")
+            full = wt2 / ws.WORKTREE_IDENTITY_PATH
+            full.parent.mkdir(parents=True, exist_ok=True)
+            full.write_text("{not json")
+            evidence = ws.takeover_evidence(wt2, "wi")
+            self.assertEqual(evidence["local_identity"]["state"], "undecidable")
+            literal = ws.takeover_authorization_literal("wi", evidence, "CP")
+            self.assertIn("repairing identity", literal)
+            ws.take_over_claim(wt2, "wi", "CP", now="t2", user_authorization=literal, evidence=evidence)
+            document = json.loads(full.read_text())
+            self.assertIn("wi", document["expected_dirty_paths_by_work_item"])
 
 
 if __name__ == "__main__":

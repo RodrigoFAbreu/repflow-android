@@ -95,10 +95,43 @@ and its supporting `origination_reference_commits`/
 `git rev-list --all --full-history -- <state path>` enumerates for a
 decidable observation that a checkpoint's `IN_PROGRESS` was ever supplied
 by a checkout, merge, or reset rather than genuinely originated in this
-worktree. Deliberately bounded: no shared claim record, no mutation/
-handoff guard, no adoption, no explicit takeover -- those remain future
-`WF8b` scope. Wired into `/milestone-implement`'s `[2.1 step 1]` step 1c,
+worktree. Wired into `/milestone-implement`'s `[2.1 step 1]` step 1c,
 alongside `verify_dirty_resume_safety`, on the resume path only.
+
+A second WF8b slice adds "The record" and "Fencing: the mutation/handoff
+guard" (revisions 63-72), plus the explicit takeover and the abandoned-
+guard recovery it depends on: the shared, never-committed claim record
+under `$(git rev-parse --git-common-dir)/ai-workflow/checkpoint-claims/`
+(`claim_checkpoint`/`resolve_claim`/`observe_claim`/`release_checkpoint`,
+atomic `os.link`/`os.rename` publication, symlink/directory/EACCES all
+failing closed rather than reading as absent), the per-work-item mutation/
+handoff guard (`acquire_guard`/`assert_claim_owner`/`owner_mutation`'s one
+fixed acquire-assert-mutate-release window, `GPT-R81-001`'s fenced
+handoff), the observation-bound, evidence-first explicit takeover
+(`takeover_evidence`/`take_over_claim`), and the distinct abandoned-
+`"destructive"`-guard recovery for a holder worktree that no longer
+exists (`recover_abandoned_destructive_guard`, `OPUS-R82-001`) -- gated
+on `git worktree list`, never on a timeout or a liveness guess. Also
+fixes `OPUS-R86-002`'s `WORKTREE_IDENTITY.json` lost-update defect
+(12/12 threaded trials lost an entry under the prior plain read-modify-
+write): `write_worktree_identity` now serializes its whole load-validate-
+mutate-publish sequence under `identity_document_lock`
+(`.ai-review/runtime/WORKTREE_IDENTITY.lock`, a stable, never-unlinked,
+per-worktree `fcntl.flock` leaf) and publishes by a single `os.replace`
+(`_publish_worktree_identity`, `OPUS-R86-005`); `repair_worktree_identity`
+is the authorized repair-by-overwrite a rotating operation uses when the
+taking worktree's own identity document is undecidable
+(`OPUS-R86-003`/`-004`).
+
+Deliberately bounded, continuing the prior slice's own stated scope:
+no `adopt_claim` (the adoption path lives under "Reconciling the two
+authorities", not "The record"/"Fencing"), no `resolve_ownership`/
+`classify_selection` (the `/milestone-implement` step 1c/1d/1f wiring
+lives under "Where the check belongs, and the ordering"), and no
+`WFR-66` identity-query enforcement (`authorize_identity_reference_gap`
+is a distinct implementation surface). Those, and executing `v2-1-dry-
+run`'s `S14`/`S15` scenarios for real against this slice, remain future
+`WF8b` scope.
 
 Stdlib-only, mirroring `scripts/workflow_fingerprint.py`'s own
 `docs/TECHNICAL_DECISIONS.md`-recorded constraint.
@@ -109,11 +142,18 @@ Run the real-repository demonstration: python3 scripts/workflow_state_demo_test.
 
 from __future__ import annotations
 
+import contextlib
 import copy
+import errno
+import fcntl
 import hashlib
 import json
+import os
 import re
+import secrets
+import stat
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Mapping
 
@@ -1395,6 +1435,76 @@ def _hash_dirty_paths(repo_root: Path) -> list[dict]:
     return entries
 
 
+WORKTREE_IDENTITY_LOCK_PATH = Path(".ai-review/runtime/WORKTREE_IDENTITY.lock")
+
+
+def identity_document_lock_path(repo_root: Path, path: Path = WORKTREE_IDENTITY_LOCK_PATH) -> Path:
+    return repo_root / path
+
+
+@contextlib.contextmanager
+def identity_document_lock(repo_root: Path, *, lock_path: Path = WORKTREE_IDENTITY_LOCK_PATH):
+    """`D-Checkpoint-Ownership` ("Because it is now load-bearing, its own
+    writes must be serialized", `OPUS-R86-002`): `WORKTREE_IDENTITY.json`
+    holds every work item's entry in one document, and a plain
+    read-modify-write lost an entry in 12/12 threaded trials -- the window
+    held open by the `git` subprocesses `_hash_dirty_paths` spawns between
+    the read and the write. Every writer of this document (this module's
+    own `write_worktree_identity`/`repair_worktree_identity`, and any
+    future one) must hold this lock across its whole
+    load -> validate -> mutate -> publish sequence.
+
+    A **stable, never-unlinked** object beside the document, per-worktree
+    (not per work item, since that is the scope of the document being
+    protected), `fcntl.flock`-serialized. Advisory, so it is defense in
+    depth layered under the publish primitive's own atomicity, not a
+    substitute for it. Released by the kernel on process death, so a crash
+    while holding it cannot become a second class of permanent lockout.
+    "Never unlinked" is a property of this lock's own writers, not of the
+    filesystem: an external wipe of `.ai-review/` (`git clean -xdf`, a
+    stale worktree cleanup) removes it like anything else and a
+    recreated file gets a new inode, so no serialization claim survives
+    such a wipe -- that is an identity-record-destroying event this
+    design already treats as the operator's own act.
+
+    It is a **leaf lock**: never held across a `WORKFLOW_STATE.json`
+    write, so it can never be held at the same time as `D1`'s state-file
+    lock, and no other lock in this design is ever acquired while it is
+    held."""
+    full = identity_document_lock_path(repo_root, lock_path)
+    full.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(full, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)
+
+
+def _publish_worktree_identity(full_path: Path, document: dict) -> None:
+    """The **single** `os.replace` publication (`OPUS-R86-005`): the
+    snapshot is built and validated in memory before this is ever called,
+    and this is the only statement in the sequence that ever touches the
+    final pathname -- a same-directory temp file, written whole, then
+    `os.replace`d over the target. A writer that writes the final
+    pathname directly and only *then* stages/replaces a temp file (as an
+    earlier draft here did) satisfies no atomicity property at all; this
+    is the corrected, single-write form."""
+    full_path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(full_path.parent), prefix=f".{full_path.name}-", suffix=".tmp",
+    )
+    try:
+        with os.fdopen(fd, "w") as handle:
+            handle.write(json.dumps(document, indent=2, sort_keys=True) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_name, full_path)
+    except BaseException:
+        Path(tmp_name).unlink(missing_ok=True)
+        raise
+
+
 def write_worktree_identity(
     repo_root: Path, work_item_id: str, *, now: str, path: Path = WORKTREE_IDENTITY_PATH,
 ) -> dict:
@@ -1415,20 +1525,24 @@ def write_worktree_identity(
     keep editing, so the dirty set is expected to keep changing between
     the moment this snapshot is taken and the next time it's read.
 
-    Writes (creating parent directories as needed) and returns the full,
+    The whole load -> validate -> mutate -> publish sequence runs inside
+    `identity_document_lock` (`OPUS-R86-002`) and publishes by the single
+    `os.replace` `_publish_worktree_identity` performs (`OPUS-R86-005`),
+    so two work items' interleaved writes -- the routine, expected case --
+    can no longer lose an entry to a lost update. Returns the full,
     now-validated `WORKTREE_IDENTITY.json` document."""
     full_path = repo_root / path
-    existing = _load_json(full_path) or {}
-    repo_root_id, git_common_dir, worktree_root = _git_identity(repo_root)
-    existing["repo_root"] = repo_root_id
-    existing["git_common_dir"] = git_common_dir
-    existing["worktree_root"] = worktree_root
-    expected = existing.setdefault("expected_dirty_paths_by_work_item", {})
-    expected[work_item_id] = _hash_dirty_paths(repo_root)
-    existing["generated_at"] = now
-    validate_worktree_identity(existing)
-    full_path.parent.mkdir(parents=True, exist_ok=True)
-    full_path.write_text(json.dumps(existing, indent=2, sort_keys=True) + "\n")
+    with identity_document_lock(repo_root):
+        existing = _load_json(full_path) or {}
+        repo_root_id, git_common_dir, worktree_root = _git_identity(repo_root)
+        existing["repo_root"] = repo_root_id
+        existing["git_common_dir"] = git_common_dir
+        existing["worktree_root"] = worktree_root
+        expected = existing.setdefault("expected_dirty_paths_by_work_item", {})
+        expected[work_item_id] = _hash_dirty_paths(repo_root)
+        existing["generated_at"] = now
+        validate_worktree_identity(existing)
+        _publish_worktree_identity(full_path, existing)
     return existing
 
 
@@ -1670,6 +1784,1289 @@ def checkpoint_origination_provable(
         "decision": "admit", "route": "scanned_all_decidable",
         "state_rel_path": state_rel_path, "examined_commits": len(commits),
     }
+
+
+# ---------------------------------------------------------------------------
+# WF8b: D-Checkpoint-Ownership -- the shared claim record and the
+# mutation/handoff guard ("The record" and "Fencing: the mutation/handoff
+# guard" in docs/ai-workflow/WORKFLOW_V2_PLAN.md, revisions 63-72),
+# plus the explicit takeover and the abandoned-guard recovery it depends
+# on. Authored fresh against the approved revision-80 text; the unwired
+# dry-run prototype (docs/ai-workflow/dry-run/wf8b-s14-repro/
+# checkpoint_ownership.py) is reference/reproduction evidence only.
+#
+# Scope, deliberately bounded per this session's own direction, continuing
+# the prior session's origination-reference slice: no `adopt_claim` (the
+# adoption path lives under "Reconciling the two authorities", not "The
+# record"/"Fencing"), no `resolve_ownership`/`classify_selection` (the
+# `/milestone-implement` step 1c/1d/1f wiring lives under "Where the
+# check belongs, and the ordering"), and no `WFR-66` identity-query
+# enforcement (a distinct implementation surface, `authorize_identity_
+# reference_gap`). Those remain future WF8b scope. This slice makes
+# `take_over_claim`/`recover_abandoned_destructive_guard` available and
+# independently tested, which is the prerequisite the plan names for
+# actually taking `v2-1-dry-run`'s interrupted `S-CP3` over for real.
+# ---------------------------------------------------------------------------
+
+
+class CheckpointOwnedByOtherWorktreeError(Exception):
+    """Raised when claiming, asserting, or releasing a work item's
+    checkpoint that is already claimed by a different worktree of this
+    repository."""
+
+
+class CheckpointOwnershipStateMismatchError(Exception):
+    """Raised when this worktree's own claim cannot be reconciled with
+    this worktree's own state -- reported, never guessed."""
+
+
+class CheckpointOwnershipUnavailableError(Exception):
+    """Raised when the shared claim/guard record cannot be read or
+    written -- fails closed rather than proceeding unprotected."""
+
+
+class CheckpointClaimTakeoverRefusedError(Exception):
+    """Raised when an explicit takeover, guard clearance, or abandoned-
+    guard recovery is attempted without the exact authorization its own
+    contract requires."""
+
+
+CLAIMS_RELDIR = "ai-workflow/checkpoint-claims"
+CLAIM_SCHEMA_VERSION = 3
+
+ORDINARY = "ordinary"
+DESTRUCTIVE = "destructive"
+GUARD_STEP_CLASSES = frozenset({ORDINARY, DESTRUCTIVE})
+
+ABSENT_OBSERVATION = "absent"
+# `OPUS-R83-002`: an observation of a record whose *bytes* cannot be read
+# is hashed under its own domain tag, so it can never collide with the
+# sha256 of some real record's content -- an authorization bound to
+# "there is a symlink here" is never satisfiable by a byte-readable
+# record, or the reverse.
+UNREADABLE_OBSERVATION_DOMAIN = b"unreadable-checkpoint-record-v1\x00"
+# Which unreadable kinds a rotation (`os.rename` onto the name) can
+# actually replace. A symlink and an unreadable regular file are replaced
+# by the rename itself, which never follows the link and never writes
+# through it. A directory is not: `rename` refuses, and this design never
+# removes a directory it did not create.
+REPLACEABLE_UNREADABLE_KINDS = frozenset({"symlink", "unreadable-file", "not-a-regular-file"})
+
+
+def _worktree_git_dir(repo_root: Path) -> str:
+    """`git rev-parse --absolute-git-dir` -- the per-worktree admin
+    directory. Recorded as **diagnostic** identity only, never as the
+    ownership key: it survives `git worktree move`, which the recorded
+    `worktree_root` does not, and that is exactly what lets a takeover
+    tell "the holder was deleted" from "the holder was relocated" instead
+    of guessing."""
+    return _run(["git", "rev-parse", "--absolute-git-dir"], cwd=repo_root).strip()
+
+
+def claims_dir(repo_root: Path) -> Path:
+    _, common_dir, _ = _git_identity(repo_root)
+    return Path(common_dir) / CLAIMS_RELDIR
+
+
+def claim_path(repo_root: Path, work_item_id: str) -> Path:
+    """One file per work item, named by digest so no `work_item_id`
+    value -- including `../../escape`, `a/b/c`, or an absolute path --
+    can address anything outside the claims directory (the same "token,
+    not a path" discipline `D-Bundle-Manifest`'s `bundles/<token>`
+    already uses)."""
+    token = hashlib.sha256(work_item_id.encode()).hexdigest()
+    return claims_dir(repo_root) / f"{token}.json"
+
+
+def guard_path(repo_root: Path, work_item_id: str) -> Path:
+    """The mutation/handoff guard (`GPT-R81-001`): one **fixed** pathname
+    per work item, deliberately not token-scoped, because its whole
+    purpose is to be the single object an owner's mutation and a
+    takeover's rotation contend for."""
+    token = hashlib.sha256(work_item_id.encode()).hexdigest()
+    return claims_dir(repo_root) / f"{token}.lease"
+
+
+def guard_mutation_lock_path(repo_root: Path, work_item_id: str) -> Path:
+    """`OPUS-R83-001`: the stable object every guard **mutation**
+    serializes on -- deliberately a different file from the guard itself,
+    and deliberately created once and never unlinked. Locking the guard
+    file would be useless for exactly the reason the finding exists: the
+    guard's whole lifecycle is create-and-remove, and two processes
+    holding `flock` on two different inodes that briefly shared one
+    pathname are not serialized at all."""
+    token = hashlib.sha256(work_item_id.encode()).hexdigest()
+    return claims_dir(repo_root) / f"{token}.guardlock"
+
+
+@contextlib.contextmanager
+def guard_mutation_lock(repo_root: Path, work_item_id: str):
+    """`D1`'s process-scoped `fcntl.flock` primitive, held across a whole
+    guard mutation so **compare-and-remove is one indivisible step**
+    rather than two statements a preemption can be scheduled between
+    (`OPUS-R83-001`).
+
+    Not the fence and must never be mistaken for one -- held for a
+    handful of syscalls entirely inside one guard operation, while the
+    *guard* is what spans a mutation window. Never held across a
+    `WORKFLOW_STATE.json` write, so it is never held at the same time as
+    `D1`'s state-file lock and the existing guard-then-`flock` ordering
+    is untouched. Advisory, so `os.link`'s `EEXIST` exclusivity is
+    retained underneath it as defense in depth rather than replaced by
+    it. Released by the kernel on process death."""
+    path = guard_mutation_lock_path(repo_root, work_item_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _assert_not_symlink(path.parent, "claims directory")
+    _assert_not_symlink(path, "guard mutation lock")
+    fd = os.open(path, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)
+
+
+# ---------------------------------------------------------------------------
+# Reading
+# ---------------------------------------------------------------------------
+
+
+def _assert_not_symlink(path: Path, what: str) -> None:
+    """The claims directory and the claim/guard file must all be real
+    objects -- never follow a link out of the claims directory. A claim
+    reached through one is not this repository's coordination state,
+    whatever it contains."""
+    try:
+        st = os.lstat(path)
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise CheckpointOwnershipUnavailableError(f"cannot stat {path} ({exc})") from exc
+    if stat.S_ISLNK(st.st_mode):
+        raise CheckpointOwnershipUnavailableError(
+            f"{what} {path} is a symbolic link -- refusing to read or publish checkpoint "
+            f"ownership through a link out of the claims directory"
+        )
+
+
+def _read_claim_bytes(path: Path) -> bytes | None:
+    _assert_not_symlink(path.parent, "claims directory")
+    _assert_not_symlink(path, "claim record")
+    try:
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        if exc.errno in (errno.ELOOP, errno.EMLINK):
+            raise CheckpointOwnershipUnavailableError(
+                f"{path} is a symbolic link -- refusing to resolve checkpoint ownership "
+                f"through it"
+            ) from exc
+        raise CheckpointOwnershipUnavailableError(f"cannot read {path} ({exc})") from exc
+    try:
+        with os.fdopen(fd, "rb") as handle:
+            return handle.read()
+    except OSError as exc:
+        # A directory `open`s successfully and fails at `fdopen`/`read`
+        # with `EISDIR` -- refuse with the declared error rather than an
+        # undeclared `IsADirectoryError` escaping to the caller.
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        raise CheckpointOwnershipUnavailableError(
+            f"cannot read {path} ({exc}) -- refusing to resolve checkpoint ownership "
+            f"against a record whose bytes cannot be read") from exc
+
+
+def _validate_claim(path: Path, data, work_item_id: str) -> dict:
+    if not isinstance(data, dict) or data.get("schema_version") != CLAIM_SCHEMA_VERSION:
+        raise CheckpointOwnershipUnavailableError(
+            f"{path} has an unsupported shape/schema_version (expected {CLAIM_SCHEMA_VERSION})")
+    required = ("work_item_id", "checkpoint_id", "repo_root", "git_common_dir",
+                "worktree_root", "worktree_git_dir", "claimed_at", "owner_token")
+    missing = [field for field in required if not isinstance(data.get(field), str)]
+    if missing:
+        raise CheckpointOwnershipUnavailableError(f"{path} is missing/malformed fields {missing}")
+    if data["work_item_id"] != work_item_id:
+        raise CheckpointOwnershipUnavailableError(
+            f"{path} records work item {data['work_item_id']!r}, not {work_item_id!r}")
+    return data
+
+
+def resolve_claim(repo_root: Path, work_item_id: str) -> dict | None:
+    """The one read every ownership decision performs. `None` means
+    unclaimed. Every other failure mode -- unreadable, torn, wrong
+    schema, wrong work item, reached through a symlink -- raises rather
+    than returning `None`, so an undecidable claim can never be mistaken
+    for an absent one."""
+    path = claim_path(repo_root, work_item_id)
+    raw = _read_claim_bytes(path)
+    if raw is None:
+        return None
+    try:
+        data = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise CheckpointOwnershipUnavailableError(
+            f"{path} exists but could not be read as JSON ({exc}) -- refusing to start or "
+            f"resume any checkpoint against an unreadable claim record; clear it with the "
+            f"explicit takeover operation, never by guessing"
+        ) from exc
+    return _validate_claim(path, data, work_item_id)
+
+
+def describe_unreadable_record(path: Path) -> dict | None:
+    """What `lstat` alone can say about a record whose bytes cannot be
+    read (`OPUS-R83-002`). Returns `None` when the record is absent or
+    genuinely byte-readable -- in which case `observation_id` over its
+    bytes applies. Derived from durable, re-verifiable facts only, and
+    for a symlink from the raw link target rather than anything read
+    *through* it: the target is never opened, so an off-tree file is
+    never touched."""
+    try:
+        st = os.lstat(path)
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        return {"kind": "unstattable", "errno": errno.errorcode.get(exc.errno, str(exc.errno))}
+    if stat.S_ISLNK(st.st_mode):
+        try:
+            target = os.readlink(path)
+        except OSError:
+            target = None
+        return {"kind": "symlink", "link_target": target}
+    if stat.S_ISDIR(st.st_mode):
+        return {"kind": "directory"}
+    if not stat.S_ISREG(st.st_mode):
+        return {"kind": "not-a-regular-file", "st_mode": stat.S_IFMT(st.st_mode)}
+    try:
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError as exc:
+        return {"kind": "unreadable-file",
+                "errno": errno.errorcode.get(exc.errno, str(exc.errno)),
+                "st_mode": stat.S_IMODE(st.st_mode)}
+    os.close(fd)
+    return None
+
+
+def unreadable_observation_id(descriptor: Mapping) -> str:
+    payload = json.dumps(descriptor, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(UNREADABLE_OBSERVATION_DOMAIN + payload).hexdigest()
+
+
+def observation_id(raw: bytes | None) -> str:
+    """The immutable identity of *the exact record a human reviewed*
+    (`GPT-R81-002`). Defined over raw bytes rather than parsed content,
+    so an unreadable or torn record has an equally binding observation
+    instead of falling back to a reusable generic authorization.
+    `"absent"` is itself an observation: authorizing a takeover of "no
+    claim" must not survive somebody publishing one in the meantime."""
+    if raw is None:
+        return ABSENT_OBSERVATION
+    return hashlib.sha256(raw).hexdigest()
+
+
+def observe_claim(repo_root: Path, work_item_id: str) -> tuple[str, dict | None, str | None, dict | None]:
+    """Read the claim **and** its observation id in one pass, reporting
+    rather than raising on an undecidable record: returns
+    `(observation_id, parsed_claim_or_None, error_or_None,
+    unreadable_descriptor_or_None)`. `resolve_claim` still fails closed
+    for ordinary ownership decisions; this exists for the operations that
+    must be able to *describe* a record they refuse to act on
+    (`takeover_evidence` and a rotation's own re-read)."""
+    path = claim_path(repo_root, work_item_id)
+    try:
+        raw = _read_claim_bytes(path)
+    except CheckpointOwnershipUnavailableError as exc:
+        descriptor = describe_unreadable_record(path)
+        if descriptor is None:
+            raise
+        return unreadable_observation_id(descriptor), None, str(exc), descriptor
+    oid = observation_id(raw)
+    if raw is None:
+        return oid, None, None, None
+    try:
+        data = json.loads(raw)
+        return oid, _validate_claim(path, data, work_item_id), None, None
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return oid, None, f"unparseable claim record ({exc})", None
+    except CheckpointOwnershipUnavailableError as exc:
+        return oid, None, str(exc), None
+
+
+def claim_is_this_worktree(repo_root: Path, claim: dict) -> bool:
+    repo_root_id, common, worktree_root = _git_identity(repo_root)
+    return (claim.get("repo_root"), claim.get("git_common_dir"), claim.get("worktree_root")) == (
+        repo_root_id, common, worktree_root)
+
+
+# ---------------------------------------------------------------------------
+# Publication
+# ---------------------------------------------------------------------------
+
+
+def _build_claim_record(repo_root: Path, work_item_id: str, checkpoint_id: str, now: str,
+                        *, adopted: bool = False, taken_over_from: dict | None = None,
+                        takeover_count: int = 0,
+                        previous_owner_tokens: tuple[str, ...] | list[str] = ()) -> dict:
+    repo_root_id, common, worktree_root = _git_identity(repo_root)
+    record = {
+        "schema_version": CLAIM_SCHEMA_VERSION,
+        "work_item_id": work_item_id,
+        "checkpoint_id": checkpoint_id,
+        "repo_root": repo_root_id,
+        "git_common_dir": common,
+        "worktree_root": worktree_root,
+        "worktree_git_dir": _worktree_git_dir(repo_root),
+        "claimed_at": now,
+        "adopted": adopted,
+        # `GPT-R81-001`: ownership is durable data a fresh session can
+        # present, not a process-lifetime property. Minted here and
+        # nowhere else; a takeover rotates it, which is what makes the
+        # displaced owner's next assertion fail.
+        "owner_token": secrets.token_hex(16),
+        "takeover_count": takeover_count,
+        "previous_owner_tokens": list(previous_owner_tokens),
+    }
+    if taken_over_from is not None:
+        record["taken_over_from"] = taken_over_from
+    return record
+
+
+def _stage_claim_payload(path: Path, record: dict, *, allow_unreadable_target: bool = False) -> Path:
+    """Stage the payload in the claims directory. The claims **directory**
+    must always be a real directory -- that assertion is never relaxed.
+    `allow_unreadable_target` relaxes the assertion on the final *name*
+    only, for the two authorized operations that exist to replace an
+    undecidable record (`OPUS-R83-002`): safe because staging happens at
+    a fresh temp name and publication is `os.rename` onto the final one,
+    which replaces the link, never follows it, never writes through it."""
+    payload = json.dumps(record, indent=2, sort_keys=True) + "\n"
+    _assert_not_symlink(path.parent, "claims directory")
+    if not allow_unreadable_target:
+        _assert_not_symlink(path, "claim record")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=".claim-", suffix=".tmp")
+        with os.fdopen(fd, "w") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except OSError as exc:
+        raise CheckpointOwnershipUnavailableError(
+            f"cannot stage a claim next to {path} ({exc}) -- refusing to start a checkpoint "
+            f"whose claim cannot be made discoverable to this repository's other worktrees"
+        ) from exc
+    return Path(tmp_name)
+
+
+def _publish_claim_replacing(path: Path, record: dict, *, allow_unreadable_target: bool = False) -> None:
+    """The takeover's/recovery's publication. `os.rename` over the
+    existing name is atomic and never leaves the path absent, so an
+    authorized rotation that fails mid-way leaves the *previous* claim in
+    force rather than silently unprotecting the work item. Never used for
+    ordinary acquisition, which must fail rather than replace."""
+    tmp = _stage_claim_payload(path, record, allow_unreadable_target=allow_unreadable_target)
+    try:
+        os.rename(tmp, path)
+    except OSError as exc:
+        tmp.unlink(missing_ok=True)
+        raise CheckpointOwnershipUnavailableError(
+            f"cannot publish the replacement claim at {path} ({exc}) -- the previous claim is "
+            f"left in force; nothing was released"
+        ) from exc
+
+
+def _publish_claim_exclusive(path: Path, record: dict) -> None:
+    """Atomic in **both** senses -- complete content, and create-if-absent.
+    Write the whole payload to a temp file in the same directory, then
+    `os.link` it into place: the link either creates the final name with
+    fully-written content, or fails `EEXIST` because somebody else won.
+    There is no window in which a reader can observe a partially-written
+    claim, so a crash can never leave a record that fails closed for
+    everybody."""
+    tmp = _stage_claim_payload(path, record)
+    try:
+        os.link(tmp, path)
+    except FileExistsError:
+        raise
+    except OSError as exc:
+        raise CheckpointOwnershipUnavailableError(
+            f"cannot publish {path} ({exc}) -- refusing to start a checkpoint whose claim "
+            f"cannot be made discoverable to this repository's other worktrees"
+        ) from exc
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _claim_or_refuse(repo_root: Path, work_item_id: str, record: dict) -> dict:
+    path = claim_path(repo_root, work_item_id)
+    try:
+        _publish_claim_exclusive(path, record)
+    except FileExistsError:
+        existing = resolve_claim(repo_root, work_item_id)
+        _, _, worktree_root = _git_identity(repo_root)
+        if existing is not None and not claim_is_this_worktree(repo_root, existing):
+            raise CheckpointOwnedByOtherWorktreeError(
+                f"{work_item_id!r} checkpoint {existing.get('checkpoint_id')!r} is already "
+                f"claimed by worktree {existing.get('worktree_root')!r} (this worktree is "
+                f"{worktree_root!r}) -- resume it there, or take the claim over explicitly"
+            ) from None
+        if existing is not None and existing.get("checkpoint_id") != record["checkpoint_id"]:
+            raise CheckpointOwnershipStateMismatchError(
+                f"this worktree already claims {work_item_id!r} checkpoint "
+                f"{existing.get('checkpoint_id')!r}; refusing to silently repoint it at "
+                f"{record['checkpoint_id']!r}"
+            ) from None
+        return existing if existing is not None else record
+    return record
+
+
+def claim_checkpoint(repo_root: Path, work_item_id: str, checkpoint_id: str, *, now: str) -> dict:
+    """Acquire a fresh-start claim. Intended to be called at step 1d
+    **after** this worktree's own identity record is established and
+    **before** `transition_checkpoint_in_progress` -- both orderings are
+    load-bearing, not stylistic, per "Where the check belongs, and the
+    ordering" (future WF8b scope wires this call site; this function is
+    the primitive it will call)."""
+    record = _build_claim_record(repo_root, work_item_id, checkpoint_id, now)
+    return _claim_or_refuse(repo_root, work_item_id, record)
+
+
+def release_checkpoint(repo_root: Path, work_item_id: str, checkpoint_id: str, *,
+                       owner_token: str, now: str = "release") -> None:
+    """Release this session's own claim -- intended to be called at step
+    1f **after** the checkpoint commit exists.
+
+    A **compare-and-delete**, not a read-then-unlink (`GPT-R81-001`): the
+    token the caller holds is asserted *inside* the mutation guard and
+    the unlink happens in that same window, so a takeover interleaved
+    between the read and the delete can no longer let a displaced owner
+    remove the replacement owner's claim."""
+    existing = resolve_claim(repo_root, work_item_id)
+    if existing is None:
+        return
+    if not claim_is_this_worktree(repo_root, existing):
+        raise CheckpointOwnedByOtherWorktreeError(
+            f"refusing to release {work_item_id!r}'s claim held by "
+            f"{existing.get('worktree_root')!r} from a different worktree")
+    try:
+        with owner_mutation(repo_root, work_item_id, owner_token,
+                            checkpoint_id=checkpoint_id, step="1f-release",
+                            step_class=ORDINARY, now=now):
+            claim_path(repo_root, work_item_id).unlink(missing_ok=True)
+    except OSError as exc:
+        raise CheckpointOwnershipUnavailableError(
+            f"cannot release {work_item_id!r}'s claim ({exc}) -- the checkpoint's own "
+            f"completion is unaffected; the claim is released on the next invocation from "
+            f"this worktree once the completion is durable"
+        ) from exc
+
+
+def committed_checkpoint_status(repo_root: Path, work_item_id: str, checkpoint_id: str,
+                                *, state_rel_path: str | None = None) -> str | None:
+    """The checkpoint's status in the `WORKFLOW_STATE.json` **committed at
+    `HEAD`** -- never the working tree's. The difference between "the
+    checkpoint is done" and "somebody typed that it is done"."""
+    state_rel_path = state_rel_path or DEFAULT_STATE_PATH.as_posix()
+    try:
+        blob = _run(["git", "show", f"HEAD:{state_rel_path}"], cwd=repo_root)
+    except subprocess.CalledProcessError:
+        return None
+    try:
+        state = json.loads(blob)
+    except json.JSONDecodeError:
+        return None
+    item = state.get("work_items", {}).get(work_item_id)
+    if not isinstance(item, dict):
+        return None
+    return item.get("checkpoints", {}).get(checkpoint_id, {}).get("status")
+
+
+# ---------------------------------------------------------------------------
+# Fencing: the mutation/handoff guard (`GPT-R81-001`)
+# ---------------------------------------------------------------------------
+
+
+def read_guard(repo_root: Path, work_item_id: str) -> dict | None:
+    """The guard body, or `None` if the guard is not held. Fails closed
+    on a torn or symlinked guard exactly as the claim does -- an
+    undecidable guard is never read as an absent one."""
+    path = guard_path(repo_root, work_item_id)
+    raw = _read_claim_bytes(path)
+    if raw is None:
+        return None
+    try:
+        data = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise CheckpointOwnershipUnavailableError(
+            f"{path} exists but could not be read as JSON ({exc}) -- refusing to mutate "
+            f"checkpoint state behind an undecidable mutation guard") from exc
+    if not isinstance(data, dict) or not isinstance(data.get("lease_id"), str):
+        raise CheckpointOwnershipUnavailableError(f"{path} is not a well-formed mutation guard")
+    return data
+
+
+def _publish_guard(repo_root: Path, work_item_id: str, body: dict) -> None:
+    _publish_claim_exclusive(guard_path(repo_root, work_item_id), body)
+
+
+def _current_owner_token(repo_root: Path, work_item_id: str) -> tuple[str | None, bool]:
+    """`(current owner_token, epoch_is_decidable)`. `None` with `True`
+    means there is genuinely no claim, so **any** guard is superseded. An
+    undecidable claim returns `False`, and a guard whose epoch cannot be
+    judged is then never reclaimed -- the fail-closed direction."""
+    try:
+        claim = resolve_claim(repo_root, work_item_id)
+    except CheckpointOwnershipUnavailableError:
+        return None, False
+    return (claim.get("owner_token") if claim is not None else None), True
+
+
+def acquire_guard(repo_root: Path, work_item_id: str, *, holder_owner_token: str | None,
+                  checkpoint_id: str | None, step: str, step_class: str, now: str,
+                  role: str = "owner", authorized_lease_id: str | None = None) -> dict:
+    """One acquisition attempt. **No retry loop, no timeout, no wall
+    clock** -- every branch decides from durable data alone.
+
+    - **superseded epoch** (`holder_owner_token` is not the claim's
+      current token): the guard was provably left by a session whose
+      ownership has already been rotated away, since only a rotation
+      changes that token and a rotation only ever happens while holding
+      this same guard. Reclaimed with no authorization, then acquisition
+      is retried exactly **once**. Deliberately not narrowed to a
+      worktree, so no post-takeover recovery is stranded.
+    - **`role="owner"`, same token *and* same worktree**: the caller's
+      own leftover guard from an interrupted earlier step. Reclaimed and
+      retried once; the window's first act is `assert_claim_owner`, so a
+      stale belief about ownership is caught immediately regardless.
+      `holder_worktree_git_dir` is a required conjunct (`OPUS-R82-002`):
+      the token is world-readable coordination data any worktree can
+      read out of the claim, so token equality alone would let a
+      *foreign* worktree reclaim a live `"destructive"` guard.
+    - **`role="takeover"`, current epoch**: `"destructive"` refuses
+      unconditionally. `"ordinary"` releases only when the observed
+      `lease_id` is exactly the one the authorization quoted; a
+      *different* `lease_id` proves the owner released and re-acquired,
+      i.e. is demonstrably live, and refuses.
+    - **`role="recovery"`, current epoch** (`OPUS-R82-001`): the one path
+      that may reclaim a `"destructive"` guard from another worktree,
+      reachable only from `recover_abandoned_destructive_guard`, which
+      has already established the holder worktree is no longer
+      registered and bound the authorization to both durable
+      observations.
+    - anything else refuses, naming the held guard."""
+    body = {
+        "lease_id": secrets.token_hex(16),
+        "holder_owner_token": holder_owner_token,
+        "holder_worktree_git_dir": _worktree_git_dir(repo_root),
+        "work_item_id": work_item_id,
+        "checkpoint_id": checkpoint_id,
+        "step": step,
+        "step_class": step_class,
+        "acquired_at": now,
+    }
+    if step_class not in GUARD_STEP_CLASSES:
+        raise CheckpointOwnershipUnavailableError(f"unknown guard step_class {step_class!r}")
+    # `OPUS-R83-001`: the reclaim-and-republish sequence below removes a
+    # guard and publishes another, and those two steps must be
+    # indivisible with respect to the `lease_id` this session compared
+    # against. Everything from the first observation to the publication
+    # runs inside the serialization.
+    with guard_mutation_lock(repo_root, work_item_id):
+        return _acquire_guard_locked(repo_root, work_item_id, body=body,
+                                     holder_owner_token=holder_owner_token, role=role,
+                                     authorized_lease_id=authorized_lease_id)
+
+
+def _acquire_guard_locked(repo_root: Path, work_item_id: str, *, body: dict,
+                          holder_owner_token: str | None, role: str,
+                          authorized_lease_id: str | None) -> dict:
+    """`acquire_guard`'s decision and publication, run under
+    `guard_mutation_lock`. Split out so the lock is taken exactly once by
+    the operation rather than re-entered by each helper (`OPUS-R83-001`)."""
+    try:
+        _publish_guard(repo_root, work_item_id, body)
+        return body
+    except FileExistsError:
+        pass
+
+    held = read_guard(repo_root, work_item_id)
+    if held is None:                       # released between the two operations
+        _publish_guard(repo_root, work_item_id, body)
+        return body
+
+    current, decidable = _current_owner_token(repo_root, work_item_id)
+    reclaim = False
+    if decidable and held.get("holder_owner_token") != current:
+        reclaim = True                     # superseded epoch
+    elif (role == "owner" and held.get("holder_owner_token") == holder_owner_token
+          and held.get("holder_worktree_git_dir") == _worktree_git_dir(repo_root)):
+        reclaim = True                     # this worktree's own leftover guard
+    elif role == "owner" and held.get("holder_owner_token") == holder_owner_token:
+        # `OPUS-R82-002`: same token, different worktree. The token
+        # proves the epoch, never the holder.
+        raise CheckpointOwnershipUnavailableError(
+            f"{work_item_id!r}'s mutation guard is held by worktree "
+            f"{held.get('holder_worktree_git_dir')!r} (lease {held.get('lease_id')!r}, step "
+            f"{held.get('step')!r}, class {held.get('step_class')!r}); this worktree is "
+            f"{_worktree_git_dir(repo_root)!r} -- presenting the claim's token is not being the "
+            f"holder, and no worktree breaks another worktree's window here")
+    elif role == "takeover":
+        if held.get("step_class") == DESTRUCTIVE:
+            raise CheckpointClaimTakeoverRefusedError(
+                f"{work_item_id!r}'s owner is inside the destructive step "
+                f"{held.get('step')!r} (lease {held.get('lease_id')!r}) -- no takeover "
+                f"authorization breaks that window; resume in the owning session, or, if that "
+                f"worktree is gone, use the abandoned-guard recovery")
+        if authorized_lease_id is not None and authorized_lease_id == held.get("lease_id"):
+            reclaim = True                 # the authorized break, exactly as quoted
+        else:
+            raise CheckpointClaimTakeoverRefusedError(
+                f"{work_item_id!r}'s mutation guard is held (lease {held.get('lease_id')!r}, step "
+                f"{held.get('step')!r}) and does not match the authorized lease "
+                f"{authorized_lease_id!r} -- the owner is live; refusing to break it")
+    elif role == "recovery":
+        if authorized_lease_id is not None and authorized_lease_id == held.get("lease_id"):
+            reclaim = True
+        else:
+            raise CheckpointClaimTakeoverRefusedError(
+                f"{work_item_id!r}'s mutation guard (lease {held.get('lease_id')!r}) is no longer "
+                f"the abandoned one the recovery authorized ({authorized_lease_id!r}) -- "
+                f"refusing, having mutated nothing")
+    if not reclaim:
+        raise CheckpointOwnershipUnavailableError(
+            f"{work_item_id!r}'s mutation guard is held by lease {held.get('lease_id')!r} "
+            f"(step {held.get('step')!r}, class {held.get('step_class')!r}) -- refusing to mutate "
+            f"checkpoint state concurrently with its owner")
+
+    _release_guard_path_locked(repo_root, work_item_id, held.get("lease_id"))
+    try:
+        _publish_guard(repo_root, work_item_id, body)
+    except FileExistsError as exc:
+        raise CheckpointOwnershipUnavailableError(
+            f"{work_item_id!r}'s mutation guard was re-acquired by another session during "
+            f"reclamation -- refusing, having mutated nothing") from exc
+    return body
+
+
+def _release_guard_path_locked(repo_root: Path, work_item_id: str, lease_id: str) -> None:
+    """Compare-and-delete on `lease_id`: never remove a guard this
+    session does not hold. **Caller must hold `guard_mutation_lock`**
+    (`OPUS-R83-001`) -- a bare read-then-`unlink` names the *pathname*
+    rather than the identity the comparison just established, so a guard
+    published between the two statements is removed instead, including a
+    live `"destructive"` one belonging to the work item's current owner
+    in another worktree.
+
+    An undecidable guard is left in place rather than deleted -- a
+    release path that silently drops a record it could not read would be
+    the one place fail-closed quietly became fail-open; the documented
+    recovery is `clear_malformed_guard`.
+
+    **An absent `lease_id` is a refusal, never a wildcard** (`OPUS-R84`
+    non-blocking observation 1, extended per `OPUS-R85` non-blocking
+    observation 1 to cover `""` as well as `None`): "every removal of a
+    guard, on every path, names the `lease_id` it just observed"."""
+    if not isinstance(lease_id, str) or not lease_id:
+        raise CheckpointOwnershipUnavailableError(
+            f"releasing {work_item_id!r}'s mutation guard requires the exact lease_id being "
+            f"released, got {lease_id!r} -- an absent lease id is a refusal, never a wildcard "
+            f"that removes whatever guard is present")
+    path = guard_path(repo_root, work_item_id)
+    try:
+        held = read_guard(repo_root, work_item_id)
+    except CheckpointOwnershipUnavailableError:
+        return
+    if held is None:
+        return
+    if held.get("lease_id") != lease_id:
+        return
+    path.unlink(missing_ok=True)
+
+
+def _release_guard_path(repo_root: Path, work_item_id: str, lease_id: str) -> None:
+    with guard_mutation_lock(repo_root, work_item_id):
+        _release_guard_path_locked(repo_root, work_item_id, lease_id)
+
+
+def guard_clearance_authorization_literal(evidence: dict) -> str:
+    return (f"clear malformed checkpoint guard {evidence.get('work_item_id')} "
+            f"observation {evidence.get('guard_observation_id')}")
+
+
+def clear_malformed_guard(repo_root: Path, work_item_id: str, *, user_authorization: str | None) -> None:
+    """The defined recovery for a guard this implementation cannot have
+    written -- torn, wrong shape, or otherwise undecidable. Publication
+    is a same-directory temp file plus `os.link`, so a partially written
+    guard is not producible here; a guard that *is* undecidable was
+    corrupted by something else, and it fails closed for every session
+    including the legitimate owner. Left there, that is a permanent
+    lockout.
+
+    The escape is explicit, user-authorized and observation-bound, never
+    automatic and never time-based: the literal must quote the exact
+    `guard_observation_id` the evidence reported, and the bytes must
+    still hash to it at the moment of removal."""
+    path = guard_path(repo_root, work_item_id)
+    raw = _read_claim_bytes(path)
+    evidence = {"work_item_id": work_item_id, "guard_observation_id": observation_id(raw)}
+    if user_authorization != guard_clearance_authorization_literal(evidence):
+        raise CheckpointClaimTakeoverRefusedError(
+            f"clearing a malformed mutation guard requires the literal authorization "
+            f"{guard_clearance_authorization_literal(evidence)!r} -- refusing to remove a "
+            f"guard on an inference")
+    with guard_mutation_lock(repo_root, work_item_id):
+        current = _read_claim_bytes(path)
+        if observation_id(current) != evidence["guard_observation_id"]:
+            raise CheckpointClaimTakeoverRefusedError(
+                f"{work_item_id!r}'s mutation guard changed between the evidence the user "
+                f"authorized ({evidence['guard_observation_id']}) and this clearance "
+                f"({observation_id(current)}) -- refusing, having removed nothing")
+        try:
+            read_guard(repo_root, work_item_id)
+        except CheckpointOwnershipUnavailableError:
+            path.unlink(missing_ok=True)
+            return
+    raise CheckpointClaimTakeoverRefusedError(
+        f"{work_item_id!r}'s mutation guard is well-formed -- this operation only ever "
+        f"removes an undecidable record; use the ordinary takeover contract instead")
+
+
+def release_guard(repo_root: Path, work_item_id: str, lease: dict) -> None:
+    _release_guard_path(repo_root, work_item_id, lease.get("lease_id"))
+
+
+def assert_claim_owner(repo_root: Path, work_item_id: str, owner_token: str) -> dict:
+    """Re-read the claim at its final pathname and require its
+    `owner_token` to equal exactly the token this session holds. On any
+    failure -- absent claim, undecidable claim, rotated token -- stop
+    immediately and mutate nothing.
+
+    This is the mechanism by which an owner whose claim was taken over
+    refuses instead of continuing: after a takeover the claim carries a
+    rotated token, so the displaced owner's very next assertion fails.
+    Meaningful only **inside** the guard; called outside it, it is a
+    check-before-use, which `GPT-R81-001` reproduced as insufficient."""
+    claim = resolve_claim(repo_root, work_item_id)
+    if claim is None:
+        raise CheckpointOwnershipStateMismatchError(
+            f"this session holds {work_item_id!r} owner token {owner_token!r} but no claim "
+            f"record exists -- refusing to mutate")
+    if claim.get("owner_token") != owner_token:
+        if not claim_is_this_worktree(repo_root, claim):
+            raise CheckpointOwnedByOtherWorktreeError(
+                f"{work_item_id!r}'s claim now belongs to worktree "
+                f"{claim.get('worktree_root')!r} with owner token {claim.get('owner_token')!r}; "
+                f"this session holds {owner_token!r} and is therefore no longer the owner -- "
+                f"refusing to write authoritative state or commit")
+        raise CheckpointOwnershipStateMismatchError(
+            f"{work_item_id!r}'s claim carries owner token {claim.get('owner_token')!r}, not the "
+            f"{owner_token!r} this session holds -- ownership was rotated; refusing to mutate")
+    return claim
+
+
+@contextlib.contextmanager
+def owner_mutation(repo_root: Path, work_item_id: str, owner_token: str, *,
+                   checkpoint_id: str | None, step: str, step_class: str, now: str):
+    """The one fixed window shape every ownership-bearing mutation runs
+    inside:
+
+        acquire the guard -> assert_claim_owner(T) *under* the guard ->
+        perform the mutation -> release the guard
+
+    Every pause, stall or crash between the assertion and the mutation is
+    therefore inside a window a takeover cannot enter. Windows are
+    strictly non-nested: a session holds at most one guard at a time."""
+    lease = acquire_guard(repo_root, work_item_id, holder_owner_token=owner_token,
+                          checkpoint_id=checkpoint_id, step=step, step_class=step_class,
+                          now=now, role="owner")
+    try:
+        yield assert_claim_owner(repo_root, work_item_id, owner_token)
+    finally:
+        release_guard(repo_root, work_item_id, lease)
+
+
+# ---------------------------------------------------------------------------
+# Explicit takeover -- never automatic, always evidence-first
+# ---------------------------------------------------------------------------
+
+
+def registered_worktrees(repo_root: Path) -> list[dict]:
+    """`git worktree list --porcelain`, parsed -- the shared registry
+    every linked worktree can read, used to tell a deleted holder from a
+    live one."""
+    out = _run(["git", "worktree", "list", "--porcelain"], cwd=repo_root)
+    entries: list[dict] = []
+    current: dict = {}
+    for line in out.splitlines():
+        if not line.strip():
+            if current:
+                entries.append(current)
+                current = {}
+            continue
+        key, _, value = line.partition(" ")
+        current[key] = value
+    if current:
+        entries.append(current)
+    return entries
+
+
+def local_identity_observation(repo_root: Path, *, path: Path = WORKTREE_IDENTITY_PATH) -> dict:
+    """What the **taking** worktree's own identity document is, as a
+    durable, re-verifiable observation (`OPUS-R86-003`). A rotating
+    operation must establish this worktree's own identity record, and
+    that write owes validate-before-mutate -- so when the document is
+    undecidable the operation refuses unless the repair is separately
+    authorized. Observed here, never concluded: the id is the sha256 of
+    the exact bytes the human is shown, so the authorization it derives
+    is bound to that document and to no other, and is non-replayable
+    once the repair changes those bytes."""
+    full_path = repo_root / path
+    try:
+        raw = _read_claim_bytes(full_path)
+    except CheckpointOwnershipUnavailableError:
+        descriptor = describe_unreadable_record(full_path)
+        return {"state": "undecidable", "path": str(full_path),
+                "identity_observation_id": (unreadable_observation_id(descriptor)
+                                            if descriptor is not None else ABSENT_OBSERVATION),
+                "unreadable": descriptor, "error": "the document is not a readable regular file"}
+    if raw is None:
+        return {"state": "absent", "path": str(full_path), "identity_observation_id": ABSENT_OBSERVATION}
+    oid = observation_id(raw)
+    try:
+        data = json.loads(raw)
+        validate_worktree_identity(data)
+    except Exception as exc:  # noqa: BLE001 -- every decidability failure is one state
+        return {"state": "undecidable", "path": str(full_path), "identity_observation_id": oid,
+                "error": f"{type(exc).__name__}: {exc}"}
+    return {"state": "valid", "path": str(full_path), "identity_observation_id": oid}
+
+
+def repair_worktree_identity(repo_root: Path, work_item_id: str, *, now: str,
+                             path: Path = WORKTREE_IDENTITY_PATH) -> dict:
+    """The authorized repair-by-overwrite of this worktree's **own**
+    identity document (`OPUS-R86-003`). Deliberately a separate entry
+    point from `write_worktree_identity`, which must keep refusing on a
+    corrupt existing document rather than silently replacing it
+    (`OPUS-R86-004`): this one discards the undecidable document and
+    builds a fresh one, and it is reachable only from a rotating
+    operation whose authorization literal carried the repair component
+    bound to that exact document's observation. Publishes through the
+    same lock and the same single `os.replace` as every other write of
+    this file."""
+    full_path = repo_root / path
+    with identity_document_lock(repo_root):
+        repo_root_id, git_common_dir, worktree_root = _git_identity(repo_root)
+        document = {
+            "repo_root": repo_root_id,
+            "git_common_dir": git_common_dir,
+            "worktree_root": worktree_root,
+            "expected_dirty_paths_by_work_item": {work_item_id: _hash_dirty_paths(repo_root)},
+            "generated_at": now,
+        }
+        validate_worktree_identity(document)
+        _publish_worktree_identity(full_path, document)
+    return document
+
+
+def _establish_or_repair_identity(repo_root: Path, work_item_id: str, *, now: str,
+                                  evidence: dict, operation: str) -> None:
+    """The identity half of both rotating operations, run **before** the
+    rotation publishes (`OPUS-R86-003`). A decidable document is
+    established the ordinary way. An undecidable one is repaired only if
+    the authorization the caller already validated carried the repair
+    component, and only if the document is still byte-identical to the
+    one that component named."""
+    observed = evidence.get("local_identity") or local_identity_observation(repo_root)
+    if observed.get("state") != "undecidable":
+        write_worktree_identity(repo_root, work_item_id, now=now)
+        return
+    fresh = local_identity_observation(repo_root)
+    if fresh.get("identity_observation_id") != observed.get("identity_observation_id"):
+        raise CheckpointClaimTakeoverRefusedError(
+            f"this worktree's own identity document changed between the evidence the user "
+            f"authorized ({observed.get('identity_observation_id')}) and this {operation} "
+            f"({fresh.get('identity_observation_id')}) -- refusing, having mutated nothing; "
+            f"present fresh evidence and obtain a fresh authorization")
+    repair_worktree_identity(repo_root, work_item_id, now=now)
+
+
+def _identity_repair_clause(evidence: dict) -> str:
+    identity = evidence.get("local_identity") or {}
+    if identity.get("state") != "undecidable":
+        return ""
+    return f" repairing identity {identity.get('identity_observation_id')}"
+
+
+def takeover_evidence(repo_root: Path, work_item_id: str) -> dict:
+    """Everything a human needs to decide a takeover, gathered without
+    changing anything. Deliberately reports rather than concludes."""
+    path = claim_path(repo_root, work_item_id)
+    oid, claim, error, unreadable = observe_claim(repo_root, work_item_id)
+    gpath = guard_path(repo_root, work_item_id)
+    try:
+        guard_oid = observation_id(_read_claim_bytes(gpath))
+    except CheckpointOwnershipUnavailableError:
+        guard_descriptor = describe_unreadable_record(gpath)
+        guard_oid = (unreadable_observation_id(guard_descriptor)
+                     if guard_descriptor is not None else ABSENT_OBSERVATION)
+    evidence = {"claim_path": str(path), "readable": error is None, "claim": None,
+                "holder_path_exists": None, "holder_registered": None,
+                "holder_current_path": None,
+                "claim_observation_id": oid,
+                "claim_unreadable": unreadable,
+                "claim_replaceable": unreadable is None or (
+                    unreadable.get("kind") in REPLACEABLE_UNREADABLE_KINDS),
+                "observed_checkpoint_id": claim.get("checkpoint_id") if claim else None,
+                "observed_owner_token": claim.get("owner_token") if claim else None,
+                "work_item_id": work_item_id,
+                "guard": None,
+                "guard_observation_id": guard_oid,
+                "guard_holder_registered": None,
+                "guard_holder_current_path": None,
+                "guard_error": None,
+                "local_identity": local_identity_observation(repo_root)}
+    try:
+        evidence["guard"] = read_guard(repo_root, work_item_id)
+    except CheckpointOwnershipUnavailableError as exc:
+        evidence["guard_error"] = str(exc)
+    registered = registered_worktrees(repo_root)
+
+    def _registered_match(recorded_root, recorded_git_dir):
+        for entry in registered:
+            wt_path = entry.get("worktree")
+            if wt_path is None:
+                continue
+            try:
+                admin = _worktree_git_dir(Path(wt_path)) if Path(wt_path).exists() else None
+            except subprocess.CalledProcessError:
+                admin = None
+            if wt_path == recorded_root or (admin and recorded_git_dir and admin == recorded_git_dir):
+                return True, wt_path
+        return False, None
+
+    guard = evidence["guard"]
+    if guard is not None:
+        guard_registered, guard_path_now = _registered_match(None, guard.get("holder_worktree_git_dir"))
+        evidence["guard_holder_registered"] = guard_registered
+        evidence["guard_holder_current_path"] = guard_path_now
+    if error is not None:
+        evidence["error"] = error
+        return evidence
+    if claim is None:
+        evidence["claim"] = None
+        return evidence
+    evidence["claim"] = claim
+    holder_root = Path(claim["worktree_root"])
+    evidence["holder_path_exists"] = holder_root.exists()
+    matched, wt_path = _registered_match(claim["worktree_root"], claim["worktree_git_dir"])
+    evidence["holder_registered"] = matched
+    if matched:
+        evidence["holder_current_path"] = wt_path
+    return evidence
+
+
+def takeover_authorization_literal(work_item_id: str, evidence: dict, checkpoint_id: str) -> str:
+    """The exact literal a user must produce, derived **from the
+    evidence they were shown** (`GPT-R81-002`). Names the observed
+    record's identity and the checkpoint that record holds, so it cannot
+    be written from memory, cannot be replayed against a later record,
+    and cannot displace a holder or checkpoint nobody reviewed. Grows a
+    repair component when this worktree's own identity document is
+    undecidable (`OPUS-R86-003`)."""
+    displaced = evidence.get("observed_checkpoint_id") or "none"
+    literal = (f"take over {work_item_id} claim {evidence.get('claim_observation_id')} "
+               f"holding {displaced} as {checkpoint_id}")
+    return literal + _identity_repair_clause(evidence)
+
+
+def guard_release_authorization_literal(guard: dict) -> str:
+    return (f"release checkpoint guard {guard.get('lease_id')} step {guard.get('step')} "
+            f"class {guard.get('step_class')}")
+
+
+def take_over_claim(repo_root: Path, work_item_id: str, checkpoint_id: str, *, now: str,
+                    user_authorization: str | None, evidence: dict | None = None,
+                    guard_release_authorization: str | None = None) -> dict:
+    """The ordinary way a claim this worktree does not own is removed --
+    and the only one that ever applies while the holder worktree is
+    still registered. (`recover_abandoned_destructive_guard` is the
+    single other route, for a destructive window abandoned by a worktree
+    that no longer exists; `clear_malformed_guard` removes an
+    undecidable guard, never a claim.)
+
+    Never triggered by a timeout, a heartbeat, an age threshold, or an
+    inference that the holder "looks gone" -- every one of those is an
+    assumption that can discard a live claim, and this design does not
+    make any of them.
+
+    1. **Observe** -- `takeover_evidence`, whose `claim_observation_id`
+       is the sha256 of the exact record bytes the human is shown.
+    2. **Authorize** -- the literal must be exactly
+       `takeover_authorization_literal(...)` for *that* observation. When
+       a guard was observed, a separate guard-release authorization
+       quoting its `lease_id`/`step`/`step_class` is required too, and a
+       `"destructive"` guard is refused outright.
+    3. **Acquire the same mutation guard** every owner mutation acquires.
+    4. **Re-verify under the guard** -- re-read the raw bytes and require
+       the observation id to be unchanged. Anything else is stale
+       evidence: refuse, having mutated nothing.
+    5. **Rotate** by atomic replace, minting a fresh `owner_token`,
+       incrementing `takeover_count`, and recording the displaced record
+       in `taken_over_from`."""
+    if evidence is None:
+        evidence = takeover_evidence(repo_root, work_item_id)
+    expected = takeover_authorization_literal(work_item_id, evidence, checkpoint_id)
+    if user_authorization != expected:
+        raise CheckpointClaimTakeoverRefusedError(
+            f"explicit takeover requires the literal authorization {expected!r} derived from the "
+            f"evidence just presented -- refusing to remove a claim on an inference, on a "
+            f"remembered literal, or on evidence the user did not review"
+        )
+    observed_oid = evidence.get("claim_observation_id")
+    guard = evidence.get("guard")
+    if guard is not None:
+        if guard.get("step_class") == DESTRUCTIVE:
+            raise CheckpointClaimTakeoverRefusedError(
+                f"the holder is inside destructive step {guard.get('step')!r} -- no takeover "
+                f"authorization breaks that window; resume in the owning session, or, if that "
+                f"worktree is gone, use the abandoned-guard recovery")
+        if guard_release_authorization != guard_release_authorization_literal(guard):
+            raise CheckpointClaimTakeoverRefusedError(
+                f"a mutation guard was observed; takeover additionally requires the literal "
+                f"{guard_release_authorization_literal(guard)!r}")
+
+    path = claim_path(repo_root, work_item_id)
+    if not evidence.get("claim_replaceable", True):
+        descriptor = evidence.get("claim_unreadable") or {}
+        raise CheckpointClaimTakeoverRefusedError(
+            f"{work_item_id!r}'s claim path is a {descriptor.get('kind')!r}, which no documented "
+            f"operation replaces: a rotation publishes by `os.rename` onto that name, and this "
+            f"design never removes a directory it did not create. Remove {str(path)!r} yourself "
+            f"once you have confirmed it holds nothing of yours, then re-run the takeover")
+    if evidence.get("claim_unreadable") is None:
+        _assert_not_symlink(path, "claim record")
+
+    lease = acquire_guard(repo_root, work_item_id,
+                          holder_owner_token=evidence.get("observed_owner_token"),
+                          checkpoint_id=checkpoint_id, step="takeover", step_class=ORDINARY,
+                          now=now, role="takeover",
+                          authorized_lease_id=guard.get("lease_id") if guard else None)
+    try:
+        current_oid, previous, _error, _unreadable = observe_claim(repo_root, work_item_id)
+        if current_oid != observed_oid:
+            raise CheckpointClaimTakeoverRefusedError(
+                f"{work_item_id!r}'s claim changed between the evidence the user authorized "
+                f"({observed_oid}) and this takeover ({current_oid}) -- refusing, having mutated "
+                f"nothing; present fresh evidence and obtain a fresh authorization")
+        taken_over_from = None
+        if previous is not None:
+            taken_over_from = {
+                "worktree_root": previous.get("worktree_root"),
+                "worktree_git_dir": previous.get("worktree_git_dir"),
+                "checkpoint_id": previous.get("checkpoint_id"),
+                "claimed_at": previous.get("claimed_at"),
+                "owner_token": previous.get("owner_token"),
+                "claim_observation_id": current_oid,
+                "holder_registered": evidence.get("holder_registered"),
+                "authorized_at": now,
+            }
+        elif current_oid != ABSENT_OBSERVATION:
+            taken_over_from = {"unreadable_record": True, "claim_observation_id": current_oid,
+                               "authorized_at": now}
+        record = _build_claim_record(
+            repo_root, work_item_id, checkpoint_id, now, taken_over_from=taken_over_from,
+            takeover_count=(previous or {}).get("takeover_count", 0) + 1,
+            previous_owner_tokens=list((previous or {}).get("previous_owner_tokens", []))
+            + ([previous["owner_token"]] if previous else []))
+        _establish_or_repair_identity(repo_root, work_item_id, now=now,
+                                      evidence=evidence, operation="takeover")
+        _publish_claim_replacing(path, record,
+                                 allow_unreadable_target=evidence.get("claim_unreadable") is not None)
+        return record
+    finally:
+        release_guard(repo_root, work_item_id, lease)
+
+
+def abandoned_guard_recovery_authorization_literal(work_item_id: str, evidence: dict) -> str:
+    """Distinct from the takeover literal in every component, and bound
+    to **both** durable observations plus the destructive step being
+    abandoned, so it can neither be written from memory nor reused for
+    an ordinary takeover (`OPUS-R82-001`)."""
+    guard = evidence.get("guard") or {}
+    return (f"recover abandoned destructive guard {work_item_id} step {guard.get('step')} "
+            f"guard {evidence.get('guard_observation_id')} "
+            f"claim {evidence.get('claim_observation_id')}"
+            + _identity_repair_clause(evidence))
+
+
+def recover_abandoned_destructive_guard(repo_root: Path, work_item_id: str, checkpoint_id: str, *,
+                                        now: str, user_authorization: str | None,
+                                        evidence: dict | None = None) -> dict:
+    """The one escape from a `"destructive"` guard left behind by a
+    holder worktree that no longer exists (`OPUS-R82-001`). Without it,
+    `take_over_claim`'s unconditional destructive refusal and
+    `clear_malformed_guard`'s well-formed refusal combine into a work
+    item no documented operation can start, resume or hand over.
+
+    Introduces **no** liveness inference: still no timeout, no
+    heartbeat, no age threshold, no `claimed_at` comparison, no "the
+    holder looks gone". The precondition is a durable, human-made fact
+    instead -- the holder worktree is not in `git worktree list`, i.e.
+    the operator (or the machine's loss) deregistered it. While it is
+    still registered this refuses and names what to do instead, so a
+    live destructive window is never broken.
+
+    Mechanically a takeover whose guard reclamation is `role="recovery"`:
+    once the claim rotates, the abandoned guard is superseded by
+    construction, so the existing epoch rule -- not a second removal
+    primitive -- finally clears it."""
+    if evidence is None:
+        evidence = takeover_evidence(repo_root, work_item_id)
+    guard = evidence.get("guard")
+    if evidence.get("guard_error") is not None or guard is None:
+        raise CheckpointClaimTakeoverRefusedError(
+            f"{work_item_id!r} has no well-formed mutation guard to recover "
+            f"({evidence.get('guard_error') or 'no guard is held'}) -- an undecidable guard is "
+            f"cleared by `clear_malformed_guard`, and a work item with no guard needs the "
+            f"ordinary takeover, not this operation")
+    if guard.get("step_class") != DESTRUCTIVE:
+        raise CheckpointClaimTakeoverRefusedError(
+            f"{work_item_id!r}'s guard is {guard.get('step_class')!r}, not {DESTRUCTIVE!r} -- an "
+            f"ordinary guard is released by the takeover's own guard-release authorization; this "
+            f"operation exists only for the window that authorization can never break")
+    claim = evidence.get("claim")
+    claim_undecidable = evidence.get("error") is not None
+    if claim is None and not claim_undecidable:
+        raise CheckpointClaimTakeoverRefusedError(
+            f"{work_item_id!r} has a guard but no claim at all -- a guard with no claim is "
+            f"superseded by construction and is already reclaimable with no authorization; "
+            f"this operation is only for an abandoned window of the current epoch")
+    if claim_undecidable and not evidence.get("claim_replaceable", True):
+        descriptor = evidence.get("claim_unreadable") or {}
+        raise CheckpointClaimTakeoverRefusedError(
+            f"{work_item_id!r}'s claim path is a {descriptor.get('kind')!r}, which no documented "
+            f"operation replaces: a rotation publishes by `os.rename` onto that name, and this "
+            f"design never removes a directory it did not create. Remove "
+            f"{evidence.get('claim_path')!r} yourself once you have confirmed it holds nothing "
+            f"of yours, then re-run this recovery")
+    if claim_undecidable:
+        if guard.get("checkpoint_id") != checkpoint_id:
+            raise CheckpointClaimTakeoverRefusedError(
+                f"{work_item_id!r}'s claim is undecidable, so the abandoned guard's own "
+                f"checkpoint {guard.get('checkpoint_id')!r} is the only durable one -- refusing "
+                f"to recover it as {checkpoint_id!r}")
+        if evidence.get("guard_holder_registered") is not False:
+            raise CheckpointClaimTakeoverRefusedError(
+                f"{work_item_id!r}'s guard is held by worktree "
+                f"{guard.get('holder_worktree_git_dir')!r}, which is still registered "
+                f"(currently {evidence.get('guard_holder_current_path')!r}) -- a registered "
+                f"holder's destructive window is never broken from outside, and the claim being "
+                f"undecidable does not change that. Resume in that worktree, move it back to "
+                f"its recorded path if it was relocated, or `git worktree remove` it if you know "
+                f"it is dead and re-run this recovery")
+    if claim is not None and guard.get("holder_owner_token") != claim.get("owner_token"):
+        raise CheckpointClaimTakeoverRefusedError(
+            f"{work_item_id!r}'s guard belongs to a superseded epoch (guard token "
+            f"{guard.get('holder_owner_token')!r}, claim token {claim.get('owner_token')!r}) -- "
+            f"it is already reclaimable with no authorization; this operation is only for a "
+            f"guard of the **current** epoch")
+    if claim is not None and claim_is_this_worktree(repo_root, claim):
+        raise CheckpointClaimTakeoverRefusedError(
+            f"{work_item_id!r}'s claim is held by this worktree -- an interrupted step of this "
+            f"worktree's own epoch is reclaimed by simply re-entering it; nothing is abandoned "
+            f"from here")
+    if claim is not None and evidence.get("holder_registered") is not False:
+        raise CheckpointClaimTakeoverRefusedError(
+            f"{work_item_id!r}'s holder is still a registered worktree of this repository "
+            f"(recorded {claim.get('worktree_root')!r}, currently "
+            f"{evidence.get('holder_current_path')!r}) -- a registered holder's destructive "
+            f"window is never broken from outside. Resume in that worktree (a session there "
+            f"reclaims its own interrupted guard), move it back to its recorded path if it was "
+            f"relocated, or `git worktree remove` it if you know it is dead and re-run this "
+            f"recovery")
+    expected = abandoned_guard_recovery_authorization_literal(work_item_id, evidence)
+    if user_authorization != expected:
+        raise CheckpointClaimTakeoverRefusedError(
+            f"recovering an abandoned destructive guard requires the literal authorization "
+            f"{expected!r}, derived from the evidence just presented -- refusing to break a "
+            f"destructive window on an inference or on a remembered literal")
+
+    observed_oid = evidence.get("claim_observation_id")
+    path = claim_path(repo_root, work_item_id)
+    if not claim_undecidable:
+        _assert_not_symlink(path, "claim record")
+
+    fresh = takeover_evidence(repo_root, work_item_id)
+    fresh_registered = (fresh.get("guard_holder_registered") if claim_undecidable
+                        else fresh.get("holder_registered"))
+    if fresh_registered is not False:
+        raise CheckpointClaimTakeoverRefusedError(
+            f"{work_item_id!r}'s holder worktree was re-registered at "
+            f"{fresh.get('guard_holder_current_path') or fresh.get('holder_current_path')!r} "
+            f"after the evidence was taken -- refusing, having mutated nothing")
+    if fresh.get("guard_observation_id") != evidence.get("guard_observation_id"):
+        raise CheckpointClaimTakeoverRefusedError(
+            f"{work_item_id!r}'s mutation guard changed between the evidence the user authorized "
+            f"({evidence.get('guard_observation_id')}) and this recovery "
+            f"({fresh.get('guard_observation_id')}) -- refusing, having mutated nothing")
+    if fresh.get("claim_observation_id") != observed_oid:
+        raise CheckpointClaimTakeoverRefusedError(
+            f"{work_item_id!r}'s claim changed between the evidence the user authorized "
+            f"({observed_oid}) and this recovery ({fresh.get('claim_observation_id')}) -- "
+            f"refusing, having mutated nothing; present fresh evidence and obtain a fresh "
+            f"authorization")
+
+    lease = acquire_guard(repo_root, work_item_id,
+                          holder_owner_token=evidence.get("observed_owner_token"),
+                          checkpoint_id=checkpoint_id, step="recover-abandoned-guard",
+                          step_class=ORDINARY, now=now, role="recovery",
+                          authorized_lease_id=guard.get("lease_id"))
+    try:
+        current_oid, previous, _error, current_unreadable = observe_claim(repo_root, work_item_id)
+        if current_oid != observed_oid:
+            raise CheckpointClaimTakeoverRefusedError(
+                f"{work_item_id!r}'s claim changed between the evidence the user authorized "
+                f"({observed_oid}) and this recovery ({current_oid}) -- refusing; the claim was "
+                f"modified outside this contract, since no sanctioned rotation is possible "
+                f"without the guard this operation holds")
+        previous = previous or {}
+        taken_over_from = {
+            "worktree_root": previous.get("worktree_root"),
+            "worktree_git_dir": previous.get("worktree_git_dir"),
+            "checkpoint_id": previous.get("checkpoint_id"),
+            "claimed_at": previous.get("claimed_at"),
+            "owner_token": previous.get("owner_token"),
+            "claim_observation_id": current_oid,
+            "holder_registered": False,
+            "authorized_at": now,
+            "claim_was_undecidable": claim_undecidable,
+            "claim_unreadable": current_unreadable,
+            "epoch_chain_lost": claim_undecidable,
+            "recovered_from_abandoned_guard": {
+                "lease_id": guard.get("lease_id"),
+                "step": guard.get("step"),
+                "step_class": guard.get("step_class"),
+                "guard_observation_id": evidence.get("guard_observation_id"),
+                "holder_worktree_git_dir": guard.get("holder_worktree_git_dir"),
+            },
+        }
+        displaced_tokens = list(previous.get("previous_owner_tokens", []))
+        if previous.get("owner_token"):
+            displaced_tokens.append(previous["owner_token"])
+        elif guard.get("holder_owner_token"):
+            displaced_tokens.append(guard["holder_owner_token"])
+        record = _build_claim_record(
+            repo_root, work_item_id, checkpoint_id, now, taken_over_from=taken_over_from,
+            takeover_count=previous.get("takeover_count", 0) + 1,
+            previous_owner_tokens=displaced_tokens)
+        _establish_or_repair_identity(repo_root, work_item_id, now=now,
+                                      evidence=evidence, operation="recovery")
+        _publish_claim_replacing(path, record, allow_unreadable_target=claim_undecidable)
+        return record
+    finally:
+        release_guard(repo_root, work_item_id, lease)
 
 
 # ---------------------------------------------------------------------------
