@@ -12,7 +12,7 @@
       "mapping_path": "docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json",
       "governing_workflow_version": "1",
       "phase": "IMPLEMENTING",
-      "plan_revision": 62,
+      "plan_revision": 80,
       "implementation_revision": 9,
       "functional_review_round": null,
       "base_commit": "162154d3e5e10eb65e109833acae4b4fb01fc5d6",
@@ -93,8 +93,8 @@
       "plan_approval": {
         "status": "CURRENT",
         "basis": "EXTERNAL_APPROVE",
-        "reviewed_bundle_id": "3b299c2b67ac3efce97701c588db64db182931af0189bee4a2ef3d951a9b414e",
-        "approved_review_content_id": "bf0db25621b8bf0f3a174f390837e1e79c0f5af57938cdddb7e3b0c19eda29a6",
+        "reviewed_bundle_id": "53c9d2da3a6b6d23d43f92c6b4d77813383b1b5ea661874c541fd33b8ad4a904",
+        "approved_review_content_id": "841057c6a5ebf7e51ac8c12587e494fdcf10549a49aa2b6c89e13e2a0178b51e",
         "review_content_manifest": [
           {
             "path": "docs/TECHNICAL_DECISIONS.md",
@@ -112,26 +112,26 @@
             "path": "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
             "exists": true,
             "mode": "100644",
-            "blob": "34f42ea27d3e3eadb43e4dd89af5e69bcd939457"
+            "blob": "f8674e26b819caef049d2977a33b5f1f86d56ed1"
           },
           {
             "path": "docs/ai-workflow/registry/workflow-v2-1-core-registry.json",
             "exists": true,
             "mode": "100644",
-            "blob": "062372324ac30452709d0f463df3cbc30b00e18e"
+            "blob": "c21a6ecbd49386bf09578c20e9bce9eb3cf7ea49"
           },
           {
             "path": "docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json",
             "exists": true,
             "mode": "100644",
-            "blob": "4051351580e5ae4d12acf1f9625577e889fc721b"
+            "blob": "baf62c8916561a1c5b433b4cf81a39426896de58"
           }
         ],
         "reviewed_content_commit": null,
         "legacy_evidence": null,
-        "user_confirmation": "I confirm plan approval for `workflow-v2-1-core`, `plan` stage, Revision 62.",
+        "user_confirmation": "I confirm approval of the workflow-v2-1-core plan stage. I also explicitly authorize the state-writer quiescence window for workflow-v2-1-core plan for this approval transaction.",
         "waived_guarantees": [],
-        "recorded_at": "2026-08-11T13:02:20+01:00"
+        "recorded_at": "2026-08-14T23:08:40+01:00"
       },
       "technical_approval": {
         "status": "CURRENT",
@@ -259,8 +259,8 @@
           ]
         }
       ],
-      "state_revision": 76,
-      "last_transition": "2026-08-12T00:46:05+01:00"
+      "state_revision": 90,
+      "last_transition": "2026-08-14T23:08:40+01:00"
     },
     "milestone-8": {
       "work_item_type": "product",
@@ -346,7 +346,7 @@
       "functional_review_round": null,
       "base_commit": "e75a756d42751ef18eee842a958cc2c888086772",
       "reviewed_implementation_head": null,
-      "current_checkpoint_id": null,
+      "current_checkpoint_id": "S-CP3",
       "last_completed_checkpoint_id": "S-CP2",
       "checkpoints": {
         "S-CP1": {
@@ -356,6 +356,10 @@
         "S-CP2": {
           "status": "COMPLETE",
           "start_commit": "dcaec48602ff4600588af5c14a15f4112aef0ad3"
+        },
+        "S-CP3": {
+          "status": "IN_PROGRESS",
+          "start_commit": "8375b64f9ad9ad44afe7574841a62457f5d83cea"
         }
       },
       "current_bundle_id": null,
@@ -408,8 +412,8 @@
       },
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 17,
-      "last_transition": "2026-08-12T09:40:00+01:00"
+      "state_revision": 18,
+      "last_transition": "2026-08-12T12:55:14+01:00"
     }
   }
 }

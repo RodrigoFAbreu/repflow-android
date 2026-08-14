@@ -1,6 +1,1205 @@
-# Workflow v2.1 core — Refined Plan (Revision 62)
+# Workflow v2.1 core — Refined Plan (Revision 80)
 
-Status: external plan review of revision 61 (`GPT-R79-001`/`-002`) returned
+Status: external plan review of revision 79 returned `Status: REVISE` with
+**zero blocking**, **three important** and **two optional** findings
+(`OPUS-R98-001` through `-005`) — the eighth consecutive round with no blocking
+finding. The reviewer reports the round's direction right and the architecture
+**not regressed**, five of revision 79's six predecessors resolved and the
+sixth half-resolved, and explicitly accepts as **not findings** the two
+residuals revision 79 disclosed rather than closed: the marker's
+assertion-to-write TOCTOU interval (accurately described, and a repository-level
+`flock` judged unwarranted under this design's stated single-operator premise)
+and the manual `PLAN.md` refresh WF8b still owns. Every baseline value was
+recomputed rather than accepted — `bundle_id` `88e3eaaa…` over 127 entries,
+`review_content_id` `403fb8cf…`, `PLAN.md` byte-identical to the authoritative
+document at `d6bcb7d1…`, the extracted archive `diff -r`-empty against
+`current/` and reproducing the same `bundle_id`, the four hermetic suites at
+489/489, the integration suite at 46/47 with the single failure isolated to
+item 166's stale `60` literal (the per-row comparison it blocks run directly:
+67 rows, 67 requirements, zero mismatches), and all four validators PASS with
+`validate_state` called with **both** `registry=` and `repo_root=`. **All five
+findings were validated against this repository before anything was edited, and
+all five are accepted** — one of them, `OPUS-R98-002`, with a stated divergence
+on the placement of its crash-resume half, recorded in the disposition below
+rather than applied silently.
+
+**What was wrong is that all three of revision 79's own Important corrections
+were written narrower than the defect they fix.** `OPUS-R98-001` (Important):
+the `-003` ordering correction was stated over **one command** while
+`reviewed_implementation_head`'s sole writer has **three** live call sites —
+`milestone-implement.md:146`, `apply-implementation-review.md:41`,
+`apply-functional-review.md:69` — and the two it did not reach carry the
+identical generate-then-durably-advance-then-report shape; worse, the same
+revision declares `/apply-functional-review` **exempt**, and the conformance
+arm asserts exempt files name the assertion nowhere, so guarding that call site
+would have failed the suite. `OPUS-R98-002` (Important): the bootstrap
+consumer's exemption from the second assertion rests on a window that starts at
+step 4a rather than at the step-2 read, prohibits state writers rather than the
+marker's writer (which writes no state at all — `/prepare-review` is explicitly
+"unrestricted" inside the window), and cites `record_bundle_generation` as its
+coverage although that function refuses the `plan` stage outright
+(`scripts/workflow_state.py:2484-2488`) — in the one consumer that **is** the
+approval, with no downstream check behind it. `OPUS-R98-003` (Important): the
+claim that each derivation disjunct is "evaluable against a command file" does
+not survive measurement — the loose rendering selects three declared-exempt
+files, the tight one drops two declared consumers and is a maintained list
+wearing a regex, and that same tight literal is why `OPUS-R98-001` went
+unnoticed for a revision. The two Optional findings: a presence check that
+cannot complete is not distinguished from "absent", and the obvious
+implementation (`Path.exists()` swallowing `OSError`) fails **open**; and
+"assert twice" has no defined second site for the report-only consumers.
+
+**Revision 80 restates each correction at the level that closes it.** The
+ordering rule moves from one command to the **writer**: every
+`record_bundle_generation` call is preceded by `assert_bundle_not_rejected`, at
+all three sites. `/apply-functional-review` moves into the consumer set scoped
+by **act**, exactly as `/prepare-review` was — nine consumers, four exempt,
+thirteen classified. The bootstrap exemption is **withdrawn as false** and
+replaced by the assertion itself at sub-step 6.1b, textually adjacent to the
+`git update-index` that stages the applied post-approval state, covering the
+whole step-2 → step-6 interval; its crash-resume half keeps this transaction's
+existing before/after-durability asymmetry (complete forward and report) rather
+than refusing at step 8b, which would strand a valid approval commit behind an
+unclosable journal — the one place this revision diverges from a required
+correction, with the evidence stated. The "evaluable against a file" claim is
+withdrawn and the predicate's input becomes a property each command file
+**carries** — a `review-subject: bundle | verdict | none` header line, missing
+or unrecognized values failing the suite, the declaration cross-checked against
+the three semantic disjuncts and against the presence of the shared assertion.
+An indeterminate presence check is treated as **present**. And "twice" is
+defined only where a guarded write exists. Item 376(t)'s (t.iv), (t.viii), (t.x)
+and conformance arms are extended or rewritten accordingly, each with a live
+control arm; `WFR-67` changes. No ownership primitive changes, nothing from
+revisions 77-79 is withdrawn beyond the two claims named above, and the marker
+lifecycle remains untouched.
+
+Not yet implemented; not yet approved. Process/tooling milestone only — no
+product code, no `docs/ROADMAP.md`/`docs/ACTIVE_MILESTONE.md` changes, no
+Milestone 9. See "WF8b finding disposition (revision 79 → 80)" below.
+
+**Revision 79**: external plan review of revision 78 returned `Status: REVISE` with
+**zero blocking**, **three important** and **three optional** findings
+(`GPT-OPUS-R97-001` through `-006`) — the seventh consecutive round with no
+blocking finding, and the reviewer's bounded architecture reassessment reports
+the design **not regressed and its direction right**, finding no new defect in
+the six-primitive lock DAG, the cross-worktree ownership model, the
+identity-gap authorization model, review provenance, or the S14/S15 dry-run
+scenarios, all of which revision 78 left untouched. The reviewer recomputed
+`bundle_id` `1c013fe4…` and `review_content_id` `7f8bb378…` from a
+**from-scratch reimplementation that does not import
+`scripts/workflow_fingerprint.py` at all** — Git blob identities read directly
+into a hand-built canonical projection, and an independent implementation of
+the `MANIFEST.md` self-reference strip and the `CHANGED_FILES.txt` header
+normalization — agreeing across all 127 files, live and extracted; confirmed
+`PLAN.md` byte-identical to the authoritative document; confirmed the archive
+`diff -rq`-empty against `current/`; re-derived the 67-row plan↔mapping
+conformance at 67/67 with **zero** mismatches by driving the integration
+suite's own `_table_rows()` rather than a reimplementation of it; and reran the
+four hermetic suites at 489/489 and the integration suite at 46/47 with the
+single failure isolated to item 166's stale count literal. **Every finding was
+validated against this repository before anything was edited, and all six are
+accepted.** No finding is rejected this round.
+
+**What was wrong is that revision 78's fix was correctly aimed and defectively
+built, in three separate ways.** `GPT-OPUS-R97-001` (Important): item 376(t)'s
+conformance arm derives the consumer set from "every command file that resolves
+a bundle or feedback directory and advances a gate" — a predicate that selects
+`/prepare-functional-review` and `/apply-functional-review`, both of which name
+`resolve_feedback_dir` in their own header text, both of which advance a gate,
+and both of which the same revision **exempts** and asserts name the assertion
+nowhere. The two halves cannot both be satisfied on the live command set, so
+the only maintainability mechanism revision 78 offered is unimplementable.
+`GPT-OPUS-R97-002` (Important): the normative rule quantifies over an
+operation's **whole duration** ("**while** a work item's marker is present …
+refuses, before that operation's first durable write") while the mechanism is a
+single pre-mutation read, and nothing in this design serializes the interval —
+no `flock` exists in `scripts/` today, and item 354's `WORKFLOW_STATE.lock`
+would not cover it after it lands, since the marker lives outside that lock's
+critical section and the withdrawal writes it with no state write at all. A
+generation failing between `/approve-review plan`'s step-2 read and its step-5
+write still yields an `EXTERNAL_APPROVE` against a withdrawn bundle, which is
+the exact defect the consumer side was introduced to close.
+`GPT-OPUS-R97-003` (Important): consumer #7's refusal point sits at the
+**hand-off report**, but `/milestone-implement` persists
+`reviewed_implementation_head` at step 4 — "what later makes
+`AWAITING_TECHNICAL_APPROVAL` reachable at all" — before step 5 is reached, so
+on the exact path this arm is scoped to the report is blocked while the field
+that unlocks the technical-approval gate has already been written on the
+strength of a withdrawn generation. The three Optional findings: the
+command-file-derived arm is structurally blind to consumer #5, which has no
+command file by design; `/accept-scoped-remediation` appears in neither the
+consumer nor the exemption list; and a truncated or empty marker — a plausible
+outcome of the very hard-kill scenario the marker exists for — has no specified
+handling, so a parse error could read as "not rejected".
+
+**Revision 79 makes the consumer obligation implementable, correctly ordered
+and completely partitioned.** The derivation is rekeyed on the **subject
+artifact** — read `REVIEW_FEEDBACK.md`, read a `<bundle_dir>` artifact this
+invocation did not generate, or present a bundle as review-ready — three
+disjuncts each evaluable against a file, stated once in part 3b and referenced
+by item 376(t) rather than restated. Each consumer performs the assertion
+**twice**, once at its existing refusal point and again immediately under its
+own mutation guard, on the discipline `/approve-review` step 5 already uses for
+the conditional fifth member; the residual interval between the guarded
+assertion and the write it guards is **disclosed rather than claimed closed**,
+and the bootstrap consumer is exempted from the second assertion because it
+already runs inside the state-writer quiescence window that prohibits
+`record_bundle_generation`. `/milestone-implement`'s assertion moves to before
+`record_bundle_generation`. Applying the partition requirement surfaced two
+further classification defects, both disclosed as extensions rather than
+slipped in: `/prepare-review`'s report step presents a bundle exactly as the
+hand-off reports do, so it joins consumer #7 and the generator exemption is
+scoped by **act** rather than by command; and `/accept-scoped-remediation` and
+`/bootstrap-workflow-v2` are named exempt so that all thirteen live command
+files are classified. A marker refuses on **presence alone**, degrading its
+diagnostic rather than raising a parse error. Item 376(t) gains four arms —
+the mutation-boundary race, the bootstrap's quiescence coverage, work-item
+scoping, and malformed markers — and its conformance arm is asserted
+**complete** against the live directory. Item 376 is extended; `WFR-67`
+changes. No ownership primitive changes, nothing from revision 78 is withdrawn,
+and revision 77's marker lifecycle remains untouched.
+
+Not yet implemented; not yet approved. Process/tooling milestone only — no
+product code, no `docs/ROADMAP.md`/`docs/ACTIVE_MILESTONE.md` changes, no
+Milestone 9. See "WF8b finding disposition (revision 78 → 79)" below.
+
+**Revision 78**: external plan review of revision 77 returned `Status: REVISE` with
+**zero blocking**, **one important** and **one optional** finding
+(`GPT-R96-001`/`-002`) — the sixth consecutive round with no blocking finding,
+and the reviewer's bounded architecture reassessment again reports the design
+**converged**, finding no new defect in the cross-worktree ownership model, the
+reviewed-content identity chain, the six-primitive lock DAG, the temporary
+bootstrap bridge, the identity-reference-gap authorization model, or revision
+77's own marker **lifecycle**. The reviewer recomputed `bundle_id`
+`b6bc91ba…` twice from a fresh extraction — once with an independent
+byte-level implementation of the bundle algorithm and once with the bundled
+`compute_bundle_id`, agreeing across all 127 files — and reconstructed
+`review_content_id` `e4cd3759…` **without using the bundled
+review-content-id function at all**, computing Git blob identities directly
+from the five protected files into a hand-built canonical projection; confirmed
+`PLAN.md` byte-identical to the authoritative document; reran the four hermetic
+suites at 489/489; reproduced the integration suite's 46/47 with the single
+failure isolated to item 166's stale count literal and re-derived the 67-row
+plan↔mapping conformance at zero mismatches in both directions; and re-ran
+state, registry, mapping-coverage and config validation independently. It also
+**scoped its own evidence honestly**, declining to treat the reported 698/698
+stress aggregate as proof of revision 77's newly specified obligations because
+the archive carries no `.git` database. **Both findings were validated against
+this repository before anything was edited, and both are accepted.** No finding
+is rejected this round.
+
+**What was wrong is that revision 77's marker has a producer and a lifecycle
+and no consumer.** `GPT-R96-001` (Important): `D-Bundle-Manifest` part 3b states
+that the marker's "presence beside a `current/` is always sufficient to refuse
+treating that directory as reviewable" — a property, asserted of no reader.
+`WFR-67`'s implementation surface names the generator, two commands and one
+protocol document; item 376(l)/(q) assert the marker's publication, its ordering
+before the first removal, its persistence across a generation boundary and its
+eventual clearing. Every one of those obligations can be satisfied while each
+command that consumes a bundle stays blind to the marker — and that is the whole
+failure the marker was introduced to close, because the residue part 3b
+constructs satisfies `bundle_id`, `review_content_id`,
+`assert_local_generation_matches` and
+`assert_review_request_states_review_content_id` **by construction**, so a
+consumer that does not read the marker has nothing else to go on. Confirmed
+against this repository rather than argued: `REJECTED` appears **zero** times
+under `.claude/commands/`, `scripts/`, `REVIEW_PROTOCOL.md`,
+`MILESTONE_WORKFLOW.md` and `PLAN_REVIEW_WORKFLOW.md`. `GPT-R96-002` (Optional):
+revision 77's own correction to revision 76's summary says item 375's "most
+recent in-place extension is revision 73", while 375(g) was extended again in
+revisions 74 and 75.
+
+**Revision 78 gives the marker a consumer side, an owner and a test.** Part 3b
+gains the rule the other half of its own sentence needs: while a work item is
+marked, every operation that treats its `current/` bundle — or a verdict or
+feedback bound to it — as reviewable, ingestible or approvable **refuses before
+its first durable write**, with no identifier recomputation required and none
+sufficient. The rule is **work-item-scoped rather than stage-scoped**, enforced
+where a bundle becomes a **subject** rather than at path resolution — so the
+generator can still write, update and clear the marker, and the recovery path
+stays "generate again, successfully" — and it is carried by **one** shared
+assertion over **one** shared path resolver rather than by prose repeated in
+each command, because this design has already watched a prose-maintained caller
+inventory go stale in two consecutive finding rounds, the second against the
+first's own correction. The consumer surface is named
+exhaustively and joins `WFR-67`'s implementation surface; the two exemptions are
+stated with reasons rather than left implicit. Item 376 gains **(t)**, whose
+fixture is the marked-but-otherwise-fully-verifying residue part 3b already
+constructs, with a negative control in which **only** the marker changes and a
+live control arm carrying today's marker-blind commands. Item 376 is extended;
+`WFR-67` changes. No ownership primitive changes, nothing from revision 77 is
+withdrawn, and revision 77's marker lifecycle is untouched.
+
+Not yet implemented; not yet approved. Process/tooling milestone only — no
+product code, no `docs/ROADMAP.md`/`docs/ACTIVE_MILESTONE.md` changes, no
+Milestone 9. See "WF8b finding disposition (revision 77 → 78)" below.
+
+**Revision 77**: external plan review of revision 76 returned `Status: REVISE` with
+**zero blocking**, **one important** and **four optional** findings
+(`OPUS-R94-001` through `-005`) — the fifth consecutive round with no blocking
+finding, and the reviewer's bounded architecture reassessment again reports the
+design **converged**. The reviewer recomputed `bundle_id` `142d7694…` three
+independent ways (the value `MANIFEST.md` declares, a from-scratch 127-entry
+walk over the on-disk `current/`, and the same walk over the tree extracted from
+`review-bundle.tar.gz`) and `review_content_id` `a8e451d4…` three ways, in a
+script that deliberately does **not** import `workflow_fingerprint`; confirmed
+the archive byte-identical to `current/` by `diff -r` over 127 files each;
+confirmed `PLAN.md` byte-identical to the authoritative plan; re-derived the
+67-row plan↔mapping conformance at zero mismatches in both directions; and
+reran the hermetic suites at 489/489. **The bootstrap bridge — the load-bearing
+item revision 76 exists for — was executed rather than read**, against a
+throwaway repository: it refuses for each of the five protected paths
+independently, accepts the exact-restore ABA, ignores every excluded path,
+refuses on a missing or disagreeing corroborating source, and fails closed on an
+unclassified path. The transitive binding the bridge rests on was re-measured by
+tampering rather than accepted. The six-primitive lock list was enumerated
+mechanically from the plan text and is complete at exactly six; the four edges
+were re-derived from the operations rather than read off the list, and no fifth
+edge or back-edge exists. **Every finding was validated against this repository
+before anything was edited, and all five are accepted.** No finding is rejected
+this round.
+
+**What was wrong is a clause revision 76 introduced alongside its own fix, and
+it reopens the exact residue that fix removed.** `OPUS-R94-001` (Important):
+part 3b's new "marker's lifecycle" sentence lets the `REJECTED` marker be
+"cleared by the next **successful** generation as that generation's **first
+act**" — and the two halves cannot both hold, since "successful" is a property
+known only at a generation's end while "first act" fixes the clear at its
+beginning. An implementer must choose, and the literal instruction is the one
+the sentence gives. Choosing it reproduces exactly the unmarked, fully
+self-verifying residue `OPUS-R93-003` was filed to remove, with **no crash
+required**, in two ordinary refusals: round N's withdrawal cannot identify its
+own artifacts, so it refuses and writes the marker; round N+1's generation
+clears that marker as its first act; and that generation then refuses at one of
+item 376(d)'s four preconditions — whose byte-identity guarantee is scoped to
+`bundle_dir`, while the marker lives at `bundle_dir/../REJECTED`, **outside** it,
+so the guarantee can neither see the removal nor restore it. The four Optional
+findings touch no mechanism: item 372(h)'s graph arm asserts the recorded edges
+as a **subset** plus acyclicity, so a new acyclic nested edge between two
+already-listed primitives passes; `.claude/commands/review-plan.md` is a third
+surface stating the binding-field set at three, and the only one that *writes*
+feedback, while item 376(s) covers `REVIEW_PROTOCOL.md` alone; the identity-gap
+escape's local ordering claim still says "names every one of them" while naming
+three of six; and revision 76's own summary reports item 375(g) as extended when
+it was not.
+
+**Revision 77 fixes the clause at the mechanism and tightens three obligation
+scopes.** The marker is cleared **only after** a generation has completed and
+verified its own end state — never as a first act — and a generation that
+refuses at a precondition, or fails before its closing binding assertion, is
+stated to leave any pre-existing marker **in place**, since it has neither
+withdrawn the marked artifact nor replaced it; the fail-closed sentences are
+unchanged. Item 372(h)'s graph arm becomes an **equality** over the edge set
+derived from actual acquisitions, failing and naming any unrecorded edge, and
+the normative rule extends from "any future primitive" to "any future primitive
+**or edge**". Item 376(s) widens from one file to every surface that states the
+binding-field contract, `.claude/commands/review-plan.md` included, which must
+name the fourth field by its exact `Reviewed review content ID:` label rather
+than as "its own labelled line". The identity-gap escape's local heading drops
+the completeness claim it cannot support and cites the global site instead.
+Items 372 and 376 are extended; `WFR-67` changes. No ownership primitive
+changes, nothing from revision 76 is withdrawn, and the round's principal
+contract — the bootstrap bridge — is untouched.
+
+Not yet implemented; not yet approved. Process/tooling milestone only — no
+product code, no `docs/ROADMAP.md`/`docs/ACTIVE_MILESTONE.md` changes, no
+Milestone 9. See "WF8b finding disposition (revision 76 → 77)" below.
+
+**Revision 76**: external plan review of revision 75 returned `Status: REVISE` with
+**zero blocking**, **three important** and **three optional** findings
+(`OPUS-R93-001` through `-006`) — the fourth consecutive round with no blocking
+finding, and the reviewer's bounded architecture reassessment again reports the
+design **converged**, now adding that the model is "enforceable rather than
+merely coherent". The reviewer recomputed `bundle_id` `75a29657…` four
+independent ways (the value `MANIFEST.md` declares, the production
+`compute_bundle_id` over the on-disk `current/`, the same over the tree
+extracted from `review-bundle.tar.gz`, and a from-scratch 127-entry walk over
+both) and `review_content_id` `2b0e2a1d…` three ways, in a script that
+deliberately does **not** import `workflow_fingerprint`; confirmed `PLAN.md`
+byte-identical across all four locations; re-derived the 67-row plan↔mapping
+conformance at zero mismatches in both directions; reran all 489 hermetic tests
+and all eighteen stress passes at 698/698; and **checked this plan's own
+evidence-scoping claim rather than trusting it**, confirming by `grep` that not
+one of those 698 assertions touches `review_content_id`, `resolve_approval_basis`,
+`assert_feedback_matches_bundle` or any approval gate. `OPUS-R92-001` was
+reproduced independently in a throwaway repository — for **each** of the five
+protected paths, plus both constraining arms — and the round's central contract
+is reported **correct, verified against the real modules, and not to be
+revisited**. **Every finding was validated against this repository before
+anything was edited, and all six are accepted.** No finding is rejected this
+round.
+
+**What was wrong is that revision 75 stated three completeness claims one
+object short each — and none of them is in the contract it just built.**
+`OPUS-R93-001` (Important): the bootstrap bridge that must approve *this*
+revision sources its new assertion from `parse_review_feedback_binding_fields`,
+which returns three binding fields and no reviewed-content id, and the plan
+sanctions no interim substitute — so the one procedure that has to execute in
+order to approve revision 75 at all reaches an assertion it cannot perform,
+while this plan's own `Known limitations` told the reader the assertion was not
+carried and the mitigation was operator discipline. `OPUS-R93-002` (Important):
+the new single-site "complete global partial order" enumerates **four**
+lock-shaped primitives while this design defines **six**, omitting
+`checkpoint-claims/<sha256(work_item_id)>.lease` and its `.guardlock` — both in
+use today — and strengthens the identity lock's own careful one-directional leaf
+claim into a two-directional one the mechanism does not satisfy, since step 1d's
+`write_worktree_identity` acquires it *inside* the checkpoint guard.
+`OPUS-R93-003` (Important): item 376(l) requires, in every arm, both that no
+surviving artifact verifies **and** that the `REJECTED` marker is present, and
+in the hard-kill arm neither holds — the marker is written by the failure
+handler a hard kill never reaches, and the surviving `current/` verifies
+completely. `OPUS-R93-004`/`-005`/`-006` (Optional): `WFR-66`'s stored
+description is the lowercased image of its table row; `WFR-03`/`WFR-06` name
+only `COMPLETE` checkpoints as owners and the disclosed `REVIEW_PROTOCOL.md`
+obligation cites two items that have nothing to do with it; and the fourth
+binding field's strength at `/approve-review` is unstated at the one command
+that deliberately treats binding-field problems as non-fatal.
+
+**Revision 76 closes each claim at the object it was short.** The reviewed
+identity's sourcing is restated with the roles the right way round —
+`MANIFEST.md`'s declared value is the **definitional** source and the feedback
+field **corroborates** it — and the bridge interval gets an explicit, bounded,
+**expiring** rule that uses only helpers that ship today, so approving this
+revision is a mechanical check rather than operator discipline. The ordering
+site names **six** primitives and states the four real edges, restates the
+identity lock's property in the direction that is true, and becomes a
+conformance obligation with a named test owner. The `REJECTED` marker is written
+**before** the first removal, and item 376(l)'s assertion is restated to the
+property the mechanism has — unverifiable **or** marked — in every arm,
+including the hard kill. `WFR-66`'s casing is restored and the sync direction is
+required to be case-preserving; `WF8b` joins `WFR-03`/`WFR-06`'s owners; the
+`REVIEW_PROTOCOL.md` binding-field count gets a real owner and the citation is
+corrected; and a missing `Reviewed review content ID:` is specified to **refuse**
+at `/approve-review`. Items 166, 372 and 376 are extended (corrected, revision
+77, `OPUS-R94-005`: this sentence also listed item 375(g), which revision 76 did
+not touch — 375's most recent in-place extension is revision 75, not the
+revision 73 this clause claimed until revision 78 corrected it
+(`GPT-R96-002`), and each of the
+six `OPUS-R93` findings routes elsewhere); `WFR-03`
+changes. No ownership primitive changes, nothing from revision 75 is withdrawn,
+and the round's principal contract is untouched.
+
+Not yet implemented; not yet approved. Process/tooling milestone only — no
+product code, no `docs/ROADMAP.md`/`docs/ACTIVE_MILESTONE.md` changes, no
+Milestone 9. See "WF8b finding disposition (revision 75 → 76)" below.
+
+**Revision 75**: external plan review of revision 74 returned `Status: REVISE` with
+**zero blocking**, **two important** and **three optional** findings
+(`OPUS-R92-001` through `-005`) — the third consecutive round with no blocking
+finding, and the reviewer's bounded architecture reassessment again reports the
+design **converged** and again declines to recommend a redesign. The reviewer
+recomputed `bundle_id` `0e866ee8…` three independent ways (manifest, a 127-entry
+walk of the on-disk `current/`, and the same walk over the extracted archive,
+agreeing entry-for-entry rather than only on the final digest) and
+`review_content_id` `53fc97e7…` from a hand-rebuilt plan-stage projection, in a
+script that deliberately does **not** import `workflow_fingerprint`; confirmed
+all five protected paths byte-identical across worktree, `files/` and archive;
+re-derived the 67-row plan↔mapping conformance at zero mismatches using the
+integration suite's own normalizers; reran all 489 hermetic tests and all
+eighteen stress passes at 698/698; rescanned the origination reference live at
+31 commits with **0 undecidable reads**; and scanned the mapping's whole
+committed history for requirement loss, finding none at any commit. Both
+findings were **executed** rather than argued, against the real
+`workflow_fingerprint`/`workflow_state` modules in throwaway repositories.
+**Every finding was validated against this repository before anything was
+edited, and all five are accepted.** No finding is rejected this round.
+
+**What was wrong is that the round closed the provenance chain at one end and
+left the other end unchecked.** `OPUS-R92-001` (Important): revision 74 made the
+bundle an immutable, self-consistent **subject** — and nothing anywhere requires
+the object being approved to be that subject. `approved_review_content_id` is
+whatever `/approve-review plan` recomputes **from the live working tree at
+approval time**; `assert_feedback_matches_bundle` binds `bundle_id`/
+`base_commit`/`work_item` only, `resolve_approval_basis` compares `bundle_id`
+only, `bundle_id` is by construction insensitive to every working-tree change,
+`assert_local_generation_matches` compares `worktree_root`/`generation_head`
+which an uncommitted edit changes neither of, and
+`verify_post_approval_manifest_match` compares the commit against the record —
+commit-versus-record, where **both are the post-drift content**. Reproduced
+independently here: a one-line append to a protected path after the verdict
+leaves every one of steps 1–4's checks passing, the basis `EXTERNAL_APPROVE`,
+and the approval commit, its trailer and the durable
+`approved_review_content_id` all naming content no reviewer saw. The plan
+asserts the missing property in **three** places. `OPUS-R92-002` (Important):
+part 3b justifies its quarantine by a retention property it does not have —
+quarantine fires only on **failure**, while a **successful** generation still
+overwrites `current/` and the archive in place, which is exactly what the cited
+revision-72 incident was — and the withdrawal's target is unstated against the
+version-store contract the same section defers to, under which its literal
+instructions would destroy the **last good** bundle and archive while the failed
+candidate survives. `OPUS-R92-003`: the pin covers the five protected files but
+not the classification sets or the state scalars, so part 3a's load-bearing
+sentence is stated unqualified. `OPUS-R92-004`: the new lock's ordering
+statement names two of the three locks its own call site sits next to.
+`OPUS-R92-005`: `authorizing_worktree_git_dir` is populated from
+`--git-common-dir`, which is repository-constant and cannot identify the
+authorizing worktree.
+
+**Revision 75 closes the approval end of the chain.** The reviewed content
+identity now has **one** definition, stated once in `D-Bundle-Manifest` and
+referenced everywhere else: it is the value `MANIFEST.md` declares, transitively
+bound by `bundle_id`, and every other physical source — the pinned generation
+projection, the live worktree, the approval commit — is valid only where it is
+**proven equal** to it. `/approve-review plan` (and the bootstrap procedure's
+inherited steps 1–4) now **refuses** when the freshly recomputed plan-stage
+`review_content_id` differs from the reviewed one, before this invocation's
+first durable mutation — no commit, no index mutation, no state write on the
+refusal path. `Reviewed review content ID:` becomes a **fourth binding field**,
+hard where `bundle_id` stays as it is, the polarity `OPUS-R14-005` established
+and `/record-manual-plan-review` already uses. The scope is deliberately not
+widened: an excluded-path edit does not block approval, and a protected path
+modified then restored byte-identically is **accepted**, because the invariant
+is content identity, not temporal history — both verified here. The three
+overstatements are corrected rather than left standing. Part 3b's false
+retention clause is **deleted**, the real retention rule is stated and given an
+owner with the interim loss named as a limitation, and the withdrawal's target
+is stated explicitly in both worlds with a fail-closed refusal when this run's
+own artifacts cannot be identified. Part 3a's sentence is qualified and the pin
+is extended to the resolved `PlanStageMetadata`. The gap leaf's ordering names
+`WORKFLOW_STATE.lock` and the global partial order is recorded in one place.
+`authorizing_worktree_git_dir` is repopulated from a per-worktree source. Items
+375(g) and 376 are extended; `WFR-03`, `WFR-06` and `WFR-67` change. No
+ownership primitive changes and nothing from revision 74 is withdrawn. See
+"WF8b finding disposition (revision 74 → 75)" below.
+
+**Revision 74**: external plan review of revision 73 returned `Status: REVISE` with
+**zero blocking**, **four important** and **one optional** finding
+(`OPUS-R91-001` through `-005`) — the second consecutive round with no blocking
+finding, and the reviewer's bounded architecture reassessment again reports the
+design **converged** and again declines to recommend a redesign. The reviewer
+recomputed `bundle_id` `6c355e56…` three independent ways (manifest, on-disk
+`current/`, extracted archive) and `review_content_id` `ed07a832…` from this
+repository's own plan-stage projection; confirmed all five protected paths —
+`PLAN.md` included — byte-identical across worktree, `files/` and archive;
+re-derived the 67-row plan↔mapping conformance at zero mismatches; reran all 489
+hermetic tests and all eighteen stress passes at 698/698; and rescanned the
+origination reference live at 31 commits with **0 undecidable reads**. Two of
+the four findings were **executed** rather than argued — replayed against the
+real `workflow_fingerprint` module in scratch repositories carrying the same
+five protected paths. All four of revision 73's corrections are confirmed
+addressed, two of them only **partially**. **Every finding was validated against
+this repository before anything was edited, and all five are accepted.** No
+finding is rejected this round.
+
+**What was wrong is that each of revision 73's own corrections was one input
+short of the thing it binds.** `OPUS-R91-001`: part 3a pins `plan_path`, but
+`review_content_id` is a digest over **five** protected paths, and the other
+four are still read from the worktree *after* the `files/` copy — the same
+unlinked window revision 73 closed for one path, left open for four; and the
+"provably the same bytes" claim is a two-point equality sample that an ABA
+(`git checkout --`, a `stash`/`stash pop`, an undo-and-resave) defeats with both
+endpoints agreeing. `OPUS-R91-002`: the identity read partition is **not
+disjoint** — a committed `{"work_items": {"X": null}}` matches row 1 (the key is
+present, so the id is decidably observed) *and* row 3 (a present-but-non-object
+member is undecidable), the table states no precedence rule, and the collision
+routes a decidable observation into the one class an authorization can clear.
+`OPUS-R91-003`: `authorize_identity_reference_gap` is a new authority boundary
+introduced "on the same footing as" two siblings while carrying almost none of
+their surface — no authorization literal, no record location, no serialization
+at a call site where no work item yet exists, no crash-window disposition, and a
+consumed token bound to the observation but not to the identity it authorizes —
+and `WFR-66` never states which invariant survives the override.
+`OPUS-R91-004`: part 3b's withdrawal states no **order** and no failure
+semantics, and the artifact it most needs to destroy is the archive, which
+carries its own manifest and self-verifies. `OPUS-R91-005` (optional): the
+mapping-incident narrative drew an incorrect inference from a diffstat.
+
+**Revision 74 corrects each at the mechanism.** Part 3a is restated as a
+**pinned observation** rather than a pinned path: all five protected paths are
+read once, the projection is pinned, `review_content_id` is computed **from the
+pinned digests** rather than from an independent late snapshot, and the closing
+re-read is demoted to a staleness check — the word "provably" is deleted, since
+a two-point sample narrows a window rather than closing it. Part 3b gains an
+**order** (the archive is removed first), a **fail-closed** disposition when a
+removal cannot complete, and the **quarantine** question 13 raised:
+`current/` is renamed to `current.rejected-<token>/` rather than left in the
+reviewable location. The identity partition gains an explicit **precedence
+rule** — key presence at the queried level is a decidable observation and takes
+precedence over every undecidability elsewhere in the same commit, so only
+undecidability that prevents establishing key presence or absence is escapable —
+and the two tables' genuine divergence is stated rather than imported by
+reference. `authorize_identity_reference_gap` gains the full authorization
+surface its siblings carry — an authorization literal binding the identity *and*
+the gap digest, the evidence displayed before it is solicited, a named durable
+record and its schema, repository-level serialization, a crash-window
+disposition at every side-effect boundary, and an identity-bound token — and
+`WFR-66` states its **post-override invariant** explicitly: no *decidably
+observed* id is reused. Items 375(g) and 376(j)/(l) are de-vacuoused and
+extended; 376 gains (n) and (o). No ownership primitive changes and nothing from
+revision 73 is withdrawn.
+**Revision 75 closes the other end of the same chain — the approval gate binds
+the reviewed identity rather than the live worktree — and corrects the
+retention claim, the withdrawal's target, the pin's remaining inputs, the lock
+ordering and the worktree field; see below.**
+
+**Revision 73**: external plan review of revision 72 returned `Status: REVISE`
+with **zero blocking**, **three important** and **one optional** finding
+(`OPUS-R90-001` through `-004`) — the first round in nine with no blocking
+finding, and the reviewer's bounded architecture reassessment reports the design
+**converged**, explicitly declining to recommend another redesign. The reviewer
+recomputed `bundle_id` `13020c9d…` three independent ways and `review_content_id`
+`7931cf14…` from a hand-rebuilt projection, through a from-scratch
+reimplementation of both digest algorithms that deliberately does not import
+`workflow_fingerprint`; confirmed `PLAN.md` byte-identical to this document
+across all five copies; re-derived the 67-row plan↔mapping conformance at zero
+mismatches; reran all 489 hermetic tests and all eighteen stress passes at
+698/698; and rescanned the origination reference live at 31 commits with **0
+undecidable reads**. All five of revision 72's corrections are confirmed
+resolved, three with residuals. **Every finding was validated against this
+repository before anything was edited, and all four are accepted.** No finding
+is rejected this round.
+
+**What was wrong is that revision 72's two new mechanisms were each specified
+one level short of the thing they bind.** `OPUS-R90-001`: `WFR-67` binds
+`PLAN.md` to `plan_path` but never pins the read, and `review_content_id` takes
+its *own independent* snapshot of that path — so the derivation's bytes and the
+identifiers' bytes can differ with nothing comparing them, and the marker check
+is blind to a same-revision body change. Its second arm: the closing assertion
+runs *after* `MANIFEST.md` and the archive are written, so a failure leaves an
+artifact that passes every check a reviewer can run from the artifact alone.
+`OPUS-R90-002`: the requirement removes a manual step that is written not in
+`REVIEW_PROTOCOL.md` but in the two commands driving the plan stage — one of
+which names the bundle copy and the authoritative document as **co-equal edit
+targets** — and `.claude/commands/` was not in `WFR-67`'s implementation
+surface. `OPUS-R90-003`: `WFR-66`'s two identity queries now name the origination
+reference, but they ask an *existence* question where the origination table
+answers an *absence* question, so they inherit no decidability partition, and
+neither polarity had a stated escape. `OPUS-R90-004` (optional): item 166's own
+row count went stale a fourth time.
+
+**Revision 73 corrects each at the mechanism.** `WFR-67` gains parts **3a** and
+**3b**: `plan_path` is read exactly once at derivation with its digest pinned
+for the run, the closing assertion compares against that pinned digest **and**
+re-reads the path, and a failed assertion **withdraws** `MANIFEST.md` and the
+archive rather than leaving a review-ready bundle behind. Both plan-stage
+commands join `WFR-67`'s implementation surface with the required wording
+stated: at the plan stage `PLAN.md` is generated, not authored, and the
+authoritative `plan_path` is the sole edit target. `WFR-66` gains a **total read
+partition of its own** for both identity queries — undecidable refuses with a
+distinct error class rather than reading as "not observed", cleared only by the
+explicit, evidence-bound, non-replayable `authorize_identity_reference_gap`,
+which admits the undecidability and never a decidable observation — plus the
+reduction and missing-key rules stated for these queries rather than inherited
+by analogy. Item 166's count is corrected to 67 and the count itself becomes a
+derived conformance property. Items 375(g) and 376 carry the new obligations; no
+ownership primitive changes and nothing from revision 72 is withdrawn.
+**Revision 74 corrects the pin's scope, the partition's disjointness, the
+escape's authorization surface and the withdrawal's ordering — see below.**
+
+**Revision 72**: external plan review of revision 71 returned `Status: REVISE` with
+**one blocking** and **four important** findings (`OPUS-R89-001` through
+`-005`). For the first time in eight rounds the blocking finding is **not** in
+`D-Checkpoint-Ownership`: it is in the bundle generator itself. The reviewer
+reproduced `bundle_id` `5b39c9a7…` three independent ways and
+`review_content_id` `aedb8a60…` through this repository's own plan-stage
+projection, confirmed `PLAN.md` byte-identical to this document, re-derived the
+66-row plan↔mapping conformance at zero mismatches, reran all 489 hermetic tests
+and all eighteen stress passes at 698/698, and **fuzzed 150 random DAG
+topologies** against revision 71's corrected reference — 0/150 disagreements
+against the unfiltered walk, versus 7/150 for revision 70's command — which
+independently establishes both `OPUS-R88-001`'s defect and revision 71's own
+`--full-history` sufficiency claim. All five of revision 71's corrections are
+confirmed resolved, four with residuals. **Every finding was validated against
+this repository, its prototype and Git itself before anything was edited, and
+all five are accepted.** No finding is rejected this round.
+
+**What was wrong is that the plan-stage bundle's own `PLAN.md` is bound to
+nothing.** `OPUS-R89-001` (blocking): `scripts/prepare-ai-review.sh` creates the
+author-written files **only if missing** and never refreshes them, while
+`files/` *is* rebuilt from the diff on every run — so a regenerated bundle can
+carry a revision-N `files/docs/ai-workflow/WORKFLOW_V2_PLAN.md` beside a
+revision-N−1 `PLAN.md`, and nothing compares the two. `review_content_id` is
+computed from the authoritative worktree paths and never reads
+`bundle_dir/PLAN.md`; `bundle_id` does hash it, but all three of the generator's
+reproducibility computations hash the *same* stale file and agree. The check
+designed for exactly this, `assert_stage_completeness` — whose own docstring
+says "an unrefreshed copy left over from an earlier round is exactly the
+staleness this check exists to catch" — has **zero production call sites**
+(verified repo-wide: its definition, nine unit tests, one comment and one line
+of prose), and `REVIEW_PROTOCOL.md` states the guarantee to the author anyway.
+Worse, wiring it in as written would not be enough: reproduced here, a `PLAN.md`
+regressed to the `(Revision 70)` marker refuses, but a `PLAN.md` whose **body**
+is altered with the marker left intact **passes**. This is not hypothetical —
+revision 71's first regeneration produced exactly this bundle, and the only
+thing that corrected it was the author remembering to copy the plan by hand.
+`OPUS-R89-002`: the partition table's admit row and the revision-71 reference
+implementation disagree about an absent `work_items` and an absent
+`checkpoints`. `OPUS-R89-003`: the partition has no row for a *failed tree
+read*, and a reader written from the table literally treats that failure as
+absence and admits. `OPUS-R89-004`: the retention contract omits linked-worktree
+removal — the one evidence-erasing route this design's own recovery prose tells
+operators to run — and its pruning-independence sentence generalises a measured
+claim into a false one. `OPUS-R89-005`: `WFR-66`'s registry-side refusal names
+no evidence source, and the reference it cites cannot observe a checkpoint id
+retired before it was ever started.
+
+**Revision 72 corrects each at the mechanism.** `D-Bundle-Manifest`'s
+one-sentence, never-wired "stage-completeness check" becomes a **generator-side
+fail-closed binding**: at the plan stage `PLAN.md` is **derived** from the
+resolved work item's own `plan_path` on every generation rather than created
+if absent, behind fail-closed preconditions evaluated before any file under
+`bundle_dir` is written, and byte-identity between `plan_path`,
+`bundle_dir/PLAN.md`, `files/<plan_path>` and the archive's extracted copy
+becomes part of the existing three-way reproducibility check — carried as new
+requirement `WFR-67` with missing-test item 376. The origination partition table
+is made **total and exactly agreed with its own reference implementation**:
+absence is distinguished from a non-object member at each of the three container
+levels, a new row refuses a failed tree read, and validating the finding
+surfaced two divergences the reviewer did not measure and in the *dangerous*
+direction — a `null` work item and a `null` checkpoint entry both **admit**
+today where the table says refuse. The retention contract discloses worktree
+removal, worktree pruning and `git gc`'s own worktree-pruning step at measured
+strength, qualifies the detached-`HEAD` property as **worktree-lifetime**
+evidence, scopes the pruning-independence sentence to object pruning, and warns
+at both places the recovery prose recommends `git worktree remove`. And
+`WFR-66`'s registry-side half is **scoped to the evidence source that exists**:
+an id retired before it was ever started carries no historical binding and is
+outside the invariant, with in-place redefinition stated as explicitly legal.
+
+Not yet implemented; not yet approved. Process/tooling milestone only — no
+product code, no `docs/ROADMAP.md`/`docs/ACTIVE_MILESTONE.md` changes, no
+Milestone 9. See "WF8b finding disposition (revision 71 → 72)" below.
+
+**Revision 71**: external plan review of revision 70 returned `Status: REVISE` with
+**one blocking** and **four important** findings (`OPUS-R88-001` through
+`-005`), against `D-Checkpoint-Ownership` for the seventh consecutive round
+and, for the third time running, against the correction the immediately
+preceding revision made. The reviewer recomputed `bundle_id` `5de1dc66…` two
+independent ways and `review_content_id` `a45c3e0f…` from a from-scratch
+reimplementation of the projection rather than by importing this repository's
+own code, confirmed `PLAN.md` byte-identical to this document, re-derived the
+65-row plan↔mapping conformance at zero mismatches and independently
+reconstructed the mapping-restoration history (two additions, zero
+modifications), reran all 489 hermetic tests and all seventeen stress passes
+at 600/600, and confirmed revision 70's one rejection correct against the live
+repository fact it turns on. **Every finding was validated against this
+repository and its prototype before anything was edited, and all five are
+accepted.** No finding is rejected this round.
+
+**What was wrong is that revision 70 defined the origination reference with a
+command whose semantics its own prose misdescribes.** `OPUS-R88-001`
+(blocking): "every commit reachable from every ref" and "path-limited to the
+state document" are two different reductions, and `git rev-list --all --
+<path>` does not compose them — a pathspec switches the walk into Git's default
+**History Simplification**, which prunes, including following only one parent
+of a merge TREESAME to it for that path. A checkpoint recorded `IN_PROGRESS` in
+a commit that stays reachable from `refs/heads/main` is therefore absent from
+the reference, and adoption is **admitted** — `WF8B-S14-001` restored for the
+third time, now through an ordinary merge and a routine post-merge branch
+deletion, with the adopter moving nothing. Reproduced against revision 70's own
+reference implementation, and already latent here: this repository's reference
+lists 30 commits where `--full-history` lists 31, and the one dropped is a real
+merge. `OPUS-R88-002`: the fail-closed partition was closed over container
+*shape* and open at the **scalar** — six schema-invalid `status` values (absent,
+`null`, a number, a list, an object, a wrong-case string) all admitted, and
+absence at a commit was concluded from `git show`'s exit status, which
+conflates "not in that tree" with "present but unreadable". `OPUS-R88-003`: the
+disclosed residual was stated as "a repository-wide destruction of history",
+and both halves are false — one `git update-ref -d` from the benefiting
+worktree defeats it against a branch `git branch -D` protects, ordinary
+maintenance erases the evidence unintentionally, and no ref-retention contract
+was stated anywhere. `OPUS-R88-004`: the reduction over multiple observations
+was never stated normatively — the refusal is permanent, it accumulates, and no
+work-item/checkpoint identity-reuse invariant existed. `OPUS-R88-005`: the
+evidence attached to `CheckpointOriginationUnprovableError` was enumerated for
+the world before the origination test existed and omits the observation that
+produced the refusal.
+
+**Revision 71 corrects each at the mechanism.** The reference becomes
+`git rev-list --all --full-history -- <state path>` and is stated as *what that
+command enumerates*, with its residual pruning proved status-preserving and a
+standing conformance obligation that it agree with the unfiltered reachable set
+on the pairs ever observed `IN_PROGRESS`. The read admits only on a status
+present, string-typed and drawn from the state schema's own controlled
+vocabulary, with absence established by the commit's tree rather than by an
+exit status. The residual is restated at its measured strength, with an
+explicit **retention contract** and the genuinely positive half — the decision
+is unchanged across `reflog expire` + `gc --prune=now` — claimed for the first
+time. The reduction is stated normatively as permanent and monotonic, and the
+identity invariant it requires becomes an enforced, tested rule at work-item
+creation and registry authoring (`WFR-66`). The refusal's evidence gains the
+route, the observing commit, the status or shape read there, the reference, the
+local identity observation and the claim's absence — with the takeover literal's
+independence from all of it stated and asserted. Two non-blocking observations
+are closed in the design text and one in the prototype.
+
+Not yet implemented; not yet approved. Process/tooling milestone only — no
+product code, no `docs/ROADMAP.md`/`docs/ACTIVE_MILESTONE.md` changes, no
+Milestone 9. See "WF8b finding disposition (revision 70 → 71)" below.
+
+**Revision 70**: external plan review of revision 69 returned `Status: REVISE` with
+**two blocking** and **four important** findings (`OPUS-R87-001` through
+`-006`), against `D-Checkpoint-Ownership` for the sixth consecutive round and,
+for the second time, against the correction the immediately preceding revision
+made. The reviewer independently recomputed `bundle_id` `d939aa26…` three ways
+and `review_content_id` `aabae769…` through this repository's own plan-stage
+projection, confirmed `PLAN.md` byte-identical to this document, re-derived the
+65-row plan↔mapping conformance at zero mismatches, reran all 489 hermetic
+tests green and all sixteen stress passes at 551/551, and inspected revision
+69's five control arms rather than trusting them. **Every finding was validated
+against this repository and its prototype before anything was edited. Five are
+accepted; one — `OPUS-R87-003` — is rejected in its central claim and accepted
+only in a narrower residual, because the repository fact it rests on is false
+here** (see "WF8b finding disposition (revision 69 → 70)" for the reproduction).
+
+**What was wrong is that revision 69 corrected the *refusal* direction of the
+origination test and never examined the *admission* direction.**
+`OPUS-R87-001`: "absent from the state committed at `HEAD`" names a reference
+the would-be adopter **selects**, because in a linked-worktree layout each
+worktree owns its own `HEAD` and can move it without touching its working
+tree. Reproduced end to end against the real `adopt_claim`: after one
+`git reset --soft HEAD~1`, and again with **no ref moved at all** via
+`git checkout <commit> -- <state path>`, a worktree that never started the
+checkpoint adopts it, publishes a claim flagged `adopted`, and locks the true
+originator out with `CheckpointOwnedByOtherWorktreeError` — `WF8B-S14-001`
+itself, restored by an ordinary recovery command. `OPUS-R87-002`: the same read
+fails **open** — `committed_checkpoint_status` returns `None`, never raises,
+for an absent state file, an unparseable blob, a missing `work_items` entry and
+a non-`dict` work item alike, so every undecidable outcome is treated as "not
+`IN_PROGRESS`" and adoption proceeds; a top-level non-object document is worse
+still and escapes as an undeclared `AttributeError`. This inverts the
+section's own "every undecidable read raises rather than returning
+'unclaimed'". `OPUS-R87-004`: both new refusals route to the explicit takeover,
+whose evidence reports nothing about uncommitted work — so the worktree holding
+the work and one holding none produce a **byte-identical** authorization
+literal for the same checkpoint. `OPUS-R87-005`: the revision-69 partition is
+closed over document *shape* but not over what the identity **path** can be; a
+directory and an `EACCES` file escape the load-bearing 1c refusal as undeclared
+`IsADirectoryError`/`PermissionError`, a symlink is followed and admitted while
+the observer calls it undecidable, and a fifo makes that refusal **block
+indefinitely**. `OPUS-R87-006`: the repair authorization and the repair
+decision hang off the same optional evidence member, and its absence removes
+the authorization while still performing the overwrite.
+
+**Revision 70 corrects each at the mechanism.** The origination test names a
+**durable, non-selectable reference** — every commit reachable from every ref
+(`git rev-list --all`, verified to span every linked worktree's own `HEAD`,
+detached included), path-limited to the state document — with a stated
+derivation, a stated residual, and a total fail-closed partition of its read in
+which only a positive, decidable "absent" admits; and it is re-evaluated at
+**publication**, under the guard, not only at evidence time. The identity
+partition gains a second axis for what the path *is*, with `lstat` plus
+`O_NOFOLLOW` establishing a real regular file before any open, and a stated
+reader/observer agreement invariant. `takeover_evidence` reports uncommitted
+work for this worktree and for every registered worktree, so the decision the
+design delegates to a human is no longer made blind. The identity observation
+becomes a **required** evidence component of both rotating operations, absent
+means refuse, and re-observation is the stale-evidence check only. Three
+non-blocking observations are closed alongside, one of them in the prototype.
+See "WF8b finding disposition (revision 69 → 70)" below. The reference this
+revision introduced is corrected in revision 71 (`OPUS-R88-001`): the command
+it named enumerates a simplified history rather than the reachable set the
+sentence above claims.
+
+**Revision 69**: external plan review of revision 68 returned `Status: REVISE` with
+**three blocking** and **two important** findings
+(`OPUS-R86-001` through `-005`), against `D-Checkpoint-Ownership` for the fifth
+consecutive round. The reviewer independently recomputed `bundle_id`
+`5543a39f…` three ways and `review_content_id` `4ba1f5a3…` through this
+repository's own plan-stage projection, confirmed `PLAN.md` byte-identical to
+this document, re-derived the 65-row plan↔mapping conformance at zero
+mismatches under the integration test's own normalization, reran all 489
+hermetic tests green, re-ran all fifteen author stress passes at 462/462,
+confirmed item 166's integration-suite failure pre-existing and not masking
+anything, and independently closed the revision-63-to-67 mapping restoration by
+a stronger route than the one offered. **All five findings were validated
+against this repository, its prototype and `scripts/workflow_state.py` before
+anything was edited, all five were reproduced end to end here, and all five are
+accepted in full.** Nothing in any of them is rejected, in whole or in part.
+
+**What was wrong is that revision 68's central safety argument rests on a
+premise this repository falsifies.** `OPUS-R86-001`: the identity-first 1d
+ordering is justified three times over by "this worktree's **own uncommitted**
+`IN_PROGRESS` state, which only its own 1d writes, and which is never
+committed, so no checkout can supply it". Five commits reachable from the
+reviewed head carry `workflow-v2-1-core`'s own `WF8b` checkpoint `IN_PROGRESS`,
+because a whole-tree checkpoint commit for one work item stages another work
+item's in-flight transition along with it — ordinary practice here, and
+forbidden by nothing in the design. Once a checkout can supply `IN_PROGRESS`,
+the **adoption** path admits a worktree that never originated the checkpoint,
+publishes its claim, and refuses the true originator with "resume it there"
+pointing at a worktree that has nothing to resume: `WF8B-S14-001` itself,
+surviving into revision 68 through the one path the section calls "not
+optional". `OPUS-R86-002`: `WORKTREE_IDENTITY.json` holds **every** work item's
+entry and is updated by an unserialized read-modify-write, so a concurrent
+write for an unrelated work item silently deletes the entry revision 68 made
+the sole proof of origination — reproducing `OPUS-R84-001`'s lockout from
+outside the work item entirely (12 of 12 trials). `OPUS-R86-003`: the takeover,
+named as the sanctioned repair for a corrupt identity record, refused **on that
+record after having already rotated the claim**, and every retry rotated again.
+`OPUS-R86-004`: the third error class is not exhaustive — a non-mapping
+document escapes the 1c refusal itself as `AttributeError` and a JSON `null`
+document is silently overwritten. `OPUS-R86-005`: the claim that atomic
+publication is "prototyped and asserted" was false; the specified writer wrote
+the final pathname twice, the first time non-atomically.
+
+**Revision 69 corrects each at the mechanism.** Adoption is guarded on the
+checkpoint's `IN_PROGRESS` **not** being present in the state committed at
+`HEAD` — only the uncommitted delta is origination evidence — with a fourth
+error class, `CheckpointOriginationUnprovableError`, and the explicit takeover
+as the named escape; the inertness sentence is withdrawn wherever it appears
+and the supporting evidence is restated at the scope it was actually measured
+at. The identity document gets a named serialization: a per-**worktree**,
+never-unlinked `fcntl.flock` leaf lock held across the whole
+load → validate → mutate → publish sequence, with an explicit statement of why
+the per-work-item guard cannot supply it and where it sits in the lock order.
+Both rotating operations establish the incoming owner's identity record
+**before** the rotation publishes, so a document they cannot decide refuses
+with the claim byte-identical — and the corrupt-record state's last hand repair
+is removed by an authorization component bound to that document's exact bytes,
+rather than by a silent overwrite. The refusal classification is closed over
+document shape for the reader as well as the writer, and the writer is
+re-prototyped so the final pathname is written exactly once, by `os.replace`.
+Five non-blocking observations are closed alongside.
+
+Not yet implemented; not yet approved. Process/tooling milestone only — no
+product code, no `docs/ROADMAP.md`/`docs/ACTIVE_MILESTONE.md` changes, no
+Milestone 9. See "WF8b finding disposition (revision 68 → 69)" below.
+
+**Revision 68** (its inertness argument is **withdrawn** by revision 69 above;
+its withdrawal of revision 67's self-owned-claim proof stands, and is
+untouched): external plan review of revision 67 returned `Status: REVISE` with
+**one blocking** and **one important** finding (`OPUS-R85-001`/`-002`), against
+`D-Checkpoint-Ownership` for the fourth consecutive round — and, for the first
+time, against a correction this plan made in the immediately preceding revision.
+Both were validated against this repository and `scripts/workflow_state.py`
+before anything was edited, both were independently reproduced here, and **both
+are accepted in full**. Nothing in either is rejected. The reviewer
+independently recomputed `bundle_id` `fb9b7f58…` three ways and
+`review_content_id` `cd47c6ed…` through this repository's own plan-stage
+projection, confirmed `PLAN.md` byte-identical to this document, re-derived the
+65-row plan↔mapping conformance at zero mismatches using the integration test's
+own normalization functions, reran all 489 hermetic tests green, re-ran all
+fourteen author stress passes at 394/394, and confirmed revision 67's
+reachability half — `OPUS-R84-001`'s actual defect — genuinely resolved.
+
+**What was wrong is that revision 67 bought that reachability with a proof that
+does not hold.** `OPUS-R85-001`: step 1c was relaxed so that a "decidably
+self-owned claim" is itself sufficient proof of origination, skipping
+`verify_dirty_resume_safety`. The ownership key that proof compares is
+`workflow_state._git_identity`'s output — which returns the worktree's path
+**twice** plus the Git common dir, i.e. two path values carrying no
+worktree-instance identity at all. Paths are reusable, and
+`.claude/worktrees/<name>` is how this repository is driven, so a **different**
+worktree occupying the holder's recorded path satisfies the proof, skips the
+check, and mutates authoritative state under the original holder's **unrotated**
+`owner_token` — two worktrees holding one valid token, `takeover_count` 0,
+`previous_owner_tokens` empty, no fencing and nothing auditable afterwards.
+Reproduced end to end through the real step-1 caller in both constructions
+(holder relocated then replaced; holder removed and recreated at the same name,
+which reuses the same admin directory). `OPUS-R85-002`: the same relaxation also
+removed a **third** refusal the plan's "exactly two error classes" enumeration
+had missed — `CorruptJsonError` — moving corruption detection to *after* an
+authoritative state write, where the schema-invalid flavour escapes as an
+undeclared `TypeError` and the corrupt record then survives indefinitely,
+unrepaired and unreported.
+
+**Revision 68 withdraws the relaxation and fixes the reachability at the
+ordering instead.** `verify_dirty_resume_safety` is unconditional again, exactly
+as through revision 66: there is **one** proof of origination, the local,
+gitignored, per-worktree identity record, because only its existence proves a
+worktree *instance* while the shared claim proves a *location*. `CONTINUE_CLAIM`
+stays reachable in the crash window it exists for — the defect `OPUS-R84-001`
+reported, which stays fixed — because step 1d now **establishes that record
+before publishing the claim**, so the window cannot be entered without it. The
+route in for a worktree that cannot prove origination is the explicit takeover,
+which was already the design's answer for exactly that judgment; both rotating
+operations now establish the incoming owner's own identity record, so a
+transfer is complete, fenced and audited rather than silent. The third error
+class is named and decided (it refuses, at 1c, before any mutation), and the
+identity writer owes two stated properties: validate before mutating, so no
+undeclared exception escapes, and publish atomically. Two non-blocking
+observations are closed alongside — an empty-string `lease_id` refuses like
+every other absent one, and the "triple" framing that made the defect easy to
+miss is corrected wherever it appears.
+
+See "WF8b finding disposition (revision 67 → 68)" below.
+
+**Revision 67** (its self-owned-claim proof is **withdrawn** by revision 68
+above; its reachability fix stands, re-achieved by a different mechanism):
+external plan review of revision 66 returned `Status: REVISE` with **one
+blocking** and **zero important** findings (`OPUS-R84-001`), against
+`D-Checkpoint-Ownership` for the third consecutive round — and, for the first
+time in that sequence, against a branch the section *specifies* rather than a
+mechanism it under-specifies. The finding was validated against this repository,
+its prototype and `scripts/workflow_state.py` before anything was edited, it was
+independently reproduced here, and **it is accepted in full**. Nothing in it is
+rejected. The reviewer independently recomputed `bundle_id`
+`e6e6c66e…` three ways (the manifest's own value, a fresh recomputation over the
+122-entry `current/` directory, and a recomputation over content extracted from
+`review-bundle.tar.gz`) and `review_content_id` `d17c3180…` through this
+repository's own plan-stage projection, confirmed `PLAN.md` byte-identical to
+this document, re-derived the 65-row plan↔mapping normalization at zero
+mismatches using the integration test's own normalization functions, reran all
+489 hermetic tests green, re-ran all thirteen author stress passes at 340/340,
+wrote four independent reviewer passes from scratch, and confirmed
+`workflow_integration_test.py`'s deferred failure is a genuinely pre-existing
+stale count literal masking nothing. Both revision-66 findings
+(`OPUS-R83-001`/`-002`) were independently re-verified as fixed at the mechanism,
+not merely in the wording.
+
+**What was wrong is that `CONTINUE_CLAIM` could not be reached in the crash
+window it exists for.** `OPUS-R84-001`: 1d publishes the claim and writes
+`WORKTREE_IDENTITY.json`'s per-work-item entry in that order, deliberately — but
+1c step 3 called `verify_dirty_resume_safety` unconditionally *before* any branch
+that can mutate, and that function raises `WorktreeIdentityMissingError` when the
+identity file is absent **or** carries no entry for this `work_item_id`. Inside
+1d's own crash window the entry does not exist, so the legitimate owner was
+refused before `CONTINUE_CLAIM` could be returned — the exact permanent lockout
+the branch is specified to prevent, with the section naming that harm in prose
+while the ordering produced it. `.ai-review/` is gitignored, so the entry is
+per-worktree and never inherited: the lockout covered the **first checkpoint any
+worktree starts on any work item**, and a brand-new work item was unstartable
+from everywhere. No documented operation cleared it — the takeover rotated the
+claim and left the refusal standing, because the refusal was driven by the
+missing identity record rather than by ownership — leaving hand-deletion of the
+claim file as the only escape, which is the class of undocumented manual repair
+this design exists to eliminate.
+
+**Revision 67 makes the specified branch reachable; it redesigns nothing.** Step
+1c now has two proofs of origination instead of one, and the claim is the
+stronger: a **decidably self-owned claim is itself the proof**, since its
+`(repo_root, git_common_dir, worktree_root)` ownership key is byte-identically
+the triple `verify_dirty_resume_safety` compares — a fact "The record" already
+states as the reason the two can never disagree. For every other case — no claim,
+or a foreign claim, including the claim-absent adoption path where the identity
+record is the only evidence in existence — `verify_dirty_resume_safety` is
+unchanged and still runs first. Because both tests compare the identical triple
+against the identical source, the relaxation removes exactly one refusal and can
+admit no worktree the mismatch check would have refused; `S14a`/`S14b` remain the
+two classes a foreign worktree actually sees, re-asserted rather than assumed.
+The refusal's diagnosis is generalized in the same edit: **every** refusal raised
+while a decidable claim is present now carries the ownership evidence and names
+the escape, for a self-owned claim as well as a foreign one. Three non-blocking
+observations are closed alongside it — an absent `lease_id` is a refusal rather
+than a removal wildcard, the recovery partition's guard axis and claim-path axis
+are stated as independently resolved, and both rotating operations are stated to
+supersede their own guard harmlessly. See "WF8b finding disposition (revision 66
+→ 67)" below.
+
+**Revision 66**: external plan review of revision 65 returned `Status: REVISE`
+with
+**zero blocking** and **two important** findings (`OPUS-R83-001`/`-002`), both
+against `D-Checkpoint-Ownership` again, and both about the gap between a
+property the plan *states* and the mechanism that is supposed to make it true.
+Both were validated against this repository and its prototype before anything
+was edited, both were independently reproduced here, and **both are accepted** —
+neither is rejected in whole or in part. The reviewer independently recomputed
+both identifiers from the on-disk bundle *and* from the separately extracted
+archive, confirmed `PLAN.md` byte-identical to this document, re-derived the
+65-row plan↔mapping normalization at zero mismatches, reran all 489 hermetic
+tests green, re-ran all twelve author stress passes at 299/299, and recorded 52
+of its own independent checks passing with 0 failures.
+
+**What was wrong is that the guard's removal was two statements, and the
+"exhaustive" recovery set had a hole.** `OPUS-R83-001`: "release becomes
+compare-and-delete" was never stated as *atomic with respect to the
+comparison*, and the prototype implemented it as `read_guard(...)` followed by
+`path.unlink(...)` — a removal naming the **pathname**, not the identity just
+compared. A guard published in that instant is deleted instead, including a live
+`"destructive"` one held by the work item's current owner in another worktree;
+and because `take_over_claim`'s destructive refusal is driven by
+`evidence["guard"]`, once the file is gone the refusal never fires and a
+correctly bound, correctly authorized takeover silently breaks the window.
+Reproduced end to end. `OPUS-R83-002`: revision 65's new "those three operations
+are exhaustive" claim is false. An **undecidable claim held together with a
+well-formed `"destructive"` guard** left all three refusing in a cycle — the
+takeover naming the recovery, the recovery naming the takeover, the clearance
+naming the takeover — with automatic reclamation deliberately disabled because
+the epoch is undecidable, so the only escape was the hand-deletion this design
+exists to eliminate. And a claim record that cannot be read **as bytes at all**
+(a symlink, a directory, an `EACCES` file) could not even be *observed*:
+`takeover_evidence` raised before producing a report, so the observation-bound
+recovery the plan advertises for an unreadable record was unreachable for it.
+
+**Revision 66 specifies the missing mechanism and closes the hole; it redesigns
+nothing.** The fencing contract, the takeover, the abandoned-guard recovery's
+ordering and binding, the epoch rule and the `holder_worktree_git_dir` conjunct
+are all untouched, and everything the reviewer re-verified stays verified. Three
+things change. **Guard removal is specified as atomic with respect to its
+`lease_id` comparison** on all three paths that remove a guard — release,
+reclamation and clearance — using `D1`'s own process-scoped `fcntl.flock`
+primitive over a stable, never-unlinked per-work-item lock object, with the
+`"destructive"` invariant text reconciled to it. **The
+(undecidable claim + `"destructive"` guard) state is given exactly one owner**:
+the abandoned-guard recovery, which already owns "destructive guard + holder
+deregistered" and can now establish that precondition from the guard's own
+`holder_worktree_git_dir` without a readable claim. And **a record whose bytes
+cannot be read gains a defined, domain-separated observation identity** and a
+reachable evidence report, with the one state no documented operation can
+replace — a directory at the claim path — named explicitly, with the operator
+action stated, rather than implied to be covered.
+
+One bounded author-side stress pass over the corrected design, with passes 1-12
+re-run as regressions, brought that revision's evidence to **340 executable
+checks green across thirteen passes**. See "WF8b finding disposition
+(revision 65 → 66)" below.
+
+**Revision 65**: external plan review of revision 64 returned `Status: REVISE` with
+**zero blocking** and **two important** findings (`OPUS-R82-001`/`-002`), both
+against the same thing — the `"destructive"` guard class revision 64 introduced.
+Both were validated against this repository and its prototype before anything was
+edited, both were independently reproduced here, and **both are accepted** —
+neither is rejected in whole or in part. The reviewer independently recomputed
+both identifiers, confirmed `PLAN.md` byte-identical to this document,
+re-derived the 65-row plan↔mapping normalization at zero mismatches, reran all
+489 hermetic tests green from the extracted archive, and re-ran all eleven author
+stress passes at 254/254. Everything revision 64 established is preserved
+unchanged and was re-verified by the reviewer rather than accepted: the fencing
+contract is real, ownership handoff is mutually exclusive, crash recovery is
+decided from durable epoch data with no clock anywhere, the observation-bound
+takeover is genuinely non-replayable, the terminal `NO_CHECKPOINT` outcome cannot
+reach step 1d, `D-Plan-Revision-Publication` is a well-formed answer to
+`GPT-R81-004`, and `S14`/`S15` hold end to end under the guard.
+
+**What was wrong is that `"destructive"` was documented as an absolute the
+mechanism does not implement, and one state it produced had no way out.**
+`OPUS-R82-001`: a session that crashes *inside* the destructive window, whose
+worktree is then deleted, leaves a work item no sanctioned operation can start,
+resume or hand over — the takeover refuses on the class, the malformed-guard
+clearance refuses because the guard is well-formed, and the only escape left was
+hand-deleting a lease file. `OPUS-R82-002`: the class was called "never
+breakable, by anyone, under any authorization" while revision 64's own
+same-token reclamation broke exactly that, with no authorization, for any session
+holding the claim's world-readable token — including one in a different
+worktree — and two artefacts described that residual as "serialization", which
+is its opposite. Revision 65 gives the abandoned state one documented,
+evidence-bound, deregistration-gated recovery; makes "never breakable by another
+worktree" true **at the guard** rather than as a consequence of step 1c; and
+states the same-worktree limit as the scope limit it is.
+
+**Revision 65 scopes and completes the contract rather than redesigning it.**
+Nothing about the guard's shape, its ordering, its epoch rule or its takeover
+binding changes. Three things do. The guard body gains
+`holder_worktree_git_dir`, and reclaiming a **current-epoch** guard now requires
+it to match, so a foreign worktree presenting the claim's token is refused by
+the guard itself — the reviewer's own required test for the "never breakable by
+another worktree" half, which revision 64 satisfied only via step 1c.
+`recover_abandoned_destructive_guard` is a new, distinctly named,
+observation-bound operation for the one state that had no exit: it refuses while
+the holder is a registered worktree, naming the operator actions instead of
+dead-ending, and proceeds only once the holder is deregistered — a durable,
+human-made fact, never a liveness guess, and the design still contains no clock,
+heartbeat or age threshold anywhere. And the never-breakable claim itself is
+restated at the strength the mechanism provides, with the three reclamation
+paths enumerated exhaustively so an implementer cannot resolve the old
+contradiction in the direction that reintroduces the lockout.
+
+One bounded author-side stress pass over the corrected design, with passes 1-11
+re-run as regressions, brings this evidence to **299 executable checks green
+across twelve passes**. Pass 12 found one further defect in this revision's own
+draft — the recovery reclaimed the abandoned guard *before* its final
+re-verification, so a holder re-registered while the user was reading the
+evidence had its live `"destructive"` window destroyed by an operation that then
+reported a refusal — fixed here by re-reading both observations and the
+registration fact from durable state before anything is touched, leaving the
+reclamation's own exact-`lease_id` requirement to close the remainder. The
+repair cycle then stopped with nothing outstanding. See "WF8b finding disposition
+(revision 64 → 65)" below.
+
+**Revision 64**: external plan review of revision 63 returned `REVISE` with three
+blocking and two important findings (`GPT-R81-001` through `-005`), all five
+validated and accepted. What was wrong is that revision 63 **coordinated**
+ownership without **fencing** it: ownership was resolved once at step 1c and
+steps 1d/1f then mutated with nothing re-asserting it, so an explicit takeover
+landing between them left two worktrees each believing it was authorized —
+reproduced end to end with revision 63's own code as the control arm, including a
+read-then-unlink release that let the displaced owner delete the replacement
+owner's claim. The takeover was equally unbound: its authorization named the
+checkpoint *being claimed* rather than the record the human had reviewed, so
+`take over v2-1-dry-run S-CP3` displaced an installed claim holding `S-CP2`
+nobody had looked at. And the durable-release branch returned
+`(FRESH, selected_id)`, i.e. `(FRESH, None)` for the final checkpoint. Revision
+64 fenced the contract by reusing `D-Approval-Commits`' own primitive family: a
+durable `owner_token` on the claim; one fixed-path, no-replace `os.link`
+mutation/handoff guard per work item that an owner's mutation and a takeover's
+rotation both contend for; the single window `acquire → assert_claim_owner(T)
+under the guard → mutate → release`; a `"destructive"` class covering the
+checkpoint commit and every `WORKFLOW_STATE.json` write (scoped correctly in
+revision 65); release as compare-and-delete inside that window; epoch
+reclamation decided from durable data with no wall clock; a
+`claim_observation_id` binding the takeover to the exact record reviewed; and the
+distinct terminal `NO_CHECKPOINT` outcome. Separately,
+`D-Plan-Revision-Publication` (new) gave the governing-v1 plan-revision mirror
+and its phase transition one sanctioned writer with an enumerated set of call
+sites and a fail-closed detection step in `prepare-ai-review.sh`.
+
+**Revision 63**: a **self-discovered** `WF8b` finding (`WF8B-S14-001`), not an external
+review round. Preparing the real `S14` cross-worktree test surfaced a genuine
+architecture defect: `D3`'s dirty-resume rule protects only the worktree that
+already knows it is resuming. `/milestone-implement`'s `[2.1 step 1]` decides
+resume-vs-fresh-start from the **invoking worktree's own** `WORKFLOW_STATE.json`,
+and the `IN_PROGRESS` transition step 1d writes is never committed — step 1f's
+checkpoint commit flips it straight to `COMPLETE`. So for the entire interval
+the rule exists to protect, the ownership fact lives only in one worktree's
+working tree, and any other linked worktree of the same repository classifies
+the very same checkpoint as a **fresh start** and mutates. Reproduced end to
+end against real Git worktrees using this repository's own unmodified
+`scripts/workflow_state.py`: worktree B selects `S-CP3`, writes
+`IN_PROGRESS` into its own tracked state, implements it, and commits it
+`COMPLETE` while worktree A still holds it `IN_PROGRESS` with uncommitted work —
+no refusal at any point. `verify_dirty_resume_safety` is not wrong; **nothing
+routes a foreign worktree into it**.
+
+**This is new design, not an implementation defect.** Revision 62's `D3` and
+`D-Selection` rule 1 condition everything on the invoking worktree's own state
+file and say nothing about cross-worktree ownership, so there is no approved
+contract for an implementation to have failed to honour. That distinction is
+the same one commit `535d4fb` drew in its own message when it landed
+`GPT-R67-001` directly as `WF8b` implementation work ("was already fully
+specified and approved through revision 58; only its generalization … was
+missing"). Nothing here was specified before.
+
+**Revision 63 adds one new design section, `D-Checkpoint-Ownership`, and amends
+two existing ones.** A per-work-item **claim** — the claim, never the work — is
+published under the shared Git common directory at
+`$(git rev-parse --git-common-dir)/ai-workflow/checkpoint-claims/<sha256(work_item_id)>.json`,
+which every linked worktree of a repository resolves to the same absolute path
+by construction while remaining invisible to `git status`, to path
+classification, to `review_content_id`/`bundle_id` and to every bundle. It is
+**coordination state only**: `WORKFLOW_STATE.json` remains the sole authority on
+checkpoint and workflow status, and the claim answers exactly one question —
+"may this worktree treat this work item as an unclaimed fresh start?".
+`/milestone-implement` gains a distinct **step 1c** that resolves ownership
+before any branch that can mutate, so a foreign worktree can never reach the
+fresh-start path; `select_next_checkpoint` stays pure and untouched
+(missing-test item 28). The refusal a foreign worktree receives is still
+produced by the existing `verify_dirty_resume_safety`, so `S14a`'s
+`WorktreeIdentityMissingError` and `S14b`'s `WorktreeIdentityMismatchError`
+both stay reachable and distinguishable. Acquisition strictly precedes the
+`IN_PROGRESS` write; release strictly follows the checkpoint commit's durable
+completion. **No claim is ever released automatically on an inference that
+could discard a live one** — the single automatic release is a self-owned claim
+whose checkpoint is `COMPLETE` in the *committed* state at `HEAD`, and every
+other recovery is an explicit, evidence-first, user-authorized takeover.
+
+Four bounded author-side design/stress passes over the candidate design found
+and fixed **seven** further concrete defects, all in this revision's own draft
+and each reproduced before being accepted: no adoption path, so every
+checkpoint interrupted *before* the mechanism lands — including the exact
+`S-CP3` that `S14` tests — stayed unprotected forever (blocking); a claim
+published before the state write permanently locked out the *legitimate owner*
+(blocking); an ownership result that named an outcome but not a checkpoint id,
+which would write a `None` checkpoint id into the state file (blocking);
+`O_CREAT | O_EXCL` giving exclusivity but not content atomicity, so a torn
+record failed closed for every worktree with no recovery (important); a claim
+path never required to be a regular file, so a planted symlink was followed out
+of the claims directory (important); a takeover that unlinked before publishing,
+so a failure left the work item silently *unclaimed* (important); and a foreign
+refusal that never named who held the claim or what the escape was (important).
+All seven were fixed and re-verified with the earlier passes re-run as
+regressions — **171 executable checks now green across nine passes**. Passes 8
+and 9 found no new blocking or important defect, so the repair cycle stopped
+early rather than consuming its remaining budget. `WF8B_SCENARIOS.md`'s `S14`
+is corrected to match the approved architecture and **remains an end-to-end
+`/milestone-implement` test**, not a helper-function unit test; no copy of
+`WORKFLOW_STATE.json` into worktree B is required at any point, and
+`v2-1-dry-run`'s own Revision 5 plan needs no change. See "WF8b finding
+disposition (revision 62 → 63)" below. Not yet implemented; not yet approved.
+Process/tooling milestone only — no product code, no
+`docs/ROADMAP.md`/`docs/ACTIVE_MILESTONE.md` changes, no Milestone 9.
+
+**Revision 62**: external plan review of revision 61 (`GPT-R79-001`/`-002`) returned
 `Status: REVISE`, zero blocking findings and two important findings, both
 validated against this repository and both applied. Revision 61's subject/
 verifier identity separation, its temporary-bridge/permanent-retirement
@@ -2306,7 +3505,7 @@ historical text this document does not actually have.
 | OPUS-R10-005 | **Accepted** | D-Legacy | Confirmed: no section named a selector, and a dormant item with `active_work_item_id` unset had no way to be targeted. Added an explicit, optional work-item-id argument to `/prepare-functional-review`; the `LEGACY_READY` scan runs before version branching, against the resolved target. |
 | OPUS-R10-006 | **Accepted** | `docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json`, D3 (validator rule) | Confirmed by machine query: `WFR-15`/`WFR-28` unmapped, `WF8a-i` unowned. Reassigned `WFR-15`→WF1b, `WFR-28`→WF0, added `WFR-36` for WF8a-i; re-queried, coverage now bidirectionally complete; added a validator rule enforcing it going forward. |
 | OPUS-R10-007 | **Accepted** | D3 | Confirmed: `validate_work_item_type` unconditionally rejects anything outside `{"process","product"}`, and D3 assigned synthetic items `null`. Synthetic items now get `work_item_type: "process"`; `work_item_kind: "synthetic"` alone determines routing. |
-| OPUS-R10-008 | **Accepted** | D3 (`WORKTREE_IDENTITY.json`) | Confirmed: a single flat `expected_dirty_paths` list would be overwritten by a second work item's own `IN_PROGRESS` transition. Keyed by work item: `expected_dirty_paths_by_work_item`. |
+| OPUS-R10-008 | **Accepted** | D3 (`WORKTREE_IDENTITY.json`) | Confirmed: a single flat `expected_dirty_paths` list would be overwritten by a second work item's own `IN_PROGRESS` transition. Keyed by work item: `expected_dirty_paths_by_work_item`. **(restated at its actual strength, revision 69, `OPUS-R86-002`)** The keying makes two work items' *sequential* writes non-interfering. It does **not** make them concurrency-safe — the whole document is one unserialized read-modify-write, and a concurrent write for a different work item deletes the other's entry outright (12/12 trials). Concurrency is answered by `D-Checkpoint-Ownership`'s per-worktree identity-document lock, not by this keying. |
 | OPUS-R10-009 | **Accepted** | D-Selection | Confirmed: rule 2 named "registry table order" while D-Registry makes the JSON authoritative and the table an unhashed view. Selection now names the JSON array explicitly; a view/JSON agreement conformance check added. |
 | OPUS-R10-010 | **Accepted** | D2 | Confirmed: the novelty check would reject a legitimate identical repeat and pass any one-character-varied automated string. Replaced with a specificity check (confirmation must name the exact work item and stage). |
 | OPUS-R10-011 | **Accepted** | D-Legacy | Confirmed: the imported entry's unset `governing_workflow_version` would either fail the creation gate or require a silent exception. Set to `"1"` at import (factually correct); adoption transitions it to `"2.1"`. |
@@ -9865,6 +11064,3867 @@ reinterpreted, through revisions 28 through 57. No new `WFR` row and no
 round, so `workflow-v2-1-core-mapping.json` is unaffected and the 63-row
 plan/mapping normalization stays zero-mismatch.
 
+## WF8b finding disposition (revision 79 → 80) — external plan review found all three of revision 79's Important corrections written narrower than the defect they fix: a rule stated per-command instead of over its writer, a coverage claim whose mechanism does not cover the actual writer, and a predicate asserted file-evaluable that no stated rendering makes so; **zero blocking**, all five findings accepted, one with a stated placement divergence (`OPUS-R98-001` through `-005`)
+
+Five of revision 79's six predecessors are confirmed resolved at their reviewed
+boundaries, and the sixth (`GPT-OPUS-R97-001`) half-resolved: the
+contradiction is gone — the derivation no longer selects the two
+functional-review commands it exempts — while the other half of that finding's
+required correction, "state the predicate in terms an implementer can evaluate
+against a file", is not met, which is `OPUS-R98-003`. The reviewer verified each
+disposition at its actual call site rather than from revision 79's own table,
+independently derived the thirteen-command partition **before** reading the
+plan's version of it (agreeing on 12 of 13), inspected
+`bootstrap-workflow-v2.md` specifically for indirect bypass and confirmed it
+cannot consume the rejected bundle as review authority, ingest a verdict from
+it or approve on it, and confirmed `/prepare-review`'s revision-79
+classification as correct and not over-scoped. Revision 79's TOCTOU disclosure
+was assessed and **accepted with no finding**, including the judgment that a
+repository-level `flock` is not warranted under this design's already-approved
+single-operator premise; the R77 clearing lifecycle, the R75/R76
+`review_content` bridge, the four-field binding, the six-primitive lock DAG,
+the S14/S15 scenarios, the withdrawal target and the quarantine-retention
+withdrawal were all re-verified unmodified.
+
+**All five findings were validated against this repository before anything was
+edited.** All five are accepted; none is rejected. One, `OPUS-R98-002`, is
+applied with a **stated divergence** on the placement of one of its two
+required assertion sites — recorded below with the evidence, not applied
+silently and not quietly dropped.
+
+`OPUS-R98-001` — **accepted, and the enumeration re-derived from the directory
+rather than from the finding.** `grep -rn "record_bundle_generation"
+.claude/commands/` returns four hits: three real call sites
+(`milestone-implement.md:146`, `apply-implementation-review.md:41`,
+`apply-functional-review.md:69`) and one prose reference
+(`approve-review.md:76`) — which is itself this plan's own enumeration of the
+same three ("called by `/milestone-implement` … and
+`/apply-implementation-review`/`/apply-functional-review`'s bounded-fix
+branch"), so revision 79 reasoned from a text that already named the two sites
+its correction did not reach. Both were read in full: `apply-functional-review`
+step 4 generates, records, and step 5 reports readiness; `apply-implementation-
+review` step 7 does the same, and there the marker is written by that same
+invocation's own generation, after both of its step-1 assertions have long
+since passed — deterministic and single-threaded, not the residual TOCTOU §6
+accepts. The `/apply-functional-review` half was confirmed to be worse than an
+omission: item 376(t)'s conformance arm asserts every non-selected file "names
+it nowhere", so the classification **forbade** the fix. The stated exemption
+reason was confirmed false for that branch — it does not receive a refused
+bundle, it creates one at `:68` — and the marker's work-item scoping,
+"unqualified by stage", makes the marked state reachable inside the command by
+construction.
+
+**Applied by restating the rule over the writer.** Every
+`record_bundle_generation` call is preceded by `assert_bundle_not_rejected` as
+that call's precondition, at all three sites; `/apply-functional-review` joins
+the consumer set as #8, scoped by act exactly as `/prepare-review` was; the
+exemption paragraph's reason is corrected; the counts become nine consumers and
+four exempt over the same thirteen files; and item 376(t.iv) gains an arm per
+newly guarded call site with the revision-79 placement carried as a live
+control for each, plus an arm asserting the call-site count is derived from the
+live tree rather than from part 3b's literal "three". `WFR-67` and its mapping
+description carry the same correction.
+
+`OPUS-R98-002` — **accepted; the exemption is withdrawn as false, with one
+divergence on placement.** All four legs were verified directly against this
+plan and this repository: the window's own definition says "**Start.** At step
+4a, the instant the journal is published", three steps after the step-2 read;
+its prohibited set is "every installed command that writes that path — all
+twelve enumerated in `D1` — … plus any manual or ad-hoc edit", and this plan
+separately establishes that "the withdrawal path writes it with no state write
+at all" and that `/prepare-review` is "the one installed command that never
+writes it and is therefore unrestricted"; `record_bundle_generation` raises
+`InvalidBundleGenerationStageError` for anything outside
+`"implementation"`/`"post-fix"` (`scripts/workflow_state.py:2484-2488`), so the
+cited prohibited writer cannot execute at the plan stage this procedure
+performs; and step 0's validation set — `schema_version`,
+`quiescence_authorization`, expected post-state, pinned digests, ownership
+fields — contains no marker read, so no forward completion re-checks it. The
+severity assessment is accepted too: this is the one consumer with no
+downstream check, since the bootstrap procedure *is* the approval and is the
+only path this work item's own approvals take, this plan's included.
+
+**Applied as the finding's preferred option 1, at sub-step 6.1b.** The second
+assertion is placed inside the mutation guard that sub-step already acquires,
+textually adjacent to the `git update-index` that stages the applied
+post-approval state — which covers the whole step-2 → step-6 interval,
+including steps 3 and 4, which run before the window exists at all. It adds no
+mechanism: step 2's read is already specified as a direct filesystem read
+needing "no code that does not exist".
+
+**The divergence, stated with its evidence.** The finding's option 1 also asks
+for the assertion "on step 0's forward-completion path before step 8b
+materializes state". That half is **not applied as written**, because it
+contradicts an already-approved contract in the same procedure. Step 0's
+classifier has three outcomes: `NOT_COMMITTED` rolls back — no approval
+survives, nothing to protect; `AMBIGUOUS` refuses and mutates nothing; and
+`COMMITTED` means the approval commit is already durable, where this
+transaction's stated rule is "**before durability, refuse and let the retry
+recapture; after durability, complete forward without clobbering**", with the
+reason given at the same site: "refusing here permanently would strand a valid,
+verified approval commit behind an unclosable journal." A refusal at step 8b
+would also leave the repository in a strictly worse state than the one the
+finding is protecting against — an approval commit that exists while the state
+file it approves is never materialized. So the forward-completion path
+**completes and reports**: it materializes state and reports a marked-approval
+incident naming the marker path, with part 3b's already-stated recovery
+(regenerate, then re-approve against the regenerated bundle). Item 376(t.viii)
+asserts this divergence explicitly rather than leaving it to prose — the
+`COMMITTED` arm asserts materialization **and** the report, and the
+`NOT_COMMITTED` arm asserts the rollback — so a future reviewer can see the
+choice being tested rather than having to trust it. The finding's other two
+required tests are applied unchanged: the concurrent non-state-writing
+generation is asserted **not** to be a quiescence violation while the procedure
+refuses anyway, and an arm drives the marker write into the step-2 → step-4a
+interval specifically, before the window exists.
+
+`OPUS-R98-003` — **accepted, and the measurement reproduced independently
+before applying it.** Both renderings were run over the live thirteen files in
+this session. The loose one (`REVIEW_FEEDBACK` / `MANIFEST\.md|bundle_id` /
+`(?i)bundle location`) classifies `apply-functional-review`,
+`prepare-functional-review` and `bootstrap-workflow-v2` as consumers — the
+first two on the documentation-pointer shape at `prepare-functional-review.md:10`
+and `apply-functional-review.md:9`, the third on the field name
+`reviewed_bundle_id` — so `derived_consumer_set == declared_consumer_set` is
+`False`. The tight one, `grep -n "Report the bundle location"`, returns exactly
+`prepare-review.md:35`, `milestone-implement.md:152` and `milestone-plan.md:105`,
+dropping `/approve-review` and `/record-manual-plan-review`. Both reproduced
+exactly as reported. The reviewer's causal claim is accepted as well:
+`/apply-functional-review`'s equivalent act is phrased "report readiness and
+**stop** — this re-enters `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`" and
+matches no (C) token, which is why the tight rendering could not have surfaced
+`OPUS-R98-001`.
+
+**Applied as the finding's recommended option 1, the declared marker.** Each
+file under `.claude/commands/` carries `review-subject: bundle | verdict |
+none` in its header; the derivation reads that line; a missing or unrecognized
+value **fails the suite** rather than defaulting to either side; and the
+conformance arm cross-checks each declaration against the three semantic
+disjuncts and against the presence or absence of the shared assertion in that
+same file, so a declaration that lies fails too. Option 2's substance is kept
+where it is still needed — the recognized (C) forms are enumerated, and the
+enumeration must include the readiness-report idiom at
+`apply-functional-review.md:74-77` and `apply-implementation-review.md:47-53`,
+not only "Report the bundle location" — because the arm still checks the
+declaration against the semantics. The unqualified "each disjunct is evaluable
+against a command file" claim is withdrawn rather than softened, on the same
+footing revision 75's quarantine-retention claim and revision 58's bridge-safety
+claim were withdrawn: a claim this plan cannot support is removed, not
+rephrased. The false-positive, false-negative and four mutation arms the
+finding requires are added.
+
+`OPUS-R98-004` — **accepted.** `pathlib.Path.exists()` swallowing `OSError` and
+returning `False` is real, and it lands exactly where (t.x) says the defect
+would silently return. Applied as one sentence in part 3b — an indeterminate
+presence check is **present**, naming the resolved path and the underlying
+error — plus a (t.x) arm making the marker's parent directory unreadable and
+asserting refusal, with the `Path.exists()` implementation carried as the live
+control that proceeds.
+
+`OPUS-R98-005` — **accepted, with one measurement corrected in passing.** The
+finding is right that "twice" has no defined second site for the report-only
+consumers, and right that this is a definitional gap rather than a safety gap.
+Its supporting claim needed one adjustment, made here rather than left to a
+later round: `/prepare-review` genuinely performs **no** durable write (`grep`
+for `persist`/`workflow_state.` over that file returns nothing), but
+`/milestone-plan` has more durable writes than step 1's `route_work_item`
+persist — its step 5 writes the registry and mapping and its step 6 runs the
+generator. That does not change the conclusion, and the applied text states the
+accurate version: all of `/milestone-plan`'s durable writes **precede** its
+consuming act and none of them consumes the marked bundle as authority. Applied
+as a stated rule — for a consumer whose consuming act is a report, the single
+assertion immediately preceding the report **is** the mutation-guard assertion
+— with the conformance arm asserting one assertion rather than two for these.
+
+**Scope of this revision.** Edits are confined to `D-Bundle-Manifest` part 3b's
+consumer, derivation, malformed-marker and exemption paragraphs;
+`D-Approval-Commits`' bootstrap plan-approval procedure step 2 and sub-step
+6.1b; item 376(t)'s (t.iv), (t.viii), (t.x) and conformance arms; `WFR-67` and
+its mapping description; and this narrative. No file under `scripts/`,
+`.claude/commands/`, `docs/ai-workflow/REVIEW_PROTOCOL.md` or
+`docs/ai-workflow/MILESTONE_WORKFLOW.md` changes — the `review-subject:` header
+line is an implementation obligation `WFR-67` now names, under the
+`.claude/commands/` protected prefix `WF8b` already owns, not an edit this
+plan-only revision performs. No new checkpoint, no dependency change, no
+ownership primitive change, and no size change.
+
+## WF8b finding disposition (revision 78 → 79) — external plan review found revision 78's consumer side correctly aimed and defectively built: a conformance arm that cannot be implemented as specified, a rule stated at a strength no mechanism in this design provides, and one consumer placed after its own authority-changing write; **zero blocking**, all six findings accepted (`GPT-OPUS-R97-001` through `-006`)
+
+Revision 78's own corrections are confirmed resolved at their reviewed
+boundaries — both `GPT-R96` findings closed. The reviewer independently
+confirmed `GPT-R96-001`'s premise (`grep -rn REJECTED` over `.claude/commands/`,
+`scripts/` and the three protocol documents still returns **zero** matches, so
+revision 77's marker did have a writer and no owned consumer-side refusal) and
+verified `GPT-R96-002` **by counting rather than by reading**: item 375's
+revision markers, extracted mechanically, are `71, 72, 72, 72, 73, 72, 74, 73,
+75, 74`, maximum **75**, and the corrected clause now reads 75 in the plan, in
+`REVIEW_REQUEST.md` and in the byte-identical bundled `PLAN.md` alike. The
+normative rule, the work-item scoping, the subject-boundary placement, the
+generator writability carve-out, the bootstrap direct read, revision 77's
+marker lifecycle, the four-field binding and the review-content live equality
+were all re-verified clean, and six of revision 78's seven consumer placements
+were confirmed to precede their command's first durable mutation against the
+actual command files.
+
+**All six findings were validated against this repository before anything was
+edited. All six are accepted; none is rejected.** The three Important ones are
+defects in revision 78's own text rather than gaps in what it set out to do,
+and the pattern is worth recording as plainly as the fix was: the round that
+finally attached readers to the marker specified the derivation, the ordering
+and the concurrency of those readers in prose that had never been evaluated
+against the live command set.
+
+`GPT-OPUS-R97-001` — **accepted, and validated by executing the predicate
+rather than by reading it.** Revision 78's arm derives the consumer set from
+"every command file that resolves a bundle or feedback directory and advances a
+gate". Run against `.claude/commands/`, `resolve_feedback_dir` appears in
+`prepare-functional-review.md:11` and `apply-functional-review.md:10` — in each
+file's own header text — and both advance a gate
+(`AWAITING_FUNCTIONAL_REVIEW`; `FIXING_FUNCTIONAL_FINDINGS` exiting to
+`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`). The derivation therefore classifies
+as **required consumers** exactly the two commands part 3b exempts and the same
+arm asserts name the assertion **nowhere**. Unimplementable as written, and the
+only escape — hand-patching the exempt set back in as a literal — is precisely
+the maintained caller inventory the arm exists to avoid.
+
+**Applied by rekeying the derivation on the subject artifact, which is what
+the exemptions were always reasoning about.** A command is a required consumer
+iff it (A) reads `REVIEW_FEEDBACK.md`, (B) reads `MANIFEST.md` or recomputes or
+compares `bundle_id` over a `<bundle_dir>` it did not itself generate in the
+same invocation, or (C) presents `<bundle_dir>` or the canonical archive as
+ready for external review. `FUNCTIONAL_REVIEW.md` satisfies none of the three,
+which is the exemption paragraph's own stated reason and is now checkable
+rather than assumed. The rule is stated **once**, in part 3b, and referenced by
+item 376(t) rather than restated there.
+
+**The reviewer's own suggested predicate was tested before being adopted, and
+was not adopted verbatim.** It proposed "reads a `REVIEW_FEEDBACK.md` carrying
+`Reviewed bundle ID:`, or resolves `<bundle_dir>` and reads `MANIFEST.md` /
+recomputes `bundle_id`". Measured against the live directory that predicate
+**drops a named consumer** — `milestone-implement.md` matches
+`REVIEW_FEEDBACK|MANIFEST.md|bundle_id` zero times — and **selects an
+unclassified file**, `bootstrap-workflow-v2.md`, whose two `bundle_id`
+occurrences are its state-sync description of WF0's approving feedback and
+which is the checkpoint driver rather than consumer #5's plan-approval
+procedure. Disjunct (C) is added for the first, and the exemption list is
+completed for the second. This is recorded rather than quietly corrected
+because the finding's whole point is that a predicate must be evaluated against
+the directory before it is written down.
+
+**Two classification defects surfaced while performing the finding's own
+required verification** — "verify it partitions today's thirteen command files
+exactly as part 3b's prose does" — **and both are disclosed as extensions of
+this finding rather than slipped in.** First, `/prepare-review` step 4 says
+"Report the bundle location", which is disjunct (C) and is the identical act
+consumer #7 exists for; revision 78 exempted it wholesale under the generator
+heading, so a `/prepare-review` whose own generation refused and wrote the
+marker would report the withdrawn bundle's location as the round's artifact.
+The generator exemption is therefore scoped to the **generation path** — the
+writing, updating and clearing that must never be blocked — and not to a report
+presenting the result as review-ready; no deadlock is introduced, since a
+generation that verifies its own end state clears the marker before its report
+is reached. Second, `bootstrap-workflow-v2.md` was in neither list, which a
+completeness-asserting arm would fail on immediately; it is named exempt with
+its reason. Eight required consumers and five exempt commands now classify all
+thirteen files.
+
+`GPT-OPUS-R97-002` — **accepted, and the mechanism claim verified directly.**
+`grep -c flock scripts/workflow_fingerprint.py scripts/workflow_state.py
+scripts/prepare-ai-review.sh` returns `0` for all three. The race is concrete
+rather than theoretical: a consumer reads the marker as absent, a second
+operator's generation fails and its withdrawal writes the marker — which this
+part requires it to write **first**, before any removal — and the consumer's
+own first durable write lands anyway. The reviewer's observation that item
+354's lock would not close it after landing is correct and is now stated in the
+plan: that primitive's critical section is `WORKFLOW_STATE.json`, the marker is
+at `bundle_dir/../REJECTED` outside it, the withdrawal performs no state write
+at all, and the plan already says the primitive "is not a compare-and-swap
+against a non-cooperating writer".
+
+**Applied as the finding's option (a), plus option (b)'s honesty, rather than
+one or the other.** Each consumer asserts **twice**: at its existing
+pre-mutation refusal point, and again immediately under its own mutation guard,
+textually adjacent to the first durable write. That adds no new mechanism —
+`/approve-review` step 5 already carries exactly this discipline for the
+conditional fifth member, and for `/milestone-implement` the two points
+coincide with `-003`'s correction. What the second assertion buys is stated
+without euphemism: it removes every window spanning user interaction,
+recomputation or generation, and it does **not** make the check atomic with the
+write. That residual is disclosed on the same footing as the temporary bridge's
+own post-final-re-read interleaving — outside the safe execution contract, with
+a stated recovery — never as a loss-free race, on the precedent revision 75 set
+when it withdrew a false quarantine claim rather than quietly editing it. The
+reviewer's fair scoping of the **bootstrap** consumer is adopted and cited in
+step 2 itself: that procedure runs inside the user-authorized state-writer
+quiescence window it refuses to open a transaction without, and
+`record_bundle_generation` is one of the twelve enumerated prohibited writers,
+so a concurrent generation there is already a quiescence violation. That
+coverage is stated as specific to consumer #5 and explicitly not extended to
+the six permanent consumers.
+
+`GPT-OPUS-R97-003` — **accepted, and confirmed against the command file rather
+than the summary.** `.claude/commands/milestone-implement.md:146` calls
+`record_bundle_generation`, persisting `reviewed_implementation_head`, inside
+step 4; the report is step 5 at line 152. The command's own text says that call
+"is what later makes `AWAITING_TECHNICAL_APPROVAL` reachable at all", and
+`/approve-review` step 1 derives `head_matches_reviewed_implementation_head`
+from that field. On the path this arm is scoped to, revision 78's placement
+blocks the report while leaving the gate-unlocking write durable — a violation
+of the revision's own ordering rule. The assertion moves to before that call.
+`/milestone-plan` is confirmed to need no change: its step 6 runs the generator
+and its step 7 reports, with no state write in between. Item 376(t.iv) is
+extended to assert `WORKFLOW_STATE.json` **byte-identical** afterwards rather
+than merely that no report was presented, and carries the revision-78 placement
+as a live control arm asserted to leave `reviewed_implementation_head`
+advanced.
+
+`GPT-OPUS-R97-004` — **accepted.** Item 348 states the Bootstrap plan-approval
+procedure "has no `scripts/`/`.claude/commands/` implementation of its own,
+having been designed specifically not to require one", so no command-file
+derivation can reach consumer #5. The reviewer's assessment that behavioral
+coverage already exists via (t.iii) is correct and is not disturbed; item
+376(t) now states that the conformance arm's domain is the command files and
+that consumer #5 is covered by (t.iii) plus the protected-path identity chain,
+so a future reader cannot mistake the derived set for the complete one.
+
+`GPT-OPUS-R97-005` — **accepted.** `/accept-scoped-remediation` is genuinely
+exempt for `/accept-milestone`'s exact reason — its subjects are the
+user-written functional checklist and durable approval state, it resolves
+neither a bundle nor a feedback directory (`grep -c` returns `0`), and its step
+8 leaves `plan_approval`/`technical_approval` untouched — so there is no safety
+gap. It is nonetheless an omission in a paragraph that presents its exemptions
+as stated rather than left implicit, and it is now named there.
+
+`GPT-OPUS-R97-006` — **accepted.** Presence is specified as decisive on its
+own: `assert_bundle_not_rejected` refuses on any marker that exists, whatever
+its contents, and degrades its diagnostic — naming the path and byte length and
+reporting the failed step and surviving path as unavailable — rather than
+raising a parse error a caller might treat as "not rejected". The gap was real:
+part 3b required the refusal to name what "the marker records" while the
+hard-kill scenario the marker exists for can plausibly leave nothing recorded.
+Item 376(t) gains empty- and truncated-marker arms.
+
+**Beyond the numbered findings**, the reviewer's item-376(t) assessment asked
+for one arm the six findings do not cover: work-item scoping is **asserted
+nowhere**, following only by construction from
+`resolve_rejected_marker_path(repo_root, work_item_id)`'s signature. That is
+exactly the shape of property worth an arm, since a regression would fail
+closed across every work item at once and no other arm would observe it.
+Added as (t.ix).
+
+**Not reopened, and deliberately so.** The six-primitive lock DAG, the
+cross-worktree ownership model, the identity-gap authorization model, review
+provenance, the reviewed-content identity chain, the bootstrap bridge and the
+S14/S15 dry-run scenarios are untouched this round — the reviewer's bounded
+regression pass found revision 78's entire edit footprint to be five plan sites
+and found no defect in any settled contract. Revision 77's marker lifecycle is
+likewise untouched: this round corrects how readers are derived, ordered and
+guarded, not what the writer does.
+
+**Carried forward unchanged.** The integration suite's
+`test_every_wfr_row_description_matches_json_exactly` still fails on its stale
+`assertEqual(len(table_rows), 60)` literal against 67 real rows
+(`scripts/workflow_integration_test.py:997`); item 166 owns it, it is test code
+this command may not write, and the per-row comparison it guards passes at 67/67
+in both directions. Both `_demo_test.py` suites still fail on live-repository
+fixtures that predate this round; item 160 owns them, and neither is inside the
+489/489 hermetic claim.
+
+## WF8b finding disposition (revision 77 → 78) — external plan review found revision 77's marker lifecycle correct and the marker itself owned by a producer and by no consumer, so the fail-closed property it exists to establish was asserted of no reader; **zero blocking**, both findings accepted (`GPT-R96-001`/`-002`)
+
+Revision 77's own corrections are confirmed resolved at their reviewed
+boundaries — all five `OPUS-R94` findings closed: the marker is no longer
+cleared at generation start and stays present through refusal and failure; the
+lock-conformance obligation is an equality over the actual acquisition edge set
+with an unrecorded-edge control arm; item 376(s) covers the additional
+binding-field surfaces including `.claude/commands/review-plan.md` and requires
+the exact parser label; and the two stale claims are gone. The reviewer
+recomputed `bundle_id` twice from a fresh extraction — once byte-level and
+independent, once with the bundled `compute_bundle_id`, agreeing across 127
+files — and reconstructed `review_content_id` without using the bundled
+review-content-id function at all, listing each of the five protected paths' Git
+blob identities. The four hermetic suites were rerun at 489/489, the integration
+suite reproduced at 46/47 with the single failure isolated to item 166's stale
+literal and the per-row conformance re-derived at 67/67 in both directions, and
+state, registry, mapping-coverage and config validation re-run independently.
+The reviewer's evidence scoping is accepted as stated: the archive carries no
+`.git` database, so the 698/698 stress aggregate is **not** treated as evidence
+for any obligation this revision or its predecessor newly specified.
+
+**Both findings were validated against this repository before anything was
+edited. Both are accepted; neither is rejected.** The Important one is a gap
+this plan left open in the same part it has been repairing for three
+consecutive rounds, and it is worth recording as plainly as the repairs were:
+each round closed the *producer* half more tightly, and none of them ever asked
+who reads the result.
+
+`GPT-R96-001` — **accepted, and validated at the mechanism rather than at the
+summary.** Three checks, each run before anything was edited. First, the
+normative text: part 3b's sentence "its presence beside a `current/` is always
+sufficient to refuse treating that directory as reviewable, with no identifier
+recomputation needed" is a statement about the marker, and nothing anywhere
+requires a reader to perform that refusal. Second, ownership: `WFR-67`'s
+implementation surface named `scripts/prepare-ai-review.sh`,
+`scripts/workflow_fingerprint.py`, `.claude/commands/milestone-plan.md`,
+`.claude/commands/apply-plan-review.md` and
+`docs/ai-workflow/REVIEW_PROTOCOL.md` — the generator, the two commands that
+*drive* generation, and the protocol document — and not one command that
+*consumes* a bundle or a verdict; item 376(l) and (q) assert publication,
+ordering, cross-generation persistence and clearing, and no arm of either starts
+from a marked bundle and requires a consumer to refuse it. Third, the live
+surface: `REJECTED` occurs **zero** times under `.claude/commands/`, `scripts/`,
+`docs/ai-workflow/REVIEW_PROTOCOL.md`, `docs/ai-workflow/MILESTONE_WORKFLOW.md`
+and `docs/ai-workflow/PLAN_REVIEW_WORKFLOW.md`. That third fact is expected
+before `WF8b` implements anything and is not itself the finding; the finding is
+that no *obligation* would ever make it change. The severity assessment is
+accepted over the earlier Optional filing for the reason the reviewer gives: the
+marker was introduced specifically to convert a fully self-verifying refused
+artifact into a fail-closed one, and a producer-only marker converts it into a
+*labelled* one, which is a different and weaker property.
+
+**Applied as the required correction states, and slightly beyond it in one
+respect that is named rather than slipped in.** Part 3b gains a consumer-side
+bullet stating the rule once: while a work item is marked, every operation that
+treats its `current/` bundle or a verdict bound to it as reviewable, ingestible
+or approvable refuses before its first durable write, with no identifier
+recomputation required and none sufficient. Three scoping decisions are stated
+explicitly rather than left to an implementer, because each of them is a place
+this plan has previously been found ambiguous. The rule is **work-item-scoped,
+not stage-scoped** — the marker sits beside a `current/` that every stage
+shares, so stage-scoping the effect would require a reader to decide which
+stage a surviving `current/` belongs to at precisely the moment its manifest is
+the thing not to be trusted; the clearing rule is unqualified by stage for the
+same reason, and a completed, verified generation at any stage supersedes what
+the marker names because it rewrites the manifest the residue's
+self-verification depends on. The rule is enforced **at the subject boundary,
+never in path resolution**, exactly as the finding requires: the generator must
+be able to see, write, update and clear a marked location, and `/prepare-review`
+is on that same generator side. And it is carried by **one** shared assertion
+(`assert_bundle_not_rejected`) over **one** shared path resolver
+(`resolve_rejected_marker_path`), used by the writer as well as by every reader
+— the finding's own preference, and independently forced by this design's
+history: `assert_local_generation_matches`' caller inventory was maintained as
+prose and went stale in two consecutive finding rounds, the second of them
+against the first's own correction.
+
+**The consumer surface was audited rather than asserted**, since the finding
+asks for the actual set. Seven call sites: `/review-plan` step 5,
+`/record-manual-plan-review` step 6, `/apply-plan-review` step 1,
+`/approve-review` step 2 at both stages, the bootstrap plan-approval procedure's
+step 2, `/apply-implementation-review` step 1, and the hand-off report of
+`/milestone-plan`/`/milestone-implement`. Two of these go beyond the finding's
+own minimum and are named as such: `/apply-implementation-review` consumes the
+identical bundle-bound `REVIEW_FEEDBACK.md` shape one stage over, and the
+hand-off report is what turns a surviving canonical archive into something an
+operator attaches — the finding's own required test 4. Three exemptions are
+stated **with proof rather than by omission**: the generator (writer and only
+sanctioned clearer; blocking it would make the marker escapable only by hand),
+`/prepare-functional-review`/`/apply-functional-review` (their subject is
+`FUNCTIONAL_REVIEW.md`, a user-written checklist carrying no `Reviewed bundle
+ID:` and binding to no bundle, so no refused bundle can reach them), and
+`/accept-milestone` (consumes durable approval state, not a bundle). The
+bootstrap step-2 call is additionally written so it is executable **in the
+interval before the helper exists** — the identical read at
+`.ai-review/workflow-v2-1-core/REJECTED` — because that procedure is the path
+this very revision's approval takes and a step that cannot be performed is the
+defect `OPUS-R93-001` found in the same place one round ago.
+
+Item 376 gains **(t)** with all six required properties, over the fixture the
+finding specifies: the marked-but-otherwise-fully-verifying residue, with each
+consumer's refusal asserted before any write and with the repository, ledger,
+index, state file and `HEAD` asserted unchanged afterwards. The **negative
+control** is the finding's own required control — the same fixture with the
+marker removed and nothing else changed, every consumer asserted to proceed —
+so the marker itself is proven to be the reason for each refusal rather than
+some other invariant that happens to be violated alongside it. Two further arms
+are added on this item's established footing: a **live control arm** carrying
+today's marker-blind consumers, asserted to reach a verdict, an ingestion, an
+applied edit and an `EXTERNAL_APPROVE` against the marked fixture; and a
+**conformance arm** deriving the consumer set from the command files rather
+than from a literal list, so a future marker-blind consumer fails the suite
+instead of passing it silently.
+
+`GPT-R96-002` — **accepted, and verified by counting rather than by reading the
+sentence.** Item 375 is a single line; its revision markers are, in order,
+`(new, revision 71)`, three `(extended in place, revision 72)`, one
+`(extended in place, revision 73)`, one `(extended in place, revision 74,
+OPUS-R91-002/-003)` and one `(extended in place, revision 75,
+OPUS-R92-004/-005)` — and the last two both fall inside sub-part **(g)**, which
+is the sub-part revision 76's summary sentence named, so the claim is stale
+under either reading. The clause is corrected in place to revision 75, with the
+correction cited where it sits, and the same stale claim is corrected in
+`REVIEW_REQUEST.md`'s own account of the previous round. Non-normative
+historical narration, corrected opportunistically exactly as the finding
+directs; no mechanism, mapping, ownership or acceptance criterion is affected.
+
+**On `OPUS-R95-001`/`-002`.** This round's feedback reports both as
+independently confirmed — `-002` by `GPT-R96-001` and `-001` by `GPT-R96-002`.
+No `OPUS-R95` feedback artifact exists in this repository's feedback directory,
+so neither is dispositioned here as a separate finding; both concerns are
+closed by the two applied above, which is the disposition the reviewer's own
+framing asks for.
+
+**Not reopened, and deliberately so.** The ownership architecture, the
+identity-gap authorization mechanism, the `S14`/`S15` checkpoint-ownership
+contract, the reviewed-content identity chain, the six-primitive lock DAG and
+the bootstrap bridge are untouched this round — the reviewer's bounded
+regression pass found no defect in any of them, and this revision changes no
+ownership primitive and withdraws nothing. Revision 77's marker **lifecycle**
+is likewise untouched: this round attaches readers to it, it does not restate
+it.
+
+**Carried forward unchanged.** The integration suite's
+`test_every_wfr_row_description_matches_json_exactly` still fails on its stale
+`assertEqual(len(table_rows), 60)` literal against 67 real rows
+(`scripts/workflow_integration_test.py:997`); item 166 owns it, it is test code
+this command may not write, and the per-row comparison it guards passes at 67/67
+in both directions. Both `_demo_test.py` suites still fail on live-repository
+fixtures that predate this round; item 160 owns them, and neither is inside the
+489/489 hermetic claim.
+
+## WF8b finding disposition (revision 76 → 77) — external plan review executed the bootstrap bridge rather than reading it and found it sound, and found that the clause revision 76 added beside its own fix reopens that fix's residue one generation later; **zero blocking**, all five findings accepted (`OPUS-R94-001` through `-005`)
+
+Revision 76's own corrections are confirmed resolved — all six `OPUS-R93`
+findings closed, four of them **at the mechanism rather than at the wording**.
+The bridge was reconstructed point by point, every helper it invokes was
+verified present today with the semantics this plan attributes to it, and the
+whole five-point procedure was **executed** against a throwaway repository: it
+refuses for each of the five protected paths independently, accepts the
+exact-restore ABA, ignores every excluded path, refuses on a missing or
+disagreeing corroborating source, and fails closed on an unclassified path. The
+transitive binding the bridge rests on was re-measured by substituting an
+all-zero digest for `MANIFEST.md`'s `review_content_id:` line and watching
+`bundle_id` move, rather than accepted from `TEST_RESULTS.md`. The
+six-primitive lock list was enumerated mechanically from the plan text and is
+complete at exactly six; the four edges were re-derived from the operations and
+no fifth edge or back-edge exists. The round's principal work is reported
+correct and not to be revisited, and nothing in this revision revisits it.
+
+**Every finding was validated against this repository before anything was
+edited. All five are accepted; none is rejected.** The one Important finding is
+a defect this plan introduced in revision 76, in the same bullet as the fix it
+accompanies — which is worth recording as plainly as the fix was.
+
+`OPUS-R94-001` — **accepted, and reproduced before it was applied.** Validated
+at both sites. Part 3b's lifecycle sentence reads, verbatim, "it is removed only
+by a withdrawal that completes every step and verifies its own end state, or
+cleared by the next **successful** generation as that generation's first act",
+and item 376(d) guarantees byte-identity for "**every** file under `bundle_dir`
+… asserted by digesting the whole directory before and after" — while the marker
+is written to `bundle_dir/../REJECTED`, **outside** `bundle_dir`. Both halves
+of the finding therefore hold as filed. The two halves of the second disjunct
+genuinely cannot both be satisfied: "successful" is a property known only at a
+generation's end, "first act" fixes the clear at its beginning, and nothing in
+part 3b or in items 376(l)/(q) constrains the choice — so an implementer follows
+the literal instruction. That choice reopens the residue `OPUS-R93-003` was
+filed to remove, **with no crash anywhere in the sequence**: a withdrawal that
+cannot identify its own artifacts refuses and writes the marker (part 3b's own
+fail-closed branch, correct and intended); the next generation clears the marker
+as its first act; that generation refuses at one of item 376(d)'s four
+preconditions; and item 376(d)'s digest-the-whole-directory guarantee can
+neither observe the marker's removal nor restore it. The end state is the
+artifact part 3b names as the thing it exists to prevent — a `current/` and an
+archive that recompute `bundle_id`, verify `review_content_id` against an
+unchanged worktree, pass `assert_local_generation_matches` and
+`assert_review_request_states_review_content_id`, and carry no marker.
+
+The obligation gap is real too, and was checked rather than assumed: every arm
+item 376(l) carries — killed between removals, `EACCES` on each removal, the
+refusal-marker arm — lives inside **one** withdrawal, and item 376(q) asserts a
+**successful** N→N+1 generation's destroy/retain set and the absence of any
+`current.rejected-*`, saying nothing about the marker. No existing arm spans a
+marker written in round N and a generation in round N+1 that clears it and then
+refuses.
+
+**Applied exactly as the required correction states.** Part 3b's lifecycle
+bullet now fixes the clearing point at the **end** of a generation — at or after
+its closing binding assertion has passed and its own `MANIFEST.md` is written,
+never before — and states explicitly that a generation which refuses at a
+precondition, or fails before its closing assertion, leaves any pre-existing
+marker **in place**, since it has neither withdrawn the marked artifact nor
+replaced it. The fail-closed sentences are kept unchanged: a run that cannot
+identify its own artifacts still writes the marker and removes nothing, and the
+marker's presence beside a `current/` is still sufficient to refuse treating it
+as reviewable with no identifier recomputation. `WFR-67`'s row and its mapping
+description carry the same correction, and item 376(q) gains the three arms the
+finding names: a **cross-generation marker arm** (round N's marker, both
+branches, against each of item 376(d)'s four preconditions in round N+1, marker
+asserted still present and the survivors asserted not to verify while unmarked),
+a **live control arm** carrying the clear-as-first-act shape and asserted to
+leave an unmarked fully-verifying `current/`, and a **positive arm** asserting a
+genuinely successful N+1 generation does clear the marker, so the fix does not
+create a sticky state needing a hand edit.
+
+`OPUS-R94-002` — **accepted.** Validated by reading the arm rather than the
+summary: item 372(h)'s graph arm asserted that the four recorded edges "are
+asserted to hold at their named call sites", that `(4)` has no edge in either
+direction, and that the graph is acyclic. All three are subset-or-negative
+properties, and a new nested acquisition between two **already-listed**
+primitives satisfies every one of them — the finding's `(1)→(3)` example
+(`write_worktree_identity` reachable from inside the plan-approval transaction's
+guard) is acyclic, contradicts no recorded edge, and is outside `(4)`'s
+negative. The completeness arm does not cover it either: that arm enumerates
+**pathnames**, and no pathname changes. The normative sentence at the ordering
+site closed the analogous hole for primitives ("Any future primitive must be
+added to this list … before it is used at any call site") and not for edges.
+This would have been the third recurrence of the class of error `OPUS-R92-004`
+and `OPUS-R93-002` each found once, which is why it is applied at full strength
+despite being filed Optional. The graph arm is now an **equality** over the edge
+set derived from actual acquisitions, failing and **naming** any unrecorded
+edge, on the footing the completeness arm already uses for pathnames; a second
+live control arm carries one extra acyclic `(1)→(3)` acquisition and is asserted
+to fail and name it; and the normative rule is extended from "any future
+primitive" to "any future primitive **or edge**". Deriving the set from
+acquisitions rather than from a hand-maintained list is retained — it is forced
+by the control arms and is the right design regardless, since a hand-maintained
+list is the thing that went stale twice.
+
+`OPUS-R94-003` — **accepted.** Validated at the file:
+`.claude/commands/review-plan.md:60`–`:64` does state "the three binding fields
+`docs/ai-workflow/REVIEW_PROTOCOL.md` now requires on every round", and does
+emit the fourth value as "its own labelled line" with no label specified, while
+`WFR-03`'s parser requires the exact `Reviewed review content ID:` form. Item
+376(s) as revision 76 wrote it names `docs/ai-workflow/REVIEW_PROTOCOL.md` and
+only that file. The distinction the finding draws is the load-bearing one:
+`REVIEW_PROTOCOL.md` is documentation a reviewer reads, while `/review-plan` is
+the instruction that **produces** a `REVIEW_FEEDBACK.md`, so a stale count there
+is emitted rather than merely read. Item 376(s) is widened to every surface that
+states the binding-field contract, `review-plan.md` included, asserted **derived**
+from `WFR-03` rather than from a literal, with today's `review-plan.md` text as a
+live control arm and an added assertion that the emitted label matches the
+parser's own regex. The `Known limitations` bullet gains `review-plan.md` so the
+disclosure matches the obligation. Filed Optional correctly —
+`workflow-v2-1-core` is `governing_workflow_version: "1"` and never invokes
+`/review-plan` — and applied in full anyway, since `.claude/commands/` is
+already inside `WF8b`'s declared implementation surface.
+
+`OPUS-R94-004` — **accepted.** Validated by counting: the bullet's heading
+claimed to name "every one of them" and names three — the per-work-item mutation
+guard, the per-worktree identity `flock`, and `D1`'s state-writer `flock` — of
+six, with `checkpoint-claims/<sha256(work_item_id)>.guardlock` absent entirely
+and "the per-work-item mutation guard" not disambiguating primitive (1) from
+primitive (5), which is the exact conflation the global site now warns about.
+The finding's own assessment that nothing unsafe follows is correct and was
+re-checked: `(4)` has no edge in either direction, so a reader trusting the
+local claim reaches a weaker but still correct conclusion, and the bullet already
+defers to the global site in its next sentence. The heading is **reduced rather
+than completed** — a second enumeration maintained locally is precisely the
+shape that went stale twice, and item 372(h)'s completeness arm checks the global
+list only, so this wording would have survived it. The bullet now states its
+concrete local rule and cites `D-Approval-Commits`' single ordering site for the
+lock set.
+
+`OPUS-R94-005` — **accepted.** Verified mechanically before editing: item 375
+(a single line) contains zero occurrences of "revision 76" and zero `OPUS-R93-*`
+citations, while items 166, 372 and 376 carry theirs (1, 1 and 4 respectively)
+and `WFR-03` does change — so only the `375(g)` element of revision 76's
+summary sentence was false. The finding's own check that nothing was *lost* was
+re-run and agrees: each `OPUS-R93` finding routes elsewhere (`-001`/`-003`/`-006`
+to 376, `-002` to 372(h), `-004` to 166, `-005` to the mapping's `checkpoint_ids`
+and to 376(s)), and 375(g)'s load-bearing properties are all present and
+unchanged. A stale summary claim, not a missing obligation; `375(g)` is removed
+from that sentence with the correction cited in place.
+
+**Not reopened, and deliberately so.** The ownership architecture, the
+identity-gap authorization mechanism, the `S14`/`S15` checkpoint-ownership
+contract, and the bootstrap bridge itself are untouched this round — the
+reviewer's bounded regression pass found no regression in any of them, and this
+revision changes no ownership primitive. The reviewer's note on the uncommitted
+`WF8B_S14_FINDING_…` file is accepted as recorded: it is dry-run scenario
+content under an excluded prefix, correctly disclosed, and not a finding against
+the design.
+
+**Carried forward unchanged.** The integration suite's
+`test_every_wfr_row_description_matches_json_exactly` still fails on its stale
+`assertEqual(len(table_rows), 60)` literal against 67 real rows
+(`scripts/workflow_integration_test.py:997`); item 166 owns it, it is test code
+this command may not write, and the per-row comparison it guards passes at 67/67
+in both directions. Both `_demo_test.py` suites still fail on live-repository
+fixtures that predate this round; item 160 owns them, and neither is inside the
+489/489 hermetic claim.
+
+## WF8b finding disposition (revision 75 → 76) — external plan review found the round's central contract correct and three *completeness claims* each one object short: the bridge that must approve this revision names a parser that does not exist, the new single-site lock order enumerates four of six primitives, and the withdrawal's crash arm asserts two properties that are both false in it; **zero blocking**, all six findings accepted (`OPUS-R93-001` through `-006`)
+
+Revision 75's own corrections are confirmed resolved — all five `OPUS-R92`
+findings closed, and closed **at the mechanism rather than at the wording**: the
+reviewer reproduced `OPUS-R92-001` independently for each of the five protected
+paths, measured the refusal boundary by digesting the repository **and
+`.git/index`** before and after steps 1 → 4a (both byte-identical), and verified
+the one-definition contract's load-bearing premise by tampering rather than by
+reading. The round's principal work is reported correct and not to be revisited,
+and nothing in this revision revisits it. **All three Important findings sit
+inside existing boundaries**; none touches the central contract; none was raised
+in any prior round.
+
+`OPUS-R93-001` — **accepted, and the finding is right in both directions,
+including the one that corrects this plan in its favour.** Validated at the call
+sites before anything was edited: `parse_review_feedback_binding_fields`
+(`scripts/workflow_fingerprint.py:1968`–`:1983`) returns exactly `status`,
+`reviewed_bundle_id`, `reviewed_base_commit`, `work_item` — no reviewed-content
+key — and `assert_feedback_matches_bundle` (`:1997`) iterates exactly the latter
+three. So the **primary source revision 75's own "Where the reviewed value comes
+from" bullet named does not exist in the interval the bridge has to work in**,
+and no substitute was sanctioned. The definitional source does exist:
+`read_manifest_identifiers` (`:2316`) returns `review_content_id` today, and it
+was used successfully against this round's own bundle. The failure this
+licensed is concrete rather than theoretical — a session following the bullet
+literally gets a dict with no such key and must abort (blocking the approval of
+the very revision that fixes the defect), invent a source, or skip the assertion
+as unimplemented and fall through to steps 3-4 with the pre-revision-75
+behaviour, which is exactly the `EXTERNAL_APPROVE`-on-drifted-content outcome
+the round exists to remove. The third reading was the one this plan's own
+`Known limitations` pointed at.
+
+**And the finding's other half corrects this plan in its favour, which is worth
+recording as plainly as the defect.** `Known limitations` stated that the
+bootstrap procedure's "step 2 does not yet carry the assertion this revision
+adds to it" and that the only mitigation was procedural — do not edit a
+protected path between verdict and approval. That was wrong and pessimistically
+so: bootstrap step 2 carries the assertion explicitly, and because item 348
+defines the procedure as a live checklist with no `scripts/`/`.claude/commands/`
+implementation of its own, **its execution surface is this document** — which,
+at the moment revision 75 is approved, is revision 75. What the bridge lacked
+was never the assertion; it was a sanctioned *source*. Both corrections are
+applied: the sourcing bullet is restated with the two sources in their correct
+roles (definitional `MANIFEST.md`, corroborating feedback field), a bounded
+five-point **expiring** bridge rule is stated in the bullet the bootstrap step
+inherits **and** pointed at from step 2 itself so a session executing the
+checklist cannot miss it, and the `Known limitations` paragraph is rewritten.
+The transitive-binding premise the whole arrangement rests on was re-measured
+here rather than taken from the review: substituting an all-zero digest for
+`MANIFEST.md`'s `review_content_id:` line alone moves this bundle's `bundle_id`
+`75a29657…` → `d01a6baf…`, so the reviewed identity is genuinely inside the
+hash the verdict pins. With the rule stated, **there is no circularity** and
+operator discipline stops being the load-bearing control for this work item's
+own approval.
+
+`OPUS-R93-002` — **accepted; every claim checked against the plan text, and the
+consolidation was short by exactly the two primitives named.** Verified:
+`…/checkpoint-claims/<sha256(work_item_id)>.lease` is defined at
+`D-Checkpoint-Ownership`'s "Fencing: the mutation/handoff guard" as one fixed
+pathname per work item acquired by no-replace `os.link`, and
+`…/checkpoint-claims/<sha256(work_item_id)>.guardlock` as a stable,
+never-unlinked `flock` object whose contract is "Release becomes
+compare-and-delete" — and the plan's own text already distinguishes all three
+objects by name ("not the mutation guard, not `.guardlock`, not `D1`'s
+state-file `flock`"). Neither appeared in the four-primitive list that revision
+75 promoted to the designated single source of truth and made normative. **The
+leaf claim was also checked and is false in one direction**: "Which mutations
+are guarded, exhaustively" names step 1d's `transition_checkpoint_in_progress`
+**plus `write_worktree_identity`**, and `write_worktree_identity` holds
+`.ai-review/runtime/WORKTREE_IDENTITY.lock` across its whole load → validate →
+mutate → publish sequence — so primitive (3) *is* acquired while another
+primitive is held. `D-Checkpoint-Ownership`'s own bullet states this correctly
+and one-directionally; the consolidation strengthened it into a claim the
+mechanism does not satisfy. The list is extended to six, the four real edges are
+recorded as a DAG (revision 75's "forest with one edge" was a consequence of the
+omissions), (3)'s property is restated in the true direction at **both** sites,
+(4) remains the only isolated leaf, and the reviewer's own negative result is
+adopted with the correction: **no cycle exists today**, so this is a defect in
+the page, not in the mechanism — the same disposition `OPUS-R92-004` received.
+
+One deviation from the finding's own bookkeeping, stated rather than made
+silently: it lists **item 375** among the affected areas, but item 375 is the
+origination reference's limits and owns nothing lock-shaped. The conformance
+obligation is placed at **item 372(h)** instead — the item that already owns the
+mutation guard's failure surface and already asserts the `.guardlock`'s
+serialization and the guard-then-`flock` rule's uninvertibility — with all three
+required arms (mechanical enumeration of every lock-shaped pathname the document
+names, the four-edge graph plus acyclicity with an inverted `(2) → (5)` live
+control arm, and the direction arm for (3)). The finding's substance is
+unchanged; only its owner is corrected. **The "any future primitive must be
+added to this list" rule becomes a conformance obligation rather than a
+convention**, which the reviewer is right to demand: it was already violated by
+two primitives in use at the moment it was written, and this is the second
+consecutive round in which a lock-ordering completeness claim was found short.
+
+`OPUS-R93-003` — **accepted, and the contradiction is exactly as filed.**
+Validated against both texts. Part 3b states that a withdrawn artifact "is
+indistinguishable from a good one to every check a reviewer can run from the
+artifact alone: its `bundle_id` verifies over `current/`, its
+`review_content_id` verifies against the worktree, and the archive matches" —
+and item 376(l) then required, in **every** arm, that no surviving artifact
+satisfies an independent `bundle_id` + `review_content_id` recomputation. The
+item's own preceding sentence falsifies its next one: it asserts the archive
+gone **at a point where `MANIFEST.md` is still present**, and that surviving
+`current/` verifies completely. Confirmed here against this round's live bundle:
+the recomputation consults `current/` and the worktree and never the archive at
+all, so removing the archive leaves both identifiers verifying. All three arms
+fail the assertion, and the hard-kill arm fails the marker conjunct too, since
+revision 74 wrote the marker from a failure handler a `SIGKILL` never reaches.
+
+The residue is real, not merely a wording defect: no archive, no marker, no
+observed exit status, and a `current/` that passes `compute_bundle_id`,
+`assert_local_generation_matches` and
+`assert_review_request_states_review_content_id` alike — which an operator may
+re-tar, or a later command may read as "the bundle currently under review",
+yielding a binding verdict on a bundle the generator refused. Both corrections
+are applied and the reviewer's fourth point is honoured explicitly: **the
+removal order does not change.** It is right, and the marker does not shrink its
+window — it makes the window *observable*, at every instant rather than only at
+the ones a handler reaches. The marker is written before the first removal, its
+lifecycle is stated, item 376(l)'s assertion becomes the disjunction the
+mechanism actually satisfies (no surviving artifact verifies **or** the marker
+is present and names the surviving path), the intermediate state is asserted to
+exist and to be marked rather than asserted away, and the write-from-the-handler
+implementation is carried as the live control arm that leaves an unmarked,
+fully-verifying `current/`. `WFR-67`'s own row is amended to carry the ordering,
+so the requirement states the property its test now asserts.
+
+`OPUS-R93-004` (Optional) — **accepted; measured independently and the numbers
+are exact.** Re-running the conformance comparison with the lowercasing removed
+and every other normalization unchanged: **35 of 67** descriptions differ from
+their table rows by case alone and **zero** differ by anything else, and
+`WFR-66`'s stored description is precisely the lowercased image of its row,
+which is itself not lowercase — finding id, design-section name and `Git`
+included. The reviewer's own grading is adopted with it: this is Optional
+because case cannot express a materially different requirement, and the one
+channel that could (`_strip_trailing_citation_parenthetical`) was checked row by
+row — the seven rows exercising it strip genuine provenance only, and this
+round's amendments place their markers mid-cell so nothing of theirs is
+stripped. `WFR-66`'s casing is restored, and item 166's mandated rewrite gains a
+third property: the sync direction must be **case-preserving** — comparison may
+lowercase, generation must not — with a conformance arm that fails on a stored
+description that is the lowercased image of a non-lowercase row, and
+`WFR-66`'s pre-restoration value as its live control arm.
+
+`OPUS-R93-005` (Optional) — **accepted, both halves.** Verified against live
+`WORKFLOW_STATE.json`: `WFR-03` → `['WF5', 'WF4a-ii']` and `WFR-06` →
+`['WF4a-iii']`, all three `COMPLETE`, while `WF8b` is the only `IN_PROGRESS`
+checkpoint — so two brand-new, unimplemented contracts name owners that closed
+before they existed, the exact shape `GPT-R29-003` described for item 166.
+Nothing derives delivery from `checkpoint_ids` (`validate_registry_mapping_coverage`
+checks referential integrity only, confirmed at
+`scripts/workflow_state.py:1681`–`:1696`), which is why it is Optional; but the
+traceability artifact should not say a thing that is false. `WF8b` joins both
+rows' owners, keeping the historical ones. And the second half is confirmed:
+`REVIEW_PROTOCOL.md:218`–`:219` still states the contract at three fields, and
+the `Known limitations` citation to "items 376(i)/(m)" is wrong — (i) is the
+stage-completeness guarantee wording and (m) is the `<bundle_dir>/PLAN.md`
+edit-target grep, neither of which concerns the binding-field count, so **no
+item made the correction enforceable**. New item 376(s) owns it, derived from
+the requirement rather than from a literal count, and the citation is corrected
+to name it.
+
+`OPUS-R93-006` (Optional) — **accepted, with the recommended option taken and
+the resolution located more precisely than the finding requires.** Verified at
+`.claude/commands/approve-review.md:57`–`:63`: step 1 deliberately treats
+missing or mismatched binding fields as **not fatal**, so "on the same footing
+as the existing three" resolved, at that one gate, to *non-fatal* — while
+`WFR-03`'s verification column requires a refusal. The two readings are
+reconciled by **locating** the refusal rather than by rewriting either policy:
+step 1's parse keeps its existing non-fatal treatment for all four fields (an
+`EXTERNAL_APPROVE` basis simply becomes unreachable), and the hard check is the
+approval-time freshness assertion at step 2, which refuses on an absent field as
+well as on a disagreeing one. Both polarities then coexist at their own sites,
+with neither rewritten, and item 376(p)'s binding-field arm asserts the
+behaviour at `/approve-review` specifically rather than only at
+`/apply-plan-review`. Refusing rather than degrading to `MANIFEST.md`-only
+sourcing is chosen on the reviewer's own grounds — every feedback file this work
+item has received carries the field except the round-30 one — and the finding's
+closing observation is recorded in the plan as well: this is **not** a safety
+property. With the field absent the definitional source is still `MANIFEST.md`,
+still transitively bound by `bundle_id`; what refusing buys is the second
+source, not the first.
+
+**Nothing is reopened and nothing is withdrawn.** The reviewer performed the
+bounded architecture reassessment for the fourth consecutive round and again
+reported the design converged, adding that the model is now "enforceable rather
+than merely coherent" and that `WFR-67`'s end-to-end chain has no gap between
+adjacent stages, each junction checked mechanically rather than by reading. Two
+`WFR` rows change materially (`WFR-03`, `WFR-67`) and two gain an owner
+(`WFR-03`, `WFR-06`); one mapping description is restored to its row's casing
+(`WFR-66`); no row is added, so the 67-row plan↔mapping normalization stays
+zero-mismatch. One amendment goes slightly beyond the findings and is named as
+such: `WFR-67`'s row now carries the marker-first ordering, because
+`OPUS-R93-003` changes what that requirement guarantees and a test obligation
+without the requirement behind it is the asymmetry item 376(s) exists to
+prevent.
+
+**Test-evidence discipline, unchanged and restated.** None of revision 76's
+additions is exercised by the 698 green prototype assertions, and the reviewer
+verified that scoping claim mechanically this round rather than accepting it —
+`grep` over the whole `wf8b-s14-repro/` tree finds no reference to
+`review_content_id`, `resolve_approval_basis`, `assert_feedback_matches_bundle`
+or any approval gate. No prototype file was added or edited this round either.
+Every property added above is a **future obligation** carried by items 166,
+372(h), 376(l), 376(p) and 376(s), plus `WFR-03`'s and `WFR-67`'s amended rows,
+and no existing green pass is cited anywhere as evidence for any of them. The
+one measurement this revision performs on the live repository — the
+`bundle_id` tampering check — is evidence for a **premise** the design relies
+on, not for any obligation the design creates.
+
+## WF8b finding disposition (revision 74 → 75) — external plan review found the provenance chain airtight from derivation to archive and **unchecked from archive to approval commit**, the quarantine justified by a retention property it does not have, and three smaller overstatements; **zero blocking**, all five findings accepted (`OPUS-R92-001` through `-005`)
+
+Revision 74's own corrections are confirmed resolved — `OPUS-R91-001` and
+`-002` in full, `-003` in full with two Optional residuals, `-005` with the
+reviewer's correction adopted — and `OPUS-R91-004` only **partially**: its
+ordering, refusal marker and quarantine are all correct and are kept unchanged,
+while the justification attached to the quarantine and the withdrawal's target
+under the version store are not, and are corrected below.
+
+`OPUS-R92-001` — **accepted, and it is the round's whole subject.** Validated
+against the repository before anything was edited, then **reproduced
+independently** in a throwaway repository against the real
+`workflow_fingerprint`/`workflow_state` modules, with `MANIFEST.md` written by
+the real `write_manifest_with_verified_identifiers_for_work_item` rather than a
+fixture: generate at T0, take the reviewer's `APPROVE` bound to that
+`bundle_id`, append **one line** to a protected path at T1, then run exactly
+what `/approve-review plan` steps 1–4 run. Every check passes —
+`approval_gate_reachable` `True`; `bundle_id` recomputed over `current/`
+**unchanged**, because it is a pure function of the bundle *directory* and is by
+construction insensitive to every working-tree change;
+`assert_local_generation_matches` `PASS`, because an uncommitted edit changes
+neither `worktree_root` nor `generation_head`; `assert_feedback_matches_bundle`
+`PASS`, because it binds `reviewed_bundle_id`/`reviewed_base_commit`/
+`work_item` and there is no fourth field to bind;
+`resolve_approval_basis` → `EXTERNAL_APPROVE`, because it compares `bundle_id`
+only; `resolve_plan_stage_approval_commit_paths` `PASS` — while the freshly
+recomputed `review_content_id` **differs** from both `MANIFEST.md`'s recorded
+value and the reviewer's. The approval proceeds, and its commit, its
+`Workflow-Plan-Approval:` trailer and the durable `approved_review_content_id`
+that gates `IMPLEMENTING` for the rest of the work item's life all name content
+no reviewer ever saw. `verify_post_approval_manifest_match` then **passes**,
+because it compares the drifted commit against the drifted record — which
+`WFR-06`'s own acceptance criterion states in as many words ("Worktree-source
+and commit-source manifests compared post-commit").
+
+Three things about this finding are worth recording rather than glossing.
+**First, it is not new in revision 74** — it predates the pinned projection —
+but revision 74 is the round that makes the reviewed and the live projection
+*definitionally* different, which is why the round that sharpened the name is
+the round that must close it. **Second, the two windows are different and only
+one was defended**: a change between the `files/` copy and `--write-manifest` is
+what `OPUS-R91-001` closed; a change between the **verdict** and the
+**approval** — the multi-hour-plus window `OPUS-R14-005` already identified as
+"the most exposed" — was undefended, and it is precisely the window in which the
+artifacts-declaration rule was believed to be the only gap. **Third, the design
+already applies the correct rule at the other gate**:
+`/record-manual-plan-review` step 6 makes the feedback's `review_content_id` a
+hard check against the freshly recomputed value (`StaleReviewContentIdError`)
+and demotes `bundle_id` to advisory. `/approve-review` has exactly the inverse
+polarity, and because `workflow-v2-1-core` is `governing_workflow_version: "1"`,
+`/record-manual-plan-review` never runs on its path — so **no
+`review_content_id` binding executed anywhere between an external review and
+this work item's plan-approval commit.**
+
+All six required corrections are applied, including the two that constrain the
+fix rather than extend it. The reviewed content identity gets **one** definition
+(`D-Bundle-Manifest`, "One definition of the reviewed content identity"). The
+approval gate refuses on a live≠reviewed mismatch **before step 5's state
+write**, i.e. before this invocation's first durable mutation, with no commit,
+no index mutation and no state write on the refusal path; the bootstrap
+procedure inherits it through its step 2, which is defined as
+`/approve-review`'s steps 1–4 performed directly. `Reviewed review content ID:`
+becomes a fourth binding field, with `MANIFEST.md`'s `read_manifest_identifiers`
+value as the cross-check and the `OPUS-R14-005` polarity preserved. The three
+overstatements are corrected at their sites. And the scope is **not** widened,
+on evidence rather than assertion — both arms were re-verified here
+independently of the reviewer: editing a declared excluded path (`.gitignore`)
+leaves `review_content_id` **unchanged**, so no clean-worktree requirement is
+needed or wanted and an unrelated implementation-side change must not block
+approval; and a protected path modified then restored byte-identically
+**recomputes to the reviewed value**, so the invariant is stated as **content
+identity, not temporal history** and the ABA case is specified to be
+**accepted**. There is no mechanism that could honour a "nothing ever changed
+since generation" requirement and none is introduced.
+
+One correction to the finding's own supporting detail, which strengthens rather
+than weakens it: the reviewer wrote that every feedback file "since round 82"
+carries `Reviewed review content ID:`. Measured across every feedback file in
+this work item's feedback directory, **all of them carry it except
+`REVIEW_FEEDBACK.gpt-r30.md`** — the field has been present continuously since
+round 31, with no gap. (The count is deliberately stated as "all but one" rather
+than as a pair of integers: the directory grows by one each round as the applied
+feedback is archived, so any absolute figure is stale the moment it is written.)
+So
+promoting it to a required binding field ratifies eleven months of existing
+practice rather than imposing a new obligation.
+
+`OPUS-R92-002` — **accepted, both arms, and arm 1 is a record-accuracy defect
+of the kind this repository treats as material.** Arm 1 verified directly
+against the generator: `scripts/prepare-ai-review.sh` writes into
+`BUNDLE_DIR="$ROOT_DIR/current"` in place and writes the archive to the single
+canonical `"$ROOT_DIR/review-bundle.tar.gz"`, so a **successful** generation
+overwrites the previous round's bundle and archive. The quarantine fires only on
+**withdrawal** — its own `<token>` is defined as "the **failed run's**
+`generation_head`" — so it cannot retain anything across a successful
+generation. And the incident revision 74 cited in its justification is a
+successful generation: this repository's own `TEST_RESULTS.md` records that "the
+revision-72 bundle and archive were overwritten in place by revision 73's own
+generation", and revision 73's generation succeeded — it produced the very
+bundle round 91 reviewed. Quarantine would not have preserved one byte of it.
+The clause is therefore **deleted**, not softened. This matters beyond accuracy:
+attributing a real, recurring, already-realized problem to a mechanism that does
+not address it means **no obligation is created for it**, and unresolved
+question 15 was framed around the wrong cost. The actual retention rule is now
+stated separately and given an owner, with the interim loss named as an explicit
+limitation rather than left implicit.
+
+Arm 2 verified against the version-store contract this plan already carries:
+under "Atomic bundle-file publication" `current` is a **symlink** to a concrete
+`bundles/<token>/`, and a failed candidate is never promoted — so at withdrawal
+time `current` still resolves to the **previous, valid** bundle. Part 3b's
+literal instructions ("the archive is removed first … then `current/` is renamed
+to `current.rejected-<token>/`") would therefore remove the last good archive and
+quarantine the pointer to the last good bundle while the failed candidate sits
+untouched in `staging/<token>/` — the exact inversion of the intent. The third
+boundary retargeted part 2's **placement** rule explicitly and said nothing
+about part 3b's **destructive** step, which is the one that needed it most. Part
+3b now states its target in both worlds and adds the fail-closed rule that a
+withdrawal which cannot identify the artifacts *this run* produced refuses and
+writes the `REJECTED` marker rather than removing anything.
+
+`OPUS-R92-003` (Optional) — **accepted, and the stronger of the two offered
+fixes is taken.** Verified: the hashed projection has exactly ten fields, and
+revision 74 pinned the five that come from protected files. Of the remainder,
+`protected_paths`/`excluded_paths`/`excluded_prefixes` resolve from
+`<work_item_id>-artifacts.json` — itself under the excluded prefix
+`docs/ai-workflow/registry/` — and `work_item_type`/`base_commit` from
+`WORKFLOW_STATE.json`, an explicitly excluded path and the one file this design
+most expects concurrent writers to touch. `plan_revision` is safe: it is read
+from the registry and cross-checked against the plan title, both pinned. So part
+3a's load-bearing sentence was true of the five paths and unqualified as
+written. It is now qualified to the scope it has, and option (a) is adopted
+rather than (b): the **resolved `PlanStageMetadata` as a whole** is pinned, so
+the identifier derives from one resolution rather than two. This is a smaller
+change than it sounds — `resolve_plan_stage_metadata` already returns an
+immutable `NamedTuple` — and it is preferred because (b) would leave the residue
+covered only by a rule stated in another section. The reviewer's grading is
+adopted too: the one case that escaped the declaration's approval-time freshness
+rule (`StaleArtifactsDeclarationError`) was the declaration edited mid-generation
+and restored byte-identically before approval, which is an instance of
+`OPUS-R92-001` and is closed by it.
+
+`OPUS-R92-004` (Optional) — **accepted as stated, and the reviewer's own
+negative result is adopted with it.** The reviewer attempted to construct a
+cycle and could not, and records that plainly; this is a defect in the **claim**,
+not in the mechanism. Verified: the escape's ordering statement names the
+per-work-item guard and the per-worktree identity `flock`, under a heading
+asserting that "Ordering against the existing locks **is stated**", while
+omitting `D1`'s state-writer `flock` at
+`.ai-review/runtime/WORKFLOW_STATE.lock` — and `WFR-66`'s ownership note places
+the escape at work-item creation, which *is* a `WORKFLOW_STATE.json` write.
+`WORKFLOW_STATE.lock` is now named in the ordering statement with the rule given
+explicitly, the global partial order is recorded in **one** place alongside the
+existing "guard first, then `flock`" rule so it is checkable at a single site
+rather than assembled from three sections, and the evidence display and literal
+solicitation are stated to happen **outside** the leaf — the text already
+implied it, but a human-interaction window inside a repository-wide exclusive
+lock is worth ruling out by name.
+
+`OPUS-R92-005` (Optional) — **accepted; measured in this repository and the
+field is exactly as reported.** From this linked worktree `git rev-parse
+--git-dir` is `…/.git/worktrees/workflow-v2-plan` while `--git-common-dir` is
+`…/.git`; from the main worktree both are `.git`. `--git-common-dir` therefore
+resolves to the same path from every linked worktree, so a field named
+`authorizing_worktree_git_dir` populated from it records a per-repository
+constant and records nothing about **which** worktree authorized. Correctness
+never depended on it — the record is repository-scoped and the serialization is
+repository-level, both deliberately, and the record **path** stays derived from
+`--git-common-dir` for exactly that reason — but the escape's stated purpose for
+the record is that a damaged repository is **auditable**, and the one field that
+would answer "who authorized this" could not. It is repopulated from a
+per-worktree source.
+
+**Unresolved questions 15 and 16 are answered and closed this round**, both on
+the reviewer's own reasoning, which was checked rather than deferred to. **Q15
+(should the generator reap `current.rejected-<token>/` quarantines?): not yet,
+and not on this axis.** The question treated unbounded accumulation as the cost
+of keeping failed artifacts inspectable, but failed generations are rare and
+each quarantine is a few megabytes under a gitignored directory, so accumulation
+is not the binding constraint. The binding constraint is the one `OPUS-R92-002`
+names: this workflow currently retains **failed** bundles and discards
+**successful** ones, which is backwards for review provenance and has already
+cost one verification. The retention rule is decided first (below), and the
+reaping policy then follows from it as one policy over one store rather than two
+policies over two. The interim answer, if one is needed before the version store
+lands: reap on the next **successful** generation, keeping the most recent
+quarantine only, and never reap by age — a quarantine's value is highest
+immediately after the failure and does not decay on a clock. **Q16 (should
+`MANIFEST.md` additionally record the closing re-read's outcome?): no, and the
+question's premise is sound but its proposed fix is not.** Revision 74 creates no
+new disagreement class: the closing re-read requires every one of the five
+protected paths to still equal its pinned entry, so a generation that
+**succeeds** ends with pinned == live by construction, and `H(pinned)` is exactly
+what a live recomputation would produce at that instant. The inconsistency is the
+pre-existing one, and the pin neither creates nor closes it. Recording the
+re-read's outcome would record a fact true for as long as it takes the generator
+to exit, teach a reader consulting it hours later nothing about the worktree they
+are actually approving against, and add a fourth stated identity to keep in sync.
+The correct fix is `OPUS-R92-001`'s: **one** definition of the reviewed content
+identity plus an approval-time assertion that the live projection still equals
+it, refusing before any durable mutation. Where a diagnostic is still wanted, the
+CLI's existing read-only `matches` / `DIFFERS -- protected content changed since
+MANIFEST.md was last written` line already provides it, and this round promotes
+that exact comparison to an assertion at the gate rather than copying it into the
+manifest.
+
+**Nothing is reopened and nothing is withdrawn.** The reviewer again performed
+the bounded architecture reassessment and again reported the design converged,
+for the third consecutive round, declining to recommend a redesign: the seven
+roles remain explicit and non-overlapping, and this round's additions sit inside
+existing boundaries rather than across them. The one role the reviewer found
+stated but not mechanized — "the approval stage must prove the current protected
+content still equals the reviewed subject" — is the missing half of a boundary
+the design had already drawn, and mechanizing it is this revision's principal
+work. One prior claim **is** withdrawn as an overstatement and is named as such:
+revision 74's quarantine-retention clause. Three `WFR` description or
+verification columns change (`WFR-03`, `WFR-06`, `WFR-67`) and no row is added,
+so `workflow-v2-1-core-mapping.json` carries exactly those three amendments and
+the 67-row plan↔mapping normalization stays zero-mismatch.
+
+**Test-evidence discipline, unchanged and restated.** None of revision 75's
+additions is exercised by the 698 green prototype assertions: no prototype file
+was added or edited this round either. The reproduction recorded above was run
+in a throwaway repository against the real modules and is evidence **for the
+defect**, not for the fix — the fix does not exist yet. Every property added
+above is a **future obligation** carried by items 375(g) and 376, plus `WFR-06`'s
+own replaced acceptance criterion and `WFR-03`'s widened binding-field set, and
+no existing green pass is cited anywhere as evidence for any of them. The
+reviewer's own inventory of test owners is adopted, including the live control
+arm it requires: today's behaviour must be asserted to reach `EXTERNAL_APPROVE`
+and write a record whose `approved_review_content_id` differs from the reviewed
+one, so the fix is demonstrated rather than assumed.
+
+## WF8b finding disposition (revision 73 → 74) — external plan review found each of revision 73's own corrections one input short: the pin covers one of five protected paths, the identity partition is not disjoint, the new escape carries none of its siblings' authorization surface, and the withdrawal has no order; **zero blocking**, all five findings accepted (`OPUS-R91-001` through `-005`)
+
+External plan review of revision 73 returned `Status: REVISE` with **zero
+blocking**, **four important** and **one optional** finding — the second
+consecutive round with no blocking finding. The reviewer recomputed `bundle_id`
+`6c355e56…` three independent ways (the value `MANIFEST.md` declares, a walk of
+the 127-entry on-disk `current/`, and the same walk over content extracted from
+`review-bundle.tar.gz`) and `review_content_id` `ed07a832…` from this
+repository's own plan-stage projection, all agreeing with `REVIEW_REQUEST.md`'s
+declared header; confirmed all five protected paths byte-identical across
+worktree, `files/` and both archive copies; re-derived the 67-row plan↔mapping
+conformance at **zero** mismatches under the integration suite's own
+normalization, in both directions; reran all 489 hermetic tests and all eighteen
+stress passes green at 698/698; and rescanned the origination reference live at
+31 commits with **0 undecidable reads** and exactly one pair ever `IN_PROGRESS`.
+All four of revision 73's corrections are confirmed addressed — `OPUS-R90-002`
+and `-004` fully, `OPUS-R90-001` and `-003` **partially**. **Every finding was
+validated against this repository, its scripts and Git itself before anything
+was edited. All five are accepted; none is rejected.**
+
+**Two of the four were executed rather than argued**, which is why they are not
+in the "arguably ambiguous prose" class: the reviewer replayed the generator's
+real ordering against the real `workflow_fingerprint` module in scratch
+repositories carrying the same five protected paths, and constructed the
+identity-partition collision as a committed document. Both reproductions were
+re-verified here before anything was edited.
+
+`OPUS-R91-001` — **accepted, and the arithmetic is the whole finding.**
+`review_content_id` is a digest over **five** protected paths —
+`PLAN_STAGE_PROTECTED`, confirmed live: `docs/TECHNICAL_DECISIONS.md`,
+`docs/ai-workflow/WORKFLOW_V2_AUDIT.md`, `docs/ai-workflow/WORKFLOW_V2_PLAN.md`,
+`workflow-v2-1-core-registry.json`, `workflow-v2-1-core-mapping.json` — and part
+3a pinned exactly one of them. The generator treats all five identically:
+`prepare-ai-review.sh` copies every changed path into `files/` and only then
+reaches `--write-manifest`, which computes the identifier from the **worktree**.
+So four fifths of the binding stayed in precisely the window `OPUS-R90-001`
+named, and the idempotence guard cannot help for the reason revision 73 itself
+stated — its window opens at the *first* computation, after the copy loop. The
+reviewer's reproduction is decisive: with an editor save injected into the
+mapping between the copy loop and the manifest computation, **every assertion
+revision 73 adds passes**, `files/` holds `v0`, `review_content_id` binds `v1`,
+and no artifact the reviewer can read contains the bytes the verdict binds. The
+second arm is equally sound and was reproduced: the "provably the same bytes"
+claim assumes the file changes at most once, and B0 → B1 → B0 across the
+manifest computation leaves **both endpoints agreeing with the pin** while the
+identifier binds bytes no copy holds. An ABA is ordinary here — `git checkout
+--`, `git stash`/`stash pop`, an undo-and-resave — and revision 73's own mapping
+incident used `git checkout --` on a protected path. **Corrected at the
+mechanism**: part 3a now pins the whole protected **observation** (all five
+paths read once into one projection), computes `review_content_id` **from the
+pinned digests** rather than from an independent late snapshot, extends the
+closing re-read to all five paths, demotes that re-read to a **staleness check**
+and deletes the word "provably" — with the entry-for-entry fallback stated for
+an implementation that keeps an independent snapshot. Item 376(j) is extended
+per path with the pin-one-path implementation as the live control arm, and two
+new arms are added: **(n)** asserts the ABA case over the digests, and **(o)**
+asserts the identifier is derived from the pinned projection rather than merely
+re-read.
+
+`OPUS-R91-002` — **accepted; this is the round's most consequential defect, and
+it re-opens a direction `OPUS-R89-002` had closed.** Verified against the plan
+text rather than taken on premise: row 1 refuses when the id "is decidably
+observed at any commit", row 3 raises the *escapable*
+`IdentityReferenceUndecidableError` when any commit is undecidable "for any of
+the reasons the origination table already enumerates — … a present-but-non-object
+member at any of the four levels …", and the subsection's own rule says an
+existence query that treated `"wi": null` as "no such work item" would be
+fail-open. So a committed `{"work_items": {"X": null}}` satisfies **both** rows,
+the table states **no** precedence, and a reader evaluating row 3 first hands a
+decidable observation to the one class an authorization clears — after which the
+work item is created under an id the committed document plainly records, with
+the same construction at the fourth level letting registry validation
+reintroduce a retired checkpoint id. That falsifies the escape's own central
+claim that it "never overrides a decidable observation": key membership is
+decidable, and it is the only decidable thing about a `null` member. The
+reviewer also confirmed the reverse direction clean — an object entry with a
+garbage `status` is undecidable for the origination question and a plain
+observation here — which is the point: **the two tables genuinely diverge about
+the same bytes**, and revision 73's cross-reference imported the wrong
+classification. **Corrected at the mechanism**: the precedence rule is stated
+explicitly and in the invariant-preserving direction (key presence at the
+queried level is a decidable observation and wins, unescapably); row 3 is
+narrowed to undecidability that prevents establishing key presence or absence,
+including a non-object container *above* the queried key; the origination
+table's own precedence sentence is explicitly **not** restated, because there
+the routes differ in which refusal is reported while here they differ in whether
+an escape exists at all; and the divergence is written out rather than pointed
+at. `D1` and `D-Registry` each state the rule at their own call site. Item
+375(g)'s container-shape arm was **vacuous on the point that matters** — "refuses"
+is satisfied by both readings — and now asserts the **error class**, with the
+undecidable-classifying reader as the live control arm that admits after
+authorization.
+
+`OPUS-R91-003` — **accepted in full.** Compared side by side with the sibling
+the plan itself names, `authorize_identity_reference_gap(work_item_id,
+[checkpoint_id], evidence)` against `recover_abandoned_destructive_guard(repo_root,
+work_item_id, checkpoint_id, *, now, user_authorization, evidence)`, revision 73
+introduced a new authority boundary "on the same footing as" two siblings while
+carrying almost none of their surface — and each missing element is one a
+sibling had to specify **after a finding in an earlier round**. Validated point
+by point against the plan text: no `user_authorization` parameter and no stated
+literal, though the prose calls the operation "explicit" and "user-authorized"
+four times; no record location, which makes the promised non-replayability
+unimplementable — and `WORKFLOW_STATE.json` cannot hold it, because at
+work-item creation the work item does not exist yet; **no serialization at all**,
+which is the sharpest gap, since the entire concurrency apparatus this design
+spent six rounds building is keyed on a per-work-item entity that by definition
+is absent at this call site, so two concurrent sessions both re-derive the same
+digest, both read "not authorized", both write and both admit; no crash/retry
+semantics, leaving a published-record-then-crash in a fail-closed state whose
+only exit is hand-editing a record the plan does not locate; a consumed token
+bound to the observation but **not** to the identity, which is either
+one-authorized-creation-repository-wide-forever or the same evidence
+authorizing an identity the user never reviewed — the exact replay axis the
+takeover was built to refuse; and no worktree/identity binding. **Corrected at
+the mechanism**: the operation gains the sibling signature, an authorization
+literal validated against the re-derived digest, mandatory evidence display
+before solicitation, a digest extended to cover the identity, a named durable
+record at
+`$(git rev-parse --git-common-dir)/ai-workflow/identity-gap-authorizations/<sha256(gap_observation_id)>.json`
+with its schema stated and published by the same atomic create-if-absent
+primitive the claim record uses — so the replay test and the write are **one**
+operation — repository-level `fcntl.flock` serialization with its ordering
+against the existing guard and identity locks stated, and a crash-window
+disposition at every boundary that makes the record **idempotent rather than
+consumed on read**, so a crash between publication and creation resumes instead
+of dead-ending. **And the invariant is stated**: `WFR-66` now says that after an
+authorized gap the surviving property is "no id **decidably observed** in the
+reference is reused", not "no id that has ever appeared" — the fifth round in
+which this section was found claiming a property the mechanism does not have,
+and the first in which the weaker true statement is written down. Item 375(g)'s
+escape arm gains replay, concurrency, crash and stale-evidence arms; it
+previously covered none of them.
+
+`OPUS-R91-004` — **accepted, and the ordering point was verified against this
+round's own artifact.** Part 3b required removing "`MANIFEST.md` and the
+archive" with **no order** and **no behaviour on failure**. The two artifacts
+are not equally dangerous: extracting `review-bundle.tar.gz` reproduces
+`bundle_id` `6c355e56…` exactly against the manifest inside it, so the archive
+is a complete, self-contained, self-verifying bundle — and it is the artifact
+that leaves the machine. Removing `current/MANIFEST.md` does nothing to it, so a
+crash or an `EACCES` between the two removals can leave the tarball as the
+survivor, and the reviewer who receives it has **no observation** distinguishing
+it from a good one. The second arm is equally verified: `REVIEW_REQUEST.md` is
+author-written, survives the withdrawal, carries `review_content_id` in a header
+this codebase treats as checkable, and — because that identifier is computed
+from the worktree, which a failed generation does not change — **still
+verifies**; and nothing in the residue says the generation was refused, since an
+absent manifest is equally consistent with "not generated yet". **Corrected at
+the mechanism**: the archive is removed **first**, then the manifest, then
+`current/` is quarantined as `current.rejected-<token>/`; a withdrawal that
+cannot complete leaves an unambiguous refusal marker naming the failed step and
+the surviving path rather than exiting silently non-zero. Item 376(l) asserted
+only the **successful** withdrawal's end state and now asserts the order
+directly, the killed-between-removals and each-removal-fails cases, the refusal
+marker, and the quarantine — with revision 73's leave-`current/`-in-place
+behaviour as the live control arm in which the surviving header verifies.
+
+`OPUS-R91-005` (Optional) — **accepted; no plan change, and the reviewer's
+correction is right.** Re-verified here: there was **no** requirement loss — 63 →
+67, exactly `WFR-64`–`WFR-67` added, zero removed, zero changed descriptions or
+`checkpoint_ids` on any pre-existing entry, and the 67-row conformance holds
+both directions at zero mismatches. What does not reconcile is the narrative's
+**inference**: `git diff HEAD` on the shipped mapping is exactly `412
+insertions, 63 deletions`, and the shipped file is in the expanded
+one-key-per-line form (418 lines) while `HEAD`'s is compact (69 lines). Those
+figures are therefore the ordinary uncommitted delta against `HEAD`, not the
+signature of a reverted reformat — as the report's own "lines 406, 412" citation
+already required, since a compact 67-requirement file is ~73 lines. The action
+taken was harmless and the recovery was real; the diffstat simply does not mean
+what the record says it means, and this repository treats those records as
+evidence. Corrected in this round's `TEST_RESULTS.md`. The reviewer also
+recorded that byte-level re-verification of the revision-72 recovery was **not
+possible**, because this generation overwrote the bundle it was rebuilt from —
+which is an independent argument for the quarantine adopted under
+`OPUS-R91-004`, and is disclosed here rather than left in the feedback file.
+
+**Unresolved questions 13 and 14 are answered and closed this round**, both on
+the reviewer's own reasoning, which was checked rather than deferred to. Q13:
+"no manifest" is **not** sufficient — quarantine, for the two verified reasons
+above. Q14: repair is **not** required — the retention contract makes the lost
+evidence often unrefetchable, so requiring repair restores the lockout the
+escape exists to prevent — but recording-and-proceeding is sound only with the
+constraints `OPUS-R91-002` and `-003` add: narrow what the escape can reach,
+bind the token to the identity, record the gap against the created identity, and
+state the weaker post-override invariant in `WFR-66`. All four are now in.
+
+**Nothing is reopened and nothing is withdrawn.** The reviewer again performed
+the bounded architecture reassessment and again reported the design converged,
+declining to recommend a redesign: the six authorities remain explicit and
+non-overlapping, the new override sits **inside** the fifth boundary rather than
+across it, and it is confirmed unreachable from `workflow-v2-1-core:WF8b`'s own
+legacy migration path — `WF8b`'s work item already exists, its 17 registry ids
+are unchanged across all five committed registry revisions, and the reference
+scans at 0 undecidable reads, so `WF8b`'s sanctioned entry remains the explicit
+takeover against an absent claim. One prior claim **is** withdrawn as an
+overstatement, and is named as such: revision 73's "provably the same bytes".
+Two `WFR` description columns change (`WFR-66`, `WFR-67`) and no row is added,
+so `workflow-v2-1-core-mapping.json` carries exactly those two amended
+descriptions and the 67-row plan↔mapping normalization stays zero-mismatch.
+
+**Test-evidence discipline, unchanged and restated.** None of revision 74's
+additions is exercised by the 698 green prototype assertions: no prototype file
+was added or edited this round either. Every property added above is a **future
+obligation** carried by items 375(g) and 376(j)/(l)/(n)/(o), and no existing
+green pass is cited anywhere as evidence for any of them. The reviewer's own
+inventory of future test owners is adopted verbatim, including its one gap —
+stale evidence, concurrent authorization and crash-retry had **no owner at all**
+before this round, and item 375(g) now owns all three.
+
+## WF8b finding disposition (revision 72 → 73) — external plan review found revision 72's new bundle binding unpinned at both ends and its new identity source unspecified as a read; **zero blocking**, all four findings accepted (`OPUS-R90-001` through `-004`)
+
+External plan review of revision 72 returned `Status: REVISE` with **zero
+blocking**, **three important** and **one optional** finding — the first round
+in nine with no blocking finding. The reviewer recomputed every identifier
+independently, through a from-scratch reimplementation of both digest algorithms
+that deliberately does not import `workflow_fingerprint`: `review_content_id`
+`7931cf14…` from a hand-rebuilt plan-stage projection, and `bundle_id`
+`13020c9d…` three independent ways (the value `MANIFEST.md` declares, a walk of
+the 127-entry on-disk `current/`, and the same walk over content extracted from
+`review-bundle.tar.gz`), all agreeing. `PLAN.md` was confirmed byte-identical to
+this document across all five copies; the 67-row plan↔mapping conformance was
+re-derived at **zero** mismatches under the integration suite's own
+normalization; all 489 hermetic tests and all eighteen stress passes were rerun
+green at 698/698; and the origination reference was recomputed live at 31
+commits with **0 undecidable reads** and exactly one pair ever `IN_PROGRESS`.
+All five of revision 72's corrections are confirmed **resolved**, three of them
+with residuals — `OPUS-R90-001`/`-002` from `OPUS-R89-001`, `OPUS-R90-003` from
+`OPUS-R89-005`. **Every finding was validated against this repository, its
+scripts and Git itself before anything was edited. All four are accepted; none
+is rejected.**
+
+**Both important findings against `WFR-67` are about the same gap seen from two
+ends: revision 72 specified the binding and left both of its ends loose.**
+
+`OPUS-R90-001` — **accepted, validated at the source.** Part 3 required the
+three bundle copies to be byte-identical to `plan_path` "as read at generation
+time" and never said *when* that read happens, nor that the derivation's read
+and the closing assertion's read must see the same bytes. Confirmed against the
+repository rather than taken on the finding's premise:
+`compute_review_content_id_plan_stage_for_work_item` takes its **own
+independent** `_snapshot_worktree` read of the authoritative path, so
+`review_content_id` never derives from the bundled bytes and the chain
+authoritative → `PLAN.md` → identifiers → archive closes only if the two reads
+agree. Under the pinned-at-derivation reading nothing compares B0 to B1 at all.
+The idempotence guard does not cover it: `write_manifest_with_verified_identifiers`
+does recompute `review_content_id` and raise `ReviewContentIdNotIdempotentError`
+on disagreement, but its window opens at its **first** computation, which
+`prepare-ai-review.sh` reaches only *after* the `files/` copy loop — a mutation
+landing in that earlier window and stable afterwards passes both computations.
+The second arm was confirmed by reading the script's own ordering: the closing
+reproducibility check runs **after** `MANIFEST.md` is written and **after** the
+archive is created, and on mismatch it `exit 1`s leaving both in place, so a
+failed generation leaves an artifact on which every check a reviewer can run
+from the artifact alone passes. Parts **3a** and **3b** are added: the read is
+pinned once at derivation, the closing assertion compares against the pinned
+digest *and* re-reads `plan_path` (which is also what makes
+`review_content_id`'s independent snapshot provably the same bytes), and a
+failed assertion **withdraws** `MANIFEST.md` and the archive before exiting.
+Item 376 gains (j), (k) and (l) — the two windows asserted separately rather
+than conflated, each with a live control arm, and the withdrawal asserted by
+digesting before and after at exactly the scope 3b states. **[Superseded by
+revision 74, `OPUS-R91-001`/`-004`: the parenthetical claim above is
+**withdrawn** — the re-read is a two-point sample an ABA defeats, and pinning
+`plan_path` alone left four of `review_content_id`'s five protected inputs in
+the same window. The pin now covers the whole protected observation, the
+identifier is computed from it, and the withdrawal is ordered and quarantined.
+Retained here as the record of what revision 73 decided.]**
+
+`OPUS-R90-002` — **accepted, and the omission is specific rather than
+structural.** Verified directly: `.claude/commands/milestone-plan.md:97` says
+"write/refresh `<bundle_dir>/PLAN.md` with the actual plan", and
+`.claude/commands/apply-plan-review.md:32` names "`<bundle_dir>/PLAN.md` **and**
+the real execution/reference plan doc" as co-equal edit targets — the
+two-hand-edits arrangement whose divergence produced revision 71's stale bundle,
+and the second is the command consuming this very round's feedback. `WFR-67`'s
+stated surface named only the two scripts plus `REVIEW_PROTOCOL.md`, while
+`WFR-64`'s and `WFR-65`'s own ownership notes already name "`scripts/` and
+`.claude/commands/`" as `WF8b`'s surface — so this is an omission in `WFR-67`,
+not a scope limit of the checkpoint. Both command files join `WFR-67`'s
+implementation surface with the required wording stated (at the plan stage
+`PLAN.md` is generated, not authored; the authoritative `plan_path` is the sole
+edit target), the edit is routed to `WF8b` and left unimplemented this round
+exactly as `REVIEW_PROTOCOL.md`'s is, and item 376(m) carries the grep-class
+conformance assertion. Noted rather than glossed: derivation makes the
+discarded-edit outcome *safe* — the reviewer then sees the unfixed authoritative
+plan — but a requirement whose stated purpose is "derivation removes the step"
+must not ship beside two procedures that still mandate it.
+
+`OPUS-R90-003` — **accepted; the same class of omission as `OPUS-R89-003`, one
+level up.** Revision 72 made both halves of the identity invariant name the
+origination reference, which was the correction `OPUS-R89-005` required — and
+confirmed here: they do. But the reference's read semantics were specified for
+the **origination** question only, whose total partition is phrased throughout
+in terms of a checkpoint's `status` and of adopt-versus-refuse. `WFR-66` asks
+two **existence** questions over the same commits, and revision 72 stated no
+outcome for a commit the reader cannot decide, while item 375(g) asserted only
+the two decidable arms. Both readings had real consequences and neither was
+chosen: undecidable → admit is fail-open for exactly the binding the
+requirement creates; undecidable → refuse, which this plan's own doctrine
+implies, is a repository-wide liveness failure — and, unlike every other
+fail-closed refusal in this design, it had **no stated escape**. The new
+subsection "The identity queries' own read partition" states the row-set for
+both queries, takes **refuse**, and names the escape:
+`authorize_identity_reference_gap`, evidence-bound to a digest over the exact
+undecidable commits and their failure classes, re-derived before acting,
+non-replayable, and — the property that keeps it from becoming a general
+override — clearing only the undecidability and never a decidable observation.
+The reduction rule and the missing-key container rule are stated for these
+queries explicitly rather than left to be inherited by analogy. Item 375(g)
+gains the undecidable-commit, escape, reduction and container-shape arms. There
+is no live instance: all 31 commits were rescanned at **0 undecidable reads**,
+which is why this was Important and not Blocking.
+
+`OPUS-R90-004` (Optional) — **accepted.** Item 166's prose said 65 rows,
+`WFR-01` through `WFR-65`; the live set is **67**, `WFR-01` through `WFR-67`
+(`WFR-66` from revision 71, `WFR-67` from revision 72, neither updating the
+count) — confirmed by counting the table and the mapping, both 67. Corrected,
+and item 166 additionally extended so the count itself becomes a **derived**
+conformance property with no prose count trusted as a source, since this is the
+fourth recurrence of the identical drift. Impact was genuinely limited — item
+166's mandated fix *replaces* the literal, so the stale prose cannot reach the
+implementation — which is why it was correctly filed Optional.
+
+**One non-finding observation adopted.** The reviewer recorded, explicitly not
+as a finding, that `WFR-66`'s invariant is steady-state while this reference is
+characterized as a shrinking migration aid, so ref loss weakens the identity
+invariant too — and traced the failure directions as correlated safely. That
+analysis is confirmed and the retention contract now states the coverage in a
+short paragraph, because a reader told the reference is a shrinking migration
+aid would otherwise reasonably conclude the identity invariant is exempt from
+the contract.
+
+**Nothing is reopened and nothing is withdrawn.** The reviewer performed the
+bounded architecture reassessment and reported the design converged, declining
+to recommend another redesign: the six authorities are explicit and
+non-overlapping, and all four findings are additive corrections to text
+revisions 71 and 72 introduced. No ownership primitive changes this round. Two
+`WFR` description columns change (`WFR-66`, `WFR-67`) and no row is added, so
+`workflow-v2-1-core-mapping.json` carries exactly those two amended
+descriptions and the 67-row plan↔mapping normalization stays zero-mismatch.
+
+**Test-evidence discipline, unchanged and restated.** None of revision 73's
+additions is exercised by the 698 green prototype assertions: no prototype file
+was added or edited this round. Every property added above is a **future
+obligation** carried by items 375(g), 376(j)-(m) and 166, and no existing green
+pass is cited anywhere as evidence for any of them.
+
+## WF8b finding disposition (revision 71 → 72) — external plan review found the plan-stage bundle's own `PLAN.md` bound to nothing and the check meant to bind it wired to nothing, plus four residuals in revision 71's own corrections; all five findings accepted (`OPUS-R89-001` through `-005`)
+
+External plan review of revision 71 returned `Status: REVISE` with **one
+blocking** and **four important** findings. The reviewer reproduced `bundle_id`
+`5b39c9a7…` three independent ways (the value `MANIFEST.md` declares, a fresh
+`compute_bundle_id` over the 127-entry on-disk `current/`, and a fresh
+computation over content extracted independently from `review-bundle.tar.gz`)
+and `review_content_id` `aedb8a60…` through this repository's own plan-stage
+projection; confirmed `PLAN.md` byte-identical to this document; re-derived the
+66-row plan↔mapping conformance at zero mismatches with the integration suite's
+own normalization; reran all 489 hermetic tests and all eighteen stress passes
+at 698/698; confirmed item 166's integration failure pre-existing (its hardcoded
+`assertEqual(len(table_rows), 60)`, now `66 != 60`); and reproduced the live
+reference arithmetic exactly (140 reachable commits, 30 under revision 70's
+command, 31 under revision 71's, the one dropped commit `7274586e` a real
+merge). All five of revision 71's corrections are confirmed **resolved**, four
+of them with residuals, which are `OPUS-R89-002` through `-005`. **Every finding
+was validated against this repository, its prototype and Git itself before
+anything was edited. All five are accepted; none is rejected.**
+
+**Two things this round's validation established that the findings did not
+claim, both fixed in the same pass.** They are recorded here because in each
+case the finding's own framing understated the defect:
+
+- `OPUS-R89-002` reported two divergences between the partition table and its
+  reference implementation, both **over-strict** (an absent `work_items` and an
+  absent `checkpoints` refuse where the table says admit). Probing all thirteen
+  rows of the table rather than the finding's four surfaced **two more, in the
+  fail-open direction**: a work item present with JSON `null` and a checkpoint
+  entry present with JSON `null` both **admit**, because
+  `items.get(work_item_id)` and `checkpoints.get(checkpoint_id)` return `None`
+  for a present-but-`null` member exactly as they do for a missing key, and both
+  call sites `continue` on `None`. The table says refuse. That is the mechanism
+  concluding a positive fact from a schema-invalid document — the precise thing
+  `OPUS-R88-002` fixed one level down — and it raises the finding from an
+  enumeration mismatch to a fail-open one.
+- `OPUS-R89-001` named `REVIEW_PROTOCOL.md`'s `PLAN.md` bullet as stating a
+  guarantee that does not exist. The **`IMPLEMENTATION_SUMMARY.md` bullet
+  immediately below it** states the same guarantee ("same stage-completeness
+  discipline"), and it is false for the identical zero-call-site reason. Fixing
+  only the plan stage would have left `assert_stage_completeness` half-wired and
+  that second bullet still lying, so `WFR-67` covers both — at the two different
+  strengths that are actually available, which is itself now a stated
+  asymmetry rather than a papered-over "same discipline".
+
+### `OPUS-R89-001` — blocking — a plan-stage bundle's `PLAN.md` is bound to nothing, and the check that was supposed to bind it has no callers
+
+**Accepted in full, and every one of the finding's six evidence points was
+re-verified against this repository before anything was edited.**
+
+1. `scripts/prepare-ai-review.sh` creates the five author-written files **only
+   if missing** and no other line in it writes `PLAN.md`; `files/` is `rm -rf`'d
+   and rebuilt from the diff on every run. Confirmed by reading the script.
+2. `compute_review_content_id_plan_stage_for_work_item` computes from the
+   authoritative worktree paths via `_snapshot_worktree` and never reads
+   `bundle_dir/PLAN.md`. Confirmed.
+3. The closing three-way reproducibility check compares manifest / on-disk /
+   extracted, all three over the same file. Confirmed.
+4. **`assert_stage_completeness` has zero production call sites.** Confirmed by
+   a repo-wide grep over `*.py`/`*.sh`/`*.md`/`*.yml`: its definition
+   (`scripts/workflow_fingerprint.py:1903`), nine unit-test call sites, one
+   comment in `scripts/workflow_integration_test.py`, one line of prose in
+   `docs/ai-workflow/REVIEW_PROTOCOL.md`. Nothing else.
+   `write_manifest_with_verified_identifiers` does not call it.
+5. `REVIEW_PROTOCOL.md` states the guarantee to the author anyway.
+6. **Even wired in, the existing check is insufficient** — re-reproduced here
+   against a scratch copy of this round's own bundle rather than taken on faith:
+   `PLAN.md` regressed to the `(Revision 70)` marker → `StageCompletenessError`;
+   `PLAN.md` with its body altered and the `(Revision 71)` marker intact →
+   **passes**.
+
+The finding is right that this is not hypothetical, and the plan owns that
+rather than minimising it: revision 71's first regeneration produced exactly
+this bundle, and the only thing that corrected it was the author copying the
+plan by hand. The bundle now under review is coherent **because of a manual
+step**, and nothing in the design or the tooling required that step. An approval
+recorded against such a bundle is an approval of a document the reviewer never
+read, with every identifier verifying successfully.
+
+**The correction** replaces `D-Bundle-Manifest`'s one-sentence
+"Stage-completeness / revision-consistency check (unchanged)" — which is now
+marked superseded in place, with the zero-call-site fact recorded there — with a
+new **"Generator-side stage-document binding"** contract in four parts:
+derivation of `PLAN.md` from the resolved `plan_path` on every plan-stage
+generation; fail-closed preconditions evaluated before any file under
+`bundle_dir` is written, under `GPT-R43-003`'s existing placement rule;
+byte-identity between `plan_path`, `bundle_dir/PLAN.md`, `files/<plan_path>` and
+the archive's extracted copy folded into the closing reproducibility check; and
+the implementation/post-fix stage's weaker marker-only check stated as weaker.
+
+**Of the finding's two permitted arms the plan takes *derive*, not
+compare-and-refuse**, and the reason is the incident itself: a comparison
+reports the staleness and leaves the author to fix it by hand — which is exactly
+the manual step that saved this round's bundle and exactly the step that cannot
+be relied on. Derivation removes it. Refusal is retained only where derivation
+is impossible (no declared `plan_path`, or a path that is absent, not a regular
+file, or unreadable), and those refusals are the ones bound by the
+before-any-write placement rule, so a rejected generation leaves `current/`
+byte-identical.
+
+`assert_stage_completeness` gains the production call site the finding requires,
+immediately after derivation — but the plan states plainly that it is **not** the
+binding, on evidence 6's strength: the marker comparison is blind to content
+divergence at an unchanged revision number, so byte-identity subsumes it and the
+marker survives only as defense in depth against a derivation that silently did
+nothing.
+
+**Routed, not implemented, exactly as the finding directs.** New requirement
+**`WFR-67`**, new numbered missing-test item **376**, owned by `WF8b`'s continued
+scope on the same grounds as `WFR-64` through `WFR-66` — the implementation
+surface is `scripts/prepare-ai-review.sh` and `scripts/workflow_fingerprint.py`,
+and `WF5`, which would otherwise own the bundle-mechanics half, is already
+`COMPLETE`. `docs/ai-workflow/REVIEW_PROTOCOL.md`'s two author-facing bullets are
+**deliberately not edited this round**: the finding says not to implement here,
+and that file is implementation-stage protected (moved there by revision 49's
+`GPT-R65-001`), so editing it would stale `technical_approval` for a
+documentation change no gate has reviewed. Correcting them is an
+implementation-acceptance obligation of `WFR-67`, item 376(i), on the same
+footing item 343 established for that file's caller-model wording.
+
+Item 376 carries all seven of the finding's required tests plus two this
+validation added: the implementation-stage asymmetry (h) and the
+`REVIEW_PROTOCOL.md` conformance obligation (i).
+
+### `OPUS-R89-002` — important — the partition table's admit row and the reference implementation disagree on absent `work_items` and absent `checkpoints`
+
+**Accepted in full, and measured wider than reported.** The finding's two rows
+reproduce exactly: `{"schema_version": 1}` and `{"work_items": {"wi": {}}}` are
+`admit` in the table and `REFUSE(undecidable)` in
+`pass18.py`'s `origination_reference_status_r71`, because that implementation
+tests membership with `isinstance(..., dict)` and cannot distinguish absence
+from a non-object member. Probing **all thirteen** rows rather than the four the
+finding names surfaced the two fail-open divergences recorded above.
+
+**Of the finding's two permitted answers the plan takes (a)** — keep the table's
+semantics, require the read to distinguish absence from a wrong-typed member at
+each of the three container levels and at the checkpoint entry. That is the
+reading the row's own wording already committed to, it matches the sibling
+identity-document partition (`OPUS-R86-004`: absence is `exists()`, never a
+falsy parse), and after the `null` measurements it is the only answer that is
+also *safe*: answer (b) would have documented the over-strict rows as intended
+while leaving the two fail-open ones untouched, since (b) only ever concerned
+absence.
+
+The table is rewritten accordingly: the admit row loses its container clause,
+one new row states absence as a **missing key** at each of the four levels, and
+one new row refuses a present-but-non-object member with `null` named
+explicitly. A new normative paragraph carries the measurement table and states
+the implementation obligation at the level of precision the rest of the section
+uses — `key not in mapping` for absence, an explicit type test for presence,
+**never** `.get(...) is None`, which conflates them. Item 374(c.v) gains the
+five-shape-per-level coverage the finding requires, the two `null` control arms,
+and the **totality assertion** that enumerates every published row and asserts
+the implementation reaches the stated decision, so the two cannot drift again —
+the assertion `R2f` was too weak to make, since "does not escape or admit" is
+satisfied by refusing everything. No live instance: all 31 commits in the
+reference were scanned and none lacks `work_items`, none lacks `checkpoints`,
+and none carries a `null` at either level.
+
+### `OPUS-R89-003` — important — the partition has no row for a failed tree read, and a table-literal implementation reads that failure as absence
+
+**Accepted in full, and reproduced with the race isolated rather than
+asserted.** The first attempt at reproduction is worth recording because it
+failed for an instructive reason: removing an examined commit's tree objects
+*before* resolving the reference makes `git rev-list --all --full-history --
+<path>` itself fail, which the existing "the reference cannot be resolved" row
+already refuses — so that construction proves nothing about this row. Isolating
+the actual mechanism the finding names (the reference resolved first, the object
+set changing underneath before the per-commit read — an interrupted `gc`, a
+partially-fetched pack, a damaged object store, or a plain `rev-list`/`ls-tree`
+race) reproduces it exactly: `ls-tree` exits **128 with empty stdout**, the
+reference implementation refuses because it checks the exit status, and a reader
+written from the table literally — "absence is the tree not listing the path" —
+parses empty stdout as "not listed", continues, and **admits**.
+
+The reviewer's characterisation is precise and is adopted: the prototype is
+right and the specification is silent, which is the wrong way round for a
+contract this plan says is "specified, not implemented". The table gains an
+explicit row (the commit's tree cannot be listed, or the commit object cannot be
+resolved → refuse, undecidable), the absence row is restated positively —
+absence is established by a **successful** listing that does not contain the
+path — and the generalisation the finding asks for is stated: **any** per-commit
+read whose failure is not the blob's refuses. Item 374(c.v) asserts the failed
+listing, the live control arm that admits on it, and that a *successful empty*
+listing still continues, so the two are never collapsed.
+
+### `OPUS-R89-004` — important — the retention contract omits linked-worktree removal, and states a prune principle that is false in the multi-worktree case
+
+**Accepted in full. Both halves reproduced on Git 2.55.0 against real linked
+worktrees, including the boundary the finding asks to be checked rather than
+assumed:** with a detached linked worktree's `HEAD` carrying the only
+`IN_PROGRESS` commit, `git worktree remove` (exit 0, empty stderr),
+`rm -rf` + `git worktree prune`, and `rm -rf` + `git -c
+gc.worktreePruneExpire=now gc` each flip the decision from refuse to **admit**
+with the object surviving; a plain `git gc` **before** the expiry does **not**;
+and removing a **branch-based** worktree does **not**. The plan's own literal
+positive-half claim also still holds and was re-reproduced.
+
+The finding is right that this omission matters more than the others in the
+disclosed residual, and the plan says why in its own voice: this design is
+*about* linked worktrees, and its recovery prose recommends the exact command,
+twice. The reviewer's restraint is also adopted — **no dedicated protected
+origination ref is introduced**. The retention contract's normative sentence
+already covers this case logically, and the honest fix is to stop advertising a
+coverage property whose lifetime was never disclosed. Four corrections, as
+directed:
+
+- the reference's **first justifying property** now carries the lifetime
+  qualifier: a detached linked worktree's `HEAD` is **worktree-lifetime**
+  evidence, the shortest-lived ref class in the reference, and the only one an
+  operation this design recommends can remove — with the branch-based case named
+  as the contrast;
+- the **residual** gains worktree removal, worktree pruning and `git gc`'s own
+  worktree-pruning step as a measured bullet, with the five-row table above and
+  the `gc.auto` consequence stated (an automatic `gc` past the three-month
+  default expiry, with no operator in the loop);
+- the **pruning-independence** paragraph is scoped: object pruning never changes
+  the decision, `gc` as a whole **can**, so `gc` is a route by which
+  reachability is lost rather than merely one at which an earlier loss becomes
+  visible;
+- **both** recovery paragraphs that recommend `git worktree remove` now state
+  the cost of removing a *detached* worktree, without withdrawing the
+  recommendation — the removal is still the right action; the operator is told
+  the price instead of meeting it later as a refuse-to-admit flip.
+
+The **retention contract** additionally states, once, why a protected ref is not
+introduced and what would change that: a second independent route by which
+ordinary workflow activity flips refuse to admit for a **post-mechanism**
+checkpoint. That is the reviewer's own threshold, adopted as the design's, so
+the decision is revisitable on evidence rather than re-argued every round. Item
+375(a) and (c) carry the assertions, both directions of the `gc` boundary
+included.
+
+### `OPUS-R89-005` — important — `WFR-66`'s registry-side refusal names no evidence source, and the reference it cites cannot observe a registry-only checkpoint id
+
+**Accepted in full, and the invisibility claim verified at the mechanism rather
+than from the finding's description.** `workflow_state`'s work-item
+initialization sets `"checkpoints": {}`, and an id enters that map only when
+`start_checkpoint` first writes a status for it — so a checkpoint authored into
+a registry and renamed or removed before ever being started never appears in
+`WORKFLOW_STATE.json` and is invisible to a reference path-scoped to that
+document. `D1`'s work-item half named its observation exactly; `D-Registry`'s
+checkpoint half named none, while `WFR-66` simultaneously required that "both
+refusals name the historical observation that binds the id".
+
+**Of the finding's two permitted answers the plan takes (b)**, for the reason
+the finding itself gives and one more. The binding `WFR-66` exists to prevent is
+created *only* by an observed `(work_item_id, checkpoint_id)` pair, so an id
+with no observation cannot inherit one — (b) is sufficient for the motivating
+problem. Answer (a) would require a second durable reference over the registry
+document's own history, with its own decidability partition (unparseable
+registry, non-object document, missing or non-object `checkpoints`, tree/blob
+read failure) and its own retention statement — re-incurring, for a class with
+**no live instance here**, the whole fail-closed discipline the state-document
+reference has spent four rounds acquiring, and creating a second thing to keep
+in sync with the first. Verified empty: all five committed revisions of
+`workflow-v2-1-core-registry.json` carry the same 17 checkpoint ids with no
+removal and no reintroduction, and all 17 appear in the state document.
+
+`D-Registry`'s paragraph now names the source, states the scope boundary
+explicitly (an id retired before it was ever started carries no historical
+binding and is outside the invariant), records why (a) is declined, and — as the
+finding asks, because a reader will ask — states the boundary the invariant
+deliberately does not cover: a checkpoint id **redefined in place** is not
+retirement and is not refused, which `WF8b`'s own history requires.
+`D-Checkpoint-Ownership`'s identity-invariant paragraph and `WFR-66`'s
+description are corrected to match, and item 375(g) asserts the refusal in both
+directions, the retired-before-started boundary explicitly, and an
+in-place-redefinition control arm using `WF8b`'s real registry history.
+
+### Non-blocking observations
+
+Observation 1 (route reporting is non-deterministic when both routes hold) is
+closed in the design text with the one sentence the reviewer asked for: the
+observed-`IN_PROGRESS` route is reported in preference to the undecidable one,
+so an operator who repairs the reported commit is not ambushed by a second
+refusal, and item 374(c.v) asserts it. Observation 2 (`validate_state` accepts a
+state whose `IN_PROGRESS` checkpoint has been removed from the registry) is
+recorded and **not** acted on: the reviewer states it is pre-existing, not
+introduced this round, and outside `WFR-66`'s scope, and the same is true after
+independent reading — the coverage validator catches it only when some
+requirement maps to the removed id, which is a gap in registry/mapping coverage
+rather than in the identity invariant, and inventing a rule for it here would be
+designing outside a finding. Observation 3 (same-worktree concurrency is stated
+correctly) requires nothing. Observation 4 (`WFR-66` retires throwaway dry-run
+ids too, so re-running the dry run needs a fresh id each time) is a real,
+accepted cost; the manifest already anticipates it with `v2-1-dry-run-legacy`,
+and the "identity invariant is a rule, not a mechanism" limitation already
+covers it — recorded so the cost stays visible rather than closed silently.
+
+### Scope
+
+Two design sections amended: `D-Bundle-Manifest` (the stage-completeness
+sentence superseded in place plus one new multi-part contract) and
+`D-Checkpoint-Ownership` (the partition table rewritten with two corrected rows
+and one new row, two new normative paragraphs, the reference's first property,
+the residual, the retention contract, the positive half, the evidence rule's
+route bullet, the identity-invariant paragraph, and the two recovery paragraphs
+that recommend `git worktree remove`), plus `D-Registry` (the checkpoint-id
+paragraph rewritten with its evidence source, its scope boundary and the
+in-place-redefinition boundary). **One new requirement (`WFR-67`)** and **one new
+numbered missing-test item (376)**; `WFR-64` and `WFR-66` amended in place; items
+374(c.v), 375(a), 375(c) and 375(g) extended in place. `WFR-64`'s and `WFR-66`'s
+description columns changed this round and `WFR-67` is new, so
+`workflow-v2-1-core-mapping.json` is synced from the table cells by the
+integration test's own normalization rather than by hand — the sync refuses
+outright unless its derivation reproduces every *unchanged* entry, so the diff
+against this session's pre-edit copy is exactly **two changed description lines
+plus one added six-line entry**, with all 64 other entries and every
+`checkpoint_ids` list byte-identical and the header untouched. Re-verified at 67
+table rows, 67 mapping requirements, equal id sets both ways and zero
+description mismatches. `reviewed_implementation_head`, `implementation_revision` and
+`technical_approval` are left exactly as round 9 recorded them — not advanced,
+not reinterpreted, through revisions 28 through 72.
+
+## WF8b finding disposition (revision 70 → 71) — external plan review found the origination reference defined by a command whose semantics the prose misdescribes, open at the scalar, and stated at a strength it does not have; all five findings accepted (`OPUS-R88-001` through `-005`)
+
+External plan review of revision 70 returned `Status: REVISE` with **one
+blocking** and **four important** findings. The reviewer recomputed `bundle_id`
+`5de1dc66…` two independent ways — a from-scratch reimplementation of the entry
+projection over the 126-entry on-disk `current/` directory, and the same
+computation over content extracted independently from `review-bundle.tar.gz` —
+and `review_content_id` `a45c3e0f…` from the plan-stage projection rebuilt from
+this work item's own declarations, **written from the specification rather than
+by importing `scripts/workflow_fingerprint.py`**, so both digests are confirmed
+by an independent implementation. They confirmed `PLAN.md` byte-identical to
+this document and all five protected paths byte-identical to their worktree
+copies; re-ran `validate_state`, `validate_registry_topological_order` and
+`validate_registry_mapping_coverage`; independently reconstructed the
+mapping-restoration history at exactly two additions and zero modifications,
+key by key, against `git show HEAD:<mapping>`; re-derived the plan↔mapping
+conformance at 65 rows both ways with zero description mismatches; reran all
+489 hermetic tests and all seventeen stress passes at 600/600; confirmed item
+166's integration failure pre-existing and masking nothing; and confirmed
+revision 70's one rejection correct by re-verifying the live repository fact it
+turns on. **Every finding was validated against this repository, its prototype
+and Git itself before anything was edited. All five are accepted; none is
+rejected.**
+
+**The validation is re-runnable, not narrated.** It is preserved as
+`docs/ai-workflow/dry-run/wf8b-s14-repro/pass18.py` — **98/98 checks, exit 0** —
+which reproduces every accepted defect against **revision 70's own reference
+implementation, carried live as the control arm in every group**, checks the
+corrected mechanism in both directions before this document specifies it, and
+closes with a read-only live-repository group (`L2`) that asserts afterwards
+that it changed neither the state document's bytes nor the worktree's
+`git status --porcelain` set. `pass17.py` was re-run unchanged (49/49) and no
+prior pass regressed.
+
+### `OPUS-R88-001` — blocking — the origination reference does not contain the commits the plan says it contains
+
+**Accepted in full, and reproduced before anything was edited.** Revision 70
+stated the reference as "every commit reachable from every ref in the
+repository, path-limited to the state document" and gave
+`git rev-list --all -- <state_rel_path>` as its normative command. Those are not
+the same set. A pathspec does not filter the reachable set; it switches the walk
+into **History Simplification**, whose default mode prunes — including following
+only one parent of a merge that is TREESAME to it for the filtered path, which
+discards that merge's entire other side. Since the safety rule is "`IN_PROGRESS`
+observed anywhere in the reference ⇒ refuse", a pruned commit is not a lost
+diagnostic; it is an **admission**.
+
+Reproduced end to end (`pass18.py` `R1a`): worktree A commits its own
+`IN_PROGRESS`, an integrator merges A's branch into the mainline resolving the
+state document to the mainline's copy and deletes the merged branch, and
+worktree B — which moves **no ref and no `HEAD`** — is admitted to adopt. The
+`IN_PROGRESS` commit is reachable from `refs/heads/main` throughout. The same
+reproduces through a **criss-cross** merge (`R1b`) and an **octopus** merge
+(`R1c`), and in each arm revision 70's command is carried as the live control
+arm that admits while the corrected one refuses. This is `OPUS-R87-001`'s class
+restored by a third route: revision 69's reference was defeated by the adopter
+moving its own `HEAD`, revision 70's by somebody else performing an ordinary
+merge.
+
+**It is already latent in this repository**, which is the part that settles it:
+`git rev-list --all -- <state path>` returns 30 commits here and
+`--full-history` returns 31, and the one already being dropped is
+`7274586e7a12f27f4e17019246540621e3c6bace`, a real merge from 2026-07-31. That
+merge is TREESAME, so nothing is currently hidden by it — but the mechanism that
+hides it is exactly the mechanism that hides a side branch's `IN_PROGRESS`, and
+it is active in the one repository this design is written for.
+
+**The correction** is in `D-Checkpoint-Ownership` → "The origination reference".
+The normative command becomes
+`git rev-list --all --full-history -- <state_rel_path>`, and — the architectural
+half of the finding, which matters more than the flag — **the prose now states
+what that command enumerates** rather than an abstract property it
+approximates: every commit reachable from every ref that is not TREESAME to a
+parent for the state document, merges retained and all parents followed. The
+plan owns the difference instead of composing two reductions as if they
+commuted.
+
+`--full-history` is chosen over dropping the path filter entirely, and the
+reason is checked rather than asserted: its residual pruning is
+**status-preserving** — a commit TREESAME to a parent for the state document
+records, for that document, exactly what the retained parent records — so no
+status becomes unobservable (`pass18.py` `R1e`). The unfiltered walk is the
+other correct option and costs 140 commits against 31 here for an identical
+answer; that identity is now a **standing conformance obligation** rather than
+an assumption (item 374(c.viii), asserted at `L2b`).
+
+**Required tests**, as the finding directs: the merge scenario as a first-class
+arm with revision 70's form as a live control arm that admits; the
+merge-topology set (second-parent-only, after branch deletion, octopus,
+criss-cross); and the live-history conformance arm that must fail if a future
+merge makes the two sets disagree. All three are now item 374(c.viii), and the
+finding's observation that (c.iv) is dischargeable with the hole wide open —
+because it constrains only operations *the adopting worktree performs on its own
+refs* — is recorded in the item itself.
+
+### `OPUS-R88-002` — important — the fail-closed partition is closed over container shape and open at the scalar
+
+**Accepted in full, and reproduced.** `OPUS-R87-002` is genuinely resolved at
+the level it was raised — every container-shape row refuses — but the partition
+stopped at the containers and the decision itself was
+`entry.get("status") == "IN_PROGRESS"`, so row 2's "present with **any other
+status**" silently included *no readable status at all*. Probed against revision
+70's own reference implementation, one commit each, real repositories: an entry
+with no `status` key, with `null`, with `42`, with `["IN_PROGRESS"]`, with
+`{"v": "IN_PROGRESS"}` and (added by this validation, not in the finding) with
+the wrong-case `"in_progress"` **all admitted** — six schema-invalid documents
+from which the mechanism concluded a positive fact, contradicting the
+subsection's own "only a positive, **decidable** 'absent' admits"
+(`pass18.py` `R2b`).
+
+**The correction** splits row 2. Admission now requires a `status` that is
+present, is a **string**, and is a value of the state schema's own controlled
+vocabulary; anything else refuses with `CheckpointOriginationUnprovableError` on
+the same terms as the container rows. The vocabulary is **imported** from
+`workflow_state.CHECKPOINT_STATUSES` rather than restated, so the two cannot
+drift — asserted (`R2a`). This is the same standard `OPUS-R86-004` already holds
+the identity document to, and the reviewer is right that the origination read is
+now equally load-bearing.
+
+**The smaller half is accepted too, and it is not smaller in effect.** The
+partition never said how "the state document does not exist at an examined
+commit" is *established*; revision 70's implementation established it from
+`git show` returning non-zero, conflating "the path is not in that tree" with
+every other failure. Constructed and reproduced: with the state blob's object
+removed and the tree intact, `git show` fails, revision 70 reads that as
+decidably absent and **admits**, while the corrected read observes an entry
+present-and-unreadable and refuses (`R2d`). Absence is therefore established by
+the commit's tree not listing the path, stated on the same terms `exists()` is
+named for the identity document, and a listed entry that is not a regular-file
+blob refuses rather than being parsed (`R2e`). Two further rows are separated
+that revision 70 left fused: a reference that cannot be **resolved** refuses,
+while a reference that resolves to **no commits** is decidable and admits
+(`R2g`).
+
+### `OPUS-R88-003` — important — the disclosed residual is stated at a strength the mechanism does not have, and its ref-retention contract was nowhere stated
+
+**Accepted in full; both halves of the reviewer's contrast reproduced.**
+Revision 70 said the escape was "a **repository-wide destruction of history**
+rather than a local checkout or an ordinary recovery command".
+
+It is neither repository-wide nor destruction. Verified on Git 2.55.0
+(`pass18.py` `R3a`): `git branch -D` correctly refuses to delete a branch
+checked out in another worktree, but `git update-ref -d refs/heads/<A's branch>`
+executed **from worktree B** succeeds with exit 0 and no warning — the commit
+leaves the reference, the commit object remains in the object database, and A's
+working tree and uncommitted work are untouched. One plumbing command, from the
+worktree that benefits, against a branch Git otherwise protects.
+
+And ordinary maintenance erases the evidence with no intent to: `git commit
+--amend`, `git reset --hard` past the commit, and deleting a topic branch after
+a squash merge each flip the decision from refuse to admit (`R3b`-`R3d`). To
+these the validation adds the reviewer's non-blocking observation 3 as a fourth,
+distinct route — a `refs/replace/` ref rewrites what the reference sees with no
+ref deleted at all, and `--no-replace-objects` disagrees with the default walk
+(`R3f`).
+
+**The retention contract is now stated**, because the safety invariant depended
+on it and nothing in the section said so: the guarantee holds only for as long
+as some ref reaches the commit; that is a property of the repository's ref
+maintenance rather than of the mechanism; and the mechanism cannot detect that
+it has been lost. An operator who needs the guarantee to survive adversarial ref
+manipulation must obtain that from outside this design, and the section now says
+so rather than implying the mechanism provides it.
+
+**The positive half the reviewer identified is claimed, and asserted.** The
+decision is **identical** before and after
+`git reflog expire --expire-unreachable=now --all` plus `git gc --prune=now`,
+because the reference consults neither the reflog nor the object database:
+reachability is lost at the earlier ref movement, never at the later prune.
+Asserted in both directions — reachable evidence still refuses after a full
+prune, evidence already unreachable already admits before it (`R3e`) — so the
+absence of a hidden dependence on default reflog expiry is a checked fact rather
+than a claim. Non-blocking observation 2 (rename blindness) is closed in the
+same paragraph: the reference is stated over a fixed path, and moving
+`WORKFLOW_STATE.json` is a migration that invalidates it, not an edit.
+
+### `OPUS-R88-004` — important — the reduction over multiple observations was never stated, and no identity-reuse invariant existed
+
+**Accepted in full.** The rule existed only as the partition's first row, which
+says what to do with one observation and nothing about many. Grepping the plan
+for any supersession or recency rule returns nothing, and the validation
+confirms the consequences the finding derives:
+
+- **the refusal is permanent** — a committed `IN_PROGRESS` refuses at every
+  later point, including after a committed `COMPLETE` and after the checkpoint
+  is reopened (`pass18.py` `R4a`), and conflicting statuses on divergent
+  branches refuse (`R4b`);
+- **it accumulates** — the refusing set grows monotonically as whole-tree
+  commits sweep another work item's in-flight transition (`R4e`), which
+  revision 69 established this repository's own commits routinely do. The
+  arithmetic revision 70 quoted is accurate today (exactly one pair,
+  `workflow-v2-1-core` / `WF8b`, re-derived over the corrected reference at
+  `L2c`) but "one concrete, one-time cost … a one-time operator action on a
+  single checkpoint" described the general rule wrongly, and that wording is
+  corrected in place;
+- **identity reuse binds new work to retired evidence** — reproduced: a reused
+  `work_item_id` inherits a removed item's historical `IN_PROGRESS` while an
+  unused id is unaffected (`R4c`).
+
+**The correction** states the reduction normatively — any historical
+`IN_PROGRESS` in the reference refuses, with no supersession and no recency,
+and the reason that alternative is not taken is stated (commit topology is not a
+total order, so "later" would need a definition the mechanism can compute, which
+is the same tiebreak-by-inference this design refuses everywhere). Of the
+finding's two permitted answers on identity, the plan takes the **invariant**
+rather than the scoping: `work_item_id` and `checkpoint_id` are permanently
+non-reusable, enforced at work-item creation (`D1`) and at registry authoring
+(`D-Registry`), and carried as a new requirement, **`WFR-66`**. The alternative —
+scoping the reference so a retired identity's evidence cannot bind to a new one
+— would need a durable lifecycle-instance marker in committed history, which is
+precisely what `S14` establishes does not exist at the moment it is needed. A
+rename is therefore a new id and the retired one stays retired, which is already
+the observed behaviour (`R4d`).
+
+### `OPUS-R88-005` — important — the refusal's evidence omits the observation that produced it
+
+**Accepted in full.** `OPUS-R87-003`'s accepted residual is genuinely fixed —
+the evidence rule is no longer scoped to a decidable claim being present — but
+*what the evidence carries* was still the four components enumerated before the
+origination test existed: the claim record, the holder, the claimed checkpoint,
+and the escape. For a `CheckpointOriginationUnprovableError` those are `absent`,
+`none`, the checkpoint and "take it over", and the one fact that explains the
+refusal is missing. An operator in this repository's live state is told
+origination is unprovable and that the exit is a takeover, without being told
+whether the reason is historical or contended, or which commit says so.
+
+**The correction** makes the origination observation a first-class evidence
+component: this worktree's local identity observation, the claim's absence,
+which of the two documented routes produced the refusal, and — for the observed
+route — the commit id and the status read there, or for the undecidable route
+the commit id and the shape that could not be decided, plus the reference the
+observation was evaluated against so the operator can rerun it. Asserted
+component by component with revision 70's message carried as the control arm
+that reports none of it (`pass18.py` `R5a`-`R5c`).
+
+**The reviewer's own answer to the binding question is adopted, and stated with
+its reason.** The origination observation is deliberately **not** bound into the
+takeover's authorization literal: the takeover is a human override of precisely
+this refusal, and the reference it would bind to is changed by ordinary merges,
+ordinary ref movement and ordinary maintenance — so binding would convert
+routine repository activity into stale-evidence refusals for no safety gain. The
+reasoning is stated the way the parallel decision is stated for the dirty-work
+observation, and the non-binding is **asserted**: the literal is byte-identical
+whether the observation is absent, present, or changed between evidence and
+authorization (`R5d`).
+
+### Non-blocking observations
+
+Observation 1 (`--single-worktree` is order-sensitive) is closed in the design
+text — the reference's first property now carries the ordering requirement — and
+asserted (`pass18.py` `R1g`). Observation 2 (rename blindness) is closed in the
+residual paragraph. Observation 3 (`refs/replace/`) is folded into the restated
+residual, as `OPUS-R88-003` directs, with its own arm. Observation 4 answers
+unresolved question 8: the axis that matters is complete-versus-simplified
+rather than narrow-versus-wide, which is exactly the change made, and the
+question is rewritten accordingly rather than closed on one opinion.
+Observation 5 answers unresolved question 9: bounding the scan would be a false
+economy at 31 commits and under 0.03s, and completeness is the constraint — the
+question is kept, with that answer recorded.
+
+### Scope
+
+One design section amended (`D-Checkpoint-Ownership`: "The origination
+reference" substantially rewritten with four new normative paragraphs — the
+reference's actual semantics, the residual at its measured strength, the
+retention contract, and the reduction rule with its identity invariant — plus
+the partition table, the adoption contract's step 3, the reconciliation table
+row, the third-consequence bullet, the evidence rule and one error class), and
+two amended in one paragraph each (`D1`'s work-item initialization and
+`D-Registry`, which carry the two halves of the identity invariant). **One new
+requirement (`WFR-66`)** and **one new numbered missing-test item (375)**;
+`WFR-64` amended in place; item 374(c.v) and (c.vii) extended in place and
+(c.viii) added. `WFR-64`'s description column changed this round, so
+`workflow-v2-1-core-mapping.json` is synced from the table cell by the
+integration test's own normalization rather than by hand, and `WFR-66` is
+appended as a single new block — the diff against this session's pre-edit copy
+is exactly one changed line plus six added ones, with all 65 pre-existing
+entries and every `checkpoint_ids` list byte-identical. Re-verified at 66 table
+rows, 66 mapping requirements, equal id sets both ways and zero description
+mismatches. `reviewed_implementation_head`, `implementation_revision` and
+`technical_approval` are left exactly as round 9 recorded them — not advanced,
+not reinterpreted, through revisions 28 through 71.
+
+## WF8b finding disposition (revision 69 → 70) — external plan review found revision 69's origination guard bypassable by ordinary Git commands and fail-open on an undecidable read; five findings accepted, one rejected in its central claim against a live repository fact (`OPUS-R87-001` through `-006`)
+
+External plan review of revision 69 returned `Status: REVISE` with **two
+blocking** and **four important** findings. The reviewer independently
+recomputed `bundle_id` `d939aa26…` three ways — the value `MANIFEST.md`
+declares, a fresh recomputation over the 125-entry on-disk `current/`
+directory, and a recomputation over content extracted independently from
+`review-bundle.tar.gz` — and `review_content_id` `aabae769…` through this
+repository's own plan-stage projection; confirmed `PLAN.md` byte-identical to
+this document; re-ran `validate_state`,
+`validate_registry_topological_order` and `validate_registry_mapping_coverage`;
+re-derived the plan↔mapping conformance at 65 rows, equal id sets both ways and
+zero description mismatches; reran all 489 hermetic tests green and all sixteen
+stress passes at 551/551; confirmed item 166's integration-suite failure
+pre-existing and not masking anything; independently re-derived the
+mapping-restoration incident and accepted this plan's blob-hash correction; and
+— the part worth naming — **inspected revision 69's five control arms rather
+than trusting them**, confirming none is a strawman and that the gap is one of
+coverage rather than honesty.
+
+**Every finding was validated against this repository, its prototype and
+`scripts/workflow_state.py` before anything was edited.** Five are accepted and
+applied. One, `OPUS-R87-003`, is **rejected in its central claim** — the
+repository fact it rests on is false here, verified live — and accepted only in
+a narrower residual it also names. That rejection is recorded in full below
+with the reproduction, per this workflow's own requirement that a rejected
+finding carry concrete repository evidence rather than a rebuttal in prose.
+
+**The validation is re-runnable, not narrated.** It is preserved as
+`docs/ai-workflow/dry-run/wf8b-s14-repro/pass17.py` — **49/49 checks, exit 0** —
+which reproduces each accepted defect against the real functions in real
+two-worktree fixtures (`V1`-`V3`), checks the *corrected* origination reference
+in both directions before the plan specifies it (`C1`-`C4`), and carries the
+live-repository conformance arm this round's one rejection rests on (`L1`).
+`L1` is read-only: it asserts afterwards that the claims directory it could
+have created still does not exist, and the whole pass touches the real
+repository nowhere else.
+
+### `OPUS-R87-001` — blocking — the admission direction rests on a reference the adopter selects, and ordinary Git commands restore `WF8B-S14-001`
+
+**Accepted in full, and reproduced before anything was edited.** Revision 69's
+rule is that local `IN_PROGRESS` proves nothing because a checkout can supply
+it, so adoption additionally requires the checkpoint **not** to be
+`IN_PROGRESS` in the state committed at `HEAD`, "since only the uncommitted
+delta is worktree-local". The refusal half is sound. The admission half —
+"absent from the committed state at `HEAD`" ⇒ "this worktree wrote it" — was
+never examined.
+
+`committed_checkpoint_status` runs `git show HEAD:<state path>` with
+`cwd=repo_root`, i.e. the **invoking worktree's own** `HEAD`
+(`checkpoint_ownership.py`, the `_run(["git", "show", f"HEAD:{state_rel_path}"],
+cwd=repo_root)` call), and `adopt_claim`'s guard is
+`if origination_guard and durable == "IN_PROGRESS"`. In a linked-worktree
+layout each worktree owns its own `HEAD` and can move it **without touching its
+working tree**, so the test's reference is a property of the (worktree, `HEAD`)
+pair and the would-be adopter owns both halves.
+
+Reproduced end to end through the real `adopt_claim` in real two-worktree
+fixtures, 17/17 checks as predicted:
+
+- **baseline** — B, holding an identity entry and an inherited `IN_PROGRESS`,
+  is refused with `CheckpointOriginationUnprovableError` and publishes no
+  claim. The revision-69 guard works as documented;
+- **one `git reset --soft HEAD~1` in B** — B's working-tree state still records
+  the checkpoint `IN_PROGRESS`, `committed_checkpoint_status(B)` now returns
+  `None`, **adoption is admitted**, a claim is published from B with
+  `adopted: true`, and A — the true originator, uncommitted work intact — is
+  refused with `CheckpointOwnedByOtherWorktreeError`;
+- **no ref moved at all** — `git checkout <commit> -- <state path>` with B's
+  `HEAD` verified unmoved produces the identical admission (`pass17.py` `V1`).
+
+Both arms reproduce `WF8B-S14-001` itself, which is the exact end state
+`pass16.py` `W1e`-`W1g` carries as the control arm the guard was supposed to
+have eliminated. The finding's list of equivalent ordinary commands
+(`git cherry-pick -n`, `git merge --no-commit`, `git revert -n`,
+`git stash pop`, an interrupted rebase) is accepted as the same shape: any
+operation leaving the working tree ahead of `HEAD` for this file.
+
+**The second-order consequence is accepted too**: the 1d inertness argument
+depends on this guard, so it was false again, and item 374(c) once more
+restated a property the mechanism did not have — the fourth consecutive
+revision in which that sentence has had to be rewritten (`OPUS-R82-002`,
+`OPUS-R84-001`, `OPUS-R85-001`, `OPUS-R86-001`). It is rewritten again, and
+this time the strength it is stated at was checked against the corrected
+mechanism before being written down.
+
+**The correction, and why this reference.** The reviewer offered
+`git rev-list --all` as an existence proof rather than a prescription, and
+asked that whatever reference is chosen state how it is derived and why an
+adopter cannot arrange it. It is adopted, path-limited to the state document,
+and all three of its load-bearing properties were checked rather than assumed
+before it was specified:
+
+- **it spans every linked worktree's own `HEAD`, detached included.** Verified
+  directly in a throwaway repository: a commit that is *only* a second
+  worktree's detached `HEAD` is reachable from `git rev-list --all` run in the
+  first worktree, and is **not** under `--single-worktree`;
+- **it defeats both reproduced arms.** Under the corrected reference, the
+  `git reset --soft` arm and the `git checkout <commit> -- <path>` arm both
+  resolve `IN_PROGRESS` and refuse;
+- **it does not close the migration path adoption exists for.** The
+  uncommitted `S-CP3` shape resolves absent and still admits.
+
+Cost was measured rather than hand-waved: 30 of this repository's 140 reachable
+commits touch the state document, and the live `WF8b` and `S-CP3` queries
+resolve in under 0.03s (`pass17.py` `C1`-`C4`). The residual — an operator who deletes every ref
+reaching a commit removes it from the reference — is stated in the section
+rather than left for a later reviewer to find, together with the honest
+statement of what the rule proves (no ref records the checkpoint as started)
+and what it does not (which worktree started it). Required correction (2),
+re-evaluation at publication rather than only at evidence time, is applied as
+its own adoption step.
+
+### `OPUS-R87-002` — blocking — the origination guard fails **open** on an undecidable read
+
+**Accepted in full, and reproduced.** `committed_checkpoint_status` returns
+`None` — never raises — for `git show` failing (the state file absent at
+`HEAD`, an unborn or orphan `HEAD`), an unparseable blob, a missing
+`work_items` entry and a non-`dict` work item; and the guard is
+`durable == "IN_PROGRESS"`, so **every** undecidable outcome is read as "not
+`IN_PROGRESS`" and adoption proceeds. Reproduced through the real
+`adopt_claim`: an orphan `HEAD` carrying no state file at all, and an
+unparseable committed blob, each admit — with no ref manipulation of any kind,
+purely because the guard cannot read its own evidence (`pass17.py` `V2`). This inverts the
+section's own discipline for the claim record ("every undecidable read raises
+rather than returning 'unclaimed'"), applied to a read that is now equally
+load-bearing.
+
+**One case is worse than the finding states, and was found while validating
+it.** A committed state document that is valid JSON but **not an object** does
+not fail open — it escapes `committed_checkpoint_status` as an undeclared
+`AttributeError` (`'list' object has no attribute 'get'`), reproduced both
+standalone and in the two-worktree adoption fixture. So the read had a
+fail-open branch *and* an undeclared-crash branch. The partition applied covers
+both, and adds the non-object `work_items`/work-item/`checkpoints`/entry
+members the same treatment; the "state document does not exist at an examined
+commit" row is deliberately **decidably absent** rather than a refusal, since a
+commit predating the file genuinely records nothing about this checkpoint. The
+corrected read was prototyped and checked before being specified: with the
+undecidable document as the *only* evidence, revision 69 admits and the
+corrected reference refuses.
+
+### `OPUS-R87-003` — important — **rejected in its central claim**; accepted in one narrower residual
+
+**The finding's core evidential claim is false against this repository, and the
+plan's own statement it contradicts is correct as written.** The finding states:
+"In this repository there is **no `WORKTREE_IDENTITY.json` anywhere** — the
+mechanism has never run", and concludes that the live shape "never reaches
+`CheckpointOriginationUnprovableError`", refusing instead with
+`WorktreeIdentityMissingError` because `adopt_claim` calls
+`verify_resume_safety` at step (2) before the origination guard at step (3).
+
+The ordering claim is correct — step (2) does precede step (3), confirmed in
+the prototype. The repository fact is not. Verified read-only against the live
+worktree, three ways:
+
+- **the document exists.**
+  `/home/rodrigo/Workspace/repflow-android/.claude/worktrees/workflow-v2-plan/.ai-review/runtime/WORKTREE_IDENTITY.json`
+  is present, 1936 bytes, `generated_at` `2026-08-12T12:55:14+01:00`. It is the
+  only one in the repository — `.ai-review/` is gitignored, so the primary
+  checkout has none, which is the likeliest source of the reviewer's negative
+  result;
+- **it carries an entry for this work item.** Its
+  `expected_dirty_paths_by_work_item` has a `workflow-v2-1-core` key with seven
+  path/sha256 entries, and its `repo_root`/`worktree_root`/`git_common_dir`
+  match this worktree;
+- **so step (2) passes and step (3) refuses.** Both
+  `ws.verify_dirty_resume_safety(repo, 'workflow-v2-1-core')` and the hardened
+  `co.verify_dirty_resume_safety_strict(...)` return without raising;
+  `committed_checkpoint_status(repo, 'workflow-v2-1-core', 'WF8b')` returns
+  `'IN_PROGRESS'`; and running the **real** 1c resolver against the live state
+  raises **`CheckpointOriginationUnprovableError`**, not
+  `WorktreeIdentityMissingError`. The claims directory
+  (`$(git rev-parse --git-common-dir)/ai-workflow/checkpoint-claims/`) does not
+  exist, so no claim and no guard were created by the probe and none existed
+  before it.
+
+The finding's further claim that "that message names no escape" is also false
+for the class actually raised: the message ends "Resume in the worktree holding
+the uncommitted work, or, if that worktree is gone or is this one, take the
+claim over explicitly after reviewing the takeover evidence". So the plan's
+declared third consequence — "protecting that checkpoint requires an explicit
+takeover rather than an automatic adoption" — is right about both the outcome
+**and** the route, and nothing about it is withdrawn.
+
+**What is accepted.** Two things the finding also identifies, both real and
+both independent of the false premise:
+
+1. **the ownership-evidence rule structurally excludes the no-claim case.**
+   `_attach_ownership_evidence` returns immediately when `claim is None`, and
+   the plan's rule is scoped to "every refusal 1c raises while a **decidable
+   claim** is present". Verified live: the `CheckpointOriginationUnprovableError`
+   raised above carries `ownership_hint = None` and `ownership_claim = None`.
+   That scoping excludes the entire class of refusals the origination test
+   introduces — a checkpoint being adopted has no claim by definition — and the
+   refusal a worktree that has never run 1d sees, which is the first checkpoint
+   any worktree starts on any work item. The scoping is removed;
+2. **the plan should state the route concretely rather than leave it to be
+   derived**, and item 374(c)'s conformance arm should assert it end to end.
+   The finding's own `L2`-`L5` establish that the takeover against an **absent**
+   claim succeeds, establishes the identity record, and lets the next invocation
+   resume — which is accepted and is now what the conformance arm asserts,
+   against the live shape, including that the class raised is
+   `CheckpointOriginationUnprovableError` and **not**
+   `WorktreeIdentityMissingError`.
+
+The pre-claim state the finding describes is therefore documented as what it
+actually is: the shape a worktree that has **never run 1d for this work item**
+presents, not the shape this repository is in.
+
+### `OPUS-R87-004` — important — the takeover's evidence cannot distinguish the worktree holding the work from one holding none
+
+**Accepted in full.** Confirmed by direct reading of `takeover_evidence`: it
+carries claim, guard, holder-registration and local-identity observations and
+**no dirty state of any kind**. Revision 70 routes two further states to the
+explicit takeover (the symmetric origination refusal, and the pre-claim legacy
+state), and in both the claim is absent, so `claim_observation_id` is the
+literal `"absent"` and `takeover_authorization_literal` produces a
+**byte-identical** string for two different worktrees. The refusal the design
+relies on says "resume in the worktree holding the uncommitted work" while the
+evidence omits the one fact that identifies it — and for the
+origination-unprovable state that fact *is* the whole decision being delegated
+to the human.
+
+Applied as the finding requires: the evidence reports whether **this** worktree
+and each **currently registered** linked worktree has uncommitted changes for
+the work item, as first-class observations on the same terms as
+`local_identity`. It **reports, it does not conclude** — this design infers
+ownership from dirtiness nowhere and revision 70 does not start. The finding's
+open question, whether the observation should bind into the authorization
+literal, is answered explicitly rather than left open: **it does not**, because
+uncommitted work changes under the operator's own hands between reading the
+evidence and typing the authorization, and binding it would convert an ordinary
+edit into a stale-evidence refusal while protecting nothing the claim
+observation does not already protect.
+
+### `OPUS-R87-005` — important — the partition is closed over document *shape* but not over what the identity path can *be*
+
+**Accepted in full, reproduced, and one row is worse than reported.** Each
+consumer was probed against its own fresh fixture — the reviewer's own run
+appears to have probed them in sequence, which lets the writer replace the
+object before the observer reads it and reports a symlink as `valid`. Isolated,
+the table is:
+
+| path kind | reader (1c refusal) | writer | observer |
+| --- | --- | --- | --- |
+| valid regular file | admits | writes | `valid` |
+| directory | undeclared `IsADirectoryError` | undeclared `IsADirectoryError` | `undecidable` |
+| `EACCES` file | undeclared `PermissionError` | undeclared `PermissionError` | `undecidable` |
+| symlink → valid | **follows and admits** | follows and replaces | `undecidable` |
+| symlink → missing | `WorktreeIdentityMissingError` | follows and replaces | `undecidable` |
+| fifo | **blocks indefinitely** | blocks indefinitely | `undecidable` |
+
+So the reviewer's `P1`/`P2`/`P3` all reproduce, the fifo row is added and is a
+**hang** rather than an undeclared escape — confirmed by a bounded-timeout
+probe that timed out with the refusal never returning — and the stated
+reader/observer invariant fails in exactly **four** rows (directory, `EACCES`,
+symlink → valid, fifo), which is what `pass17.py` `V3` asserts row by row, with
+the invariant's per-row verdict carried as the expected outcome so the arm
+fails if a disagreement disappears for the wrong reason. The dangling-symlink
+row is recorded separately and honestly: it satisfies the literal invariant —
+both consumers refuse — but the *meanings* differ, the reader reporting "this
+worktree never ran 1d" for a document the observer cannot decide, and the
+writer following and replacing the link. A hanging load-bearing refusal is
+strictly worse than a crashing one, and there is no timeout anywhere in this
+design to end it.
+
+Applied as the finding requires: a second partition axis for what the path
+*is*, resolved before the shape axis; `lstat` plus `O_NOFOLLOW` establishing a
+real regular file **before any open**, reusing `_read_claim_bytes`'s existing
+discipline rather than inventing a second one — which is also what makes the
+fifo row refuse instead of blocking, since the decision is made from `lstat`
+and the open never happens; and the reader/observer agreement stated as an
+explicit invariant rather than left to coincide. `CorruptJsonError` is reused
+rather than a class added, on the grounds "New error classes" already states.
+The finding's own note that it is not asking for I/O failures to be folded into
+schema classes is respected: what is required is that they be **declared**, not
+that they be reclassified as schema outcomes.
+
+### `OPUS-R87-006` — important — the repair authorization and the repair decision hang off the same optional evidence member
+
+**Accepted in full.** Confirmed by direct reading:
+`takeover_authorization_literal` derives the ` repairing identity <id>`
+component through `_identity_repair_clause`, which does
+`evidence.get("local_identity") or {}` — an absent member yields `{}`, whose
+`state` is not `"undecidable"`, so the component is dropped — while
+`_establish_or_repair_identity` does
+`evidence.get("local_identity") or local_identity_observation(repo_root)`,
+re-observes, finds the document undecidable, compares that fresh observation
+against **itself**, and repairs. The two agree when the member is present and
+diverge in the **unsafe** direction when it is absent: the user is never asked
+to authorize a repair, and the repair happens anyway.
+
+The finding is explicit that the prototype's internal builders always populate
+the member, so this is not live today. It is accepted on the grounds the
+finding gives and this plan has accepted throughout: the contract as specified
+has an unsafe default rather than a fail-closed one, and it is the contract
+`WF8b` will implement against. Applied as required — the observation is a
+**required** evidence component, its absence refuses having mutated nothing,
+the repair runs only under an authorization carrying the component derived from
+that same observation, and re-observation under the guard stays the
+stale-evidence check alone.
+
+### Non-blocking observations
+
+Observations 1 and 2 are closed in the design text: `takeover_count` is stated
+to count **rotations** rather than ownership transfers, with `taken_over_from:
+null` named as the establishing case's provenance marker; and the identity
+lock's "stable and never unlinked" is reconciled with the same section's own
+`git clean -xdf`/wiped-`.ai-review/` scenarios by scoping the guarantee to the
+interval between external removals and forbidding an implementer from caching
+the descriptor across one. Observation 3 (the prototype docstring heading "Why
+(2) exists" for a guard both the docstring's own list and the plan number (3))
+is corrected in `checkpoint_ownership.py`. Observation 4 is folded into
+`OPUS-R87-001`'s required correction (2), as the finding itself directs.
+Observation 5 records the reviewer's answer to unresolved question 7 (yes, the
+symmetric refusal is the right trade) and sharpens question 8, which
+`OPUS-R87-006`'s correction now answers in the specification.
+
+### Scope
+
+One design section amended (`D-Checkpoint-Ownership`: one new subsection, the
+adoption contract, the reconciliation table row, the 1d inertness argument, the
+evidence rule, the identity partition, the takeover's evidence bullets, the
+repair binding, the epoch-chain and lock-object statements, and one error
+class), one requirement amended in place (`WFR-64`), five missing-test items
+extended or rewritten in place (363, 373(d), 374(c), (d), (e), (f)), and one
+prototype docstring heading corrected. **No new WFR ID and no new numbered
+missing-test item.** `WFR-64`'s description column changed this round, so
+`workflow-v2-1-core-mapping.json` is synced from the table cell by the
+integration test's own normalization rather than by hand — re-verified at 65
+table rows, 65 mapping requirements, equal id sets both ways and zero
+description mismatches. `reviewed_implementation_head`,
+`implementation_revision` and `technical_approval` are left exactly as round 9
+recorded them — not advanced, not reinterpreted, through revisions 28 through
+70.
+
+## WF8b finding disposition (revision 68 → 69) — external plan review found revision 68's inertness premise false against this repository, the identity document unserialized, and the sanctioned corrupt-record repair mutating before it refused (`OPUS-R86-001` through `-005`)
+
+External plan review of revision 68 returned `Status: REVISE` with **three
+blocking** and **two important** findings. The reviewer independently
+recomputed `bundle_id` `5543a39f…` three ways — the value `MANIFEST.md`
+declares, a fresh recomputation over the 124-entry on-disk `current/`
+directory, and a recomputation over content extracted independently from
+`review-bundle.tar.gz` — and `review_content_id` `4ba1f5a3…` through this
+repository's own plan-stage projection resolved from the work item's declared
+metadata; confirmed `PLAN.md` byte-identical to this document; re-ran
+`validate_state`, `validate_registry_topological_order` and
+`validate_registry_mapping_coverage`; re-derived the plan↔mapping conformance
+independently using the integration test's own normalization functions at 65
+rows, equal id sets both ways and zero description mismatches; reran all 489
+hermetic tests green; re-ran all fifteen author stress passes at 462/462;
+confirmed item 166's integration-suite failure pre-existing, the only one, and
+not masking a revision-68 inconsistency; and closed the revision-63-to-67
+mapping restoration by a **stronger route than the one this plan offered**.
+**All five findings were validated against this repository, its prototype and
+`scripts/workflow_state.py` before anything was edited, all five were
+reproduced end to end here, and all five are accepted in full.** Nothing in any
+of them is rejected, in whole or in part.
+
+### `OPUS-R86-001` — blocking — the inertness premise is false against this repository, and the branch it denies is adoption
+
+**Accepted in full, and reproduced before anything was edited.** Revision 68
+justified writing the identity record before the claim on the ground that the
+entry "admits a worktree to no branch on its own", because every branch it can
+reach additionally requires a self-owned claim or "this worktree's **own
+uncommitted `IN_PROGRESS` state** (which only its own 1d writes, and which is
+never committed, so no checkout can supply it)". The sentence appears three
+times, and it is false.
+
+Scanning **all 140 commits reachable from `HEAD`** — the scope revision 63's
+own supporting evidence should have used, and did not — five carry a checkpoint
+`IN_PROGRESS` in the committed `WORKFLOW_STATE.json`, and every one of them is
+`workflow-v2-1-core`'s own `WF8b`: `535d4fb`, `96dcf87`, `ac1df00`, `dcaec48`
+and the reviewed generation head `8375b64` itself. The mechanism is ordinary
+and is this repository's normal practice — a checkpoint commit for one work
+item stages the whole tree, so a *different* work item's in-flight transition
+rides along, and `D-Commit-Provenance`'s member rules do not scope
+`WORKFLOW_STATE.json` to the committing work item's entry. Revision 63's
+evidence ("no commit reachable from `HEAD` has ever carried a **`v2-1-dry-run`**
+checkpoint `IN_PROGRESS`") is true and does not generalize; the counter-example
+is the work item being planned.
+
+Once a checkout can supply `IN_PROGRESS`, the third branch item 374(c) said did
+not exist is reachable, and it is the **claim-absent adoption path**.
+`adopt_claim` was guarded on local `IN_PROGRESS`, `verify_dirty_resume_safety`
+passing, and no foreign claim — all three of which a worktree holding an
+identity entry earned on an *earlier* checkpoint satisfies for a checkpoint it
+never started. Reproduced in `pass16.py` `W1` through the **real**
+`harness.step1_fixed`, the real `resolve_ownership` and real `git worktree`
+checkouts: worktree B works `S-CP1` legitimately, A starts `S-CP2` and makes an
+ordinary whole-tree mid-checkpoint commit, B fast-forwards, and B then adopts
+`S-CP2`, publishes a claim flagged `adopted: true`, and the true originator is
+refused with `CheckpointOwnedByOtherWorktreeError` telling it to "resume it
+there" — in a worktree holding none of its work. That is `WF8B-S14-001` itself,
+surviving into revision 68 through the one path the section calls "the one-time
+migration path, and it is not optional".
+
+**The correction is the reviewer's option 2, taken at the mechanism.** Adoption
+additionally requires the checkpoint **not** to be `IN_PROGRESS` in the
+`WORKFLOW_STATE.json` committed at `HEAD` — only the uncommitted delta is
+worktree-local, so only it is origination evidence — tested with
+`committed_checkpoint_status`, the design's own durable-versus-working-tree
+test (A6), not a new authority. (**The reference named in this paragraph is
+superseded by revision 70**, `OPUS-R87-001`/`-002`: the invoking worktree's own
+`HEAD` is one that worktree can move, and the read failed open. The direction —
+only the uncommitted delta is evidence — stands; see "The origination
+reference".) The refusal is a fourth error class,
+`CheckpointOriginationUnprovableError`, naming the explicit takeover as the
+escape; the takeover applies to an **absent** claim on the same terms as a
+present one, which is the partition's existing "readable or absent" row.
+
+Three consequences are stated rather than implied. The refusal is **symmetric**
+— an originating worktree that committed its own transition is refused too,
+because the evidence the two present is byte-identical and inventing a tiebreak
+would be exactly the inference this design refuses everywhere else. The
+**migration path is unaffected**: `S-CP3`'s interrupted transition is
+uncommitted, so it is still adopted and resumed, and adoption is still
+idempotent (`W1m`-`W1p`). And there is **one concrete one-time cost in this
+repository**, declared here rather than discovered later: `workflow-v2-1-core`'s
+own `WF8b` is `IN_PROGRESS` in the committed state at `HEAD`, so once the
+mechanism lands, protecting that checkpoint takes an explicit takeover rather
+than an automatic adoption — asserted against the real repository in
+`W1q`-`W1s`.
+
+**Options 1 and 3 were considered and are not taken, with reasons rather than
+preference.** Option 1 (forbid a committed `IN_PROGRESS`, by pathspec rules on
+every checkpoint commit plus a validator refusal) would make the original
+sentence true, and is rejected on three grounds: it contradicts this
+repository's own five most recent commits and so owes a migration for durable
+history; it puts a pathspec obligation on a design that deliberately specifies
+commits by *member*, against `D-Approval-Commits`' whole-tree index discipline;
+and it would make the guarantee depend on every future commit author's care,
+where option 2 depends only on a fact the mechanism checks for itself at the
+moment it matters. Option 3 (withdraw the identity-first ordering) reopens
+`OPUS-R84-001` and is the weakest, as the reviewer states.
+
+Item 374(c) is rewritten in place so it no longer asserts a property the
+mechanism does not have, item 363 is extended with adoption's own origination
+ordering and its control arm, `WFR-64`'s revision-68 clause is superseded in
+place, and the section opening at what was line 15029 is restated at the scope
+it was actually measured at, with `W0` measuring it over every commit rather
+than over one work item's.
+
+### `OPUS-R86-002` — blocking — the identity document is shared by every work item and written without serialization, so an unrelated work item can delete the sole proof of origination
+
+**Accepted in full, and reproduced.** Revision 68 promoted the identity entry
+to the design's only evidence of worktree instance and put two writes of it on
+the 1d critical path plus one in each rotating operation, without asking what
+serializes them. Nothing does: `write_worktree_identity` is a plain
+read-modify-write over a document holding **every** work item's entry, the
+revision-68 wrapper added a second read and a later `os.replace` on top (two
+levels of lost update), the mutation guard is keyed per work item and therefore
+cannot serialize two work items by construction, 1d's establishing write is
+deliberately outside it, and neither `.guardlock` nor `D1`'s state-file lock is
+held across it. Reproduced with real threads: **12 of 12 trials lost an entry**,
+the window held open by the `git` subprocesses `_hash_dirty_paths` spawns
+between the read and the write. With the interleave pinned, the downstream
+consequence is the one that matters — a work item whose 1d completed, holding
+its own self-owned claim, is refused at its own next 1c with
+`WorktreeIdentityMissingError`, which is `OPUS-R84-001`'s lockout produced by
+activity on an unrelated work item, outside the design's one declared
+same-worktree scope limit.
+
+**The correction names the mechanism** rather than leaving it to the
+implementer, the discipline `OPUS-R83-001` established for guard removal: a
+per-**worktree**, stable, never-unlinked `fcntl.flock(LOCK_EX)` lock object
+beside the document, held across the whole load → validate → mutate → publish
+sequence. Three properties are stated with it: why the per-work-item guard
+cannot supply it; that it is a **leaf** lock, so no other lock is ever acquired
+while it is held and it is never held across a state write, a claim publication
+or a guard acquisition — which is what keeps the existing guard-then-`flock`
+ordering rule un-invertible and makes deadlock impossible by construction; and
+that the atomic `os.replace` publication is necessary and **not** sufficient,
+because it prevents a torn document, never a lost update. `OPUS-R10-008`'s
+interleaving claim is restated at the strength it has, in the round-10
+disposition row, in "The record", and in the writer's own contract: the keying
+makes *sequential* writes non-interfering and says nothing about concurrency.
+Item 374 gains sub-item (g), and `pass16.py` `W2` asserts all of it over
+repeated trials with the unserialized writer as the live control arm.
+
+### `OPUS-R86-003` — blocking — the sanctioned repair for a corrupt identity record refused on that record after rotating the claim, and every retry rotated again
+
+**Accepted in full, and reproduced.** Revision 68 named the takeover as the
+repair for a record "corrupted by something *else*" and simultaneously required
+the takeover to establish the taking worktree's own identity record — a write
+that owes validate-before-mutate and therefore refuses on a corrupt document.
+Both could not hold, and the mechanism did worse than refuse: the establishment
+ran *after* `_publish_replacing`, with the guard released in `finally` and no
+compensating action, so the documented repair reported failure having already
+rotated the claim, burned the displaced token and incremented `takeover_count`
+— and each retry rotated again, filling the epoch chain the audit trail depends
+on with spurious takeovers. `recover_abandoned_destructive_guard` had the
+identical shape and failed identically. The only real exit was hand-deleting
+`WORKTREE_IDENTITY.json`, which the same paragraph dismissed as escaping
+nothing — under that design not a dismissal but a **required precondition**,
+and exactly the class of undocumented hand repair `GPT-R81-004` was raised
+against.
+
+**The correction is the reviewer's preferred option 1, plus the part of option
+2 needed to make the path complete.** Both rotating operations establish the
+incoming owner's identity record **before** the rotation publishes, inside the
+same guard window and after the stale-evidence re-verification — and it is the
+establishment itself that moves, not merely a precondition check, so an
+identity write that fails for any reason refuses with the claim byte-identical,
+`takeover_count` unchanged, no new `previous_owner_tokens` entry and N attempts
+indistinguishable from none. The reverse residue (an entry outliving a failed
+rotation) is benign for exactly the reason 1d's own ordering already relies on.
+Because that alone would leave the corrupt-record state needing a hand
+deletion, the undecidable case gets its **own authorization component**:
+`takeover_evidence` reports the taking worktree's identity document as a
+first-class observation with an `identity_observation_id` over its exact bytes,
+both rotating literals grow ` repairing identity <id>` when it is undecidable,
+and the operation re-verifies that observation under the guard and refuses on
+stale evidence exactly as it does for the claim. The literal is byte-for-byte
+unchanged for a valid or absent document, so no earlier authorization shape
+moves. That is designed repair-by-overwrite under human authorization bound to
+the bytes being discarded — never the silent overwrite `OPUS-R86-004` forbids,
+which `establish_worktree_identity` still refuses outright on every path. The
+"deleting the record by hand escapes nothing" framing is withdrawn. Item 374(e)
+and (f) are rewritten; `pass16.py` `W5`, `W6` and `W7` assert the refusal
+atomicity, retry idempotence, the recovery's identical contract, and the
+complete repair sequence end to end **with no hand-deletion step**, with the
+revision-68 rotate-then-establish shape carried as the live control arm.
+
+### `OPUS-R86-004` — important — the third error class is not exhaustive, and the escape is in the validator, on the refusal path itself
+
+**Accepted in full, and reproduced.** Revision 68 stated the third class as
+`CorruptJsonError` from "unparseable bytes or a schema-invalid document" and
+put the obligation on the *writer*. The load-bearing refusal at 1c is the
+**reader**, which validates a document it did not write — so
+`validate_worktree_identity`'s own undeclared exits escape the refusal itself,
+with `_attach_ownership_evidence`'s evidence and escape hint attached to an
+exception the operator reads as a crash. Confirmed against the real functions:
+`[]`, `"hello"`, `42` and `true` exit as `AttributeError` (the validator calls
+`data.get(...)` before establishing that `data` is a mapping); a non-iterable
+snapshot member exits as `TypeError` from `set(entry)` — the reviewer's own
+non-blocking observation 4, promoted here because it is the same defect; and a
+JSON `null` document is reported as `WorktreeIdentityMissingError` by the
+reader and **silently overwritten** by the writer, because `_load_json` returns
+`None` for a missing file and for `null` alike. `Y7`'s headline "no undeclared
+exception escapes the identity writer" was asserted against one sample and is
+false in general.
+
+**The correction states the classes as a closed partition over document
+shape** — absent, unparseable, JSON `null`, non-mapping,
+mapping-but-schema-invalid (snapshot members included), valid-but-no-entry,
+valid-but-mismatched, valid-and-matching — so exhaustiveness is checkable
+rather than asserted, and puts the obligation on the **validator** as well as
+the writer: a non-mapping document and a non-mapping snapshot member both
+refuse with the declared `CorruptJsonError`, and absence is established by
+`exists()` rather than by a falsy parse in both the reader and the writer, so a
+`null` document refuses and is never overwritten. Every row is asserted against
+both halves with the revision-68 shapes as control arms (`pass16.py` `W3`,
+`W4g`-`W4i`); item 374(d) is rewritten around the partition.
+
+### `OPUS-R86-005` — important — the "prototyped and asserted" atomic-publication claim was false
+
+**Accepted in full, and reproduced.** The specified writer delegated to
+`write_worktree_identity`, which writes the **real pathname** with a plain
+`write_text`, and only then staged a temp file and `os.replace`d it.
+Instrumenting one ordinary call shows the sequence `write_text → REAL PATH`,
+`write_text → temp`, `os.replace`: the writer offered as proof that a torn
+record can never happen wrote the final pathname non-atomically on every single
+call, and the redundant `os.replace` does not undo it. `Y7` asserted nothing
+about atomicity — `Y7e` checks only that no staging temp survives. The trap was
+live rather than cosmetic, because the wrapper's own docstring ("this wrapper
+never re-implements the snapshot") invites exactly that shape.
+
+**The correction is structural rather than an extra call.** The snapshot
+computation is separated from the write — `build_worktree_identity_document` is
+pure and `_hash_dirty_paths` is still the installed helper, so nothing is
+re-implemented — and the publishing writer touches the final pathname exactly
+once, by `os.replace`, from a same-directory temp with a per-call unique name.
+The obligation is restated in the form an implementer cannot satisfy by
+accident: *the final pathname is written once, by `os.replace`, and by no other
+call in the sequence*. `pass16.py` `W4` asserts the write sequence directly,
+injects a torn write and asserts the previous document byte-identical and
+schema-valid afterwards with no temp surviving, and carries the revision-68
+writer as the live control arm that writes the pathname twice. The per-call
+unique temp name also closes the reviewer's non-blocking observation 2, which
+under `OPUS-R86-002`'s concurrency was not cosmetic: two threads sharing
+`tmp-{os.getpid()}` produced a `FileNotFoundError` from `os.replace` on a temp
+the sibling had already consumed.
+
+### Non-blocking observations
+
+The reviewer recorded five, each explicitly requiring no revision on its own.
+Four are closed here; the fifth is a disclosure-quality note this disposition
+adopts.
+
+1. **Stale prototype comments.** `resolve_ownership`'s docstring still said
+   `D3` had "two distinguishable error classes" (three since revision 68, and
+   closed over document shape since this one), and
+   `_resolve_with_origination_proved` still referred to "step 3's **two
+   proofs**" and a branch "reachable only when **proof 2** passed" — proof 2
+   was withdrawn in revision 68. Code was correct; all three are corrected.
+2. **PID-scoped staging temp name.** Closed with `OPUS-R86-005`, and it was a
+   real fault rather than a nicety once `OPUS-R86-002`'s concurrency is
+   admitted (see above).
+3. **Evidence scoped narrower than the claim it supports.** Closed with
+   `OPUS-R86-001`; `W0` now measures the property over all 140 reachable
+   commits.
+4. **`validate_worktree_identity` does not type-check entry members.**
+   Promoted into `OPUS-R86-004` rather than deferred, because `set(entry)` on a
+   non-iterable member is an undeclared `TypeError` out of the same validator
+   and the closed partition would be false without it.
+5. **The mapping restoration's cited proof was unverifiable.** Blob
+   `31732f6c…` is genuinely not in this repository's object database, so the
+   evidence this plan offered could not be reproduced as offered. The
+   restoration itself is confirmed — independently by the reviewer, and again
+   here: all 63 entries present at `HEAD` are byte-identical and the only
+   difference is the never-committed `WFR-64`/`WFR-65`. The note is adopted:
+   future disclosures cite evidence a reviewer can reproduce, and this
+   revision's own restoration check is stated in exactly that reproducible
+   form.
+
+### Scope
+
+This is a plan-only round. No file under `scripts/`, `.claude/commands/` or
+`docs/ai-workflow/MILESTONE_WORKFLOW.md` was touched, and the contract remains
+specified rather than implemented. The changes are `D-Checkpoint-Ownership`'s
+section opening, "The record" (identity-document serialization), the 1d
+ordering bullet's inertness argument, the adoption contract and its
+reconciliation-table row, the error-class enumeration and its new fourth class,
+the corrupt-record repair ownership, and the takeover/recovery bullets;
+`OPUS-R10-008`'s round-10 disposition row; `WFR-64` and its mapping row;
+missing-test items 363, 374(c)-(f) and the new 374(g); and the non-installed
+prototype under `docs/ai-workflow/dry-run/wf8b-s14-repro/`, which is excluded
+from review content and exists only to make the correction executable.
+Everything the reviewer re-verified about revisions 64 through 68 — the fencing
+contract, the observation-bound takeover, the abandoned-guard recovery's
+ordering and binding, the epoch rule, atomic guard removal, the total recovery
+partition, `GPT-R81-003`'s terminal `NO_CHECKPOINT`, source-of-truth
+discipline, the shared-file scope statement, the ownership-key honesty, and
+revision 68's own withdrawal of the self-owned-claim proof — is untouched and
+stays verified. One bounded author-side stress pass over the corrected design,
+with passes 1-15 re-run as regressions and unchanged, brings this evidence to
+**551 executable checks green across sixteen passes**.
+
+## WF8b finding disposition (revision 67 → 68) — external plan review confirmed revision 67's reachability fix but found the proof it bought it with path-aliasable, admitting a different worktree occupying the holder's path (`OPUS-R85-001`/`-002`)
+
+> **Superseded in part by revision 69** (`OPUS-R86-001` through `-005`): the
+> withdrawal of revision 67's self-owned-claim proof stands and is untouched,
+> and `OPUS-R85-002`'s third error class stands. What does **not** stand is
+> three things this disposition asserts below and revision 69 corrects at the
+> mechanism: that the identity entry a failed acquisition leaves behind is
+> inert "since ... this worktree's own uncommitted `IN_PROGRESS` state ... is
+> never committed, so no checkout can supply it" (false against this
+> repository — see `OPUS-R86-001`); that the writer's validate-before-mutate
+> and atomic-publication obligations were "both prototyped and asserted
+> (`Y7`)" (they were not — `OPUS-R86-004`/`-005`); and that the takeover is
+> the working repair for a corrupt record while hand-deletion "escapes
+> nothing" (the takeover rotated before refusing, and hand-deletion was in
+> fact its required precondition — `OPUS-R86-003`). Read the revision 68 → 69
+> disposition above for what replaced each.
+
+External plan review of revision 67 returned `Status: REVISE` with **one
+blocking** and **one important** finding. The reviewer independently recomputed
+`bundle_id` `fb9b7f58…` three ways — the value `MANIFEST.md` declares, a fresh
+recomputation over the 123-entry on-disk `current/` directory, and a
+recomputation over content extracted independently from `review-bundle.tar.gz` —
+and `review_content_id` `cd47c6ed…` through this repository's own plan-stage
+projection resolved from the work item's declared metadata; confirmed `PLAN.md`
+byte-identical to this document; re-ran `validate_state`,
+`validate_registry_topological_order` and `validate_registry_mapping_coverage`;
+re-derived the plan↔mapping conformance independently using the integration
+test's own normalization functions at 65 rows, equal id sets both ways and zero
+description mismatches; reran all 489 hermetic tests green; re-ran all fourteen
+author stress passes at 394/394; verified the revision-63-through-66 mapping
+content had lost no amendment; and confirmed revision 67's **reachability** half
+resolved at the mechanism, with the revision-66 resolver carried as a live
+control arm. **Both findings were validated against this repository and
+`scripts/workflow_state.py` before anything was edited, both were reproduced end
+to end here, and both are accepted in full.** Nothing in either is rejected, in
+whole or in part.
+
+### `OPUS-R85-001` — blocking — the self-owned-claim proof is path-aliasable, so a different worktree occupying the holder's recorded path was admitted under the holder's unrotated token
+
+**Accepted in full, and reproduced before anything was edited.** Revision 67's
+central justification was an equivalence claim: `claim_is_this_worktree` and
+`verify_dirty_resume_safety`'s identity comparison test the same triple against
+the same source, so the relaxation "removes exactly one refusal and no other — a
+`WorktreeIdentityMissingError` raised against a worktree that the shared,
+durable claim **already proves is the originating one**". The premise is true.
+The conclusion is not, and the error is in "already proves is the originating
+one".
+
+Two facts, both confirmed directly against `scripts/workflow_state.py` and
+against real Git worktrees. First, `_git_identity` returns
+`git rev-parse --show-toplevel` as **both** its first and third element, so the
+"triple" is two distinct values and both are plain filesystem paths — the key
+encodes no worktree instance, no admin directory, no HEAD and no branch.
+Second, paths are reusable: `git worktree move` then `git worktree add` at the
+vacated path, or `git worktree remove` then `git worktree add` at the same path
+with the same name, both produce a byte-identical ownership key, and the second
+construction **reuses the same admin directory name**, so `worktree_git_dir`
+would not have distinguished it either. Through revision 66 the local identity
+record was the only thing in the design that could detect worktree-instance
+replacement, and revision 67 removed it from exactly the branches where a stale
+claim is live.
+
+**Reproduced in `pass15.py` `Y1`/`Y2`**, driving the **real** step-1 procedure
+with only step 1c's resolver swapped for a verbatim revision-67 copy. In both
+constructions the replacement worktree satisfies proof 1, is admitted, performs
+an authoritative `WORKFLOW_STATE.json` write, and can commit and release the
+checkpoint — all under the original holder's **unrotated** `owner_token`, with
+`takeover_count` 0, `previous_owner_tokens` empty and no `taken_over_from`. Two
+worktrees hold one valid token; the fencing model's single-owner invariant is
+defeated with no rotation and nothing auditable afterwards; and the plan's own
+"the escape from a claim this worktree does not own is an **explicit
+takeover**" becomes false on that path. `Y6` reproduces the same worktree
+reaching the design's single automatic release and dropping another worktree's
+claim residue. The corrected arm refuses every one of them, having mutated
+nothing and left the claim byte-identical.
+
+**The correction withdraws the relaxation rather than narrowing it**, which is
+the reviewer's option (c), and fixes `OPUS-R84-001`'s reachability at 1d's
+ordering — the reviewer's own second option from the previous round, which
+revision 67 declined. `verify_dirty_resume_safety` is unconditional again for
+every contended path, exactly as through revision 66: there is **one** proof of
+origination, because only the local, gitignored, per-worktree record's
+*existence* proves an instance, while the shared claim's key proves a location.
+Step 1d establishes that record **before** publishing the claim, so the crash
+window `CONTINUE_CLAIM` covers can never be entered without it and the branch is
+reachable by construction (`pass15.py` `Y3`, with the claim-first ordering as
+the live control arm that still locks the owner out; `pass14.py` `Z2` carries
+the same guard).
+
+Revision 67 declined that ordering on the grounds that it "would make an
+identity entry outlive a failed acquisition". The objection is factually right
+and is now weighed against the defect the alternative produced — and it is
+benign, provably rather than assertedly: the entry admits a worktree to no
+branch on its own, since every branch it can reach additionally requires either
+a self-owned claim (which a failed acquisition did not obtain) or this
+worktree's own uncommitted `IN_PROGRESS` state (which only its own 1d writes and
+which is never committed, so no checkout can supply it). The snapshot the entry
+carries is diagnostic data `verify_dirty_resume_safety` never compares.
+
+The reviewer's options (a) and (b) were considered and are not taken, with
+reasons rather than preference. **(a)** binding proof 1 to `worktree_git_dir`
+does not close the remove-and-recreate construction, reproduced directly
+(`Y2b`), and would contradict the `worktree_git_dir` row's own "diagnostic
+only, never the ownership key" rule. **(b)** a per-worktree nonce minted at
+publication would have to be stored durably *inside* the worktree to be
+instance-scoped at all — which is precisely the durability profile
+`WORKTREE_IDENTITY.json` already has, so it reduces to (c) plus a second file
+and a second corruption surface.
+
+**What the correction costs is stated rather than implied.** A worktree that
+loses its own identity record while holding a claim is refused, and the
+mechanism cannot distinguish that from a replacement at the same path. That is
+`D3`'s pre-existing rule and revision 66's behaviour, unchanged — but it is no
+longer a dead end: **both rotating operations now establish the incoming
+owner's own identity record** as part of the rotation, so the explicit takeover
+is a complete operation and this state has a documented, authorization-bound,
+fenced and audited exit instead of a hand repair (`Y5`, `pass14.py` `Z3`). That
+also fixes an incompleteness the withdrawal would otherwise have created: a
+worktree that takes a claim over having never run 1d for that work item would
+have been refused at its very next invocation.
+
+The `worktree_git_dir` row, the `CONTINUE_CLAIM` row, the `S14a`/`S14b`
+exhaustiveness sentence and the "Scope boundaries" `git worktree move` bullet
+are all reconciled to the corrected mechanism, and the last of these now states
+what happens to the **vacated path**, which it did not.
+
+### `OPUS-R85-002` — important — `verify_dirty_resume_safety` has a third error class, so the relaxation also moved corruption detection after an authoritative state write
+
+**Accepted in full, and reproduced.** The plan rested its rationale on `D3`
+having exactly two failure classes. That enumeration is incomplete against the
+real function: `_load_json` raises `CorruptJsonError` on unparseable bytes and
+`validate_worktree_identity` raises it on a schema-invalid document, both
+*before* either identity comparison. So "removes exactly one refusal and no
+other" was false independently of `OPUS-R85-001`.
+
+Reproduced in `pass15.py` `Y4`, driven through the real step-1 caller with a
+crash-window fixture and a corrupt record, for both flavours. Revision 67 skips
+the check, mutates `WORKFLOW_STATE.json`, and only then fails — and in the
+schema-invalid flavour it fails as an undeclared `TypeError: list indices must
+be integers` out of `write_worktree_identity`'s `expected[work_item_id] = …`,
+the same class of undeclared escape `OPUS-R83-002` corrected for
+`IsADirectoryError` (`Y7a` isolates it against the installed writer directly).
+The follow-on state is worse than the first failure: the state entry it wrote
+moves every later invocation onto the `RESUME` branch, which under that
+ordering never re-checks, so the corrupt record survives indefinitely,
+unrepaired and unreported — reproduced as a passing control arm.
+
+The correction states the third class explicitly and decides it on purpose: it
+**refuses, at 1c, before any authoritative mutation**, exactly as the other two
+do, because a corrupt record proves nothing about the instance either. Under the
+restored unconditional ordering every invocation reports it rather than
+resuming over it. Two implementation obligations on the identity writer are
+stated with it: **validate the loaded document before mutating it**, so every
+corrupt-document exit is the declared `CorruptJsonError` and no path escapes
+with an undeclared exception type; and **publish atomically** (same-directory
+temp plus `os.replace`), so this writer cannot produce the torn record the
+resolution now depends on. Both are prototyped and asserted (`Y7`). Deleting a
+corrupt record by hand escapes nothing — it converts `CorruptJsonError` into
+`WorktreeIdentityMissingError`, which refuses just as firmly — and the sanctioned
+repair is the takeover above.
+
+### Non-blocking observations
+
+The reviewer recorded three, each explicitly requiring no revision on its own.
+Two are closed here; the third was already an owned obligation and stays that
+way.
+
+1. **An empty-string `lease_id` was not refused.** Revision 67 refused only a
+   non-`str` value, so `""` fell through the comparison and silently no-opped.
+   Safety held — nothing was removed — but the absolute the design states covers
+   `""` as squarely as `None`. Closed at the mechanism; item 372(d) is extended
+   and `pass15.py` `Y8` asserts it with revision 67's shape as the control arm.
+2. **`_git_identity` returns `repo_root` twice, so the "triple" is two values.**
+   The reviewer notes this framing is what made `OPUS-R85-001` easy to miss.
+   Closed: "The record" now states exactly what the key carries and what it
+   cannot prove, and `pass15.py` `Y0` asserts both properties mechanically.
+3. **The row-count assertion runs before the real conformance loop**, so
+   `test_every_wfr_row_description_matches_json_exactly` has not executed its
+   description comparison since the count went stale. Item 166 already owns the
+   fix; the reviewer's suggestion to *reorder* the two assertions so the loop
+   runs independently of the count is recorded on that item rather than applied
+   in a plan-only round, and the plan↔mapping conformance reported here is a
+   full author-side sweep under the test's own normalization functions, not a
+   claim derived from that assertion.
+
+### Scope
+
+This is a plan-only round. No file under `scripts/`, `.claude/commands/` or
+`docs/ai-workflow/MILESTONE_WORKFLOW.md` was touched, and the contract remains
+specified rather than implemented. The changes are `D-Checkpoint-Ownership`'s
+origination check, 1d ordering, ownership-key semantics, error-class
+enumeration, takeover/recovery completeness and scope boundaries; `WFR-64` and
+its mapping row; missing-test items 363(d), 364, 372(d), 373 and the new item
+374; and the non-installed prototype under
+`docs/ai-workflow/dry-run/wf8b-s14-repro/`, which is excluded from review
+content and exists only to make the correction executable. Everything the
+reviewer re-verified about revisions 64, 65 and 66 — the fencing contract, the
+observation-bound takeover, the abandoned-guard recovery's ordering and binding,
+the epoch rule, atomic guard removal, the total recovery partition,
+`GPT-R81-003`'s `FRESH, None` fix, `D-Plan-Revision-Publication`, and
+`S14`/`S15` end to end — is untouched and stays verified, and `OPUS-R84-001`'s
+reachability property stays true by a different mechanism. One bounded
+author-side stress pass over the corrected design, with passes 1-14 re-run as
+regressions (pass 14 re-targeted in place where it encoded revision 67's now
+withdrawn mechanism), brings this evidence to **462 executable checks green
+across fifteen passes**.
+
+## WF8b finding disposition (revision 66 → 67) — external plan review confirmed revision 66's corrections but found `CONTINUE_CLAIM` unreachable in the crash window it exists for, locking the legitimate owner out of a work item's first checkpoint (`OPUS-R84-001`)
+
+> **Superseded in part by revision 68** (`OPUS-R85-001`/`-002`): the
+> reachability defect this round names is real and stays fixed, but the
+> mechanism below — step 1c's second, self-owned-claim proof of origination —
+> was **withdrawn** in revision 68 after external review showed the ownership
+> key it trusts is path-aliasable. The non-weakening argument recorded below is
+> the one that does not hold. Read it as the historical record of revision 67,
+> not as current normative design.
+
+External plan review of revision 66 returned `Status: REVISE` with **one
+blocking** and **zero important** findings. The reviewer independently recomputed
+`bundle_id` `e6e6c66e…` three ways — the value `MANIFEST.md` declares, a fresh
+recomputation over the 122-entry on-disk `current/` directory, and a
+recomputation over content extracted independently from `review-bundle.tar.gz` —
+and `review_content_id` `d17c3180…` through this repository's own plan-stage
+projection resolved from the work item's declared metadata; confirmed `PLAN.md`
+byte-identical to this document; re-ran `validate_state`,
+`validate_registry_topological_order` and `validate_registry_mapping_coverage`;
+re-derived the plan↔mapping conformance independently **using the integration
+test's own normalization functions** at 65 rows, equal id sets both ways and zero
+description mismatches; reran all 489 hermetic tests green; re-ran all thirteen
+author stress passes at 340/340; and wrote **four independent reviewer passes
+from scratch**, not derived from the author's, covering recovery TOCTOU,
+real-process takeover/recovery races, replay, crash boundaries, the S14/S15
+end-to-end path, observation identities and lock ordering. **The finding was
+validated against this repository, its prototype and `scripts/workflow_state.py`
+before anything was edited, it was reproduced end to end here, and it is accepted
+in full.** Nothing in it is rejected, in whole or in part.
+
+The reviewer also re-verified — rather than accepted — both revision-66 findings
+as fixed **at the mechanism rather than only in the wording**: `OPUS-R83-001` by
+exhaustively enumerating every `unlink` in the prototype and confirming guard
+removal occurs at exactly three sites, all inside `guard_mutation_lock`, over a
+stable never-unlinked `.guardlock` never held across a state write, with the
+revision-65 control arm still losing the guard; and `OPUS-R83-002` by building
+the (undecidable claim + `"destructive"` guard + deregistered holder) state end
+to end for both a torn and a symlinked record. The deferred
+`workflow_integration_test.py` failure was independently reconstructed as
+genuinely pre-existing (`assertEqual(len(table_rows), 60)` unchanged since commit
+`7eaad8c`, failing on the count since the 61st row landed and never reaching its
+per-row comparison, which is itself zero-mismatch across all 65 rows) and
+correctly deferred to missing-test item 166.
+
+### `OPUS-R84-001` — blocking — `CONTINUE_CLAIM` was unreachable in the crash window it exists for, so a work item's first checkpoint could permanently lock out its own owner
+
+**Accepted in full, and reproduced before anything was edited.** The section
+states the harm in prose — "without it the *legitimate owner* is permanently
+locked out of its own claim with an error naming a state mismatch it cannot
+clear" — and item 364's preamble states the property as an absolute: "none of
+them locks out the legitimate owner." The ordering then produced exactly that
+lockout.
+
+Two normative facts collided. 1d publishes the claim **before**
+`transition_checkpoint_in_progress`, and `write_worktree_identity` runs with the
+state write inside the mutation guard — deliberately, because a crash between the
+two writes must leave behind the authority that protects the checkpoint. 1c step
+3 called `verify_dirty_resume_safety(repo_root, work_item_id)` unconditionally
+"before any branch that can mutate", and that function raises
+`WorktreeIdentityMissingError` when `WORKTREE_IDENTITY.json` is absent **or**
+carries no entry for this `work_item_id` (`scripts/workflow_state.py`; it never
+inspects dirtiness despite its name). Inside the window 1d opens by construction
+the per-work-item entry does not exist, so step 3 raised and the `CONTINUE_CLAIM`
+branch below it was never reached.
+
+The scope is not exotic. `.ai-review/` is gitignored, so the identity file is
+per-worktree and never shared or inherited; the entry for a given work item
+therefore appears only after that worktree has already completed 1d for that work
+item at least once. The lockout consequently covered **the first checkpoint any
+worktree starts on any work item**, and for a brand-new work item no worktree has
+an entry at all, so the item was unstartable from everywhere. The refusal was
+also undiagnosable: evidence was attached only when the claim was *foreign*, so
+the self-owned case produced the bare message "cannot resume `<item>`'s
+`IN_PROGRESS` checkpoint from a worktree with no local identity record" — while
+nothing was `IN_PROGRESS` at all, and with no escape named.
+
+**Reproduced in `pass14.py` `Z1`**, on a brand-new work item with no identity
+entry anywhere, driving the **real** step-1 procedure (`harness.step1_fixed`)
+with only step 1c's resolver swapped for a verbatim revision-66 copy: the owner's
+own next invocation is refused from its own claim with
+`WorktreeIdentityMissingError`, and the message names an `IN_PROGRESS` checkpoint
+that does not exist while carrying no hint. `Z3` then attempted every documented
+operation against that state and confirmed the reviewer's own conclusion:
+`clear_malformed_guard` does not apply (no guard), the abandoned-guard recovery
+does not apply (no guard), and an explicit takeover by the **owning** worktree
+*succeeds* at rotating the claim and still leaves the refusal standing — because
+the refusal was driven by the missing identity record rather than by ownership,
+so the operation offered for "someone else holds this" could not clear a state in
+which nobody else did. Hand-deleting the claim file was the only remaining
+escape: the same class of undocumented manual repair `GPT-R81-004` and
+`OPUS-R82-001` were each raised against, and which this section's own
+`recover_abandoned_destructive_guard` rationale calls out by name.
+
+The correction is the finding's own preferred option, stated normatively rather
+than left to the implementer: **step 1c has two proofs of origination, and the
+claim is the stronger of them.** A decidably self-owned claim — its
+`(repo_root, git_common_dir, worktree_root)` ownership key equal to the invoking
+worktree's own `_git_identity` output — *is* the proof of origination, and
+`verify_dirty_resume_safety` is not additionally required for the branches
+reached with one. For every other case, including the claim-absent adoption path
+where the identity record is the only evidence in existence, it is unchanged and
+still runs first. The safety argument is mechanical rather than rhetorical:
+"The record" already states that the claim stores `_git_identity`'s exact output
+so the two notions of "this worktree" can never disagree, which means a worktree
+satisfying proof 1 would always have satisfied `verify_dirty_resume_safety`'s
+*mismatch* check too. The relaxation therefore removes exactly one refusal — a
+missing-identity-record refusal against a worktree the durable shared claim
+already proves originated it — and can admit no worktree the mismatch check would
+have refused. The reviewer's second option, closing the window by writing the
+identity record first, was not chosen: it would make an identity entry outlive a
+failed acquisition, and the design already stores the fact needed to answer the
+question without adding one.
+
+**Which outcomes it applies to is stated explicitly**, as the finding requires:
+all and only the branches reached with a decidably self-owned claim — `RESUME`,
+`CONTINUE_CLAIM`, the single durable-completion release, and the self-owned
+refusals, which stay refusals. Not the adoption path. And the evidence attachment
+is **generalized** in the same edit: every refusal 1c raises while a decidable
+claim is present now carries the claim record and names the escape that applies,
+for a self-owned claim as well as a foreign one.
+
+`S14a`/`S14b` are re-asserted rather than assumed. A foreign worktree never
+reaches proof 1 — `claim_is_this_worktree` is false for it by construction — so
+it takes proof 2 and is refused exactly as before. `pass14.py` `Z4` asserts both
+classes in the *identical* state: `S14a` for a worktree with no record, `S14b`
+for one carrying another worktree's record, each with zero authoritative
+mutation, no guard residue, no identity written, and the ownership evidence
+attached; and the owner still resolves `CONTINUE_CLAIM` afterwards. `Z7` asserts
+the scoping in the other direction — with the claim released and the identity
+record lost, the adoption path still refuses, so the relaxation is not global.
+`Z5` asserts the two `WorktreeIdentityMissingError` branches separately, since
+only the no-entry branch is reachable for a worktree that has worked on a
+*different* work item. `Z6` asserts the diagnosis, including the revision-66
+control arm that raised a bare, unannotated identity error in the same state.
+
+`WFR-64` is amended in place to match, and item 364(a) and its preamble are
+rewritten to assert what the corrected mechanism actually does, with the
+no-prior-identity-entry case named — the same discipline `OPUS-R82-002` and
+`OPUS-R83-002` established for items 372(f) and 365(c). Item 363(d) carries the
+real-caller obligation for both proofs. Plan↔mapping conformance was re-derived
+under the real normalization at 65 rows and zero mismatches after the amendment,
+not asserted by construction.
+
+### Non-blocking observations
+
+The reviewer recorded four, each explicitly requiring no revision on its own.
+Three are closed here; the fourth was already recorded as a standing obligation
+and stays that way.
+
+1. **`_release_guard_path(..., lease_id=None)` still removed whatever guard was
+   present.** Revision 66 fixed the `held is None` branch and left the
+   caller-side `lease_id is None` case falling through to an unconditional
+   `unlink`. The reviewer confirmed it is unreachable from any in-contract caller
+   and did not raise it as a finding — but it contradicts the absolute revision
+   66 itself states ("every removal of a guard, on every path, names the
+   `lease_id` it just observed"), and it is a live trap for `WF8b`'s
+   implementation. Closed at the mechanism: the lease id is a required argument
+   and an absent one **refuses** rather than matching anything. Asserted by item
+   372(d) and by `pass14.py` `Z8`, with the revision-66 shape carried as a
+   control arm that still removes a guard it never compared against.
+2. **The partition table had one benign row overlap** — `(directory at the claim
+   path, undecidable guard)` matched both row 1 and row 9. Closed with one
+   clause: the guard axis and the claim-path axis are resolved independently and
+   act on *different objects*, so the rows compose rather than compete.
+3. **The recovery's own guard is superseded by construction between its rotation
+   and its release**, and so is the takeover's. Closed — stated explicitly, with
+   why it is harmless and why "fixing" it by re-acquiring under the new token
+   would reintroduce the two-holder shape the guard exists to prevent.
+4. **`as <checkpoint_id>` on the recovery's authorization literal** remains an
+   implementation obligation on item 373(d). Carried forward unchanged, which the
+   reviewer records as an acceptable disposition.
+
+### Scope
+
+This is a plan-only round. No file under `scripts/`, `.claude/commands/` or
+`docs/ai-workflow/MILESTONE_WORKFLOW.md` was touched, and the contract remains
+specified rather than implemented. The changes are `D-Checkpoint-Ownership`'s
+ordering, reachability, diagnosis, partition and guard-removal text; `WFR-64` and
+its mapping row; missing-test items 363(d), 364 and 372(d); and the non-installed
+prototype under `docs/ai-workflow/dry-run/wf8b-s14-repro/`, which is excluded
+from review content and exists only to make the correction executable. Everything
+the reviewer re-verified about revisions 64, 65 and 66 — the fencing contract,
+the observation-bound takeover, the abandoned-guard recovery's ordering and
+binding, the epoch rule, atomic guard removal, the total recovery partition,
+`GPT-R81-003`'s `FRESH, None` fix, `D-Plan-Revision-Publication`, and `S14`/`S15`
+end to end — is untouched and stays verified. One bounded author-side stress pass
+over the corrected design, with passes 1-13 re-run as regressions, brings this
+evidence to **394 executable checks green across fourteen passes**.
+
+## WF8b finding disposition (revision 65 → 66) — external plan review confirmed revision 65's corrections but found the guard's removal non-atomic with its own comparison, and the new exhaustiveness claim false for an undecidable claim (`OPUS-R83-001`/`-002`)
+
+External plan review of revision 65 returned `Status: REVISE` with **zero
+blocking** and **two important** findings. The reviewer independently recomputed
+`bundle_id` `9e8752d2…` from the on-disk `current/` directory **and** from the
+separately extracted `review-bundle.tar.gz` (121 entries each), recomputed
+`review_content_id` `622bc4ab…` through this repository's own plan-stage
+projection, confirmed `PLAN.md` byte-identical to this document, re-derived the
+65-row plan↔mapping normalization at zero mismatches, reran all 489 hermetic
+tests green, re-ran all twelve author stress passes at 299/299, and recorded 52
+of its own independent checks passing with 0 failures. **Both findings were
+validated against this repository and its prototype before anything was edited,
+both were reproduced end to end here, and both are accepted.** Neither is
+rejected, in whole or in part.
+
+The reviewer also re-verified — rather than accepted — every property revision
+65 was written to establish, and this revision preserves all of them unchanged:
+the `holder_worktree_git_dir` conjunct as a real, load-bearing guard-side fence
+(confirmed against a foreign worktree presenting a token read straight out of
+the claim file); the deliberately un-narrowed superseded-epoch branch, whose
+narrowing would strand post-takeover recovery; the abandoned-guard recovery's
+ordering, binding and non-replayability, with `H3e`'s failure mode confirmed not
+to reproduce; determinism under contention; `GPT-R81-003`'s `FRESH, None` fix;
+`S14`/`S15` end to end; source-of-truth discipline; the terminal `NO_CHECKPOINT`
+outcome; and `D-Plan-Revision-Publication`. The deferred
+`workflow_integration_test.py` failure was independently reconstructed as
+genuinely pre-existing (a stale `assertEqual(len(table_rows), 60)` literal,
+failing on the count since the 61st row landed and never reaching its per-row
+comparison, which is itself zero-mismatch across all 65 rows) and correctly
+deferred to missing-test item 166, since fixing it edits `scripts/`.
+
+### `OPUS-R83-001` — important — the guard's release was a read-then-unlink-by-name, so a stale session could delete the current owner's live `"destructive"` guard
+
+**Accepted in full, and reproduced before anything was edited.** Revision 65
+stated the invariant the whole section rests on — "no operation of any kind
+breaks a destructive window held by the work item's *current owner* from outside
+that owner's own worktree, while that worktree is still registered" — and the
+primitive meant to make it true, "release becomes compare-and-delete". It never
+said the removal had to be **atomic with respect to the comparison**, and the
+bundled prototype implemented it as two independent statements: `read_guard(...)`
+to compare, then `path.unlink(missing_ok=True)` to delete. The unlink names the
+pathname, not the identity compared, so any guard published between them is
+removed instead. Both branches leaked — an observed `None` unlinked
+unconditionally, and a matching `lease_id` unlinked whatever now occupied the
+name.
+
+Reproduced in `pass13.py` `I2`, using only sanctioned operations, with the
+schedule pinned inside those two statements — exactly the preemption the code
+permits. A legitimate takeover rotates the claim to worktree B; the displaced
+session A wakes, is correctly fenced by its assertion, and enters its
+`finally: release_guard(...)`; in the instant between A's comparison and its
+unlink, B — the legitimate current owner — opens its own `"destructive"` window
+by the ordinary superseded-epoch rule; A's unlink then removes **B's** guard. B
+is inside a destructive window with no guard on disk, `takeover_evidence` from a
+third worktree reports `guard: None`, and a correctly bound, correctly
+authorized takeover from that worktree rotates the claim out from under the live
+window — because `take_over_claim`'s destructive refusal is driven by
+`evidence["guard"]` and cannot see what is no longer there. Two worktrees each
+held what the design calls exclusive ownership of the same checkpoint: the
+precise harm `GPT-R81-001` was raised for, reached through the release primitive
+rather than the missing fence.
+
+The correction is the reviewer's own first option, stated normatively rather
+than left to the implementer: **all three removal paths — the release,
+`acquire_guard`'s reclaim-and-republish, and `clear_malformed_guard`'s
+clearance — run their whole compare-and-remove sequence inside `D1`'s
+process-scoped `fcntl.flock` serialization**, over a stable, never-unlinked
+per-work-item `.guardlock` object. The alternative formulation the finding
+allows (rename to a lease-scoped name, verify, then unlink) remains acceptable;
+what is now explicitly not acceptable is satisfying "compare-and-delete" with a
+read followed by an unlink. The `"destructive"` invariant text is reconciled to
+it: the absolute is conditioned on the atomic removal contract, not merely on
+the three reclamation paths. Three properties are stated as load-bearing so the
+lock is not mistaken for the fence — it is held for a few syscalls inside one
+operation while the *guard* spans the window; `os.link`'s `EEXIST` exclusivity
+is retained underneath it because `flock` is advisory; and it is never held
+across a `WORKFLOW_STATE.json` write, so the existing guard-then-`flock`
+ordering rule cannot be inverted.
+
+All four required tests are owed as standing obligations: item 368(c) is
+extended to the guard (it covered only the claim), and item 373(i) adds the
+end-to-end consequence, the reclamation path, and the invariant that no session
+can be left inside an acquired window with no guard on disk. `pass13.py` `I2`
+now asserts the corrected behaviour with the revision-65 primitive carried as a
+live control arm (`I2'`) that still loses the guard, and `I3` asserts the
+reclamation path's own indivisibility while distinguishing it from the
+documented same-worktree rule-2 reclamation, which is a scope limit rather than
+a lost update.
+
+### `OPUS-R83-002` — important — the new exhaustiveness claim was false: an undecidable claim left all three operations refusing in a cycle, and a symlinked claim could not be observed at all
+
+**Accepted in full, and both manifestations reproduced before anything was
+edited.** Revision 65 added, normatively, "those three operations are
+exhaustive: no other path removes either record, and each of the three refuses
+by naming whichever of the others owns the state it was handed." The design
+already treats an externally corrupted claim as first-class — item 365(c)
+requires a corrupt record to be recoverable **only** by the explicit takeover,
+and `clear_malformed_guard` exists solely because a record corrupted by
+something else and left in place is a permanent lockout — but revision 65 never
+considered the *conjunction* of the two states it separately budgets a recovery
+for.
+
+**Manifestation A** (`pass13.py` `I4`, built from the same fixture
+`OPUS-R82-001` used): with a `"destructive"` guard held, the claim rendered
+undecidable by something outside this contract, and the holder worktree removed,
+every documented operation refused in a cycle — `take_over_claim` on the
+destructive class, naming the recovery; `recover_abandoned_destructive_guard`
+because the claim was not readable, naming the takeover; `clear_malformed_guard`
+because the guard was well-formed, naming the takeover. Automatic reclamation
+could not help either: with the claim undecidable, `_current_owner_token`
+returns `decidable=False` by design, so the superseded-epoch branch is correctly
+disabled — the right fail-closed direction, but it removes the last automatic
+exit. Nothing succeeded, and the remaining escape was hand-deleting the record:
+exactly the class of undocumented manual repair `GPT-R81-004` and
+`OPUS-R82-001` were each raised against.
+
+**Manifestation B** (`pass13.py` `I5`): `claim_observation_id` is defined as the
+sha256 of the record's exact bytes, and a symlink has no such bytes under this
+design's own refusal to follow it — so the observation the authorization must
+quote could not be produced, and `takeover_evidence` raised before returning any
+report. The symlink refusal itself is correct and the off-tree target is
+properly left alone; what was wrong is that the recovery the plan advertises for
+an unreadable record was unreachable for that flavour of unreadable, so item
+365(c)'s standing obligation could not be discharged as written. A directory at
+the claim path was worse: it opened successfully and failed at read, escaping as
+an undeclared `IsADirectoryError`.
+
+The correction has three parts, all normative. **The (undecidable claim +
+`"destructive"` guard) state is given exactly one owner** — the abandoned-guard
+recovery, which is the right operation on its own terms: the takeover is the
+route that applies while the holder is still *registered*, and its destructive
+refusal exists to protect a *live* holder, whereas a deregistered holder has
+already been judged dead by the same durable, human-made fact this recovery is
+built on. It establishes that precondition from the guard's own
+`holder_worktree_git_dir`, takes the checkpoint id from the guard (refusing an
+operator-supplied id that disagrees rather than reconciling it), binds to the
+undecidable record's own `claim_observation_id`, and records
+`claim_was_undecidable`/`epoch_chain_lost` so a claim recovered from a torn
+predecessor is never presented as a continuous epoch chain. The still-registered
+case refuses exactly as the readable-claim case does, naming the same three
+operator actions, so no live window is weakened by a single step.
+
+**A record whose bytes cannot be read gains a defined observation identity**,
+hashed under its own domain tag over a canonical `lstat`-derived descriptor — so
+it can never collide with a byte hash, and remains durable, re-verifiable and
+non-replayable. `takeover_evidence` now returns a report for every such state
+and names the kind. The ownership-resolution path is untouched and still fails
+closed; the split is the one revision 64 already drew between `resolve_claim`
+and `observe_claim`, applied to the states it had missed.
+
+**The exhaustiveness claim is made true by stating the partition on both axes**
+— guard class, holder registration *and* claim decidability — as a total,
+disjoint table with an explicit owner or an explicit named non-owner for every
+row. And the one state genuinely outside every documented operation, a
+**directory** at the claim path (`os.rename` cannot replace it, and this design
+never removes a directory it did not create), is declared as such with the
+operator action stated, per the finding's own permitted alternative, rather than
+implied to be covered.
+
+Item 365(c) is corrected to assert against the guard-held case rather than only
+the guard-free one, item 365(d) is extended to require a *report* rather than
+only a fail-closed refusal, and item 373(j) adds the conjunction, the
+still-registered variant, and the unreadable-record family with its bound,
+non-replayable authorization.
+
+### Non-blocking observations
+
+The reviewer recorded three, each explicitly requiring no revision on its own.
+Two are closed here because they are one sentence each; the third is recorded as
+a standing implementation obligation rather than silently adopted.
+
+1. **The recovery's authorization literal does not carry the checkpoint id** the
+   way the takeover's `as <checkpoint_id>` does. Left as-is deliberately: it is
+   a change to an authorization literal's shape, and this revision's own
+   discipline is not to ride an unreviewed mechanism change along with two
+   accepted findings. Recorded instead as an explicit obligation on item 373(d)
+   so `WF8b`'s implementation must close the asymmetry rather than rediscover
+   it. The blast radius the reviewer notes is unchanged: the recovery writes no
+   authoritative state, and step 1c re-checks the claimed checkpoint against
+   selection and local state.
+2. **Which instant "still registered" is evaluated at.** Closed — the recovery's
+   re-verification bullet now says so explicitly.
+3. **`wf8b-s14-repro/README.md` described eleven passes and 254 checks.**
+   Closed — evidence-directory housekeeping, now thirteen passes and 340 checks.
+
+## WF8b finding disposition (revision 64 → 65) — external plan review confirmed the fencing contract but found the `"destructive"` class stated as an absolute the mechanism does not implement, and one abandoned-guard state with no documented exit (`OPUS-R82-001`/`-002`)
+
+External plan review of revision 64 returned `Status: REVISE` with **zero
+blocking** and **two important** findings. The reviewer independently recomputed
+`bundle_id` `92d85d32…` and `review_content_id` `2fae7d0f…` (the latter twice,
+once through this repository's own projection and once from a stdlib-only
+reimplementation reading only the extracted archive), confirmed `PLAN.md`
+byte-identical to this document, re-derived the 65-row plan↔mapping
+normalization at zero mismatches, reran all 489 hermetic tests green **from the
+archive's own copies**, and re-ran all eleven author stress passes at 254/254,
+confirming they mutate nothing. **Both findings were validated against this
+repository and its prototype before anything was edited, and both are
+accepted.** Neither is rejected, in whole or in part.
+
+The reviewer also re-verified — rather than accepted — every property revision 64
+was written to establish, and this revision preserves all of them unchanged:
+`acquire → assert → mutate → release` as a single non-nested shape with the
+assertion *inside* the guard and the rejected `assert → acquire` shape carried as
+a live control arm; mutually exclusive ownership handoff; crash recovery decided
+from durable epoch data with no timestamp, heartbeat or liveness probe on any
+acquisition path; `claim_observation_id` over exact record bytes with `"absent"`
+and unreadable records as first-class observations; the terminal `NO_CHECKPOINT`
+outcome structurally unable to reach step 1d; source-of-truth discipline (the
+claim contributes an id and a token, never a status); `lstat`-before-`O_NOFOLLOW`
+symlink discipline on both records; `S14`/`S15` end to end under the guard; and
+`D-Plan-Revision-Publication`.
+
+### `OPUS-R82-001` — important — an abandoned `"destructive"` guard made the work item permanently unrecoverable by any documented operation
+
+**Validated, independently reproduced, accepted in full.** Reproduced against the
+bundled prototype before any edit, in a hermetic two-worktree fixture: worktree B
+claims `S-CP3`, acquires the guard as `"destructive"` at step `1f-commit`, and
+dies inside that window; B is then removed with `git worktree remove --force`.
+From the surviving worktree, with the *complete and correctly bound*
+authorization set — takeover literal, guard-release literal, and the
+observation-bound clearance literal — `take_over_claim` refused on the class
+before reaching its own guard acquisition, `clear_malformed_guard` refused
+because the guard was well-formed, and the guard was still held afterwards. The
+reviewer's reading of the remaining escape is correct: hand-deleting
+`.../checkpoint-claims/<digest>.lease`, which is exactly the class of
+undocumented manual repair `GPT-R81-004` was raised against one round earlier.
+The finding's observation that this window sits *between* the two crashes the
+design already models (`CONTINUE_CLAIM` before it, the durable-release branch
+after it) is also correct, and item 368(h)'s "and to succeed normally once the
+owner's window closes" indeed cannot detect the window that never closes.
+
+**The correction** is `D-Checkpoint-Ownership`'s new "Recovering a
+`"destructive"` guard abandoned by a worktree that no longer exists" subsection,
+following the shape the finding itself proposed and this section already owns:
+one distinct operation, never a mode of the takeover and never reachable from
+`/milestone-implement`; an authorization bound to the guard's
+`guard_observation_id` **and** the claim's `claim_observation_id` and naming the
+destructive step being abandoned; five structural refusals that each name the
+operation which *does* own the state handed to them; and a precondition that is a
+durable, human-made fact — the holder is no longer in `git worktree list` —
+rather than any liveness inference. No clock, heartbeat or age threshold is
+added anywhere. The recovery **rotates** rather than deletes, so the abandoned
+guard becomes superseded by construction and the existing epoch rule clears it,
+and the crashed session is fenced at its next assertion exactly as any other
+displaced owner. `D-Checkpoint-Ownership`'s "Scope boundaries" now states the
+reachability of a relocated or deleted holder by state, exhaustively, in place of
+the unqualified "reachable by explicit takeover" the finding showed to be false.
+The reviewer's five required tests are covered by `pass12.py` `H1`-`H4` and are
+owed as standing tests by new missing-test item 373, with item 368(h) extended in
+place to cover the window that never closes.
+
+### `OPUS-R82-002` — important — `"destructive"` was documented as never breakable "by anyone, under any authorization", and two of the plan's own rules break it with no authorization at all
+
+**Validated, independently reproduced, accepted in full.** The contradiction is
+exactly as described: `:14223-14224` stated the absolute, and thirteen lines
+later the same-token reclamation rule stated the opposite for a session holding
+the current token. Reproduced in real OS processes: session 1 opens a
+`"destructive"` window; session 2 in the same worktree reads the same claim,
+holds the same token, reclaims session 1's guard with no authorization, and both
+windows are open simultaneously — after which session 1's compare-and-delete
+release finds session 2's `lease_id` and no-ops, so the breach leaves no trace.
+The reviewer's reading of the two misdescribing artefacts is also correct:
+missing-test item 372(f) and `REVIEW_REQUEST.md` both said such sessions
+"serialize on the guard", which is an obligation the specified design cannot
+discharge, while the bundle's own `pass11.py` `G8` asserted the honest behaviour.
+
+**Validating the finding established one thing it did not itself claim**, and it
+is fixed here rather than merely documented. The finding's proposed wording —
+"never breakable by another **worktree**" — was **not** true of the revision-64
+mechanism either: the guard body recorded no worktree at all, so the
+same-token branch admitted a session in *any* worktree that could read the
+claim's world-readable `owner_token`, which is precisely the reviewer's own
+non-blocking observation 2. Reproduced: a foreign worktree presenting the token
+read straight out of the claim file reclaimed a live `"destructive"` guard. The
+"never breakable by another worktree" half was therefore true only as a
+downstream consequence of step 1c's `verify_dirty_resume_safety` refusal — which
+is exactly what the finding's required test 2 says it must not be. So the guard
+body gains `holder_worktree_git_dir` (the stable admin directory, on the same
+terms the claim already records it), and reclamation of a **current-epoch** guard
+requires it to match; the refusal is `CheckpointOwnershipUnavailableError`, plain
+guard contention, adding no error class. The **superseded-epoch** branch is
+deliberately left un-narrowed: it is the crash-recovery path for a session that
+acquired a guard and died before its own assertion could fence it, and narrowing
+it by worktree would strand every post-takeover recovery — asserted directly in
+`pass12.py` `H5g`/`H5h`.
+
+**The correction** therefore states the invariant at the strength the mechanism
+provides — *a `"destructive"` window is never broken by another worktree while
+the holder worktree is still registered, under any authorization* — and
+enumerates the three reclamation paths exhaustively (superseded epoch; same
+worktree, current token; the abandoned-guard recovery), each with why it is safe
+and what it does not cover. A new "Same-worktree concurrency" subsection states
+the residual as the scope limit it is, including why the alternative the finding
+offers (a per-session lease identity) is not taken: it would immediately owe an
+answer to `OPUS-R82-001`'s question for the *ordinary* same-worktree crash, with
+no way to tell a crash from a live peer that does not reduce to the liveness
+guess this design forbids everywhere. Item 372(f) is rewritten to assert what the
+mechanism does, item 368(f) is reconciled with the corrected absolute, and
+`REVIEW_REQUEST.md`'s limitation now states concurrent occupancy rather than
+serialization.
+
+### Bounded author-side stress pass
+
+One new pass over the corrected design, against real Git worktrees, using this
+repository's own unmodified `scripts/workflow_state.py`, with passes 1-11 re-run
+as regressions after every change:
+
+| pass | scope | result |
+| --- | --- | --- |
+| 12 | both findings, each reproduced against the revision-64 shape before the fix and re-asserted against the corrected one: the deleted-holder lockout and its bound recovery; the relocated-holder branch; live-window protection including a re-registration race; six authorization-binding refusals plus non-replayability; the corrected same-worktree/cross-worktree scope in real OS processes; the superseded-epoch destructive reclamation | 45/45 — **1 defect found**, fixed |
+
+**299 checks green across all twelve passes.** Pass 12's finding (`H3e`) was
+genuine and is fixed inside this revision: the recovery originally reclaimed the
+abandoned guard and re-verified the holder's registration *under* it, so a
+worktree re-registered while the user was reading the evidence had its live
+`"destructive"` guard destroyed by an operation that then reported a refusal —
+the exact harm the operation exists to prevent, on its own refusal path. Both
+observations and the registration fact are now re-read from durable state
+**before** anything is touched, and the reclamation's own exact-`lease_id`
+requirement closes the remaining window, because a resumed holder's first act is
+to reclaim its own interrupted guard and publish a new `lease_id`. The repair
+cycle stopped after pass 12 with no blocking or important defect outstanding.
+
+One comment was amended in place: `pass11.py` `G8`'s section header said
+"serialized", the same wording `OPUS-R82-002` correctly objected to, while the
+checks beneath it always asserted the reclamation.
+
+**One unrelated, pre-existing defect was found while verifying this round and is
+deliberately not fixed here.** `scripts/workflow_integration_test.py`'s
+`test_every_wfr_row_description_matches_json_exactly` — missing-test item 166's
+conformance guard — opens with `self.assertEqual(len(table_rows), 60)`, a count
+hardcoded when this plan had 60 `WFR-*` rows. It has therefore been failing on
+the count since the 61st row landed, without ever reaching the per-row
+comparison it exists to make. That comparison itself is green across all 65 rows
+when run directly against the same helpers, so nothing about the data is wrong.
+Fixing the constant edits a file under `scripts/`, which a plan-only round must
+not touch. It is already owed: missing-test item 166 has carried the exact
+obligation — replace that literal with a check derived from the live requirement
+set — since revision 31 (`GPT-R47-004`), which diagnosed the same magic number
+and predicted precisely this drift. What this round adds is the observation that
+the drift has since actually **disabled** the test rather than merely threatened
+to, and item 166's own stale "62 rows" count is corrected to 65 in the same
+pass.
+
+### The reviewer's non-blocking observations
+
+1. **`clear_malformed_guard` re-checks decidability, not the observation id,
+   before unlinking** — accepted as stated, and left for `WF8b` implementation as
+   the reviewer suggests; recorded in missing-test item 372(b) so it cannot be
+   implemented as a bare decidability re-check.
+2. **`owner_token` is coordination data, not a credential** — accepted, and this
+   round makes it load-bearing rather than merely documented: it is the reason
+   `holder_worktree_git_dir` had to be added, and the plan now says so in the
+   reclamation rules themselves.
+3. **Unresolved question 3** — no change required, as the reviewer states.
+4. **Unresolved question 1 (naming the operations as slash commands)** — the
+   reviewer notes this becomes more pressing now that a third user-authorized
+   operation exists. It stays an unresolved question for `WF8b` rather than being
+   settled here, and `REVIEW_REQUEST.md` carries it forward naming all three.
+
+### Effect on the live `v2-1-dry-run` `S-CP3` state: none
+
+Re-verified read-only at the end of this session (`pass11.py` `G10`, `pass12.py`
+`H6`): `checkpoints["S-CP3"] == {"status": "IN_PROGRESS", "start_commit":
+"8375b64f9ad9ad44afe7574841a62457f5d83cea"}`, still uncommitted, `state_revision`
+unchanged; no claim record and no mutation guard exists anywhere in the real
+repository, and the claims directory has never been created here.
+
+### Scope
+
+One design section amended (`D-Checkpoint-Ownership`: two new subsections, four
+amended paragraphs, one corrected scope-boundary bullet), one requirement amended
+in place (`WFR-64`), one new missing-test item (373) and three amended in place
+(368(f), 368(h), 372(b)/(f)). No new requirement id, no new design section, no
+checkpoint's name, scope, size or dependency changes; no requirement is removed
+or renumbered; no settled architecture is reopened. The contract remains
+**specified, not implemented** — `WF8b` implements it after approval, and
+`S14`/`S15` remain blocked until then.
+
+## WF8b finding disposition (revision 63 → 64) — external plan review found the new checkpoint claim coordinated but never fenced, its takeover unbound to the evidence it displaced, and the durable-release recovery still able to return a mutation-capable null checkpoint (`GPT-R81-001` through `-005`)
+
+External plan review of revision 63 returned `Status: REVISE` with **three
+blocking** and **two important** findings. The reviewer independently recomputed
+`bundle_id` `686b7c84…` and `review_content_id` `2830671c…`, confirmed
+`PLAN.md` byte-identical to the plan document, confirmed the 64-row plan↔mapping
+normalization at zero mismatches, and reran all 489 hermetic tests green from the
+extracted archive. **Every one of the five findings was validated against this
+repository and its prototype before anything was edited, and all five are
+accepted.** None is rejected, in whole or in part.
+
+The reviewer also confirmed the parts of revision 63 that stand, and this
+revision preserves them unchanged: `WF8B-S14-001` is real; a Git-common-dir
+coordination record is the right direction and does not become a second
+authoritative status store; claim-before-state and release-after-durable-
+completion are the correct orderings; adoption is necessary for the already-
+interrupted live `S-CP3`; no timeout/heartbeat expiry is right; and `S14` must
+stay an end-to-end `/milestone-implement` test that never copies worktree A's
+state into B.
+
+### `GPT-R81-001` — blocking — an atomically replaceable claim is not a fencing claim
+
+**Validated, reproduced, accepted in full.** Revision 63 resolved ownership once
+at step 1c and let 1d/1f mutate afterwards with nothing re-asserting it. Read
+directly out of the bundled prototype: `resolve_ownership` returned
+`(outcome, checkpoint_id)` and no caller path re-checked the claim before
+`transition_checkpoint_in_progress`, before the checkpoint commit, or inside
+`release_checkpoint`, whose body was `resolve_claim(...)` → worktree check →
+`unlink(...)` on a pathname.
+
+Three interleavings were then reproduced in this revision's own passes, each
+with the revision-63 code as a control arm (`pass10.py` `F1`/`F2`/`F3`):
+
+1. `owner resolves → B takes over → owner writes state`: the displaced owner's
+   `WORKFLOW_STATE.json` changed after ownership had transferred;
+2. the same shape ending in a checkpoint completion commit;
+3. a takeover interleaved between the release's read and its unlink: the
+   displaced owner deleted **B's** claim.
+
+**The correction** is `D-Checkpoint-Ownership`'s new "Fencing: the
+mutation/handoff guard" subsection, which deliberately reuses
+`D-Approval-Commits`' own primitive family rather than inventing a second one: a
+durable `owner_token` on the claim; a fixed-path, no-replace `os.link` guard per
+work item that ordinary mutation and takeover both contend for; the one fixed
+window `acquire → assert_claim_owner(T) under the guard → mutate → release`; a
+`"destructive"` class (checkpoint commit, every state-file write) that no
+authorization can break; release as compare-and-delete inside that window; and
+epoch reclamation decided from durable data with no wall clock anywhere. The
+reviewer's six required tests are covered by `pass10.py` `F1`-`F6` and are owed
+as standing tests by new missing-test item 368.
+
+### `GPT-R81-002` — blocking — takeover authorization named a checkpoint, not the claim the human reviewed
+
+**Validated, reproduced, accepted in full.** The revision-63 prototype's
+authorization was `f"take over {work_item_id} {checkpoint_id}"`, computed from
+the caller's *intended* checkpoint and bound to no observed record at all;
+`takeover_evidence` was re-read internally but never required to equal what the
+user had seen. Reproduced against the revision-63 shape (`pass10.py` `F7`
+control arm): an authorization naming `S-CP3` displaced an installed claim
+holding **`S-CP2`**, recording the displacement only after the fact.
+
+**The correction**: `claim_observation_id` — the sha256 of the exact record
+bytes, defined equally for an absent (`"absent"`) and an unreadable record — is
+reported by the evidence step, quoted by the authorization literal
+(`take over <id> claim <observation> holding <displaced|none> as <checkpoint>`),
+and **re-verified under the guard** immediately before the rotation. A claim that
+changed since the evidence is a stale-evidence refusal with zero mutation; the
+same authorization cannot be replayed, because the rotation changes the bytes it
+was bound to; and `taken_over_from` now records the displaced record's own
+observation id, token and checkpoint. The reviewer's five required tests are
+covered by `pass10.py` `F7`-`F9` and are owed by new missing-test item 369.
+
+### `GPT-R81-003` — blocking — the durable-release recovery returned `FRESH` with a null checkpoint id
+
+**Validated, reproduced, accepted in full.** Revision 63's own text says the
+`(outcome, checkpoint_id)` return exists because the durable-release branch is
+reachable while `selected_id` is `None` — and the branch then returned
+`(FRESH, selected_id)`, i.e. `(FRESH, None)` for the final checkpoint. The
+author-side check that covered it (`pass7.py` `T6d`) asserted only the outcome
+and the claim removal, never a non-null id and never the real caller, so it did
+not satisfy missing-test item 363(d).
+
+**The correction**: a distinct terminal `NO_CHECKPOINT` outcome that cannot reach
+step 1d and re-enters `/milestone-implement`'s existing "nothing to implement
+this invocation" path; `FRESH` now always carries a concrete checkpoint id. Both
+the final-checkpoint crash window and the non-final case (release of X revealing
+Y) are run through the **real** step-1 procedure end to end in `pass10.py`
+`F10`/`F11`; item 363(d) is amended in place to require exactly that, and
+`pass2.py` `E2b`, `pass5.py` `R3b` and `pass7.py` `T6d` are amended in place
+where they encoded the old outcome.
+
+### `GPT-R81-004` — important — no sanctioned owner for the governing-v1 plan-revision mirror and phase transition
+
+**Validated against this repository, accepted in full.** Confirmed by reading the
+installed code rather than the narrative: `apply_plan_approval`
+(`scripts/workflow_state.py:2411`) writes `plan_approval`, `phase`,
+`state_revision` and `last_transition` and never `plan_revision`;
+`route_work_item` (`:1856`) is the only writer of that field on an existing entry
+and is called only from `/milestone-plan`'s `[2.1]` branch; and
+`.claude/commands/milestone-plan.md`'s `"1"` branch states in terms that it
+performs no state writes at all. The revision-63 round therefore produced
+registry `63` against mirror `62` — a state failing its own
+`PlanRevisionMirrorMismatchError` invariant — until a recovery session wrote it.
+
+**The correction** is the new `D-Plan-Revision-Publication` section above: one
+canonical `publish_plan_revision(...)` writer, called by the same operation that
+bumps the registry, with its three call sites named exhaustively; a narrow,
+property-stated v1 carve-out that preserves `WF8a-ii`'s inertness test for every
+v1 item **without** a state entry; and a fail-closed detection step in
+`prepare-ai-review.sh`'s plan stage so an unowned bump can never reach a reviewer
+again. Owed as standing tests by new missing-test item 371 (cited as "item 370" in revision 64's own text and in `WFR-65`'s verification cell; corrected in place in revision 65 after `OPUS-R82`'s validation sweep re-derived the item numbering).
+
+**What this round still had to do by hand, stated plainly**: the contract is
+specified here, not implemented — implementing it touches `scripts/` and
+`.claude/commands/`, which is `WF8b` implementation work after this plan is
+approved. So revision 64's own mirror was published exactly as revision 63's was:
+through `route_work_item(...)`, `plan_revision`'s documented writer, with the
+phase already at `AWAITING_EXTERNAL_PLAN_REVIEW` and therefore untouched. That is
+one documented API call rather than a plain JSON repair, and it is disclosed in
+`TEST_RESULTS.md` rather than described as something the workflow did for itself.
+
+### `GPT-R81-005` — important — the bundle carried two mutually exclusive accounts of its own state
+
+**Validated, accepted in full.** `REVIEW_REQUEST.md`'s corrected unresolved
+question 3 described the reconciled revision-63 state, while a later review-hint
+bullet in the same file still read "Registry and state file are deliberately
+unchanged (`plan_revision: 62`)", and `TEST_RESULTS.md` still said the state file
+was deliberately not written and that "the two reconcile in the plan-approval
+commit" — the exact claim question 3 had just shown to be false. Both wrapper
+files are rewritten for revision 64 to describe one state, and the plan-stage
+mirror check specified in `D-Plan-Revision-Publication` is the mechanical part of
+the answer.
+
+### Bounded author-side stress passes
+
+Two new passes over the corrected design, against real Git worktrees, using this
+repository's own unmodified `scripts/workflow_state.py`, with passes 1-9 re-run
+as regressions after every change:
+
+| pass | scope | result |
+| --- | --- | --- |
+| 10 | the three blocking findings, each with a revision-63 control arm; real-process takeover-vs-owner interleavings; the durable-release recovery through the real step-1 procedure | 50/50 |
+| 11 | adversarial attack on what pass 10 introduced: planted, corrupted and symlinked guards; assertion placement; guard lifetime; authorized breaks; same-worktree concurrency; the `S14`→`S15` regression | 33/33 — **1 important defect found**, fixed |
+
+**254 checks green across all eleven passes.** Pass 11's finding (`WF8B-S14-002`)
+was genuine and is fixed inside this revision: an **undecidable guard** failed closed for every
+session including the legitimate owner, with no defined escape — a permanent
+lockout, the same defect `A4` fixed for the claim record — and one release path
+would have silently deleted a guard it could not read. The escape is now
+`clear_malformed_guard`, explicit, user-authorized and bound to the guard's own
+observation id, and no release path removes an undecidable record. The repair
+cycle stopped after pass 11 with no blocking or important defect outstanding.
+
+Four assertions were amended in place, each carrying a comment naming the finding
+that changed it: `pass2.py` `E2b`, `pass5.py` `R3b` and `pass7.py` `T6d` for the
+terminal outcome (`GPT-R81-003`), and every `release_checkpoint`/takeover call
+site for the token and observation arguments the fenced contract requires.
+
+### Effect on the live `v2-1-dry-run` `S-CP3` state: none
+
+Re-verified read-only at the end of this session (`pass9.py` `P4`, `pass11.py`
+`G10`): `checkpoints["S-CP3"] == {"status": "IN_PROGRESS", "start_commit":
+"8375b64f9ad9ad44afe7574841a62457f5d83cea"}`, still uncommitted, `state_revision`
+unchanged; no claim record and no mutation guard exists anywhere in the real
+repository, and the claims directory has never been created here.
+
+### Scope
+
+One design section amended (`D-Checkpoint-Ownership`), one new
+(`D-Plan-Revision-Publication`), one requirement amended in place (`WFR-64`), one
+added (`WFR-65`), five new missing-test items (368-372) and one amended in place
+(363(d)). No checkpoint's name, scope, size or dependency changes; no requirement
+is removed or renumbered; no settled architecture is reopened. The contract
+remains **specified, not implemented** — `WF8b` implements it after approval, and
+`S14`/`S15` remain blocked until then.
+
+## WF8b finding disposition (revision 62 → 63) — self-discovered: an interrupted checkpoint's ownership is invisible to every other worktree, so `D3`'s dirty-resume rule is inert against the case it reads as covering (`WF8B-S14-001`)
+
+Self-discovered while preparing `S14`, the cross-worktree interrupted-checkpoint
+scenario, in `WF8b`'s manual dry run. Not an external review round: there is no
+`REVIEW_FEEDBACK.md` behind this revision, and no reviewer finding was accepted
+or rejected. The same self-discovered-continued-`WF8b`-scope route revisions 16,
+21, 22, 27 and 28 already took.
+
+### The finding
+
+`S14` requires a second real Git worktree (B) to attempt `/milestone-implement
+v2-1-dry-run` against a checkpoint left `IN_PROGRESS`-and-uncommitted in
+worktree A, and to be refused. Setting it up surfaced that the scenario is
+unexecutable as written — and, far more importantly, **why**: the guarantee it
+was written to test does not exist in the approved architecture.
+
+Both statements are true and the second is load-bearing:
+
+- **Scenario-specification defect (real, secondary).** `S14`'s procedure
+  assumes a fresh worktree B reaches `verify_dirty_resume_safety`. It cannot,
+  for ordinary Git reasons: `git worktree add` gives B a working directory
+  reflecting only committed history, and the `IN_PROGRESS` transition is
+  deliberately uncommitted.
+- **Workflow architecture defect (real, primary).** `D3`'s dirty-resume rule is
+  conditioned entirely on the invoking worktree's own view of
+  `WORKFLOW_STATE.json`. It protects only the worktree that already knows it is
+  resuming. Against the case it reads as protecting against — another worktree
+  acting on the same interrupted checkpoint — it is **inert**, because that
+  worktree never classifies the checkpoint as a resume in the first place.
+
+`verify_dirty_resume_safety` is not wrong. Its two error classes are both
+genuinely reachable. **Nothing routes a foreign worktree into it.**
+
+### Reproduced before anything was designed
+
+Established by calling the real `scripts/workflow_state.py` functions against
+both views, and then by running the full step-1 procedure against real Git
+worktrees:
+
+| view | `current_checkpoint_id` | `select_next_checkpoint` | step 1b classification | reaches 1c? | 1d executes? |
+| --- | --- | --- | --- | --- | --- |
+| worktree B (committed `HEAD`) | `null` | `S-CP3` | **FRESH START** | no — 1c is resume-only | **yes** |
+| worktree A (working tree) | `S-CP3` | `S-CP3` | RESUME | yes | no |
+
+So the concrete answer to "what would the command do in B today" is: select
+`S-CP3` and start it as a fresh checkpoint. Step 1d writes
+`checkpoints["S-CP3"] = {"status": "IN_PROGRESS", start_commit: <B's HEAD>}`
+into B's own tracked `WORKFLOW_STATE.json` and creates
+`.ai-review/runtime/WORKTREE_IDENTITY.json` under B; step 1e implements it;
+step 1f commits it with `Workflow-Checkpoint`/`Workflow-Work-Item` trailers and
+flips the same checkpoint to `COMPLETE` — while worktree A still holds it
+`IN_PROGRESS` with uncommitted work. Two worktrees, one checkpoint, both
+believing they own it, no refusal at any point.
+
+The exact root cause is that **the ownership fact is never durable**: step 1d
+does not commit, and the next commit touching the checkpoint (1f) already says
+`COMPLETE`. Verified against this repository's own history — no commit
+reachable from `HEAD` has ever carried a `v2-1-dry-run` checkpoint
+`IN_PROGRESS`. The one durable `IN_PROGRESS` marker that does exist
+(`workflow-v2-1-core:WF8b`) became so only incidentally, first appearing in
+`535d4fb`, an unrelated fix commit that happened to include the whole state
+file. Durability of the ownership fact is an accident of what other commands
+commit, never a contract.
+
+### Why this is new design, not an implementation defect
+
+Revision 62's normative text conditions `D3`'s dirty-resume rule and
+`D-Selection` rule 1 wholly on the invoking worktree's own state file, and says
+nothing anywhere about cross-worktree ownership. There is therefore **no
+approved contract that an implementation failed to honour** — the behaviour
+observed is exactly what revision 62 specifies. That is the distinction commit
+`535d4fb` drew in its own message when `GPT-R67-001`'s generalization landed
+directly as `WF8b` implementation work: that change "was already fully specified
+and approved through revision 58; only its generalization … was missing." This
+one was never specified. `docs/ai-workflow/WORKFLOW_V2_PLAN.md` is a plan-stage
+protected path under a **CURRENT** plan approval, so editing it stales that
+approval and the change must go through the ordinary plan route rather than
+landing as implementation work.
+
+### The design
+
+`D-Checkpoint-Ownership` (new section above), plus amendments to `D-Selection`
+rule 1 and `D3`'s dirty-resume paragraph. In summary: a per-work-item claim
+under the shared Git common directory, published atomically, consulted at a new
+`/milestone-implement` step 1c before any branch that can mutate; acquisition
+strictly before the `IN_PROGRESS` write, release strictly after durable
+completion; `select_next_checkpoint` untouched and still pure; the refusal
+still produced by the existing `verify_dirty_resume_safety`, so `S14a`/`S14b`
+stay distinguishable; and no automatic release on any inference that could
+discard a live claim.
+
+The candidate design was **validated rather than assumed**. Two competing
+authorities — committing every `IN_PROGRESS` transition, and a second state
+file — were considered and rejected on stated grounds, and the residual limit
+of the chosen one (a separate clone shares no common directory) was measured
+rather than argued away.
+
+### Bounded author-side design/stress passes
+
+Four passes over the candidate design, against real Git worktrees, using this
+repository's own unmodified `scripts/workflow_state.py`. Runnable:
+`docs/ai-workflow/dry-run/wf8b-s14-repro/pass{1..9}.py` (stdlib only; each
+creates and destroys its own throwaway repository under `/tmp`). Passes 1-5
+predate this revision and were re-run as regressions after every fix; passes
+6-9 are this revision's own.
+
+| pass | scope | result |
+| --- | --- | --- |
+| 6 | the candidate design against the real repository's actual shape, and its crash/corruption/symlink windows | 27/27 — **2 blocking + 2 important defects found**, all fixed |
+| 7 | adversarial attack on what pass 6's fixes introduced: adoption, `CONTINUE_CLAIM`, durability, takeover | 25/25 — **1 blocking + 2 important defects found**, all fixed |
+| 8 | the repaired `S14`→`S15` end to end; claims-directory symlink, hostile work-item ids, symlinked `.git`, refusal side-effect freedom | 27/27 — no new blocking/important defect |
+| 9 | scope boundaries (committed vs uncommitted `IN_PROGRESS`, v1 inertness), release ordering, real-repository re-verification | 14/14 — no new blocking/important defect |
+
+**171 checks green across all nine passes.** The seven defects found this
+revision, each reproduced before being accepted and each fixed inside this same
+revision:
+
+1. **Blocking (pass 6, A1/A2)** — **no adoption path.** Every pass through 5
+   arranged its fixture with the claim already taken, i.e. assumed the
+   interrupted checkpoint was started *after* the mechanism existed. The real
+   repository's `S-CP3` was not. In that configuration — dirty `IN_PROGRESS`
+   with no claim, which is the live state today — worktree B still
+   fresh-started and mutated, and a legitimate resume from A published no claim
+   either, so the very next foreign invocation was equally unprotected. The
+   design would have closed the defect for future checkpoints while leaving the
+   exact checkpoint `S14` tests permanently exposed. Fixed by `adopt_claim`,
+   automatic on the resume branch and separately invocable as a setup operation
+   that implements nothing.
+2. **Blocking (pass 6, A3)** — a claim published before the `IN_PROGRESS` state
+   write left the **legitimate owner** permanently refused by its own claim,
+   with no documented operation to clear it. Fixed by `CONTINUE_CLAIM`, which
+   releases and discards nothing.
+3. **Blocking (pass 7, T2)** — ownership resolution returned an outcome but not
+   a checkpoint id. `CONTINUE_CLAIM` and the durable-release branch are both
+   reachable while selection returns `None`, so a caller reusing `selected_id`
+   would write a `None` checkpoint id into the state file. Fixed by returning
+   `(outcome, checkpoint_id)`.
+4. **Important (pass 6, A4)** — `O_CREAT | O_EXCL` plus a separate write gives
+   exclusivity but **not content atomicity**; a crash mid-write left a torn
+   record that failed closed for every worktree including the owner, with no
+   recovery. Fixed by same-directory temp file plus `os.link`, with the explicit
+   takeover as the stated recovery for a record corrupted by anything else.
+5. **Important (pass 6, A5)** — the claim path was never required to be a
+   regular file, so a symlink planted there was followed out of the claims
+   directory and its target accepted as an authoritative claim. Fixed by
+   `lstat`/`O_NOFOLLOW` refusal on both the file and its directory.
+6. **Important (pass 7, T1)** — the explicit takeover unlinked the old claim
+   before publishing the replacement, so a failure between the two left the work
+   item **silently unclaimed** — strictly worse than refusing. Fixed by atomic
+   `os.rename` replace, which never leaves the path absent.
+7. **Important (pass 7, T5)** — a foreign worktree's refusal never named who
+   held the claim, on what checkpoint, or what the escape was; its message spoke
+   of resuming an `IN_PROGRESS` checkpoint the invoking worktree does not have.
+   Fixed by attaching the ownership evidence to the refusal, without changing
+   the error class `S14a`/`S14b` depend on.
+
+Two further design tightenings came out of the same passes and are recorded
+here because they change the contract rather than only the prototype: the single
+automatic release is gated on **durable** (committed at `HEAD`) completion
+rather than working-tree state, and a failed release now raises a typed
+ownership error with a defined recovery rather than a bare `OSError`.
+
+Passes 8 and 9 found no new blocking or important defect, so the repair cycle
+**stopped early** at four of its five permitted passes rather than manufacturing
+findings to consume the budget. Two assertions in the earlier passes
+(`pass2.py` E1, `pass5.py` R3) were amended in place where this revision
+deliberately changes the behaviour they encoded, each carrying a comment naming
+the finding that changed it; the revision-62 draft is preserved unmodified as
+`checkpoint_ownership_r62draft.py` so pass 6's reproductions remain executable
+rather than becoming a claim about code that no longer exists.
+
+### Effect on the live `v2-1-dry-run` `S-CP3` state: none
+
+Preserved exactly as found and re-verified read-only at the end of this session
+(`pass9.py` P4): `checkpoints["S-CP3"] == {"status": "IN_PROGRESS",
+"start_commit": "8375b64f9ad9ad44afe7574841a62457f5d83cea"}`,
+`current_checkpoint_id == "S-CP3"`, `state_revision == 18`, still uncommitted;
+`docs/ai-workflow/dry-run/scratch/c.txt` untouched. No claim record was written
+anywhere in the real repository — the mechanism exists only in the throwaway
+fixtures the passes create and destroy. Once `WF8b` implements this contract,
+`S14`'s corrected setup step will publish exactly one claim record under
+`.git/ai-workflow/checkpoint-claims/`, which is outside every worktree's working
+tree and therefore changes no tracked file, no `git status`, and no bundle
+identity.
+
+### Scope
+
+One new design section, two amended ones, one new requirement (`WFR-64`), and
+new missing-test items. No checkpoint's name, scope, size or dependency changes;
+no requirement is removed or renumbered. `docs/ai-workflow/dry-run/WF8B_SCENARIOS.md`
+is corrected for `S14` only, as justified by this architecture and no further —
+it is not a protected path of any current approval. `v2-1-dry-run`'s own
+Revision 5 plan and its `CURRENT` plan approval are **unaffected**: its only
+normative statements about this scenario are that checkpoint 3 is started in
+worktree A and left `IN_PROGRESS`, that it is the subject of `S14`'s two
+sub-cases and then, unchanged, of `S15`, and that the same checkpoint serves
+both because `S14` mutates nothing. Every one of those remains true verbatim
+under this design. No settled architecture is reopened: the approval
+transaction, the verifier-authority model, the quiescence lifecycles, bundle
+publication and the completion-obligation model are all untouched.
+
 ## WF8b finding disposition (revision 61 → 62) — external plan review confirmed `GPT-R78-*` resolved but found the verifier's approval authority sourced from a mutable record rather than a durable approval commit, and the recorded verifier unable to execute in isolation because its census omitted its own import dependency (`GPT-R79-001`/`-002`)
 
 External plan review of revision 61 returned `Status: REVISE`, **zero blocking
@@ -13508,7 +18568,20 @@ algorithm, stated in full:
 
 1. If `current_checkpoint_id` is non-null and its status is `IN_PROGRESS`,
    resume it, subject to the worktree-identity check (D3's dirty-resume
-   rule).
+   rule). **Amended, revision 63 (`WF8B-S14-001`)**: this rule states which
+   checkpoint is selected, and deliberately says nothing about *who may act
+   on it*. Through revision 62 that was the whole of the story, and it was
+   wrong in one direction only — a worktree whose own state file records
+   nothing `IN_PROGRESS` falls through to rule 2 and fresh-starts a
+   checkpoint another worktree may be holding interrupted, because rule 1's
+   antecedent is evaluated against the invoking worktree's own, possibly
+   uncommitted, state. Ownership is now a **separate, prior** question,
+   answered by `D-Checkpoint-Ownership` at `/milestone-implement` step 1c,
+   against a repository-shared record rule 1 does not read. This section is
+   otherwise unchanged, and `select_next_checkpoint` remains pure: the
+   determinism guarantee rules 2/3 provide is a property of the registry and
+   the state file alone, and folding a filesystem read into it would destroy
+   exactly the testability (missing-test item 28) it exists to give.
 2. Otherwise, select the first checkpoint in **the order of the
    `checkpoints` array in `docs/ai-workflow/registry/<work_item_id>-registry.json`**
    (corrected per `OPUS-R10-009`, which found rule 2 named "registry table
@@ -13528,6 +18601,2321 @@ algorithm, stated in full:
    drift between the two is caught rather than silently tolerated.
 4. If no such checkpoint exists and any checkpoint is still incomplete,
    stop and report the specific blocked dependency (never silently idle).
+
+### D-Checkpoint-Ownership — cross-worktree checkpoint ownership (new, revision 63, resolves `WF8B-S14-001`; **fenced**, revision 64, resolves `GPT-R81-001`/`-002`/`-003`; **origination proved rather than inherited**, revision 69, resolves `OPUS-R86-001` through `-005`)
+
+`D3`'s dirty-resume rule and `D-Selection` rule 1 are both evaluated against
+the **invoking worktree's own** `WORKFLOW_STATE.json`. The `IN_PROGRESS`
+transition is written at `/milestone-implement` step 1d, and **this design's
+own commit points never commit it** — the next commit touching that checkpoint
+is step 1f's, which flips it straight to `COMPLETE`. So in the ordinary case
+the ownership fact exists only as working-tree bytes in the worktree that
+produced it, for exactly the interval it is meant to protect, and a second
+linked worktree can be created inside that interval.
+
+**Stated at the scope it was actually measured at** (corrected, revision 69,
+`OPUS-R86-001`; revision 63 offered "no commit reachable from `HEAD` has ever
+carried a `v2-1-dry-run` checkpoint `IN_PROGRESS`" as support for a
+repository-wide property, and that generalization is false). "This design's own
+commit points never commit it" is **not** the same claim as "no commit ever
+carries it", and the second is false against this repository: five commits
+reachable from the revision-68 head carry `workflow-v2-1-core`'s own `WF8b`
+checkpoint `IN_PROGRESS`. The mechanism is ordinary and is this repository's
+normal practice — a checkpoint commit for **one** work item stages the whole
+tree, so a *different* work item's in-flight `IN_PROGRESS` transition rides
+along, and `D-Commit-Provenance`'s member rules do not scope
+`WORKFLOW_STATE.json` to the committing work item's own entry. A checkout can
+therefore supply `IN_PROGRESS`, and every argument in this section that rested
+on the opposite has been withdrawn or re-derived rather than restated
+(`pass16.py` `W0`, which measures the property over all 140 commits reachable
+from `HEAD` rather than over one work item's).
+
+The consequence is not theoretical. Traced and then reproduced end to end with
+this repository's unmodified `scripts/workflow_state.py`: from a worktree whose
+committed state has no `S-CP3` entry, `select_next_checkpoint` returns `S-CP3`
+as a **fresh start**, step 1c is skipped because it is documented resume-only,
+and step 1d writes `IN_PROGRESS` into that worktree's own tracked state before
+step 1f commits the same checkpoint `COMPLETE` — while the originating worktree
+still holds it `IN_PROGRESS` with uncommitted work.
+
+**What this section adds, and what it deliberately does not.** It adds one
+shared coordination record and one new resolution step. It does not change
+`select_next_checkpoint`, does not commit anything new, does not touch
+`WORKTREE_IDENTITY.json`'s schema or either of its error classes, does not
+change any protected path's content hash, and adds no new phase or gate.
+
+#### Authority and source of truth
+
+`WORKFLOW_STATE.json` remains the **sole authority** on checkpoint and workflow
+status. The claim is **coordination state only**. It is never read to decide
+what a checkpoint's status *is*, never written to record progress, and never
+consulted by any gate, approval, bundle or identity computation. It answers
+exactly one question: *may this worktree treat this work item as an unclaimed
+fresh start?* A foreign worktree must **fail closed before performing any
+authoritative workflow mutation** — before any `WORKFLOW_STATE.json` write,
+any `WORKTREE_IDENTITY.json` write, and any commit.
+
+This is why a second authoritative store was rejected outright. Two candidate
+alternatives were considered and both discarded on their merits:
+
+1. **Commit every `IN_PROGRESS` transition.** Durable and shared, but it costs
+   an extra commit per checkpoint start and interacts with
+   `D-Approval-Commits`' commit-shape rules, the "no protected path is dirty"
+   gate condition, and bundle/round identity. It also still fails when the
+   second worktree branched before the transition commit existed.
+2. **A second state file.** Rejected on the same grounds `D3` already rejects
+   status living anywhere but `WORKFLOW_STATE.json`: two writable records of
+   the same fact is precisely the shape this design has spent revisions 28-62
+   removing elsewhere.
+
+The shared Git common directory is the smallest authority that is genuinely
+shared and genuinely non-committed, matching what the fact actually is: local,
+repository-scoped, and never part of reviewed content.
+
+#### The record
+
+One file per work item at
+
+```text
+$(git rev-parse --git-common-dir)/ai-workflow/checkpoint-claims/<sha256(work_item_id)>.json
+```
+
+`git rev-parse --git-common-dir` resolves to the same absolute path from every
+linked worktree of a repository (verified for this repository: both real
+worktrees resolve `/home/rodrigo/Workspace/repflow-android/.git`), including
+when `.git` is itself a symlink and when the worktree is nested inside the
+primary checkout — this repository's own layout. It is outside every worktree's
+working tree, so it appears in no `git status`, no dirty-path set, no path
+classification, and no bundle.
+
+Keyed **per work item**, so `OPUS-R10-008`'s interleaving property is preserved
+unchanged: two work items with interleaved `IN_PROGRESS` work never disturb each
+other's *claim* record. (The claim is one file per work item, so this is true by
+construction here. The **identity** document is a single file shared by every
+work item, where the same keying is weaker than it reads — see "Because it is
+now load-bearing, its own writes must be serialized" below.) Named by **digest**, so no `work_item_id` value — including
+`../../escape`, `a/b/c` or an absolute path — can address anything outside the
+claims directory; this is the same "token, not a path" discipline
+`D-Bundle-Manifest`'s `bundles/<token>` already uses.
+
+Contents (`schema_version: 3` — revision 64 adds the three ownership-epoch
+fields below):
+
+| field | role |
+| --- | --- |
+| `work_item_id` | the claimed item; a record whose value disagrees with the requested id is rejected, never silently reused |
+| `checkpoint_id` | the checkpoint claimed |
+| `owner_token` | **(new, revision 64, `GPT-R81-001`)** 32 lowercase hex (`secrets.token_hex(16)`), minted at publication and at nothing else. Holding it is what "being the owner" means: durable data a fresh session can present, not a process-lifetime property. A takeover rotates it, which is precisely what makes the displaced owner's next assertion fail |
+| `takeover_count`, `previous_owner_tokens` | **(new, revision 64)** the ownership-epoch chain, so a claim's history is auditable rather than inferred from `taken_over_from` alone. **The count is of *rotations*, not of ownership transfers** (stated, revision 70, `OPUS-R87` non-blocking observation 1): a takeover against an **absent** claim records `takeover_count: 1` with `taken_over_from: null`, and a worktree may take over a claim it already owns, taking the count to 2. Neither is unsafe — each is separately authorized against fresh evidence — but "auditable rather than inferred" must not be read as "counts hand-offs". The establishing case is distinguishable by `taken_over_from: null`, which is the provenance marker rather than a second field |
+| `repo_root`, `git_common_dir`, `worktree_root` | the **ownership key** — deliberately the exact output `workflow_state._git_identity` already produces, so a claim's notion of "this worktree" is byte-identical to `verify_dirty_resume_safety`'s and the two can never disagree. **What it proves, exactly** (stated, revision 68, `OPUS-R85-001`): a *location*, never a worktree *instance* — see below |
+| `worktree_git_dir` | `git rev-parse --absolute-git-dir`. **Diagnostic only, never the ownership key**: it survives `git worktree move`, which `worktree_root` does not, and that is exactly what lets a takeover distinguish "the holder was deleted" from "the holder was relocated" instead of guessing. It is deliberately **not** promoted into the key by revision 68 either — it would not close the case that matters, since `git worktree remove` followed by `git worktree add` at the same path *reuses the same admin directory name*, reproduced in `pass15.py` `Y2b` |
+| `claimed_at` | timestamp. **Never used to expire a claim** — see "no automatic staleness" below |
+| `adopted` | provenance: whether this claim was adopted over an already-`IN_PROGRESS` checkpoint rather than taken at a fresh start. Provenance, not privilege — an adopted claim behaves identically in every other respect |
+| `taken_over_from` | present only on a claim published by an explicit takeover; records the displaced holder, its checkpoint, whether it was still a registered worktree, and when the takeover was authorized |
+
+**What the ownership key proves, and what it cannot** (new, revision 68,
+`OPUS-R85-001`). The key is often described in this section as a *triple*. It
+is one syntactically and two semantically: `_git_identity`
+(`scripts/workflow_state.py`) returns `git rev-parse --show-toplevel` as
+**both** its first and third element, so the key carries exactly two distinct
+values — the worktree's own path and the shared common directory — and both are
+plain filesystem paths. It therefore answers "is this claim addressed to this
+**location** in this repository?" and nothing else. It does not encode the
+worktree instance, its admin directory, its HEAD or its branch (`pass15.py`
+`Y0`: the key is unchanged by `git checkout --detach`).
+
+That distinction is load-bearing rather than pedantic, because **paths are
+reusable**. `git worktree move`, `git worktree remove` followed by
+`git worktree add`, or an `rm -rf` plus `prune` and recreate all vacate a path
+another worktree can then occupy — and `.claude/worktrees/<name>` is how this
+repository is actually driven, so recreating a worktree at a name used before is
+routine. A replacement worktree at the holder's recorded path produces a
+byte-identical ownership key while holding none of the holder's work.
+
+The evidence that *does* identify an instance is `WORKTREE_IDENTITY.json`
+(`.ai-review/runtime/`, inside the working tree and gitignored). Its **existence
+is instance-scoped**: it is destroyed with the worktree directory and is never
+inherited by a replacement, because `git worktree add` produces a fresh checkout
+and the file is ignored. That is why revision 68 requires it unconditionally
+wherever origination must be proved, and why the claim is never accepted as a
+substitute for it — see "Where the check belongs, and the ordering".
+
+**Because it is now load-bearing, its own writes must be serialized** (new,
+revision 69, `OPUS-R86-002`). Revision 68 promoted the identity entry from
+diagnostic audit data to the design's only evidence of worktree instance and
+put two writes of it on the step-1d critical path, plus one in each rotating
+operation — without ever asking what serializes them. Nothing did. The document
+holds **every** work item's entry
+(`expected_dirty_paths_by_work_item`, keyed by `work_item_id`), and
+`write_worktree_identity` is a plain read-modify-write; the revision-68 wrapper
+added a second read and a later `os.replace`, i.e. two levels of lost update
+rather than one. Reproduced with real threads: **12 of 12 trials lost an
+entry**, the window held open by the `git` subprocesses `_hash_dirty_paths`
+spawns between the read and the write.
+
+The consequence is not cosmetic, and it lands on the property this whole
+section now rests on. With the interleave pinned, a work item whose 1d
+completed — claim published, `owner_token` minted — has its entry removed by an
+**unrelated** work item's write, and is then refused at its own next 1c with
+`WorktreeIdentityMissingError`, holding a self-owned claim, with no exit but a
+user-authorized takeover. That is precisely `OPUS-R84-001`'s lockout, produced
+from outside the work item entirely, and an entry lost this way is
+indistinguishable to every later reader from one that was never written — so
+the crash window 1d's new ordering exists to always carry the record through
+can be entered and then have the record removed behind it.
+
+`OPUS-R10-008`'s interleaving claim is therefore **restated at the strength it
+actually has**: per-work-item keying means two work items never disturb each
+other's entry when the writes are *sequential*. It says nothing about
+concurrency, and this plan declares concurrent activity across work items the
+normal case. The mechanism is named here rather than left to the implementer,
+the same discipline `OPUS-R83-001` established for guard removal:
+
+- **a per-worktree lock object beside the document**
+  (`.ai-review/runtime/WORKTREE_IDENTITY.lock`), stable and **never unlinked**,
+  `fcntl.flock(LOCK_EX)`-serialized, held across the whole
+  load → validate → mutate → publish sequence. Per **worktree**, not per work
+  item, because that is the scope of the object being protected.
+  **"Never unlinked" is a property of this design's own writers, not of the
+  filesystem** (stated, revision 70, `OPUS-R87` non-blocking observation 2):
+  the same section names `git clean -xdf` and a wiped `.ai-review/` as things
+  that really happen to that directory, and if the lock object is removed it is
+  recreated with a **new inode**, so two writers can hold `flock`s on different
+  inodes and believe they share one. The two statements are reconciled rather
+  than left in tension: the guarantee is scoped to the interval between
+  external removals, an external wipe of `.ai-review/` is already an
+  identity-record-destroying event this design treats as the operator's act
+  (see "What this costs"), and no serialization claim in this section survives
+  one. An implementer must not read "never unlinked" as licence to cache the
+  file descriptor across such a wipe;
+- **the mutation guard cannot supply this, by construction.** It is keyed
+  `<sha256(work_item_id)>.lease`, so it cannot serialize two work items at all;
+  and 1d's establishing write is deliberately *outside* it, since it happens
+  before the claim exists. `D1`'s state-file lock does not cover it either — it
+  is explicitly never held across a `WORKFLOW_STATE.json` write, let alone
+  across this one;
+- **it is a leaf lock in one direction, which fixes its place in the lock order
+  once and for all.** No other lock in this design is ever acquired while it is
+  held — not the mutation guard, not `.guardlock`, not `D1`'s state-file
+  `flock` — and it is never held across a `WORKFLOW_STATE.json` write, a claim
+  publication or a guard acquisition. The existing guard-then-`flock` ordering
+  rule therefore cannot be inverted through it, and deadlock is impossible by
+  construction rather than by convention. **The converse is not claimed, and
+  must not be** (stated explicitly, revision 76, `OPUS-R93-002`): this lock
+  **is** acquired while the checkpoint mutation guard is held, because step 1d's
+  guarded mutation is `transition_checkpoint_in_progress` *plus*
+  `write_worktree_identity` — see "Which mutations are guarded, exhaustively"
+  below. That is edge `(5) → (3)` in the global partial order recorded once
+  under `D-Approval-Commits`, which is the site to consult for the whole graph;
+  a reader who takes the one-directional statement above for a two-directional
+  one will conclude this lock participates in no ordering rule at all, which is
+  precisely the error revision 75's consolidation made;
+- **the atomic `os.replace` publication is necessary and not sufficient**: it
+  prevents a torn document, never a lost update. Both are required, and they
+  are different obligations.
+
+Asserted over repeated trials rather than once, for two work items and for two
+writers of the same work item, with the unserialized writer carried as the
+control arm that reproduces the lockout (`pass16.py` `W2`).
+
+**Publication is atomic in both senses**: the payload is written whole to a
+temp file in the same directory and then `os.link`ed into place. `os.link`
+fails `EEXIST` if the name exists, so the filesystem — not a read-then-write
+sequence — decides the winner, and a reader can never observe a partially
+written record. `O_CREAT | O_EXCL` followed by a separate write was the first
+draft and is **not** sufficient: it gives exclusivity but not content
+atomicity, so a crash mid-write leaves a torn record that fails closed for every
+worktree including the owner, with no recovery. Reproduced.
+
+**Reads never follow a link.** Both the claims directory and the claim file
+must be real objects: `lstat` plus `O_NOFOLLOW`, refusing with
+`CheckpointOwnershipUnavailableError` if either is a symbolic link. A claim
+reached through a link out of the claims directory is not this repository's
+coordination state, whatever it contains.
+
+**Every undecidable read raises rather than returning "unclaimed."**
+Unreadable, torn, wrong schema, wrong work item, reached through a symlink —
+all fail closed. An undecidable claim can never be mistaken for an absent one.
+
+**But failing closed is for the operations that *resolve* ownership, never for
+the ones that *describe* it** (new, revision 66, `OPUS-R83-002`). Revision 65
+defined `claim_observation_id` as the sha256 of the record's exact bytes and
+simultaneously listed "reached through a symlink" among the undecidable states.
+A symlink has no such bytes under this design's own refusal to follow it, so
+the observation the takeover's authorization must quote could not be produced
+at all: `takeover_evidence` raised before returning any report, and the recovery
+the plan advertises for an unreadable record — "recovered the same way, and only
+that way, with its own observation binding" — was unreachable for that entire
+flavour of unreadable. A directory at the claim path was worse still: it opened
+successfully and failed at read, escaping as an undeclared `IsADirectoryError`.
+
+The identity is therefore defined for **every** state the claim path can be in:
+
+| state of the claim path | `claim_observation_id` |
+| --- | --- |
+| absent | the literal `"absent"` |
+| a readable regular file (well-formed, torn, or unparseable alike) | sha256 of its exact bytes |
+| a symlink, a directory, an `EACCES` file, a non-regular file, or unstattable | sha256 of a **domain-tagged**, canonical descriptor of what `lstat` alone reports — the kind, and for a symlink the raw link target as read by `readlink`, never anything read *through* it |
+
+The domain tag (a fixed prefix hashed ahead of the descriptor) is what keeps
+the two families disjoint: an authorization bound to "there is a symlink here"
+can never be satisfied by a byte-readable record, or the reverse. The
+descriptor is durable and re-verifiable, so the binding is as
+non-replayable as any other — replacing the symlink with a different symlink
+changes the observation, and the authorization stops matching.
+
+`takeover_evidence` **returns a report** for all of these rather than raising,
+and names the kind, so the operator is told what they are looking at.
+`resolve_claim`, `claim_checkpoint` and everything on the ownership-resolution
+path are unchanged and still fail closed — the split is exactly the one revision
+64 already drew between `resolve_claim` and `observe_claim`, now applied to the
+states it had missed.
+
+**One of those states is genuinely outside every documented recovery, and says
+so.** A rotation publishes by `os.rename` onto the claim path, which replaces a
+symlink or an unreadable file without following or writing through it — so both
+are recoverable by the operations below. `rename` cannot replace a **directory**,
+and this design never removes a directory it did not create. A directory at the
+claim path is therefore reported, flagged as not replaceable, and refused by
+both the takeover and the recovery with the operator action stated: remove it
+yourself once you have confirmed it holds nothing of yours, then re-run. That is
+a stated exit, not a dead end, and it is the only claim-path state no documented
+operation clears on its own.
+
+#### Fencing: the mutation/handoff guard (new, revision 64, `GPT-R81-001`)
+
+Revision 63 made claim *publication* and claim *replacement* atomic and stopped
+there. That is not enough, and the gap is the same one `D-Approval-Commits`
+already closed for the approval transaction: ownership was resolved once at step
+1c, and steps 1d/1f then mutated with nothing re-asserting it, so an explicit
+takeover landing between them left **two** worktrees each believing it was
+authorized. Reproduced directly (`pass10.py` `F1`/`F2`/`F3`, revision-63 control
+arms included): after `resolve_ownership` returned `RESUME`, worktree B took the
+claim over and worktree A still wrote authoritative state, still created a
+checkpoint completion commit, and — via a read-then-unlink release — still
+deleted **B's** claim. An atomic replace coordinates the record; it does not
+fence the work the record exists to coordinate.
+
+The correction reuses the primitive family this plan already owns, rather than
+inventing a second one:
+
+- **The guard.** One **fixed** pathname per work item, alongside the claim and
+  named by the same digest:
+  `.../checkpoint-claims/<sha256(work_item_id)>.lease`. Deliberately not
+  token-scoped: its whole purpose is to be the single object an owner's mutation
+  and a takeover's rotation contend for. Acquired by the same atomic, complete,
+  no-replace `os.link` publication the claim uses (`FileExistsError` means it is
+  held), with body `{lease_id, holder_owner_token, holder_worktree_git_dir,
+  work_item_id, checkpoint_id, step, step_class, acquired_at}`. It lives outside
+  every working tree exactly as the claim does, so it is invisible to
+  `git status`, to path classification and to every bundle.
+  `holder_worktree_git_dir` (new, revision 65, `OPUS-R82-002`) records **which
+  worktree** holds the window, on the same terms and with the same stable admin
+  directory the claim itself records, and is what makes "never breakable by
+  another worktree" a property of the guard rather than a downstream consequence
+  of step 1c — see the reclamation rules below. It is also the field that lets
+  the abandoned-guard recovery establish its deregistration precondition when
+  the *claim* is undecidable (revision 66, `OPUS-R83-002`).
+
+  Beside the guard, and never to be confused with it, sits one more object: the
+  **guard-mutation lock**, `.../checkpoint-claims/<sha256(work_item_id)>.guardlock`
+  (new, revision 66, `OPUS-R83-001`). It is created once, **never unlinked**,
+  carries no ownership at rest, and exists solely so that removing a guard is
+  atomic with respect to the comparison that authorized the removal. It is
+  invisible to `git status` and to every bundle for the same reason the guard
+  is. Its full contract is under "Release becomes compare-and-delete" below.
+- **The one fixed window shape**, and this ordering is the whole fix:
+  **acquire the guard → `assert_claim_owner(T)`, re-reading the claim *under* the
+  guard → perform the mutation → release the guard.** The assertion is inside,
+  not before. Every pause, stall or crash between assertion and mutation is
+  therefore inside a window a takeover cannot enter. `pass11.py` `G4` runs the
+  rejected `assert → takeover → mutate` shape as a control arm and shows it still
+  mutates; the guarded arm refuses.
+- **`assert_claim_owner(T)`** re-reads the claim and requires its `owner_token`
+  to equal exactly the token this session holds. On any failure — absent claim,
+  undecidable claim, rotated token — it stops immediately, mutates nothing,
+  releases the guard, and reports both tokens. No new error class: a claim that
+  now belongs to another worktree raises `CheckpointOwnedByOtherWorktreeError`,
+  and a token rotated within this worktree raises
+  `CheckpointOwnershipStateMismatchError`.
+- **Which mutations are guarded, exhaustively.** Step 1d's
+  `transition_checkpoint_in_progress` + `write_worktree_identity`; step 1f's
+  checkpoint commit (which carries `complete_checkpoint`'s state write); and the
+  release. Claim acquisition itself needs no guard — `os.link` already admits
+  exactly one winner, and the token does not exist until it succeeds — but every
+  mutation *after* acquisition is guarded, so a takeover landing in that instant
+  fails the owner's very first assertion. Read-only classification, selection and
+  verification run outside the guard, which is required rather than stylistic:
+  the guard is a pathname, not a recursive lock.
+- **Step classes**, by `D-Approval-Commits`' own test (a mutation is
+  `"destructive"` if its already-issued completion could still be externally
+  visible after a replacement owner has finished): the checkpoint commit and
+  every `WORKFLOW_STATE.json` write are `"destructive"`; the identity-file write,
+  the release and the takeover itself are `"ordinary"`. What is borrowed is the
+  **classification test** and nothing else (stated explicitly, revision 65,
+  `OPUS-R82-002`): each guard states its own breakability scope for its own
+  mechanism, because the two mechanisms differ in exactly the way that scope
+  depends on — `D-Approval-Commits`' transaction guard is held by a procedure
+  whose exclusively-acquired journal admits one transaction at a time, while
+  this one coordinates worktrees that share a Git common directory. Do not carry
+  `D-Approval-Commits`' wording across; the scoped statement below is this
+  guard's.
+
+  **What `"destructive"` guarantees, stated at the strength the mechanism
+  actually provides** (corrected, revision 65, `OPUS-R82-002`; revision 64 said
+  "never breakable, by anyone, under any authorization", and its own
+  same-token and superseded-epoch reclamation rules both broke that absolute —
+  a contradiction an implementer could resolve in either direction, one of them
+  reintroducing the very lockout `OPUS-R82-001` reports). The guarantee is: **a
+  `"destructive"` window held by the work item's current owner is never broken
+  from outside that owner's own worktree while that worktree is still registered
+  — under any authorization, including a complete and correctly bound
+  takeover.** Exactly three paths reclaim such a guard, and they are exhaustive:
+
+  1. **Superseded epoch** — the guard's `holder_owner_token` is not the claim's
+     current token. No authorization, any worktree. Safe because only a rotation
+     changes that token and a rotation only ever happens while holding this same
+     guard, so the holder's ownership was already transferred away. Necessary,
+     not merely permitted: it is the recovery path for a session that acquired a
+     guard and died before its own assertion could fence it.
+  2. **Same worktree, current token** — the holder's own interrupted step. No
+     authorization. `holder_worktree_git_dir` must match, which is the conjunct
+     revision 64 lacked. It does **not** fence two sessions inside one worktree:
+     they read the same claim, hold the same token and present the same
+     worktree, so the second reclaims the first's window and both proceed. That
+     is a stated scope limit of a cross-**worktree** contract, not serialization
+     — see "Same-worktree concurrency" below.
+  3. **The abandoned-guard recovery** — another worktree, but only once the
+     holder is no longer a registered worktree at all, and only under a distinct
+     authorization bound to both durable observations. See "Recovering a
+     `"destructive"` guard abandoned by a worktree that no longer exists".
+
+  Everything else refuses, and the consequence a reviewer should hold this to,
+  stated exactly: **no operation of any kind breaks a destructive window held by
+  the work item's *current owner* from outside that owner's own worktree, while
+  that worktree is still registered.**
+
+  That statement is a property of the mechanism only if a guard can never be
+  removed by an operation that did not compare against **that** guard — which is
+  precisely what revision 65 left unstated and its prototype did not do
+  (`OPUS-R83-001`, above). The absolute is therefore conditioned on the atomic
+  removal contract, not merely on the three reclamation paths: **every removal
+  of a guard, on every path, names the `lease_id` it just observed and is
+  indivisible with respect to that observation.** A design that enumerates the
+  three paths correctly and still removes by pathname does not satisfy this
+  statement, and the enumeration below should be read as "exactly three paths
+  *decide* to reclaim, and no path removes a guard it did not compare against."
+
+  **An absent `lease_id` is a refusal, never a wildcard** (new, revision 67,
+  `OPUS-R84` non-blocking observation 1). The absolute above says *every*
+  removal names the `lease_id` it observed, so a removal primitive that accepts
+  "no lease id" and falls through to an unconditional unlink contradicts it even
+  where no in-contract caller reaches that branch — and it is a live trap for
+  `WF8b`'s implementation, since the reviewer confirmed exactly that shape
+  survived revision 66's fix in the bundled prototype (the `held is None`
+  branch was corrected; the caller-side `lease_id is None` branch was not).
+  The lease id is therefore a **required** argument of the removal primitive,
+  and a `None`/absent value refuses rather than matching anything. Item 372(d)
+  carries the assertion.
+  Each path is outside the statement for a
+  different reason, and the differences are load-bearing rather than incidental.
+  Path 1's holder is by construction **not** the current owner — its ownership
+  was rotated away before the guard was reclaimed, and it is already fenced at
+  its own next assertion, which is exactly why breaking its window is harmless
+  (a still-registered worktree can be in this position, and must be: it is the
+  post-takeover crash case). Path 2 is not from outside the owner's worktree at
+  all. Path 3 requires the owner's worktree to be gone. A takeover — the only
+  authorization a live current owner could ever be exposed to — refuses on the
+  class unconditionally.
+- **Release becomes compare-and-delete, and the delete is atomic with respect to
+  the compare** (the second half is new in revision 66, `OPUS-R83-001`). The
+  token is asserted inside the guard and the unlink happens in that same window,
+  so a displaced owner can no longer remove the replacement owner's claim
+  (`pass10.py` `F3`, with the revision-63 read-then-unlink arm reproducing the
+  loss).
+
+  **"Compare-and-delete" is one indivisible operation, never two statements.**
+  Revision 65 left this to be read as a sequence, and the bundled prototype
+  implemented it as exactly that: `read_guard(...)`, then
+  `path.unlink(missing_ok=True)`. The unlink names the **pathname**, not the
+  identity the comparison established, so a guard published between the two is
+  removed instead — including a live `"destructive"` one belonging to the work
+  item's current owner in another worktree. Both branches leaked (an observed
+  `None` unlinked unconditionally; a matching `lease_id` unlinked whatever now
+  occupied the name), and the escalation is silent rather than noisy, because
+  `take_over_claim`'s `"destructive"` refusal is driven by `evidence["guard"]`:
+  once the file is gone the refusal cannot fire, and a correctly bound,
+  correctly authorized takeover rotates the claim out from under a live window.
+  Reproduced end to end in `pass13.py` `I2`, with the revision-65 primitive
+  carried as the control arm (`I2'`) that still loses the guard.
+
+  **The mechanism is named, not left to the implementer.** All three paths that
+  remove a guard — the release, `acquire_guard`'s reclaim-and-republish, and
+  `clear_malformed_guard`'s clearance — run their whole compare-and-remove
+  sequence inside `D1`'s process-scoped `fcntl.flock` serialization, held over a
+  **stable, never-unlinked** per-work-item lock object beside the guard:
+  `.../checkpoint-claims/<sha256(work_item_id)>.guardlock`. The lock object is
+  deliberately *not* the guard file, and deliberately never removed: the guard's
+  whole lifecycle is create-and-remove, and two processes holding `flock` on two
+  inodes that briefly shared one pathname are not serialized at all — the same
+  class of mistake as the defect being fixed. An implementer may substitute any
+  primitive that makes the removal name the identity rather than the path (a
+  rename to a lease-scoped name, verified before unlinking, is acceptable); what
+  is **not** acceptable is leaving "compare-and-delete" to be satisfied by a
+  read followed by an unlink.
+
+  Three properties of that lock are load-bearing and must survive any
+  substitution. It is **not the fence** and must never be mistaken for one — it
+  is held for a handful of syscalls entirely inside one guard operation, while
+  the *guard* is what spans a mutation window; `os.link`'s `EEXIST` exclusivity
+  is **retained underneath it** as defense in depth rather than replaced by it,
+  since `flock` is advisory; and it is **never held across a
+  `WORKFLOW_STATE.json` write**, so it is never held simultaneously with `D1`'s
+  state-file lock and the existing guard-then-`flock` ordering rule is untouched
+  and cannot be inverted. A process that dies inside a guard mutation releases
+  it in the kernel, so this cannot become a second class of permanent lockout.
+- **Contention is decided from durable data alone — no wall clock anywhere.** A
+  guard whose `holder_owner_token` is not the claim's current token is
+  **superseded**: only a rotation changes that token, and a rotation only ever
+  happens while holding this same guard, so such a guard was necessarily left by
+  a session whose ownership has already been transferred away. Any session
+  holding the current token removes it and retries acquisition **once**, with no
+  authorization and no timeout; this branch is deliberately **not** narrowed to a
+  worktree, because narrowing it would strand every post-takeover recovery. A
+  session that finds a guard carrying its own token **and its own
+  `holder_worktree_git_dir`** is looking at its own worktree's interrupted step
+  and reclaims it the same way — safely, because the window's first act is the
+  assertion. Same token from a *different* worktree is refused
+  (`CheckpointOwnershipUnavailableError`, revision 65, `OPUS-R82-002`): the token
+  is world-readable coordination data any worktree can read out of the claim
+  file, never a credential, so token equality alone proves the epoch and not the
+  holder. Anything else refuses and reports. **The whole decide-remove-republish
+  sequence runs inside the guard-mutation serialization** (revision 66,
+  `OPUS-R83-001`): reclamation observes a `lease_id`, removes *that* guard and
+  publishes its own with no instant in between for another session to occupy the
+  name — the same window the release had, closed the same way.
+- **An undecidable guard fails closed, and has exactly one escape**
+  (`pass11.py` `G2`, found and fixed inside this revision). Publication is
+  temp-file-plus-`os.link`, so this writer cannot produce a torn guard; a guard
+  that is nevertheless unreadable was corrupted by something else and blocks
+  every session including the legitimate owner. Left there that is a permanent
+  lockout — the same defect `A4` fixed for the claim record. The escape is
+  `clear_malformed_guard`: explicit, user-authorized, and bound to the exact
+  `guard_observation_id` the evidence reported, refusing outright if the guard is
+  well-formed or has changed since. A release path never deletes a guard it could
+  not decide. The clearance's own re-verification and removal run inside the
+  same serialization (revision 66, `OPUS-R83-001`), so a guard legitimately
+  republished between the authorization and the unlink is **not** removed by an
+  operation the user authorized against entirely different bytes.
+
+#### Same-worktree concurrency: a stated scope limit, not serialization
+
+Two Claude Code sessions in **one** worktree — a hung terminal, a second window,
+the ordinary way this repository is driven — read the same claim, hold the same
+`owner_token` and present the same `holder_worktree_git_dir`. Reclamation rule 2
+therefore applies between them: the second session reclaims the first's guard,
+including a `"destructive"` one, with no authorization, and both windows are open
+at once. Revision 64's own test asserted exactly this; two of its artefacts
+(missing-test item 372(f) and `REVIEW_REQUEST.md`) described it as
+"serialize on the guard", which is the opposite (`OPUS-R82-002`). Both are
+corrected, and the honest statement is the contract:
+
+**This mechanism fences worktrees, not sessions.** Within one worktree there is
+no process identity to fence with — no PID, no lease owner beyond
+`holder_owner_token`, no clock — and inventing one (a per-session lease identity
+asserted alongside the token) would immediately owe an answer to the question
+`OPUS-R82-001` asks: how the *next* session in that same worktree recovers the
+window a crashed sibling left behind, with no way to tell a crash from a live
+peer that does not reduce to a liveness guess. Rule 2 is that answer today, and
+it is why the ordinary same-worktree crash — by far the most common one — needs
+no authorized recovery at all.
+
+The residual risk is therefore real and is stated where a reviewer will see it:
+two sessions driving the same work item in the same worktree can both be inside
+the checkpoint commit. The mitigation is procedural (do not run two sessions
+against one work item in one worktree), and the mechanism does not pretend
+otherwise.
+
+#### Recovering a `"destructive"` guard abandoned by a worktree that no longer exists
+
+New in revision 65, resolving `OPUS-R82-001`. Revision 64 left one state with no
+documented exit at all: a session crashes **inside** step 1f's destructive
+window, and its worktree is then deleted or reimaged. The guard survives, the
+claim survives, the claim's `owner_token` is still the dead session's — and every
+sanctioned operation refuses. `take_over_claim` refuses on the class before it
+reaches its own guard acquisition; `clear_malformed_guard` refuses because the
+guard is perfectly well-formed; `release_guard` is reachable only from inside a
+window the surviving worktree cannot open. The remaining escape was
+hand-deleting `.../checkpoint-claims/<digest>.lease`, i.e. exactly the class of
+undocumented manual repair `GPT-R81-004` was raised against one round earlier.
+The crash window is not hypothetical for this design — `CONTINUE_CLAIM` exists
+for a crash immediately *before* it and the durable-release branch for a crash
+immediately *after* it; only the window between them had no recovery.
+
+**`recover_abandoned_destructive_guard(repo_root, work_item_id, checkpoint_id,
+*, now, user_authorization, evidence)`** is that recovery. It is a distinct,
+separately named operation — never a mode of the takeover, never reachable from
+`/milestone-implement` — and it introduces **no** liveness inference: still no
+timeout, no heartbeat, no age threshold, no `claimed_at` comparison, no "the
+holder looks gone".
+
+- **Its precondition is a durable, human-made fact, not a guess**: the holder is
+  not in `git worktree list --porcelain` (matched on the stable
+  `worktree_git_dir` as well as the recorded path, exactly as
+  `takeover_evidence` already matches). The operator's own `git worktree remove`
+  — or the machine's loss — *is* the liveness judgment, made by a human who
+  knows something the mechanism cannot know. While the holder is still
+  registered this refuses, and the refusal names the three concrete operator
+  actions rather than dead-ending: resume in that worktree (rule 2 self-heals
+  it), move it back to its recorded path if it was relocated, or
+  `git worktree remove` it and re-run the recovery. **One caution belongs with
+  that third action** (new, revision 72, `OPUS-R89-004`): if the worktree being
+  removed has a **detached** `HEAD`, removing it takes that `HEAD` out of
+  `D-Checkpoint-Ownership`'s origination reference, which may erase origination
+  evidence for *other* checkpoints that no other ref reaches — see "The
+  retention contract". The removal is still the right action here; the operator
+  is told the cost rather than left to discover it as a later refuse-to-admit
+  flip.
+- **Structural refusals come first**, each naming the operation that *does*
+  apply, so there is never a second route to a state some other operation owns:
+  no guard, or an undecidable one (→ `clear_malformed_guard`); an `"ordinary"`
+  guard (→ the takeover's own guard-release authorization); a **superseded**
+  guard (→ already reclaimable with no authorization, rule 1); a claim held
+  by **this** worktree (→ rule 2, re-enter the step); and no claim **at all**
+  (→ a guard with no claim is superseded by construction, so rule 1 again).
+- **An undecidable claim is owned here, not routed away** (new, revision 66,
+  `OPUS-R83-002`). Revision 65 refused on "no readable claim" and pointed at the
+  takeover's observation-bound corrupt-record path — but the takeover refuses
+  unconditionally on a `"destructive"` guard, so the two refusals pointed at
+  each other and the state had no exit at all. The correction gives it exactly
+  one owner, and this operation is the right one on its own terms: the takeover
+  is the route that applies **while the holder is still registered**, and its
+  destructive refusal exists to protect a *live* holder, whereas a deregistered
+  holder has already been judged dead by the same durable, human-made fact this
+  recovery is built on. Concretely, when the claim is undecidable:
+  - the **deregistration precondition is established from the guard**, matching
+    on its `holder_worktree_git_dir` rather than the claim's — which is exactly
+    what that field (revision 65, `OPUS-R82-002`) makes possible;
+  - the authorization binds to the undecidable record's own
+    `claim_observation_id`, now defined for every unreadable flavour above;
+  - the **checkpoint id comes from the guard**, the only durable record left,
+    and an operator-supplied id that disagrees is refused rather than
+    reconciled — nothing is guessed;
+  - the state where the holder is still **registered** refuses exactly as the
+    readable-claim case does, naming the same three operator actions, so a live
+    destructive window is still never broken and the undecidable claim does not
+    weaken that by a single step;
+  - a claim path that is a **directory** is refused with its own operator
+    action, per "The record" above.
+  The replacement claim records `claim_was_undecidable` and `epoch_chain_lost`
+  in `taken_over_from`, and carries the displaced `owner_token` recovered from
+  the guard, so a claim recovered from a torn predecessor is never presented as
+  a continuous epoch chain it cannot prove.
+- **The authorization is distinct in every component and bound to both durable
+  observations**: `recover abandoned destructive guard <work_item_id> step
+  <step> guard <guard_observation_id> claim <claim_observation_id>`. It names
+  the destructive step being abandoned, cannot be written from memory, cannot be
+  reused as a takeover literal, and is non-replayable for the same reason the
+  takeover's is — the rotation changes the bytes it was bound to.
+- **Both observations and the registration fact are re-read from durable state
+  immediately before anything is touched, and the reclamation happens only
+  after** (found by this revision's own `pass12.py` `H3e`, which caught the
+  opposite ordering: reclaiming first and refusing afterwards would destroy a
+  re-registered holder's live `"destructive"` guard on the very path that exists
+  to protect it, then report a refusal). The residual window — a re-registration
+  between those checks and the reclamation — is closed by the reclamation
+  itself, which requires the `lease_id` to still be exactly the abandoned one; a
+  resumed holder's first act is to reclaim its own interrupted guard, which
+  publishes a new `lease_id` and makes the recovery refuse. **Which instant the
+  invariant is evaluated at, stated explicitly** (revision 66, closing
+  `OPUS-R83`'s non-blocking observation 2): "while that worktree is still
+  registered" is evaluated at this re-verification point, not at the instant of
+  the reclamation. A worktree re-registered inside the residual window can have
+  its **abandoned** guard rotated away — harmless, because no live window
+  exists, nothing authoritative is written, and the holder is fenced at its next
+  assertion — while a *resumed* holder is kept out of that case entirely by the
+  exact-`lease_id` requirement.
+- **It rotates rather than deletes.** Mechanically it is a takeover whose guard
+  reclamation runs as `role="recovery"`: it mints a fresh `owner_token`,
+  increments `takeover_count`, appends the displaced token, publishes by atomic
+  replace, and records `taken_over_from.recovered_from_abandoned_guard`
+  (`lease_id`, `step`, `step_class`, `guard_observation_id`,
+  `holder_worktree_git_dir`) so a recovered claim is never indistinguishable
+  from an ordinary claim or an ordinary takeover afterwards. It writes **no**
+  authoritative workflow status, exactly as the takeover does not — and, for
+  exactly the same reason as the takeover, it **does** establish the recovering
+  worktree's own local identity record for the work item as part of the
+  rotation (new, revision 68, `OPUS-R85-001`): both rotating operations make the
+  invoking worktree the owner, and an owner that cannot pass 1c's origination
+  check has been handed something it cannot use. Once the claim
+  rotates, the abandoned guard is superseded **by construction**, so rule 1 —
+  not a second removal primitive — is what finally clears it, and the crashed
+  session, if it ever comes back, is fenced at its next `assert_claim_owner`
+  like any other displaced owner.
+
+**Both rotating operations supersede their own guard, and that is harmless**
+(stated explicitly, revision 67, `OPUS-R84` non-blocking observation 3). The
+takeover and the recovery each acquire the guard with the token they are about to
+displace, so from the instant their own rotation lands until their own release,
+the guard they hold is a superseded-epoch guard by the design's own rule 1. This
+costs nothing and is not a window anyone can exploit: both have finished every
+mutation they perform by the time they rotate, neither writes authoritative
+workflow state at all, and their compare-and-delete release correctly declines to
+remove a *replacement* guard should one be published in that interval — the same
+property revision 66 made atomic. It is recorded here because it is the first
+question a reader of the epoch rule asks about the two operations that rotate,
+and leaving it unstated invites an implementer to "fix" it by re-acquiring under
+the new token, which would reintroduce exactly the two-holder shape the guard
+exists to prevent.
+
+#### Where the check belongs, and the ordering
+
+`/milestone-implement`'s `[2.1 step 1]` gains a distinct step 1c and a
+tightened 1d/1f. The numbering below is normative; the existing resume-only
+step 1c is **replaced**, not supplemented.
+
+- **1b — select (unchanged).** `select_next_checkpoint(work_item, registry)`,
+  still pure, still deciding nothing about ownership. The last sentence of
+  revision 62's 1b ("If it equals `current_checkpoint_id` with status
+  `IN_PROGRESS`, this is a resume; otherwise it is a fresh start") is
+  **removed**: that sentence is the defect, and classification moves wholly to
+  1c.
+- **1c — resolve ownership (new).**
+  `resolve_checkpoint_ownership(repo_root, work_item, work_item_id,
+  selected_id)` returns **`(outcome, checkpoint_id, owner_token)`** (extended
+  from `(outcome, checkpoint_id)` in revision 64, `GPT-R81-001`) where `outcome`
+  is `RESUME`, `FRESH`, `CONTINUE_CLAIM` or the terminal `NO_CHECKPOINT`, or
+  raises. Returning the checkpoint id rather than leaving the caller to reuse
+  `selected_id` is load-bearing: `CONTINUE_CLAIM` and the durable-release branch
+  are both reachable while `selected_id` is `None`, and a caller reusing
+  `selected_id` there would write a `None` checkpoint id into the state file.
+  The `owner_token` is the token every subsequent guarded mutation must present;
+  it is `None` only for `NO_CHECKPOINT` and for `FRESH`, where 1d mints it by
+  acquiring the claim. Its internal order is the security property:
+  1. read the claim (fail closed on anything undecidable);
+  2. if **no** claim exists **and** nothing is locally `IN_PROGRESS`, return
+     `(FRESH, selected_id, None)` — the ordinary uncontended case, which must
+     stay exactly as permissive as it is today — or, when selection itself
+     resolved nothing, `(NO_CHECKPOINT, None, None)`;
+  3. otherwise the work item is **contended**, and this worktree must prove it
+     is the originating one **before any branch that can mutate**. There is
+     exactly **one** proof of origination, and it is the local identity record:
+     call `verify_dirty_resume_safety(repo_root, work_item_id)`, unchanged,
+     before any branch that can mutate — for a claim that is absent, foreign or
+     self-owned alike (**corrected, revision 68, `OPUS-R85-001`**; revision 67
+     made a decidably self-owned claim a second, sufficient proof, and that
+     proof is path-aliasable — see "Why the claim can never substitute for the
+     local identity record" below. Revision 66's unconditional ordering is
+     restored exactly, and the reachability defect revision 67 was resolving is
+     fixed at 1d's ordering instead).
+- **No mutation-capable outcome ever carries a `None` checkpoint id** (new,
+  revision 64, `GPT-R81-003`). `NO_CHECKPOINT` is a distinct terminal outcome
+  precisely so it cannot reach 1d: it re-enters `/milestone-implement`'s existing
+  "every registry checkpoint is already `COMPLETE` — skip straight to step 2"
+  path, unchanged. Revision 63 instead returned `(FRESH, selected_id)` out of the
+  durable-release branch, which is `(FRESH, None)` whenever the release is of the
+  **final** checkpoint — a mutation-capable result naming no checkpoint, and the
+  exact contradiction of the reason the checkpoint id is returned at all.
+- **1d — establish identity, acquire, then write state under the guard.** For
+  `FRESH`, the order is **`write_worktree_identity` → acquire the claim →
+  guarded state write (with the identity record refreshed inside the same
+  window, unchanged)**. Both orderings are load-bearing, not stylistic:
+  - *claim before state* (revision 63, unchanged): a crash between those two
+    writes must leave behind the authority that protects the checkpoint, and
+    the state-first variant demonstrably reopens the hole;
+  - *identity before claim* (**new, revision 68, `OPUS-R85-001`**): the crash
+    window between claim publication and the state write is exactly where
+    `CONTINUE_CLAIM` lives, and 1c requires the identity record there. Writing
+    the record first means that window can never be entered without it, so the
+    branch is reachable **by construction** rather than by relaxing the check.
+    This is the reviewer's own second option from `OPUS-R84-001`, which
+    revision 67 declined on the grounds that an identity entry would then
+    outlive a failed acquisition. That objection is correct and is now weighed
+    against the defect the alternative produced. The entry is benign, but
+    **only because of a guard revision 69 had to add** (`OPUS-R86-001`;
+    revision 68 asserted the inertness on a premise that is false; revision 69
+    then asserted it on a guard that was itself bypassable, `OPUS-R87-001`, and
+    the argument below is the twice-corrected one). The entry admits a worktree
+    to no branch on its own. Every branch it can reach additionally requires
+    either a **self-owned claim** (which a failed acquisition by definition did
+    not obtain) or an `IN_PROGRESS` this worktree can prove it **originated** —
+    which, since a checkout *can* supply local `IN_PROGRESS` (see the section
+    opening), means an `IN_PROGRESS` that is **absent from the origination
+    reference**, read fail-closed, tested by the adoption guard below and
+    re-tested at publication. Stated at the strength that reference actually
+    has (revision 70): what it establishes is that no ref in this repository
+    records the checkpoint as started — not that this worktree started it — and
+    it is not defeated by any operation the adopting worktree can perform on
+    its own refs, which is the property revision 69's `HEAD`-relative test
+    lacked and was reproduced lacking. Without that guard the third branch is
+    reachable and is the adoption path: a worktree
+    holding an identity entry earned on an *earlier* checkpoint of the same
+    work item inherits a later checkpoint's `IN_PROGRESS` by ordinary
+    fast-forward, adopts it, publishes a claim, and locks the originator out
+    (`pass16.py` `W1`, with the unguarded adoption carried as a live control
+    arm). The snapshot the entry carries is diagnostic audit data that
+    `verify_dirty_resume_safety` never compares, so writing it a few syscalls
+    earlier changes nothing it is read for.
+
+  The state write and the identity refresh then run inside the mutation guard,
+  whose first act is `assert_claim_owner` (revision 64) — so a takeover landing
+  between 1c and 1d refuses this session instead of leaving two authorized. The
+  establishing write is deliberately **outside** the guard, and can only be:
+  it happens before the claim exists, so there is no `owner_token` for a guard
+  body to carry and nothing yet to take over — the same reason claim acquisition
+  itself needs no guard. It is `"ordinary"` by the step-class test, and it is
+  reached only on the `FRESH` path, i.e. only when 1c has already established
+  that no claim exists and nothing is locally `IN_PROGRESS`. The invariant that
+  a **foreign** worktree fails closed before any `WORKTREE_IDENTITY.json` write
+  is therefore preserved unchanged: on that path there is no owner to be foreign
+  to. For `CONTINUE_CLAIM`, the claim already exists and only the guarded state
+  write is performed.
+- **1f — commit, verify durable, then release.** The checkpoint commit
+  (carrying `complete_checkpoint`'s state write, per `D-Commit-Provenance`)
+  happens first, inside a `"destructive"` guard window; the claim is released
+  only after that completion is durable, by the fenced compare-and-delete above.
+  Releasing before the commit hands the work item to another worktree while
+  the completion is still uncommitted — also demonstrated with a control arm.
+
+Because 1c's step 3 runs on **either** authority being live, a foreign worktree
+is refused before it can reach 1d, which is the property `S14` exists to prove.
+A foreign worktree is refused by `verify_dirty_resume_safety`, with `S14a`
+(`WorktreeIdentityMissingError`) and `S14b` (`WorktreeIdentityMismatchError`)
+the two classes it sees in the states `S14` is written against. That is
+re-asserted rather than assumed — item 364(a) carries a foreign arm in the
+identical state. **Stated at the strength the mechanism provides** (corrected,
+revision 68, `OPUS-R85-001`): those are not the *only* two classes a foreign
+worktree can ever see. A worktree carrying a valid identity record of its own
+**with an entry for this work item** passes the check and is refused one line
+later by the foreign-claim row with `CheckpointOwnedByOtherWorktreeError`
+instead. That state is reachable only for a worktree that has itself held this
+claim — a displaced owner after a takeover, typically — and it too refuses
+before any mutation, so the guarantee is unchanged; only the earlier claim that
+`S14a`/`S14b` are exhaustive was.
+
+**Why the claim can never substitute for the local identity record** (revision
+68, `OPUS-R85-001`; this replaces revision 67's "why the self-owned-claim proof
+cannot weaken the refusal", which was wrong). Revision 67 argued that
+`claim_is_this_worktree` and `verify_dirty_resume_safety`'s identity comparison
+"test the same triple against the same source", so a worktree satisfying the
+first would always have satisfied the second's *mismatch* check, and the
+relaxation therefore "removes exactly one refusal and no other". The first half
+is true. The conclusion does not follow, and the error is in treating the claim
+as proof that a worktree "is the originating one". The two mechanisms compare
+the same values, but their **existence** proves different things, and the
+relaxation discarded precisely the existence half:
+
+- the **claim** is shared and durable, lives in the Git common directory, and
+  survives its holder's destruction. Its ownership key is two filesystem paths
+  ("The record", above), so it proves a *location*;
+- the **identity record** is local, gitignored, per-worktree, and is destroyed
+  with the worktree that wrote it. Its existence proves an *instance*.
+
+Skipping the second because the first matched therefore admits any worktree that
+occupies the holder's path. Reproduced end to end in `pass15.py`, through the
+**real** step-1 procedure with revision 67's resolver carried as the live
+control arm, in both constructions: `Y1`, holder relocated by `git worktree
+move` and a different worktree created at the vacated path; and `Y2`, holder
+removed and recreated at the same path with the same name — which additionally
+**reuses the same admin directory**, so binding the proof to `worktree_git_dir`
+would not have closed it. In both, revision 67 admits the replacement, lets it
+perform an authoritative state write, and lets it commit and release the
+checkpoint under the original holder's **unrotated** `owner_token`, with
+`takeover_count` 0, `previous_owner_tokens` empty and no `taken_over_from` —
+two worktrees holding one valid token, the fencing model's single-owner
+invariant defeated without a rotation and with nothing auditable afterwards.
+`Y6` reproduces the same worktree reaching the design's single automatic
+release and dropping another worktree's claim residue.
+
+So the relaxation is **withdrawn**, not narrowed, and nothing replaces it: there
+is one proof of origination and it is `verify_dirty_resume_safety`, applied to
+every contended path — claim absent, foreign or self-owned alike, adoption
+included. The correct route for a worktree that legitimately wants a claim it
+cannot prove it originated is the one this design already has for exactly that
+judgment: the **explicit takeover**, which is user-authorized, bound to the
+exact record observed, rotates the token, increments `takeover_count`, appends
+the displaced token and records what it displaced (`Y5`). That converts a
+silent, unfenced, unauditable transfer into an explicit, fenced, audited one.
+
+**What this costs, stated rather than implied.** A worktree that loses its own
+identity record while holding a claim — `git clean -xdf`, a wiped
+`.ai-review/`, a record corrupted by something else — is refused, and the
+mechanism genuinely cannot distinguish it from a replacement worktree at the
+same path. That is `D3`'s pre-existing rule, unchanged by this section and
+identical to revision 66's behaviour; revision 67's attempt to let the claim
+cover it is what `OPUS-R85-001` shows cannot be done. It is not a dead end: the
+explicit takeover applies, and **both rotating operations establish the
+incoming owner's own identity record** as part of the rotation (see the
+takeover's bullets below), so the state has a documented,
+authorization-bound, fenced exit rather than a hand repair — including when the
+record is not merely absent but **corrupt**, which revision 69 gives its own
+authorization component rather than the hand deletion revision 68 in fact
+required (`OPUS-R86-003`).
+
+**Why `verify_dirty_resume_safety` is the refusal, and stays first.** A claim
+poses exactly one question to the invoking worktree — "are you the owner?" — and
+`D3`'s error classes are the ways of failing to answer it: no local identity
+record (`WorktreeIdentityMissingError`, `S14a`), an identity record for a
+different worktree (`WorktreeIdentityMismatchError`, `S14b`), and — **stated
+explicitly, revision 68, `OPUS-R85-002`; revision 67 enumerated only the first
+two and called that exhaustive** — a record that cannot be decided at all
+(`CorruptJsonError`). The third class is decided the same way as the other two:
+**it refuses, and it refuses here**, before any authoritative mutation.
+Corruption is never tolerated on the strength of a self-owned claim, because a
+corrupt record proves nothing about the instance either.
+
+**The enumeration is closed over document shape, not sampled** (corrected,
+revision 69, `OPUS-R86-004`; revision 68 stated the third class as "unparseable
+bytes or a schema-invalid document" and put the obligation on the *writer*,
+which is not where the escape was). The load-bearing refusal at 1c is the
+**reader**, `verify_dirty_resume_safety`, and it validates a document it did
+not write — so the validator's own undeclared exits escape the refusal path
+itself, with `_attach_ownership_evidence`'s ownership evidence and escape hint
+attached to an exception the operator reads as a crash. Reproduced against the
+real function: `[]`, `"hello"`, `42` and `true` — all squarely "a schema-invalid
+document" — exit as `AttributeError`, because `validate_worktree_identity`
+calls `data.get(...)` before establishing that `data` is a mapping; a snapshot
+member that is not iterable exits as `TypeError` from `set(entry)`; and a
+document whose whole content is JSON `null` is reported as
+`WorktreeIdentityMissingError`, collapsing the two classes this paragraph
+spends its length distinguishing, because `_load_json` returns `None` for a
+missing file and for `null` alike.
+
+The classes are therefore stated as a **total partition of document shape**,
+which makes exhaustiveness checkable rather than asserted:
+
+| document shape | class |
+| --- | --- |
+| absent (established by `exists()`, never by a falsy parse) | `WorktreeIdentityMissingError` |
+| unparseable bytes | `CorruptJsonError` |
+| JSON `null` | `CorruptJsonError` |
+| a valid JSON document that is not an object | `CorruptJsonError` |
+| an object failing the schema, snapshot members included | `CorruptJsonError` |
+| valid, no entry for this `work_item_id` | `WorktreeIdentityMissingError` |
+| valid, a different worktree's identity | `WorktreeIdentityMismatchError` |
+| valid, this worktree, entry present | admits |
+
+Two `WF8b` obligations follow from it, on the **validator** rather than only on
+the writer: `validate_worktree_identity` must reject a non-mapping top-level
+document, and a non-mapping snapshot member, with the declared
+`CorruptJsonError` — "validate before mutate" cannot close an escape that
+happens *inside* validation; and `_load_json`'s `None` must stop meaning both
+"absent" and "the document is JSON `null`", with absence established by
+`exists()` in both the reader and the writer, so a `null` document refuses and
+is never overwritten. Every row above is asserted against **both** the reader
+and the writer, with the revision-68 shapes carried as live control arms
+(`pass16.py` `W3`, `W4g`-`W4i`).
+
+**But a partition over document shape is not a partition over what the path
+can be** (new, revision 70, `OPUS-R87-005`). Every shape row above holds — that
+half is genuinely closed. What is not closed is the identity **path's kind**,
+and the 1c refusal escapes on it exactly as `OPUS-R83-002` showed the *claim*
+reader escaping one axis earlier. Reproduced against the real functions, each
+consumer probed in its own fresh fixture:
+
+| path kind | reader (the 1c refusal) | writer | `local_identity_observation` |
+| --- | --- | --- | --- |
+| valid regular file | admits | writes | `valid` |
+| **directory** | undeclared `IsADirectoryError` | undeclared `IsADirectoryError` | `undecidable` |
+| **`EACCES` regular file** | undeclared `PermissionError` | undeclared `PermissionError` | `undecidable` |
+| **symlink → valid document** | **follows it and admits** | follows and replaces it | `undecidable` |
+| **symlink → missing target** | `WorktreeIdentityMissingError` | follows and replaces it | `undecidable` |
+| **fifo / non-regular** | **blocks indefinitely** | blocks indefinitely | `undecidable` |
+
+`IsADirectoryError` and `PermissionError` are I/O failures rather than schema
+outcomes, and they are not folded into the schema classes. The defect is that
+they escape the **load-bearing refusal path** undeclared, with
+`_attach_ownership_evidence`'s hint attached to an exception the operator reads
+as a crash — the precise wording this section already uses about revision 68's
+insufficient classification. The fifo row is worse than an undeclared escape:
+step 1c does not refuse at all, it hangs, and no timeout exists anywhere in
+this design to end it. And the symlink rows are a direct contradiction of this
+section's own "the literal is unchanged for a valid or absent document, so no
+earlier authorization shape moves": the reader **accepts** a symlinked document
+as valid while the observer calls it undecidable, so the takeover literal grows
+` repairing identity <id>` for a document 1c is simultaneously admitting, and
+the authorized repair then discards it.
+
+The partition therefore gains a **second axis** — what the path *is* — resolved
+before the shape axis is reached at all:
+
+| path kind | class |
+| --- | --- |
+| a real regular file | proceed to the document-shape partition above |
+| a symlink (to anything, valid target included) | `CorruptJsonError` — never followed |
+| a directory, a fifo, a socket, a device, any non-regular file | `CorruptJsonError` |
+| present but unstattable, or `EACCES` | `CorruptJsonError` |
+
+Two obligations follow, both on the reader and the writer alike. The path must
+be established as a **real regular file before it is opened**, by `lstat` plus
+`O_NOFOLLOW` — the discipline `_read_claim_bytes` already applies to the claim
+record, reused rather than reinvented — which is also what makes the fifo row
+refuse instead of blocking, since the refusal is decided from `lstat` and the
+open never happens. And the two consumers must be stated to **agree**:
+
+> `local_identity_observation(...).state == "undecidable"` **iff**
+> `verify_dirty_resume_safety` refuses that document with a class from the
+> combined partition.
+
+That is an invariant, not a coincidence, and it is stated because today the two
+disagree in four of the rows above while the takeover's repair component is
+derived from one and 1c's decision from the other. `CorruptJsonError` is
+reused rather than a new class introduced, for the reason "New error classes"
+below already gives: these are cases the existing taxonomy covers, and a
+document this worktree cannot decide is a document this worktree cannot decide,
+whatever the reason.
+
+Two further consequences follow, and both are contract rather than accident:
+
+- the check being unconditional is what keeps the third class firing at 1c. Under
+  revision 67 a self-owned claim skipped it, so the corruption surfaced from the
+  middle of 1d — *after* the `WORKFLOW_STATE.json` write — and, in the
+  schema-invalid flavour, as an undeclared `TypeError` out of
+  `write_worktree_identity`'s `expected[work_item_id] = …` (`pass15.py` `Y4`,
+  `Y7a`). Worse, the state entry it had just written moved every later
+  invocation onto the `RESUME` branch, which under that ordering never
+  re-checked, so the corrupt record survived indefinitely, unrepaired and
+  unreported. Under the restored ordering every invocation reports it;
+- `write_worktree_identity` must **validate the document it loaded before
+  mutating it**, so every corrupt-document exit is the declared
+  `CorruptJsonError` and no path escapes with an undeclared exception type —
+  the same discipline `OPUS-R83-002` established for `IsADirectoryError`. It
+  must also **publish atomically**, and the obligation is stated in the one
+  form an implementer cannot satisfy by accident (**corrected, revision 69,
+  `OPUS-R86-005`**): the final pathname is written **exactly once, by
+  `os.replace`**, from a same-directory temp file with a per-call unique name,
+  and by no other call in the sequence. Revision 68 stated it as
+  "same-directory temp plus `os.replace`" and claimed it was "prototyped and
+  asserted in `pass15.py` `Y7`". That claim was **false and is withdrawn**: the
+  prototype wrapped the installed `write_worktree_identity`, which writes the
+  real pathname with a plain `write_text`, and only then staged a temp file and
+  replaced it — so the writer offered as proof that a torn record "can never"
+  happen wrote the final pathname non-atomically on every single call, and
+  `Y7` asserted nothing about atomicity (`Y7e` checks only that no temp file
+  survives). The correction is structural, not an extra call: the snapshot
+  computation is **separated from the write** (`build_worktree_identity_document`
+  is pure; the publishing writer is the only thing that touches the pathname),
+  which is what makes the single-write property hold rather than be hoped for.
+  Both obligations are now genuinely prototyped and asserted — write-sequence
+  instrumentation, a torn-write injection, and the revision-68 shape as the
+  control arm that writes the pathname twice (`pass16.py` `W4`).
+
+**And the corrupt-record state has exactly one owner, whose repair completes**
+(new, revision 69, `OPUS-R86-003`; revision 68 left two obligations pointing at
+each other). Revision 68 named the takeover as "the repair for a record
+corrupted by something *else*", and simultaneously required the takeover to
+establish the taking worktree's own identity record — a write that owes
+validate-before-mutate and therefore **refuses** on a corrupt document. Both
+could not hold, and what the mechanism actually did was worse than refusing: it
+established the record *after* `_publish_replacing`, with the guard released in
+`finally` and no compensating action, so the documented repair reported failure
+having already rotated the claim, burned the displaced token and incremented
+`takeover_count` — and each retry rotated again, filling the epoch chain the
+audit trail depends on with spurious takeovers. `recover_abandoned_destructive_
+guard` had the identical shape and failed the identical way. Its only real exit
+was hand-deleting `WORKTREE_IDENTITY.json`, the manual repair the same paragraph
+dismissed as escaping nothing — which under that design was not a dismissal but
+a **required precondition**. That dismissal is withdrawn. The corrupt-record
+state is now owned end to end:
+
+- **the identity establishment runs before the rotation publishes**, inside the
+  same guard window and after the stale-evidence re-verification, so a document
+  this worktree cannot decide or cannot publish refuses with the claim
+  byte-identical, `takeover_count` unchanged, no new `previous_owner_tokens`
+  entry, and N failed attempts indistinguishable from none (`W5`). The reverse
+  residue — an identity entry outliving a failed rotation — is benign for
+  exactly the reason 1d's own ordering already relies on;
+- **an undecidable document is repaired under its own authorization
+  component**, not as a side effect. `takeover_evidence` reports the taking
+  worktree's own identity document as a first-class observation, with an
+  `identity_observation_id` over its exact bytes; when that document is
+  undecidable, both rotating operations' authorization literals grow
+  ` repairing identity <id>`, and the operation re-verifies that observation
+  under the guard and refuses on stale evidence exactly as it does for the
+  claim. The literal is unchanged for a valid or absent document, so no earlier
+  authorization shape moves. This is designed repair-by-overwrite with human
+  authorization bound to the exact bytes being discarded — never the silent
+  overwrite `OPUS-R86-004` forbids, which
+  `establish_worktree_identity` still refuses outright on every path (`W7`);
+- **and the observation is a *required* component of the evidence, whose
+  absence refuses rather than falls back** (new, revision 70,
+  `OPUS-R87-006`). Revision 69 derived the literal's repair component from
+  `evidence["local_identity"]` while the repair *decision* fell back to
+  re-observing when that member was missing. When the member is present the two
+  agree; when it is absent they diverge, and they diverge in the unsafe
+  direction — the literal loses the repair component, so the user is never
+  asked to authorize a repair, while the fallback re-observes, finds the
+  document undecidable, compares it against **itself**, and repairs it. That is
+  precisely the outcome the bullet above says cannot occur, and it is the
+  contract `WF8b` would implement against, so it is closed in the specification
+  rather than left to the prototype's internal builders always happening to
+  populate the member. Both rotating operations therefore **refuse, having
+  mutated nothing**, when the evidence they are given carries no identity
+  observation; the repair is performed **only** when the authorization the
+  caller validated carried a repair component derived from that same
+  observation; and re-observation under the guard stays exactly what it is —
+  the stale-evidence check — and never doubles as the source of the decision
+  the authorization exists to gate.
+
+So the complete repair sequence is one authorized operation with **no
+hand-deletion step**: observe, authorize (including the repair), rotate, and
+the taker passes its own 1c immediately afterwards — asserted end to end
+(`W7e`-`W7g`), with `recover_abandoned_destructive_guard` carrying the
+identical contract (`W6`).
+
+Refusing earlier with a single "owned by another worktree" class would collapse
+these distinctions and require a new refusal class for cases the design already
+handles. The one thing bare refusal got wrong is diagnosis: the message speaks
+of resuming an
+`IN_PROGRESS` checkpoint even when the invoking worktree has none, and never
+names who holds the claim or what the escape is. So **every** refusal 1c raises
+**carries the ownership evidence** — the claim
+record, the holder, the claimed checkpoint, and the escape that applies — which
+the command must report (**generalized, revision 67, `OPUS-R84-001`**: through
+revision 66 the evidence was attached only when the claim was *foreign*, so a
+self-owned claim could still yield a bare message about resuming an `IN_PROGRESS`
+checkpoint that did not exist, naming no escape at all). For a foreign claim the
+escape named is the explicit takeover; for a self-owned one it is this worktree's
+own continuation, or the concrete disagreement between claim and state that the
+operator must reconcile. The classes the scenarios depend on are unchanged; only
+the report is complete.
+
+**And the rule is no longer scoped to a decidable claim being present**
+(corrected, revision 70, `OPUS-R87-003`'s accepted residual). Through revision
+69 it read "every refusal 1c raises **while a decidable claim is present**",
+and the evidence helper returned immediately when the claim was absent. That
+scoping structurally excluded the state this repository is actually in — no
+claim exists for `workflow-v2-1-core` at all — and, more generally, the entire
+class of refusals the new origination test introduces, since a checkpoint being
+adopted has by definition no claim yet. It also excluded the refusal a worktree
+that has never run 1d for the work item sees, which is the first checkpoint any
+worktree starts on any work item. So the evidence is attached on **every**
+refusal 1c raises, and when the claim is absent the report says so explicitly
+and names the escape that applies to an absent claim: the explicit takeover,
+which the partition's "readable **or absent**" row already covers. An absent
+claim is an observation like any other here, exactly as it is for
+`claim_observation_id`; it is not an excuse to report nothing.
+
+**And the evidence carries the observation that produced the refusal** (new,
+revision 71, `OPUS-R88-005`). The four components above — the claim record, the
+holder, the claimed checkpoint, and the escape — were enumerated for the world
+before the origination test existed. For a `CheckpointOriginationUnprovableError`
+they evaluate to `absent`, `none`, the checkpoint, and "take it over", and the
+one fact that actually explains the refusal is missing: an operator in this
+repository's live state is told that origination is unprovable and that the exit
+is a takeover, without being told whether the reason is historical or contended,
+or which commit says so. That is the same diagnosis defect revision 67
+generalized the rule to fix, reappearing in the class revision 70 introduced. So
+the evidence for that class carries, as first-class observations:
+
+- **this worktree's local identity** — present, absent or undecidable (the same
+  `local_identity_observation` the rotating operations already consume);
+- **whether the claim is absent**, distinguished from foreign and from
+  self-owned;
+- **which of the two documented routes produced the refusal** — an observed
+  `IN_PROGRESS`, or an undecidable read. When **both** hold in the same
+  reference, the **observed-`IN_PROGRESS` route is reported in preference** to
+  the undecidable one (new, revision 72, closing this round's non-blocking
+  observation 1: the decision is refuse either way, so reporting which one is
+  diagnosis rather than safety — but with reporting left to whichever commit
+  `rev-list` ordering happened to reach first, an operator who repairs the
+  reported undecidable commit and retries meets a second refusal nobody told
+  them about);
+- **for the observed route, the commit id at which it was observed and the
+  status read there**; for the undecidable route, the commit id and the shape
+  that could not be decided;
+- and **the reference the observation was evaluated against**, so the operator
+  can rerun it.
+
+Asserted on the live shape rather than described (`pass18.py` `R5a`/`R5b`), with
+revision 70's message carried as the control arm that reports none of it
+(`R5c`).
+
+**The origination observation is deliberately *not* bound into the takeover's
+authorization literal**, and the reason is stated here rather than left to be
+inferred, because the parallel decision is stated for the dirty-work
+observation. The takeover is a human override of precisely this refusal. The
+reference it would bind to is changed by ordinary merges, ordinary ref movement
+and ordinary maintenance ("The residual, at its actual strength"), so binding
+the literal to it would convert routine repository activity into stale-evidence
+refusals of an authorization the user has already reviewed — for no safety gain,
+since the takeover's job is to proceed *despite* the observation, not because of
+it. The literal therefore stays byte-identical whether or not the origination
+observation is present, and whether or not it changed between evidence and
+authorization; that non-binding is itself asserted, so it is a checkable
+property rather than an omission (`pass18.py` `R5d`). What the literal binds
+remains what it bound: the claim observation and the checkpoint.
+
+#### Reconciling the two authorities
+
+With this worktree's origination proved by step 3 — the local identity record,
+and only it (revision 68, `OPUS-R85-001`) — and the claim self-owned by its own
+ownership key or absent, the remaining cases are decided as follows. Each is a
+*required* case, and each has a defined outcome:
+
+| local `WORKFLOW_STATE.json` | shared claim | outcome |
+| --- | --- | --- |
+| nothing `IN_PROGRESS` | none | `FRESH` — ordinary start; 1d acquires |
+| checkpoint X `IN_PROGRESS` | none | **adopt**, then `RESUME` — but only when X's `IN_PROGRESS` is **absent from the origination reference** *and* that reference read is **decidable**; otherwise refuse with `CheckpointOriginationUnprovableError` (revision 69, `OPUS-R86-001`; reference corrected and read made fail-closed, revision 70, `OPUS-R87-001`/`-002`; reference command and scalar partition corrected, revision 71, `OPUS-R88-001`/`-002`) — see below |
+| checkpoint X `IN_PROGRESS` | self, X | `RESUME` |
+| checkpoint X `IN_PROGRESS` | self, Y≠X | refuse (`CheckpointOwnershipStateMismatchError`) |
+| any | foreign | refuse at 1c step 3, with ownership evidence attached |
+| no entry for the claimed checkpoint | self, X | `CONTINUE_CLAIM` — see below; reached with this worktree's identity record present, which 1d's ordering guarantees inside the crash window this row exists for (revision 68, `OPUS-R85-001`, replacing revision 67's "whether or not this worktree has a local identity record yet") |
+| nothing `IN_PROGRESS`, nothing selectable | none | `NO_CHECKPOINT` — terminal; the command's existing no-checkpoint path |
+| claimed checkpoint `COMPLETE` **and durable at `HEAD`** | self, X | release, then `FRESH` **with the concrete next checkpoint**, or `NO_CHECKPOINT` when none remains (revision 64, `GPT-R81-003`) — the single automatic release |
+| claimed checkpoint `COMPLETE` in the working tree but **not** at `HEAD` | self, X | refuse — completion is not durable |
+| claimed checkpoint any other status | self, X | refuse |
+
+**Adoption** (`adopt_claim`) is the one-time migration path, and it is not
+optional: without it the guarantee never applies to any checkpoint interrupted
+*before* the mechanism lands — including the exact `S-CP3` that `S14` is
+written against, whose interrupted state predates this revision. It publishes a
+claim for a checkpoint this worktree already holds `IN_PROGRESS`, guarded so it
+can only ever run in the originating worktree:
+
+1. the local state must actually record that checkpoint `IN_PROGRESS`;
+2. `verify_dirty_resume_safety` must pass — **first**, so the classes a
+   foreign worktree sees are unchanged;
+3. that same checkpoint's `IN_PROGRESS` must be **absent from the origination
+   reference**, and that read must be **decidable** (new, revision 69,
+   `OPUS-R86-001`; **reference corrected and read made fail-closed, revision
+   70, `OPUS-R87-001`/`-002`** — revision 69 evaluated it against the invoking
+   worktree's own `HEAD`, which the would-be adopter selects, and admitted on
+   every undecidable outcome; **reference command corrected to enumerate what
+   the prose claims and the partition closed at the scalar, revision 71,
+   `OPUS-R88-001`/`-002`** — revision 70's `git rev-list --all -- <path>` is
+   Git's default history simplification, which an ordinary merge defeats, and
+   its read admitted on six schema-invalid `status` shapes). See "The
+   origination reference" below;
+4. the same test is **re-evaluated at publication**, under the guard, and not
+   only at evidence time (new, revision 70, `OPUS-R87-001`);
+5. no foreign claim may exist.
+
+It is idempotent, it writes **no** authoritative state — not the state file,
+not the identity file, not the working tree — and it never invents an ownership
+fact where none exists. It runs automatically inside 1c's resume branch, and is
+separately invocable as an explicit setup operation for an interrupted
+checkpoint that must be protected *without* being resumed, which is exactly
+`S14`'s need.
+
+#### The origination reference (new, revision 70, `OPUS-R87-001`/`-002`)
+
+Revision 69 stated the origination test as "**not** `IN_PROGRESS` in the
+`WORKFLOW_STATE.json` committed at `HEAD`, since only the uncommitted delta is
+worktree-local". The **refusal** direction of that rule is sound and is kept
+unchanged. The **admission** direction — "absent from the committed state at
+`HEAD`" ⇒ "this worktree wrote it" — is not, and revision 69 never examined it.
+
+**Why the reference had to move.** `committed_checkpoint_status` resolves
+`HEAD` in the invoking worktree (`git show HEAD:<state path>` with
+`cwd=repo_root`). In a linked-worktree layout **every worktree owns its own
+`HEAD`, and can move it without touching its working tree** — so "the
+uncommitted delta" is not a property of the checkpoint at all. It is a property
+of the (worktree, `HEAD`) pair, and the would-be adopter owns both halves.
+Reproduced end to end against the real `adopt_claim` through the real step-1
+caller, in a real two-worktree fixture, in two arms:
+
+- one `git reset --soft HEAD~1` in B — B's working-tree state still records the
+  checkpoint `IN_PROGRESS`, `committed_checkpoint_status(B)` now returns
+  `None`, adoption is **admitted**, a claim is published from B with
+  `adopted: true`, and A — the true originator, still holding the only copy of
+  the uncommitted work — is refused with
+  `CheckpointOwnedByOtherWorktreeError`;
+- **no ref moved at all**: `git checkout <commit> -- <state path>` leaves B's
+  `HEAD` exactly where it was and produces the identical admission.
+
+Neither is exotic and neither is an attack. `git reset --soft`/`--mixed`,
+`git checkout <commit> -- <path>`, `git cherry-pick -n`, `git merge
+--no-commit`, `git revert -n`, `git stash pop` (the stash ref lives in the
+**common** dir and is visible from every linked worktree) and any interrupted
+rebase or merge all produce the same "working tree ahead of `HEAD` for this
+file" state, and several are ordinary recovery moves this repository's own
+procedures use.
+
+**The reference, stated exactly** (command corrected, revision 71,
+`OPUS-R88-001`). The origination test is evaluated against the commits the
+following command enumerates, and for each of them the checkpoint's status in
+that commit's `WORKFLOW_STATE.json`:
+
+```text
+git rev-list --all --full-history -- <state_rel_path>
+```
+
+**The prose must say what that command enumerates, not an abstract property it
+approximates**, because revision 70 composed two different reductions as if
+they commuted. "Every commit reachable from every ref" and "path-limited to the
+state document" are not composable in Git: adding a pathspec to `rev-list` does
+not filter the reachable set, it switches the walk into **History
+Simplification**, whose default mode deliberately *prunes* — including
+following only one parent of a merge that is TREESAME to it for the filtered
+path, discarding that merge's entire other side. Revision 70's
+`git rev-list --all -- <path>` was therefore a strictly smaller set than the
+one its own sentence claimed, and `OPUS-R88-001` reproduced an admission
+through the gap with the adopter moving nothing (`pass18.py` `R1`). So the
+reference is stated as what it is:
+
+> every commit reachable from every ref in the repository that is **not
+> TREESAME to a parent for the state document** — merges retained, all parents
+> followed.
+
+Four properties are why this one is chosen, and each is checked rather than
+asserted:
+
+- **it spans every linked worktree's own `HEAD`, detached included — for as
+  long as that worktree is registered.** `--all` examines all working trees by
+  default; `--single-worktree` is the documented opt-out — and that option only
+  takes effect when it **precedes** `--all` (`git rev-list --all
+  --single-worktree` and `git rev-list --single-worktree --all` return different
+  sets), so any prose that ever cites it must carry the ordering (`pass18.py`
+  `R1g`). **The lifetime qualifier is load-bearing and is stated here rather
+  than left to the residual** (new, revision 72, `OPUS-R89-004`): a *detached*
+  linked worktree's `HEAD` is a **per-worktree** ref that exists only while that
+  worktree is registered, so it is evidence with **worktree lifetime, not
+  repository lifetime** — the shortest-lived ref class in the whole reference,
+  and the only one an operation this design's own prose recommends can remove.
+  A branch-based worktree's `HEAD` does not have this property, because the
+  branch survives the worktree;
+- **the adopter cannot arrange it by moving its own refs.** B rewinding,
+  detaching or resetting its own branch does not remove A's, so both revision-69
+  arms refuse. Verified against both;
+- **it is not defeated by an ordinary merge.** `--full-history` retains merges
+  and follows every parent, so a commit reachable only through a merge's second
+  parent — including after the integrator's routine post-merge branch deletion,
+  and in criss-cross and octopus topologies — stays in the reference.
+  Reproduced in all three topologies, each with revision 70's command carried as
+  a live control arm that admits (`pass18.py` `R1a`-`R1c`);
+- **it does not close the migration path it exists for.** `S-CP3`'s interrupted
+  transition is committed nowhere, so it is absent from the reference and still
+  admits (`pass18.py` `R1f`).
+
+**Why `--full-history` is sufficient, and not merely larger.** It still prunes:
+commits TREESAME to a parent for that path. That residual is
+**status-preserving** by construction — a commit TREESAME to a parent for the
+state document records, for that document, exactly what the retained parent
+records — so no status becomes unobservable, which is the only property this
+predicate needs. Checked directly rather than argued: every pruned commit's
+status for the checkpoint is one a retained commit also carries (`pass18.py`
+`R1e`). Dropping the path filter entirely (`git rev-list --all`, reading the
+document at each commit) is the other correct option and was measured; it is
+not taken because it is 140 commits against 31 here for an identical answer.
+That identity is not assumed either — it is a standing conformance obligation
+that the two agree on the set of `(work_item_id, checkpoint_id)` pairs ever
+observed `IN_PROGRESS`, asserted against this repository's live history and
+required to fail if a future merge ever makes them disagree (`pass18.py` `L2b`;
+item 374(c.viii)).
+
+**What it costs, and what it does not prove.** The scan is path-limited, so it
+touches only commits that changed the state document — 31 of this repository's
+140 reachable commits (30 under revision 70's command; the one it already drops
+is `7274586e`, a real merge, TREESAME here and therefore currently hiding
+nothing — the mechanism that hides it is the one that hides a side branch's
+`IN_PROGRESS`), and the live `WF8b` and `S-CP3` queries both resolve in under
+0.03s. The rule proves that **no ref in this repository records this checkpoint
+as having been started**; it does not prove which worktree started it, and
+nothing in this section may be read as if it did.
+
+**The residual, at its actual strength** (restated, revision 71,
+`OPUS-R88-003`; revision 70 said the escape was "a repository-wide destruction
+of history rather than a local checkout or an ordinary recovery command", and
+both halves of that contrast are false). The reference is **not** unforgeable,
+and what defeats it is smaller than revision 70 claimed:
+
+- **it is defeated by the removal of every ref reaching the commit, which can
+  be a single ordinary command.** `git branch -D` correctly refuses to delete a
+  branch checked out in another worktree, but `git update-ref -d
+  refs/heads/<the other worktree's branch>`, executed **from the worktree that
+  benefits**, succeeds with exit 0 and no warning — leaving every object intact
+  in the object database and the other worktree's uncommitted work completely
+  undisturbed. Verified on Git 2.55.0 (`pass18.py` `R3a`). This destroys
+  nothing and is not repository-wide;
+- **and ordinary history maintenance erases the evidence with no intent to.**
+  `git commit --amend`, `git rebase`, `git reset --hard`, deleting a topic
+  branch after a squash- or rebase-merge, and dropping a stash each remove a
+  commit from the reference while remaining routine. Reproduced for the amend,
+  the reset and the squash-merge-then-delete (`pass18.py` `R3b`-`R3d`);
+- **`refs/replace/` is a distinct route.** `rev-list` honours replace refs by
+  default, so a replace ref rewrites what the reference sees without any ref
+  being deleted; `--no-replace-objects` disagrees with the default walk
+  (`pass18.py` `R3f`);
+- **and removing a linked worktree removes its `HEAD` from the reference**
+  (new, revision 72, `OPUS-R89-004`; the one route the revision-71 list omitted,
+  and the one that matters most here, because this design is *about* linked
+  worktrees and its own recovery prose recommends the command). Measured on Git
+  2.55.0 against real linked worktrees, with a **detached** worktree's `HEAD`
+  carrying the only `IN_PROGRESS` commit, the decision flips from refuse to
+  admit — and the object survives every time, so only reachability is lost:
+
+  | operation | decision before | after |
+  | --- | --- | --- |
+  | `git worktree remove <wt>` (clean worktree, exit 0, no warning) | refuse | **admit** |
+  | `rm -rf <wt>` then `git worktree prune` | refuse | **admit** |
+  | `rm -rf <wt>` then `git -c gc.worktreePruneExpire=now gc` | refuse | **admit** |
+  | `rm -rf <wt>` then plain `git gc`, before the expiry elapses | refuse | refuse (boundary checked in both directions) |
+  | `git worktree remove <wt>` where `<wt>`'s `HEAD` is a **branch** | refuse | refuse (control arm — the branch survives) |
+
+  The third row is the sharp one: `gc.worktreePruneExpire` defaults to three
+  months, but once it has elapsed — or is set — an ordinary `git gc`, including
+  an **automatic** one under `gc.auto`, removes a stale worktree's admin
+  directory and with it that worktree's `HEAD` and per-worktree refs, with no
+  operator in the loop at all;
+- **and the reference does no rename detection.** It is stated over a fixed
+  path, and moving `WORKFLOW_STATE.json` would silently take every observation
+  recorded under the old path out of the reference. The path is fixed by design
+  today; moving it invalidates the reference and is a migration, not an edit.
+
+**The retention contract, stated rather than implied** (new, revision 71,
+`OPUS-R88-003`). The safety property depends on refs continuing to reach these
+commits, and nothing in the mechanism maintains that: **the guarantee holds
+only for as long as some ref reaches the commit; this is a property of the
+repository's ref maintenance, not of the mechanism; and the mechanism cannot
+detect that it has been lost.** An operator who needs the guarantee to survive
+adversarial ref manipulation must get that from outside this design — protected
+refs, a mirror, or a server-side hook — and this section does not pretend
+otherwise. **Refs have unequal lifetimes and the contract is only as strong as
+the shortest one holding the evidence** (revision 72, `OPUS-R89-004`): a
+detached linked worktree's `HEAD` lasts only while that worktree is registered,
+so deregistering it — by `git worktree remove`, by `git worktree prune`, or by
+`git gc`'s own worktree-pruning step, sanctioned operations that exit 0 without
+warning — ends the guarantee for every observation only that `HEAD` reached.
+This is stated as a **disclosed limit, not a defect to be mechanised away**: a
+dedicated protected origination ref is deliberately **not** introduced, because
+the normative sentence above already covers this case logically and the
+alternative would add a durable, repository-wide ref-maintenance obligation to a
+design whose history scan is a finite, shrinking migration aid rather than the
+steady-state guarantee (every checkpoint started after this mechanism lands has
+a claim, and the claim is the authority). If a future round finds a **second**
+independent route by which ordinary workflow activity flips refuse to admit for
+a **post-mechanism** checkpoint, that is the point at which a protected ref
+should be reconsidered — not another disclosure paragraph.
+
+**The contract covers the identity queries too, and their failure directions
+are correlated safely** (new, revision 73, `OPUS-R90-003`, from `OPUS-R90`'s
+recorded structural observation rather than from a finding). `WFR-66`'s
+invariant is *steady-state* — identities stay non-reusable for the life of the
+repository — while this reference is characterized above as a finite, shrinking
+migration aid, so ref loss weakens the identity invariant as well as the
+origination test, and the contract is stated once for both. The directions were
+traced rather than assumed and they are safe: losing an observation removes the
+refusal **and** the binding it would have created, so the two move together and
+no state is reachable where an id is treated as bound by evidence that no
+longer exists; and a later restoration of the ref only ever moves an admit back
+to a refuse, never the reverse. No correction to the mechanism follows — but
+the coverage is stated, because a reader who has just been told the reference
+is a shrinking migration aid will otherwise reasonably conclude the identity
+invariant is exempt from this contract.
+
+**The positive half, which is worth claiming because it is not obvious —
+scoped, revision 72, `OPUS-R89-004`.** The literal claim holds and is
+reproduced: the decision is **identical** before and after `git reflog expire
+--expire-unreachable=now --all` plus `git gc --prune=now` for evidence a ref
+still reaches, and for evidence already unreachable before the prune
+(`pass18.py` `R3e`). The reference never consults the reflog or the object
+database, so there is **no** hidden dependence on default reflog expiry. What
+revision 71 got wrong was the sentence that generalised it — "reachability is
+lost at the earlier ref movement and never at the later prune: reachable
+evidence survives a full prune unchanged" — which is false in exactly the
+multi-worktree case this design is written for. `git gc` runs `git worktree
+prune` as one of its own steps: it does not remove *objects* a ref reaches, but
+it **can remove refs**, by pruning a stale worktree's admin directory and with
+it that worktree's `HEAD` and per-worktree refs (measured above). The claim is
+therefore scoped to the **object-pruning** step: object pruning never changes
+the decision, and `gc` as a whole **can**, so `gc` is a route by which
+reachability is lost and not merely a step at which an earlier loss becomes
+visible.
+
+**The reduction over multiple observations, stated normatively** (new, revision
+71, `OPUS-R88-004`; the rule existed only as the partition's first row, which
+says what to do with one observation and nothing about many). The rule is:
+
+> a checkpoint observed `IN_PROGRESS` at **any** commit in the reference
+> refuses, regardless of what any other commit — earlier, later or concurrent —
+> records. There is no supersession, no recency and no scoping to a lifecycle
+> instance.
+
+That is deliberate and it is chosen over the alternatives, because commit
+topology is not a total order and any "later observation wins" rule would need
+a definition of "later" the mechanism can compute; the design refuses to invent
+one, exactly as it refuses every other tiebreak. Three consequences follow and
+are stated rather than discovered:
+
+- **the refusal is permanent.** Once a checkpoint's `IN_PROGRESS` is in a
+  commit that stays ref-reachable, automatic adoption for that
+  `(work_item_id, checkpoint_id)` pair is refused for the remaining life of the
+  repository — including after a committed `COMPLETE`, and including for a
+  legitimately reopened checkpoint whose current lifecycle never committed an
+  `IN_PROGRESS` (`pass18.py` `R4a`). The exit is unchanged and is the same one
+  the section names everywhere: the explicit, authorized, audited takeover;
+- **it accumulates.** This is a property of the rule, not of this repository.
+  The concrete instance here is one pair — `workflow-v2-1-core` / `WF8b`,
+  verified by scanning every commit in the reference (`pass18.py` `L2c`) — but
+  because whole-tree checkpoint commits routinely sweep another work item's
+  in-flight transition (this repository's own five most recent commits, revision
+  69), the refusing set grows monotonically as such commits are made
+  (`pass18.py` `R4e`). Revision 70 called this "one concrete, one-time cost …
+  a one-time operator action on a single checkpoint"; the count is accurate
+  today and the characterization was not, and it is corrected here;
+- **and it is keyed on two strings, so identity reuse binds new work to retired
+  evidence** — reproduced: a reused `work_item_id` inherits a removed item's
+  historical `IN_PROGRESS`, while an unused one is unaffected (`pass18.py`
+  `R4c`).
+
+**So the identity invariant is stated, not left to accident** (new, revision 71,
+`OPUS-R88-004`). **A `work_item_id` is permanently non-reusable, and a
+`checkpoint_id` is permanently non-reusable within its work item, across plan
+revisions and after completion, removal or migration.** Registry authoring and
+work-item creation are the enforcement points, and **both name the same single
+evidence source — this reference — rather than one naming it and the other
+naming nothing** (corrected, revision 72, `OPUS-R89-005`): creating a work item
+whose id has ever appeared in the reference, or a registry that reintroduces a
+checkpoint id **this work item has ever had observed in the reference**, is
+refused at validation with the historical observation named. Two boundaries
+follow from stating the source, and `D-Registry` states both: an id retired
+before it was ever *started* never entered `WORKFLOW_STATE.json`, is therefore
+unobservable here, carries no binding, and is outside the invariant; and an id
+**redefined in place** — never retired — is not reuse and stays legal, which is
+what `WF8b`'s own history requires. Retirement is therefore one-way — a renamed
+checkpoint is a **new** id, and the retired one keeps whatever history it
+already had, which is exactly the observed behaviour (`pass18.py` `R4d`). This
+is the cheaper of the two available answers: the alternative — scoping the
+reference so historical evidence for a retired identity cannot bind to a new
+one — would require a durable lifecycle-instance marker in committed history,
+which is the very thing `S14` establishes does not exist at the moment it is
+needed. These two enforcement points ask **existence** questions over the same
+commits the origination test asks its **absence** question over, and the two
+question shapes do not share a partition automatically — "The identity queries'
+own read partition" below states theirs, because naming a source is not the same
+as specifying how it is read (`OPUS-R90-003`).
+
+**The read fails closed, and the partition is total** (`OPUS-R87-002`).
+Revision 69's read returned `None` — never raised — for an absent state file,
+an unparseable blob, a missing `work_items` entry and a non-`dict` work item
+alike, so **every** undecidable outcome was treated as "not `IN_PROGRESS`" and
+adoption proceeded; a top-level non-object document escaped as an undeclared
+`AttributeError`. That inverts this section's own discipline for the claim
+record two pages above — "every undecidable read raises rather than returning
+'unclaimed'" — applied to a read that is now equally load-bearing. The
+origination read is therefore partitioned the same way, and only a positive,
+decidable "absent" admits:
+
+| origination read outcome | decision |
+| --- | --- |
+| the checkpoint's `status` is `IN_PROGRESS` at any commit in the reference | **refuse** (`CheckpointOriginationUnprovableError`) |
+| the checkpoint's `status` is present, is a **string**, and is a value of the state schema's own controlled vocabulary (`workflow_state.CHECKPOINT_STATUSES`) other than `IN_PROGRESS`, at every commit — read from a **decidable** state document | **admit** |
+| the checkpoint entry is an object but its `status` is **absent**, is `null`, is not a string, or is a string outside that vocabulary | **refuse** — the absence of a readable status is not decidable evidence that the checkpoint was not `IN_PROGRESS` |
+| the `work_items` **key is absent** from the state document, or the work item's key is absent from `work_items`, or the `checkpoints` key is absent from the work item, or the checkpoint's key is absent from `checkpoints` (**corrected, revision 72, `OPUS-R89-002`** — a missing **key**, established by key membership, never by a falsy or non-object value) | decidably absent **for that commit**; continue — and **admit** if every commit continues |
+| any one of those four members is **present** but is not an object — `null`, a list, a string or a number alike (**corrected, revision 72, `OPUS-R89-002`**) | **refuse** — a present member of the wrong type is a schema-invalid document, not an absence |
+| the state document at any examined commit is unparseable, or is parseable but is not an object | **refuse** — origination is unprovable, not proved |
+| the reference itself cannot be **resolved** (the `rev-list` invocation fails) | **refuse** |
+| the reference resolves to **no commits** | decidable: no evidence exists anywhere; **admit** |
+| the state path is **absent from an examined commit's tree** — established by a **successful** tree listing that does not contain the path, never by a read command's exit status | decidably absent **for that commit**; continue |
+| the examined commit's **tree cannot be listed**, or the commit object itself cannot be resolved — any per-commit read that fails for a reason which is not the blob's (**new, revision 72, `OPUS-R89-003`**) | **refuse** — undecidable; a listing that did not *succeed* establishes nothing |
+| the state path is present in the tree but is not a regular-file blob, or its blob cannot be read | **refuse** — present and unreadable is undecidable, not absent |
+
+Every refusal here is `CheckpointOriginationUnprovableError`, and no path exits
+with an undeclared exception type. Stated as a table, on the same terms
+`OPUS-R86-004`'s document-shape partition is stated, rather than left to the
+implementer — and asserted with revision 69's `return None` behaviour carried
+as a live control arm that admits.
+
+**The identity queries' own read partition** (new, revision 73,
+`OPUS-R90-003`). Revision 72 made `WFR-66`'s two enforcement points name this
+same reference as their evidence source, which was the correction
+`OPUS-R89-005` required. It did **not** give them a read partition, and the
+table above cannot serve as one by inheritance: every row of it is phrased in
+terms of a checkpoint's `status` and of adopt-versus-refuse, because the
+origination test asks whether a status was **absent** everywhere. The identity
+queries ask the opposite shape —
+
+- **work-item creation**: has this `work_item_id` ever appeared in the
+  reference?
+- **registry validation**: has this `(work_item_id, checkpoint_id)` pair ever
+  been observed in the reference?
+
+— and an *existence* query's undecidable read has no outcome anywhere in
+revision 72's text. That is the same "not observable" versus "not decidable"
+conflation `OPUS-R89-003` was raised to close one level up, and leaving it open
+is not neutral: **undecidable → admit** is fail-open for exactly the binding
+`WFR-66` exists to create, while **undecidable → refuse** without a stated exit
+would let one corrupt historical commit permanently block creating *any* work
+item and validating *any* registry revision. Both readings were available and
+the plan chose neither. There is no live instance — all 31 commits in this
+repository's reference were scanned with a table-faithful reader at revision 72
+and again here, with **0 undecidable reads** — which is why this is a stated
+partition rather than a live defect.
+
+The partition is therefore stated as its own short row-set, for **both**
+queries alike, and it fails closed on the same doctrine the origination read
+follows — only a positive, decidable "never observed" admits:
+
+| identity read outcome | decision |
+| --- | --- |
+| the id (or the pair) is **decidably observed** at any commit in the reference — the queried key is **present** at its own level, *whatever its value* (revision 74, `OPUS-R91-002`) | **refuse**, naming the observation — the commit, the level at which it was found, and the identity it binds. **Unescapable**; this row wins over every other row for the same commit |
+| **every** commit in the reference is decidable and none observes the id | **admit** |
+| a commit is undecidable **for the queried key itself** — the reader cannot establish whether that key is present or absent: the state document unparseable or not an object; a **container above** the queried key present but not an object (`work_items` for the work-item query; `work_items`, the work item, or `checkpoints` for the pair query); the commit's tree unlistable; the commit object unresolvable; the state path present but not a readable regular-file blob (narrowed from "a present-but-non-object member at any of the four levels", revision 74, `OPUS-R91-002`) | **refuse** — `IdentityReferenceUndecidableError`, distinct from the observed-id refusal because it names a repairable repository condition rather than a binding — **with the escape below** |
+| the reference itself cannot be **resolved** | **refuse**, same class |
+| the reference resolves to **no commits** | decidable: no evidence exists anywhere; **admit** |
+| the state path is **absent** from an examined commit's tree, established by a **successful** listing that does not contain it | decidably not-observed **for that commit**; continue |
+
+Three properties of this table are stated rather than left to be inferred.
+
+**It shares the origination test's reduction rule, without exception.** Any
+observation anywhere binds — no supersession, no recency, no scoping to a
+lifecycle instance — exactly as the reduction rule two subsections above states
+for the status observation. An id observed at one commit and absent at every
+later commit still binds. This was previously stated only of the status
+observation, and the identity queries were left to inherit it by analogy.
+
+**Absence at a level is a missing key, and a present-but-non-object member
+refuses, at every level** — the same correction `OPUS-R89-002` made to the
+origination read, applied here rather than restated differently. An existence
+query that treated `"wi": null` as "no such work item" would admit a reused id
+from a schema-invalid document, which is the fail-open direction.
+
+**The rows are disjoint, and the precedence rule is stated in the direction that
+preserves the invariant** (new, revision 74, `OPUS-R91-002`). Revision 73 wrote
+row 3 as "any commit undecidable **for any of the reasons the origination table
+already enumerates** — … a present-but-non-object member at any of the four
+levels …", and that import is what broke disjointness: a committed
+`{"work_items": {"X": null}}` matches row 1 (the key `X` is present, and for an
+*existence* query key presence **is** the observation — the paragraph above says
+so) *and* matched row 3 (the member is present-but-non-object). The table stated
+no precedence, so a reader evaluating row 3 first raised the **escapable**
+`IdentityReferenceUndecidableError`, the operator correctly invoked
+`authorize_identity_reference_gap`, and the work item was created under an id
+the committed document plainly records — with the identical construction at the
+fourth level, `{"work_items": {"X": {"checkpoints": {"CP": null}}}}`, letting
+registry validation reintroduce a retired checkpoint id. That falsifies the
+escape's own central claim that it "never overrides a decidable observation",
+and re-opens one authorization later exactly the fail-open direction
+`OPUS-R89-002` closed for this document shape. The rule is therefore:
+
+- **For the identity queries, key presence at the queried level is a decidable
+  observation, and it takes precedence over every undecidability elsewhere in
+  the same commit.** Row 1 wins, and its refusal is **unescapable**.
+- **Only undecidability that prevents the reader from establishing key presence
+  or absence** may raise `IdentityReferenceUndecidableError`: an unparseable
+  document, a non-object document, a non-object container *above* the queried
+  key, an unlistable tree, an unresolvable commit, an unreadable blob, an
+  unresolvable reference. A present-but-non-object member **at the queried
+  level** is an observation, not a gap.
+- The origination table's own analogous precedence sentence (revision 72: "When
+  both refusal routes hold in one reference, the observed-`IN_PROGRESS` route is
+  reported in preference to the undecidable one") is **not** simply restated
+  here, because there the two routes differ only in which refusal is *reported*
+  while here they differ in **whether an escape exists at all**.
+
+**The two tables genuinely diverge about the same bytes, and that is stated
+rather than pointed at** (new, revision 74, `OPUS-R91-002`). A `null` member at
+the queried level is **undecidable** for the origination question — the status
+cannot be read out of it — and a **decidable observation** for the existence
+question, because the key's presence is the whole of what that question asks.
+The reverse direction is clean and was checked: a checkpoint entry that *is* an
+object but carries a garbage `status` refuses under the origination table's own
+scalar row and is a plain decidable observation here. Revision 73's
+cross-reference to "the reasons the origination table already enumerates" is
+what imported the wrong classification, and it is deleted rather than
+qualified.
+
+**The refusal has a named, authorization-bound escape, because every other
+fail-closed refusal in this design has one.** `IdentityReferenceUndecidableError`
+is cleared by one explicit operation, on the same footing as the explicit
+takeover and `recover_abandoned_destructive_guard` — and, from revision 74
+(`OPUS-R91-003`), carrying the same authorization surface rather than only being
+described as sharing their footing. Its signature is
+
+```
+authorize_identity_reference_gap(repo_root, work_item_id, checkpoint_id=None,
+                                 *, now, user_authorization, evidence)
+```
+
+which is `recover_abandoned_destructive_guard`'s shape deliberately, because
+every parameter that sibling needed, this one needs for the same reason. Its
+properties:
+
+- it is **evidence-bound**: the authorization carries a digest over the exact
+  set of undecidable commits and the failure class observed at each **plus the
+  identity being authorized** (`work_item_id`, and `checkpoint_id` when the
+  query is the pair query), and the operation re-derives that whole digest
+  immediately before acting and refuses on any disagreement — so an
+  authorization written against one damaged commit cannot clear a different one
+  that appeared since, **and cannot be replayed against a different identity**
+  (revision 74, `OPUS-R91-003`: revision 73's digest covered the observation
+  only, which left one damaged commit either authorizing exactly one creation
+  repository-wide forever or authorizing a `work_item_id` the user never
+  reviewed — the same change-the-claim-replay-the-authorization axis the
+  takeover was built to refuse);
+- it carries an **authorization literal**, distinct in every component and
+  unwritable from memory, exactly as its two siblings do:
+  `authorize identity reference gap <work_item_id> [checkpoint <checkpoint_id>]
+  gap <gap_observation_id>`, where `<gap_observation_id>` is the digest above.
+  It cannot be reused as a takeover or a guard-recovery literal, and it is
+  **validated against the re-derived digest**, not merely parsed;
+- the **evidence is displayed before the literal is solicited**, and it is the
+  same evidence the digest covers: each undecidable commit, its failure class,
+  the reference command that enumerated it, the identity being authorized, and
+  the explicit statement that authorizing does **not** repair the repository —
+  so the operator authorizes an observed fact rather than a summary of one;
+- it **never overrides a decidable observation**: with the gap authorized, the
+  query still refuses if any *decidable* commit observes the id — which, per the
+  precedence rule above, includes a present-but-non-object member **at the
+  queried level**. The escape admits only the undecidability, never the binding;
+- it is **recorded durably, against the created identity, at a named location**
+  (revision 74, `OPUS-R91-003`; revision 73 required non-replayability without
+  naming any record, which made it unimplementable). The record lives at
+  `$(git rev-parse --git-common-dir)/ai-workflow/identity-gap-authorizations/<sha256(gap_observation_id)>.json`
+  — repository-scoped rather than work-item-scoped, because at work-item
+  creation **the work item does not exist yet**, so `WORKFLOW_STATE.json` cannot
+  hold it and no per-work-item record can. Its schema is
+  `{"schema_version": 1, "gap_observation_id": <hex>, "work_item_id": <str>,
+  "checkpoint_id": <str|null>, "undecidable_commits": [{"commit": <sha>,
+  "failure_class": <str>}], "authorized_at": <iso8601>,
+  "authorizing_worktree_git_dir": <str>, "consumed": <bool>}`, where
+  `authorizing_worktree_git_dir` is populated from **`git rev-parse
+  --git-dir`** — the per-worktree path — and never from `--git-common-dir`
+  (corrected, revision 75, `OPUS-R92-005`). Measured in this repository:
+  from a linked worktree `--git-dir` is `…/.git/worktrees/<name>` while
+  `--git-common-dir` is `…/.git`, and from the main worktree both are `.git`,
+  so `--git-common-dir` resolves to the same path from every linked worktree
+  and a field of this name populated from it would record a per-repository
+  constant and nothing about **which** worktree authorized. Correctness never
+  depended on the field — the record is repository-scoped and the
+  serialization is repository-level, both deliberately, which is why the
+  record **path** above stays derived from `--git-common-dir` — but this
+  bullet's own stated purpose is that a repository operating with a damaged
+  reference is **auditable**, and the one field answering "who authorized
+  this" must therefore actually answer it. (`.ai-review/runtime/WORKTREE_IDENTITY.json`'s
+  worktree identity is an acceptable equivalent source; what is prohibited is
+  the common dir.) It is published
+  by the same atomic same-directory-temp-plus-`os.link` create-if-absent
+  primitive the claim record uses, never through a symlink;
+- it is **non-replayable**: a second invocation whose re-derived
+  `gap_observation_id` matches an existing record refuses rather than silently
+  re-admitting. The `os.link` create-if-absent publication **is** that check —
+  the test and the write are one operation, so there is no read-then-write
+  window between them;
+- it is **serialized at the repository level** (revision 74, `OPUS-R91-003`).
+  This is the sharpest thing revision 73 left unstated: at work-item creation
+  there is no work item, no claim and no per-work-item mutation guard, so the
+  entire concurrency apparatus this design built is keyed on an entity that does
+  not exist at this call site. Two sessions authorizing the same gap
+  concurrently would both re-derive the same digest, both read "not yet
+  authorized", both write, and both admit. The operation therefore runs inside
+  the **repository-level `fcntl.flock` leaf** at
+  `$(git rev-parse --git-common-dir)/ai-workflow/identity-gap.lock` — stable,
+  never unlinked, process-scoped, acquired for the whole re-derive → publish →
+  admit sequence. `os.link`'s exclusivity is retained underneath it rather than
+  replaced by it, exactly as `D1`'s guard/flock composition does. The **evidence
+  display and the literal solicitation happen outside the leaf** (revision 75,
+  `OPUS-R92-005`'s sibling point in `OPUS-R92-004`): the hold interval begins at
+  the *re-derive* that follows the user's answer, never before it, so no
+  human-interaction window is ever held inside a repository-wide exclusive lock.
+  **Ordering against the existing locks is stated here as a concrete local
+  rule; the complete lock set is owned by the single global ordering site**
+  (heading reduced, revision 77, `OPUS-R94-004`; the ordering itself corrected,
+  revision 75, `OPUS-R92-004`): this leaf is never acquired while the
+  per-work-item mutation guard, the per-worktree identity `flock`, or `D1`'s
+  state-writer `flock` at `.ai-review/runtime/WORKFLOW_STATE.lock` is held, and
+  none of the three is acquired while it is held. Revision 75's heading claimed
+  this bullet named **every** lock in the design. It names three of six —
+  `checkpoint-claims/<sha256(work_item_id)>.guardlock` is absent entirely, and
+  "the per-work-item mutation guard" does not disambiguate primitive (1) from
+  primitive (5), the very conflation the global site now goes out of its way to
+  warn about. Nothing unsafe followed, because `(4)` genuinely has no edge in
+  either direction, so a reader trusting the local claim reached a weaker but
+  still correct conclusion. The claim is **dropped rather than completed**: a
+  second enumeration maintained here is exactly the shape that went stale twice
+  (`OPUS-R92-004`, `OPUS-R93-002`), and item 372(h)'s completeness arm checks
+  the global list only, so this wording would have survived it. For the lock set
+  itself, see `D-Approval-Commits`' single ordering site. The state-writer
+  `flock` was
+  omitted through revision 74 while the heading claimed the ordering was stated,
+  and it is the one a reader checking this call site would look for first, since
+  `WFR-66` places the escape at work-item creation and work-item creation **is**
+  a `WORKFLOW_STATE.json` write. The rule that makes this true is explicit
+  rather than incidental: **the gap leaf's hold interval ends at "admit", before
+  any state write begins**, so the creation that follows is never nested inside
+  it; and **the identity query's read of the durable record takes no lock at
+  all**, so a query evaluated inside the state lock acquires nothing. No cycle
+  was constructible under the revision-74 wording either — this corrects an
+  incomplete claim, not a defect — and the resulting global partial order is
+  recorded in one place under `D-Approval-Commits`' "Lock ordering is fixed and
+  single-directional" rather than left to be assembled from three sections;
+- its **crash windows are dispositioned at every side-effect boundary** (new,
+  revision 74, `OPUS-R91-003`). The sequence is: derive evidence → display →
+  solicit literal → re-derive and compare → **publish the record** → the query
+  admits → the work item (or registry revision) is created. A crash *before* the
+  record is published leaves nothing and the operator simply re-runs. A crash
+  *between* the record's publication and the creation is the window that
+  matters, and it is resolved by making the record **idempotent rather than
+  consumed on read**: a re-run that re-derives the identical
+  `gap_observation_id` and finds a record whose `work_item_id`/`checkpoint_id`
+  match **recognises its own completed authorization and proceeds**, rather than
+  refusing as a replay. Non-replayability is preserved because the digest binds
+  the identity: a record can only ever authorize the one identity it names, so
+  recognising it cannot admit a second one. `"consumed"` is set when the
+  creation completes, and is diagnostic — the refusal a *different* identity
+  receives does not depend on it. There is therefore no state in which a
+  completed authorization dead-ends with no exit but a hand edit, which is what
+  revision 73's "refuses a second invocation carrying the same digest" produced;
+- it **records** the undecidable commits and their failure classes, so a
+  repository that has been operating with a damaged reference is auditable
+  rather than silently degraded — and, because the record is keyed to the
+  identity, **every later query over that identity carries the disclosed
+  uncertainty** instead of inheriting a clean bill.
+
+**What the override authorizes, and the invariant that survives it** (new,
+revision 74, `OPUS-R91-003`). This is the weaker of the two available shapes:
+the user authorizes **treating an unknown fact as true** ("this id was probably
+never used"), not a recovery that establishes a new fenced state despite an
+unknowable fact. The plan must therefore say what remains true afterwards, and
+does: `WFR-66`'s stated invariant, "an id that has **ever appeared** in the
+reference is refused", is the *pre-override* invariant. After an authorized gap
+the surviving invariant is strictly weaker and is stated as such —
+
+> No id **decidably observed** in the reference is reused, and every commit that
+> was undecidable at authorization time is recorded, durably and against the
+> identity that was admitted despite it.
+
+— because a requirement that claimed the stronger property would be claiming
+something the mechanism does not have, which is the failure mode five separate
+rounds have now found in this section. `WFR-66` states this explicitly rather
+than leaving it to be inferred from the escape's existence.
+
+Without that escape the refuse arm is a repository-wide liveness failure with
+no exit, which is why revision 72's silence could not simply be resolved by
+picking "refuse" and stopping there. **Requiring the damage to be repaired is
+not the alternative** (revision 74, answering unresolved question 14): this
+plan's own retention contract establishes that origination evidence is
+legitimately and irreversibly erased by `git worktree remove`, `git worktree
+prune`, `gc`'s worktree-pruning step, `commit --amend`, `reset --hard` and
+branch deletion — a commit lost that way cannot be refetched, so mandating
+repair would reintroduce exactly the permanent repository-wide lockout the
+escape exists to prevent. The correct constraint is the one applied above:
+narrow what the escape can reach (the precedence rule), bind the consumed token
+to the identity, record the authorized gap against the created identity, and
+state the post-override invariant.
+
+**Absence is a missing key, at every level, and the table and its reference
+implementation are required to agree row for row** (new, revision 72,
+`OPUS-R89-002`). Revision 71 closed the partition at the scalar and left the
+three *container* levels described one way in the table and implemented another
+way in the reference implementation the same section cites as its evidence
+(`pass18.py`'s `origination_reference_status_r71`), which tests membership with
+`isinstance(..., dict)` and therefore cannot tell "the key is absent" from "the
+key is present with a value of the wrong type". Measured, one commit each, in
+real repositories, against that implementation — and the divergence is **wider
+than the finding reported, and runs in both directions**:
+
+| committed document | table said | measured |
+| --- | --- | --- |
+| `{"schema_version": 1}` — no `work_items` | admit | **REFUSE(undecidable)** |
+| `{"work_items": {"wi": {}}}` — no `checkpoints` | admit | **REFUSE(undecidable)** |
+| `{"work_items": {"wi": null}}` | refuse | **ADMIT** |
+| `{"work_items": {"wi": {"checkpoints": {"CP": null}}}}` | refuse | **ADMIT** |
+
+The first two are the finding's own, and they are over-strict — safe, but
+behaviour no stress pass has ever exercised, in the one predicate the section
+exists to make fail-closed. The last two were found while validating it, are
+**fail-open**, and are the reason this correction matters more than an
+enumeration fix: `items.get(work_item_id)` and `checkpoints.get(checkpoint_id)`
+each return `None` for a key that is *present with a JSON `null`* exactly as they
+do for a missing key, and both call sites `continue` on `None`. A committed state
+document carrying `"wi": null` is schema-invalid, the table says refuse, and the
+mechanism concludes a positive fact from it. `pass18.py`'s `R2f` does not catch
+any of the four: its document-shape arm probes only *non-object* members
+(`{"work_items": 4}`, `{"wi": 4}`, `{"checkpoints": 4}`, `{"CP": 4}`), never the
+absent or `null` forms, and its assertion ("does not escape or admit") is
+satisfied by refusing everything.
+
+Of the finding's two permitted answers the plan takes **(a)**, keeping the
+table's semantics and requiring the read to distinguish absence from a
+wrong-typed member at each of the three container levels *and* at the checkpoint
+entry: a missing **key** continues, a present member that is not an object
+refuses. That is the reading the row's own wording already committed to, and it
+is what the sibling identity-document partition does (`OPUS-R86-004`: absence is
+`exists()`, never a falsy parse). The implementation obligation is therefore
+`key not in mapping` for absence and an explicit type test for presence — never
+`.get(...) is None`, which conflates them. There is no live instance in this
+repository: all 31 commits in the reference were scanned and none lacks
+`work_items`, none lacks `checkpoints`, and none carries a `null` at either
+level.
+
+**And the partition is total over read *failures*, not only over document
+shapes** (new, revision 72, `OPUS-R89-003`). Revision 71 stated absence as "the
+state path is absent from an examined commit's tree — established by that
+commit's tree not listing the path", and gave no row for *the tree listing
+itself failing*. That is the same exit-status conflation `OPUS-R88-002` fixed one
+level down (`git show`'s returncode read as absence), reappearing one level up in
+the same paragraph that fixed it. Reproduced: with an examined commit's tree
+objects removed after the reference was resolved — an interrupted `gc`, a
+partially-fetched pack, a damaged object store, or a plain `rev-list`/`ls-tree`
+race — `git ls-tree --full-tree -z <sha> -- <state path>` exits **128 with empty
+stdout**, a reader written from the table literally parses that empty stdout as
+"not listed", continues, and **admits**, while the reference implementation
+(which does check the exit status) refuses. The prototype was right and the
+specification was silent, which is the wrong way round for a contract this plan
+says is "specified, not implemented". The new row states it, and the rule is
+stated positively as well: absence at a commit is established by a **successful**
+listing that does not contain the path, and every per-commit read whose failure
+is not the blob's — the tree listing and the commit-object lookup alike —
+refuses. A successful *empty* listing still continues; the two are never
+collapsed.
+
+**The partition is closed at the scalar, not only over the containers** (new,
+revision 71, `OPUS-R88-002`). Revision 70 closed every *container* row and left
+the decision itself to `entry.get("status") == "IN_PROGRESS"`, so "present with
+any other status" silently included *no readable status at all*. Probed against
+revision 70's own reference implementation, one commit each: a checkpoint entry
+with no `status` key, with `null`, with `42`, with `["IN_PROGRESS"]`, with
+`{"v": "IN_PROGRESS"}` and with the lowercase `"in_progress"` **all admitted** —
+six schema-invalid documents from which the mechanism concluded a positive
+fact, in direct contradiction of this subsection's own rule that "only a
+positive, **decidable** 'absent' admits". Each now refuses, with revision 70's
+comparison carried as the live control arm that admits on all six (`pass18.py`
+`R2b`). The vocabulary is the state schema's own, imported rather than
+restated, so the two cannot drift.
+
+**And absence is established by the tree, not by an exit status** (same
+finding, second half). Revision 70 established "the state document does not
+exist at this commit" from `git show` returning non-zero, which conflates "the
+path is not in that tree" with every other reason that command can fail.
+Reproduced: with the state blob's object removed but the tree intact, `git
+show` fails, revision 70 reads that as decidably absent and **admits**, while
+the corrected read observes an entry that is present and unreadable and refuses
+(`pass18.py` `R2d`). Absence is therefore established by the commit's tree not
+listing the path — the same discipline `OPUS-R86-004` fixed for the identity
+document, where absence must come from `exists()` and never from a falsy parse
+— and a listed entry that is not a regular-file blob refuses rather than being
+read as a document (`pass18.py` `R2e`).
+
+**And it is re-evaluated at publication, not only at evidence time.** Adoption
+read the committed status and then published with nothing re-asserting it and
+no guard held, so even a correct reference was a TOCTOU against refs the same
+worktree can move in between. The test is therefore evaluated a second time
+**inside the guard window that publishes the claim**, against a freshly
+resolved reference, and a disagreement refuses having published nothing — the
+same re-verification-under-the-guard discipline the takeover's own stale-evidence
+rule already follows.
+
+**Why (3) exists, and what it costs** (new, revision 69, `OPUS-R86-001`;
+reference and read corrected, revision 70, `OPUS-R87-001`/`-002`).
+Through revision 68, adoption trusted *local* `IN_PROGRESS` as evidence that
+this worktree originated the checkpoint. It is not, because a checkout can
+supply it (section opening). The only part of that fact which is
+worktree-local is the **uncommitted** delta, so that is what (3) tests — the
+same durable-versus-working-tree distinction the single automatic release
+already rests on (A6), not a new authority and not a second status store,
+now evaluated against the durable reference above rather than against the
+invoking worktree's own `HEAD`. What (3) refuses is exactly the
+reproduced defect: a worktree that legitimately holds an identity entry from an
+*earlier* checkpoint of the same work item, fast-forwards over a whole-tree
+commit carrying a later checkpoint's `IN_PROGRESS`, and adopts a checkpoint it
+never started (`pass16.py` `W1e`-`W1g`, the unguarded arm; `W1h`-`W1l`, the
+guarded one).
+
+Three consequences are stated rather than implied:
+
+- **It refuses the true originator too**, when that originator has committed
+  its own `IN_PROGRESS` mid-checkpoint. The mechanism genuinely cannot tell
+  the two apart — both worktrees see byte-identical evidence — and inventing a
+  tiebreak (dirtiness, timestamps, a reflog guess) would be exactly the
+  inference this design refuses everywhere else. Both are refused, and the
+  refusal names the escape: resume in the worktree holding the uncommitted
+  work, or take the claim over explicitly. The takeover applies to an **absent**
+  claim on the same terms as a present one — the partition's "readable **or
+  absent**" row — so this is a documented, authorization-bound, audited exit,
+  not a dead end (`W7`). The evidence that exit is decided on is extended by
+  revision 70 so the operator is no longer shown nothing about *which*
+  worktree holds the work — see "No automatic staleness, ever".
+- **The migration path it exists for is untouched.** `S-CP3`'s interrupted
+  state is uncommitted, so it is absent from the origination reference and is
+  admitted, adopted and resumed exactly as before, and adoption stays
+  idempotent (`W1m`-`W1p`). Re-verified against the corrected reference.
+- **It has a concrete cost, whose current instance in this repository is one
+  checkpoint** (wording corrected, revision 71, `OPUS-R88-004`; revision 70
+  called this a "one-time cost … a one-time operator action on a single
+  checkpoint", which described this repository's arithmetic accurately and the
+  general rule wrongly). Declared here rather than discovered later:
+  `workflow-v2-1-core`'s own `WF8b` **is** `IN_PROGRESS` in commits reachable
+  from this repository's refs, so once this mechanism lands, protecting that
+  checkpoint requires an explicit takeover rather than an automatic adoption
+  (`W1q`-`W1s` assert both halves against the real repository; `pass18.py`
+  `L2c` re-derives the pair set over the corrected reference and finds exactly
+  this one). The refusal for that pair is **permanent**, not one-time, and the
+  set of such pairs **grows** as whole-tree checkpoint commits sweep other work
+  items' in-flight transitions — see "The reduction over multiple observations"
+  above, which states the rule this bullet is an instance of. Each is an
+  operator action on one checkpoint, and it is the price of not silently
+  trusting inheritable evidence.
+
+  **The route to that refusal, stated concretely** (revision 70; this is the
+  half `OPUS-R87-003` was right to ask for, though its own account of it is
+  falsified below and in the disposition section). Adoption's checks run in
+  order, and for this repository's actual live shape the sequence is:
+  `verify_dirty_resume_safety` **passes** — `.ai-review/runtime/WORKTREE_IDENTITY.json`
+  exists in this worktree and carries an `expected_dirty_paths_by_work_item`
+  entry for `workflow-v2-1-core` — and the origination test then refuses with
+  `CheckpointOriginationUnprovableError`, whose message names the escape.
+  Verified read-only against the live repository through the real 1c resolver.
+  The exit is the explicit takeover against an **absent** claim (no claim and
+  no guard exist for this work item: `$(git rev-parse --git-common-dir)/ai-workflow/checkpoint-claims/`
+  does not exist at all), which succeeds, establishes this worktree's identity
+  record, and lets the very next step-1 invocation resume the same checkpoint —
+  with no `WORKFLOW_STATE.json` edit, no hand-created claim, no deletion and no
+  checkpoint reset anywhere in the sequence.
+
+  **A worktree that has *never* run 1d for this work item sees a different
+  refusal, and that one is now diagnosed too.** In that state
+  `verify_dirty_resume_safety` refuses first, with `WorktreeIdentityMissingError`,
+  before the origination test is reached — and through revision 69 that refusal
+  carried no ownership evidence at all, because the evidence rule was scoped to
+  "every refusal 1c raises while a **decidable claim** is present" and no claim
+  exists. Revision 70 removes that scoping — see "Where the check belongs".
+
+**Why not forbid the committed `IN_PROGRESS` instead.** The reviewer's stronger
+option — require every checkpoint commit to exclude any other work item's
+`IN_PROGRESS` transition, and make a committed `IN_PROGRESS` a
+validator-refused condition — would make the original sentence true rather than
+working around it. It is not taken, for three reasons. It contradicts this
+repository's own five most recent commits, so it would owe a migration for
+history that is already durable. It puts a *pathspec* obligation on every
+checkpoint commit in the design, which `D-Commit-Provenance` deliberately
+specifies by member rather than by pathspec, and a whole-tree commit is the
+shape `D-Approval-Commits`' own index discipline is built around. And it would
+make the guarantee depend on every future commit author's discipline, where (3)
+depends only on a fact the mechanism can check for itself at the moment it
+matters. Option (3) is strictly local, needs no migration, and fails closed.
+
+**`CONTINUE_CLAIM`** covers a crash between publishing the claim and writing the
+state. Without it the *legitimate owner* is permanently locked out of its own
+claim with an error naming a state mismatch it cannot clear. It is not a
+release and not a takeover: nothing is discarded, and the owner simply performs
+the state write it was interrupted before. It is gated on the claim being
+self-owned and on selection resolving the claimed checkpoint (or resolving
+nothing at all).
+
+**Its reachability is part of the contract, not a consequence of it** (new,
+revision 67, `OPUS-R84-001`). Through revision 66 this branch was unreachable in
+the exact window it is specified for, so the section prevented the lockout it
+names in prose and produced it in the mechanism. 1d writes
+`WORKTREE_IDENTITY.json`'s per-work-item entry *after* publishing the claim, and
+1c step 3 called `verify_dirty_resume_safety` unconditionally — which raises
+`WorktreeIdentityMissingError` when that file is absent **or** carries no entry
+for this `work_item_id` (`scripts/workflow_state.py`'s
+`verify_dirty_resume_safety`, which despite its name never inspects dirtiness).
+Inside the crash window the entry does not exist yet, so the owner's own next
+invocation was refused before `CONTINUE_CLAIM` could be returned. Because
+`.ai-review/` is gitignored, that entry is per-worktree and never shared or
+inherited, so it exists only once that worktree has already completed 1d for that
+work item at least once: the lockout therefore covered the **first checkpoint any
+worktree starts on any work item**, and a brand-new work item was unstartable
+from everywhere. Nothing documented cleared it. The explicit takeover *succeeded*
+at rotating the claim and still left the refusal standing, because the refusal
+was driven by the missing identity record rather than by ownership — so the
+operation offered for "someone else holds this" could not clear a state in which
+nobody else did — and neither `clear_malformed_guard` nor
+`recover_abandoned_destructive_guard` applies with no guard present. The only
+remaining escape was hand-deleting the claim file: exactly the class of
+undocumented manual repair this design exists to eliminate, and the same harm
+`GPT-R81-004` was raised against.
+
+**How the branch is made reachable, corrected in revision 68**
+(`OPUS-R85-001`). Revision 67 reached it by relaxing 1c's check for a
+self-owned claim, which admits a different worktree occupying the holder's
+path. Revision 68 reaches it at **1d's ordering** instead: the identity record
+is established before the claim is published, so the window between publication
+and the state write always carries the record 1c requires, and nothing is
+relaxed. The two facts that produced the lockout — the record is written after
+the claim, and 1c requires it — are still both true of the *design*; only which
+of them moves has changed, and moving the write is what removes the window
+rather than the check. Item 364(a) asserts the reachability against the **real**
+step-1 procedure with **the claim-first ordering carried as a live control arm**
+that reproduces the lockout, so the assertion fails if the correction is
+reverted (`pass15.py` `Y3`, `pass14.py` `Z2`).
+
+#### No automatic staleness, ever
+
+**No claim is released on an assumption that could discard a live one.** There
+is no timeout, no heartbeat, no age threshold, no liveness probe, and no
+"the holder looks gone" inference anywhere in this design. `claimed_at` is
+recorded and is never read to expire anything.
+
+The **single** automatic release is a self-owned claim whose checkpoint is
+`COMPLETE` in the `WORKFLOW_STATE.json` **committed at `HEAD`** — the crash
+window between step 1f's commit and its release. Keying it on the working tree
+instead was a real defect in the draft: "somebody typed `COMPLETE`" is not
+"the checkpoint is done", and releasing on it hands the item away while the
+completion is still uncommitted.
+
+Every other disagreement refuses and reports. The escape from a claim this
+worktree does not own is an **explicit takeover** — the only one that ever
+applies while the holder worktree is still registered, and therefore the only
+one that can ever be reached against a holder that might still be alive
+(revision 65: the abandoned-guard recovery above is the single other route, and
+it exists precisely because the holder no longer exists). The takeover:
+
+- is never reachable from `/milestone-implement`, on any path;
+- presents `takeover_evidence` first — the claim record, its
+  `claim_observation_id`, whether the holder's recorded path still exists,
+  whether a **currently registered** worktree (`git worktree list --porcelain`,
+  matched on the stable `worktree_git_dir` as well as the path) still
+  corresponds to it, and the mutation guard's state. It reports; it does not
+  conclude. A holder that is still live is reported as still live, so the user
+  is told to resume there rather than shown a false orphan;
+- **and it reports uncommitted work, because for an absent claim that is the
+  whole decision** (new, revision 70, `OPUS-R87-004`). Revision 70 routes two
+  further states to this takeover — the symmetric origination refusal, and the
+  pre-claim legacy state — and in both the claim is **absent**, so
+  `claim_observation_id` is the literal `"absent"` and every other observation
+  the evidence carries is identical between two worktrees. The authorization
+  literal is therefore **byte-identical** for the worktree holding the real
+  uncommitted work and for one holding none, and the operator authorizing the
+  takeover is shown nothing that distinguishes them: reproduced, with the
+  worktree holding none succeeding and locking the true originator out. The
+  refusal message the design relies on says "resume in the worktree holding the
+  uncommitted work" while the evidence omits the one fact that identifies it.
+  So `takeover_evidence` additionally reports, as first-class observations on
+  the same terms as `local_identity`: whether **this** worktree has uncommitted
+  changes for the work item, and — for **every currently registered linked
+  worktree** — whether it does, named. It **reports, it does not conclude**:
+  this design never infers ownership from dirtiness, and revision 70 does not
+  start; the observation exists so the human making the judgment can see it.
+  Whether the dirty-work observation should also bind into the authorization
+  literal is decided here and stated rather than left open: it does **not**.
+  Uncommitted work changes under the operator's own hands between reading the
+  evidence and typing the authorization, and binding it would convert an
+  ordinary edit into a stale-evidence refusal without protecting anything the
+  claim observation does not already protect;
+- **binds the user's authorization to the exact claim they reviewed** (new,
+  revision 64, `GPT-R81-002`). The `claim_observation_id` is the sha256 of the
+  exact record bytes — defined for an **absent** record (`"absent"`) and for an
+  unreadable one alike, so neither falls back to a reusable generic
+  authorization. The literal is derived from that observation and names what the
+  observed record holds:
+  `take over <work_item_id> claim <claim_observation_id> holding
+  <displaced_checkpoint_id|none> as <checkpoint_id>`. Revision 63's literal named
+  only the work item and the checkpoint *being claimed*, so — reproduced
+  directly — `take over v2-1-dry-run S-CP3` displaced an installed claim holding
+  **`S-CP2`** that nobody had reviewed. A takeover targeting X can no longer
+  silently displace a claim for Y, because a claim for Y produces a different
+  literal;
+- **acquires the same mutation guard** every owner mutation acquires, and holds
+  it across its re-verification and its rotation, so
+  `takeover reverify → rotate` and `assert → mutate` are mutually exclusive by
+  construction. A held **`"destructive"`** guard refuses the takeover
+  unconditionally — the owner is inside a commit or a state write and no wording
+  of any *takeover* authorization releases that; when the holder worktree no
+  longer exists at all, the separately named abandoned-guard recovery above
+  applies instead, and the refusal says so rather than leaving the operator with
+  nothing (revision 65, `OPUS-R82-001`). A held `"ordinary"` guard requires a
+  separate guard-release authorization quoting the exact observed
+  `lease_id`/`step`/`step_class`; a guard whose `lease_id` has changed since
+  proves the owner is live and refuses. Exactly one acquisition attempt, no
+  retry loop, no timeout, no wall clock;
+- **re-reads the record under the guard and refuses on stale evidence**: the
+  observation must still be byte-identical to the one authorized. A claim that
+  changed between evidence and takeover requires fresh evidence and a fresh
+  authorization, which is also what makes the same authorization
+  non-replayable — the rotation it performs changes the very bytes it was bound
+  to;
+- **publishes by atomic replace** (`os.rename`), never unlink-then-create, so
+  a takeover that fails to publish leaves the previous claim in force rather
+  than leaving the work item silently unclaimed;
+- **rotates the `owner_token`**, increments `takeover_count` and appends the
+  displaced token to `previous_owner_tokens`, so the displaced owner's next
+  assertion fails and it can no longer write state, commit, or release;
+- records what it displaced in `taken_over_from` — including the displaced
+  record's own `claim_observation_id`, `owner_token` and `checkpoint_id`, i.e.
+  the record **atomically** displaced rather than an earlier read — so a takeover
+  is never indistinguishable from an ordinary claim afterwards;
+- **establishes the taking worktree's own local identity record** for the work
+  item, inside the same guard window and **immediately before the rotation
+  publishes** (new, revision 68, `OPUS-R85-001`; **ordering corrected, revision
+  69, `OPUS-R86-003`** — revision 68 did it after, so a document it could not
+  decide refused having already rotated). Without it the takeover is an
+  incomplete operation: 1c's origination check is unconditional again, so a
+  worktree that has never run 1d for this item — the ordinary case for a
+  takeover — would be refused at its very next invocation, and the operation
+  that just transferred ownership to it could not be worked from. It is also
+  what gives an identity record lost out of band a documented exit (see "What
+  this costs", above). When that document is **undecidable**, the establishment
+  becomes an authorized repair: the authorization literal carries
+  ` repairing identity <identity_observation_id>`, bound to the document's exact
+  bytes and re-verified under the guard, so the corrupt-record state needs no
+  hand deletion and no silent overwrite. This is not a status write: the record
+  is local, gitignored, per-worktree, carries no checkpoint status, and is
+  exactly the fact the human authorization just asserted;
+- writes **no** authoritative workflow status — no `WORKFLOW_STATE.json` write,
+  no commit, no working-tree change (**wording tightened, revision 68**: the
+  bullet above is the one local record it does write, and "no authoritative
+  workflow state" was previously stated in a way that read as excluding it).
+
+Two simultaneous authorized takeovers therefore have exactly one winner (the
+guard's `os.link` decides it), the winner proceeds as an ordinary owner, and
+both the loser and the displaced owner are fenced.
+
+A record that is unreadable or torn is recovered by an observation-bound
+operation, never a generic authorization — and **which** of the two owns it
+depends on the guard, which is the distinction revision 65 got wrong
+(`OPUS-R83-002`). An undecidable **guard** has its own equally explicit escape
+(`clear_malformed_guard` above), and a well-formed `"destructive"` guard
+abandoned by a worktree that no longer exists has one more
+(`recover_abandoned_destructive_guard`, above).
+
+Those three operations are exhaustive — no other path removes either record —
+and the claim that each "refuses by naming whichever of the others owns the
+state it was handed" is true **only because the ownership partition below is
+total and disjoint**. Revision 65 asserted the property while enumerating
+states by guard class alone, silently assuming the claim was always decidable;
+the conjunction of the two states it separately budgets a recovery for had no
+owner, and all three refused in a cycle. The partition, stated by both axes:
+
+| claim | guard | owner |
+| --- | --- | --- |
+| any | undecidable | `clear_malformed_guard` |
+| readable or absent | none, or `"ordinary"` | the explicit takeover (plus the guard-release authorization when `"ordinary"`) |
+| readable | `"destructive"`, holder registered | **nobody** — refuses, naming the three operator actions; a live window is never broken |
+| readable | `"destructive"`, holder deregistered | `recover_abandoned_destructive_guard` |
+| undecidable | none, or `"ordinary"` | the explicit takeover's observation-bound corrupt-record path |
+| undecidable | `"destructive"`, holder registered | **nobody** — refuses, same three operator actions (new, revision 66) |
+| undecidable | `"destructive"`, holder deregistered | `recover_abandoned_destructive_guard` (new, revision 66) |
+| absent | `"destructive"` | nobody needs one: a guard with no claim is superseded by construction, so reclamation rule 1 clears it with no authorization |
+| a **directory** at the claim path | any | **nobody, and stated as such** — refused with the operator action named, per "The record" |
+
+Every row has exactly one owner or an explicit, named non-owner; no row has
+two. The two "nobody" rows are refusals by design rather than gaps — they are
+the live-holder cases the whole `"destructive"` class exists to protect — and
+each names a concrete operator action rather than dead-ending. The directory row
+is the one state outside every documented operation, and it is declared, not
+implied.
+
+**The guard axis and the claim-path axis are resolved independently, and the
+table is disjoint per axis rather than per pair** (clarified, revision 67,
+`OPUS-R84` non-blocking observation 2). A directory at the claim path held
+together with an undecidable guard matches both the first row and the directory
+row, which looks like two owners and is not: the two rows act on **different
+objects**. `clear_malformed_guard` owns the *guard* and clears it; the claim path
+is still a directory afterwards, and the directory row's stated operator action
+is still the one that applies to *it*. The rows compose in that order and never
+compete, because no operation in this design removes both records in one step.
+
+#### New error classes
+
+Four, for cases genuinely new rather than routed into existing ones:
+
+- **`CheckpointOwnedByOtherWorktreeError`** — claiming, adopting or releasing a
+  claim held by a different worktree;
+- **`CheckpointOwnershipStateMismatchError`** — this worktree's own claim
+  cannot be reconciled with this worktree's own state file; reported, never
+  guessed;
+- **`CheckpointOwnershipUnavailableError`** — the record is unreadable,
+  unpublishable, or reached through a symlink; fails closed rather than
+  proceeding unprotected. Revision 64 widens it to the guard on the same terms:
+  an undecidable guard, or one held by a live owner this session may not break;
+- **`CheckpointOriginationUnprovableError`** (new, revision 69,
+  `OPUS-R86-001`; **widened, revision 70, `OPUS-R87-001`/`-002`**; **its
+  evidence made diagnostic, revision 71, `OPUS-R88-005`**) — this
+  worktree's own state records a checkpoint `IN_PROGRESS` that this worktree
+  cannot prove it originated. Two ways to reach it, and they are exhaustive:
+  the same `IN_PROGRESS` is present in the **origination reference** and could
+  therefore have been supplied by a checkout; or that reference's read is
+  **undecidable**, in which case origination is unprovable rather than proved
+  and the read refuses rather than admitting. Distinct from all three above on
+  purpose: nobody else necessarily holds the item, this worktree has no claim to
+  reconcile against, and — in the first case — every record involved is
+  perfectly readable. Which of the two routes it is, the commit the observation
+  came from, the status or shape read there, the reference it was evaluated
+  against, this worktree's local identity observation and the claim's absence
+  are all carried as evidence components rather than collapsed into the message
+  — see "Where the check belongs, and the ordering". It is raised only by
+  adoption, at its own check and again at publication, and it names the explicit
+  takeover as the escape.
+
+A fourth, **`CheckpointClaimTakeoverRefusedError`**, is raised only by the three
+authorized operations — the explicit takeover, `clear_malformed_guard` and
+`recover_abandoned_destructive_guard` — when the authorization is absent, wrong,
+bound to a different observation, or would break a `"destructive"` guard the
+caller may not break.
+
+**Neither revision 64 nor revision 65 adds a fifth class.** The fencing contract
+reuses all four: a displaced owner's failed assertion is
+`CheckpointOwnedByOtherWorktreeError` (claim now foreign) or
+`CheckpointOwnershipStateMismatchError` (token rotated in place), guard
+contention is `CheckpointOwnershipUnavailableError` — including revision 65's
+same-token-different-worktree refusal, which is guard contention and nothing
+else — and every authorization refusal is `CheckpointClaimTakeoverRefusedError`.
+`S14a`/`S14b`'s two `D3` classes remain the ones a foreign worktree actually
+sees.
+
+#### Scope boundaries
+
+- **`governing_workflow_version: "1"` items are untouched.** The mechanism
+  lives wholly inside `[2.1 step 1]`, which a `"1"` item never enters
+  (`/milestone-implement` step 0). Claims are per work item, so v1 inertness is
+  structural rather than a rule to remember.
+- **The bootstrap driver is out of scope.** `/bootstrap-workflow-v2` derives
+  completion from commit trailers and never writes an uncommitted `IN_PROGRESS`
+  transition, so it never opens the window this section closes. Confirmed
+  against this repository: `workflow-v2-1-core`'s own `WF8b` `IN_PROGRESS`
+  marker **is** committed — and is therefore present in the origination
+  reference — which is why it was never exposed to this defect, while
+  `v2-1-dry-run`'s `S-CP3` marker is not.
+- **A separate clone is a stated residual limit, not a regression.** A clone
+  has a different common directory and sees no claim — but it equally cannot
+  see the uncommitted work, so nothing that worked before stops working. The
+  multi-worktree case is the one `S14` is about and the one this closes.
+- **`git worktree move` of the holder** already breaks `D3`'s own identity
+  check, independently of this section, since `verify_dirty_resume_safety`
+  compares `worktree_root`. This revision does not reopen that settled rule; it
+  records `worktree_git_dir` so the situation is **diagnosable** rather than
+  silently indistinguishable from an orphan.
+- **What happens to the path the holder vacated** (new, revision 68,
+  `OPUS-R85-001`; the bullet above stated what happens to the *holder* and said
+  nothing about the *path*, which is where the defect lived). A vacated path can
+  be occupied by another worktree — by `git worktree add` after a move, or after
+  a `remove`, which additionally reuses the same admin directory name. The
+  occupant produces a byte-identical **ownership key** to the one the claim
+  records, so it satisfies `claim_is_this_worktree` and every claim-side
+  comparison built on the key. It is nevertheless refused, because 1c's
+  origination proof is the local identity record, which the occupant does not
+  have and cannot inherit. Its route in is the explicit takeover, which fences
+  and audits the transfer. The operator action this section already recommends
+  for a relocated holder — "move it back to its recorded path and resume there"
+  — is unavailable once the path is occupied, and the refusal should say so:
+  vacate the path (or move the holder somewhere else and take the claim over
+  from it) rather than leaving two worktrees contending for one location.
+- **What "reachable" means for a relocated or deleted holder, exactly**
+  (corrected, revision 65, `OPUS-R82-001`; revision 64 said such a holder stays
+  "reachable by explicit takeover", which is false whenever a `"destructive"`
+  guard is held — the takeover refuses on the class, and revision 64 offered
+  nothing else. **Corrected again, revision 66, `OPUS-R83-002`**: this
+  enumeration listed states by guard class and holder registration only, and
+  silently assumed the claim was always decidable — the assumption that produced
+  the three-way refusal cycle). The corrected statement, by guard class,
+  holder registration **and** claim decidability:
+  - **no guard held** — explicit takeover, unchanged, for a readable, absent or
+    undecidable claim alike;
+  - **`"ordinary"` guard held** — explicit takeover plus the guard-release
+    authorization quoting the observed `lease_id`, unchanged, likewise for any
+    claim state;
+  - **`"destructive"` guard held, holder deregistered** (deleted, reimaged, or
+    removed by the operator) — the abandoned-guard recovery above, **whether or
+    not the claim is readable**; when it is not, the deregistration fact and the
+    checkpoint id are taken from the guard's own record;
+  - **`"destructive"` guard held, holder still registered** (including a
+    relocated one, which stays registered under its stable `worktree_git_dir`)
+    — deliberately **not** reachable from another worktree, with the refusal
+    naming what to do: move it back to its recorded path and resume there, or
+    `git worktree remove` it and use the recovery — carrying the same
+    detached-`HEAD` caution the abandoned-guard recovery above states (revision
+    72, `OPUS-R89-004`: removing a detached linked worktree takes its `HEAD` out
+    of the origination reference and may erase origination evidence for other
+    checkpoints). Nothing here guesses whether
+    a registered worktree is alive. An undecidable claim does not change this
+    row: the window is protected by the guard, not by the claim's readability.
+  The one state no row covers is a **directory** at the claim path, which is
+  declared outside every documented operation with its operator action stated
+  ("The record", above) rather than left to be discovered.
 
 ### D-Registry — checkpoint registry format (revised, resolves OPUS-R6-018)
 
@@ -13574,6 +20962,82 @@ intent without a distinct field. Status never lives in the registry file
 at all — status lives exclusively in `WORKFLOW_STATE.json` (D3) — so no
 progress write can ever touch it.
 
+**Checkpoint ids are permanently non-reusable within a work item** (new,
+revision 71, `OPUS-R88-004`; **evidence source named and the invariant scoped to
+it, revision 72, `OPUS-R89-005`**). Registry validation refuses a registry that
+reintroduces a checkpoint id **that this work item has ever had observed in
+`D-Checkpoint-Ownership`'s origination reference**, because that reference is
+keyed on `(work_item_id, checkpoint_id)` over durable history and cannot
+distinguish a reused id from the original. A rename is therefore a **new** id
+and the retired one stays retired, which is the behaviour the mechanism already
+has (`pass18.py` `R4d`); this makes it a validated invariant rather than an
+accident of how the registry has happened to be edited so far. The refusal names
+the historical observation that binds the id.
+
+**How that reference is read for this query** is not inherited from the
+origination test and is stated separately (new, revision 73, `OPUS-R90-003`):
+see `D-Checkpoint-Ownership`'s "The identity queries' own read partition". In
+short — a decidable observation of the pair refuses; every commit decidable with
+no observation admits; a commit undecidable **for the queried key itself**
+refuses with `IdentityReferenceUndecidableError` rather than being read as "not
+observed", cleared only by the explicit, evidence-bound, non-replayable
+`authorize_identity_reference_gap` operation, which admits the undecidability
+and never a decidable observation; and the origination test's reduction rule —
+any observation anywhere binds, no supersession, no recency — applies here
+unchanged. **The precedence rule matters at exactly this call site** (revision
+74, `OPUS-R91-002`): a committed `{"work_items": {"X": {"checkpoints":
+{"CP": null}}}}` is a **decidable observation** of the pair, refusing
+unescapably, and is not routed to the escapable class — otherwise one
+authorization would let registry validation reintroduce a retired checkpoint id
+the committed document plainly records. Revision 72 named the source without specifying the read, which left
+the fail-open reading ("undecidable, therefore not observed") available for the
+exact query whose whole purpose is to find a historical observation.
+
+Revision 71 stated this half as "a checkpoint id this work item has **previously
+retired** — renamed away, removed, or completed and dropped" and named **no
+evidence source at all**, while `D1`'s sibling work-item half named one exactly.
+Neither `WFR-66` nor item 375(g) closed the gap, and `WFR-66` simultaneously
+required that "both refusals name the historical observation that binds the id"
+— which the registry half could not do for a whole class of ids, because a
+checkpoint id enters `work_items[…].checkpoints` only when a status is first
+written for it (`workflow_state.start_checkpoint`; work-item creation
+initialises `checkpoints` to `{}`), so **an id authored into a registry and
+renamed or removed before it was ever started never appears in
+`WORKFLOW_STATE.json` and is invisible to the reference**. Two faithful readings
+of revision 71 therefore disagreed on that class, and the plan gave no way to
+choose.
+
+Of the finding's two permitted answers the plan takes **(b)**, and says so as a
+scope statement rather than as a silent narrowing: **the registry-side refusal
+is scoped to ids observable in the state-document reference. A checkpoint id
+retired before it was ever started carries no historical binding, and is
+therefore outside this invariant** — reintroducing it is legal. That is
+sufficient for the motivating problem, because the binding `WFR-66` exists to
+prevent is created *only* by an observed `(work_item_id, checkpoint_id)` pair;
+an id with no observation cannot inherit one. Answer (a) — a second durable
+reference over `docs/ai-workflow/registry/<work_item_id>-registry.json`, with its
+own decidability partition (unparseable registry, non-object document, missing
+or non-object `checkpoints`, tree/blob read failure) and its own retention
+statement, plus a rule for what happens when a work item's `registry_path`
+itself changes — is declined: it would re-incur, for a class with no live
+instance, the entire fail-closed discipline the state-document reference spent
+four rounds acquiring. There is no live violation under either reading: all five
+committed revisions of `workflow-v2-1-core-registry.json` carry the same 17
+checkpoint ids with no removal and no reintroduction, and all 17 also appear in
+the state document, so the registry-only class is currently **empty** here.
+
+**The boundary this invariant deliberately does not cover, stated because a
+reader will ask.** A checkpoint id **redefined in place** — kept live, its scope
+rewritten across plan revisions — is **not** retirement and is **not** refused.
+`workflow-v2-1-core`'s own `WF8b` has been redefined this way across dozens of
+revisions and must stay legal. The historical-evidence binding argument applies
+to in-place redefinition exactly as it does to reuse after retirement — the
+reference cannot tell the two apart either — and the invariant is nonetheless
+scoped to *reintroduction after retirement* on purpose, because refusing
+in-place redefinition would make ordinary plan revision impossible while buying
+nothing the claim mechanism does not already provide for post-mechanism
+checkpoints.
+
 ### D4b — Requirements mapping and ledger (revised: files created this round, resolves GPT-R9-003)
 
 - **`docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json`**
@@ -13608,7 +21072,29 @@ per-item field, governing routing exactly as before.
   (`/milestone-plan` creates or updates the item under `work_items[id]`,
   `governing_workflow_version` copied from `WORKFLOW_CONFIG.json` at
   creation time), now writing into the multi-item map rather than a
-  singleton.
+  singleton. **A `work_item_id` is permanently non-reusable** (new, revision
+  71, `OPUS-R88-004`): creating a work item under an id that has ever appeared
+  in `D-Checkpoint-Ownership`'s origination reference is refused at creation,
+  because that reference is keyed on `(work_item_id, checkpoint_id)` over
+  durable history and would silently bind the new item to the retired one's
+  observations — reproduced (`pass18.py` `R4c`). Removing a work item's entry
+  from `WORKFLOW_STATE.json` therefore retires its id rather than freeing it;
+  the sibling invariant for checkpoint ids within an item lives in
+  `D-Registry`. The read this refusal is decided on is
+  `D-Checkpoint-Ownership`'s "The identity queries' own read partition", not
+  the origination table (new, revision 73, `OPUS-R90-003`): a commit
+  undecidable **for the queried key itself** refuses work-item creation with
+  `IdentityReferenceUndecidableError` rather than being read as "this id was
+  never used", and `authorize_identity_reference_gap` is the one explicit,
+  evidence-bound exit — so a damaged historical commit can neither deadlock
+  ordinary work-item creation nor silently license a reused id. **A committed
+  `{"work_items": {"X": null}}` is a decidable observation of `X`, not a gap**
+  (revision 74, `OPUS-R91-002`): key presence is the whole of what an existence
+  query asks, so that refusal is **unescapable** and `authorize_identity_reference_gap`
+  refuses against it. Note that this call site is also why the escape's record
+  is repository-scoped and its serialization repository-level — at work-item
+  creation the work item does not exist yet, so neither `WORKFLOW_STATE.json`
+  nor any per-work-item guard can carry either.
 - **`active_work_item_id`**: names the one work item autonomous commands
   (`/milestone-implement`, a resumed `/milestone-plan`, etc.) operate on by
   default without an explicit work-item argument. Exactly one value at a
@@ -13876,6 +21362,77 @@ per-item field, governing routing exactly as before.
     explicit authorization on every run (revision 61, `GPT-R78-002`); the
     move out of state (1) is made by item 347's permanent `/approve-review`,
     which is the sole consumer of the retirement.
+
+### D-Plan-Revision-Publication — the single sanctioned writer of a plan-revision bump (new, revision 64, resolves `GPT-R81-004`)
+
+`D3` requires `WORKFLOW_STATE.json`'s non-authoritative `plan_revision` mirror to
+equal the registry's authoritative value whenever `registry_path` is non-null,
+and `validate_state` refuses with `PlanRevisionMirrorMismatchError` otherwise.
+Revision 63 exposed that **no documented step owned that write** for a
+governing-v1 work item that nevertheless has a state entry — which is exactly
+this repository's own permanently-v1 `workflow-v2-1-core`:
+
+- `/milestone-plan`'s `"1"` branch performs no `WORKFLOW_STATE.json` writes at
+  all beyond its initial routing read, and is v1-inert by construction;
+- `route_work_item(...)` is `plan_revision`'s only writer on an existing entry,
+  and it is called only from the `[2.1]` branch;
+- `apply_plan_approval(...)` writes `plan_approval`/`phase`/`state_revision`/
+  `last_transition` and **never** `plan_revision`, and no step of
+  `D-Approval-Commits`' "Bootstrap plan-approval procedure" writes it either.
+
+So a self-discovered revision of this work item bumped the registry to `63`
+while the mirror stayed `62`, producing a state that fails its own validator and
+that the plan-approval commit would have committed in that condition. It was
+repaired out of band. **The repair is not the fix**: the writer contract is.
+
+**The rule.** The operation that writes a new `plan_revision` into a registry
+**must, in the same operation and before any bundle is generated**, publish the
+same value to the state mirror through one canonical entry point:
+
+```text
+workflow_state.publish_plan_revision(state, work_item_id, plan_revision, now)
+```
+
+which sets `plan_revision` to the registry's value, sets `phase` to
+`AWAITING_EXTERNAL_PLAN_REVIEW` for a `"1"`-governed item and
+`AWAITING_LOCAL_PLAN_REVIEW` for a `"2.1"`-governed one (`D-Plan-Review-Stages`
+enters local review first), advances `state_revision`/`last_transition`, and is
+**idempotent**: re-running it with the same value and the same resulting phase is
+a no-op, so an interrupted revision is retried rather than repaired. It refuses a
+terminal-phase item and never touches any other work item's entry. It is written
+through the same serialized state-write primitive every other state writer uses
+(`D1`), never as a plain JSON edit.
+
+**Its call sites are exhaustive, and each is named here rather than left to
+convention**:
+
+1. `/milestone-plan` step 3's `[2.1]` registry write — the ordinary path, which
+   already calls `route_work_item(...)` for the mirror and now also owns the
+   phase transition;
+2. `/apply-plan-review` step 5, on both branches, whenever the revision counter
+   advances as part of applying feedback;
+3. `D-Bootstrap`'s `/bootstrap-workflow-v2` — the sole driver of the
+   permanently-v1 `workflow-v2-1-core`, and therefore the owner of a
+   **self-discovered** revision opened while `IMPLEMENTING`. Its step 1
+   state-sync gains this one obligation: a registry `plan_revision` ahead of the
+   mirror is published here, and the item enters external plan review, before
+   any checkpoint is selected.
+
+**The v1 carve-out is narrow and is stated as a property, not a habit.** The
+`"1"` branch's "no `WORKFLOW_STATE.json` writes" rule is preserved for every v1
+work item that has **no** `work_items` entry — which is every ordinary v1
+milestone, and is what `WF8a-ii`'s golden-output inertness test covers. The
+carve-out applies only where an entry already exists, i.e. where `D3`'s mirror
+invariant is live and can be violated in the first place. A v1 item with no entry
+has no mirror to keep, so nothing to reconcile.
+
+**Detection is added alongside the writer**, because a rule with no failing test
+is a convention: `scripts/prepare-ai-review.sh`'s **plan** stage refuses, before
+generating any content, when the resolved work item's state mirror disagrees with
+its registry's `plan_revision` — naming both values, exactly as it already
+refuses a `base_commit` disagreement (`D-Fingerprint-Generalization`). An unowned
+bump therefore can never reach a reviewer again, whether or not the writer above
+was called. This is also the bundle-consistency check `GPT-R81-005` asks for.
 
 ### D2 — Explicit approval, unified record (revised: entry/exit split, mechanism-independent guard, waiver enum)
 
@@ -14662,6 +22219,144 @@ its `"2.1"` branch is the revised exit step above.
   checkpoint-commit descendant of it, **and** `plan_approval.status ==
   CURRENT`, **and** a freshly recomputed **plan-stage** `review_content_id`
   matches `plan_approval.approved_review_content_id`.
+- **Approval-time reviewed-identity freshness (new, revision 75, resolves
+  `OPUS-R92-001`)**: step (1)'s recomputed plan-stage `review_content_id` is not
+  merely displayed — it is **asserted equal to the reviewed content identity**
+  (`D-Bundle-Manifest`, "One definition of the reviewed content identity"), and
+  `/approve-review plan` **refuses** on a difference, naming both digests. This
+  is the missing half of a boundary this design had already drawn: revision 74
+  made the bundle an immutable, self-consistent *subject*, and until this rule
+  nothing required the object being approved to *be* that subject.
+  - **Where the reviewed value comes from** (roles restated, revision 76,
+    `OPUS-R93-001`): there are **two** sources and they are not
+    interchangeable, which revision 75's own wording obscured by naming the
+    derived one first and the definitional one as a "cross-check".
+    - **Definitional source — `MANIFEST.md`'s own declared
+      `review_content_id`**, read by
+      `workflow_fingerprint.read_manifest_identifiers(<bundle_dir>/MANIFEST.md)`.
+      `D-Bundle-Manifest`'s "One definition of the reviewed content identity"
+      names that value as the one semantic object, and it is **transitively
+      bound to the reviewer's verdict by `bundle_id`**: the
+      `review_content_id:` line is ordinary hashed content, because
+      `_strip_manifest_self_reference` strips `^bundle_id: <64hex>$` and nothing
+      else. Measured on this round's own bundle rather than asserted —
+      substituting an all-zero digest for that one line, changing nothing else,
+      moves `bundle_id` `75a29657…` → `d01a6baf…`.
+    - **Corroborating source — the feedback's fourth binding field**,
+      `Reviewed review content ID:`, parsed by
+      `parse_review_feedback_binding_fields` and enforced by
+      `assert_feedback_matches_bundle` on the same footing as the existing three
+      (a missing field raises the same `MissingFeedbackBindingFieldError`
+      shape). It is a second, independently-authored copy that the reviewer
+      states in their own words; it is not the definition, and where the two
+      disagree the invocation **refuses** naming both rather than preferring
+      either.
+    The polarity `OPUS-R14-005` established is
+    preserved and is the point of the field: `review_content_id` is **hard**,
+    `bundle_id` stays exactly as it is today. `/record-manual-plan-review` step
+    6 already applies this polarity at its own gate
+    (`StaleReviewContentIdError`); `/approve-review` had the inverse one, and
+    because `workflow-v2-1-core` is `governing_workflow_version: "1"` that
+    command never runs on its path — so before this rule, no `review_content_id`
+    binding executed anywhere between an external review and this work item's
+    plan-approval commit.
+  - **What a missing fourth field does at `/approve-review`, decided rather
+    than left to `WF8b`** (new, revision 76, resolves `OPUS-R93-006`): it
+    **refuses**, with the same `MissingFeedbackBindingFieldError` shape
+    `WFR-03`'s verification column already names. The question is live because
+    `/approve-review` step 1 deliberately treats a missing or mismatched
+    `Reviewed bundle ID:`/`Reviewed base commit:`/`Work item:` as **not fatal**
+    to reading the file — an `EXTERNAL_APPROVE` basis simply becomes
+    unreachable at step 3 — so "on the same footing as the existing three"
+    resolves, at this one command, to *non-fatal*, which is not what a **hard**
+    check means. The two are reconciled by locating the refusal precisely:
+    **step 1's parse keeps its existing non-fatal policy for all four fields**,
+    unchanged, and the refusal belongs to **this assertion**, which is a
+    separate check at step 2 and which cannot be satisfied by a
+    single-sourced comparison. So the three older fields keep their
+    basis-reachability polarity and the fourth gets its hard one, at different
+    sites, with neither policy rewritten. Refusing rather than degrading to
+    `MANIFEST.md`-only sourcing is the choice taken, on two grounds: every
+    feedback file this work item has ever received carries the field except the
+    round-30 one, so refusing ratifies existing practice rather than imposing a
+    new obligation; and a degrading path would silently lose the corroboration
+    at exactly the gate where the reviewed identity is load-bearing. Note what
+    this is **not**: it is not a safety property. With the field absent the
+    definitional source is still `MANIFEST.md`, still transitively bound by
+    `bundle_id`, so the assertion would still compare live against what the
+    verdict binds. What refusing buys is the **second** source, not the first.
+  - **The bridge interval, and it expires** (new, revision 76, resolves
+    `OPUS-R93-001`): the corroborating source above does **not exist yet**.
+    `parse_review_feedback_binding_fields`
+    (`scripts/workflow_fingerprint.py:1968`–`:1983`) returns exactly `status`,
+    `reviewed_bundle_id`, `reviewed_base_commit` and `work_item`, and
+    `assert_feedback_matches_bundle` (`:1997`) iterates exactly the latter
+    three; the fourth field is `WF8b`'s to implement. Until it lands — and this
+    matters because the **bootstrap plan-approval procedure is what approves
+    this very revision**, carrying this assertion through its step 2 — the
+    sourcing is:
+    1. **the reviewed identity is read from
+       `read_manifest_identifiers(<bundle_dir>/MANIFEST.md)["review_content_id"]`**,
+       the definitional source above, which ships today and needs no new
+       helper;
+    2. **it is corroborated against the feedback's own `Reviewed review content
+       ID:` line read directly** — a literal-line read, no parser change — and
+       a disagreement **or an absence** refuses, naming both values, which is
+       the same disposition the permanent path takes;
+    3. **it is compared against a freshly recomputed
+       `compute_review_content_id_plan_stage_for_work_item(repo_root,
+       <work_item_id>)[0]`**, before the journal, before the index-isolation
+       precondition and before the state write — exactly where step 2 already
+       places the assertion, so nothing about its position changes;
+    4. **both digests and both sources are preserved in the round's own
+       record**, and any mismatch aborts having mutated nothing;
+    5. **this clause expires.** Once `WF8b` implements the fourth binding
+       field, the parser becomes the corroborating source and (2)'s direct line
+       read is retired. The permanent path is mechanical; this interim one is
+       mechanical too, and neither is operator discipline.
+    Two things follow, and they are the reason this is stated rather than left
+    implicit. There is **no circularity**: the bridge can perform the whole
+    check today, with read-only helpers, so approving revision 75 or later does
+    not wait on the mechanism that approval would authorize. And "do not edit a
+    protected path between receiving a verdict and running the approval" stops
+    being the load-bearing control and becomes belt-and-braces over a
+    mechanical check — which is what `WFR-06` requires, since a plan whose only
+    stated mitigation for its own approval is operator discipline fails its own
+    standard.
+  - **Where it runs**: before step (3)'s basis resolution and, decisively,
+    **before this invocation's first durable mutation** — the state write. On
+    the refusal path there is **no commit, no index mutation and no state
+    write**, and the repository is byte-identical to its pre-invocation state.
+    A refusal here is identical in kind to the `StaleArtifactsDeclarationError`
+    refusal one step later.
+  - **Why the plan stage specifically needs it**: the plan-approval commit
+    *commits the working-tree bytes*, so the committed object must be the
+    reviewed object, and proving live == reviewed is the only way to obtain
+    that. Neither existing check reaches it: `bundle_id` is a pure function of
+    the bundle directory and is insensitive to every working-tree change, and
+    `assert_local_generation_matches` compares `worktree_root`/`generation_head`,
+    neither of which an uncommitted edit alters.
+  - **Scope, deliberately not widened**: only the plan-stage projection is
+    compared. Editing a declared **excluded** path leaves `review_content_id`
+    unchanged and therefore does not block approval — verified directly against
+    the real module, `.gitignore` being the concrete case — so an unrelated
+    implementation-side change never blocks a plan approval, and **no
+    clean-worktree requirement is introduced**.
+  - **ABA is accepted, not refused**: a protected path modified and then
+    restored byte-identically recomputes to the reviewed value and **passes**,
+    per the content-identity-not-temporal-history rule stated once in
+    `D-Bundle-Manifest`. This is not a weakness of the check; it is the
+    invariant the check is defined against.
+  - **The bootstrap procedure inherits it** without a separate statement,
+    because its step 2 is defined as "Steps 1-4 of `/approve-review`, unchanged,
+    performed directly, read-only" — the assertion lands inside that step, ahead
+    of its own step 5 state write, preserving that step's existing
+    `WORKFLOW_STATE.json`-byte-identical guarantee.
+  - **The diagnostic already existed as a print.** `scripts/workflow_fingerprint.py`'s
+    read-only CLI path already reports `MANIFEST.md`'s recorded
+    `review_content_id` and labels it `matches` / `DIFFERS -- protected content
+    changed since MANIFEST.md was last written`. This rule promotes exactly that
+    comparison to an assertion at the gate; it does not invent a new one.
 - **Conditional fifth commit member — the artifact declaration (new,
   revision 50, resolves `GPT-R67-001`)**: `<work_item_id>-artifacts.json`
   is plan-stage excluded (`docs/ai-workflow/registry/` is a plan-stage
@@ -14690,7 +22385,17 @@ its `"2.1"` branch is the revised exit step above.
      the same bundle-freshness discipline `bundle_id` recomputation already
      applies to every other file, made explicit here because this file is
      the one member of the commit set that is plan-stage excluded and so
-     is not already covered by the plan-stage `review_content_id` match.
+     is not covered by the "Approval-time reviewed-identity freshness"
+     assertion above. **(Corrected, revision 75, `OPUS-R92-001`.)** Through
+     revision 74 this clause read "is not *already* covered by the plan-stage
+     `review_content_id` match", which asserted that the other four members
+     **were** covered by such a match. They were not: no `review_content_id`
+     comparison against the reviewed identity existed at any call site, and
+     the sentence described a property the design named in three places and
+     implemented in none. The freshness rule stated above is what now makes
+     the clause true for the four protected members; this condition remains
+     necessary for the fifth precisely because that rule cannot reach a
+     plan-stage-excluded path.
   3. When both conditions hold, the declaration's working-tree bytes are
      staged into the **same** commit as the other four files — never a
      second, post-approval cleanup commit (resolves point 3). Its own
@@ -15858,13 +23563,80 @@ its `"2.1"` branch is the revised exit step above.
      reachability (`workflow_state.approval_gate_reachable`); recompute
      `bundle_id`/plan-stage `review_content_id` fresh and run the local
      worktree/HEAD staleness check
-     (`workflow_fingerprint.assert_local_generation_matches`); resolve the
+     (`workflow_fingerprint.assert_local_generation_matches`); **assert the
+     recomputed plan-stage `review_content_id` equals the reviewed content
+     identity** and refuse, naming both digests, on a difference (new,
+     revision 75, `OPUS-R92-001` — the "Approval-time reviewed-identity
+     freshness" bullet above, inherited here rather than restated, since this
+     step is defined as `/approve-review`'s own steps 1-4). **The reviewed
+     value's source, in this interval, is the bullet's "The bridge interval,
+     and it expires" clause and it must be read before this step is executed**
+     (new, revision 76, `OPUS-R93-001`): this procedure has no code — item 348
+     states it is exercised as a live checklist, so its execution surface is
+     this document — and the corroborating source the permanent rule names,
+     `parse_review_feedback_binding_fields`' fourth binding field, does **not
+     exist yet**. A session that reaches this step and calls that parser gets a
+     dict with no reviewed-content key and has no sanctioned next move; the
+     three unsanctioned ones are all bad, and the worst of them (treat the
+     assertion as unimplemented and fall through to steps 3-4) reproduces
+     exactly the `EXTERNAL_APPROVE`-on-drifted-content defect this revision's
+     predecessor exists to remove. So: read the identity from
+     `read_manifest_identifiers(<bundle_dir>/MANIFEST.md)["review_content_id"]`,
+     corroborate it against the feedback's `Reviewed review content ID:` line
+     read directly, and compare both against a freshly recomputed
+     `compute_review_content_id_plan_stage_for_work_item(...)`. All three are
+     read-only and all three ship today. Resolve the
      basis (`workflow_state.resolve_approval_basis`); build the record
      (`workflow_state.build_approval_record`). None of these steps
      reference the commit's file set, so none of them differ from an
      ordinary `/approve-review plan` run — and, unlike revision 51, none of
      them write anything: `docs/ai-workflow/WORKFLOW_STATE.json` is still
-     byte-identical to its pre-procedure state after this step.
+     byte-identical to its pre-procedure state after this step, which is
+     exactly what makes the new refusal safe to place here — it precedes the
+     journal, the index-isolation precondition and every mutation this
+     procedure performs. **Also assert this work item is not marked** (new,
+     revision 78, `GPT-R96-001`): call
+     `workflow_fingerprint.assert_bundle_not_rejected(repo_root,
+     "workflow-v2-1-core")` and refuse, naming the marker's path and its
+     recorded content, if the marker exists — and, until that helper ships,
+     perform the identical read directly at
+     `.ai-review/workflow-v2-1-core/REJECTED`, which is the whole of what the
+     helper does and needs no code that does not exist. This belongs in this
+     step for the same reason the freshness assertion does: it is read-only,
+     it precedes every mutation, this procedure is the only path this work
+     item's own approvals take, and `D-Bundle-Manifest` part 3b's marked
+     residue satisfies every *other* check in this step by construction.
+     **This consumer repeats the assertion under its own mutation guard, like
+     every other consumer** (rewritten, revision 80, `OPUS-R98-002`; replaces
+     revision 79's quiescence-coverage exemption, which is **withdrawn as
+     false**). Revision 79 argued this procedure needed no second assertion
+     because it "executes inside the state-writer quiescence window … and
+     `record_bundle_generation` is one of the twelve enumerated prohibited
+     writers". Four legs of that argument fail, and `D-Bundle-Manifest` part
+     3b now records all four: the window **starts at step 4a**, three steps
+     after this read; it prohibits **state writers**, and the marker's writer
+     writes no state (`/prepare-review` is explicitly "unrestricted" inside
+     the window, and no file under `scripts/` writes the state path at all);
+     `record_bundle_generation` cannot execute at the **plan** stage at all
+     (`scripts/workflow_state.py:2484-2488`), so the cited coverage is
+     inapplicable to the only approvals this procedure performs; and a
+     step-0 forward completion never re-reads the marker, so a single
+     assertion could sit in a different session from the mutation it guards.
+     Since this procedure **is** the approval — the only path
+     `workflow-v2-1-core`'s own approvals take, this plan's included — it is
+     the one consumer with no downstream check to catch the result, which is
+     why it gets the strongest placement rather than the weakest. The second
+     assertion is therefore performed at **sub-step 6.1b**, textually
+     adjacent to the `git update-index` that stages the applied post-approval
+     state, inside the mutation guard that sub-step already acquires; it
+     covers the whole step-2 → step-6 interval, including steps 3 and 4,
+     which run before the window exists. The crash-resume path is governed by
+     this transaction's existing before/after-durability asymmetry rather
+     than by a third assertion — see sub-step 6.1b and part 3b for why
+     refusing at step 8b is the wrong treatment. What *is* specific to this
+     procedure, and does not extend to the permanent consumers, is that both
+     of its assertions are direct filesystem reads until
+     `assert_bundle_not_rejected` ships.
   3. **Git index-isolation precondition (new, revision 54, `GPT-R71-001`
      — required before any staging step below, and still before any state
      write, so the rollback/exact-file-set guarantees the later steps
@@ -16099,7 +23871,35 @@ its `"2.1"` branch is the revised exit step above.
            revision 57; guarded, revision 58, `GPT-R75-001`): this sub-step
            mutates the index, so it may not run on a
            transaction this session no longer owns, and ownership may not
-           transfer while it is in flight. The progress record is advanced
+           transfer while it is in flight.
+           **Then, inside the same guard and immediately before the
+           `git update-index` below, repeat step 2's marker read** (new,
+           revision 80, `OPUS-R98-002`): call
+           `workflow_fingerprint.assert_bundle_not_rejected(repo_root,
+           "workflow-v2-1-core")` — or, until that helper ships, the identical
+           direct read of `.ai-review/workflow-v2-1-core/REJECTED` — and, if
+           the marker exists, **refuse through the rollback**, naming the
+           marker path and its recorded content. This is
+           `D-Bundle-Manifest` part 3b's second assertion for consumer #5,
+           placed at this procedure's first durable approval mutation. It is
+           the whole of what the withdrawn revision-79 exemption assumed the
+           quiescence window provided: the window does not start until step
+           4a, and it does not prohibit the marker's writer, so the marker can
+           legitimately appear anywhere between step 2 and here. Refusing at
+           this point costs nothing beyond a rollback that is a verified
+           no-op — the index still equals `HEAD` and the state file is still
+           byte-identical to `pre_procedure_state_sha256` — and the retry is
+           this procedure from step 0 after a successful regeneration clears
+           the marker. **On the step-0 forward-completion path this assertion
+           is deliberately not repeated**: there the approval commit is
+           already durable, and refusing would strand a valid, verified commit
+           behind an unclosable journal, which is precisely what this
+           transaction's "before durability, refuse and let the retry
+           recapture; after durability, complete forward without clobbering"
+           rule forbids. That path completes forward and **reports** a marked
+           approval instead, with part 3b's stated recovery — regenerate, then
+           re-approve against the regenerated bundle. A `NOT_COMMITTED`
+           resume needs nothing: it rolls back, so no approval survives. The progress record is advanced
            and the guard released as soon as the `git update-index` below
            returns — **before** sub-step (c)'s confirmation, which is a pure
            read, and before any transition into the rollback, per the
@@ -19072,10 +26872,34 @@ been shortened or edited but still happened to contain no duplicate
 compare against) trivially satisfies this rule against an empty prior
 array.
 
-**Dirty in-progress resume, worktree-scoped** (unchanged): a clean
-(`COMPLETE`) checkpoint is portable anywhere; an `IN_PROGRESS` checkpoint's
-uncommitted work is worktree-local — resume requires matching local
-`WORKTREE_IDENTITY.json`, else stop and report.
+**Dirty in-progress resume, worktree-scoped** (rule unchanged; its reach
+corrected in revision 63): a clean (`COMPLETE`) checkpoint is portable
+anywhere; an `IN_PROGRESS` checkpoint's uncommitted work is worktree-local —
+resume requires matching local `WORKTREE_IDENTITY.json`, else stop and report.
+
+**Revision 63 (`WF8B-S14-001`)** — what this rule does *not* do, now stated
+rather than assumed. Through revision 62 this paragraph read as though it
+protected an interrupted checkpoint against any other worktree. It does not,
+and could not: it is reached only once the invoking worktree has already
+classified the invocation as a resume, and that classification is made against
+the invoking worktree's **own** `WORKFLOW_STATE.json`. The `IN_PROGRESS`
+transition is never committed, so a second linked worktree's copy has no such
+entry, classifies the same checkpoint as a fresh start, and never reaches this
+rule at all. The rule therefore protects the worktree that already knows it is
+resuming, and was inert against the case it reads as covering. Neither this
+rule nor either of its error classes changes; what changes is that
+`D-Checkpoint-Ownership` now **routes** a foreign worktree into it, via a
+repository-shared claim resolved at `/milestone-implement` step 1c, before any
+branch that can mutate. `WORKFLOW_STATE.json` remains the sole authority on
+checkpoint status — the claim is coordination state and is never read to decide
+what a checkpoint's status is.
+
+**`.ai-review/runtime/WORKTREE_IDENTITY.json` cannot close this gap on its
+own**, which is why the claim lives elsewhere: it is gitignored and
+worktree-local by design (`.gitignore:1`), so a freshly created worktree has no
+copy of it and — more to the point — is never asked for one, because the
+identity check is downstream of a classification that already went the wrong
+way. The claim is deliberately *not* stored here for the same reason.
 
 **Checkpoint-complete continuation** (unchanged): `current_checkpoint_id`
 → `null` between checkpoints while `phase` stays `IMPLEMENTING`; `phase` →
@@ -20646,6 +28470,110 @@ first, then `flock`**, released in reverse. No path anywhere takes the `flock`
 before the guard, so a lock-order inversion is unreachable by construction
 rather than by convention.
 
+**The complete global partial order, in one place** (new, revision 75,
+`OPUS-R92-004`; **corrected from four primitives to six and from a forest to a
+DAG, revision 76, `OPUS-R93-002`**). Through revision 74 the order was checkable
+only by assembling three sections, and each section asserted completeness
+against its own local subset — which is how the identity-gap leaf came to claim
+a stated ordering while omitting `WORKFLOW_STATE.lock`. Revision 75 created this
+single site and **repeated the same class of error at it**, enumerating four
+primitives while this design defines six: it omitted both objects
+`D-Checkpoint-Ownership` owns, each of which is defined in this same document
+and each of which is exercised by the green stress passes today. That is the
+second consecutive round in which a completeness claim about lock ordering was
+found short, which is why the closing rule below is a conformance obligation
+with a test owner rather than a convention. This design has **six** lock-shaped
+primitives:
+
+1. the per-work-item **transaction** mutation/handoff guard
+   (`.ai-review/runtime/PLAN_APPROVAL_MUTATION.lease`, link-based,
+   `D-Approval-Commits`);
+2. `D1`'s state-writer `flock` at `.ai-review/runtime/WORKFLOW_STATE.lock`;
+3. the per-worktree identity `flock` at
+   `.ai-review/runtime/WORKTREE_IDENTITY.lock` (`D-Checkpoint-Ownership`'s
+   identity-document lock);
+4. the repository-level identity-gap `flock` leaf at
+   `$(git rev-parse --git-common-dir)/ai-workflow/identity-gap.lock`;
+5. the per-work-item **checkpoint** mutation/handoff guard at
+   `…/checkpoint-claims/<sha256(work_item_id)>.lease` (link-based,
+   `D-Checkpoint-Ownership`'s "Fencing: the mutation/handoff guard"). This is
+   **not** (1): different directory, different scope, different lifecycle,
+   different reclamation rules, different owning section. They are named alike
+   because they are the same *primitive family*, which is exactly why omitting
+   one while listing the other was easy to do and is worth naming here;
+6. the guard-mutation `flock` at
+   `…/checkpoint-claims/<sha256(work_item_id)>.guardlock` — stable,
+   never-unlinked, carrying no ownership at rest, held for a handful of
+   syscalls so that removing (5) is atomic with respect to the comparison that
+   authorized the removal.
+
+The whole order over them is four edges, and it is a **DAG rather than a
+forest** — revision 75's "forest with one edge" was a consequence of the two
+missing primitives, not an independent claim:
+
+```text
+(1) PLAN_APPROVAL_MUTATION.lease  →  (2) WORKFLOW_STATE.lock      [D-Approval-Commits step 8b]
+(5) checkpoint-claims/<wi>.lease  →  (2) WORKFLOW_STATE.lock      [steps 1d and 1f state writes]
+(5) checkpoint-claims/<wi>.lease  →  (3) WORKTREE_IDENTITY.lock   [step 1d's write_worktree_identity]
+(5) checkpoint-claims/<wi>.lease  →  (6) …/<wi>.guardlock         [the release's compare-and-delete]
+(4) identity-gap.lock                                             [isolated leaf, no edge either way]
+```
+
+Read `X → Y` as "X may be held while Y is acquired, and never the reverse".
+Every edge is released in reverse acquisition order. **No back-edge exists and
+none may be introduced**; in particular **(2) is never held while (5) is
+acquired**, which is the one inversion that would close a real cycle between two
+long-lived, cross-worktree, cross-process primitives — a state writer that wants
+to fence a checkpoint transition it is about to record is the natural way to
+write it, and it is prohibited here.
+
+Two per-primitive properties, stated at the strength each mechanism actually
+has:
+
+- **(3) is a leaf in one direction only**, which is how
+  `D-Checkpoint-Ownership`'s own defining bullet states it and how it is
+  restated here: *no other lock in this design is ever acquired while (3) is
+  held*. It **is** acquired while (5) is held — step 1d's guarded mutation is
+  `transition_checkpoint_in_progress` **plus `write_worktree_identity`**, and
+  the latter takes (3) for its whole load → validate → mutate → publish
+  sequence. Revision 75 strengthened this to a two-directional leaf claim
+  ("neither is ever acquired while another is held"), which the mechanism does
+  not satisfy and never did. Nothing about the mechanism changes here; the claim
+  is brought back to it.
+- **(4) is the only genuine isolated leaf**, and its rule stays concrete rather
+  than asserted: its hold interval ends at "admit", strictly before the
+  `WORKFLOW_STATE.json` write that follows, and the identity query's read of the
+  durable authorization record takes no lock at all, so a query evaluated inside
+  (2) acquires nothing.
+- **(6) is a leaf below (5)** and is never held across a `WORKFLOW_STATE.json`
+  write, so it is never held simultaneously with (2) and cannot reach (2)
+  transitively through any path.
+
+**The graph is acyclic**, and that was checked rather than assumed: takeover,
+abandoned destructive-guard recovery, `authorize_identity_reference_gap`,
+identity establishment, state mutation and the bootstrap transaction were each
+traced, and no cycle is constructible in any of them. So the correction here is
+to the **page**, not to the mechanism — the same disposition `OPUS-R92-004`
+received, and stated as plainly.
+
+**Any future primitive — or any future *edge* between two primitives already on
+this list — must be added here, with its position and its edges stated, before
+it is used at any call site, and this is a conformance obligation, not a
+convention** (revision 76; **extended from primitives to edges, revision 77,
+`OPUS-R94-002`**). The extension is not cosmetic: the primitive half of this
+rule was already enforced mechanically, while a new nested acquisition between
+two listed primitives was constrained by nothing — it contradicts no recorded
+edge and introduces no cycle, so it could land while leaving this site
+documenting five of six real edges. Item 372(h) owns both halves: every
+lock-shaped pathname this document defines is enumerated mechanically and
+asserted to appear in this list, the derived edge set is asserted **equal** to
+the four recorded edges and names any unrecorded one, acyclicity is asserted,
+and two live control arms are carried — an inverted `(2) → (5)` acquisition that
+produces the cycle, and an extra acyclic `(1)→(3)` acquisition that the equality
+must name. The rule as revision 75 wrote it was already
+violated by two primitives in use at the moment it was written, which is what a
+convention with no owner is worth.
+
 **Every command that can make the work item terminal consumes it.**
 - `complete_work_item(...)` — the sole writer of `MILESTONE_COMPLETE`, and
   therefore the sole path `/accept-milestone` can reach a terminal phase
@@ -20778,9 +28706,46 @@ review — not an extra hoop bolted onto the end.
 ### D-Bundle-Manifest (revised: real worktree-staleness fix, portability vs. local staleness split, NUL-safe parsing, binaries/unusual paths, relayout migration)
 
 `REVIEW_PROTOCOL.md`'s feedback structure requires `Reviewed bundle ID:`
-(the `bundle_id`), `Reviewed base commit:`, `Work item:`. The approval gate
+(the `bundle_id`), `Reviewed review content ID:` (new binding field, revision
+75, `OPUS-R92-001`), `Reviewed base commit:`, `Work item:`. The approval gate
 rejects feedback whose bundle ID is missing or doesn't match the current
 recomputed `bundle_id`, naming both.
+
+**One definition of the reviewed content identity** (new, revision 75,
+`OPUS-R92-001`; the single statement every other site now refers to rather than
+restates). The **reviewed content identity** of a plan-stage round is the
+`review_content_id` value that round's `MANIFEST.md` declares. That value is
+transitively bound to the reviewer by `bundle_id` — `MANIFEST.md` is a member of
+the bundle directory `bundle_id` hashes, and the feedback's `Reviewed bundle ID:`
+pins it — so it is the one identity an external verdict can be said to be
+*about*. Every other physical source of a `review_content_id` is a **candidate**,
+valid only where it is **proven equal** to that value:
+
+- the **pinned generation projection** (part 3a below) is proven equal at
+  derivation, which is what makes `MANIFEST.md`'s declared value meaningful in
+  the first place;
+- the **live worktree** at approval time is proven equal by the approval gate's
+  own freshness assertion (`D-Approval-Commits`, "Approval-time reviewed-identity
+  freshness"), and by nothing else;
+- the **approval commit** is proven equal by `verify_post_approval_manifest_match`
+  running against the reviewed identity, not merely against a record recomputed
+  in the same invocation.
+
+Three consequences are normative, and each replaces an earlier statement that
+assumed the property rather than establishing it. **First**, no site may describe
+a comparison as being against "what was reviewed" unless the value on the other
+side of that comparison is the reviewed content identity as defined here; a
+comparison against a value this invocation recomputed must say so. **Second**,
+`bundle_id` equality alone never establishes that the *content* being approved is
+the reviewed content: `bundle_id` is a pure function of the bundle **directory**
+and is by construction insensitive to every change in the working tree — an
+uncommitted edit to a protected path changes `review_content_id` while leaving
+`bundle_id`, `worktree_root` and `generation_head` all unchanged. **Third**, the
+invariant is **content identity, not temporal history**: a protected path
+modified and then restored byte-identically recomputes to the reviewed value and
+**must be accepted**. No "nothing ever changed since generation" requirement is
+imposed anywhere in this design — there is no mechanism that could honour one,
+and none is needed.
 
 **Worktree/HEAD staleness check, replacing `ACTIVE_WORK_ITEM`** (resolves
 `OPUS-R6-016`): the first-party Milestone-8 incident was a stale bundle in
@@ -20939,9 +28904,929 @@ milestone's own transition).
 **`prepare-ai-review.sh` detached-HEAD branch bug** (unchanged):
 `BRANCH=$(git branch --show-current); BRANCH=${BRANCH:-"(detached)"}`.
 
-**Stage-completeness / revision-consistency check** (unchanged): `PLAN.md`/
-`IMPLEMENTATION_SUMMARY.md`'s stated revision must agree with the
-authoritative doc's before a bundle is complete.
+**Stage-completeness / revision-consistency check** (**superseded in place,
+revision 72, `OPUS-R89-001`**). Through revision 71 this contract was one
+sentence — "`PLAN.md`/`IMPLEMENTATION_SUMMARY.md`'s stated revision must agree
+with the authoritative doc's before a bundle is complete" — and the check it
+named, `assert_stage_completeness`, **was never wired to anything**. Verified
+repo-wide before the correction was written: every reference to that function is
+its own definition (`scripts/workflow_fingerprint.py`), its own nine unit tests,
+one comment in `scripts/workflow_integration_test.py` and one line of prose in
+`docs/ai-workflow/REVIEW_PROTOCOL.md`. `write_manifest_with_verified_identifiers`
+— documented as the **only** code path allowed to write `MANIFEST.md` — does not
+call it. The paragraph below replaces that sentence with the binding it claimed.
+
+**Generator-side stage-document binding** (new, revision 72, `OPUS-R89-001`;
+`WFR-67`, missing-test item 376). The defect this closes is structural, not a
+missing call: `scripts/prepare-ai-review.sh` creates the five author-written
+files **only if missing** (`if [[ ! -f "$path" ]]; then : > "$path"; fi`) and no
+other line in it ever writes `PLAN.md`, while `files/` **is** rebuilt on every
+run (`rm -rf "$FILES_DIR"` then re-copy from the diff). A regenerated bundle can
+therefore carry a revision-N `files/<plan_path>` beside a revision-N−1
+`PLAN.md`. Nothing catches it: `review_content_id` is computed from the
+**authoritative worktree paths** (`compute_review_content_id_plan_stage_for_work_item`
+→ `_snapshot_worktree` over the resolved protected set) and never reads
+`bundle_dir/PLAN.md`, so the two are unlinked by construction; `bundle_id` does
+hash `PLAN.md`, but the generator's closing three-way reproducibility check
+compares manifest / on-disk / extracted, **all three of which hash the same
+stale file**, and passes. The external reviewer then reads the stale document,
+verifies both identifiers successfully, and returns a verdict bound to a
+`bundle_id` computed over a plan they were never shown. Revision 71's own first
+regeneration produced exactly that bundle; the only thing that corrected it was
+the author copying the plan by hand, and nothing in the design or the tooling
+required that step.
+
+The contract is therefore stated **generator-side and fail-closed**, in four
+parts — part 3's binding split into 3/3a/3b by revision 73 (`OPUS-R90-001`),
+which supplies the read discipline that makes it a binding rather than a
+sampling, and the artifact disposition when it fails:
+
+1. **Derivation, not authorship, at the plan stage.** For `stage == "plan"`,
+   `bundle_dir/PLAN.md` is **derived** on every generation: the exact bytes of
+   the resolved work item's own `plan_path` are copied over it, unconditionally,
+   whether or not a file is already there. `PLAN.md` leaves the
+   create-if-missing stub list for that stage; the other four author-written
+   files are unaffected. The **derive** arm is chosen over the compare-and-refuse
+   arm the finding also permits, and the reason is the incident itself: a
+   comparison reports the staleness and leaves the author to fix it by hand,
+   which is precisely the manual step this round's own bundle depended on, while
+   derivation removes the step. Refusal is retained only where derivation is
+   impossible.
+2. **Fail-closed preconditions, before any file under `bundle_dir` is written.**
+   The work item's `plan_path` is resolved through the same
+   `resolve_plan_stage_metadata` call the stage already makes; generation
+   refuses, naming the resolved path, if the item declares no `plan_path`, or if
+   that path is absent, is not a regular file, or cannot be read. These run in
+   the round-identity preflight's own position — **before** the author-written
+   stub loop and before any generated file — under the same placement rule
+   `GPT-R43-003` established (`current/` is "the bundle currently under review",
+   not a scratch directory a rejected generation may leave mutated; the
+   pre-existing `mkdir -p` remains the sole exception). A refused plan-stage
+   generation therefore leaves every file under `bundle_dir` byte-identical to
+   its pre-run state, `MANIFEST.md` included.
+3. **Byte-identity is the binding; the revision marker is not.** The closing
+   three-way reproducibility check gains a fourth assertion: `bundle_dir/PLAN.md`
+   and — when the diff-derived tree contains it, which absence alone is not a
+   failure — `bundle_dir/files/<plan_path>`, and the archive's own extracted
+   `current/PLAN.md`, are each **byte-identical** to the **pinned digest**
+   defined in part 3a below, naming every digest on any mismatch.
+   `assert_stage_completeness`
+   is additionally invoked on the plan-stage generation path, immediately after
+   derivation, so it finally has a production call site — but it is explicitly
+   **not** the binding, and the reason is measured rather than argued: executed
+   against a scratch copy of this round's own bundle, a `PLAN.md` regressed to
+   the `(Revision 70)` marker refuses, while a `PLAN.md` whose **body** is
+   altered with the `(Revision 71)` marker left intact **passes**. The marker
+   comparison is blind to content divergence at an unchanged revision number, so
+   byte-identity subsumes it and the marker check survives only as defense in
+   depth against a derivation that silently did nothing.
+
+   **3a. The read is pinned, and the assertion re-reads** (new, revision 73,
+      `OPUS-R90-001`). Part 3 as revision 72 wrote it said "byte-identical to
+      `plan_path` as read at generation time" and never said **when** that read
+      happens or that the derivation's read and the closing assertion's read must
+      be the same bytes. That matters because `review_content_id` does **not**
+      derive from the bundled bytes: `compute_review_content_id_plan_stage_for_work_item`
+      takes its own independent `_snapshot_worktree` read of the authoritative path
+      (`scripts/workflow_fingerprint.py`), stated two paragraphs above and
+      confirmed live. The chain the contract needs — authoritative bytes →
+      `PLAN.md` → identifiers → archive → review — therefore closes only if those
+      two reads see the same bytes, and nothing in revision 72 required it. Under
+      the pinned-at-derivation reading the assertion compares all three bundle
+      copies against bytes B0 while `review_content_id` was computed over bytes B1
+      and **nothing compares B0 to B1**; under the re-read-at-check-time reading
+      the mismatch is caught. The specification chose neither and the weaker
+      reading was at least as natural, so it is chosen explicitly here:
+      - **What is pinned is the whole protected observation, not one path**
+        (revision 74, `OPUS-R91-001`). Revision 73 pinned `plan_path` alone, and
+        that is **one of five**: `review_content_id` is a digest over
+        `PLAN_STAGE_PROTECTED` — `docs/TECHNICAL_DECISIONS.md`,
+        `docs/ai-workflow/WORKFLOW_V2_AUDIT.md`,
+        `docs/ai-workflow/WORKFLOW_V2_PLAN.md`, the registry and the mapping —
+        and the generator treats all five identically, copying every changed
+        path into `files/` before `--write-manifest` computes the identifier
+        from the **worktree**. So four of the five inputs stayed in exactly the
+        window `OPUS-R90-001` named, with nothing comparing the bundled bytes to
+        the bound bytes. Reproduced against the real module: with an ordinary
+        editor save injected into the mapping between the `files/` copy and the
+        manifest computation, **every assertion revision 73 adds passes** while
+        `files/` holds `v0`, `review_content_id` binds `v1`, and the reviewer
+        reads bytes that appear in no artifact they can check. That is not
+        hypothetical for this file — revision 73's own apply session mutated the
+        mapping mid-session and needed a bundle-snapshot recovery. The contract
+        is therefore stated over the observation:
+        - **all five protected paths are read exactly once**, at derivation,
+          into a single pinned projection; `plan_path`'s entry in that
+          projection is the pinned plan digest;
+        - the derivation writes those exact plan bytes;
+        - **`review_content_id` is computed from the pinned projection**, never
+          from an independent late snapshot. This is the load-bearing change:
+          once the identifier is derived from the same read the bundle is
+          derived from, **no mutation of a protected path** can change what the
+          manifest binds, and the closing re-read becomes a **staleness check**
+          rather than a proof it was never able to carry.
+      - **The pin covers the whole resolved metadata, not only the file reads**
+        (revision 75, `OPUS-R92-003`). The qualification in the bullet above is
+        necessary and is stated rather than implied: the hashed projection has
+        **ten** fields, and pinning the five protected file reads leaves three
+        resolved from files that are themselves plan-stage *excluded* —
+        `protected_paths`/`excluded_paths`/`excluded_prefixes` come from
+        `<work_item_id>-artifacts.json`, under the excluded prefix
+        `docs/ai-workflow/registry/`, and `work_item_type`/`base_commit` from
+        `WORKFLOW_STATE.json`, an explicitly excluded path and the one file this
+        design most expects concurrent writers to touch. (`plan_revision` needs
+        no separate treatment: it is read from the registry and cross-checked
+        against the plan title, both of which are pinned protected paths.) The
+        contract is therefore stated over the **whole resolution**: the
+        generation resolves `PlanStageMetadata` **exactly once**, pins it, and
+        derives both the projection's classification sets and its state scalars
+        from that one pinned resolution — never from a second
+        `resolve_plan_stage_metadata` call later in the same run. This is the
+        stronger of the two available fixes and is chosen over merely stating
+        that the values are resolved once and reused, because it makes the
+        property structural rather than a rule stated in another section;
+        `resolve_plan_stage_metadata` already returns an immutable `NamedTuple`,
+        so the change is smaller than it sounds. The residue this closes was
+        **not** independently exploitable — a mid-generation edit to the
+        declaration makes it *pending*, and
+        `resolve_plan_stage_approval_commit_paths`' freshness condition then
+        refuses at approval with `StaleArtifactsDeclarationError` — except in the
+        one case that escaped it, the declaration edited mid-generation and
+        restored byte-identically before approval, which is an instance of
+        `OPUS-R92-001` and is closed by that finding's approval-time assertion.
+      - The closing assertion compares `bundle_dir/PLAN.md`,
+        `bundle_dir/files/<plan_path>` when present, and the archive's extracted
+        copy against that **pinned digest** — *and* **re-reads every one of the
+        five protected paths**, requiring each to still equal its pinned entry.
+        A mutation landing anywhere between derivation and the closing check
+        therefore **refuses**, naming the path, on the same "re-evaluated at
+        publication, not only at evidence time" doctrine
+        `D-Checkpoint-Ownership` already applies to the origination test.
+      - **The re-read narrows the window; it does not close it, and it is not a
+        proof** (revision 74, `OPUS-R91-001`, second arm). Revision 73 claimed
+        the re-read made `review_content_id`'s own snapshot "provably the same
+        bytes" as the pinned digest. That argument assumes the file changes at
+        most once. Reproduced: with `plan_path` at B0 at derivation, B1 during
+        the identifier's snapshot and B0 again at the closing check, **both
+        endpoints agree with the pin** and the identifier still binds bytes no
+        copy holds — and an ABA is ordinary here, not exotic (`git checkout --`,
+        `git stash`/`stash pop`, an undo-and-resave, a failed edit rolled back;
+        the mapping incident used `git checkout --` on a protected path). The
+        word "provably" is therefore **deleted**. What closes the gap is
+        computing the identifier from the pinned projection, per the bullet
+        above; the re-read is retained as the staleness check that reports a
+        concurrent edit rather than as the mechanism that makes the two reads
+        equal. **If a future implementation retains an independent snapshot for
+        architectural reasons**, then the closing assertion must additionally
+        compare `review_content_id`'s **own per-path manifest** against the
+        pinned projection **entry for entry**, and a two-point equality sample
+        must be described as narrowing the window, never as closing it.
+      - The pre-existing idempotence guard does not provide any of this:
+        `write_manifest_with_verified_identifiers` recomputes `review_content_id`
+        and refuses on disagreement, but that window opens only at its **first**
+        computation, which happens *after* the `files/` copy loop — a mutation
+        landing in between and stable afterwards passes both computations. The
+        concrete window is real and named: `scripts/prepare-ai-review.sh` runs the
+        `files/` copy, then `--write-manifest`, then the archive, then the
+        reproducibility check, and an ordinary editor save from the sibling
+        worktree this whole design exists to coordinate lands inside it. The marker
+        check cannot cover it either — it is blind to a same-revision body change,
+        which revision 72 already measured.
+
+   **3b. A failed binding assertion leaves no review-ready artifact** (new,
+      revision 73, `OPUS-R90-001`). Part 2's before-any-write rule is scoped to the
+      **preconditions**; the fourth assertion runs in the closing reproducibility
+      check, which today executes **after** `MANIFEST.md` is written and **after**
+      the archive is created, and on failure the script exits non-zero and leaves
+      both in place. That artifact is indistinguishable from a good one to every
+      check a reviewer can run from the artifact alone: its `bundle_id` verifies
+      over `current/`, its `review_content_id` verifies against the worktree, and
+      the archive matches. The contract therefore states the disposition rather
+      than leaving it to the exit status — and, from revision 74
+      (`OPUS-R91-004`), states its **order**, its **failure semantics** and the
+      **disposition of `current/` itself**, none of which revision 73 supplied:
+
+      - **The archive is removed first**, then `MANIFEST.md`, then `current/` is
+        quarantined. The order is not cosmetic and it is the finding's sharpest
+        point: revision 73 removed "`MANIFEST.md` and the archive" with no order,
+        and the archive is **the more dangerous of the two**. Verified against
+        this round's own bundle: `review-bundle.tar.gz` contains its own
+        `current/MANIFEST.md` and extracting it reproduces `bundle_id`
+        **exactly**, so the archive is a complete, self-contained, self-verifying
+        bundle, and it is the artifact that actually leaves the machine. Removing
+        `current/MANIFEST.md` does nothing to it. A crash or an `EACCES` between
+        the two removals — the same crash window item 376(e) already asserts for
+        generation — would, under either unordered reading, be able to leave the
+        tarball as the survivor, and the operator would attach it, the reviewer
+        would verify `bundle_id` three ways against the manifest inside it,
+        `review_content_id` against the worktree, and return a **binding verdict
+        on a bundle the generator refused**, with no observation available to
+        distinguish it from a good one.
+      - **The refusal marker is written *before* the first removal, not from
+        the failure handler** (ordering corrected, revision 76,
+        `OPUS-R93-003`). The generator writes an unambiguous marker at
+        `bundle_dir/../REJECTED` naming the withdrawal it is about to perform,
+        **then** removes the archive, **then** `MANIFEST.md`, **then**
+        quarantines `current/`; on any step that does not complete it updates
+        the marker with the failed step and the surviving path and says so in
+        the failure message rather than exiting quietly non-zero. A partial
+        withdrawal must never be silent, because its residue is exactly the
+        artifact this part exists to prevent.
+
+        **Why the order matters, and it is the ordering rule's own residual
+        window.** Revision 74 wrote the marker from the failure handler, which
+        is unreachable on a hard kill (`SIGKILL`, a closed terminal, an
+        interrupted session). Take the concrete window: `os.remove` of the
+        archive succeeds and the process dies before `os.remove` of
+        `current/MANIFEST.md`. The end state is no archive, no marker, no exit
+        status anyone observed — and a `current/` that is **complete and passes
+        every check a reviewer or a local command can run**: `compute_bundle_id`
+        verifies over it against its own surviving `MANIFEST.md`,
+        `review_content_id` verifies against a worktree the failed generation
+        did not change, `assert_local_generation_matches` passes, and
+        `assert_review_request_states_review_content_id` passes. An operator who
+        re-tars it, or a later command that reads it as "the bundle currently
+        under review", obtains a binding verdict on a bundle the generator
+        refused. Writing the marker first costs one cheap, idempotent,
+        gitignored file and converts that residue from *unmarked and
+        self-verifying* into *marked and obviously withdrawn*, at every instant
+        of the sequence rather than only at the ones a handler reaches.
+
+        **The removal order itself is unchanged**, deliberately: archive first,
+        because it carries its own manifest, reproduces `bundle_id` on
+        extraction, and is the artifact that actually leaves the machine. The
+        marker does not shrink the window — it makes the window observable,
+        which is the property the window needed and did not have.
+
+        **The marker's lifecycle** (corrected, revision 77, `OPUS-R94-001`):
+        it is removed only by a withdrawal that completes every step and
+        verifies its own end state, or cleared by a **later generation that has
+        itself completed and verified its own end state** — at or after the
+        point that generation's closing binding assertion has passed and its own
+        `MANIFEST.md` is written, **never before**. Revision 76 wrote the second
+        disjunct as "cleared by the next **successful** generation as that
+        generation's **first act**", and those two halves cannot both hold:
+        "successful" is a property known only at a generation's end, while
+        "first act" fixes the clear at its beginning. The literal instruction —
+        first act — is the one an implementer would follow, and it reopens the
+        precise residue the marker exists to remove, **without any crash**, in
+        two ordinary refusals: a withdrawal that cannot identify its own
+        artifacts refuses and writes the marker (below); the next generation
+        clears it as its first act; and that generation then refuses at one of
+        item 376(d)'s four preconditions, whose byte-identity guarantee is
+        scoped to `bundle_dir` while the marker lives at
+        `bundle_dir/../REJECTED`, **outside** it — so nothing sees the removal
+        and nothing restores it, and the previously-rejected `current/` and
+        archive are left unmarked and fully self-verifying again.
+
+        **A generation that refuses at a precondition, or that fails before its
+        closing binding assertion, therefore leaves any pre-existing marker
+        exactly where it found it.** Such a run has neither withdrawn the marked
+        artifact nor replaced it, so it has established nothing that would make
+        the marked artifact reviewable; leaving the marker is the only end state
+        consistent with that. Only a generation that has produced a complete,
+        verified bundle of its own has superseded what the marker names, and
+        only then does the marker come off.
+
+        It is never removed by a run that failed to identify its own artifacts
+        (that run is the one that wrote it), and its presence beside a
+        `current/` is always sufficient to refuse treating that directory as
+        reviewable, with no identifier recomputation needed.
+      - **The marker's consumer side: a marked work item is not reviewable,
+        ingestible or approvable** (new, revision 78, `GPT-R96-001`). Every
+        rule above is a **producer** obligation — write the marker before the
+        first removal, order the removals, leave it in place across a refusing
+        generation, clear it only at a verified end state — and until this
+        revision the design required no **reader** to act on it. The property
+        the marker exists to establish is not "an operator can see that this
+        generation was refused"; it is that a refused generation cannot be
+        reviewed, ingested or approved. Only the first was owned, and the
+        difference is not academic: the residue this part constructs is, by its
+        own description above, one that satisfies every identifier check a
+        consumer can run — `compute_bundle_id` against its own surviving
+        `MANIFEST.md`, `review_content_id` against a worktree the failed
+        generation did not change, `assert_local_generation_matches`, and
+        `assert_review_request_states_review_content_id` — so a consumer that
+        does not read the marker has nothing else to go on. The whole
+        missing-test and ownership set could therefore be satisfied while every
+        bundle consumer stayed blind to it, which makes the marker advisory in
+        exactly the case it was introduced for. The rule, stated once here and
+        referenced rather than restated elsewhere:
+
+        **While a work item's `REJECTED` marker is present, every workflow
+        operation that treats that work item's `current/` bundle — or a verdict
+        or feedback bound to it — as reviewable, ingestible or approvable
+        refuses, before that operation's first durable write, naming the marker
+        path and the failed step and surviving path the marker records.** No
+        identifier recomputation is required, and none is sufficient: the
+        marked artifact verifies by construction, which is the entire reason
+        the marker exists.
+
+        **Work-item-scoped, not stage-scoped.** The marker is written at
+        `bundle_dir/../REJECTED` — beside `current/`, which is one directory
+        per work item that every stage shares — so its effect is unqualified by
+        stage, and the clearing rule above ("a later generation that has itself
+        completed and verified its own end state") is unqualified the same way:
+        any completed, verified generation for that work item, at any stage,
+        supersedes what the marker names, because it has rewritten the
+        `MANIFEST.md` the marked residue's own self-verification depends on.
+        Stage-scoping the *effect* would require a reader to decide which
+        stage a surviving `current/` belongs to at exactly the moment its
+        manifest is the thing not to be trusted.
+
+        **Enforced where a bundle becomes a subject, never at path
+        resolution.** `resolve_bundle_dir`/`resolve_feedback_dir` keep
+        returning what they return today. The generator must be able to see,
+        write, update and clear a marked location in order to perform the
+        withdrawal and the clearing lifecycle at all, and an operator must be
+        able to read it; a resolver that refused would make a marked work item
+        recoverable only by hand. The refusal belongs at the point a bundle or
+        a verdict becomes a review, feedback or approval **subject**.
+
+        **One shared assertion, not one prose copy per command.**
+        `workflow_fingerprint.assert_bundle_not_rejected(repo_root,
+        work_item_id)` raises `RejectedBundleError` naming the marker path and
+        its recorded content, and
+        `workflow_fingerprint.resolve_rejected_marker_path(repo_root,
+        work_item_id)` is the single path resolver both the writer above and
+        that assertion use — so writer and reader cannot disagree about where
+        the marker lives, and the refusal policy cannot drift between commands.
+        This design already has the counter-example on file:
+        `assert_local_generation_matches`' caller inventory, maintained as
+        prose in each document that named it, went stale in **two consecutive
+        finding rounds** — `GPT-R63-001` found two paragraphs claiming one
+        local caller when revision 46 had added a second, applying it surfaced
+        a **third** already-live caller (`/review-plan`) no finding had ever
+        named, and `GPT-R64-001` then found two *further* paragraphs still
+        claiming two.
+
+        **The consumer surface, named exhaustively** — every operation that
+        takes this work item's bundle, or a verdict bound to it, as its
+        subject, with the call placed at each one's existing pre-mutation
+        refusal point **and repeated immediately under its own mutation
+        guard** (see "Two assertions per consumer", below):
+        1. `/review-plan` step 5, beside its recompute and
+           `assert_local_generation_matches` refusals, before any
+           `REVIEW_FEEDBACK.md` or `plan_review_stages` ledger write;
+        2. `/record-manual-plan-review` step 6's validation set, before the
+           ledger write and the phase transition — **hard**, never advisory in
+           the way that step's own `bundle_id` comparison deliberately is;
+        3. `/apply-plan-review` step 1, beside `assert_feedback_matches_bundle`,
+           before the plan document is edited;
+        4. `/approve-review` step 2, at **both** stages, so the refusal
+           precedes step 5's first durable mutation;
+        5. this work item's own **Bootstrap plan-approval procedure**, step 2
+           (`D-Approval-Commits`), on the same read-only footing as the
+           reviewed-identity freshness assertion that step already carries —
+           it is the only path `workflow-v2-1-core`'s own approvals take;
+        6. `/apply-implementation-review` step 1, which consumes the same
+           bundle-bound `REVIEW_FEEDBACK.md` shape one stage over;
+        7. the **hand-off report** of `/milestone-plan`, `/milestone-implement`
+           and `/prepare-review`: none may present a bundle or its archive
+           as ready for external review while the marker is present. A
+           successful generation clears the marker before that report is
+           reached, so this arm fires only where a generation refused or never
+           ran — which is exactly the surviving-archive case;
+        8. `/apply-functional-review`'s **bounded-fix branch** (new, revision
+           80, `OPUS-R98-001`): its step 4 `record_bundle_generation` call and
+           its step 5 readiness report, on exactly the footing consumers #6
+           and #7 stand on. Revision 79 listed this command among the exempt,
+           on the stated ground that `FUNCTIONAL_REVIEW.md` is its subject "so
+           no refused bundle can reach them at all". That is true of every
+           other branch of the command and false of this one: the bounded-fix
+           branch does not *receive* a refused bundle, it **creates** one at
+           `apply-functional-review.md:68` and records it at `:69`, and the
+           marker is work-item-scoped and unqualified by stage, so the marked
+           state is reachable inside this command by construction. Like
+           `/prepare-review`, the command is therefore split by **act**: its
+           `FUNCTIONAL_REVIEW.md`-consuming acts stay exempt, and these two
+           acts are consuming ones.
+
+           **`/milestone-implement`'s assertion sits before step 4's
+           `record_bundle_generation` call, not at its step-5 report**
+           (corrected, revision 79, `GPT-OPUS-R97-003`). Revision 78 placed
+           this arm uniformly at "the hand-off report", and for
+           `/milestone-implement` that placement violates this bullet's own
+           ordering rule: step 4 persists `reviewed_implementation_head` —
+           "this is what later makes `AWAITING_TECHNICAL_APPROVAL` reachable
+           at all", in the command's own words, and the field
+           `/approve-review` step 1 computes
+           `head_matches_reviewed_implementation_head` from — **before** step
+           5 is reached. On the exact path this arm is scoped to, a generation
+           that refused and wrote the marker, the net effect of the revision-78
+           placement is that the report is blocked while the state field that
+           unlocks the technical-approval gate has already been durably written
+           on the strength of a withdrawn generation. The assertion therefore
+           attaches to `record_bundle_generation`'s own precondition.
+           `/milestone-plan` keeps the report placement: its step 6 runs the
+           generator and its step 7 reports, with no state write in between.
+           `/prepare-review` keeps it for the same reason, and is named here
+           rather than left inside the generator exemption — see the exemption
+           paragraph below, which is scoped by **act** rather than by command.
+
+           **The ordering rule is stated over the writer, not over one
+           command** (corrected, revision 80, `OPUS-R98-001`). Revision 79
+           attached the correction above to `/milestone-implement` by name,
+           and that is one of **three** live call sites of the same function.
+           This plan's own `/approve-review` text already enumerates them
+           (`approve-review.md:75-78`: "called by `/milestone-implement` … and
+           `/apply-implementation-review`/`/apply-functional-review`'s
+           bounded-fix branch"), and the directory confirms it —
+           `milestone-implement.md:146`, `apply-implementation-review.md:41`,
+           `apply-functional-review.md:69`, with `approve-review.md:76` a
+           prose reference rather than a call. The two the revision-79
+           correction did not reach carry the identical shape: generate,
+           durably advance `reviewed_implementation_head`, then report
+           readiness for a fresh external review round. The justification
+           given for `/milestone-implement` — the write "persists
+           `reviewed_implementation_head`, the field that makes
+           `AWAITING_TECHNICAL_APPROVAL` reachable at all", on the strength of
+           a generation that refused — applies verbatim to both, and the
+           "a failing generator would halt the step anyway" defence this plan
+           already rejected for one site cannot hold for the other two. The
+           rule is therefore stated at the **writer**: **every call to
+           `workflow_state.record_bundle_generation` is preceded by
+           `assert_bundle_not_rejected` for that work item, as that call's own
+           precondition, at all three sites.** This is the same "one shared
+           assertion, not one prose copy per command" discipline this part
+           already argues for from the `assert_local_generation_matches`
+           caller-inventory precedent, applied one level down: a command-level
+           rule goes stale the moment a fourth call site is added, while a
+           writer-level precondition cannot.
+
+        **Two assertions per consumer, and the residual window stated rather
+        than closed** (new, revision 79, `GPT-OPUS-R97-002`). A single
+        pre-mutation read cannot satisfy a rule that quantifies over an
+        operation's whole duration. Concretely: `/approve-review plan` reads
+        the marker at step 2 and finds it absent; a second operator's
+        generation then fails and its withdrawal writes the marker — which
+        this part requires it to do **first**, before any removal — and step 5
+        still records `EXTERNAL_APPROVE` against the now-withdrawn bundle,
+        which is precisely the defect the consumer side exists to close. **No
+        mechanism in this design covers that interval**, and this plan states
+        that rather than implying otherwise: there is no `flock` anywhere in
+        `scripts/` today, and item 354's `WORKFLOW_STATE.lock` would not cover
+        it after it lands either — that primitive serializes a writer's
+        `read → mutate → serialize → publish` critical section over
+        `docs/ai-workflow/WORKFLOW_STATE.json`, while the marker lives at
+        `bundle_dir/../REJECTED`, outside that file, and the withdrawal path
+        writes it with no state write at all. The primitive is explicitly "not
+        a compare-and-swap against a non-cooperating writer".
+
+        So each consumer performs the assertion **twice**: once at its
+        existing pre-mutation refusal point, where it is cheap and diagnoses
+        the refusal before any work is done, and again **immediately under its
+        own mutation guard** — in the same step as, and textually adjacent to,
+        that operation's first durable write. This is idiomatic to the design
+        rather than a new mechanism: `/approve-review` step 5 already carries
+        exactly this discipline for the conditional fifth commit member
+        ("step 4a already ran and passed"), and its step 6 staging already
+        reasons about a concurrent work item's write under `D1`. For
+        `/milestone-implement`, `/apply-implementation-review` and
+        `/apply-functional-review` the two points coincide with the
+        writer-level rule above — `record_bundle_generation` **is** the
+        mutation guard, at all three of its call sites.
+
+        **"Twice" is defined only where a guarded write exists** (new,
+        revision 80, `OPUS-R98-005`). For a consumer whose consuming act is a
+        **report** rather than a durable write, the second site does not
+        exist and an implementer must not be left to invent one:
+        `/prepare-review` performs no durable write at all (this part's own
+        writer enumeration: "`/prepare-review` is the sole non-writer"), and
+        `/milestone-plan`'s durable writes — step 1's `route_work_item`
+        persist, step 5's registry/mapping writes, step 6's generation — all
+        precede its consuming act and none of them consumes the marked bundle
+        as authority; they are ordinary planning progress on the recovery path
+        this rule deliberately keeps open. For these, **the single assertion
+        immediately preceding the report is the mutation-guard assertion, and
+        the "twice" rule does not apply.** This is a definition, not a
+        weakening: the act being guarded is not durable, and a successful
+        generation clears the marker before the report is reached, so the
+        exposure the second assertion narrows for a writer has no analogue
+        here. The conformance arm asserts **one** assertion for these, so a
+        future reader does not record a spurious failure.
+
+        **What the second assertion does and does not buy, stated without
+        euphemism.** It narrows the exposure from "the whole operation" to
+        "the interval between the guarded assertion and the write it guards",
+        and it removes every window that spans user interaction, recomputation
+        or file generation — which is all of the long ones, and all of the
+        ones an ordinary two-operator session actually produces. It does
+        **not** make the check atomic with the write, and no claim to the
+        contrary is made anywhere: closing that last interval needs a
+        primitive whose critical section contains both the marker and the
+        write, which this design does not have and does not add here. That
+        residual is disclosed on the same footing as the temporary bridge's
+        own post-final-re-read interleaving — outside the safe execution
+        contract, with a stated recovery (the withdrawal is durable, so the
+        next consumer of the same bundle refuses and the approval is corrected
+        by rerunning against a regenerated bundle) — never as a loss-free race.
+
+        **The bootstrap consumer (#5) gets the second assertion too; revision
+        79's claim that the quiescence window already covered it is
+        withdrawn** (corrected, revision 80, `OPUS-R98-002`). Revision 79
+        exempted consumer #5 on the ground that it "executes inside the
+        state-writer quiescence window … and `record_bundle_generation` is one
+        of the twelve enumerated prohibited writers". Four legs of that claim
+        fail against this plan's own text, and they fail in the one place
+        where no downstream consumer exists to catch the result — the
+        bootstrap procedure **is** the approval, and it is the only path
+        `workflow-v2-1-core`'s own approvals take, including this plan's.
+        **(a)** The window **starts at step 4a**, when the journal is
+        published ("Start. At step 4a, the instant the journal is published"),
+        while the marker read is at **step 2**; steps 3 and 4 run before the
+        window exists, so the procedure does not execute inside it — only its
+        second half does. **(b)** The window prohibits **state writers** —
+        "every installed command that writes that path — all twelve enumerated
+        in `D1` — … plus any manual or ad-hoc edit" — and the marker's writer
+        is not one: this part establishes that "the withdrawal path writes it
+        with no state write at all", and the same enumeration names
+        `/prepare-review` as "the one installed command that never writes it
+        and is therefore unrestricted", with no file under `scripts/` writing
+        the state path at all. A concurrent `/prepare-review plan
+        workflow-v2-1-core`, or a bare `./scripts/prepare-ai-review.sh <base>
+        plan workflow-v2-1-core`, that refuses and writes the marker is
+        **fully permitted inside the window**. **(c)** The one prohibited
+        writer revision 79 cited **cannot run at this stage at all**:
+        `record_bundle_generation` raises `InvalidBundleGenerationStageError`
+        for any stage outside `"implementation"`/`"post-fix"`
+        (`scripts/workflow_state.py:2484-2488`), and this procedure performs
+        only **plan**-stage approvals. **(d)** No re-read exists on the
+        crash-resume path: step 0 validates the journal's `schema_version`,
+        `quiescence_authorization`, expected post-state and pinned digests,
+        but not the marker, and step 2 does not re-run — so under the
+        exemption the single assertion could sit in a different session,
+        separated from the mutation by an unbounded interval.
+
+        So consumer #5 carries the same second assertion every other consumer
+        carries, placed at this procedure's own first durable **approval**
+        mutation: sub-step 6.1b, inside the mutation guard it already
+        acquires, textually adjacent to the `git update-index` that stages the
+        applied post-approval state. That placement covers the whole
+        step-2 → step-6 interval, including the pre-window steps 3 and 4 that
+        leg (a) exposes, and it adds no mechanism — step 2's read is already
+        specified as a direct filesystem read requiring "no code that does not
+        exist". **The crash-resume path is treated by this procedure's
+        existing before/after-durability asymmetry rather than by a third
+        assertion**, and this is a deliberate divergence from the finding's
+        suggested step-8b placement, recorded as such: on a `NOT_COMMITTED`
+        classification step 0 rolls back, so no approval survives to protect;
+        on a `COMMITTED` classification the approval commit is already
+        durable, and this transaction's stated rule is "before durability,
+        refuse and let the retry recapture; after durability, complete forward
+        without clobbering" — refusing at step 8b would strand a valid,
+        verified approval commit behind an unclosable journal, which is the
+        exact outcome step 8b's own text forbids. A forward completion
+        therefore **completes and reports**: if the marker is present when
+        step 8b materializes state, the materialization proceeds and the run
+        reports a marked-approval incident naming the marker path, whose
+        recovery is the one this part already states — regenerate, then
+        re-approve against the regenerated bundle.
+
+        **How the consumer set is derived, keyed on the subject artifact**
+        (new, revision 79, `GPT-OPUS-R97-001`). Revision 78 left the
+        derivation to item 376(t), which keyed it on "resolves a bundle or
+        feedback directory and advances a gate" — a predicate that, evaluated
+        against the live `.claude/commands/` directory, selects
+        `/prepare-functional-review` and `/apply-functional-review`, both of
+        which name `workflow_fingerprint.resolve_feedback_dir` in their own
+        header text and both of which advance a gate, and both of which this
+        very paragraph exempts. The two halves could not both be satisfied.
+        The derivation is therefore keyed on the **subject artifact**, which
+        is what the exemptions were always actually reasoning about, and is
+        stated here so item 376(t) references one rule rather than restating
+        it. A command is a **required consumer** iff it does any of:
+        - **(A)** read `REVIEW_FEEDBACK.md` — the bundle-bound verdict;
+        - **(B)** read an artifact under `<bundle_dir>` that it did not itself
+          generate in the same invocation — operationally, read `MANIFEST.md`
+          or recompute or compare `bundle_id` over that directory;
+        - **(C)** present `<bundle_dir>` or the canonical archive to the user
+          as ready for external review.
+
+        These three disjuncts are the **semantics** of the classification.
+        They are not, by themselves, a derivation: revision 79 additionally
+        claimed each was "evaluable against a command file rather than against
+        a maintained list", and that claim is **withdrawn** (corrected,
+        revision 80, `OPUS-R98-003`). It was measured and it does not hold.
+        (A) and (B) were given operational renderings; **(C) was given none**,
+        and (C) is the disjunct doing the most work — it is what selected three
+        of revision 79's eight consumers, and what rescues
+        `/milestone-implement` from the predicate revision 78 was rejected for. Both natural renderings
+        fail over the live thirteen files: a **loose** one
+        (`REVIEW_FEEDBACK` / `MANIFEST\.md|bundle_id` / `(?i)bundle location`)
+        classifies `prepare-functional-review.md:10` and
+        `apply-functional-review.md:9` as consumers on a **documentation
+        pointer** to `REVIEW_PROTOCOL.md`'s "Bundle location" section, and
+        `bootstrap-workflow-v2.md:34` on the field *name*
+        `reviewed_bundle_id`; a **tight** one, the literal
+        `Report the bundle location`, returns exactly three files
+        (`prepare-review.md:35`, `milestone-implement.md:152`,
+        `milestone-plan.md:105`), dropping `/approve-review` and
+        `/record-manual-plan-review` — and a literal chosen to return the
+        wanted three is a maintained list in disguise. That second rendering
+        is also *why* `OPUS-R98-001` was missed for a whole revision:
+        `/apply-functional-review`'s equivalent act is phrased "report
+        readiness and **stop** — this re-enters
+        `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`" and matches no (C) token at
+        all. Choosing per-file regexes until the sets agree reconstructs
+        exactly the hand-maintained inventory this whole mechanism exists to
+        avoid — the `GPT-R63-001`/`GPT-R64-001` staleness precedent.
+
+        **The predicate's input is therefore a property command files
+        *carry*, not one a regex infers.** Each file under `.claude/commands/`
+        declares its classification in a machine-readable line in its own
+        header — `review-subject: bundle | verdict | none` — and the
+        derivation **reads that line**. `bundle` and `verdict` are the two
+        consuming subjects ((B)/(C) and (A) respectively); `none` is exempt.
+        A command whose acts split — `/prepare-review` (generation exempt,
+        report consuming) and `/apply-functional-review` (checklist acts
+        exempt, bounded-fix branch consuming) — declares `bundle`, because the
+        declaration answers "can a marked bundle become this command's subject
+        anywhere in it", which is the question the assertion turns on. Three
+        properties make this a derivation rather than a list: the line lives
+        in the file it classifies, so it moves with it; a file carrying **no**
+        line, or an unrecognized value, **fails the suite** rather than
+        defaulting either way, so a command added later cannot pass by being
+        absent from prose; and the conformance arm asserts the declared value
+        against the three semantic disjuncts **and** against the
+        presence/absence of the shared assertion in that same file, so a
+        declaration that lies about what its file does fails too. The
+        semantics remain the definition — the line is how a file states which
+        side of the definition it falls on, and the arm is what keeps the two
+        honest. `FUNCTIONAL_REVIEW.md` satisfies none of the three disjuncts —
+        it carries no `Reviewed bundle ID:` and binds to no bundle, which is
+        the exemption's own stated reason and is now a property the test
+        checks rather than assumes; that is why
+        `/prepare-functional-review` declares `none` while
+        `/apply-functional-review`, which generates and records a bundle of
+        its own, does not.
+
+        Recognized (C) forms are enumerated with the same discipline, because
+        the arm still checks the declaration against the semantics: a report
+        step presenting the bundle location or the canonical archive **and**
+        a readiness report that hands the round to an external reviewer both
+        count — the latter includes the form at
+        `apply-functional-review.md:74-77` and
+        `apply-implementation-review.md:47-53`, not only the literal "Report
+        the bundle location".
+
+        **`/prepare-review` joins consumer #7, and the generator exemption is
+        scoped by act rather than by command** (discovered while applying
+        `GPT-OPUS-R97-001`'s required correction — "verify it partitions
+        today's thirteen command files exactly as part 3b's prose does" — and
+        disclosed as an extension of that finding rather than slipped in).
+        Revision 78 exempted "`/prepare-review`'s ad-hoc invocation" wholesale
+        under the generator heading. Its step 4 nonetheless says "Report the
+        bundle location", which is disjunct (C) and is the identical act
+        consumer #7 exists for: if that command's own generation refused and
+        wrote the marker, the revision-78 text has it report a withdrawn
+        bundle's location as the round's artifact. The exemption is therefore
+        scoped to the **generation path** — writing, updating and clearing the
+        marker, which must never be blocked — and not to a report that
+        presents the result as review-ready. This introduces no deadlock: a
+        generation that completes and verifies its own end state clears the
+        marker before the report is reached, so the refusal fires only on the
+        path where the generation refused, and the recovery is unchanged.
+
+        **Malformed or unreadable marker contents: presence alone decides**
+        (new, revision 79, `GPT-OPUS-R97-006`). This part requires the refusal
+        to name "the failed step and surviving path the marker records", and a
+        truncated, empty or unreadable marker records neither — a plausible
+        end state of exactly the hard-kill scenario the marker exists for, and
+        one in which a parse error must never be allowed to read as "not
+        rejected". `assert_bundle_not_rejected` therefore treats **presence
+        alone** as decisive: it refuses on any marker that exists, whatever its
+        contents, and **degrades the diagnostic** rather than raising a parse
+        error — reporting the marker path, its byte length, and that its
+        recorded failed step and surviving path are unavailable. This is the
+        same fail-closed direction the rest of this part takes, and it is the
+        reason the rule above says no identifier recomputation is required and
+        none is sufficient.
+
+        **And a presence check that cannot complete is "present", never
+        "absent"** (new, revision 80, `OPUS-R98-004`). The rule above covers
+        unreadable marker *contents*; one boundary earlier is the check
+        itself, which can fail on `EACCES`/`ENOTDIR`/`ELOOP` against
+        `.ai-review/<work_item_id>/`. This matters because the obvious
+        implementation fails **open**: `pathlib.Path.exists()` swallows
+        `OSError` and returns `False`, so "could not determine" would be
+        reported as "not rejected" — the one failure direction item 376(t.x)
+        itself names as silently restoring the whole defect, and a class item
+        376(l)'s existing `EACCES` arms already put inside this design's
+        contemplated failure model. `assert_bundle_not_rejected` therefore
+        treats an indeterminate presence check as **present**, refusing and
+        naming the resolved path and the underlying error.
+
+        **Exempt, with the reason stated rather than left to omission,
+        and classified exhaustively.** The **generator** —
+        `scripts/prepare-ai-review.sh` and the `workflow_fingerprint`
+        generation path it calls, including the generation `/prepare-review`
+        drives — is the marker's writer and its only sanctioned clearer;
+        blocking it would leave a marked work item recoverable only by a hand
+        edit, and the recovery path this design intends is precisely "generate
+        again, successfully". (`/prepare-review`'s *report* is not covered by
+        this exemption — see the preceding paragraph.)
+        `/prepare-functional-review` takes `FUNCTIONAL_REVIEW.md` as its
+        subject — a user-written checklist that carries no
+        `Reviewed bundle ID:` and binds to no bundle — so no refused bundle
+        can reach it at all; `/accept-milestone` consumes durable approval
+        state rather than a bundle, for the same reason.
+        **`/apply-functional-review` is no longer exempt** (corrected,
+        revision 80, `OPUS-R98-001`). Revision 79 covered it by the same
+        `FUNCTIONAL_REVIEW.md`-subject sentence, and that reason is false for
+        its bounded-fix branch, which generates a bundle and records it
+        (consumer #8 above). The correction is not merely that the protection
+        was missing: the classification **forbade** it, since item 376(t)'s
+        conformance arm asserts that every file the derivation does not select
+        "names it nowhere", so an implementer who guarded
+        `apply-functional-review.md:69` would have failed the suite. Its
+        checklist-consuming acts remain exempt, by act, exactly as
+        `/prepare-review`'s generation does.
+        `/accept-scoped-remediation` is exempt for `/accept-milestone`'s exact
+        reason and is named here rather than omitted (new, revision 79,
+        `GPT-OPUS-R97-005`): it is the second, mutually exclusive command
+        reachable from `AWAITING_FUNCTIONAL_REVIEW`, its subjects are the
+        user-written functional checklist and durable approval state
+        (`verify_functional_checklist_evidence`,
+        `apply_scoped_remediation_acceptance`), it resolves neither a bundle
+        nor a feedback directory, and its own step 8 leaves `plan_approval`
+        and `technical_approval` completely untouched — no safety gap, but an
+        omission in a paragraph that presents its exemptions as stated rather
+        than left implicit. `/bootstrap-workflow-v2` is likewise exempt and
+        likewise named (new, revision 79, same finding's completeness
+        requirement): it is this work item's **checkpoint driver**, whose step
+        2 durability guard compares a freshly recomputed plan-stage
+        `review_content_id` against durable approval state and which consumes
+        no bundle and no bundle-bound verdict — the **Bootstrap plan-approval
+        procedure** that is consumer #5 is a different artifact, living in this
+        document, with no `.claude/commands/` implementation of its own (item
+        348). Together with the **nine** required consumers, these **four**
+        exempt commands classify all thirteen live command files, which is the
+        property item 376(t)'s conformance arm asserts (counts corrected from
+        eight/five, revision 80, `OPUS-R98-001`; the arm derives the total
+        from the live directory rather than from this sentence, so a
+        disagreement between the two fails the suite rather than being
+        resolved in prose's favour).
+
+        **The recovery path is the one the lifecycle already defines**, and it
+        is why this rule is not a deadlock: generate again; a generation that
+        completes and verifies its own end state clears the marker, after which
+        every consumer above proceeds normally. The marker is never a state
+        that needs a hand edit to leave — the property item 376(q)'s positive
+        arm already asserts, now with consumers attached to it.
+      - **`current/` is quarantined rather than left in place** (adopting
+        unresolved question 13's own answer). It is renamed to
+        `current.rejected-<token>/`, where `<token>` is the failed run's
+        `generation_head` plus a short random suffix. Revision 73 argued that
+        removing `MANIFEST.md` was sufficient because it is "the sole carrier of
+        both identifiers" — and that is false in two ways the finding
+        demonstrated. First, `REVIEW_REQUEST.md` is author-written, survives the
+        withdrawal, and carries `review_content_id: <hex>` in its own header, a
+        header this codebase treats as checkable
+        (`assert_review_request_states_review_content_id`); because
+        `review_content_id` is computed from the worktree and a failed
+        generation does not change the worktree, **that header still verifies
+        after the withdrawal**, so the residue passes the one identifier check
+        that needs no manifest at all, beside a correct-looking derived
+        `PLAN.md`. Second, nothing in `current/` says the generation was
+        refused: "no `MANIFEST.md`" is equally consistent with "not generated
+        yet". Quarantine's benefits are therefore exactly three, and are stated
+        exhaustively so a fourth cannot be assumed: it keeps the failed artifact
+        **inspectable**, which was the stated goal; it **removes it from the
+        location** every tool and every reviewer treats as current; and it
+        **preserves `CONTEXT_FILES.txt` and the other author-written files**.
+        **Retention across generations is not one of them** (revision 75,
+        `OPUS-R92-002`). Revision 74 claimed quarantine "stops each generation
+        from destroying the previous round's reviewed bytes"; that claim is
+        **withdrawn as false**, and the withdrawal is recorded rather than
+        quietly edited because the incident it was attached to is real and now
+        loses its stated remedy. Quarantine fires **only on withdrawal** — its
+        own `<token>` is the *failed* run's `generation_head` — while a
+        **successful** generation still overwrites `current/` in place and still
+        overwrites `review-bundle.tar.gz` at its single canonical path
+        (`scripts/prepare-ai-review.sh` writes `BUNDLE_DIR="$ROOT_DIR/current"`
+        and `ARCHIVE="$ROOT_DIR/review-bundle.tar.gz"` directly). The cited
+        incident is precisely a successful generation: this repository's own
+        `TEST_RESULTS.md` records that "the revision-72 bundle and archive were
+        overwritten in place by revision 73's own generation", and revision 73's
+        generation succeeded — it produced the bundle round 91 reviewed.
+        Quarantine would not have preserved one byte of it.
+      - **The retention rule, stated separately and owned** (new, revision 75,
+        `OPUS-R92-002`). The property the withdrawn clause claimed is real and
+        wanted — a reviewer must be able to re-derive a prior round's identifiers
+        from the artifact, and this workflow has already lost one such
+        verification — but it belongs to a different mechanism and is stated
+        here with an owner rather than assumed. **The version store owns it**:
+        under `D-Approval-Commits`' "Atomic bundle-file publication", each round
+        is promoted onto its own `bundles/<token>/` and prior rounds are left in
+        place (step 9 removes automatic deletion from ordinary publication
+        entirely), so retention across successful generations is provided by
+        construction once that contract lands. **Until it lands, the limitation
+        is named rather than implied: each successful generation destroys the
+        previous round's reviewed bytes and its archive, and a prior round's
+        identifiers cannot be re-derived from any surviving artifact.** No
+        interim preserve-the-outgoing-bundle step is added, because it would be
+        a second retention store to reconcile with the first; the exposure is
+        instead disclosed, and unresolved question 15's reaping policy is decided
+        **after** this rather than before it, since it is the same disk-footprint
+        trade-off over the same store.
+      - **What the withdrawal targets, stated explicitly in both worlds** (new,
+        revision 75, `OPUS-R92-002`). Revision 74 stated the withdrawal's
+        *order* but not its *target*, and the third boundary below retargets only
+        part 2's **placement** rule — leaving the one destructive step in this
+        section unretargeted. **Today**, the target is `current/` and the
+        canonical archive at `$ROOT_DIR/review-bundle.tar.gz`, exactly as the
+        ordering bullet above describes. **Under the version-store contract**,
+        the target is the **candidate** — `staging/<token>/` and any archive
+        produced from it — and **never** a promoted `bundles/<token>/`, **never**
+        the `current` symlink, and **never** an archive of a bundle this run did
+        not produce. The distinction is load-bearing rather than pedantic: under
+        that contract a failed candidate is never promoted, so at withdrawal time
+        `current` still resolves to the **previous, valid** bundle, and part 3b
+        applied literally would remove the last good archive and quarantine the
+        pointer to the last good bundle while the failed candidate sat untouched
+        in `staging/<token>/` — the exact inversion of this part's intent.
+      - **A withdrawal that cannot identify its own artifacts refuses rather than
+        removing** (new, revision 75, `OPUS-R92-002`; the fail-closed rule that
+        makes the targeting above safe rather than merely stated). If the run
+        cannot establish which artifacts *it* produced — the candidate token is
+        unknown, `current` resolves to a target this run did not promote, or the
+        archive at the canonical path cannot be attributed to this run — the
+        withdrawal removes and renames **nothing**, writes the same `REJECTED`
+        marker the preceding bullet defines, and reports the ambiguity naming
+        every path it declined to touch. Removing the wrong artifact is strictly
+        worse than leaving a refused one in place, because the refused artifact
+        is already covered by the marker while the removed one is unrecoverable.
+      - The failure message names the pinned digest, each compared digest, the
+        quarantine path, and the fact that the archive and the manifest were
+        withdrawn.
+4. **The implementation and post-fix stages get the check they were already
+   promised, at the strength that is actually available** (independently
+   discovered while applying this finding, not in `OPUS-R89-001`, and disclosed
+   as such). `REVIEW_PROTOCOL.md` states the **same** stage-completeness
+   discipline for `IMPLEMENTATION_SUMMARY.md`'s `implementation_revision: <N>`
+   line, and that guarantee is equally false today for the identical
+   zero-call-site reason. `IMPLEMENTATION_SUMMARY.md` has **no** authoritative
+   source document to derive from — it is genuinely author-written — so it keeps
+   create-if-missing and gets the revision-marker check only, invoked as a
+   **completion** assertion alongside the reproducibility check rather than as a
+   precondition, because a first-ever generation legitimately creates the empty
+   stub the check would otherwise refuse. Its refusal therefore leaves a
+   generated bundle behind and says so; the bundle is not publishable until the
+   summary states the current counter, and re-running after fixing it is the
+   resume path. The asymmetry is deliberate and must be **stated** in
+   `REVIEW_PROTOCOL.md` rather than papered over with "same discipline": the
+   plan stage is bound byte-for-byte, the implementation stage by a revision
+   marker that a body-only divergence defeats.
+
+Three boundaries, stated so a reader does not have to infer them (a third added
+by revision 73, `OPUS-R90-002`). First,
+`docs/ai-workflow/REVIEW_PROTOCOL.md`'s two author-facing bullets currently
+describe a guarantee that does not exist; correcting them is an
+**implementation-acceptance obligation** of `WFR-67`, on the same footing item
+343 established for that file's caller-model wording, and is deliberately not
+edited in this plan round — the finding itself directs that it not be
+implemented here, and that file is implementation-stage protected, so editing it
+would stale `technical_approval` for a documentation change no gate has yet
+reviewed.
+
+**Second, and on exactly the same footing: the two commands that actually drive
+the plan stage still mandate the manual step this contract exists to remove**
+(new, revision 73, `OPUS-R90-002`). The manual `PLAN.md` step is not written in
+`REVIEW_PROTOCOL.md` at all — it is written as an operator instruction in
+`.claude/commands/milestone-plan.md` ("write/refresh `<bundle_dir>/PLAN.md` with
+the actual plan") and, more sharply, in `.claude/commands/apply-plan-review.md`
+("Apply accepted findings to the plan (`<bundle_dir>/PLAN.md` **and** the real
+execution/reference plan doc)"). The second names the bundle copy and the
+authoritative document as **co-equal edit targets**, which is precisely the
+two-hand-edits arrangement whose divergence produced revision 71's stale bundle;
+both commands are live for this work item at `governing_workflow_version: "1"`,
+and `/apply-plan-review` is the command that consumes this very round's
+feedback. Once `WFR-67` lands both instructions are wrong: the bundle copy is
+derived and unconditionally overwritten, so editing it is a no-op at best, and
+an author who applies an accepted finding to `<bundle_dir>/PLAN.md` while
+slipping on the authoritative document has the edit **silently discarded** by
+the next derivation. Derivation makes that outcome *safe* — the reviewer then
+sees the unfixed authoritative plan and catches it, which is the correct
+direction — but the plan must not ship a requirement whose stated purpose is
+"derivation removes the step" while the two operator procedures mandating the
+step stay unamended and unowned. The required wording is stated here so the
+implementation is not left to invent it: **at the plan stage the bundle's
+`PLAN.md` is generated, not authored — the authoritative `plan_path` is the sole
+edit target, and neither command may direct a write or an edit to
+`<bundle_dir>/PLAN.md`**; each command's bundle-refresh step names only the
+generator invocation. Both files join `WFR-67`'s implementation surface, the
+edit is routed to `WF8b` and deliberately out of this plan-only round exactly as
+`REVIEW_PROTOCOL.md`'s is, and item 376(m) carries the conformance assertion so
+the wording cannot drift back. This is an omission specific to `WFR-67`, not a
+scope limit of the checkpoint: `WFR-64`'s and `WFR-65`'s own ownership notes
+already name "`scripts/` and `.claude/commands/`" as `WF8b`'s surface.
+
+Third, once `D-Bundle-Manifest`'s "Atomic bundle-file publication"
+contract lands, the derivation and its assertions run inside that contract's
+`staging/<token>/` candidate build and its promotion is unchanged; nothing here
+re-opens the version-store design, and part 2's placement rule is then satisfied
+by construction rather than by ordering.
 
 **`generation_head` vs. `reviewed_implementation_head`, reconciled**
 (revision 28, `WF8B-003`; see D-Approval-Commits' "Provenance-commit-
@@ -21175,10 +30060,10 @@ unmapped requirements, zero unowned checkpoints, zero dangling
 |---|---|---|---|
 | WFR-01 | `bundle_id` and `review_content_id` are distinct, independently computed, and independently testable | WF4a-i | Test-vector table implemented as literal test cases — done, `scripts/workflow_fingerprint_test.py` |
 | WFR-02 | Wrapper-only bundle changes produce a new `bundle_id` but an unchanged `review_content_id` | WF4a-i | `test_wrapper_word_edit_changes_bundle_id` |
-| WFR-03 | External feedback is matched against `bundle_id` exactly; stale/missing feedback is rejected naming both values | WF5, WF4a-ii | Round-N feedback replayed against a round-N+1 bundle rejected |
+| WFR-03 | External feedback is matched against `bundle_id` exactly; stale/missing feedback is rejected naming both values. **(amended in place, revision 75, `OPUS-R92-001`)** The binding-field set is **four**, not three: `Reviewed review content ID:` joins `Reviewed bundle ID:`/`Reviewed base commit:`/`Work item:`, parsed by `parse_review_feedback_binding_fields` and enforced by `assert_feedback_matches_bundle` on the same footing — a missing field raises the same `MissingFeedbackBindingFieldError` shape, a mismatched one is reported naming both values. The two identifiers carry deliberately different polarities, the ones `OPUS-R14-005` established: `review_content_id` is a **hard** check against the freshly recomputed value at every gate that consumes feedback, while `bundle_id` keeps exactly its current strength. The field is not new practice — every feedback file this work item has received carries it except the round-30 one, continuously since round 31 — only newly binding. **(amended in place, revision 76, `OPUS-R93-006`)** The two polarities are located rather than left to conflict: `/approve-review` step 1's parse keeps its existing **non-fatal** treatment of all four fields — a missing or mismatched one only makes an `EXTERNAL_APPROVE` basis unreachable — and the **hard** check is `D-Approval-Commits`' approval-time freshness assertion, which refuses when the field is absent as well as when it disagrees. "Same footing as the existing three" is therefore a statement about the parser, not about every gate; and the field's absence is not a safety gap either way, since the definitional source is `MANIFEST.md`'s declared value, which `bundle_id` transitively binds. **(amended in place, revision 76, `OPUS-R93-005`)** `WF8b` joins this row's owners: the surface this amendment names is `parse_review_feedback_binding_fields`/`assert_feedback_matches_bundle` and `docs/ai-workflow/REVIEW_PROTOCOL.md`'s binding-field count, none of which `WF5` or `WF4a-ii` can deliver, both being `COMPLETE` and never reopened. | WF5, WF4a-ii, WF8b | Round-N feedback replayed against a round-N+1 bundle rejected; feedback missing `Reviewed review content ID:` rejected with the same missing-binding-field shape as the other three, at `/approve-review` as well as at `/apply-plan-review` |
 | WFR-04 | Approval records store both `reviewed_bundle_id` and `approved_review_content_id`; only the latter gates future durability | WF4a-ii | Approving, then regenerating a bundle for unrelated reasons, does not stale an existing approval |
 | WFR-05 | The native-git manifest represents additions, modifications, deletions, renames, mode changes, symlinks, **binaries**, and **unusual-but-supported paths** deterministically; unsupported cases fail closed | WF4a-i, WF5 | Test vectors for each case, including newline-in-path/non-ASCII-path/binary fixtures (`OPUS-R6-019`) |
-| WFR-06 | The committed plan exactly matches the reviewed working-tree content after the plan-approval commit | WF4a-iii | Worktree-source and commit-source manifests compared post-commit, zero delta — done, `test_complete_manifests_are_equal_after_approval_commit` |
+| WFR-06 | The committed plan exactly matches the **reviewed** content after the plan-approval commit. **(amended in place, revision 75, `OPUS-R92-001`)** "Reviewed" means the reviewed content identity as `D-Bundle-Manifest` defines it — the value `MANIFEST.md` declares, transitively bound by `bundle_id` — and **not** a `review_content_id` this invocation recomputed from the live working tree. Through revision 74 this row's own acceptance criterion compared worktree-source against commit-source, which are both the *post-drift* content: a protected-path edit landing between the reviewer's verdict and the approval left every check passing while the commit, its trailer and the durable `approved_review_content_id` bound content no reviewer saw. The requirement is therefore satisfied by two comparisons, not one: the approval gate proves live == reviewed **before** its first durable mutation (`D-Approval-Commits`, "Approval-time reviewed-identity freshness"), and `verify_post_approval_manifest_match` then proves commit == reviewed. **(amended in place, revision 76, `OPUS-R93-005`)** `WF8b` joins this row's owners for the same reason it joins `WFR-03`'s: the approval-time assertion this row now depends on is `WF8b`'s to implement, and `WF4a-iii` is `COMPLETE`, so leaving it as the sole owner names a checkpoint that closed before the contract existed and can never be reopened to deliver it. | WF4a-iii, WF8b | Commit-source manifest compared against the **reviewed identity**, zero delta, with the existing worktree-source comparison retained only as a secondary check — `test_complete_manifests_are_equal_after_approval_commit` is superseded in place rather than reused, since it asserts the pre-correction property |
 | WFR-07 | Commit-trailer lookup is exact, full-identifier, work-item-scoped, ancestry-limited, requires exactly one match, with a stated tie-break for legitimate duplicates | WF4a-iii | Two work items sharing a checkpoint ID cannot cross-match; a cherry-picked/merged duplicate resolves via the tie-break; a genuine ambiguity stops with a named recovery (`OPUS-R6-022`) |
 | WFR-08 | Approval freshness is checked against current committed content, per stage, with no `basis` branch | WF4a-iii, D-Legacy | An unreviewed protected-path commit after approval is detected stale; the `LEGACY_V1` record stales on a protected-path commit exactly like any other (`OPUS-R6-009`) |
 | WFR-09 | `WORKFLOW_CONFIG.json`'s repository-level default is separate from any work item's `governing_workflow_version`; missing/corrupt config fails safe to `"1"` **only pre-activation** | WF1a, WF-Activate | Pre-activation missing config → `"1"`, no error; post-activation missing config → hard stop (`OPUS-R6-015`) |
@@ -21236,6 +30121,10 @@ unmapped requirements, zero unowned checkpoints, zero dangling
 | WFR-61 | `record_bundle_generation`'s `reviewed_implementation_head` identifies the protected implementation content under review and is never advanced by a metadata-only commit; a dedicated, durable `Workflow-Bundle-Generation-Record: <work_item_id>/<implementation_revision>` trailer commit (D-Commit-Provenance) records the round before the bundle is generated, so bundle generation itself performs no state write requiring a later durability commit; that commit carries, per D-Commit-Provenance's canonical provenance trailer set (**new, revision 33, `GPT-R49-001`**), also the ordinary `Workflow-Work-Item: <work_item_id>` trailer the scoped discovery lookup itself requires — never a bare single-trailer commit — and, within `WORKFLOW_STATE.json`, changes **exactly** `phase`/`reviewed_implementation_head`/`implementation_revision`/`state_revision`/`last_transition` and no other field (**`phase` added, revision 34, `GPT-R50-001`**, per `D-Approval-Commits`' "Ordinary bundle-publication phase transition" subsection — legal source `SELF_REVIEWING_IMPLEMENTATION` or `APPLYING_REVIEW_FEEDBACK`, target always `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`; the remaining four fields **named exhaustively, revision 33, `GPT-R49-002`**, closing the gap where "touches only `WORKFLOW_STATE.json`" alone did not also rule out an unrelated field mutation riding through that same excluded file); `MANIFEST.md`'s `generation_head` identifies the exact repository HEAD the bundle was generated from, and may legitimately be a descendant of `reviewed_implementation_head` through the bounded, fully first-parent-enumerated and classified provenance interval D-Commit-Provenance defines, never through any protected-path or unclassified-path change; `/approve-review implementation` accepts **only** live HEAD exactly equal to `T`, the discovered current `Workflow-Bundle-Generation-Record` commit for the current `implementation_revision`, where the whole interval `reviewed_implementation_head..T` validates per that definition — every non-terminal commit classified by role, a generation-record commit satisfying its own role-specific contract even when historical/superseded (**new, revision 34, `GPT-R50-002`**), every other commit excluded-only — with `T` itself classified exactly as strictly as every other generation-record member plus matching its own role-specific mutation contract (**strengthened, revision 31, `GPT-R47-003`**, closing the gap where revision 30's terminal check alone, "touches no protected path," did not also rule out an unclassified path) — for an ordinary round this interval is exactly one commit, identical to revision 29's rule (**generalized, revision 30, `GPT-R46-001`**, to also represent `WFR-62`'s recovered, longer intervals, which revision 29's exactly-one-commit wording could not); bare equality (live HEAD `== reviewed_implementation_head`) is never accepted, not even as an alternative, since the mandatory provenance commit makes that state unreachable for any genuinely new round (**amended, revision 29, `GPT-R45-003`**, removing the equality alternative revision 28's text still permitted); `implementation_revision` advances by exactly one only when the protected implementation-stage `review_content_id` genuinely changes from **the value recomputed directly from the commit `reviewed_implementation_head` currently names** — never a separately stored content-id field, never `.ai-review/current/MANIFEST.md`, and never the `Workflow-Bundle-Generation-Record` trailer itself, which carries no content hash (**amended, revision 29, `GPT-R45-002`**, naming this explicit source) — a bundle-publication request against an unchanged `review_content_id` is idempotent, resolved one of two ways depending on live HEAD's position relative to the round's current tip `T` (**restated, revision 37, `GPT-R53-002`**, replacing the pre-revision-37 text that described this as `record_bundle_generation`'s own "exact retry" branch — an outcome proven never reachable as an invocation of that phase-gated function, since reaching either of its legal source phases itself requires live HEAD to already be strictly ahead of `T`; see "WF8b finding disposition (revision 36 → 37)"): if live HEAD already equals `T`, `D-Approval-Commits`' "Bundle-publication resume" contract handles it directly — no invocation of `record_bundle_generation`, no commit; if live HEAD has moved through legitimate excluded-only commits since `T`, `record_bundle_generation`'s same-content-republication outcome produces a new recovery-shaped, non-revision-advancing commit (`D-Commit-Provenance`'s "Same-content post-fix republication" subsection) — legal from either `SELF_REVIEWING_IMPLEMENTATION` or `APPLYING_REVIEW_FEEDBACK` (**widened, revision 38, `GPT-R54-002`**, from the prior `APPLYING_REVIEW_FEEDBACK`-only restriction, which left a `SELF_REVIEWING_IMPLEMENTATION`-invoked unchanged-content round with no legal outcome) — and is never advanced merely because live HEAD differs from the stored value; both bundle-file-writing sub-cases above (the resume no-commit path and the post-commit publish path) go through the same **atomic candidate-build-then-verified-promotion** operation (`D-Approval-Commits`' "Atomic bundle-file publication" contract, **new, revision 38, `GPT-R54-003`**) — canonical `.ai-review/<work_item_id>/current/` is never rewritten in place, and an interruption at any point before promotion leaves it byte-identical to its pre-publication state; and this round identity is always derived from the durable provenance commit and `WORKFLOW_STATE.json`, never from `.ai-review/current/MANIFEST.md`, which is disposable, regeneratable review-bundle content, not a security authority (new, revision 28, `WF8B-003`) | WF4c, WF5 | A protected-content commit `P`, followed by a durability commit `S` carrying the provenance trailer, followed by bundle generation from `S`, reaches `/approve-review implementation` successfully; a protected-path commit landing between `P` and the provenance/generation step refuses; an untrailed metadata commit in that interval refuses; a wrong-work-item or wrong-revision trailer refuses; an ambiguous multi-commit provenance history refuses; a metadata-only durability commit alone never advances `implementation_revision`; genuinely new protected content advances it by exactly one; an identical-content regeneration against the same `reviewed_implementation_head` is idempotent; deleting `.ai-review/current/MANIFEST.md` does not disable round-identity validation; `generation_head`'s repository-local staleness check still catches a stale bundle from another worktree or a later unrelated commit; **(new, revision 29)** live HEAD exactly equal to `reviewed_implementation_head` with no discoverable current-revision provenance commit refuses, never approved via a bare-equality alternative; the revision-advancement comparison is exercised against a first-ever round (no `reviewed_implementation_head`), a previous `REVISE` round with no `technical_approval`, and a deleted/corrupted previous review directory, all producing the correct advance/no-advance decision; **(new, revision 30)** a multi-commit provenance interval (`WFR-62` recovery) validates only when every non-terminal commit is classified by role — a generation-record commit against its own role contract, every other commit excluded-only (**revised, revision 34, `GPT-R50-002`**) — and a merge or non-first-parent-reachable commit anywhere in the interval refuses the interval as unenumerable; **(new, revision 31)** a terminal `T` carrying an unclassified path, or a mutation outside its own role's exact contract, refuses even when `T` touches no protected path; **(new, revision 33)** a correctly-scoped ordinary `S` carrying both canonical trailers is discovered and validates, a same `S` missing or misnaming `Workflow-Work-Item` is not discovered at all, and an `S` touching an extra `WORKFLOW_STATE.json` field beyond the exact allowed set refuses even while nominally touching only that one excluded file; **(new, revision 34)** the ordinary generation-record commit's durable `phase` transition into `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` is exercised end to end from both legal source phases, refused from an illegal source phase and from a wrong target-phase value, and confirmed idempotent on retry; a malformed historical generation-record commit hidden behind a valid, current successor is refused, never rendered harmless by supersession; **(new, revision 35, restated revision 37, `GPT-R53-002`)** a fresh session resumed with live HEAD already equal to the current tip `T` performs no commit, via the caller-level "Bundle-publication resume" contract — never via an invocation of `record_bundle_generation`, which the legal-source-phase gate would correctly refuse in that exact state; a same-content republication invoked from `APPLYING_REVIEW_FEEDBACK` (live HEAD always moved through legitimate excluded-only commits past `T` by construction) produces a new, current, recovery-shaped commit without advancing `implementation_revision`, exercised end to end alongside the ordinary-round and genuinely-new-round cases; **(new, revision 38)** the same-content-republication branch, invoked from `SELF_REVIEWING_IMPLEMENTATION`, produces an identically-shaped commit with its own real phase transition, exercised alongside the pre-existing `APPLYING_REVIEW_FEEDBACK`-sourced case, and the atomic candidate-build-then-promote publication operation is exercised under interruption at every major step, proving canonical `current` always resolves to either the complete old bundle or the complete new one, never a missing or partial-mix state; **(new, revision 39, `GPT-R55-001`)** the promotion primitive itself is redefined as a versioned-bundle-directory-plus-atomically-replaced-`current`-symlink design, replacing revision 38's own "single directory rename over `current/`" wording, which specified an operation no POSIX rename call can actually perform against an existing non-empty directory (`ENOTEMPTY`) — canonical `current` is a symlink, never itself a directory holding bundle content, and the only atomic operation is the rename of a symlink — pointing at that already freshly built, verified, immutable versioned directory — onto the name `current` (wrong-direction wording — "rename of that symlink onto a ... versioned directory" — corrected in place, revision 45, `GPT-R61-003`: the verified directory already exists first; a temporary symlink pointing at it is what gets atomically renamed/replaced onto the name `current`, never the reverse); symlink-unsupported environments fail closed rather than falling back to a non-atomic write; **(new, revision 40, `GPT-R56-001`)** starting from this repository's actual state — `current/` a real, non-empty directory — the one-time migration contract runs automatically as the first promotion's own precondition: the existing directory is renamed onto a fresh `bundles/<token>/` path, then `current` is created as a symlink pointing at it, both ordinary renames onto previously-absent names; a fresh session resumed with `current` absent and exactly one `bundles/<token>/` directory present completes only the symlink-creation half, never re-attempting the already-completed directory rename; **(revision 40, `GPT-R56-002`; superseded in place, revision 42, `GPT-R58-003` — restated here only as historical record, never as a live or alternative acceptance condition alongside the revision-41 `GPT-R57-005` clause below, which is this row's sole live archive-generation requirement from revision 41 onward)** revision 40's own archive mechanism generated the archive with a dereferencing `tar -h`/`--dereference` invocation, so a generated archive extracted into an unrelated empty directory contained ordinary regular `current/` files/directories, and `bundle_id` reproduced correctly from that extracted content; **(new, revision 40, `GPT-R56-003`)** a reader that pins `current`'s resolved target once at operation start observes a fully consistent bundle even when a promotion completes mid-operation, and ordinary publication never deletes a superseded version directory a slower reader might still be using; **(new, revision 40, `GPT-R56-004`)** a state write that deletes an existing `technical_review_block_pins` entry, or mutates any of its fields, is refused, while appending exactly one new, previously-unseen pin succeeds — closing the gap where revision 39's duplicate-`bundle_id`-only check could not distinguish a legitimately append-only array from one shortened or edited without introducing a duplicate; **(new, revision 41, `GPT-R57-001`)** both the migration contract and ordinary publication idempotently create their `bundles/`/`staging/` parent directories before ever renaming anything into them, exercised against this repository's own actual pre-migration shape (`current/` present, `bundles/` absent), where the un-fixed revision-40 rename would raise `FileNotFoundError`; **(new, revision 41, `GPT-R57-002`, amending items 323-324 in place)** candidates are built under a `staging/<token>/` namespace and promoted onto `bundles/<token>/` only once fully populated and identity-verified, so `bundles/<token>/` is always complete by construction; an interrupted first-ever publication (partial `staging/<token>/`, `current` absent, `bundles/` empty) resumes by leaving the stale staging attempt unreferenced and building fresh, never promoting partial content, while a migration- or promotion-interrupted state (`current` absent, exactly one verified `bundles/<token>/`) resumes by completing the symlink-creation step (refined by the current-round binding check below, revision 43, `GPT-R59-001`), both now covered by one unconditional recovery rule instead of an assumed-unique migration case; **(new, revision 41, `GPT-R57-003`)** migration validates the legacy `current/` directory against the same completeness/identity check every ordinary candidate must pass before it is eligible for the directory rename, refusing and leaving the directory untouched, with the specific failure reported, when that check fails; **(new, revision 41, `GPT-R57-004`)** a simulated symlink-unsupported filesystem fails the migration's own preflight before the real `current/` directory is touched, leaving it byte-identical to its pre-migration state, and a working filesystem proceeds through preflight, rename, and symlink creation exactly as before; **(new, revision 41, `GPT-R57-005`)** archive generation pins `current`'s resolved target exactly once before invoking `tar`, and a promotion completing concurrently with an in-progress archive operation does not change which bundle the resulting archive reproduces — the same pin-once property item 326 already established for `compute_bundle_id`, now also proven for archive creation, and the restated `--transform`-based archive command continues to extract into an ordinary, self-contained `current/` directory reproducing the correct `bundle_id`; **(new, revision 42, `GPT-R58-001`)** `os.readlink(current)` returns exactly the relative payload `bundles/<token>` after both migration and ordinary steady-state promotion, never a repository/worktree-prefixed or absolute spelling, resolves to exactly the intended `bundles/<token>/` directory, and a corrupted (absolute, `..`-escaping, or cross-work-item) temporary-symlink target fails the promotion closed before ever being renamed onto `current`, leaving it at its prior target untouched; **(new, revision 42, `GPT-R58-002`; outcome wording corrected in place, revision 44, `GPT-R60-002`, to match the revision-43/44 binding check's own two outcomes rather than the original unconditional-return statement, which was never updated when revision 43 introduced that split)** "Atomic bundle-file publication" step 1's own numbered algorithm, not merely adjoining narrative, invokes the fresh-session `current`-absent recovery classifier — a fresh session with `current` absent and exactly one verified `bundles/<token>/` directory completes the symlink-creation step and then, per the current-round binding check, either returns after completing archive generation/replacement (steps 9-10) when the restored directory already matches the round being published, or falls through into steps 2-4a to build and promote a fresh candidate when it does not, exercised as the same scenario items 323-324/330/335 already cover, now confirmed driven through step 1's own 1a/1b/1c branches rather than a parallel, unwired description; **(new, revision 42, `GPT-R58-003`)** this row's `tar -h`/`--dereference` clause above is confirmed superseded, non-live documentation only, never satisfied or checked as an independent requirement; a partial candidate is confirmed to exist only under `staging/<token>/`, never `bundles/<token>/`, at every interruption point items 314/315 exercise; and every "discard(ed/ing)" reference to a redundant `staging/`/`bundles/` directory (step 7, items 317/330) is confirmed to mean "left unreferenced on disk," consistently, with step 9's own no-cleanup-as-a-publication-side-effect rule, never an actual deletion; **(new, revision 43, `GPT-R59-001`)** the one-bundle recovery branch's current-round binding check distinguishes a restored bundle that already matches the round being published (continues through archive generation/replacement, steps 9-10, before returning success) from a restored bundle that is a valid but older round (falls through to build a fresh candidate for the round actually requested, leaving the older directory as an ordinary superseded version), exercised for both a migration-interrupted origin requesting a genuinely newer round and a first-publication-interrupted origin where the restored candidate always already matches, and for two rounds sharing an identical `generation_head` but differing round identity; **(new, revision 43, `GPT-R59-002`)** the canonical symlink validator's raw `os.readlink` payload check rejects a deliberately corrupted absolute target even when that target resolves to the exact correct intended directory, proving resolved-target equality alone is never sufficient; **(new, revision 43, `GPT-R59-003`)** this row's own prior "discarding the stale attempt" wording, and missing-test item 316's wrong-direction symlink-rename description, are both corrected in place, confirmed by re-reading this row and items 314-334 in full for any other publication-side-deletion or wrong-direction wording, finding none; **(new, revision 43, `GPT-R59-004`)** `current` existing as an unexpected filesystem object (not a real directory, symlink, or absent) at step 1's own entry point refuses outright with a stable validation error before any candidate construction or mutation, never auto-repairing or overwriting the unexplained object; **(new, revision 44, `GPT-R60-001`)** the current-round binding check's expanded, seven-field comparison rejects a restored directory sharing every round/content field (`stage`/`work_item_type`/`work_item_id`/round number/`base_commit`/protected `review_content_id`) with the round being published but carrying a stale `generation_head` — falling through to build and promote a fresh candidate for the requested round rather than mistakenly completing publication against the stale one — while continuing to accept a restored directory matching on all seven fields, including `generation_head`, without building a redundant candidate, and continuing to reject a restored directory sharing only `generation_head` with a genuinely different round; **(new, revision 44, `GPT-R60-003`)** a fresh session finding `current` already a canonical, valid symlink (correct raw payload, resolving inside this work item's own `bundles/`) proceeds directly into ordinary step 1c candidate construction, while one with an absolute-but-correctly-resolving, `..`-escaping, cross-work-item, or dangling target refuses outright before any staging directory is built, leaving the existing `current` symlink exactly as found; **(new, revision 45, `GPT-R61-001`)** the current-round binding check's widened, eight-field comparison rejects a restored directory sharing every other field — including `generation_head` — with the round being published but recording a `worktree_root` from a different or relocated worktree, falling through to build and promote a fresh candidate rather than mistakenly completing local publication against a bundle from another worktree, reusing `assert_local_generation_matches` (`D-Bundle-Manifest`) for the `worktree_root`/`generation_head` portion so the two checks cannot drift apart, while continuing to accept a restored directory matching on all eight fields, including `worktree_root`, without building a redundant candidate; **(new, revision 45, `GPT-R61-002`)** the canonical `current` symlink validation predicate — now one shared implementation for both creation-time validation and step 1c's existing-symlink entry validation — accepts a canonical direct-child target and refuses, before any staging directory is built or existing content read, both a multi-path-component token (token grammar) and `bundles/<token>` itself existing as a symlink aliasing a different `bundles/` entry (direct-child reality check), proving the tightened exact-target resolution check is strictly stronger than revision 44's "somewhere inside `bundles/`" version; **(new, revision 45, `GPT-R61-003`)** items 324 and 330 no longer derive migration-recovery "match" from request timing — a migration-interrupted recovery followed by a request for a genuinely newer round correctly falls through to build a fresh candidate regardless of whether any repository commit landed after migration began — and this row's own revision-39 sub-bullet no longer describes the symlink-promotion primitive in the wrong direction; **(new, revision 46, `GPT-R62-001`)** the current-round binding check's `worktree_root`/`generation_head` conjunct, now evaluated via `assert_local_generation_matches`'s new `require_metadata=True` mode, rejects a restored directory whose `MANIFEST.md` is missing either field, contains a malformed field, or contains a duplicate field — never treating absence as "nothing to compare" the way the function's own unchanged default (`require_metadata=False`) still correctly does for `/approve-review`'s own separate, legacy-compatible staleness check, confirmed to remain unaffected; **(new, revision 46, `GPT-R62-002`)** `worktree_root`/`generation_head`, at both manifest-generation time and at every `assert_local_generation_matches` call site, are confirmed read from the live Git worktree (`git rev-parse --show-toplevel`/`HEAD`) rather than from `.ai-review/runtime/WORKTREE_IDENTITY.json`, exercised by relocating a worktree after bundle generation and confirming detection succeeds even when that file still names, or never named, the prior path; **(new, revision 46, `GPT-R62-003`)** the tightened version-token grammar (`^[0-9a-f]{32}$`) rejects a token that would otherwise be reinterpreted by the exact archive `tar --transform` command as an option or a regex metacharacter (independently reproduced: a `--version`-named token makes the pre-fix archive command print `tar`'s own version and create no archive) at the canonical symlink validation predicate itself, before archive generation is ever reached, while a conforming `uuid.uuid4().hex` token continues to round-trip through archive generation correctly; **(new, revision 47, `GPT-R63-002`)** the current-round binding check's strict `require_metadata=True` presence requirement is exercised symmetrically for both `worktree_root` and `generation_head`: a duplicate well-formed line, a well-formed-plus-malformed duplicate, and a lone malformed line each reported as a mismatch independently for either field, closing the gap where only `worktree_root`'s duplicate/malformed handling had explicit coverage; **(amended, revision 48, `GPT-R64-001`)** item 339's own pre-metadata compatibility confirmation is stated for both already-live permissive callers (`/approve-review`, `/review-plan`), not `/approve-review` alone, matching this row's and `D-Bundle-Manifest`'s corrected three-caller model; **(new, revision 49, `GPT-R65-001`)** `docs/ai-workflow/REVIEW_PROTOCOL.md` moves, within `workflow-v2-1-core-artifacts.json`, from implementation-stage `excluded_paths` to `protected_paths` — a committed edit to this file alone now changes the implementation-stage `review_content_id` and stales a current `technical_approval` until a fresh implementation review/technical approval is recorded, rather than remaining silently exempt from it as before — closing the approval-binding gap `GPT-R65-001` found between item 343 (documentation content) and item 342 (executable caller set); the plan-stage classification of this file is unaffected — **owed to `WF8b`**, items 215-230, 238-241, 245-246, 253-255, 262-267, 273-277, 282-285, 290-291, 295-303, 310-344 |
 | WFR-62 | **(new, revision 29, `GPT-R45-004`; topology, precondition, and operation contract corrected, revision 30, `GPT-R46-001`/`-002`/`-003`; phase scope and post-recovery transition corrected, revision 31, `GPT-R47-001`/`-002`; historical generation-record members role-validated, revision 34, `GPT-R50-002`; allowed source phase narrowed to one and a second, non-command writer for an identically-shaped commit defined, revision 35, `GPT-R51-001`/`-003`; acceptance/test column resynchronized to the single-source-phase model, revision 36, `GPT-R52-004`; the second writer's own legal source phase widened from one to two, revision 38, `GPT-R54-002`)** After a later legitimate excluded-only commit stales a round's `generation_head` without changing its protected implementation-stage `review_content_id`, the dedicated `/recover-implementation-provenance <work_item_id>` command — user-confirmation-gated, invocable from `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` (**narrowed, revision 35, `GPT-R51-001`**, from revision 31's two-phase list — `AWAITING_TECHNICAL_APPROVAL` is never a durably stored `phase` value under revision 35's design, so it cannot be a legal source phase either, and this single phase already covers every case the two-phase list covered; widened, revision 31, `GPT-R47-002`, from revision 30's `AWAITING_TECHNICAL_APPROVAL`-only scope, which left staleness during the earlier phase unrecoverable) — **and, distinctly, `record_bundle_generation` itself is a second legal writer of an identically-shaped commit, invocable from either `SELF_REVIEWING_IMPLEMENTATION` or `APPLYING_REVIEW_FEEDBACK` (**widened, revision 38, `GPT-R54-002`**, from the prior `APPLYING_REVIEW_FEEDBACK`-only scope) at `implementation`/`post-fix` stage with unchanged protected content and a moved live HEAD, never requiring `/recover-implementation-provenance`'s own command or additional confirmation (new, revision 35, `GPT-R51-003`, `D-Commit-Provenance`'s "Same-content post-fix republication" subsection)** — refuses outright unless **both** (a) that content is byte-identical to the one at `reviewed_implementation_head`, **and** (b) an exhaustive first-parent, commit-by-commit classification of the entire candidate interval finds no protected or unclassified commit (endpoint equality alone is not sufficient proof, `GPT-R46-002`); creates exactly one new commit `S2`, as the first-parent child of live HEAD (never of `P` — ancestry is never rewritten), touching only `WORKFLOW_STATE.json`'s `phase`/`state_revision`/`last_transition` (no round-identity field changes), carrying the unchanged `Workflow-Bundle-Generation-Record: <work_item_id>/<implementation_revision>` trailer value (never a new revision), a `Workflow-Supersedes: <sha>` trailer naming the superseded provenance commit, and the ordinary `Workflow-Work-Item: <work_item_id>` trailer (**new, revision 33, `GPT-R49-001`**, completing the recovered-role canonical trailer set — never a two-trailer `S2`); a **second or later** legitimate recovery of the same `(work_item_id, implementation_revision)` is the same operation applied again with the prior `S2` in the role `S` played the first time, producing a linked, never forked or cyclic, supersession chain whose unique non-superseded tip is always the current record — every `Workflow-Supersedes` edge names the immediately preceding current record, a second commit naming an already-superseded or already-targeted record is refused as fork/cycle ambiguity, and the approval gate's provenance interval always spans the full chain from `reviewed_implementation_head` to the current tip, never a shortcut through it (**new, revision 33, `GPT-R49-003`** — see D-Commit-Provenance's "Multiple sequential recoveries / supersession chain" for the full algorithm); the real resulting topology (`P → S → U → S2`, never described as a one-commit `P → S2` interval, `GPT-R46-001`) is accepted by `WFR-61`'s generalized bounded-interval gate because every non-terminal commit was classified by role under precondition (b) — `S` against its own ordinary generation-record contract (**revised, revision 34, `GPT-R50-002`**, from the generic excluded-only classification revision 30 applied here uniformly), every `U_i` excluded-only — and `S2` itself passes `WFR-61`'s strengthened terminal check; the trailer lookup's existing genuine-ambiguity tie-break treats a content-verified `Workflow-Supersedes` match as resolving the resulting duplicate deterministically; on success the item always transitions to (or remains at) `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`, never directly to or remaining at `AWAITING_TECHNICAL_APPROVAL` (**new, revision 31, `GPT-R47-001`**), because the regenerated bundle's `bundle_id` necessarily changed and `D2`'s `EXTERNAL_APPROVE` basis requires exact current-`bundle_id` equality, so pre-recovery external feedback is automatically inert against it and a fresh external implementation review is mandatory before `/approve-review implementation` can re-evaluate the now-valid interval via `EXTERNAL_APPROVE`; two provenance commits for the same `(work_item_id, implementation_revision)` pair with no `Workflow-Supersedes` trailer between them remain genuine, refused ambiguity, unchanged from `WFR-61`'s existing coverage; retry detects an already-reachable content-verified `Workflow-Supersedes` commit for the same triple before creating a second one | WF4c | The recovery command succeeds and restores `/approve-review implementation` reachability (after a fresh external review of the regenerated bundle) following a simulated concurrent excluded-only commit landing during external implementation review, its sole legal window (**restated, revision 36, `GPT-R52-004`** — revision 35's text here still described a second, now-impossible window, "after technical-approval-phase entry"), with `implementation_revision` unchanged, and the resulting three-commit graph is independently verified against `git log --first-parent` rather than merely asserted; the same operation refuses outright when the candidate content has genuinely changed (routed to the ordinary new-round path instead); a protected-path or unclassified commit anywhere in the recovered interval refuses even when endpoint content is byte-identical (the revert/transient-path cases); invoking the command outside its sole legal phase (`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`), or without explicit user confirmation naming the work item and superseded SHA, refuses; a successful recovery's phase always remains `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`, its sole legal source and target, and pre-recovery `REVIEW_FEEDBACK.md` (bound to `B1`'s `bundle_id`) is confirmed refused against the regenerated bundle `B2` until a fresh `APPROVE` naming `B2` exactly is supplied; retrying the recovery against the same stale round is idempotent (no duplicate superseding commit); a conflicting `Workflow-Supersedes` naming a different prior commit remains genuine ambiguity; the superseded commit's own provenance record is never silently deleted or reused; an exact replay of an already-recovered round performs no commit and no working-tree write; a discovered recovery commit whose committed state lacks the required mutation is refused as malformed, never repaired in place; **(new, revision 33)** two independent, sequential recoveries of the same round (`S → S2 → S3`) preserve `implementation_revision`, each require their own fresh external review, and the approval gate validates the full four-non-terminal-commit chain; a forked supersession (two commits both naming the same superseded target) and a cyclic/malformed chain both refuse; **(new, revision 34)** a malformed historical `S` hidden by an otherwise-valid recovery, and a malformed historical `S2` hidden by an otherwise-valid second recovery, are both refused at the interval as a whole even though the chain's own current tip is well-formed; a canonical multi-recovery chain with every generation-record member independently role-valid still succeeds; an unrelated excluded-only commit between provenance records requires no role-specific field or trailer of its own; **(new, revision 35)** invoking `/recover-implementation-provenance` from a hand-edited `AWAITING_TECHNICAL_APPROVAL` refuses identically to any other illegal phase; a supersession chain mixing a `record_bundle_generation`-authored link and a `/recover-implementation-provenance`-authored link, in either order, validates identically to a chain produced by only one of the two writers; **(new, revision 36)** the second recovered-role writer, `record_bundle_generation`'s same-content-republication branch, is covered separately by `WFR-61`'s items 286-289, not as a second legal phase of this row's dedicated command; **(new, revision 38)** that same writer's own legal source phase is now two, not one (`SELF_REVIEWING_IMPLEMENTATION` **or** `APPLYING_REVIEW_FEEDBACK`, `GPT-R54-002`) — covered by `WFR-61`'s items 310-313, still not a second legal phase of this row's own dedicated command, which remains scoped to `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` alone — **owed to `WF8b`**, items 242-244, 247-252, 256-261, 268-271, 278-281, 286-289, 292-294 |
 | WFR-63 | **(new, revision 50, `GPT-R67-001`)** The plan-approval commit conditionally includes the work item's own concrete `<work_item_id>-artifacts.json` declaration as a fifth member of the single commit, together with the four ordinary plan-approval files, whenever its working-tree bytes differ from HEAD and match the just-recomputed current bundle's own copy exactly; an unchanged declaration is never gratuitously added, and a declaration that changed again after bundle generation causes `/approve-review plan` to refuse rather than commit unreviewed bytes; the declaration's own plan-stage exclusion and implementation-stage protected/excluded classification are both unaffected by inclusion in this commit | WF4a-iii | Items 345-347: the one-commit/clean-tree/trailer property with a real pending declaration change; the no-gratuitous-inclusion and bundle-freshness-refusal boundary properties; and the deferred `.claude/commands/approve-review.md` conformance obligation once that file is next updated. Item 348 (added revision 51; strengthened revision 52, `GPT-R69-001`; strengthened again revision 53, `GPT-R70-001`; strengthened again revision 54, `GPT-R71-001`): the "Bootstrap plan-approval procedure"'s own live-execution checklist, bridging this same property until that command-file update lands — including, as of revision 52, proving `WORKFLOW_STATE.json` byte-identical non-mutation on the freshness-refusal branch, not merely the absence of a commit; as of revision 53, proving the fifth member's binding is established and load-bearing *before* the approval commit becomes reachable, with deterministic index-rollback on a pre-commit refusal and an explicit, non-`git-reset` amend recovery for a post-commit mismatch; and as of revision 54, proving the Git index is verified clean (equal to `HEAD`) before any staging begins, that a pre-existing staged path causes fail-closed refusal rather than being absorbed or destroyed, that the complete staged path set is asserted to equal exactly the applicable four/five-member set immediately before commit creation, that the approval commit is created via a plain pathspec-free `git commit`, and that the amend recovery itself verifies an otherwise-clean index and a single corrected path before amending; and as of revision 55 (`GPT-R72-001`), proving the whole procedure is one failure-atomic transaction — the exact pre-procedure `WORKFLOW_STATE.json` bytes captured into a durable approval journal before `apply_plan_approval` is called, one automatic approval-transaction rollback covering every failure after the journal is opened and before a durable approval commit exists (staged-set assertion, fifth-member blob assertion, and `git commit` failure alike), that rollback verified before refusal is reported — **superseded in part by revision 56**, under which the rollback restores only the index and deliberately writes no `WORKFLOW_STATE.json` bytes at all, since the transaction no longer writes that file before the commit — an outcome classifier rather than a command exit status deciding whether a commit was created, an exact committed-path-set assertion on the commit itself and not only on the index, and fail-closed fresh-session recovery at every interruption boundary. and as of revision 56 (`GPT-R73-001`/`-002`/`-003`), proving the transaction is enforceable, exactly bound, and crash-resumable end to end — journal acquisition exclusive by construction rather than by an `exists()`-then-`os.replace()` sequence two runs can both pass; the post-approval state pinned into the Git index and materialized into the working tree only after a verified durable approval commit exists, so no intermediate state can satisfy the currently-installed `/bootstrap-workflow-v2`'s own durability guard and the rollback never writes the shared state file at all; the exact expected post-approval `WORKFLOW_STATE.json` identity bound in the journal before the first mutation, guarded by a compare-and-swap, and verified as a staged blob, as committed content, and as materialized bytes; and step 7's amend recovery resumable across its own staging and amend boundaries rather than refusing on its own interrupted work. And as of revision 57 (`GPT-R74-001`/`-002`/`-003`), proving the same transaction is ownership-safe, loss-free, and exhaustively re-verified after an amend — the journal published by a single atomic, fully-written, no-replace `os.link`, so its final pathname is never observable zero-length and a resolver can never mistake a live acquisition for a crashed one; transaction ownership carried by a durable `owner_token` re-asserted before every mutating step, with a non-owner refusing by default at step 0 and unable to roll back, complete, replace, or delete a live owner's journal, and takeover available only through an explicit, exclusively-claimed, mechanically re-verified authorization that exactly one session can win; the post-approval state materialization never merging the shared state file, so this step cannot itself republish another work item's bytes from a stale read, with `D1`'s narrowed serialized-write contract and its named lock primitive carrying the general obligation; and every amended approval commit re-verified against the complete, exhaustively enumerated step-7 set — committed path membership, committed `WORKFLOW_STATE.json` bytes, and declaration bytes — before step 8, 8b or 8a can run, since `git commit --amend` re-runs hooks and a same-path hook mutation leaves the committed path set unchanged. Items 349-352 (added revision 55; 349, 350 and 352 rewritten or retimed revision 56) cover the journal, the classifier and rollback, the committed-path-set assertion, and the cross-command obligation the journal creates; item 353 (added revision 56) covers the canonical `WORKFLOW_STATE.json` serialization the post-state binding depends on. **Ownership note (revision 58, `GPT-R75-003`)**: this row's own `WF4a-iii` checkpoint owns the revision-50 conditional-fifth-member commit property this row states, and nothing more. The forward-looking obligations this verification column *mentions* are owned by their own checkpoints, not by this row's — items 348-353 and 355 by `WF8b`'s continued scope, and in particular **item 354, `D1`'s every-writer serialization conformance, by `WF8b`'s continued scope and not by this already-`COMPLETE` checkpoint**. Revision 57 both suffixed item 354 `→ WF4a-iii` and referenced it from this column, which together read as though a newly discovered future obligation had inherited this row's historical owner; it had not, and could not, since `WF4a-iii` is `COMPLETE` and is deliberately not reopened. Item 355 asserts this mechanically. Revision 58 also records `GPT-R75-001`'s and `GPT-R75-002`'s own additions to the same bridge — the transaction mutation/handoff guard that makes ownership transfer mutually exclusive with every load-bearing mutation, and the temporary, user-authorized, journal-recorded state-writer quiescence window that covers the interval in which the twelve installed writers still ignore `D1`'s primitive — through items 348(oo)/(pp), 349, 352 and 354, again with no ownership implication for this row; item 347 (extended revisions 55 and 56) keeps the permanent `.claude/commands/approve-review.md` fix bound to the same contract, including the pairing rule that forbids adopting a working-tree-first state write without landing item 352's commit-bound guard in the same change, so retiring this bridge cannot retire its atomicity. **Revision 61 (`GPT-R78-001`/`-002`)** records two further additions to the same bridge/permanent-command pairing, again with no ownership implication for this row: the completion-obligation gate's verifier authority is bound to the existing implementation-stage `technical_approval` (`approval_is_current(... stage="implementation", head=C)` on the obligation's owning work item, with the verifier materialized and executed from that record's approved blobs and its identity recorded for historical replay) through new items 358 and 359 and item 356(q)-(v); and the temporary bridge's quiescence contract is reduced to one rule — always the literal current-turn authorization, no obligation branch, no commit stored in `quiescence_authorization`, no pre-approval `HEAD` pin and therefore no `PIN_MOVED` across its own step-6 approval commit — through item 348(ss), with retirement moved wholly to item 347's permanent command, which pins the derived `(obligation_content_id, verifier_identity_id)` rather than a `HEAD` SHA precisely because its own approval commit moves `HEAD` and may rewrite the implementation-stage-protected declaration file |
+| WFR-64 | **(new, revision 63, `WF8B-S14-001`)** A checkpoint's ownership is discoverable by every linked worktree of the repository for the whole interval it is `IN_PROGRESS`, so no worktree can treat a checkpoint another worktree holds interrupted as a fresh start. A per-work-item claim -- coordination state only, never a second authoritative status store -- is published under `$(git rev-parse --git-common-dir)/ai-workflow/checkpoint-claims/<sha256(work_item_id)>.json`, atomically and create-if-absent (same-directory temp plus `os.link`), never through a symlink, and is resolved at a distinct `/milestone-implement` step 1c before any branch that can mutate; `select_next_checkpoint` is unchanged and stays pure. Acquisition strictly precedes the `IN_PROGRESS` state write; release strictly follows the checkpoint commit's durable completion. A foreign worktree is refused by the existing `verify_dirty_resume_safety`, preserving both `WorktreeIdentityMissingError` and `WorktreeIdentityMismatchError` as distinguishable outcomes, with the ownership evidence attached to the refusal, and performs zero authoritative mutation. A checkpoint already `IN_PROGRESS` when the mechanism lands is adopted by its originating worktree only, under `verify_dirty_resume_safety`, writing no authoritative state. No claim is ever released on an inference that could discard a live one: the single automatic release requires the claimed checkpoint to be `COMPLETE` in the state committed at `HEAD`, and every other recovery is an explicit, evidence-first, user-authorized takeover that publishes by atomic replace and records what it displaced. **(amended in place, revision 64, `GPT-R81-001`/`-002`/`-003`)** The claim additionally **fences** the work it coordinates: it carries a durable `owner_token`, and every ownership-bearing mutation -- the `IN_PROGRESS` state write, the identity write, the checkpoint commit and the release -- runs inside a single fixed-path, no-replace `os.link` mutation/handoff guard whose first act is re-asserting that token, so a displaced owner is mechanically unable to write state, commit, or remove the replacement claim; release is compare-and-delete inside that same window; the checkpoint commit and every `WORKFLOW_STATE.json` write are a `"destructive"` class; abandoned guards are reclaimed from durable epoch data with no wall clock, and an undecidable guard has one explicit, observation-bound clearance. **(further amended in place, revision 65, `OPUS-R82-001`/`-002`)** The `"destructive"` class is stated at the strength the mechanism provides -- a window held by the work item's current owner is never broken from outside that owner's own worktree while that worktree is still registered, under any authorization -- with exactly three reclamation paths, each outside that statement for a stated reason: a superseded epoch (no authorization, any worktree, the crash-recovery path); the holder's own worktree presenting the current token, which requires the guard's recorded `holder_worktree_git_dir` to match and which does not fence two sessions inside one worktree, a stated scope limit rather than serialization; and one distinct, user-authorized `recover_abandoned_destructive_guard` operation for a window abandoned by a worktree that is no longer registered, bound to the guard's and the claim's observation ids and to the abandoned step, refusing while the holder is still a registered worktree and naming the operator actions instead, re-verifying both observations and the registration fact from durable state before touching anything, and rotating rather than deleting so the abandoned guard is cleared by the epoch rule it makes true. No liveness inference of any kind is added: the deregistration is a durable, human-made fact. The explicit takeover is bound to the exact claim the user reviewed -- a `claim_observation_id` over the record's exact bytes, quoted in the authorization, re-verified under the same guard before rotation, refusing on stale evidence, non-replayable, and recording the displaced record's own observation, token and checkpoint -- so an authorization for one checkpoint can never displace a claim holding another. Ownership resolution returns `(outcome, checkpoint_id, owner_token)` and no mutation-capable outcome ever carries a `None` checkpoint id: an exhausted registry, including after the single durable-completion release, is the distinct terminal `NO_CHECKPOINT` outcome that re-enters the command's existing no-checkpoint path. **(further amended in place, revision 66, `OPUS-R83-001`/`-002`)** Guard removal is atomic with respect to its `lease_id` comparison on every path that removes a guard -- the release, `acquire_guard`'s reclaim-and-republish and the malformed-guard clearance each run their whole compare-and-remove sequence inside `D1`'s process-scoped `fcntl.flock` serialization over a stable, never-unlinked per-work-item lock object, so a guard published between a comparison and its removal is never the one removed; the lock is never held across a state write, leaving the guard-then-`flock` ordering rule intact, and `os.link`'s exclusivity is retained underneath it rather than replaced by it. The `"destructive"` guarantee is conditioned on that contract rather than on the reclamation rules alone. Every state of the claim path has a defined observation identity -- `"absent"`, the sha256 of exact bytes, or a domain-separated digest of an `lstat`-derived descriptor for a record whose bytes cannot be read at all -- and `takeover_evidence` reports rather than raises for all of them, while the ownership-resolution path still fails closed. The recovery and takeover ownership partition is total and disjoint across guard class, holder registration and claim decidability: an undecidable claim held with a `"destructive"` guard is owned by `recover_abandoned_destructive_guard` when the holder is deregistered -- established from the guard's own `holder_worktree_git_dir`, with the checkpoint id taken from the guard and a disagreeing one refused -- and refuses with the concrete operator actions when the holder is still registered; a directory at the claim path is declared outside every documented operation with its operator action stated. **(further amended in place, revision 67, `OPUS-R84-001`)** Step 1c's origination check has exactly two proofs and the claim is the stronger of them: a decidably self-owned claim -- one whose `(repo_root, git_common_dir, worktree_root)` ownership key equals the invoking worktree's own `_git_identity` output -- is itself the proof, and `verify_dirty_resume_safety` is not additionally required for the branches reached with one (`RESUME`, `CONTINUE_CLAIM`, the single durable-completion release, and the self-owned refusals, which stay refusals); for every other case -- no claim, or a foreign claim, including the claim-absent adoption path where the local identity record is the only evidence in existence -- `verify_dirty_resume_safety` is unchanged and still runs before any branch that can mutate, so `WorktreeIdentityMissingError` and `WorktreeIdentityMismatchError` remain the two distinguishable classes a foreign worktree actually sees. Because both tests compare the identical triple against the identical source, the relaxation removes exactly one refusal -- a missing-identity-record refusal against a worktree the durable shared claim already proves is the originating one -- and can admit no worktree the mismatch check would have refused. `CONTINUE_CLAIM` is therefore reachable in the crash window it is specified for, including the first checkpoint any worktree starts on any work item, where no identity entry exists yet and hand-deleting the claim record was previously the only recovery; and every refusal raised while a decidable claim is present carries the ownership evidence and names the escape that applies, for a self-owned claim as well as a foreign one. Guard removal names the `lease_id` it observed on every path and an absent lease id refuses rather than matching whatever guard is present; the guard axis and the claim-path axis of the recovery/takeover partition are resolved independently, acting on different records rather than competing for one. **(further amended in place, revision 68, `OPUS-R85-001`/`-002`)** Step 1c's origination check has exactly one proof and it is the local identity record: `verify_dirty_resume_safety` runs unconditionally on every contended path — claim absent, foreign or self-owned alike, adoption included — before any branch that can mutate. Revision 67's second, self-owned-claim proof is withdrawn: the ownership key it trusted is `_git_identity`'s output, which returns the worktree's path twice plus the Git common dir and therefore proves a location rather than a worktree instance, so a different worktree occupying the holder's recorded path satisfied it, skipped the check, and mutated authoritative state under the holder's unrotated `owner_token` with `takeover_count` 0, no rotation and nothing auditable — in both path-reuse constructions, the second of which reuses the same admin directory and so would not have been closed by binding the proof to `worktree_git_dir` instead. Only `WORKTREE_IDENTITY.json`'s existence proves an instance, because it lives inside the working tree, is gitignored, and is never inherited by a replacement worktree at the same path. `CONTINUE_CLAIM` stays reachable in the crash window it is specified for because step 1d establishes that record before publishing the claim, not because any check is relaxed; the identity entry a failed acquisition then leaves behind is inert, since every branch it could reach additionally requires a self-owned claim or this worktree's own uncommitted `IN_PROGRESS` state — **and revision 68's ground for the second half, that such state is never committed and so can never be inherited, is withdrawn as false; the revision-69 clause below replaces it with a checked test**. `verify_dirty_resume_safety`'s third error class is named and decided rather than omitted: `CorruptJsonError`, from unparseable bytes or a schema-invalid document, refuses at step 1c before any authoritative mutation, and the identity writer validates the document it loaded before mutating it, so no path exits with an undeclared exception type, and publishes atomically so it can never produce the torn record the resolution depends on. Both rotating operations — the explicit takeover and `recover_abandoned_destructive_guard` — establish the incoming owner's own identity record as part of the rotation, so an ownership transfer is complete, fenced and audited and a worktree that lost its record while holding a claim has a documented, authorization-bound exit rather than a hand repair; neither writes any authoritative workflow status. Every flavour of absent lease id, the empty string included, refuses rather than matching whatever guard is present. **(further amended in place, revision 69, `OPUS-R86-001` through `-005`)** Origination is proved rather than inherited, and the local identity record's own lifecycle is serialized, atomic and closed over document shape. Local `IN_PROGRESS` is not evidence that this worktree originated a checkpoint: a whole-tree checkpoint commit for one work item can commit a different work item's in-flight transition — verified against this repository's own history, which carries five such commits — so adoption additionally requires the checkpoint **not** to be `IN_PROGRESS` in the `WORKFLOW_STATE.json` committed at `HEAD`, since only the uncommitted delta is worktree-local, and refuses otherwise with a fourth error class, `CheckpointOriginationUnprovableError`, naming the explicit takeover — which applies to an absent claim on the same terms as a present one — as the escape. That refusal is symmetric: an originating worktree that committed its own transition is refused too, because the mechanism cannot distinguish the two and does not guess, and the migration path adoption exists for is unaffected because an interrupted checkpoint's transition is uncommitted. `WORKTREE_IDENTITY.json` is a single document shared by every work item, so its whole load, validate, mutate and publish sequence is serialized by a per-worktree, stable, never-unlinked `fcntl.flock` leaf lock — no other lock is acquired while it is held, and it is never held across a `WORKFLOW_STATE.json` write, a claim publication or a guard acquisition, so the guard-then-`flock` ordering rule cannot be inverted — because the per-work-item mutation guard cannot serialize two work items by construction and step 1d's establishing write is outside it; per-work-item keying makes sequential writes non-interfering and nothing more. The document's final pathname is written exactly once, by `os.replace`, from a same-directory temp file with a per-call unique name, with the snapshot computation separated from the write rather than wrapped around it. Absence is established by `exists()` rather than by a falsy parse, and the refusal classification is a total partition of document shape for the reader as well as the writer — absent, unparseable, JSON null, non-mapping, schema-invalid including snapshot members, valid-but-no-entry, valid-but-mismatched — so no path exits with an undeclared exception type and a corrupt document is never repaired by an unauthorized overwrite. Both rotating operations establish the incoming owner's identity record **before** the rotation publishes, so a document they cannot decide or cannot publish refuses with the claim byte-identical, `takeover_count` unchanged and no retry rotating; an undecidable document is repaired only under an authorization component naming its exact observed bytes, re-verified under the guard and refused on stale evidence, which leaves the corrupt-record state with no hand-repair step and no silent overwrite. **(further amended in place, revision 70, `OPUS-R87-001`/`-002`/`-004`/`-005`/`-006`)** The origination test names a reference the would-be adopter cannot select, reads it fail-closed, and is re-evaluated where it acts. The reference is every commit reachable from every ref in the repository, path-limited to the state document, which spans every linked worktree's own HEAD including a detached one -- never the invoking worktree's own HEAD, which that worktree can move without touching its working tree and which was reproduced admitting a worktree that never started the checkpoint, publishing its claim and locking the true originator out. What the reference establishes is that no ref records the checkpoint as started, not which worktree started it, and an operator who deletes every ref reaching a commit removes it -- stated rather than implied. Only a positive, decidable absence admits: an unresolvable reference, an unparseable or non-object state document, and a non-object work_items, work-item, checkpoints or entry member all refuse, and no path exits with an undeclared exception type. The test is evaluated a second time inside the guard window that publishes the claim, so a reference that changes between evidence and publication refuses having published nothing. Every refusal step 1c raises carries the ownership evidence and names the escape, whether or not a claim is present, since a checkpoint being adopted has none by definition. The takeover's evidence reports whether this worktree and every currently registered linked worktree hold uncommitted work for the item, because a takeover against an absent claim is otherwise decided on evidence that is byte-identical between the worktree holding the work and one holding none; it reports and does not conclude, and the observation is deliberately not bound into the authorization literal. The identity document's refusal partition is closed over what its path is as well as over what the document contains -- a symlink, a directory, a non-regular file, an unstattable path and an EACCES file each yield the declared class, with the path established as a real regular file by lstat plus O_NOFOLLOW before any open, so a symlinked document is never followed and a fifo refuses instead of blocking -- and the reader and the observer are required to agree, an undecidable observation holding exactly when the reader refuses. The identity observation is a required component of the evidence both rotating operations consume: its absence refuses having mutated nothing, the repair is performed only under an authorization carrying the component derived from that same observation, and re-observation under the guard is the stale-evidence check alone and never the source of the decision the authorization gates. **(further amended in place, revision 71, `OPUS-R88-001` through `-005`)** The origination reference is stated as what its command enumerates rather than as an abstract property that command approximates: every commit reachable from every ref that is not TREESAME to a parent for the state document, merges retained and all parents followed, since a pathspec does not filter the reachable set but switches Git into history simplification -- which an ordinary merge plus a routine post-merge branch deletion was reproduced defeating with the adopter moving nothing. That reference's own residual pruning is status-preserving, and it is required to agree with the unfiltered reachable set on the pairs ever observed IN_PROGRESS. The read admits only on a status that is present, is a string, and is a value of the state schema's own controlled vocabulary; an absent, null, non-string or out-of-vocabulary status refuses, and absence at a commit is established by that commit's tree not listing the path rather than by a read command's exit status. The residual is stated at its measured strength -- a single git update-ref -d from the benefiting worktree against a branch another worktree has checked out removes the evidence, ordinary maintenance erases it unintentionally, and a replace ref rewrites what the reference sees -- with an explicit retention contract: the guarantee holds only while some ref reaches the commit, that is a property of the repository's ref maintenance rather than of the mechanism, and the mechanism cannot detect its loss; the decision is unchanged across reflog expiry and object pruning. The reduction over multiple observations is monotonic and permanent, with no supersession and no recency rule, so the refusing set grows rather than being a one-time cost, and identities are therefore permanently non-reusable. Every CheckpointOriginationUnprovableError carries the observation that produced it -- the route, the observing commit, the status or shape read there, the reference itself, the local identity observation and the claim's absence -- and that observation is deliberately not bound into the takeover's authorization literal, whose bytes it never changes. **(further amended in place, revision 72, `OPUS-R89-002`/`-003`/`-004`)** The origination read's partition is total over container *absence* and over read *failure*, not only over document shape, and it is required to agree with its own reference implementation row for row. Absence at each of the four levels -- `work_items`, the work item, `checkpoints`, the checkpoint entry -- is a **missing key**, established by key membership and never by a falsy or non-object value, and continues; a member that is **present but is not an object**, JSON null included, refuses. A per-commit read that fails for a reason which is not the blob's -- the commit's tree cannot be listed, or the commit object cannot be resolved -- refuses, because absence is established only by a **successful** listing that does not contain the path, and a successful empty listing still continues. When both refusal routes hold in one reference, the observed-IN_PROGRESS route is reported in preference to the undecidable one. The retention contract discloses that refs have unequal lifetimes: a detached linked worktree's HEAD is worktree-lifetime evidence, and `git worktree remove`, `git worktree prune` and `git gc`'s own worktree-pruning step each remove it, flipping refuse to admit while the object survives -- so the pruning-independence claim is scoped to the object-pruning step, `gc` is disclosed as a route by which reachability is lost rather than merely one at which an earlier loss becomes visible, and both recovery procedures that recommend `git worktree remove` state the origination-evidence cost of removing a detached worktree. | WF8b | Items 362-375. Owned by `WF8b`'s continued scope rather than by `WF2` (whose scope text covers `/milestone-implement`'s selection and resume-safety) because `WF2` is already `COMPLETE` and is deliberately not reopened -- the same ownership discipline `GPT-R75-003` established for item 354, and the same continued-scope pattern every `WF8b`-discovered requirement since `WFR-47` has followed. The concrete implementation surface is `scripts/` and `.claude/commands/`, both implementation-stage protected prefixes, exactly the surface commit `535d4fb` already edited as ordinary `WF8b` checkpoint work. |
+| WFR-65 | **(new, revision 64, `GPT-R81-004`)** A plan-revision bump has exactly one sanctioned writer, and the registry's authoritative `plan_revision` and `WORKFLOW_STATE.json`'s non-authoritative mirror can never disagree at a commit boundary. The operation that writes a new `plan_revision` into a registry publishes the same value to the mirror in the same operation, through a single canonical `publish_plan_revision(...)` entry point that also performs the plan-review phase transition, is idempotent on retry, refuses a terminal item, touches no other work item, and is written through `D1`'s serialized state-write primitive rather than as a plain JSON edit; its call sites are `/milestone-plan`'s `[2.1]` registry write, `/apply-plan-review` step 5 on both branches, and `/bootstrap-workflow-v2`'s state-sync for a self-discovered revision of the permanently-v1 core item. Governing-v1 inertness is preserved as a property: the carve-out applies only where a `work_items` entry already exists, so a v1 item with no entry is unaffected. `prepare-ai-review.sh`'s plan stage refuses, before generating any content, when mirror and registry disagree -- naming both values, exactly as it already refuses a `base_commit` disagreement. | WF8b | Item 371. Owned by `WF8b`'s continued scope for the same reason `WFR-64` is: the implementation surface is `scripts/` and `.claude/commands/`, and the checkpoints that originally specified these commands are `COMPLETE` and are deliberately not reopened. |
+| WFR-66 | **(new, revision 71, `OPUS-R88-004`)** Work-item and checkpoint identities are permanently non-reusable, because `D-Checkpoint-Ownership`'s origination reference is keyed on `(work_item_id, checkpoint_id)` over durable Git history and cannot distinguish a reused identity from the original. Creating a work item under an id that has ever appeared in that reference is refused at creation, and a registry that reintroduces a checkpoint id its own work item has retired -- renamed away, removed, or completed and dropped -- is refused at validation; both refusals name the historical observation that binds the id. Removing a work item's entry from `WORKFLOW_STATE.json` therefore retires its id rather than freeing it, and a checkpoint rename is a new id whose retired predecessor keeps whatever history it already had. **(amended in place, revision 72, `OPUS-R89-005`)** Both halves name the **same single evidence source**, the origination reference, rather than one naming it and the other naming nothing, and the invariant is scoped to exactly what that source can observe: the registry-side refusal applies to a checkpoint id this work item has ever had **observed in the reference**, so an id retired before it was ever started -- which therefore never entered `work_items[...].checkpoints` and is invisible to a reference path-scoped to the state document -- carries no historical binding and is outside the invariant. A second reference over the registry document's own history is deliberately not introduced, because the binding this requirement exists to prevent is created only by an observed `(work_item_id, checkpoint_id)` pair. A checkpoint id **redefined in place** -- kept live with its scope rewritten across plan revisions, as `WF8b` itself has been -- is not retirement, is not reuse, and is not refused. **(amended in place, revision 73, `OPUS-R90-003`)** Naming the source is not specifying the read, so both queries carry their own **total decidability partition**, stated separately from the origination test's because they ask an existence question where it asks an absence question: a decidably observed id refuses naming the observation; every commit decidable with no observation admits; **any** undecidable commit -- an unparseable or non-object state document, a present-but-non-object member at any of the four levels, an unlistable tree, an unresolvable commit object, a present-but-unreadable blob, or an unresolvable reference -- refuses with a distinct `IdentityReferenceUndecidableError` rather than being read as "not observed"; an empty reference admits. Absence at a level is a missing **key**, never a falsy or non-object value. Because a fail-closed refusal with no exit would let one damaged historical commit permanently block creating any work item and validating any registry revision, that refusal has one explicit escape, `authorize_identity_reference_gap`, bound to a digest over the exact undecidable commits and their failure classes, re-derived and re-verified immediately before acting, non-replayable, recording what it admitted -- and it clears **only** the undecidability, never a decidable observation. Both queries share the origination test's reduction rule unchanged: any observation anywhere binds, with no supersession and no recency. **(amended in place, revision 74, `OPUS-R91-002`/`-003`)** The partition's rows are **disjoint**, with the precedence rule stated in the direction that preserves the invariant: for these existence queries, **key presence at the queried level is a decidable observation** and takes precedence over every undecidability elsewhere in the same commit, so a present-but-non-object member -- JSON `null` included -- **at the queried level** refuses unescapably, and only undecidability that prevents the reader from establishing key presence or absence at all, including a non-object container **above** the queried key, may raise `IdentityReferenceUndecidableError`. The escape carries the same authorization surface as its two siblings rather than only their footing: an authorization literal naming the work item, the checkpoint when present and the gap digest, validated against the re-derived digest; the evidence displayed before the literal is solicited; a digest bound to **the identity as well as the observation**, so one damaged commit authorizes exactly the one reviewed identity and no other; a named durable record under the repository's own admin directory, published create-if-absent so the replay test and the write are one operation, because at work-item creation no work item and therefore no per-work-item record or guard yet exists; repository-level `fcntl.flock` serialization with its ordering against the existing guard and identity locks stated, so two concurrent authorizations of the same gap yield exactly one winner; and an idempotent-rather-than-consumed record, so a crash between publication and creation is resumable rather than a fail-closed dead end. **The invariant that survives the override is stated rather than assumed**: after an authorized gap it is not "an id that has ever appeared is refused" but the strictly weaker **no id decidably observed in the reference is reused, and every commit undecidable at authorization time is recorded durably against the identity admitted despite it**. Requiring the damaged history to be repaired is deliberately **not** added, because the retention contract establishes that the lost evidence is often unrefetchable and the requirement would restore the repository-wide lockout the escape exists to prevent. | WF8b | Item 375(g). Owned by `WF8b`'s continued scope for the same reason `WFR-64` and `WFR-65` are: the implementation surface is `scripts/` -- the state validator at work-item creation and the registry validator at authoring time -- and the checkpoints that would otherwise own it are already `COMPLETE`. |
+| WFR-67 | **(new, revision 72, `OPUS-R89-001`)** A review bundle's own author-written stage document is bound to the authoritative source it claims to reproduce, generator-side and fail-closed, rather than by an unwired check the protocol documentation nonetheless promises. At the `plan` stage `bundle_dir/PLAN.md` is **derived** from the resolved work item's own `plan_path` on every generation -- copied byte-for-byte, never created-if-absent -- behind preconditions that refuse, naming the resolved path, when the item declares no `plan_path` or that path is absent, is not a regular file, or cannot be read; those preconditions run before any file under `bundle_dir` is written, so a refused generation leaves the bundle byte-identical to its pre-run state, `MANIFEST.md` included. The closing reproducibility check additionally asserts `bundle_dir/PLAN.md`, `bundle_dir/files/<plan_path>` when the diff-derived tree contains it, and the archive's extracted copy each byte-identical to `plan_path`, naming every digest on mismatch, because all three of the pre-existing three-way computations hash the same file and agree on a stale one. `assert_stage_completeness` gains a production call site on that path but is explicitly not the binding: its revision-marker comparison passes on a body altered with the marker intact. At the `implementation` and `post-fix` stages `IMPLEMENTATION_SUMMARY.md` has no authoritative source to derive from, so it keeps create-if-missing and the revision-marker check alone, invoked as a completion assertion rather than a precondition, and `REVIEW_PROTOCOL.md`'s author-facing bullets are corrected to describe the two guarantees at their actual, unequal strengths instead of claiming one discipline for both. **(amended in place, revision 73, `OPUS-R90-001`/`-002`)** The authoritative read is **pinned**, so the assertion is a binding rather than a sampling: `plan_path` is read exactly once at derivation and its digest pinned for the run, the derivation writes those exact bytes, and the closing assertion compares all three bundle copies against that pinned digest **and** re-reads `plan_path`, requiring it to still equal it -- so a mutation landing anywhere between derivation and the closing check refuses, and `review_content_id`'s own independent snapshot of the same path is provably the same bytes rather than assumed to be. A failure of that assertion **withdraws the artifact**: `MANIFEST.md` and the archive are removed before the non-zero exit, so a failed generation cannot leave a bundle directory and archive that satisfy a reviewer's independent `bundle_id` and `review_content_id` recomputation while the document under review is not the one the identifiers bind. The operator-facing half of the manual step this requirement removes is part of the same surface: neither `.claude/commands/milestone-plan.md` nor `.claude/commands/apply-plan-review.md` may direct a write or an edit to `bundle_dir/PLAN.md`, which at the plan stage is generated rather than authored, leaving the authoritative `plan_path` as the sole edit target and the generator invocation as each command's only bundle-refresh step. **(amended in place, revision 74, `OPUS-R91-001`/`-004`)** What is pinned is the **whole protected observation**, not one path: all five paths `review_content_id` binds are read exactly once at derivation into a single pinned projection, the derivation writes the pinned plan bytes, and **`review_content_id` is computed from that pinned projection** rather than from an independent late snapshot -- because pinning one of five left the other four inside the same unlinked window, in which a mutation between the `files/` copy and the manifest computation passes every assertion while the bundled bytes and the bound bytes differ. The closing re-read covers **every** protected path and is a **staleness check**, not a proof: it is a two-point equality sample that an ABA defeats with both endpoints agreeing, so the claim that it makes the two reads provably equal is withdrawn, and an implementation that retains an independent snapshot must instead compare that snapshot's own per-path manifest against the pinned projection entry for entry. The withdrawal is **ordered, fail-closed and a quarantine**: the archive is removed **first**, because it carries its own manifest and reproduces `bundle_id` on extraction and is the artifact that actually leaves the machine, then `MANIFEST.md`, then `current/` is renamed to `current.rejected-<token>/` rather than left in the reviewable location -- since `REVIEW_REQUEST.md`'s own surviving `review_content_id` header still verifies against an unchanged worktree after a failed generation, and an absent manifest is equally consistent with a bundle not yet generated. A withdrawal that cannot complete leaves an unambiguous refusal marker naming the failed step and the surviving path rather than exiting silently non-zero. **(amended in place, revision 75, `OPUS-R92-002`/`-003`)** The provenance this requirement asserts is **end-to-end only in combination with `WFR-06`**: the chain authoritative bytes → pinned projection → `PLAN.md` → `review_content_id` → `MANIFEST.md` → `bundle_id` → archive closes on the generation side, and the approval side is `WFR-06`'s own approval-time freshness assertion; neither half alone is end-to-end and this row no longer implies otherwise. The pin covers the **whole resolved `PlanStageMetadata`**, not only the five protected file reads, so the projection's classification sets (resolved from the excluded-prefix `<work_item_id>-artifacts.json`) and its state scalars (`work_item_type`/`base_commit`, from the excluded `WORKFLOW_STATE.json`) derive from one resolution rather than two; the "an intervening mutation cannot change what the manifest binds" property is stated at the scope it has — **no mutation of a protected path**. Quarantine's benefits are exactly three and are enumerated exhaustively — inspectability, removal from the canonical location, preservation of the author-written files — and the revision-74 claim that it retains the previous round's reviewed bytes is **withdrawn as false**: quarantine fires only on withdrawal, while a **successful** generation still overwrites `current/` and the canonical archive in place, which is exactly what the incident it was attached to was. Retention is stated separately and owned by the version store, with the interim loss named as an explicit limitation. The withdrawal's **target** is stated in both worlds — today `current/` and the canonical archive; under the version-store contract the **candidate** `staging/<token>/` and any archive produced from it, never a promoted `bundles/<token>/`, never the `current` symlink, never an archive this run did not produce — and a withdrawal that cannot identify the artifacts *this run* produced refuses and writes the `REJECTED` marker rather than removing anything. **(amended in place, revision 76, `OPUS-R93-003`)** The refusal marker is written **before the first removal**, not from the failure handler, and is cleared only by a withdrawal that completes and verifies its own end state or by a later generation that has itself completed and verified its own end state. Written from the handler it is unreachable on a hard kill, which leaves the one residue this requirement exists to prevent: archive gone, `MANIFEST.md` still present, no marker, and a `current/` that satisfies an independent `bundle_id` and `review_content_id` recomputation completely. The removal order is unchanged — the marker does not shrink that window, it makes it observable — and the property the requirement asserts is correspondingly a disjunction: at every instant of a withdrawal, either no surviving artifact verifies, or the marker is present and names the surviving path. **(amended in place, revision 77, `OPUS-R94-001`)** The marker's clearing point is fixed at the **end** of a generation rather than at its start, and the disjunction is asserted **across the generation boundary** rather than only across the instants within one withdrawal. Revision 76 wrote the clearing rule as "cleared by the next successful generation as that generation's first act", which names two incompatible instants -- "successful" is known only at a generation's end, "first act" is its beginning -- and the literal reading reopens this requirement's own residue with no crash required: a withdrawal that cannot identify its own artifacts refuses and writes the marker, the next generation clears it as its first act, and that generation then refuses at one of the preconditions above, whose byte-identity guarantee is scoped to `bundle_dir` while the marker lives at `bundle_dir/../REJECTED`, outside it, so nothing observes the removal and nothing restores it. A generation that refuses at a precondition, or that fails before its closing binding assertion, therefore leaves any pre-existing marker in place, having neither withdrawn the marked artifact nor replaced it; only a generation that has completed and verified its own end state supersedes what the marker names, and only then is the marker cleared. **(amended in place, revision 78, `GPT-R96-001`)** The marker acquires a **consumer** side, without which it is advisory in the one case it exists for: while a work item's marker is present, every workflow operation that treats that work item's `current/` bundle -- or a verdict or feedback bound to it -- as reviewable, ingestible or approvable **refuses before its own first durable write**, naming the marker path and the failed step and surviving path it records, with no identifier recomputation required and none sufficient, since the marked residue satisfies `bundle_id`, `review_content_id`, `assert_local_generation_matches` and `assert_review_request_states_review_content_id` by construction. Every obligation this requirement carried until now is a producer obligation, and all of them can be satisfied while every consumer stays blind to the marker. The rule is **work-item-scoped rather than stage-scoped** -- the marker sits beside a `current/` that every stage shares, and the clearing rule is unqualified by stage for the same reason -- and it is enforced **where a bundle becomes a review, feedback or approval subject, never at path resolution**, so `resolve_bundle_dir`/`resolve_feedback_dir` are unchanged, the generator can still see, write, update and clear a marked location, and the recovery path stays "generate again, successfully" rather than a hand edit. One shared assertion (`assert_bundle_not_rejected`) over one shared path resolver (`resolve_rejected_marker_path`) serves every consumer and the writer alike, so the two cannot disagree about where the marker lives and the policy cannot drift command by command, which is the failure mode `assert_local_generation_matches`' prose-maintained caller inventory already demonstrated in two consecutive finding rounds (`GPT-R63-001`, then `GPT-R64-001` against that same round's own correction, with a third live caller no finding had ever named). The consumer surface is named exhaustively -- `/review-plan` step 5, `/record-manual-plan-review` step 6, `/apply-plan-review` step 1, `/approve-review` step 2 at both stages, this work item's own bootstrap plan-approval procedure step 2, `/apply-implementation-review` step 1, and the hand-off report of `/milestone-plan` and `/milestone-implement` -- and the exemptions are stated with their reasons: the generator, because it is the marker's writer and only sanctioned clearer, and the functional-review commands and `/accept-milestone`, whose subjects carry no bundle identity at all. **(amended in place, revision 79, `GPT-OPUS-R97-001`/`-002`/`-003`/`-005`/`-006`)** The consumer obligation is made implementable, ordered correctly and completely partitioned. Its derivation is keyed on the **subject artifact** rather than on directory resolution -- a command is a required consumer iff it reads `REVIEW_FEEDBACK.md`, reads `MANIFEST.md` or recomputes or compares `bundle_id` over a bundle directory it did not itself generate, or presents that directory or the canonical archive as ready for external review -- because the revision-78 predicate selected the two functional-review commands the same revision exempts, so no implementation could satisfy both halves. The assertion is performed **twice** per consumer, once at the existing pre-mutation refusal point and again immediately under that operation's own mutation guard, since a single read cannot satisfy a rule quantified over an operation's whole duration and nothing in this design serializes a concurrent withdrawal against a consumer; the residual interval between the guarded assertion and the write it guards is disclosed rather than claimed closed, and the bootstrap procedure is exempted from the second assertion because it already executes inside the state-writer quiescence window that prohibits `record_bundle_generation`. `/milestone-implement`'s assertion moves from its report step to before step 4's `record_bundle_generation` call, which persists `reviewed_implementation_head` -- the field that makes `AWAITING_TECHNICAL_APPROVAL` reachable -- and therefore violated the rule's own ordering. `/prepare-review`'s report joins the consumer set and the generator exemption is scoped by **act** rather than by command, since that report presents a bundle exactly as the hand-off reports do. `/accept-scoped-remediation` and `/bootstrap-workflow-v2` are named as exempt so that all thirteen live command files are classified. And a marker whose contents are empty, truncated or unreadable refuses on **presence alone**, degrading the diagnostic rather than raising a parse error a caller might read as "not rejected". **(amended in place, revision 80, `OPUS-R98-001`/`-002`/`-003`/`-004`/`-005`)** Three of revision 79's own corrections were written narrower than the defect they fix, and each is restated at the level that closes it. The ordering rule is stated over the **writer** rather than over one command: every call to `record_bundle_generation` is preceded by `assert_bundle_not_rejected` as that call's precondition, at all three live call sites (`milestone-implement.md`, `apply-implementation-review.md`, `apply-functional-review.md`), since naming `/milestone-implement` alone left two callers with the identical generate-then-durably-advance-`reviewed_implementation_head`-then-report shape unguarded. `/apply-functional-review` moves from the exemption list into the consumer set, scoped by **act** exactly as `/prepare-review` was -- its bounded-fix branch creates the refused bundle rather than receiving one, so the exemption's stated reason ("no refused bundle can reach them at all") was false for it, and the classification did not merely omit protection but forbade it, since the conformance arm asserts every exempt file names the assertion nowhere; the counts become nine consumers and four exempt over the same thirteen files. The bootstrap procedure's exemption from the second assertion is **withdrawn as false** and replaced by the assertion itself, at sub-step 6.1b: the quiescence window starts at step 4a rather than at step 2, prohibits state writers rather than the marker's writer (which writes no state at all), and cites a prohibited writer that cannot execute at the plan stage, while a step-0 forward completion never re-reads the marker -- and this consumer is the one with no downstream check, being the only path this work item's own approvals take. The crash-resume path keeps the transaction's before/after-durability asymmetry rather than gaining a third assertion, since refusing after the approval commit is durable would strand it behind an unclosable journal; it completes forward and reports a marked approval. The claim that each disjunct of the derivation is "evaluable against a command file" is **withdrawn as measured-false** -- no stated rendering reproduces the declared partition, the loose one selecting three declared-exempt files on documentation pointers and a field name, the tight one dropping two declared consumers -- and the predicate's input becomes a property each command file **carries**, a machine-readable `review-subject: bundle | verdict | none` header line the derivation reads, with a missing or unrecognized line failing the suite and the declaration cross-checked against the three semantic disjuncts and against the presence of the shared assertion. A presence check that cannot complete (`EACCES`/`ENOTDIR`/`ELOOP` on the marker's parent directory) is treated as **present**, naming the resolved path and the underlying error, because the obvious implementation fails open. And "twice" is defined only where a guarded write exists: for a consumer whose consuming act is a report rather than a durable write, the single assertion immediately preceding the report **is** the mutation-guard assertion. | WF8b | Item 376. Owned by `WF8b`'s continued scope for the same reason `WFR-64` through `WFR-66` are: the implementation surface is `scripts/prepare-ai-review.sh` and `scripts/workflow_fingerprint.py`, `.claude/commands/milestone-plan.md` and `.claude/commands/apply-plan-review.md` (added revision 73, `OPUS-R90-002` -- the same `.claude/commands/` implementation-stage protected prefix `WFR-64` and `WFR-65` already name as `WF8b`'s surface), plus the `docs/ai-workflow/REVIEW_PROTOCOL.md` wording item 343 already made an implementation-acceptance surface, and `WF5`, which would otherwise own the bundle-mechanics half, is already `COMPLETE`. **(surface widened, revision 78, `GPT-R96-001`)** The consumer-side rule adds every command that takes a bundle or a bundle-bound verdict as its subject: `.claude/commands/review-plan.md`, `.claude/commands/record-manual-plan-review.md`, `.claude/commands/approve-review.md`, `.claude/commands/apply-implementation-review.md` and `.claude/commands/milestone-implement.md`, alongside the `milestone-plan.md`/`apply-plan-review.md` pair already named — all inside the same `.claude/commands/` implementation-stage protected prefix `WFR-64` and `WFR-65` already name as `WF8b`'s surface — plus this document's own `D-Approval-Commits` bootstrap plan-approval procedure step 2, whose execution surface is this document. **(surface widened again, revision 79, `GPT-OPUS-R97-001`)** `.claude/commands/prepare-review.md` joins it, for its report step only, under the same protected prefix. **(surface widened again, revision 80, `OPUS-R98-001`/`-002`/`-003`)** `.claude/commands/apply-functional-review.md` joins it for its bounded-fix branch; **all thirteen** files under the same protected prefix acquire the `review-subject:` header line the derivation reads, which is an edit to each file rather than new machinery; and this document's own `D-Approval-Commits` bootstrap plan-approval procedure gains its second assertion at sub-step 6.1b, alongside the step-2 read already named. No new checkpoint, no dependency change, no size change. |
 
 ## Checkpoint registry (revision 26: 17 checkpoints, unchanged count — `WF4a-iv` (added revision 10) had its session target widened in revision 11; revisions 12 through 26 (`OPUS-R14-*`/`OPUS-R16-*`/`OPUS-R18-*`/`OPUS-R20-*`/`WF8B-S1-001`/`OPUS-R25-*`/`OPUS-R26-*`/`OPUS-R27-*`/`OPUS-R28-*`/`GPT-R29-*`/`WF8B-002`/`GPT-R36-*`/`GPT-R37-*`/`GPT-R38-*`/`GPT-R39-*`) touched no checkpoint's size or dependency, only `PLAN_STAGE_PROTECTED`/`PLAN_STAGE_EXCLUDED_*` classification (and, since revision 16, how that classification is *derived* per work item — `D-Fingerprint-Generalization`), the registry JSON's own `plan_revision` field, and requirements owned by existing checkpoints; complexity scale defined; this table is a generated view of `docs/ai-workflow/registry/workflow-v2-1-core-registry.json`, D-Registry). **Revision 22** (`D-Scoped-Remediation-Acceptance`) adds `WFR-53`-`WFR-57`, owned by `WF4c`/`WF4a-ii`/`WF2` — same pattern as `WF8B-S1-001`'s own `WFR-47`-`WFR-52` (owned by `WF4a-i`). **Revision 23** (`GPT-R36-001`/`-002`/`-003`) amends `WFR-53`/`WFR-56` and adds `WFR-58`/`WFR-59`, all owned by `WF4c`. **Revision 24** (`GPT-R37-001`/`-002`/`-003`/`-004`) amends `WFR-53`/`WFR-55`/`WFR-56`/`WFR-58`/`WFR-59` in place (no new requirement added or renumbered), all owned by `WF4c`. **Revision 25** (`GPT-R38-001`/`-002`/`-003`) amends `WFR-58`/`WFR-59` in place and adds `WFR-60`, owned by `WF4c` (`WFR-58`/`-59`) and `WF4c`/`WF-M8b` jointly (`WFR-60`) — no checkpoint's own name/scope text changes, including `WF8b`'s own row below, unchanged. **Revision 26** (`GPT-R39-001`/`-002`) amends `WFR-58`/`WFR-59`/`WFR-60` in place (no new requirement added or renumbered; `WFR-56`'s schema itself is untouched), owned by `WF4c` (`WFR-58`/`-59`) and `WF4c`/`WF-M8b` jointly (`WFR-60`) — no checkpoint's own name/scope text changes. **Revision 28** (self-discovered, `WF8B-003`) adds `WFR-61`, owned by `WF4c` — same continued-scope pattern as every `WF8b` revision since 21; no checkpoint's own name, scope, size, or dependency changes (revision 27 added no new requirement, so this note continues directly from revision 26). **Revision 29** (`GPT-R45-001`/`-002`/`-003`/`-004`) amends `WFR-53`/`WFR-61` in place and adds `WFR-62`, owned by `WF4c` — same continued-scope pattern; no checkpoint's own name, scope, size, or dependency changes. **Revision 30** (`GPT-R46-001`/`-002`/`-003`) amends `WFR-61`/`WFR-62` in place (no new requirement added or renumbered), owned by `WF4c` — same continued-scope pattern; no checkpoint's own name, scope, size, or dependency changes. **Revision 31** (`GPT-R47-001`/`-002`/`-003`) amends `WFR-61`/`WFR-62` in place again (no new requirement added or renumbered), owned by `WF4c` — same continued-scope pattern; no checkpoint's own name, scope, size, or dependency changes. **Revision 32** (`GPT-R48-001`/`-002`/`-003`) touches no `WFR` row's description text at all — the three fixes are in `D-States`/`D-Commit-Provenance` prose and `WFR-62`'s verification column only — owned by `WF4c`; no checkpoint's own name, scope, size, or dependency changes. **Revision 33** (`GPT-R49-001`/`-002`/`-003`/`-004`) amends `WFR-61`/`WFR-62` in place (no new requirement added, removed, or renumbered — still 62 rows), owned by `WF4c` — same continued-scope pattern; no checkpoint's own name, scope, size, or dependency changes; `workflow-v2-1-core-mapping.json`'s `WFR-61`/`WFR-62` descriptions amended to match. **Revision 34** (`GPT-R50-001`/`-002`/`-003`) amends `WFR-61`/`WFR-62` in place again (no new requirement added, removed, or renumbered — still 62 rows), owned by `WF4c` — same continued-scope pattern; no checkpoint's own name, scope, size, or dependency changes; `workflow-v2-1-core-mapping.json`'s `WFR-61`/`WFR-62` descriptions amended to match (re-verified byte/normalization-equivalent by item 166's own conformance function, mechanically). **Revision 35** (`GPT-R51-001`/`-002`/`-003`/`-004`) amends `WFR-19`/`WFR-61`/`WFR-62` in place (no new requirement added, removed, or renumbered — still 62 rows), owned by `WF4a-ii` (`WFR-19`) and `WF4c` (`WFR-61`/`WFR-62`) — same continued-scope pattern; no checkpoint's own name, scope, size, or dependency changes; `workflow-v2-1-core-mapping.json`'s `WFR-19`/`WFR-61`/`WFR-62` descriptions amended to match. **Revision 36** (`GPT-R52-001`/`-002`/`-003`/`-004`/`-005`) touches no `WFR` row's description text except `WFR-62`'s acceptance/test column (`GPT-R52-004`) — the other three fixes (`GPT-R52-001`/`-002`/`-003`) are in `D-Commit-Provenance`/`D-Approval-Commits`/`D-States` prose only, and `GPT-R52-005` is a missing-test amendment — owned by `WF4c`; no checkpoint's own name, scope, size, or dependency changes; `workflow-v2-1-core-mapping.json`'s `WFR-62` description amended to match. **Revision 37** (`GPT-R53-001`/`-002`/`-003`) amends `WFR-19`/`WFR-61` in place (no new requirement added, removed, or renumbered — still 62 rows), owned by `WF4a-ii` (`WFR-19`) and `WF4c` (`WFR-61`) — no checkpoint's own name, scope, size, or dependency changes; `workflow-v2-1-core-mapping.json`'s `WFR-19`/`WFR-61` descriptions amended to match. **Revision 38** (`GPT-R54-001`/`-002`/`-003`) amends `WFR-19`/`WFR-61`/`WFR-62` in place (no new requirement added, removed, or renumbered — still 62 rows), owned by `WF4a-ii` (`WFR-19`) and `WF4c` (`WFR-61`/`WFR-62`) — `WFR-61` additionally gains `WF5` as a second owning checkpoint (the atomic bundle-file-publication contract is bundle-mechanics work squarely within `WF5`'s existing scope, not a new checkpoint or a size/dependency change to either `WF4c` or `WF5`); `workflow-v2-1-core-mapping.json`'s `WFR-19`/`WFR-61`/`WFR-62` descriptions amended to match and `WFR-61`'s `checkpoint_ids` widened from `["WF4c"]` to `["WF4c", "WF5"]`. **Revision 39** (`GPT-R55-001`/`-002`/`-003`/`-004`) amends `WFR-19`/`WFR-61` in place (no new requirement added, removed, or renumbered — still 62 rows), owned by `WF4a-ii` (`WFR-19`) and `WF4c`/`WF5` (`WFR-61`, `checkpoint_ids` unchanged from revision 38) — no checkpoint's own name, scope, size, or dependency changes; `GPT-R55-003`/`-004` touch acceptance criterion 31 and missing-test items 14/27, not any `WFR` row's description text; `workflow-v2-1-core-mapping.json`'s `WFR-19`/`WFR-61` descriptions amended to match. **Revision 40** (`GPT-R56-001`/`-002`/`-003`/`-004`) amends `WFR-61`'s acceptance/test column only (no new requirement added, removed, or renumbered — still 62 rows; the requirement's own description column is unaffected — the migration, archive-dereferencing, reader-snapshot, and pin-monotonicity fixes are all `D-Approval-Commits`/`D3`/`D2a` mechanism detail the description column references by contract name rather than restates, exactly as it already did for revision 39's own symlink-primitive change), owned by `WF4c`/`WF5` (`checkpoint_ids` unchanged from revision 38) — no checkpoint's own name, scope, size, or dependency changes; `WFR-19` is untouched this revision (`GPT-R56-004`'s pin-monotonicity fix lives entirely in `D3`'s validator rule and `D2a`'s cross-reference, not in either gate's entry condition); `GPT-R56-005` touches only bundle evidence artifacts and this plan's own prior `GPT-R55-005` disposition-text precision, not any `WFR` row's description text; `workflow-v2-1-core-mapping.json`'s `WFR-61` description requires no change — independently re-verified, zero mismatches across all 62 rows (see `TEST_RESULTS.md`). **Revision 41** (`GPT-R57-001`/`-002`/`-003`/`-004`/`-005`) amends `WFR-61`'s acceptance/test column only (no new requirement added, removed, or renumbered — still 62 rows; the requirement's own description column is unaffected — the version-store parent-directory, staging-namespace, legacy-validation, symlink-preflight, and pinned-archive fixes are all `D-Approval-Commits` mechanism detail the description column references by contract name rather than restates, exactly as revisions 39/40 already did for their own symlink-primitive/migration changes), owned by `WF4c`/`WF5` (`checkpoint_ids` unchanged from revision 38) — no checkpoint's own name, scope, size, or dependency changes; `WFR-19` is untouched this revision, same as revision 40; `workflow-v2-1-core-mapping.json`'s `WFR-61` description requires no change — independently re-verified, zero mismatches across all 62 rows (see `TEST_RESULTS.md`).
 
@@ -21272,7 +30161,7 @@ After WF8b: existing, unmodified `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` →
 `AWAITING_FUNCTIONAL_REVIEW` → `AWAITING_USER_ACCEPTANCE` →
 `MILESTONE_COMPLETE` gate sequence.
 
-## Missing tests (revision 62 — clean, continuous numbering — items 1-44 from revision 7, 45-54 from revision 8, 55-78 from revision 9, 79-93 from revision 10, 94-99 from revision 11, 100-116 from revision 12, 117-124 from revision 13, 125-137 from revision 14, 138-140 from revision 15, 141-160 from revision 16/17, 161-163 from revision 18, 164-166 from revision 19, 167-179 from revision 22 (`WF8B-002`), 180-186 from revision 23 (`GPT-R36-*`), 187-190 from revision 24 (`GPT-R37-*`), 191-196 from revision 25 (`GPT-R38-*`), 197-206 from revision 26 (`GPT-R39-*`), 207-214 from revision 27 (`GPT-R40-*`), 215-230 from revision 28, self-discovered (`WF8B-003`), 231-244 from revision 29 (`GPT-R45-*`), 245-252 from revision 30 (`GPT-R46-*`, item 242 replaced in place, not renumbered), 253-259 from revision 31 (`GPT-R47-*`, item 250 replaced in place, not renumbered), 260-261 from revision 32 (`GPT-R48-*`), 262-272 from revision 33 (`GPT-R49-*`), 273-281 from revision 34 (`GPT-R50-*`, items 242, 255, 266, 269 amended in place), 282-291 from revision 35 (`GPT-R51-*`, item 12 amended in place), 292-296 from revision 36 (`GPT-R52-*`, item 30 amended in place), 297-303 from revision 37 (`GPT-R53-*`, items 12, 224, 227, 277, 286, 291 amended in place), 304-318 from revision 38 (`GPT-R54-*`, items 12, 297, 298 amended in place — see "WF8b finding disposition (revision 37 → 38)"), 319-322 from revision 39 (`GPT-R55-*`, items 14, 27 amended in place — see "WF8b finding disposition (revision 38 → 39)"), 323-328 from revision 40 (`GPT-R56-*`, no item amended in place — see "WF8b finding disposition (revision 39 → 40)"), 329-333 from revision 41 (`GPT-R57-*`, items 323-324 amended in place to match the new unified migration/staging model, item 325 amended in place for wording only — see "WF8b finding disposition (revision 40 → 41)"), 334 from revision 42 (`GPT-R58-*`, items 314, 315, 317, 330 amended in place — see "WF8b finding disposition (revision 41 → 42)"), 335-336 from revision 43 (`GPT-R59-*`, items 316, 324, 330, 334 amended in place — see "WF8b finding disposition (revision 42 → 43)"), 337 from revision 44 (`GPT-R60-*`, items 324, 330, 335 amended in place — see "WF8b finding disposition (revision 43 → 44)"), 338 from revision 45 (`GPT-R61-*`, items 324, 330, 335, 337 amended in place — see "WF8b finding disposition (revision 44 → 45)"), 339-341 from revision 46 (`GPT-R62-*`, item 335 extended with (h)-(k) — see "WF8b finding disposition (revision 45 → 46)"), 342 from revision 47 (`GPT-R63-*`, item 335 extended with (l)-(p) — see "WF8b finding disposition (revision 46 → 47)"), 343 from revision 48 (`GPT-R64-*`, item 339 amended in place to cover both already-live permissive callers — see "WF8b finding disposition (revision 47 → 48)"), 344 from revision 49 (`GPT-R65-*`, no item amended in place — see "WF8b finding disposition (revision 48 → 49)"), 345-347 from revision 50 (`GPT-R67-*`, no item amended in place — see "WF8b finding disposition (revision 49 → 50)"), 348 from revision 51 (`GPT-R68-*`, item 347 amended in place — see "WF8b finding disposition (revision 50 → 51)"), no new numbered items in revision 52 (`GPT-R69-*`, item 348 strengthened in place to require `WORKFLOW_STATE.json` non-mutation coverage and to correct its step cross-references — see "WF8b finding disposition (revision 51 → 52)"), no new numbered items in revision 53 (`GPT-R70-*`, item 348 strengthened in place again for the pre-commit declaration pin and the amend-based recovery — see "WF8b finding disposition (revision 52 → 53)"), no new numbered items in revision 54 (`GPT-R71-*`, item 348 extended in place with sub-scenarios (k)-(p) for the Git index transaction — see "WF8b finding disposition (revision 53 → 54)"), 349-352 from revision 55 (`GPT-R72-*`, item 348 extended in place with sub-scenarios (q)-(z) for the approval-transaction failure-atomicity contract and item 347 extended in place so the permanent command must carry that contract before this bridge is retired — see "WF8b finding disposition (revision 54 → 55)"), 353 from revision 56 (`GPT-R73-*`, the canonical `WORKFLOW_STATE.json` serialization the exact expected-post-state binding depends on; item 348 extended in place with sub-scenarios (aa)-(jj) for exclusive journal acquisition, the index-pinned state write and its structural protection of the currently-installed `/bootstrap-workflow-v2`, the expected-post-state binding, the committed-state-bytes assertion, step 8b's materialization, and the interruption-idempotent amend recovery; items 347, 349, 350 and 352 extended or rewritten in place for the same contract — see "WF8b finding disposition (revision 55 → 56)"), 354 from revision 57 (`GPT-R74-*`, the `D1` shared-state serialization primitive; item 348 extended in place with sub-scenarios (kk)-(nn) for durable transaction ownership, explicit takeover, the never-merge materialization, and the exhaustive post-amend verification set, and its (cc)/(dd)/(hh)/(jj) sub-scenarios rewritten in place for the link-publication and ownership contracts; items 347, 349, 350 and 352 extended in place for the same contract — see "WF8b finding disposition (revision 56 → 57)"), 355 from revision 58 (`GPT-R75-*`, checkpoint-reachability conformance; item 348 extended in place with sub-scenarios (oo)/(pp) for the transaction mutation/handoff guard and the temporary state-writer quiescence window; item 354 reassigned from already-`COMPLETE` `WF4a-iii` to `WF8b` continued scope and its writer enumeration corrected from eight to twelve; items 347, 349, 352 and 353 extended in place for the same contract, with item 347's stale revision-56 `flock` acquisition wording corrected to revision 57's `os.link` publication — see "WF8b finding disposition (revision 57 → 58)"), 356 from revision 59 (`GPT-R76-*`, `D-Completion-Obligations` enforcement; item 354 rewritten around the process-scoped `flock` critical section and its new `WFO-STATE-SERIALIZATION` success fact; item 355 rewritten after its revision-58 completion claim was withdrawn; item 348 extended in place with sub-scenarios (qq)/(rr) for the widened non-breakable guard set and delayed-operation ordering; item 347 extended in place — see "WF8b finding disposition (revision 58 → 59)"), 357 from revision 60 (`GPT-R77-*`, the single dynamic state-writer discovery implementation and the identity it binds; item 354(c)/(d) rewritten in place around live discovery and a gate-derived verdict, replacing revision 59's self-asserted evidence record; item 356's (a)/(b)/(c)/(h)/(i) sub-scenarios rewritten in place for the derived-verdict classifications and (k)-(p) added for caller-supplied-identity refusal, accepted-identity binding, the terminal audit record, re-entrancy against the held state lock, behavioural determinism and replace-object hardening; item 347 extended in place — see "WF8b finding disposition (revision 59 → 60)"), 358-359 from revision 61 (`GPT-R78-*`, the verifier-authority binding to implementation-stage technical approval and the implementation-stage classification totality it depends on; item 354(d) amended in place so the derivation is a pure function of `(obligation_id, subject_identity, verifier_identity)` rather than of `(obligation_id, C)`; item 356 extended in place with sub-scenarios (q)-(v) for verifier authority, re-approval eligibility, excluded-commit non-staleness, incomplete-authority refusal, recorded-verifier historical replay and the extended terminal audit record; item 348 extended in place with sub-scenario (ss) for the temporary bridge's single quiescence rule; item 347 extended in place so the permanent command carries verifier authority, identity pinning and the fall-back rule, and is the sole retirement point — see "WF8b finding disposition (revision 60 → 61)"), 360-361 from revision 62 (`GPT-R79-*`, the durable technical-approval provenance the verifier authority is sourced from and the execution-complete verifier dependency closure it materializes; item 354(d) amended in place so the authority resolves through the owner's durable `Workflow-Technical-Approval` commit rather than through `approval_is_current(...)` alone and the verifier is the complete closure rather than a single file; item 356 extended in place with sub-scenarios (w)-(z) for durable approval provenance, live-record non-authority, verifier execution closure and executable replay; item 358(a)/(b) rewritten in place and (c)/(e) extended in place for the same contract; item 359's scope corrected in place from one unclassified prefix to two after an exhaustive re-derivation over all 85 changed paths; item 347 extended in place so the permanent command resolves the same durable authority — see "WF8b finding disposition (revision 61 → 62)") — no new numbered items in revision 20 or 21; items 161, 166 corrected/extended in revision 21 (`GPT-R29-*`); items 170, 171, 176, 178, 182-186 amended in revision 24; item 189 amended in revision 26 — forward-looking obligations owed to `WF8b`'s continued scope, now including items 167-361 (**revision 58, `GPT-R75-003`**: extended from `167-353`, which stopped one item short of revision 57's own new item 354 and left it owned only by already-`COMPLETE` `WF4a-iii`; item 355 makes the range's upper bound equalling the list's highest item a checked conformance property rather than an editing convention); see the note under "Round 6 finding disposition" above)
+## Missing tests (revision 73 — clean, continuous numbering — items 1-44 from revision 7, 45-54 from revision 8, 55-78 from revision 9, 79-93 from revision 10, 94-99 from revision 11, 100-116 from revision 12, 117-124 from revision 13, 125-137 from revision 14, 138-140 from revision 15, 141-160 from revision 16/17, 161-163 from revision 18, 164-166 from revision 19, 167-179 from revision 22 (`WF8B-002`), 180-186 from revision 23 (`GPT-R36-*`), 187-190 from revision 24 (`GPT-R37-*`), 191-196 from revision 25 (`GPT-R38-*`), 197-206 from revision 26 (`GPT-R39-*`), 207-214 from revision 27 (`GPT-R40-*`), 215-230 from revision 28, self-discovered (`WF8B-003`), 231-244 from revision 29 (`GPT-R45-*`), 245-252 from revision 30 (`GPT-R46-*`, item 242 replaced in place, not renumbered), 253-259 from revision 31 (`GPT-R47-*`, item 250 replaced in place, not renumbered), 260-261 from revision 32 (`GPT-R48-*`), 262-272 from revision 33 (`GPT-R49-*`), 273-281 from revision 34 (`GPT-R50-*`, items 242, 255, 266, 269 amended in place), 282-291 from revision 35 (`GPT-R51-*`, item 12 amended in place), 292-296 from revision 36 (`GPT-R52-*`, item 30 amended in place), 297-303 from revision 37 (`GPT-R53-*`, items 12, 224, 227, 277, 286, 291 amended in place), 304-318 from revision 38 (`GPT-R54-*`, items 12, 297, 298 amended in place — see "WF8b finding disposition (revision 37 → 38)"), 319-322 from revision 39 (`GPT-R55-*`, items 14, 27 amended in place — see "WF8b finding disposition (revision 38 → 39)"), 323-328 from revision 40 (`GPT-R56-*`, no item amended in place — see "WF8b finding disposition (revision 39 → 40)"), 329-333 from revision 41 (`GPT-R57-*`, items 323-324 amended in place to match the new unified migration/staging model, item 325 amended in place for wording only — see "WF8b finding disposition (revision 40 → 41)"), 334 from revision 42 (`GPT-R58-*`, items 314, 315, 317, 330 amended in place — see "WF8b finding disposition (revision 41 → 42)"), 335-336 from revision 43 (`GPT-R59-*`, items 316, 324, 330, 334 amended in place — see "WF8b finding disposition (revision 42 → 43)"), 337 from revision 44 (`GPT-R60-*`, items 324, 330, 335 amended in place — see "WF8b finding disposition (revision 43 → 44)"), 338 from revision 45 (`GPT-R61-*`, items 324, 330, 335, 337 amended in place — see "WF8b finding disposition (revision 44 → 45)"), 339-341 from revision 46 (`GPT-R62-*`, item 335 extended with (h)-(k) — see "WF8b finding disposition (revision 45 → 46)"), 342 from revision 47 (`GPT-R63-*`, item 335 extended with (l)-(p) — see "WF8b finding disposition (revision 46 → 47)"), 343 from revision 48 (`GPT-R64-*`, item 339 amended in place to cover both already-live permissive callers — see "WF8b finding disposition (revision 47 → 48)"), 344 from revision 49 (`GPT-R65-*`, no item amended in place — see "WF8b finding disposition (revision 48 → 49)"), 345-347 from revision 50 (`GPT-R67-*`, no item amended in place — see "WF8b finding disposition (revision 49 → 50)"), 348 from revision 51 (`GPT-R68-*`, item 347 amended in place — see "WF8b finding disposition (revision 50 → 51)"), no new numbered items in revision 52 (`GPT-R69-*`, item 348 strengthened in place to require `WORKFLOW_STATE.json` non-mutation coverage and to correct its step cross-references — see "WF8b finding disposition (revision 51 → 52)"), no new numbered items in revision 53 (`GPT-R70-*`, item 348 strengthened in place again for the pre-commit declaration pin and the amend-based recovery — see "WF8b finding disposition (revision 52 → 53)"), no new numbered items in revision 54 (`GPT-R71-*`, item 348 extended in place with sub-scenarios (k)-(p) for the Git index transaction — see "WF8b finding disposition (revision 53 → 54)"), 349-352 from revision 55 (`GPT-R72-*`, item 348 extended in place with sub-scenarios (q)-(z) for the approval-transaction failure-atomicity contract and item 347 extended in place so the permanent command must carry that contract before this bridge is retired — see "WF8b finding disposition (revision 54 → 55)"), 353 from revision 56 (`GPT-R73-*`, the canonical `WORKFLOW_STATE.json` serialization the exact expected-post-state binding depends on; item 348 extended in place with sub-scenarios (aa)-(jj) for exclusive journal acquisition, the index-pinned state write and its structural protection of the currently-installed `/bootstrap-workflow-v2`, the expected-post-state binding, the committed-state-bytes assertion, step 8b's materialization, and the interruption-idempotent amend recovery; items 347, 349, 350 and 352 extended or rewritten in place for the same contract — see "WF8b finding disposition (revision 55 → 56)"), 354 from revision 57 (`GPT-R74-*`, the `D1` shared-state serialization primitive; item 348 extended in place with sub-scenarios (kk)-(nn) for durable transaction ownership, explicit takeover, the never-merge materialization, and the exhaustive post-amend verification set, and its (cc)/(dd)/(hh)/(jj) sub-scenarios rewritten in place for the link-publication and ownership contracts; items 347, 349, 350 and 352 extended in place for the same contract — see "WF8b finding disposition (revision 56 → 57)"), 355 from revision 58 (`GPT-R75-*`, checkpoint-reachability conformance; item 348 extended in place with sub-scenarios (oo)/(pp) for the transaction mutation/handoff guard and the temporary state-writer quiescence window; item 354 reassigned from already-`COMPLETE` `WF4a-iii` to `WF8b` continued scope and its writer enumeration corrected from eight to twelve; items 347, 349, 352 and 353 extended in place for the same contract, with item 347's stale revision-56 `flock` acquisition wording corrected to revision 57's `os.link` publication — see "WF8b finding disposition (revision 57 → 58)"), 356 from revision 59 (`GPT-R76-*`, `D-Completion-Obligations` enforcement; item 354 rewritten around the process-scoped `flock` critical section and its new `WFO-STATE-SERIALIZATION` success fact; item 355 rewritten after its revision-58 completion claim was withdrawn; item 348 extended in place with sub-scenarios (qq)/(rr) for the widened non-breakable guard set and delayed-operation ordering; item 347 extended in place — see "WF8b finding disposition (revision 58 → 59)"), 357 from revision 60 (`GPT-R77-*`, the single dynamic state-writer discovery implementation and the identity it binds; item 354(c)/(d) rewritten in place around live discovery and a gate-derived verdict, replacing revision 59's self-asserted evidence record; item 356's (a)/(b)/(c)/(h)/(i) sub-scenarios rewritten in place for the derived-verdict classifications and (k)-(p) added for caller-supplied-identity refusal, accepted-identity binding, the terminal audit record, re-entrancy against the held state lock, behavioural determinism and replace-object hardening; item 347 extended in place — see "WF8b finding disposition (revision 59 → 60)"), 358-359 from revision 61 (`GPT-R78-*`, the verifier-authority binding to implementation-stage technical approval and the implementation-stage classification totality it depends on; item 354(d) amended in place so the derivation is a pure function of `(obligation_id, subject_identity, verifier_identity)` rather than of `(obligation_id, C)`; item 356 extended in place with sub-scenarios (q)-(v) for verifier authority, re-approval eligibility, excluded-commit non-staleness, incomplete-authority refusal, recorded-verifier historical replay and the extended terminal audit record; item 348 extended in place with sub-scenario (ss) for the temporary bridge's single quiescence rule; item 347 extended in place so the permanent command carries verifier authority, identity pinning and the fall-back rule, and is the sole retirement point — see "WF8b finding disposition (revision 60 → 61)"), 360-361 from revision 62 (`GPT-R79-*`, the durable technical-approval provenance the verifier authority is sourced from and the execution-complete verifier dependency closure it materializes; item 354(d) amended in place so the authority resolves through the owner's durable `Workflow-Technical-Approval` commit rather than through `approval_is_current(...)` alone and the verifier is the complete closure rather than a single file; item 356 extended in place with sub-scenarios (w)-(z) for durable approval provenance, live-record non-authority, verifier execution closure and executable replay; item 358(a)/(b) rewritten in place and (c)/(e) extended in place for the same contract; item 359's scope corrected in place from one unclassified prefix to two after an exhaustive re-derivation over all 85 changed paths; item 347 extended in place so the permanent command resolves the same durable authority — see "WF8b finding disposition (revision 61 → 62)"), 362-367 from revision 63, self-discovered (`WF8B-S14-001`, the cross-worktree checkpoint-ownership contract `D-Checkpoint-Ownership` introduces: the defect as a standing regression with its own pre-fix control arm, acquisition/release ordering with control arms, the crash windows, record integrity against hostile and accidental inputs, the no-automatic-staleness rule and the explicit takeover, and adoption as the migration path; no earlier item is amended in place — see "WF8b finding disposition (revision 62 → 63)"), 368-372 from revision 64 (`GPT-R81-*` plus this revision's own pass-11 finding: the ownership fencing contract and its six required interleavings, the observation-bound takeover authorization, the terminal no-checkpoint outcome proved through the real command procedure, the single sanctioned plan-revision publication writer and its fail-closed detection, and the mutation guard's own failure surface; item 363(d) amended in place so the null-checkpoint obligation is discharged by running the real step-1 procedure rather than by inspecting a helper's return value — see "WF8b finding disposition (revision 63 → 64)"), 373 from revision 65 (`OPUS-R82-001`/`-002`, the `"destructive"` class stated at the strength the mechanism provides and the abandoned-guard recovery; items 365(c) and 372(f) rewritten in place — see "WF8b finding disposition (revision 64 → 65)"), no new numbered items in revision 66 (`OPUS-R83-001`/`-002`; items 365, 372(d) and 373 extended in place for atomic guard removal and the undecidable-claim conjunction) or revision 67 (`OPUS-R84-001`; items 363(d), 364 and 372(d) amended or extended in place for `CONTINUE_CLAIM`'s reachability and the absent-`lease_id` refusal), 374 from revision 68 (`OPUS-R85-001`/`-002`, the local identity record's lifecycle as the design's only evidence of worktree instance; items 363(d) and 364 rewritten in place after revision 67's self-owned-claim proof was withdrawn, and items 372(d) and 373 extended in place — see "WF8b finding disposition (revision 67 → 68)"), no new numbered items in revision 69 (`OPUS-R86-001` through `-005`; item 374(c) and (d) rewritten in place after revision 68's inertness premise and single-sample exhaustiveness claim were both falsified, (e) and (f) rewritten in place for the rotate-before-refuse defect and the authorized identity repair, (g) added in place for the identity document's serialization, and item 363 extended in place with adoption's own origination ordering and its control arm — see "WF8b finding disposition (revision 68 → 69)"), no new numbered items in revision 70 (`OPUS-R87-001` through `-006`; item 374(c) rewritten in place a second time after revision 69's own origination guard was reproduced bypassable by ordinary Git commands and fail-open on an undecidable read, and extended with the admission-direction, fail-closed-partition, publication-time and live-shape conformance arms; item 374(d) extended in place with the identity path-kind axis and the reader/observer agreement invariant; items 374(e) and (f) extended in place for the required identity observation and the authorization-side repair property; item 373(d) extended in place for the absent-claim takeover's uncommitted-work evidence; and item 363 extended in place for the origination *reference* rather than only the origination test — see "WF8b finding disposition (revision 69 → 70)"), 375 from revision 71 (`OPUS-R88-001` through `-005`; item 374(c.v) extended in place for the scalar-level partition and the tree-established absence test, (c.vii) extended in place for the refusal's own evidence components and the takeover literal's deliberate independence from them, and (c.viii) added in place for reference completeness after revision 70's `git rev-list --all -- <path>` was reproduced admitting through an ordinary merge — see "WF8b finding disposition (revision 70 → 71)"), 376 from revision 72 (`OPUS-R89-001`, the generator-side stage-document binding; item 374(c.v) extended in place a third time for the container-absence/read-failure totality and the table↔implementation row-for-row agreement after four measured divergences, two of them fail-open; item 375(a) and (c) extended in place for linked-worktree removal, worktree pruning and `git gc`'s own worktree-pruning step, with the boundary asserted in both directions; item 375(g) extended in place for the registry-side refusal's named evidence source, its retired-before-started scope boundary and the in-place-redefinition control arm — see "WF8b finding disposition (revision 71 → 72)"), no new numbered items in revision 73 (`OPUS-R90-001` through `-004`; item 376 extended in place with sub-arms (j)-(m) for the pinned-read window, the pre-`files/` window, the withdrawn-artifact disposition and the two plan-stage commands' wording conformance; item 375(g) extended in place with the two identity queries' undecidable-commit, escape, reduction and container-shape arms; item 166 corrected from 65 rows to 67 — its **fourth** recurrence of the same drift — and extended in place so the row count itself becomes a derived conformance property with no prose count trusted as a source — see "WF8b finding disposition (revision 72 → 73)") — no new numbered items in revision 20 or 21; items 161, 166 corrected/extended in revision 21 (`GPT-R29-*`); items 170, 171, 176, 178, 182-186 amended in revision 24; item 189 amended in revision 26 — forward-looking obligations owed to `WF8b`'s continued scope, now including items 167-376 (**revision 58, `GPT-R75-003`**: extended from `167-353`, which stopped one item short of revision 57's own new item 354 and left it owned only by already-`COMPLETE` `WF4a-iii`; item 355 makes the range's upper bound equalling the list's highest item a checked conformance property rather than an editing convention. **Revision 68, `OPUS-R85-001`**: extended from `167-372`, which had gone stale by two revisions — item 373 landed in revision 65 and item 374 in this one — exactly the drift item 355 exists to catch, corrected here rather than left for the conformance test to find); see the note under "Round 6 finding disposition" above)
 
 Items already implemented and passing (prototype rounds, `scripts/workflow_fingerprint_test.py`/`_demo_test.py`) are marked **done**; the rest are checkpoint obligations.
 
@@ -21476,7 +30365,7 @@ because each exercises a scope distinct from what 141-163 already cover:
 
 164. **(new, `OPUS-R27-002`; extended, `OPUS-R28-001`)** `approval_is_current(stage="implementation")` **and** `verify_post_approval_manifest_match(stage="implementation")`, each exercised against a second work item, load that item's own `<id>-artifacts.json` — via `fingerprint.artifacts_path_for_work_item(work_item_id)`, never `DEFAULT_ARTIFACTS_PATH`: deleting the second item's own self-referential `implementation_stage.protected_paths` entry changes only its own implementation-stage `review_content_id` and stales only its own `technical_approval`; editing `workflow-v2-1-core`'s own artifacts file leaves the second item's approval untouched. `verify_post_approval_manifest_match` is the caller with no other coverage in this item — it is the one `/approve-review` step 6a actually invokes post-commit, for either stage (`OPUS-R27-002`, `OPUS-R28-001`, integration/approval-binding) → **owed to `WF8b`**;
 165. **(new, `OPUS-R27-003`; extended, `OPUS-R28-004`/`-006`)** `scripts/prepare-ai-review.sh <base> plan <id>` refuses, before generating any bundle content, when the resolved item's own declared `base_commit` (`WORKFLOW_STATE.json`'s `work_items[<id>].base_commit`) disagrees with the resolved `BASE_SHA` (not the raw `<base>` argument — an abbreviated SHA or symbolic ref that `git rev-parse` resolves correctly must still pass; only a genuine disagreement between the two resolved commits refuses), naming both resolved values — the content↔identity binding fail-closed matrix condition 13 already defines, applied here as an early script-level refusal via `fingerprint.resolve_plan_stage_metadata` (never a second, ad hoc metadata reader) rather than only a downstream manifest-write check. **Extended, `OPUS-R28-004`**: migration step 8a's relocation, run against a byte-copy of this repository's own real `.ai-review/current`/`review-bundle.tar.gz`, (a) refuses with both paths named when the destination already exists non-empty rather than nesting silently; (b) the post-move verification catches a simulated partial move (destination missing an expected file) and stops before the rebinding write, leaving the source-or-partial-destination state diagnosable rather than binding it (`OPUS-R27-003`, `OPUS-R28-004`, `OPUS-R28-006`, integration/bundle + negative) → **owed to `WF8b`**;
-166. **(new, `OPUS-R27-001`; scope reconciled with criterion 19, `OPUS-R28-003`; ownership reassigned, `GPT-R29-003`; row-count and drift corrected, revision 31, `GPT-R47-004`)** A grep-based conformance test over `docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json` and the Requirements traceability table above asserts that every `WFR-*` requirement's JSON `description` — **the description field only, never the Checkpoint column, which may legitimately cite a design-doc section instead of or alongside a registry checkpoint id and is explicitly out of scope for this test** — matches its rendered table row (backtick markup, `**` bold markup, em dash normalized to `--`, and trailing `(corrected/extended/new OPUS-R.../GPT-R...)` historical-citation parentheticals stripped from the table row before comparison, case-insensitive — the same normalization every other requirement's JSON description already applies implicitly, confirmed by inspection: no existing `description` field embeds a round citation). **The set now has 62 rows, `WFR-01` through `WFR-62`** (not the 52 rows this item's text described as of revision 19 — `WFR-53` through `WFR-60` were added by revisions 22/23/25's `D-Scoped-Remediation-Acceptance` work, `WFR-61`/`WFR-62` by revisions 28/29's `WF8B-003` round-identity redesign; `GPT-R47-004` found this item's own historical "52 rows" framing had gone stale without being corrected at either addition, and found `WFR-53`'s description had drifted from its table row in the process — both independently fixed as of this revision: all 62 rows are re-verified byte/normalization-equivalent by this same revision, mechanically, using this test's own normalization function, not by inspection). This item is the **separate, ongoing** automated regression test that keeps them synced going forward — it does not re-do the one-time sync, which is complete as of this revision — enforcing the "generated view" claim rather than merely asserting it, the same class as items 108/109/123, and what would have caught `OPUS-R27-001` during self-review (`OPUS-R27-001`, `OPUS-R28-003`, documentation-consistency lint) → **owed to `WF8b`** (corrected, `GPT-R29-003`: `OPUS-R28-003` split ownership between this item, kept with `WF8a-ii`, and criterion 19's data-correctness half, satisfied by this revision — but `WF8a-ii` is already `COMPLETE`, and checkpoint completion is never reopened to attach a new obligation to it, leaving this item with no reachable owner at all, exactly the gap the current review's own failure scenario describes: a remediation implementation could pass every other required test while this one is never added, since nothing scheduled it. Reassigned to this same `WF8b` continued-scope set that items 141-165 already belong to and included in migration step 10's required-green range alongside them — the smaller of the finding's two offered fixes, and consistent with `WF8b`, not `WF8a-ii`, being the checkpoint whose own `OPUS-R28-003` fix populated the rows this test verifies). **Also owed to `WF8b` as part of this same item (`GPT-R47-004`)**: the already-landed prototype copy of this test in `scripts/workflow_integration_test.py` currently hardcodes `self.assertEqual(len(table_rows), 60)` — stale even before this revision's 62-row count, and a magic number that will drift again on the next requirement addition regardless. `WF8b`'s implementation of this item must replace that literal with a check derived from the live requirement set itself (e.g. asserting the extraction is non-empty and `set(table_rows) == set(mapping["requirements"])`, which the test already separately asserts and which makes a hardcoded count redundant, or, if a sanity bound is kept, deriving it from `len(mapping["requirements"])` rather than a literal) — not fixed by this plan-only revision, which does not edit `scripts/` (design-only scope discipline, unchanged since revision 28).
+166. **(new, `OPUS-R27-001`; scope reconciled with criterion 19, `OPUS-R28-003`; ownership reassigned, `GPT-R29-003`; row-count and drift corrected, revision 31, `GPT-R47-004`)** A grep-based conformance test over `docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json` and the Requirements traceability table above asserts that every `WFR-*` requirement's JSON `description` — **the description field only, never the Checkpoint column, which may legitimately cite a design-doc section instead of or alongside a registry checkpoint id and is explicitly out of scope for this test** — matches its rendered table row (backtick markup, `**` bold markup, em dash normalized to `--`, and trailing `(corrected/extended/new OPUS-R.../GPT-R...)` historical-citation parentheticals stripped from the table row before comparison, case-insensitive — the same normalization every other requirement's JSON description already applies implicitly, confirmed by inspection: no existing `description` field embeds a round citation). **The set now has 67 rows, `WFR-01` through `WFR-67`** (corrected from 65 in revision 73 by `OPUS-R90-004` — `WFR-66` was added by revision 71 and `WFR-67` by revision 72 without this item's own count being updated at either, the **fourth** recurrence of this exact drift; and corrected from 62 in revision 65 by `OPUS-R82`'s validation sweep — `WFR-63` was added by revision 50 and `WFR-64`/`WFR-65` by revisions 63/64 without this item's own count being updated at any of the three, the same staleness `GPT-R47-004` had already corrected once; and not the 52 rows this item's text described as of revision 19 — `WFR-53` through `WFR-60` were added by revisions 22/23/25's `D-Scoped-Remediation-Acceptance` work, `WFR-61`/`WFR-62` by revisions 28/29's `WF8B-003` round-identity redesign; `GPT-R47-004` found this item's own historical "52 rows" framing had gone stale without being corrected at either addition, and found `WFR-53`'s description had drifted from its table row in the process — both independently fixed as of revision 31, when all 62 rows were re-verified byte/normalization-equivalent mechanically, using this test's own normalization function rather than by inspection, and all 65 are re-verified the same way in revision 65). This item is the **separate, ongoing** automated regression test that keeps them synced going forward — it does not re-do the one-time sync, which is complete as of this revision — enforcing the "generated view" claim rather than merely asserting it, the same class as items 108/109/123, and what would have caught `OPUS-R27-001` during self-review (`OPUS-R27-001`, `OPUS-R28-003`, documentation-consistency lint) → **owed to `WF8b`** (corrected, `GPT-R29-003`: `OPUS-R28-003` split ownership between this item, kept with `WF8a-ii`, and criterion 19's data-correctness half, satisfied by this revision — but `WF8a-ii` is already `COMPLETE`, and checkpoint completion is never reopened to attach a new obligation to it, leaving this item with no reachable owner at all, exactly the gap the current review's own failure scenario describes: a remediation implementation could pass every other required test while this one is never added, since nothing scheduled it. Reassigned to this same `WF8b` continued-scope set that items 141-165 already belong to and included in migration step 10's required-green range alongside them — the smaller of the finding's two offered fixes, and consistent with `WF8b`, not `WF8a-ii`, being the checkpoint whose own `OPUS-R28-003` fix populated the rows this test verifies). **Also owed to `WF8b` as part of this same item (`GPT-R47-004`)**: the already-landed prototype copy of this test in `scripts/workflow_integration_test.py` currently hardcodes `self.assertEqual(len(table_rows), 60)` — stale even before this revision's 62-row count, and a magic number that will drift again on the next requirement addition regardless. `WF8b`'s implementation of this item must replace that literal with a check derived from the live requirement set itself (e.g. asserting the extraction is non-empty and `set(table_rows) == set(mapping["requirements"])`, which the test already separately asserts and which makes a hardcoded count redundant, or, if a sanity bound is kept, deriving it from `len(mapping["requirements"])` rather than a literal) — not fixed by this plan-only revision, which does not edit `scripts/` (design-only scope discipline, unchanged since revision 28). **(extended in place, revision 68, `OPUS-R85` non-blocking observation 3)** The stale literal is asserted **first**, before the per-row description comparison, so that comparison has not actually executed since the count went stale — the standing green signal for plan↔mapping conformance has been coming from author-side sweeps under this test's own normalization functions rather than from the test itself. `WF8b`'s implementation must therefore **reorder** the two assertions as well as fix the count, so a stale sanity bound can never again mask the loop it precedes, and must assert that reordering directly (a deliberately stale bound with a conformant table is asserted to fail on the bound while the per-row loop is asserted to have run). **(extended in place, revision 73, `OPUS-R90-004`)** This item's own prose count went stale for the **fourth** time — 52 → 62 → 65 → 67, corrected by `GPT-R47-004`, `OPUS-R82`, and now `OPUS-R90-004` — which is enough recurrences to stop treating it as an editing convention. `WF8b`'s implementation must therefore also make the **row count itself** a derived conformance property rather than a literal anywhere: the count is read from the live requirement set (the plan table and `…-mapping.json`, which this test already asserts equal), and **no prose count is trusted as a source** — this item's own sentence above included, which is documentation of the current value and not an input to any check. That is the same treatment item 355(c) gives the missing-test range's upper bound, and it is the reason the drift is Optional rather than Important: the mandated fix **replaces** the literal, so the stale prose cannot propagate into the implementation. The obligation is stated here rather than as a new item because it is the same test, the same owner, and the same assertion this item already mandates re-deriving. **(extended in place, revision 76, `OPUS-R93-004`)** The mandated rewrite gains a third property alongside the derived row count and the reordered assertions: **the sync direction must be case-preserving — comparison may lowercase, generation must not.** The normalization above is case-insensitive by design, and that is correct for *comparison*: a case difference cannot express a materially different requirement, and the one channel that could hide one (`_strip_trailing_citation_parenthetical`, which drops a trailing `(...)` matching `(?i)^(corrected|extended|new)\b.*(OPUS-R|GPT-R)`) was checked row by row — all seven rows that currently exercise it strip genuine provenance and nothing normative. But a case-insensitive comparison also cannot **see** what the generation direction writes, and it has already written normalizer output into the artifact: measured with the lowercasing removed and every other normalization unchanged, **35 of 67** stored descriptions differ from their table rows by case alone, and one of them — `WFR-66` — is not a sentence-initial capital but the **fully lowercased image** of its row, finding id, design-section name and `Git` included, while `WFR-64`, `WFR-65` and `WFR-67` from adjacent revisions are all case-exact. So a case-sensitive `grep` for `OPUS-R88-004` misses `WFR-66`'s own row in the traceability artifact that exists to be searched. `WFR-66`'s description is restored to its row's exact casing as part of this revision; the standing obligation is the conformance arm: **no stored `description` may be the lowercased image of its table row when that row is not itself lowercase**, asserted with `WFR-66`'s pre-restoration value carried as the live control arm that fails it.
 
 **Items 167-179 (new, revision 22, `WF8B-002`, `D-Scoped-Remediation-Acceptance`)**:
 
@@ -21752,6 +30641,22 @@ Revision 38's items (`GPT-R54-*`), continuing the numbering:
 360. **(new, revision 62, `GPT-R79-001`)** The completion-obligation gate's technical-approval authority is **durable Git provenance**, and the ways it can be forged or faked are enumerated and refused rather than reasoned about. **(a)** The authority chain is asserted in order: recompute the implementation-stage identity at the pinned `C`; discover the `Workflow-Technical-Approval` commit carrying **that recomputed identity** for the obligation owner; require it reachable, an ancestor of `C`, and unambiguous; read `technical_approval` from the `WORKFLOW_STATE.json` that commit committed; validate that durable record on its own terms; require any live copy and the live `base_commit` to agree with it; derive the verifier census from it; execute; derive the verdict. **(b)** The **search key** is asserted to be the recomputed identity and never a record field, which is the structural reason a fabricated record is irrelevant rather than merely insufficient; a test that mutates only the live record is asserted not to change which commit is discovered. **(c)** Every fail-closed direction is exercised individually and named in the refusal — absent approval commit, unreachable/foreign-branch commit, ambiguous commits surviving the first-parent tie-break, malformed or missing committed record, `status != "CURRENT"` durably, durable `approved_review_content_id` not the recomputed identity, null/malformed `reviewed_content_commit`, empty durable manifest, absent live record, live/durable divergence on any authority-bearing field, live `base_commit` divergence, and an approval trailer naming another work item. **(d)** The **non**-refusal directions are asserted with equal weight, because a gate that only ever refuses is not a gate: commits touching only implementation-stage **excluded** paths after the approval keep it usable and leave `verifier_identity_id` unchanged; repairing a live/durable divergence restores authorization; and a fresh implementation review plus a new durable approval of the exact changed content makes a previously refused repository eligible again. **(e)** The mechanism is asserted to introduce **no new approval format and no parallel provenance system**: the discovery, ancestry and ambiguity semantics are asserted to be the existing `discover_approval_commits`/`_is_ancestor` ones, shared with plan-approval provenance, and the `AmbiguousApprovalTrailerError` is asserted to be **caught and classified**, never to escape the gate. **(f)** The durable approval commit's own SHA is asserted to be what `completion_obligations_accepted` records as `technical_approval_commit`, distinct from the record's `reviewed_content_commit`, so a later audit can name the approval **event** and not merely the content it approved → WF8b.
 
 361. **(new, revision 62, `GPT-R79-002`)** The recorded verifier is an **execution-complete repository-local dependency closure**, and its completeness is a mechanically checked property rather than a maintained list. **(a)** The closure is asserted to be **derived**, by static `ast` import analysis over the blobs at the pinned commit, seeded at the declared verifier entry point and transitively following tracked modules and packages on the declared verifier source root; the derived result for this repository is asserted to be exactly `scripts/workflow_fingerprint.py` and `scripts/workflow_state.py`, **as an observation**. **(b)** Imports inside function and class bodies are asserted to be followed, so a lazily imported dependency cannot escape the census. **(c)** Constructs static closure cannot follow are asserted to **fail closed**, not to be skipped: `importlib.import_module(...)`, a bare `__import__(...)`, `exec(...)` and relative imports each classify `VERIFIER_UNRESOLVABLE`, and today's two modules are asserted to contain none of them. **(d)** Package dependencies are asserted to contribute their whole tracked subtree and to be materialized preserving import layout, with the package's absence from the census asserted to fail closed. **(e)** Isolated execution is asserted to be the backstop that makes (a) checked rather than assumed: the census is materialized to a scratch tree and executed in a **fresh interpreter process** in isolated mode with `sys.path` reset to that tree plus the standard library, and the process asserts **from inside itself** that no loaded module resolves to the live repository. **(f)** Omitting any required dependency is asserted to fail closed with an import error rather than resolving live, asserted to still hold with `PYTHONPATH` pointed at the live `scripts/` directory, and a live module of the same name is asserted **not** to win over the recorded one. **(g)** Identity rotation is asserted in both directions: changing **any** executable verifier dependency rotates `verifier_identity_id`, while changing only a state writer leaves it byte-identical. **(h)** Census binding is asserted to handle the legitimate case the manifest cannot cover: where the durable `review_content_manifest` covers a closure path the blob at `C` must equal the approved one, and where it does not the path must be proven byte-identical at `C` and at `base_commit`, with each entry recording which source bound it — the direct regression test for `R62-S3-001`, where requiring manifest coverage unconditionally was reproduced permanently refusing a repository whose dependency had simply not changed since `base_commit`. **(i)** Historical replay is asserted to execute the recorded closure after arbitrary later history, including both live verifier modules rewritten to raise and then deleted outright; a planted `git replace` ref over a recorded blob is asserted to be defeated by `--no-replace-objects`/`GIT_NO_REPLACE_OBJECTS=1`; and a genuinely unreachable recorded blob is asserted to classify `REPLAY_UNRESOLVABLE` rather than to fall back to current code → WF8b.
+362. **(new, revision 63, `WF8B-S14-001`)** The defect itself is a standing regression test, not only a fixed bug. **(a)** Against a real two-worktree fixture where worktree A holds a checkpoint `IN_PROGRESS` with the transition **uncommitted**, worktree B's full step-1 procedure is asserted to refuse rather than to select that checkpoint as a fresh start — and the pre-fix procedure is asserted, in the same fixture, to fresh-start it, so the test proves the fixture reproduces the defect rather than merely passing. **(b)** B's refusal is asserted to leave every authoritative byte unchanged: A's `WORKFLOW_STATE.json`, A's `WORKTREE_IDENTITY.json`, A's dirty working files, both worktrees' `HEAD`s, both `git status` outputs, B's own `WORKFLOW_STATE.json`, and the claim record — byte-compared, not inspected. **(c)** B is asserted never to have required a copy of A's `WORKFLOW_STATE.json`: B's copy is asserted byte-identical to its own committed bytes throughout. **(d)** The same refusal is asserted from a third worktree, from a worktree checked out at an **older** commit than the claim, and from a linked worktree nested inside the primary checkout (this repository's own layout). **(e)** A **committed** `IN_PROGRESS` marker is asserted to have been refused even by the pre-fix procedure, which is the property that scopes this contract to the uncommitted transition `/milestone-implement` writes and excludes the trailer-derived bootstrap driver → WF8b.
+363. **(new, revision 63, `WF8B-S14-001`)** Acquisition and release ordering are asserted **with control arms**, because an ordering claim no test can fail is not a contract. **(a)** Claim-before-state: a crash between the two step-1d writes is asserted to leave the claim behind and to keep a foreign worktree refused; the **state-first** arm is asserted to let the foreign worktree fresh-start, proving the ordering load-bearing. **(b)** Release-after-durable-completion: releasing after the checkpoint commit is asserted to drop the claim only once `committed_checkpoint_status(...) == "COMPLETE"`; the **release-before-commit** arm is asserted to hand the work item to another worktree while the completion is still uncommitted. **(c)** A release that cannot complete is asserted to raise a typed ownership error with a defined recovery, never a bare `OSError`, and the next invocation from the same worktree is asserted to self-heal the leaked claim — because, and only because, the completion is durable. **(d)** **(amended in place, revision 64, `GPT-R81-003`)** Every one of `/milestone-implement`'s outcomes is asserted to name the checkpoint id it applies to, and the assertion is made by running the **real** step-1 procedure to the point of mutation rather than by inspecting a helper's return value: a `CONTINUE_CLAIM` or durable-release outcome reached while selection returns `None` is asserted to resolve to the terminal `NO_CHECKPOINT` outcome, to be unable to reach step 1d at all, to leave the state file byte-identical, and to leave the work item at the same post-checkpoint boundary the command's existing no-checkpoint path reaches; the non-final case is asserted separately to release checkpoint X and return a concrete next checkpoint Y that step 1d then claims and writes. **(extended in place, revision 67, `OPUS-R84-001`; rewritten in place, revision 68, `OPUS-R85-001`, after the mechanism the revision-67 wording assumed was withdrawn — the discipline is unchanged, what it is applied to is not)** The same real-caller discipline is required of step 1c's **single** proof of origination and of step 1d's ordering. `verify_dirty_resume_safety` is asserted **through the real step-1 procedure** to run on every contended path — claim absent, foreign or self-owned alike, adoption included — and to refuse before any authoritative mutation on each of them. A worktree whose ownership key matches the claim but whose **worktree instance does not** is asserted refused through that same caller, in both path-reuse constructions, with the post-refusal `WORKFLOW_STATE.json` asserted byte-identical and the claim record asserted untouched; the revision-67 resolver is carried as the live control arm that admits it and mutates, so the assertion fails if the withdrawal is reverted. And step 1d's identity-before-claim ordering is asserted the same way: the crash window it opens is asserted to always carry this worktree's identity record, so `CONTINUE_CLAIM` is reachable without relaxing anything, with the **claim-first** ordering carried as the control arm that reproduces the lockout. **(extended in place, revision 69, `OPUS-R86-001`)** The same real-caller discipline is required of adoption's own origination test, which is a *second* proof rather than a restatement of the first: adoption is asserted, through the real step-1 caller in a real two-worktree fixture, to refuse a checkpoint whose `IN_PROGRESS` is present in the origination reference and to admit one whose `IN_PROGRESS` is not, with the **unguarded** adoption carried as the live control arm that admits a worktree holding none of the originator's work — so the assertion fails if the guard is reverted, exactly as (a) and (b) require of the other two orderings. **(extended in place, revision 70, `OPUS-R87-001`/`-002`)** The same real-caller discipline is required of the *reference* the test is evaluated against, which revision 69 left selectable by the worktree being tested: the reference is asserted to be derived from every commit reachable from **every ref**, asserted unchanged by every ref operation the adopting worktree can perform on its own refs (`git reset --soft`/`--mixed`, `git checkout <commit> -- <path>`, `git cherry-pick -n`, `git stash pop`), and asserted to still admit an interrupted checkpoint whose transition is committed nowhere — with revision 69's `HEAD`-relative reference carried as the live control arm that admits under each of those operations and locks the true originator out. The read is asserted **fail-closed** over its own total partition, with the `return None`-on-undecidable behaviour carried as the control arm that admits, and the ordering asserted a second time at **publication** and not only at evidence time → WF8b.
+364. **(new, revision 63, `WF8B-S14-001`)** The crash windows each have a defined, asserted outcome, and none of them locks out the legitimate owner — **and that preamble is asserted in the state every work item actually starts in, not only in states a worktree reaches after it has already completed a checkpoint** (corrected, revision 67, `OPUS-R84-001`: through revision 66 this item was satisfiable only because no arm had ever been run against a worktree with no prior `WORKTREE_IDENTITY.json` entry for the work item, which is precisely the state in which the lockout occurred; the same discipline `OPUS-R82-002` and `OPUS-R83-002` established for items 372(f) and 365(c), where an obligation was rewritten to assert what the mechanism actually does rather than what it was hoped to do). **(a)** Claim published, `IN_PROGRESS` state not yet written: the owner is asserted to **continue its own acquisition**, to complete the interrupted state write, and to leave the original claim record intact rather than republishing it; a foreign worktree is asserted still refused throughout that window. **(a) is asserted for a brand-new work item in a worktree that has completed no checkpoint anywhere** — so nothing about the work item is inherited from any other worktree — **by running the real step-1 procedure to the point of mutation**, never by inspecting a helper's return value, with **the claim-first 1d ordering carried as a live control arm** that is asserted to lock the owner out, so the assertion fails if the correction is reverted (**rewritten in place, revision 68, `OPUS-R85-001`**: through revision 67 this arm required the owner to be admitted while holding *no* identity record, which is exactly the state a replacement worktree at the holder's path presents; the property being asserted is the same — the legitimate owner is never locked out of its own claim — but it is now asserted of the ordering that makes the record present, not of a relaxation that stops requiring it). **The two path-reuse constructions are asserted as first-class arms**: (i) the holder relocated by `git worktree move` and a different worktree created at the vacated path, and (ii) the holder removed and recreated at the same path **with the same name**, which is additionally asserted to reuse the dead holder's admin directory — so the assertion also records that binding the check to `worktree_git_dir` would not close it. In both, the replacement is asserted refused through the real caller with zero authoritative mutation, and **the revision-67 resolver is carried as the live control arm** that admits it, mutates state, and does so under the original holder's unrotated `owner_token`. **A fencing assertion accompanies them**: no path may leave two worktrees presenting the same `owner_token` for one claim without a recorded rotation — `takeover_count` incremented, the displaced token appended, `taken_over_from` recorded — and the replacement's only sanctioned route in is asserted to be the explicit takeover, which is asserted to satisfy all three. **A corrupt-`WORKTREE_IDENTITY.json` arm is asserted for both flavours** — unparseable bytes, and parseable but schema-invalid — asserting that step 1c refuses with the declared `CorruptJsonError` **before** any `WORKFLOW_STATE.json` write, with the revision-67 shape carried as the control arm that mutates first and then fails, in the schema-invalid case with an undeclared `TypeError`; and asserting that the corrupt record cannot survive a successful checkpoint start unreported, with the control arm's silent `RESUME`-over-it behaviour carried as the shape the assertion must fail if it holds. Four further arms make the property total. **No hand repair is required**: in that same state the work item is asserted recoverable without deleting or editing any file by hand, and `clear_malformed_guard` and `recover_abandoned_destructive_guard` are each asserted to refuse as not applicable (there is no guard). **The state a lost identity record leaves behind is asserted to have exactly one documented exit** (**rewritten in place, revision 68, `OPUS-R85-001`**; through revision 67 this sub-clause asserted that a takeover by the *owning* worktree rotates the claim and still does not clear the state, which was true of a takeover that established nothing and is the incompleteness revision 68 closes): the explicit takeover is asserted to rotate the claim **and** to establish the taking worktree's own identity record, so the work item is workable immediately afterwards through the real step-1 caller, with the revision-67 takeover — which established nothing — carried as the control arm that leaves the refusal standing. **The refusal is not weakened**: in the identical state a *foreign* worktree is asserted still refused with `WorktreeIdentityMissingError`/`WorktreeIdentityMismatchError` as applicable, performing zero authoritative mutation and leaving no guard residue, so `S14a`/`S14b` both remain distinguishable and remain the classes a foreign worktree sees **in the states `S14` is written against** — with the one further foreign case asserted separately rather than left implied (**added, revision 68, `OPUS-R85-001`**): a foreign worktree carrying a valid identity record of its own *with* an entry for this work item, reachable only for a worktree that has itself held this claim, is asserted to pass `verify_dirty_resume_safety` and to be refused one line later by the foreign-claim row with `CheckpointOwnedByOtherWorktreeError`, still before any mutation, so the enumeration is asserted at the strength it actually has. **Both `WorktreeIdentityMissingError` branches are asserted separately** — the missing-file case and the file-exists-but-carries-no-entry-for-this-work-item case — since only the second is reachable for a worktree that has already worked on a *different* work item, and the two are distinct code paths in `verify_dirty_resume_safety`. **Diagnosis is asserted**: any refusal raised while a decidable claim is present is asserted to carry the ownership evidence and to name the escape that applies, for a self-owned claim as well as a foreign one, so no refusal can again describe resuming an `IN_PROGRESS` checkpoint that does not exist while naming no way out. **(b)** `IN_PROGRESS` written but the checkpoint not committed — the ordinary interrupted case — is asserted to resume for the owner and refuse for everyone else. **(c)** Checkpoint committed but the claim not released is asserted to auto-release on the next invocation from the owning worktree, and **only** when the completion is `COMPLETE` in the state committed at `HEAD`; the same fixture with the completion present only in the working tree is asserted to refuse instead. **(d)** Two work items with interleaved `IN_PROGRESS` work are asserted not to disturb each other's claim in any of these windows, preserving `OPUS-R10-008` → WF8b.
+365. **(new, revision 63, `WF8B-S14-001`)** The record's integrity properties are asserted against hostile and accidental inputs. **(a)** Two genuinely concurrent OS processes claiming the same work item are asserted to produce exactly one winner and one `CheckpointOwnedByOtherWorktreeError`, with the surviving record complete and parseable; a deliberately injected stale pre-read is asserted not to overwrite the winner. **(b)** A partially written record is asserted **not producible by this writer** — publication is a same-directory temp file plus `os.link` — and no staging temp file is asserted to survive a successful publication. **(c)** A record corrupted by anything else (torn, wrong `schema_version`, wrong `work_item_id`, unparseable) is asserted to fail closed for **every** worktree including the owner, never to be read as "unclaimed", and to be recoverable **only** by an explicit, observation-bound operation — **which one depending on the guard, asserted against the guard-held case and not only the guard-free one** (corrected, revision 66, `OPUS-R83-002`: through revision 65 this item named the explicit takeover unconditionally, which is true only when no `"destructive"` guard is held and the record is byte-readable, so the conjunction that had no exit at all could satisfy this item while being unrecoverable). With no guard or an `"ordinary"` one the takeover is asserted to own it; with a `"destructive"` guard and a deregistered holder the abandoned-guard recovery is asserted to own it; with a `"destructive"` guard and a **registered** holder the state is asserted to refuse with the concrete operator actions named and the live window asserted unbroken; and in every case the other operations are asserted to refuse by naming the one that owns it. **(d)** A symlink planted at the claim path, and a symlinked claims directory, are each asserted to fail closed on both read and publish **on the ownership-resolution path**, with the off-tree target asserted untouched — **and, extended in revision 66 (`OPUS-R83-002`), asserted to produce a *report* rather than an exception from `takeover_evidence`**, since a record that cannot be observed cannot be recovered by an observation-bound operation and the plan advertised exactly that recovery for it. A symlink, a directory, an `EACCES` file and an unstattable entry are each asserted to yield a defined, domain-separated `claim_observation_id` derived from `lstat` alone (never from anything read *through* a link), asserted distinct from any byte hash, and asserted to produce a bound, non-replayable authorization. The symlink and the unreadable file are asserted recoverable by the owning operation, with the link asserted **replaced** rather than written through and the off-tree target asserted untouched afterwards; the directory is asserted refused with its operator action named, since `os.rename` cannot replace it and this design never removes a directory it did not create. **(e)** Hostile `work_item_id` values (`../../escape`, `a/b/c`, `..`, an absolute path, an over-long string) are asserted to map to a fixed-length digest inside the claims directory, addressing nothing outside it. **(f)** The record is asserted invisible to every worktree's `git status` and dirty-path set, and a repository whose `.git` is itself a symlink is asserted to resolve the identical claim path from every worktree → WF8b.
+366. **(new, revision 63, `WF8B-S14-001`)** No claim is released on an assumption, and the takeover is the only exception. **(a)** A claim whose holder worktree has been **deleted** is asserted still not released automatically — no age, heartbeat, liveness probe or `claimed_at` comparison is asserted to appear anywhere in the resolution path. **(b)** `takeover_evidence` is asserted to **report rather than conclude**: the claim record, whether the holder's recorded path still exists, and whether a currently registered worktree still corresponds to it, matched on the stable `worktree_git_dir` as well as the recorded path — so a **live** holder is asserted reported as live rather than shown as a false orphan, and a **relocated** holder (`git worktree move`) is asserted distinguishable from a deleted one. **(c)** Takeover is asserted refused without its literal authorization naming both work item and checkpoint — absent, empty, truthy-but-wrong, and naming a different checkpoint are each asserted individually — with the existing claim asserted untouched after every refusal. **(d)** An authorized takeover is asserted to publish by **atomic replace**, so a takeover that fails to publish leaves the previous claim in force rather than leaving the work item unclaimed; to record the displaced holder in `taken_over_from`; and to write **no** authoritative workflow state. **(e)** Takeover is asserted unreachable from `/milestone-implement` on every path → WF8b.
+367. **(new, revision 63, `WF8B-S14-001`)** Adoption, the migration path, is asserted to be both necessary and incapable of stealing. **(a)** Without it, a checkpoint left `IN_PROGRESS` **before** the mechanism landed is asserted to remain fresh-startable by a foreign worktree — the direct regression test for the configuration the real `S-CP3` is in, and the reason the contract is not merely forward-looking. **(b)** Adoption is asserted to write **no** authoritative state: the state file, identity file, dirty working files, `HEAD` and `git status` are all asserted byte-identical across it, with the shared claim the only thing that changed. **(c)** It is asserted idempotent, asserted to refuse from a foreign worktree by way of `verify_dirty_resume_safety`, asserted to refuse when the local state records nothing `IN_PROGRESS` (never inventing an ownership fact), and asserted to refuse when another worktree already holds the claim. **(d)** An adopted claim is asserted behaviourally identical to a fresh one — `adopted` is provenance, not privilege. **(e)** A `governing_workflow_version: "1"` work item is asserted never to acquire, consult or be affected by a claim, and a `"2.1"` item's claim is asserted not to create or imply one for it → WF8b.
+368. **(new, revision 64, `GPT-R81-001`)** Ownership **fences** the work it coordinates, and every one of these is asserted against a real two-worktree fixture with the revision-63 shape as a control arm, because a fencing claim no test can fail is not a contract. **(a)** `owner_assert(A) → takeover(B) → owner_state_mutation(A)` is asserted to refuse with **zero** A-side authoritative mutation, byte-compared, and the revision-63 arm is asserted to mutate. **(b)** The same interleaving ending in a checkpoint commit is asserted to produce no completion commit at all: A's `HEAD` unchanged and the checkpoint still not `COMPLETE` in A's own state. **(c)** A takeover interleaved between release's read and its unlink is asserted **not** to let the displaced owner delete the replacement owner's claim, with the revision-63 read-then-unlink arm asserted to delete it. **Extended to the guard, revision 66 (`OPUS-R83-001`)**: the identical assertion is owed for the **mutation guard**, which this item covered only for the claim and which had the same defect — a release whose guard was reclaimed and republished *between its comparison and its removal* is asserted not to remove the replacement guard, with the revision-65 read-then-unlink shape carried as the control arm that does remove it; and the same is asserted for `acquire_guard`'s reclaim-and-republish sequence and for `clear_malformed_guard`'s removal, each of which has the identical window. **(d)** Two simultaneous authorized takeovers, in **real OS processes**, are asserted to produce exactly one winner, a complete parseable surviving record, and a loser that refused on evidence or on the guard rather than by force. **(e)** The winner is asserted able to proceed as an ordinary owner while the displaced owner is fenced from every mutation, including release. **(f)** Guard recovery after a crash is asserted to be decided from durable data alone, and asserted against the **corrected** statement of the `"destructive"` class rather than revision 64's absolute (amended, revision 65, `OPUS-R82-002`): a superseded-epoch guard — **including a `"destructive"` one, and including one left by a different worktree** — is asserted reclaimed with no authorization, since that branch is the crash-recovery path for a session that acquired a guard and died before its own assertion could fence it, and narrowing it by worktree is asserted to strand a legitimate post-takeover recovery; a session's own leftover guard is asserted reclaimed **only** when the guard's `holder_worktree_git_dir` is this worktree's, with the same-token-different-worktree case asserted refused (see item 373(f)); and **no** age threshold, heartbeat, liveness probe or timestamp comparison is asserted to appear on any acquisition path. **(g)** The placement is asserted, not only the mechanism: asserting ownership *before* acquiring the guard is asserted to still permit the displaced mutation, and asserting inside it to refuse. **(h)** A takeover attempted while the owner holds a `"destructive"` guard is asserted refused unconditionally, with no takeover authorization able to release it, and to succeed normally once the owner's window closes — **and, amended in revision 65 (`OPUS-R82-001`), the window that never closes is asserted too**: with the guard still held and the holder worktree deleted, the takeover is asserted still refused, that refusal is asserted to name the abandoned-guard recovery rather than dead-ending, and the work item is asserted to have a defined outcome by way of item 373 rather than being unstartable by every documented operation → WF8b.
+369. **(new, revision 64, `GPT-R81-002`)** Takeover authorization is bound to the exact claim the human reviewed. **(a)** An authorization naming checkpoint X while the installed claim holds Y is asserted refused, with the revision-63 literal asserted — as a control arm — to have displaced exactly that claim. **(b)** A claim that changes between the evidence presentation and the takeover is asserted to produce a stale-evidence refusal with **zero** mutation, the surviving claim byte-compared. **(c)** The same authorization is asserted non-replayable against the claim its own rotation produced. **(d)** `taken_over_from` is asserted to describe the record **atomically** displaced — its `claim_observation_id` asserted equal to the digest of the bytes present at rotation and unequal to an earlier read's — together with the displaced `owner_token` and `checkpoint_id`, and the `takeover_count`/`previous_owner_tokens` chain. **(e)** The unreadable/corrupt-record recovery is asserted to carry an equally explicit observation binding rather than a reusable generic authorization: a generic literal is asserted refused, an authorization for one corrupt record is asserted not to carry over to a different one, and the correctly bound literal is asserted to recover it and to record the recovery. **(f)** The `"absent"` observation is asserted to be an observation like any other, so authorizing a takeover of "no claim" is asserted not to survive somebody publishing one in the meantime → WF8b.
+370. **(new, revision 64, `GPT-R81-003`)** No mutation branch can receive a `None` checkpoint id, asserted through the real `/milestone-implement` procedure rather than a helper's signature. **(a)** The exact crash window is run end to end: the **final** checkpoint's completion durably committed, its claim still present because the process stopped before release, and the next invocation asserted to release the claim, to reach the terminal `NO_CHECKPOINT` outcome, to leave the state file byte-identical, and to leave the work item at the normal post-checkpoint/review boundary. **(b)** The non-final case is asserted separately: releasing X reveals a concrete next checkpoint Y, `FRESH` carries Y, and step 1d claims and writes Y with no `None`-keyed entry anywhere in the state file. **(c)** An exhausted registry with nothing claimed and nothing `IN_PROGRESS` is asserted to reach the same terminal outcome rather than a `FRESH` with a null id. **(d)** `NO_CHECKPOINT` is asserted structurally unable to reach step 1d — the assertion is on the command procedure, not on a comment → WF8b.
+371. **(new, revision 64, `GPT-R81-004`)** The plan-revision mirror has one sanctioned writer and no manual repair step. **(a)** A governing-v1 continued-scope plan revision opened from `IMPLEMENTING` is asserted, end to end, to increment the registry, to leave the state mirror equal to the registry **immediately**, to enter the documented external-plan-review phase, and to pass `validate_state` with no manual repair. **(b)** `publish_plan_revision(...)` is asserted idempotent: re-running it with the same value and resulting phase is a no-op, so an interrupted revision is retried rather than repaired, and it is asserted to alter no other work item's entry. **(c)** It is asserted to refuse a terminal-phase item and to write through `D1`'s serialized state-write primitive, never as a plain JSON edit. **(d)** The `"2.1"` phase target is asserted to be `AWAITING_LOCAL_PLAN_REVIEW` and the `"1"` target `AWAITING_EXTERNAL_PLAN_REVIEW`, so `D-Plan-Review-Stages` is not bypassed. **(e)** Governing-v1 inertness is asserted preserved as a property, not a habit: a v1 work item with **no** `work_items` entry is asserted to produce byte-identical golden output to `WF8a-ii`'s existing inertness test, and only an item that already has an entry is asserted to be written. **(f)** The detection half is asserted too: `prepare-ai-review.sh`'s plan stage is asserted to refuse, before generating any bundle content, when the resolved item's mirror disagrees with its registry, naming both values — and asserted to proceed unchanged when they agree → WF8b.
+372. **(new, revision 64, `WF8B-S14-002`, found by this revision's own pass 11)** The mutation guard's own failure surface is asserted, since the guard is itself a new shared object. **(a)** A guard planted by a session holding no current token is asserted to be superseded by construction and never to become a permanent false lock. **(b)** An **undecidable** guard is asserted to fail closed for every session including the legitimate owner, asserted **not** to be silently deleted by any release path, and asserted recoverable only by an explicit, user-authorized clearance bound to the guard's own observation id — which is asserted to refuse a generic authorization and to refuse outright when the guard is in fact well-formed. The clearance's removal is asserted to be a **compare-and-delete on the observed bytes**, not merely a re-check that the record is still undecidable (added, revision 65, `OPUS-R82` non-blocking observation 1): an undecidable guard replaced by a *different* undecidable guard between the authorization and the unlink is asserted **not** removed, since it is not the record the user authorized clearing. **(c)** A symlinked guard path is asserted to fail closed on both read and publication, with the off-tree target asserted untouched. **(d)** The guard is asserted released on every exit path including a mutation that raises, leaving no residue — **and the release is asserted to remove the guard it compared against and no other** (added, revision 66, `OPUS-R83-001`): the removal is asserted indivisible with respect to its `lease_id` comparison, asserted to leave a guard published in that instant in place, and the serialization is asserted to be over a **stable, never-unlinked** lock object rather than over the guard file itself, since a lock on an inode that briefly shared the guard's pathname serializes nothing. The lock is asserted never held across a `WORKFLOW_STATE.json` write, so the existing guard-then-`flock` ordering rule is asserted uninvertible, and `os.link`'s `EEXIST` exclusivity is asserted retained underneath it rather than replaced by it. **(extended in place, revision 67, `OPUS-R84` non-blocking observation 1)** The removal primitive is additionally asserted to treat an **absent** `lease_id` as a refusal rather than a wildcard: a removal invoked with no lease id is asserted to raise and to leave the guard on disk byte-identical, with the "unconditional unlink when no lease id is supplied" shape carried as the control arm the assertion must fail if it holds — because the absolute this item enforces says *every* removal names the `lease_id` it observed, and a primitive that silently accepts "no lease id" contradicts it whether or not any current caller reaches that branch. **(extended in place, revision 68, `OPUS-R85` non-blocking observation 1)** The refusal is asserted for **every flavour of absent**, the empty string included: revision 67 refused only a non-`str` value, so `""` fell through the comparison and silently no-opped, which is safe but is not the refusal the absolute states. The revision-67 shape is carried as the control arm that does not refuse it. **(e)** An authorized break of an `"ordinary"` guard is asserted to still fence the broken session, whose own compare-and-delete release is asserted unable to remove the new owner's state; and a guard whose `lease_id` changed since the authorization is asserted to prove the owner live and refuse. **(f)** Same-worktree concurrency is asserted to be honestly out of scope rather than falsely fenced, and the assertion is the one the specified mechanism can satisfy (**rewritten, revision 65, `OPUS-R82-002`**; through revision 64 this item required these sessions to "serialize on the guard", which the design does not do and no implementation of it could be made to do without a per-session identity the design deliberately does not have): two sessions sharing one worktree identity and token, in **real OS processes**, are asserted to have the second reclaim the first's guard — including a `"destructive"` one, with no authorization — and both windows are asserted open simultaneously, with the "they serialize" shape carried as the explicit control arm the assertion must fail if it holds; a session presenting a token the claim does not carry is asserted refused wherever it runs; and the corresponding cross-worktree half is asserted by item 373(f). **(g)** The `S14`→`S15` path is asserted unchanged end to end under the guard: the foreign refusal still mutates nothing, creates no guard residue, and leaves the claim record untouched. **(extended in place, revision 76, `OPUS-R93-002`)** **(h)** The **global lock order is a conformance obligation with an owner, not a convention**, because two consecutive rounds found a completeness claim about it short — `OPUS-R92-004` found the identity-gap leaf's local statement missing `WORKFLOW_STATE.lock`, and `OPUS-R93-002` found the single site created to fix that missing two whole primitives, both defined in this same document and both in use at the moment it was written. Three arms. **A completeness arm**: every lock-shaped object this design defines is enumerated **mechanically** from the plan text — every `.lease`, `.lock` and `.guardlock` pathname the document names — and each is asserted to appear in `D-Approval-Commits`' single ordering list, failing and **naming the omitted pathname** if any does not; the revision-75 four-primitive list is carried as the **live control arm**, asserted to fail on exactly `checkpoint-claims/<sha256(work_item_id)>.lease` and `…/<sha256(work_item_id)>.guardlock`. Enumerating from the text rather than from a hand-maintained list is the point: a hand-maintained list is the thing that went stale twice. **A graph arm**: the edge set **derived from the actual nested acquisitions** is asserted **equal** to the four recorded edges — `(1)→(2)`, `(5)→(2)`, `(5)→(3)`, `(5)→(6)` — failing and **naming the unrecorded edge** if the derived set contains any other, on exactly the footing the completeness arm already uses for pathnames; `(4)` is asserted to have no edge in either direction, and the resulting graph is asserted **acyclic**. **(Strengthened from a subset check to an equality, revision 77, `OPUS-R94-002`.)** Revision 76 asserted only that the four recorded edges *hold*, which a new edge cannot contradict: an implementation that made `write_worktree_identity` reachable from inside the plan-approval transaction's guard would add `(1)→(3)` — acyclic, contradicting no recorded edge, and outside `(4)`'s negative — and pass, leaving the single ordering site documenting five of six real edges. That is the third recurrence of the class of error `OPUS-R92-004` and `OPUS-R93-002` each found once, so the arm is stated at the strength that closes it rather than at the strength that merely records today's answer. Deriving the set from acquisitions rather than comparing a hand-maintained list is forced by the control arms and is the right design in any case — a hand-maintained list is the thing that went stale twice. Two **live control arms**: an inverted `(2) → (5)` acquisition (a state writer fencing a checkpoint transition it is about to record — the natural way to write it, and the one prohibited) is asserted to close `(2) → (5) → (2)` and be detected as a cycle; and an implementation carrying **one extra acyclic nested acquisition between two already-listed primitives** — `(1)→(3)` — is asserted to **fail** the equality and to **name that edge**, so the subset weakness cannot return by a green test. **A direction arm**: `(3)`'s leaf property is asserted in the direction that is true and asserted **false** in the other — nothing is acquired while `WORKTREE_IDENTITY.lock` is held, while `write_worktree_identity` inside step 1d's guarded mutation *does* acquire it while `checkpoint-claims/<wi>.lease` is held — so the two-directional claim revision 75 made cannot be reintroduced by a green test → WF8b.
+373. **(new, revision 65, `OPUS-R82-001`/`-002`)** The `"destructive"` class means exactly what the plan says it means, and the one state it can strand has exactly one documented exit. **(a)** The abandoned-window state is built end to end — an owner acquires a `"destructive"` guard, never releases it, and its worktree is then **deleted** — and another worktree is asserted to reach a defined, documented outcome rather than a bare "never breakable" dead end: the takeover and the malformed-guard clearance are each asserted still refused (both correct), the takeover's refusal is asserted to name the recovery, and the bound recovery is asserted to succeed. **(b)** The same is asserted with the holder **relocated** by `git worktree move`: the evidence is asserted to distinguish relocated from deleted, the recovery is asserted refused while the holder is still registered with the refusal naming the concrete operator actions, and the recovery is asserted to succeed once the operator deregisters it — so both branches have a stated outcome and neither is a dead end. **(c)** The recovery is asserted to refuse while any evidence indicates the holder is a currently registered worktree whose guard `lease_id` is unchanged, so a live `"destructive"` window is still never broken; and the re-registration race is asserted specifically — a holder re-registered between the evidence and the authorization is asserted refused **with the abandoned guard still in place**, byte-compared, since a refusal that destroys the window it was protecting is the failure this operation exists to prevent (found by revision 65's own `pass12.py` `H3e`). **(d)** The recovery is asserted bound to **both** observations and to the abandoned step: an absent, empty, takeover-shaped, wrong-step, wrong-guard-observation and wrong-claim-observation authorization are each asserted refused individually, with the claim and the guard byte-compared unchanged after every refusal; and the successful authorization is asserted non-replayable against the claim its own rotation produced. **(extended in place, revision 70, `OPUS-R87-004`)** The evidence for an **absent** claim is asserted to distinguish a worktree that holds uncommitted work for the item from one that holds none: two worktrees in the same fixture, one holding the work and one holding none, are asserted to produce **different** evidence reports; the operator-facing report is asserted to **name** the registered worktrees that have uncommitted work for the item; and the pre-claim legacy takeover run from a worktree holding none of the work is asserted visibly distinguishable in the evidence from the same operation run by the originator — with revision 69's evidence carried as the live control arm that produces a **byte-identical** authorization literal for both, lets the worktree holding none succeed, and locks the originator out. The authorization literal itself is asserted **unchanged** by the new observations, so no earlier authorization shape moves and the dirty-work fact is asserted **not** bound into it. **Owed additionally by `WF8b`'s implementation (revision 66, `OPUS-R83` non-blocking observation 1)**: the recovery literal binds the work item, the abandoned step and both observation ids, but not the checkpoint id of the claim it publishes — unlike the takeover literal, which carries `as <checkpoint_id>`. The implementation must close that asymmetry and assert it, rather than leaving the two literals gratuitously different; the plan deliberately does not change the literal's shape in a revision whose scope is two accepted findings. **(e)** The recovery is asserted to refuse, naming the operation that does apply, for each state another operation owns — no guard, an undecidable guard, an `"ordinary"` guard, an unreadable claim, a superseded-epoch guard, and a claim held by this worktree — so no state has two sanctioned routes. **(f)** The cross-worktree half of the corrected absolute is asserted **mechanically**, not as a consequence of step 1c: a session in a **different** worktree presenting a token it read out of the claim file is asserted refused at guard acquisition, before any mutation, with the revision-64 condition (token equality alone) carried as the control arm that would have reclaimed it. **(g)** The recovery is asserted to leave the displaced owner fenced at its next assertion, to write **no** authoritative workflow state, to record what it displaced in `taken_over_from.recovered_from_abandoned_guard`, and to clear the abandoned guard through the superseded-epoch rule rather than a second removal primitive. **(h)** No age threshold, heartbeat, liveness probe or timestamp comparison is asserted to appear on any path this item exercises. **(h2)** (new, revision 68, `OPUS-R85-001`) The design's **single automatic release** is asserted unreachable by a path-aliased worktree: with the holder's checkpoint `COMPLETE` and durable at `HEAD` and its claim unreleased, a different worktree occupying the holder's recorded path is asserted refused before reaching the release, with the claim asserted to survive the refusal byte-identical; the revision-67 resolver is carried as the control arm that reaches the release, drops another worktree's claim residue and fresh-starts the next checkpoint under a token of its own. **(i)** (new, revision 66, `OPUS-R83-001`) The `"destructive"` guarantee is asserted as a property of the **removal primitive**, not only of the reclamation rules: after a stale session's release is interleaved between its own comparison and its own removal, the current owner's `"destructive"` guard is asserted still present, `takeover_evidence` is asserted to still report it, and a correctly bound takeover from a third worktree is asserted still refused **on the class** — the end-to-end consequence, not just the primitive, with the revision-65 read-then-unlink shape carried as the control arm that loses all three. The same is asserted for a session reclaiming a superseded guard, which is asserted unable to remove a guard published after its own observation, and the documented same-worktree rule-2 reclamation is asserted to remain distinguishable from a lost update rather than being masked by the fix. And a regression asserts the invariant directly: **no path can leave a session inside an acquired window with no guard on disk**, from any other session's point of view. **(j)** (new, revision 66, `OPUS-R83-002`) The conjunction revision 65 left unowned is built end to end — a `"destructive"` guard held, the claim rendered undecidable, the holder worktree deleted — and the work item is asserted to have **exactly one** documented outcome, with the other two operations asserted to refuse by naming the one that owns it and the recovered work item asserted workable again by an ordinary guarded mutation. The same conjunction with the holder still **registered** is asserted to produce a stated operator action rather than a bare refusal, with the live window asserted unbroken. The recovered claim is asserted to record `claim_was_undecidable`/`epoch_chain_lost` and to carry the displaced token recovered from the guard, so it is never presented as a continuous epoch chain it cannot prove; and the checkpoint id is asserted taken from the guard, with a disagreeing operator-supplied id asserted refused rather than reconciled → WF8b.
+374. **(new, revision 68, `OPUS-R85-001`/`-002`)** The local identity record is the design's only evidence of worktree **instance**, so its lifecycle is asserted rather than assumed. **(a)** The ownership key is asserted to carry two distinct values, both filesystem paths, and to be unchanged by `git checkout --detach` — so the plan's own "triple" framing can never again be read as carrying instance, HEAD or branch identity — and a replacement worktree at a vacated path is asserted to produce a byte-identical key while holding none of the original's work. **(b)** Step 1d's identity-before-claim ordering is asserted load-bearing **with a control arm**, exactly as item 363 requires of the other two orderings: the corrected ordering is asserted to make `CONTINUE_CLAIM` reachable through the real step-1 caller with `verify_dirty_resume_safety` still passing unmodified, and the claim-first arm is asserted to lock the legitimate owner out of its own claim. **(c)** The identity entry a failed claim acquisition leaves behind is asserted **inert** — and asserted at the strength the mechanism has, not the one revision 68 claimed (**rewritten in place, revision 69, `OPUS-R86-001`**: revision 68 discharged this sub-item against "the adoption path still requires its own uncommitted `IN_PROGRESS` state, which no checkout can supply", a property the mechanism did not have and this repository falsifies). A worktree holding an entry for a work item it never started is asserted unable to reach any mutation-capable branch on the strength of that entry alone: the foreign-claim row still refuses it, **and the adoption path is asserted to refuse it whenever the checkpoint's `IN_PROGRESS` is present in the state committed at `HEAD`**. That refusal is asserted through the **real** step-1 caller in a **real two-worktree fixture** built the way the defect occurs — worktree B earns an identity entry by working an earlier checkpoint, worktree A starts a later one and makes an ordinary whole-tree commit carrying `IN_PROGRESS`, B fast-forwards — with the **unguarded adoption carried as a live control arm** that is asserted to adopt, publish a claim flagged `adopted`, and lock the true originator out. The originating worktree is asserted in the same fixture to remain able to adopt and resume when its `IN_PROGRESS` is **not** committed (the live `S-CP3` case), and adoption is asserted still idempotent there, so the correction is asserted not to close the migration path it exists for. A conformance assertion accompanies it over this repository's own history: the committed-state test is asserted to report `IN_PROGRESS` for exactly the checkpoints a full scan of every commit reachable from `HEAD` finds carrying one, and to admit the dry-run item's own interrupted checkpoint — so the one-time operator cost on `workflow-v2-1-core`'s `WF8b` is a checked fact rather than a claim. **(rewritten in place a second time, revision 70, `OPUS-R87-001`/`-002`/`-003`** — revision 69 asserted the admission direction only for the legitimate `S-CP3` shape, which is exactly why the bypass survived; the inertness sentence this sub-item exists to carry is restated at the strength the *corrected* reference has, for the fourth consecutive revision.) The **admission** direction is asserted as its own obligation, through the real step-1 caller in a real two-worktree fixture. **(c.i)** A worktree that acquired the checkpoint's `IN_PROGRESS` by checkout and then moved **its own `HEAD` backwards** — `git reset --soft` and `git reset --mixed` asserted separately — is asserted **refused**, with no claim published, `WORKFLOW_STATE.json` byte-identical, and the originator asserted still able to resume. **(c.ii)** The same is asserted for a worktree that moved **no ref at all** and acquired the content by `git checkout <commit> -- <state path>`, by `git cherry-pick -n` and by `git stash pop`. **(c.iii)** Both arms are asserted with revision 69's `HEAD`-relative test carried as a **live control arm** that adopts and locks the originator out, so the assertion fails if the correction is reverted — the discipline item 363 already requires of the other three orderings. **(c.iv)** The reference is asserted **unchanged by any operation the adopting worktree can perform on its own refs**, and asserted to span a second worktree's own `HEAD` including a detached one, with `--single-worktree` carried as the arm that does not. **(c.v)** The fail-closed partition is asserted row by row — the state document absent at an examined commit (decidably absent, continues), unparseable, valid JSON but not an object, a non-object `work_items`/work-item/`checkpoints`/entry member, and an unresolvable reference — each asserted to refuse with `CheckpointOriginationUnprovableError` rather than admit or escape undeclared, with revision 69's `return None` behaviour carried as the live control arm that admits and the non-object case carried as the one that escapes as `AttributeError`. **(extended in place, revision 71, `OPUS-R88-002`)** The partition is asserted closed at the **scalar** as well as over the containers: a checkpoint entry that is a valid object but whose `status` is absent, `null`, a number, a list, an object, or a string outside the state schema's own controlled vocabulary is asserted to **refuse**, with revision 70's `entry.get("status") == "IN_PROGRESS"` comparison carried as the **live control arm** that admits on all six; the two admitting rows (`IN_PROGRESS`, and a vocabulary-valid other status) are asserted unchanged; the vocabulary is asserted **sourced from** `workflow_state.CHECKPOINT_STATUSES` rather than restated, so the two cannot drift; and no path is asserted to exit with an undeclared exception type for any of them. Absence at an examined commit is asserted established by that commit's **tree** rather than by a read command's exit status: a commit whose tree genuinely lacks the path is asserted decidably absent and to continue, while a path present in the tree whose blob cannot be read, and one present but not a regular-file blob, are each asserted to refuse -- with revision 70's `git show` returncode test carried as the **live control arm** that reads the unreadable-blob case as 'decidably absent' and admits. A reference that resolves to **no commits** is asserted decidable and admitting, distinctly from one that cannot be resolved at all, which is asserted to refuse. **(extended in place, revision 72, `OPUS-R89-002`/`-003`)** The partition is asserted **total over container absence and over read failure**, and asserted to **agree with its own reference implementation row for row** — the property revision 71 assumed and this round measured false in four rows, two of them fail-open. For each of `work_items`, the work item, `checkpoints` and the checkpoint entry, one commit each is asserted for the key **absent**, present with `null`, present with a list, present with a scalar, and present with an object: absence is asserted to **continue** and every present-but-non-object form, `null` included, is asserted to **refuse**, with the revision-71 `isinstance(..., dict)`/`.get(...) is None` implementation carried as the **live control arm** that refuses the two absent forms and **admits** the `null` work item and the `null` checkpoint entry. A **totality assertion** enumerates every row of the published table and asserts the implementation reaches the stated decision for each, so the two cannot drift again — the assertion this sub-item exists to make un-vacuous, since `R2f`'s "does not escape or admit" is satisfied by refusing everything. A commit whose **tree object is removed after the reference has been resolved** is asserted to make the tree listing fail (non-zero exit, empty stdout) and the decision `REFUSE(undecidable)`, with a reader that treats empty stdout as "not listed" carried as the **live control arm** that admits; a **successful empty** listing (the path genuinely absent) is asserted to continue in the same fixture, so the two are asserted never collapsed. And when both refusal routes hold in one reference, the reported route is asserted to be the observed-`IN_PROGRESS` one regardless of `rev-list` ordering. **(c.vi)** The publication-time re-evaluation is asserted: a reference that acquires the checkpoint's `IN_PROGRESS` between the evidence read and the publication is asserted to refuse with **no claim published**. **(c.vii)** The conformance arm is asserted against this repository's **live** shape rather than only its history: `verify_dirty_resume_safety` is asserted to **pass** (the identity document exists here and carries a `workflow-v2-1-core` entry), the origination test is asserted to refuse, the class actually raised is asserted to be `CheckpointOriginationUnprovableError` and not `WorktreeIdentityMissingError`, that refusal is asserted to name a concrete escape, `take_over_claim` against an **absent** claim is asserted to succeed and to establish the identity record, the next invocation is asserted to resume the same checkpoint, and **no** `WORKFLOW_STATE.json` edit, claim hand-creation, deletion or checkpoint reset is asserted to be required anywhere in the sequence. **(extended in place, revision 71, `OPUS-R88-005`)** The evidence that refusal carries is asserted **component by component** on the live shape: it is asserted to name which of the two documented routes produced it, to name the observing commit and the status read there for the observed route, to name the commit and the undecidable shape for the undecidable route, to name this worktree's local identity observation and the claim's absence, and to name the reference it was evaluated against -- with revision 70's message carried as the **live control arm** that reports none of them. And the takeover's authorization literal is asserted **byte-identical** whether the origination observation is absent, present, or changed between evidence and authorization, so the deliberate non-binding is a checked property rather than an omission. **(c.viii)** (new, revision 71, `OPUS-R88-001`) **Reference completeness** is asserted as its own obligation, because none of (c.i)-(c.vii) covers it -- (c.iv) asserts only that the reference is unchanged by operations the *adopting worktree performs on its own refs*, which the merge route never touches, so (c.iv) is dischargeable with the hole wide open. A checkpoint recorded `IN_PROGRESS` in a commit that remains reachable from a ref is asserted to **refuse** in each of: a side branch merged into the mainline with the state document resolved to the mainline's copy and the topic branch then deleted; the same through a **criss-cross** merge; and the same through an **octopus** merge -- with revision 70's `git rev-list --all -- <path>` form carried as a **live control arm** that admits in every one of them, the discipline (c.iii) already requires. The adopting worktree is asserted to move **no ref and no `HEAD`** in each arm. `--full-history`'s own residual pruning is asserted **status-preserving**: every commit it prunes is asserted to record, for the state document, a status a retained commit also records. And a **conformance arm** over this repository's live history asserts that the chosen reference and the unfiltered `git rev-list --all` agree on the set of `(work_item_id, checkpoint_id)` pairs ever observed `IN_PROGRESS`, computed over the two commit counts separately, and is asserted to **fail** if a future merge ever makes them disagree.  **(d)** The identity document's **reader and writer** are both asserted over a **closed partition of document shape** — absent, unparseable, JSON `null`, non-mapping, mapping-but-schema-invalid (snapshot members included), valid-but-no-entry, valid-but-mismatched, valid-and-matching — each asserted to exit with its declared class and asserted **exhaustive over shape rather than sampled** (**rewritten in place, revision 69, `OPUS-R86-004`**: revision 68 asserted this against a single schema-invalid sample, and the property is false in general — five shapes escape the **1c refusal itself** as `AttributeError`/`TypeError`, and a `null` document is silently overwritten). No path is asserted to exit with an undeclared exception type, with the installed reader's and writer's escapes carried as control arms; the `null` case is asserted specifically, with the writer asserted to refuse and the document asserted byte-identical afterwards, and the installed writer carried as the control arm that overwrites it. The writer is additionally asserted to **publish atomically in the one form that is checkable**: the final pathname is asserted written **exactly once, by `os.replace`**, with the revision-68 delegating shape carried as the live control arm that writes it twice (**corrected in place, revision 69, `OPUS-R86-005`**: revision 68's "asserted incapable of producing a torn record" was asserted of a writer that produced one on every call). A torn-write injection is asserted for both outcomes — a failure during the staging write leaves the previous document byte-identical and schema-valid, a failure after `os.replace` leaves the new one — and no staging temp file is asserted to survive either. **(extended in place, revision 70, `OPUS-R87-005`)** The partition is asserted closed over a **second axis** — what the path *is*, not only what the document contains — with arms for a **directory**, an **`EACCES` file**, a **symlink to a valid document**, a **symlink to a missing target** and a **non-regular file (fifo)**, each asserted against **both** the reader and the writer to exit with the declared class. The revision-69 shapes are carried as live control arms: the directory and `EACCES` arms are asserted to escape undeclared as `IsADirectoryError`/`PermissionError`, the symlink-to-valid arm is asserted to be **followed and admitted** by the reader, and the fifo arm is asserted to **block** rather than refuse — which additionally requires the assertion to be made under a bounded timeout, since a hanging refusal cannot be caught by an exception assertion. The symlinked document's off-tree target is asserted **untouched** afterwards, the link asserted never followed. And a **cross-check arm** asserts the reader/observer agreement invariant over every row of the combined partition: `local_identity_observation(...).state == "undecidable"` **iff** the reader refuses that document with a class from the partition, with the revision-69 behaviour carried as the control arm that disagrees in four rows. **(e)** Both rotating operations — the explicit takeover and `recover_abandoned_destructive_guard` — are asserted to establish the incoming owner's own identity record as part of the rotation, inside the same guard window and **before the rotation publishes** (**extended in place, revision 69, `OPUS-R86-003`**), and the work item is asserted workable immediately afterwards through the real step-1 caller by a worktree that had no entry before; each is asserted to still write no authoritative workflow **status**, with `WORKFLOW_STATE.json` byte-compared and `HEAD` unmoved across the operation. **A failure-atomicity arm accompanies each**: with a corrupt identity document and no repair authorization, the operation is asserted to refuse with the claim **byte-identical**, `takeover_count` unchanged, no new `previous_owner_tokens` entry and no guard left held; N such attempts are asserted indistinguishable from none; and the revision-68 rotate-then-establish shape is carried as the live control arm that rotates anyway and inflates `takeover_count` on every retry. **The complete repair sequence is asserted end to end with no hand-deletion step**: the authorization literal is asserted to carry the identity-repair component bound to the corrupt document's exact bytes, to refuse when that document changed since the evidence, to be non-replayable afterwards, and to be **byte-for-byte unchanged** for a valid or absent document; after the authorized operation the taker is asserted to pass its own 1c and to be able to work the item. **(extended in place, revision 70, `OPUS-R87-006`)** The identity observation is asserted to be a **required** component of the evidence both rotating operations consume: an operation given evidence carrying **no** `local_identity` member is asserted to **refuse**, with the claim and the identity document both byte-identical, `takeover_count` unchanged and no guard left held — with the revision-69 fallback carried as the live control arm that instead re-observes, silently overwrites the corrupt document and rotates the claim. **(f)** A corrupt identity record is asserted never to be repaired by any *unauthorized* write: `establish_worktree_identity` is asserted to refuse it outright on every path and to leave it byte-identical, so repair-by-overwrite exists only under the authorization component in (e). Deleting the record by hand is asserted to escape no refusal — it converts `CorruptJsonError` into `WorktreeIdentityMissingError` and every contended path still refuses — so the record can never be used as a bypass. **(extended in place, revision 70, `OPUS-R87-006`)** The property is asserted over the authorization rather than only over the writer: **no** combination of evidence and authorization literal that lacks the repair component is asserted able to leave an undecidable identity document overwritten, asserted by enumerating the combinations — full evidence with a repair-bearing literal (repairs), full evidence with a literal lacking the component (refuses), and trimmed evidence with either literal (refuses) — with the document byte-compared after every refusing arm. **(g)** (new, revision 69, `OPUS-R86-002`) The identity document's writes are asserted **serialized**: two concurrent writers for two different work items in one worktree are asserted to leave both entries present over **repeated trials**, with the unserialized writer carried as the live control arm that loses one; two concurrent writers for the **same** work item are asserted to leave a schema-valid document with the entry present and no staging temp file behind; and the assertion that matters downstream — that after any interleaving, a work item whose 1d completed is never refused at its own next 1c with `WorktreeIdentityMissingError` — is asserted with the unserialized writer carried as the control arm that reproduces exactly that lockout. The lock object is asserted to be per-**worktree**, stable and never unlinked, and the per-work-item mutation guard is asserted unable to supply the property → WF8b.
+375. **(new, revision 71, `OPUS-R88-003`/`-004`)** The origination reference's own **limits** are asserted rather than asserted away, because five consecutive rounds have found this section stating a property at a strength the mechanism does not have. **(a)** The residual is asserted at its measured strength: `git update-ref -d` of a branch another worktree has checked out is asserted to succeed **from the benefiting worktree**, with the commit leaving the reference, the object surviving in the object database and the other worktree's uncommitted work byte-identical -- and `git branch -D` of that same branch asserted to refuse, the contrast that makes "repository-wide destruction of history" false. **(extended in place, revision 72, `OPUS-R89-004`)** **Linked-worktree removal** is asserted as its own residual route, in a fixture with a **real detached** linked worktree whose `HEAD` carries the only `IN_PROGRESS` commit: the decision is asserted to refuse before, `git worktree remove` is asserted to succeed with **exit 0 and empty stderr**, the decision is asserted to flip to **admit**, and the commit object is asserted to **survive** in the object database. The same is asserted for `rm -rf <wt>` followed by `git worktree prune`. And a **control arm** asserts that removing a worktree whose `HEAD` is a **branch** does **not** flip the decision, so the assertion is about per-worktree ref lifetime rather than about worktree removal in general. **(b)** Ordinary history maintenance is asserted to erase the evidence with no intent to, separately for `git commit --amend`, `git reset --hard` past the commit, and deleting a topic branch after a squash merge, each asserted to flip the decision from refuse to admit. **(c)** The **pruning-independence** claim is asserted rather than stated: the decision is asserted **unchanged** across `git reflog expire --expire-unreachable=now --all` plus `git gc --prune=now`, both for reachable evidence (still refuses) and for evidence already unreachable before the prune (already admits), so the absence of any hidden dependence on default reflog expiry is a checked fact rather than a claim. **(extended in place, revision 72, `OPUS-R89-004`)** The claim is asserted at the scope it actually has, in **both directions**, because `git gc` runs `git worktree prune` as one of its own steps: with a stale detached-worktree admin directory present, a plain `git gc` is asserted **not** to flip the decision before `gc.worktreePruneExpire` elapses, and `git -c gc.worktreePruneExpire=now gc` is asserted to flip it to **admit** with the object still surviving -- so the boundary is checked rather than assumed, and "reachable evidence survives a full prune unchanged" is asserted only of the **object-pruning** step and never of `gc` as a whole. **(d)** `refs/replace/` is asserted a distinct route: a replace ref is asserted to change what the reference sees with **no ref deleted**, and `--no-replace-objects` asserted to disagree with the default walk. **(e)** The **reduction** is asserted over multiple observations: a single work item whose history contains, in order, an absent entry, `IN_PROGRESS`, `COMPLETE` and a reopened absent entry -- each committed -- is asserted to refuse at every point after the `IN_PROGRESS` commit, including after the `COMPLETE` and after the reopening; and two divergent branches carrying conflicting statuses for the same checkpoint are asserted to refuse. **(f)** The refusing set is asserted to **grow monotonically** as whole-tree commits sweep another work item's in-flight transition, so the accumulation this section now states is a checked property rather than a prediction, with this repository's own current count asserted at exactly one pair. **(g)** The **identity invariant** is asserted at both enforcement points: creating a work item under an id that has ever appeared in the reference is asserted refused at creation with the historical observation named, and a registry that reintroduces a checkpoint id its own work item has retired is asserted refused at validation -- with the unenforced behaviour carried as the **live control arm** that demonstrates what the invariant buys (a reused `work_item_id` inheriting a retired item's `IN_PROGRESS`, an unused one unaffected), and a checkpoint renamed between plan revisions asserted to leave the retired id refusing and the new id unaffected. **(extended in place, revision 72, `OPUS-R89-005`)** The **evidence source** the registry-side refusal names is asserted, not just the refusal: registry validation is asserted to **refuse** a reintroduced checkpoint id that **is** observable in the origination reference and to **admit** one that is not; a checkpoint **renamed before it was ever started** — and therefore never present in `WORKFLOW_STATE.json` — is asserted admitted, explicitly and in both directions, as the scope boundary rather than as an oversight; and a **control arm** asserts that an id **redefined in place**, never retired, is admitted, using `workflow-v2-1-core`'s own real `WF8b` registry history as the fixture. The work-item-side refusal is asserted to name the same source. A conformance arm asserts that this repository's registry-only class is currently **empty** — all five committed revisions of `workflow-v2-1-core-registry.json` carry the same 17 ids, and all 17 appear in the state document — and is required to fail if a future revision introduces a checkpoint id that is never started, since that is the point at which the scoping decision becomes observable. **(extended in place, revision 73, `OPUS-R90-003`)** The two identity queries' **read partition** is asserted, not only their two decidable arms — "not observable" and "not decidable" are the exact pair `OPUS-R89-003` was raised to stop conflating, and revision 72 asserted only the former. **An undecidable-commit arm for each query**: one commit each for the unparseable document, the non-object document, the unlistable tree and the present-but-unreadable blob, asserted to reach the chosen outcome — `IdentityReferenceUndecidableError`, distinct from the observed-id refusal — for **both** the work-item-creation refusal and the registry-validation refusal, with a "treat undecidable as not-observed" reader carried as the **live control arm** that admits a reused id whose only observation sits in the damaged commit, so the fail-open direction is demonstrated rather than argued. **An escape arm**: `authorize_identity_reference_gap` is asserted to admit, to name the undecidable commits and their failure classes in its record, to be **non-replayable** (a second invocation carrying the same digest refuses), to refuse when the undecidable set has changed since the authorization was written, and — the arm that proves the escape does not become a general override — to leave a **decidable** observation still refusing while the gap is authorized; the un-escaped path is asserted to refuse, so the deadlock is proved to have an exit and the exit is proved not to be a hole. **A reduction arm**: an id observed at one commit and absent at every later commit is asserted still to bind, matching the origination test's own no-supersession rule, asserted for both queries rather than inherited by analogy. **A container-shape arm**: absence at each of the four levels is asserted to be a missing **key** and a present-but-non-object member (JSON `null` included) asserted to refuse, so the `OPUS-R89-002` correction is asserted to hold for the existence queries and not only for the status query. **(extended in place, revision 74, `OPUS-R91-002`/`-003`)** The container-shape arm as revision 73 wrote it asserts only that a present-but-non-object member "refuses", which **both** readings of the non-disjoint table satisfy and which is therefore vacuous on the point that decides safety; it is replaced by an assertion over the **error class**. A committed `{"work_items": {"X": null}}` and a committed `{"work_items": {"X": {"checkpoints": {"CP": null}}}}` are each asserted to reach the **observed-id** refusal — not `IdentityReferenceUndecidableError` — and `authorize_identity_reference_gap` against that same state is asserted to **refuse** rather than to admit, with a reader that classifies the queried-level `null` as undecidable carried as the **live control arm** that admits after authorization and creates a work item under an id the committed document records. A non-object container **above** the queried key (`{"work_items": 4}`) is asserted to reach the undecidable class, so the boundary is asserted in **both** directions rather than only in the safe one. The **escape arm** is extended from admit/record/non-replayability/changed-set to the authorization surface itself: a **replay arm** changes only `work_item_id` (and, for the pair query, only `checkpoint_id`) against an otherwise identical damaged reference and asserts refusal **before any mutation**, so the identity-bound digest is asserted rather than described; a **concurrency arm** runs two authorized recoveries against the same gap digest simultaneously and asserts exactly **one** winner with the loser failing closed and no duplicate authority-changing effect, exercising the repository-level `flock` leaf at a call site where no work item exists; a **crash arm** kills the process at each side-effect boundary — after evidence re-derivation, after the record's publication, before creation — and asserts that the retry neither double-admits nor dead-ends, with the published-record-then-crash case asserted to **recognise its own completed authorization and proceed** rather than refusing as a replay, and a consumed-on-read implementation carried as the live control arm that dead-ends; and an **evidence-staleness arm** mutates the repository between the evidence display and the execution and asserts refusal naming the disagreement. A conformance arm asserts `WFR-66`'s stated **post-override invariant** is the one the mechanism has: after an authorized gap, a **decidably observed** id is asserted still refused, and the authorization record is asserted to name the identity it admitted. **(extended in place, revision 75, `OPUS-R92-004`/`-005`)** The **concurrency arm** gains a **state-write contender**: one session authorizing a gap while another holds `.ai-review/runtime/WORKFLOW_STATE.lock`, asserted to serialize with no deadlock and no unbounded wait — the lock pairing revision 74's ordering statement omitted — plus a direct assertion that the gap leaf is **not held across any `WORKFLOW_STATE.json` write**, which is the concrete rule the corrected ordering rests on rather than a restatement of it. A **worktree-attribution arm** asserts the record written from a **linked** worktree differs from one written from the **main** worktree, so `authorizing_worktree_git_dir` is proven to carry per-worktree information rather than the repository-constant `--git-common-dir` value; the record **path** is asserted unchanged across both, since it is derived from the common dir deliberately. → WF8b
+
+376. **(new, revision 72, `OPUS-R89-001`)** The bundle's own stage document is **bound to the source it claims to reproduce**, asserted generator-side rather than promised in protocol prose, because the check that was supposed to provide this had zero production call sites for its whole life. **(a)** A **first generation into an empty `current/`** is asserted to produce a `PLAN.md` byte-identical to the resolved `plan_path`, so derivation is asserted to happen rather than to be skipped when nothing is there to overwrite. **(b)** A **regeneration over a `current/` holding the previous revision's `PLAN.md`** is asserted to leave `PLAN.md` byte-identical to the current `plan_path` -- the exact incident revision 71's own first regeneration produced, with the create-if-missing behaviour carried as the **live control arm** that leaves the stale document in place and lets the closing three-way reproducibility check pass over it. **(c)** A regeneration where the plan's **content** changed but its `(Revision N)` marker did **not** is asserted to correct `PLAN.md` all the same, with `assert_stage_completeness` carried as the **live control arm** that passes -- the measured insufficiency (reproduced against a scratch copy of this round's own bundle: marker regressed to `(Revision 70)` refuses, body altered with `(Revision 71)` intact passes) that makes byte-identity rather than the marker the binding. **(d)** Each refusing precondition -- no declared `plan_path`, an absent path, a non-regular file, an unreadable file -- is asserted to refuse **naming the resolved path**, and to leave **every** file under `bundle_dir` byte-identical to its pre-run state, `MANIFEST.md` and `files/` included, asserted by digesting the whole directory before and after. **(e)** An **interrupted generation** (killed between `DIFF.patch` and `MANIFEST.md`) is asserted to leave the next run reaching the same decision rather than inheriting a half-written bundle. **(f)** A bundle whose `PLAN.md` and `files/<plan_path>` **disagree** is asserted refused, and the archive's **extracted** `current/PLAN.md` is asserted byte-identical to `plan_path` as part of the existing three-way reproducibility check -- the assertion that check cannot currently make, since all three of its computations hash the same file. The absence of `files/<plan_path>` from the diff-derived tree is asserted **not** to be a failure. **(g)** A **negative control** proves the comparison is not vacuous: a one-byte change to `PLAN.md` after derivation is asserted detected. **(h)** The implementation-stage half is asserted at its own, weaker strength: `assert_stage_completeness` is asserted invoked on the `implementation`/`post-fix` generation path as a **completion** assertion, a stale `implementation_revision:` line is asserted to refuse there, a **first-ever** generation that creates the empty stub is asserted **not** to refuse as a precondition, and the body-only divergence that defeats a marker check is asserted **undetected** -- the disclosed asymmetry, asserted rather than described. **(i)** `docs/ai-workflow/REVIEW_PROTOCOL.md`'s two author-facing bullets are asserted to describe the guarantees that exist -- byte-identity for `PLAN.md`, a revision marker for `IMPLEMENTATION_SUMMARY.md`, stated as unequal -- with a conformance assertion that the file names no stage-completeness guarantee stronger than the one the generation path actually enforces, on the same footing item 343 established for that file's caller-model wording. **(extended in place, revision 73, `OPUS-R90-001`/`-002`)** **(j)** An authoritative-plan mutation injected **between the `files/` copy and the manifest computation** — the concrete window `prepare-ai-review.sh` leaves open, with the `(Revision N)` marker unchanged so the marker check cannot see it — is asserted to **refuse**, with a pinned-only comparison that does **not** re-read carried as the **live control arm** that passes and produces a bundle whose `review_content_id` derives from B1 while `PLAN.md` holds B0; the assertion is made over **both digests**, never over the exit status alone, so the control arm demonstrates the actual divergence rather than merely a missing error. **(extended in place, revision 74, `OPUS-R91-001`)** The arm is extended from `plan_path` to **each of the five protected paths**, one injection per path, because `review_content_id` binds all five and revision 73 pinned one: for each, a mutation injected in that same window is asserted to refuse, with a **pin-`plan_path`-only** implementation carried as the live control arm that **passes** for the other four and produces a bundle whose `files/` copy and bound identifier disagree — the exact reproduction that produced this finding, made a standing assertion rather than a one-off. **(k)** The same mutation injected **between derivation and the `files/` copy** is asserted to refuse — already caught by the three-way comparison, and asserted anyway so the two windows are distinguished rather than conflated, since only one of them is closed by the re-read. **(l)** A deliberately failing fourth assertion is asserted to leave **no** artifact under `bundle_dir` and none at the archive path that satisfies a reviewer's independent `bundle_id` + `review_content_id` recomputation — digested before and after, the same way (d) already digests the precondition case — with `MANIFEST.md` and the archive asserted removed and the author-written files, `CONTEXT_FILES.txt` included, asserted **not** destroyed, so the withdrawal is asserted at exactly the scope part 3b states. **(extended in place, revision 74, `OPUS-R91-004`)** Revision 73's arm asserts the end state of a **successful** withdrawal only, which is the case that cannot go wrong; it gains a **failed/interrupted-withdrawal** arm. The **order** is asserted directly — the archive is asserted gone at a point where `MANIFEST.md` is still present, since the order is what makes the crash safe. The process is killed between the two removals, and each removal is separately made to fail (`EACCES` on the archive path, then on the manifest). **(Restated, revision 76, `OPUS-R93-003`.)** The revision-74 wording required, in every arm, both that no surviving artifact satisfies an independent `bundle_id` + `review_content_id` recomputation *and* that the refusal marker is present — and part 3b's own preceding sentence falsifies the first conjunct in all three arms, since a withdrawn artifact "is indistinguishable from a good one to every check a reviewer can run from the artifact alone". Killed between the removals: `current/` survives with `MANIFEST.md` still present, by this item's own order assertion, and verifies completely. `EACCES` on the archive: the archive survives and is by the plan's own words a complete self-verifying bundle. `EACCES` on the manifest: `current/` survives and verifies. The old assertion was false in every arm of the case it was added to cover, and the hard-kill arm additionally could not satisfy the marker conjunct, because revision 74 wrote the marker from a failure handler a `SIGKILL` never reaches. The property asserted per arm is therefore the one the mechanism has, as a **disjunction**: *either* no surviving artifact — directory or archive — satisfies an independent `bundle_id` + `review_content_id` recomputation, *or* the `REJECTED` marker is present and names the surviving path. The marker is asserted present in **every** arm, the hard-kill arm included — which is achievable only because part 3b now writes it **before** the first removal, and that ordering is itself asserted here (the marker is asserted present at an instant when the archive is still on disk). The intermediate state in which the archive is gone and `MANIFEST.md` is still present is asserted **to exist and to be marked**, rather than asserted away: it is deliberate, it is what makes the crash safe, and an assertion that denies it is asserting against the design. The **live control arm** is the revision-74 implementation that writes the marker from the failure handler: killed between the two removals, it is asserted to leave an **unmarked, fully verifying** `current/`, so the arm fails if that shape ever returns. The **quarantine** is asserted: `current/` is asserted renamed to `current.rejected-<token>/`, the previous round's reviewed bytes asserted **not** destroyed by the failed generation, and `REVIEW_REQUEST.md`'s surviving `review_content_id:` header asserted **not** reachable at the reviewable location — with revision 73's leave-`current/`-in-place behaviour carried as the **live control arm** in which that header still verifies against the worktree and the residue passes an identifier check with no manifest present. **(m)** A grep-class conformance assertion over `.claude/commands/milestone-plan.md` and `.claude/commands/apply-plan-review.md`: neither names `<bundle_dir>/PLAN.md`, nor the resolved equivalent, as a write or edit target at the plan stage, and each command's bundle-refresh step names only the generator invocation — on the same footing as (i)'s `REVIEW_PROTOCOL.md` assertion, so the two-hand-edits wording that produced revision 71's stale bundle cannot drift back in. **(extended in place, revision 74, `OPUS-R91-001`)** **(n)** The **ABA** case is asserted directly, because a two-point equality sample cannot see it: a protected path is driven B0 → B1 → B0 across the manifest computation — B0 at derivation, B1 during the identifier's snapshot, B0 again at the closing re-read — and the run is asserted to bind **B0**, the pinned bytes, with the assertion made over the **digests** and never over the exit status, since revision 73's implementation exits 0 here. The two-point-sample implementation, in which both endpoints agree with the pin while the manifest binds B1, is carried as the **live control arm** that passes while binding bytes no bundle copy holds. **(o)** `review_content_id` is asserted **derived from the pinned projection** rather than from an independent late snapshot: with every protected path mutated after derivation and left mutated, the identifier written to `MANIFEST.md` is asserted equal to the one computed from the pinned digests, and the closing re-read is asserted to refuse **as a staleness check** — so the two properties are asserted separately and a future implementation cannot satisfy the arm by re-reading alone. If an implementation retains an independent snapshot, this arm additionally asserts the entry-for-entry comparison of that snapshot's own per-path manifest against the pinned projection. **(extended in place, revision 75, `OPUS-R92-001`/`-002`/`-003`)** **(p)** The **approval gate binds the reviewed identity, not the live worktree** — the round's principal obligation, and the one with a mandatory live control arm. For **each** of the five protected paths independently, a post-verdict edit is asserted to make `/approve-review plan` **refuse**, naming both digests; each refusal is asserted to occur **before any state write, any commit and any index mutation**, with the repository asserted **byte-identical** afterwards, so "before the first durable mutation" is proven rather than described. The **scope arms** assert approval **succeeds** after a change to a declared excluded path and after a change to an unclassified-but-excluded-prefix path, so the fix is proven not to have become a clean-worktree requirement. The **ABA arm** asserts approval **succeeds** after a modify-then-restore-byte-identically sequence on a protected path, so content identity rather than temporal history is the asserted invariant. The **live control arm** carries today's behaviour and is asserted to reach `EXTERNAL_APPROVE` and write a record whose `approved_review_content_id` **differs** from the reviewed one — the fix demonstrated rather than assumed, on the same footing as (n)'s two-point-sample control. A **binding-field arm** asserts feedback missing `Reviewed review content ID:` refuses with the same `MissingFeedbackBindingFieldError` shape the other three fields use, and that a present-but-mismatched value is reported naming both. **(Extended in place, revision 76, `OPUS-R93-006`.)** That arm asserts the behaviour **at `/approve-review` specifically**, not only at `/apply-plan-review`, because `/approve-review` step 1 deliberately treats the other three binding fields as non-fatal and the plan must not leave `WF8b` to choose: a missing fourth field is asserted to **refuse** there, and the refusal is asserted to occur at the freshness assertion rather than by rewriting step 1's parse policy for the other three — so both polarities are asserted to coexist, at their own sites, in one run. The **bootstrap arm** asserts the same refusal on the bootstrap plan-approval procedure's inherited step 2, since that is the only path this work item's own approvals take. **(Extended in place, revision 76, `OPUS-R93-001`.)** The bootstrap arm additionally asserts the **bridge-interval sourcing path**, which is the only interval that procedure actually has to work in: with `parse_review_feedback_binding_fields` stubbed to its present-day three-field shape — no fourth key at all — a post-verdict edit to **each** of the five protected paths is asserted to refuse, with the reviewed identity sourced from `read_manifest_identifiers` alone and corroborated by a direct literal-line read of the feedback's `Reviewed review content ID:`; a feedback file lacking that line is asserted to refuse on this path too, and a disagreement between the two sources is asserted to refuse naming both. A **control arm** asserts the post-`WF8b` parser path reaches the identical refusal, so retiring the interim clause is asserted not to change the outcome. And a **live control arm** carries the unsanctioned reading the revision-75 text licensed — treat the assertion as not-yet-implemented and fall through to steps 3-4 — asserted to reach `EXTERNAL_APPROVE` on drifted content, so the gap this closes is demonstrated rather than described. `WFR-06`'s own test is **replaced, not extended**: commit-source manifest compared against the **reviewed** identity, with the current worktree-source comparison retained only as a secondary check. **(q)** The **retention and withdrawal-target** obligations (`OPUS-R92-002`, superseding (l)'s scope rather than duplicating it): a **successful** N→N+1 generation is asserted for what it *destroys* and what it *retains* — revision N's `current/` contents and `review-bundle.tar.gz` asserted gone, and **no** `current.rejected-*` directory asserted created, so the withdrawn retention claim cannot be reintroduced by a green test; under the version-store contract, a candidate built in `staging/<token>/` whose closing binding assertion is forced to fail is asserted to leave the last promoted `bundles/<token>/` **and** its archive untouched and to quarantine **only** the candidate; a withdrawal that cannot identify this run's own artifacts is asserted to **refuse and write the `REJECTED` marker rather than remove anything**; and (l)'s existing killed-between-removals, each-removal-fails and refusal-marker arms are kept unchanged. **(extended in place, revision 77, `OPUS-R94-001`)** The marker's disjunction is asserted **across the generation boundary**, which neither this item nor (l) reached: every arm either item carried lives inside a **single** withdrawal, and (q)'s own N→N+1 arm asserts what a **successful** generation destroys and retains while saying nothing about the marker — so a marker written by round N and cleared by a round-N+1 generation that then refuses was asserted by nothing. A **cross-generation marker arm**: round N's withdrawal writes the marker — both the unidentifiable-artifact branch and the killed-between-removals branch — and round N+1's generation is then made to refuse at **each** of (d)'s four preconditions in turn; after each, the marker is asserted **still present**, and the surviving `current/` and archive are asserted **not** to satisfy an independent `bundle_id` + `review_content_id` recomputation *while unmarked*. A **live control arm** carries the clear-as-first-act implementation revision 76's lifecycle sentence licensed, killed or refused after the clear, asserted to leave an **unmarked, fully verifying** `current/` — so the shape reproduced end-to-end in `OPUS-R94-001` fails the suite if it ever ships. A **positive arm** asserts a genuinely successful N+1 generation **does** clear the marker, so the correction does not turn it into a permanently sticky state that needs a hand edit to remove. **(r)** The **whole-resolution pin** (`OPUS-R92-003`): with `<work_item_id>-artifacts.json` mutated between the `files/` copy and the manifest computation, the generator is asserted to refuse — and, as the paired approval-side arm, the declaration edited mid-generation and **restored byte-identically** before approval is asserted to be caught by (p)'s freshness assertion, since that is the one case the declaration's own `StaleArtifactsDeclarationError` freshness condition cannot see. **(extended in place, revision 76, `OPUS-R93-005`)** **(s)** A `docs/ai-workflow/REVIEW_PROTOCOL.md` **binding-field-count** conformance arm, on exactly the footing (i) established for the same file: the document is asserted to state the feedback binding-field set at the count `WFR-03` requires, and to **fail** while it names three (`REVIEW_PROTOCOL.md:218`–`:219` today: "The three binding fields (`Reviewed bundle ID:`, `Reviewed base commit:`, `Work item:`) are required on every ordinary review round"). This is the obligation the plan's own `Known limitations` previously mis-cited to items (i)/(m), neither of which has anything to do with the binding-field count — (i) is the stage-completeness guarantee wording and (m) is the `<bundle_dir>/PLAN.md` edit-target grep — so no item made the correction enforceable at all. The failure it prevents is a self-inflicted round rather than a safety hole: `WF8b` lands the fourth field, this arm passes, and the protocol document keeps telling every external reviewer that three fields are required until a reviewer omits the fourth and ingestion refuses. The arm is asserted **derived** from the requirement rather than from a literal count, on the same reasoning item 166 applies to its own row count. **(widened in place, revision 77, `OPUS-R94-003`)** The arm covers **every surface that states the binding-field contract**, not the one file revision 76 named. `.claude/commands/review-plan.md:60`–`:64` also states the count, and unlike `REVIEW_PROTOCOL.md` it is not documentation — it is the instruction that **produces** a `REVIEW_FEEDBACK.md`, so a stale count there is emitted rather than merely read: it says "the three binding fields `docs/ai-workflow/REVIEW_PROTOCOL.md` now requires on every round", and it emits the fourth value "as its own labelled line" with **the label left unspecified**, while `WFR-03`'s parser requires the exact `Reviewed review content ID:` form. The failure is a self-inflicted round of exactly the kind this item exists to prevent, on a surface the revision-76 scoping did not reach: a `"2.1"` work item runs `/review-plan`, follows its own instruction, and `parse_review_feedback_binding_fields` returns `None` for the fourth key, so `assert_feedback_matches_bundle` raises `MissingFeedbackBindingFieldError` — or, if the command is followed loosely, `/approve-review`'s step-2 freshness assertion refuses. So: a **grep-class assertion over every surface naming the binding-field set**, asserted to fail while any of them states three, with today's `review-plan.md` text carried as a **live control arm**; and an assertion that the label that command emits **matches the parser's own regex** rather than being left to the writer's choice. `workflow-v2-1-core` is itself `governing_workflow_version: "1"` and never invokes `/review-plan`, which is why this was filed Optional — the obligation is owed all the same, since `.claude/commands/` is already inside `WF8b`'s declared implementation surface. **(extended in place, revision 78, `GPT-R96-001`)** **(t)** The marker's **consumer** side, which every arm above leaves untested: (l) and (q) assert what the *writer* does — publication, ordering, cross-generation persistence, clearing — and this suite can be green on all of them while every reader stays blind, which is the state the code is in today (`REJECTED` appears zero times under `.claude/commands/` and `scripts/`). The fixture is the one part 3b already constructs and (l)'s `EACCES`-on-the-manifest arm already builds: a **marked but otherwise fully self-verifying** residue — `current/` and the canonical archive each reproducing `bundle_id` and `review_content_id` independently, `assert_local_generation_matches` and `assert_review_request_states_review_content_id` both passing, and the `REJECTED` marker present. Against exactly that fixture, with every assertion made **before any write**: **(t.i)** each local plan-review consumer refuses — `/review-plan` step 5 and `/record-manual-plan-review` step 6 — with `REVIEW_FEEDBACK.md`, the `plan_review_stages` ledger and the item's `phase` all asserted unchanged afterwards. **(t.ii)** Feedback ingestion and application refuse when the reviewed bundle their own binding fields validate against is the marked one — `/apply-plan-review` step 1 and `/apply-implementation-review` step 1 — with the plan document asserted byte-identical afterwards, so the refusal is proven to precede the edit rather than to follow it. **(t.iii)** Plan approval refuses **before index, state and commit mutation** — `/approve-review plan` step 2 and the bootstrap procedure's inherited step 2, asserted separately since only the second one governs this work item — with `git diff --cached` empty, `docs/ai-workflow/WORKFLOW_STATE.json` byte-identical and `HEAD` unmoved, the same three-property assertion (p) already uses for the freshness refusal. **(t.iv)** No hand-off report presents a surviving bundle or archive as ready for external review while the marker is present, asserted at `/milestone-plan`'s and `/prepare-review`'s report step over an archive that independently verifies — the surviving-canonical-archive case, which is the one an operator would otherwise re-attach by hand. **(extended, revision 79, `GPT-OPUS-R97-003`)** For `/milestone-implement` the assertion is exercised at its **step 4** placement rather than at its report, and the arm asserts the property the report placement did not have: after the refusal, `docs/ai-workflow/WORKFLOW_STATE.json` is **byte-identical** to its pre-run state — `reviewed_implementation_head` specifically unchanged — not merely that no report was presented, since under the revision-78 placement `record_bundle_generation` had already persisted that field, and it is the field `/approve-review` step 1 derives `head_matches_reviewed_implementation_head` from. The revision-78 report-step placement is carried as a **live control arm** for `/milestone-implement` alone: run against the marked fixture it is asserted to leave `reviewed_implementation_head` durably advanced, which is the defect demonstrated rather than described. **(extended again, revision 80, `OPUS-R98-001`)** The same treatment is applied at the **other two call sites of the same writer**, because the revision-79 arm tested the correction at the one command it was written for while `record_bundle_generation`'s other two callers stayed unguarded: against the same marked fixture, `/apply-functional-review`'s **bounded-fix branch** (its step 4) and `/apply-implementation-review`'s **step 7** are each asserted to refuse, with `docs/ai-workflow/WORKFLOW_STATE.json` **byte-identical** afterwards — `reviewed_implementation_head` specifically unchanged — and no readiness report presented; the revision-79 placement (assertion at step 1 only, or absent entirely) is carried as the **live control arm** for both, asserted against the same fixture to leave `reviewed_implementation_head` durably advanced and the round presented as ready for a fresh external review. The `/apply-implementation-review` control is the sharper of the two: its step-1 assertion and its mutation-guard twin have both long since passed by step 7, and the generation whose refusal writes the marker is that same invocation's own, so the arm is **deterministic and single-threaded** — no interleaving, no concurrency, the marker written by the very invocation that then ignores it. An arm also asserts that the number of guarded call sites is **derived from the live tree** (`grep -rn "record_bundle_generation" .claude/commands/`, discounting prose references) rather than from the literal "three" in part 3b, so a fourth caller added later fails the suite instead of inheriting silence. **(t.v)** After a generation that completes and verifies its own end state clears the marker at the revision-77-defined point, every consumer in (t.i)-(t.iv) is asserted to proceed normally against the same paths: the **no-deadlock** property, paired with (q)'s positive arm, which asserts the clearing itself. **(t.vi)** The **exemptions are asserted rather than assumed**: with the marker present, the generator is asserted to run to completion and clear it, so the recovery path is proven reachable rather than stated, and `resolve_bundle_dir`/`resolve_feedback_dir` are asserted to resolve normally under the marker, so the refusal is proven to live at the subject boundary and not in path resolution. **(t.vii)** **(new, revision 79, `GPT-OPUS-R97-002`)** The marker written **between** a consumer's assertion and its first durable mutation does not produce a mutation: the arm drives at least `/approve-review plan` and one feedback-ingestion consumer, writes the marker at the point revision 78's single pre-mutation read had already passed, and asserts the same three properties (t.iii) uses — `git diff --cached` empty, `docs/ai-workflow/WORKFLOW_STATE.json` byte-identical, `HEAD` unmoved. The revision-78 single-assertion placement is carried as the **live control arm**, asserted against that same interleaving to record an `EXTERNAL_APPROVE` against the withdrawn bundle, so the second assertion is proven load-bearing rather than defensive. Every other arm of this item is a single-threaded fixture and would be green while this property was false, which is why it is stated separately. The arm's scope is the guarded interval only: it asserts what the second assertion buys and asserts **nothing** about the interval between that assertion and the write it guards, which part 3b discloses as residual rather than closing. **(t.viii)** **(rewritten, revision 80, `OPUS-R98-002`; replaces the revision-79 arm, which tested the wrong mechanism)** The bootstrap consumer is asserted against what the quiescence window **actually prohibits**, not against what revision 79 assumed it did. Three arms. First, the **negative** one that makes the point: with `workflow-v2-1-core` marked and the bridge's transaction open, a concurrent **non-state-writing** generation — `/prepare-review plan workflow-v2-1-core`, or `scripts/prepare-ai-review.sh` invoked directly — is asserted **not** to be a quiescence violation (the window's prohibited set is the twelve installed *state* writers plus manual edits of `WORKFLOW_STATE.json`, and this writes none of them), and the bootstrap procedure is asserted to refuse **anyway**, at sub-step 6.1b's second assertion, with the same three properties (t.iii) uses — `git diff --cached` empty, `docs/ai-workflow/WORKFLOW_STATE.json` byte-identical, `HEAD` unmoved. A companion assertion records that the writer revision 79 cited as the coverage is inapplicable here at all: `record_bundle_generation` raises `InvalidBundleGenerationStageError` for the `plan` stage (`scripts/workflow_state.py:2484-2488`), so no plan-stage generation can ever be the prohibited writer that argument depended on. Second, an arm drives the marker write into the **step-2 → step-4a interval specifically**, before the window exists at all, and asserts those same three properties — the leg of the revision-79 claim that failed first. Third, the **crash-resume** arm, which asserts this plan's divergence from the finding's suggested placement rather than the placement itself: a fresh-session step-0 forward completion of a `COMMITTED` transaction, with the marker written after the original step 2, is asserted to **materialize state and report the marked approval** rather than to refuse — because refusing there would strand a valid, verified approval commit behind an unclosable journal, which step 8b's own before/after-durability rule forbids — while the `NOT_COMMITTED` classification is asserted to roll back, leaving no approval to protect. The revision-79 exemption (no second assertion, quiescence cited as coverage) is carried as the **live control arm**: run against the marked fixture with a concurrent `/prepare-review` generation, it is asserted to record `plan_approval {status: CURRENT, basis: EXTERNAL_APPROVE}` naming the withdrawn bundle, which is the terminal harm this consumer side exists to prevent and the one no downstream consumer catches. **(t.ix)** **(new, revision 79, resolving the reviewer's requested assessment (4) on work-item scoping)** A marker on work item **A** leaves work item **B** entirely alone: with `.ai-review/A/REJECTED` present and no marker under `B`, every consumer in (t.i)–(t.iv) is asserted to refuse for `A` and to **proceed normally** for `B` against its own bundle in the same repository, and the reverse assignment is asserted symmetrically. This follows by construction from `resolve_rejected_marker_path(repo_root, work_item_id)`'s signature, which is exactly why it needs an arm: a regression that dropped the `work_item_id` scoping would fail closed across every work item at once, and no other arm of this item would observe it. **(t.x)** **(new, revision 79, `GPT-OPUS-R97-006`)** An **empty** marker and a **truncated** marker each refuse exactly as a well-formed one does, with the refusal asserted to name the marker path and to report its recorded failed step and surviving path as unavailable rather than raising a parse error — the arm additionally asserting that no consumer treats an unreadable marker as absent, which is the failure direction that would silently restore the whole defect. **(extended, revision 80, `OPUS-R98-004`)** One boundary earlier is asserted too: with the marker's **parent directory** made unreadable (`EACCES` on `.ai-review/<work_item_id>/`, the fixture item 376(l)'s existing `EACCES` arms already build), the presence check cannot complete, and every consumer is asserted to **refuse** naming the resolved path and the underlying error — not to proceed. The natural implementation is carried as the **live control arm**: `pathlib.Path.exists()` swallows `OSError` and returns `False`, so a consumer built on it is asserted to proceed against the marked fixture, which is the fail-open direction the rest of this arm exists to rule out. Two controls keep the arm from being vacuous. The **negative control** is the same fixture with the marker removed and **nothing else changed**: every consumer in (t.i)-(t.iv) is asserted to proceed, which proves the marker itself — not a coincidental identifier mismatch, a phase guard, a missing file or any other invariant that happens to be violated in the same fixture — is the reason each refusal happens. The **live control arm** is today's marker-blind consumer set, asserted against the marked fixture to reach a written verdict, a completed ingestion, an applied plan edit and an `EXTERNAL_APPROVE` respectively — the defect demonstrated rather than described, on the same footing as (n)'s two-point sample and (p)'s live control. And a **conformance arm**, on the footing (i) and (m) established, **rekeyed on the subject artifact (revision 79, `GPT-OPUS-R97-001`)** because revision 78's own predicate — "resolves a bundle or feedback directory and advances a gate" — selects `/prepare-functional-review` and `/apply-functional-review`, which part 3b exempts and which this same arm asserts name the assertion nowhere, so its two halves could not both be satisfied on the live command set. **(rekeyed again on the declared classification line, revision 80, `OPUS-R98-003`, because "evaluable against a command file" was measured and is false)** Revision 79 gave (A) and (B) operational renderings and (C) none, and neither natural rendering of the whole reproduces the declared partition: the loose one (`REVIEW_FEEDBACK` / `MANIFEST\.md|bundle_id` / `(?i)bundle location`) selects three files the same revision declares exempt — two of them on the identical documentation-pointer shape revision 78's predicate tripped over — while the tight one (the literal `Report the bundle location`) returns exactly three files and drops `/approve-review` and `/record-manual-plan-review`, which is a maintained list wearing a regex. So the arm reads a property each file **carries**: part 3b's `review-subject: bundle | verdict | none` header line. The arm asserts **both** set equalities against the live `.claude/commands/` directory — `derived_consumer_set == declared_consumer_set` **and** `derived_exempt_set == declared_exempt_set` — with a file carrying no line, or an unrecognized value, **failing the suite** rather than defaulting to either side. Every file declaring a consuming subject is asserted to name the shared assertion; every file declaring `none` is asserted to name it nowhere; and for the report-only consumers (`/prepare-review`, `/milestone-plan`) the arm asserts **one** assertion rather than two, per part 3b's "twice is defined only where a guarded write exists" rule (revision 80, `OPUS-R98-005`), so a future reader does not record a spurious failure. The declaration is asserted against the semantics rather than trusted: for each file the arm cross-checks the declared value against the three disjuncts — **(A)** reads `REVIEW_FEEDBACK.md`, **(B)** reads `MANIFEST.md` or recomputes or compares `bundle_id` over a `<bundle_dir>` it did not itself generate in the same invocation, **(C)** presents `<bundle_dir>` or the canonical archive as ready for external review, including the readiness-report idiom at `apply-functional-review.md:74-77` and `apply-implementation-review.md:47-53` and not only the literal "Report the bundle location" — so a declaration that lies about its own file fails. Four mutation arms keep it honest: adding a consumer, adding an exempt command, removing a command, and changing an existing command's consuming semantics without updating its line each **fail the suite**. Two shape arms come straight from the measured failures: a **false-positive** arm, in which a fixture command carries a recognized token in a documentation-pointer position (the real shape at `prepare-functional-review.md:10`) and is asserted to classify **exempt**; and a **false-negative** arm, in which a fixture command generates a bundle, records it and reports readiness without the phrase "Report the bundle location" and is asserted to classify **CONSUMER** — the exact shape that hid `OPUS-R98-001` for a revision. The partition is asserted **complete** rather than sampled — every command file is classified into exactly one side, and a file classified into neither **fails the suite** — on the same completeness discipline item 354's writer enumeration already uses, asserting against the live directory rather than against this plan's own list, so a consumer added later cannot pass by being absent from prose. Against today's thirteen files the arm is asserted to yield exactly the **nine** required consumers (`review-plan`, `record-manual-plan-review`, `apply-plan-review`, `approve-review`, `apply-implementation-review`, `apply-functional-review`, `milestone-plan`, `milestone-implement`, `prepare-review`) and exactly the **four** exempt ones (`prepare-functional-review`, `accept-milestone`, `accept-scoped-remediation`, `bootstrap-workflow-v2`), with the total asserted equal to the live file count rather than to the literal thirteen. **The arm's domain is the command files, and consumer #5 is outside it** (new, revision 79, `GPT-OPUS-R97-004`): the Bootstrap plan-approval procedure has no `scripts/`/`.claude/commands/` implementation by explicit design (item 348), so no command-file derivation can reach it; it is covered behaviorally by (t.iii), which asserts its inherited step 2 separately since only that one governs this work item, and against drift by the protected-path identity chain, since the procedure lives in this plan document and any edit to it moves `review_content_id`. Stated so a future reader does not mistake the derived set for the complete consumer set. → WF8b
 
 ## Usability concerns (resolves round 5/6's undispositioned per-gate reporting requirement, and GPT-R9-004's bootstrap-sequence requirement)
 
