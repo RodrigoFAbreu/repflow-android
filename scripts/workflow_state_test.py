@@ -240,6 +240,186 @@ class TestCheckpointTrailerDiscovery(unittest.TestCase):
                 ws.discover_checkpoint_commits(repo.root, "wi", repo.base)
 
 
+STATE_REL_PATH = "docs/ai-workflow/WORKFLOW_STATE.json"
+
+
+def _commit_state(repo: "ScratchRepo", content: str, message: str = "state") -> str:
+    """Commits arbitrary bytes at the real `WORKFLOW_STATE.json` path
+    inside a `ScratchRepo`, so `checkpoint_origination_provable`'s
+    per-commit partition can be exercised against realistic nested-path
+    history rather than `ScratchRepo.commit`'s flat scratch files."""
+    full = repo.root / STATE_REL_PATH
+    full.parent.mkdir(parents=True, exist_ok=True)
+    full.write_text(content)
+    _run(["git", "add", STATE_REL_PATH], cwd=repo.root)
+    _run(["git", "commit", "-q", "-m", message], cwd=repo.root)
+    return repo.head()
+
+
+def _state_json(**work_items) -> str:
+    return json.dumps({"schema_version": 1, "work_items": work_items})
+
+
+class TestCheckpointOriginationReference(unittest.TestCase):
+    """WF8b's `D-Checkpoint-Ownership` origination-reference slice
+    (`checkpoint_origination_provable`/`origination_reference_commits`),
+    against the plan's "The read fails closed, and the partition is
+    total" table and its reduction/precedence rules."""
+
+    def test_no_reference_commits_admits(self):
+        with ScratchRepo() as repo:
+            result = ws.checkpoint_origination_provable(repo.root, "wi", "CP")
+            self.assertEqual(result, {
+                "decision": "admit", "route": "no_reference_commits",
+                "state_rel_path": STATE_REL_PATH, "examined_commits": 0,
+            })
+
+    def test_absent_from_every_examined_commit_admits(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, _state_json())  # no "wi" entry at all
+            result = ws.checkpoint_origination_provable(repo.root, "wi", "CP")
+            self.assertEqual(result["decision"], "admit")
+            self.assertEqual(result["route"], "scanned_all_decidable")
+
+    def test_decidable_complete_status_admits(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, _state_json(wi={"checkpoints": {"CP": {"status": "COMPLETE"}}}))
+            result = ws.checkpoint_origination_provable(repo.root, "wi", "CP")
+            self.assertEqual(result["decision"], "admit")
+
+    def test_observed_in_progress_refuses(self):
+        with ScratchRepo() as repo:
+            sha = _commit_state(repo, _state_json(wi={"checkpoints": {"CP": {"status": "IN_PROGRESS"}}}))
+            with self.assertRaises(ws.CheckpointOriginationUnprovableError) as ctx:
+                ws.checkpoint_origination_provable(repo.root, "wi", "CP")
+            self.assertEqual(ctx.exception.evidence["route"], "observed")
+            self.assertEqual(ctx.exception.evidence["commit"], sha)
+
+    def test_reduction_rule_any_observation_anywhere_binds(self):
+        """No supersession, no recency: an `IN_PROGRESS` observed at an
+        earlier commit still refuses even though a later commit in the
+        same reference records `COMPLETE`."""
+        with ScratchRepo() as repo:
+            _commit_state(repo, _state_json(wi={"checkpoints": {"CP": {"status": "IN_PROGRESS"}}}))
+            _commit_state(repo, _state_json(wi={"checkpoints": {"CP": {"status": "COMPLETE"}}}))
+            with self.assertRaises(ws.CheckpointOriginationUnprovableError) as ctx:
+                ws.checkpoint_origination_provable(repo.root, "wi", "CP")
+            self.assertEqual(ctx.exception.evidence["route"], "observed")
+
+    def test_undecidable_unparseable_document_refuses(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, "{not json")
+            with self.assertRaises(ws.CheckpointOriginationUnprovableError) as ctx:
+                ws.checkpoint_origination_provable(repo.root, "wi", "CP")
+            self.assertEqual(ctx.exception.evidence["route"], "undecidable")
+
+    def test_undecidable_non_object_document_refuses(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, json.dumps([1, 2, 3]))
+            with self.assertRaises(ws.CheckpointOriginationUnprovableError) as ctx:
+                ws.checkpoint_origination_provable(repo.root, "wi", "CP")
+            self.assertEqual(ctx.exception.evidence["route"], "undecidable")
+
+    def test_present_but_non_object_work_items_refuses_undecidable(self):
+        """A present `work_items: null` is a schema-invalid document, not
+        an absence -- absence is a missing key, established with `in`,
+        never a falsy or non-object value."""
+        with ScratchRepo() as repo:
+            _commit_state(repo, json.dumps({"schema_version": 1, "work_items": None}))
+            with self.assertRaises(ws.CheckpointOriginationUnprovableError) as ctx:
+                ws.checkpoint_origination_provable(repo.root, "wi", "CP")
+            self.assertEqual(ctx.exception.evidence["route"], "undecidable")
+
+    def test_present_but_non_object_checkpoint_entry_refuses_undecidable(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, _state_json(wi={"checkpoints": {"CP": None}}))
+            with self.assertRaises(ws.CheckpointOriginationUnprovableError) as ctx:
+                ws.checkpoint_origination_provable(repo.root, "wi", "CP")
+            self.assertEqual(ctx.exception.evidence["route"], "undecidable")
+
+    def test_status_outside_controlled_vocabulary_refuses_undecidable(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, _state_json(wi={"checkpoints": {"CP": {"status": "BOGUS"}}}))
+            with self.assertRaises(ws.CheckpointOriginationUnprovableError) as ctx:
+                ws.checkpoint_origination_provable(repo.root, "wi", "CP")
+            self.assertEqual(ctx.exception.evidence["route"], "undecidable")
+
+    def test_precedence_observed_wins_over_undecidable_in_same_reference(self):
+        """`OPUS-R89-001`'s precedence rule: when both refusal routes hold
+        in the same reference, the observed route is reported -- the
+        decision is refuse either way, but diagnosis should point at the
+        actionable fact rather than whichever commit `rev-list` happened
+        to reach first."""
+        with ScratchRepo() as repo:
+            _commit_state(repo, "{not valid json at all")
+            sha = _commit_state(repo, _state_json(wi={"checkpoints": {"CP": {"status": "IN_PROGRESS"}}}))
+            with self.assertRaises(ws.CheckpointOriginationUnprovableError) as ctx:
+                ws.checkpoint_origination_provable(repo.root, "wi", "CP")
+            self.assertEqual(ctx.exception.evidence["route"], "observed")
+            self.assertEqual(ctx.exception.evidence["commit"], sha)
+
+    def test_symlinked_state_path_is_undecidable_not_absent(self):
+        """A symlink at the state path is never followed -- it is a
+        present-but-not-a-regular-file blob, refused as undecidable."""
+        with ScratchRepo() as repo:
+            full = repo.root / STATE_REL_PATH
+            full.parent.mkdir(parents=True, exist_ok=True)
+            (full.parent / "elsewhere.json").write_text(
+                _state_json(wi={"checkpoints": {"CP": {"status": "COMPLETE"}}})
+            )
+            full.symlink_to("elsewhere.json")
+            _run(["git", "add", "-A"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "symlink state"], cwd=repo.root)
+            with self.assertRaises(ws.CheckpointOriginationUnprovableError) as ctx:
+                ws.checkpoint_origination_provable(repo.root, "wi", "CP")
+            self.assertEqual(ctx.exception.evidence["route"], "undecidable")
+
+    def test_full_history_retains_a_deleted_branchs_only_observation(self):
+        """Reproduces `OPUS-R88-001`'s exact gap: a merge resolved
+        `-s ours` produces a merge commit TREESAME to mainline for the
+        state path, and once the side branch ref is deleted the only
+        remaining path to the side commit is through the merge's second
+        parent. A plain `git rev-list --all -- <path>` (Git's default
+        History Simplification) prunes that parent entirely and misses
+        the side commit's `IN_PROGRESS`; `--full-history` must not."""
+        with ScratchRepo() as repo:
+            _commit_state(repo, _state_json(wi={"checkpoints": {"CP": {"status": "COMPLETE"}}}))
+            _run(["git", "checkout", "-q", "-b", "side"], cwd=repo.root)
+            side_sha = _commit_state(repo, _state_json(wi={"checkpoints": {"CP": {"status": "IN_PROGRESS"}}}))
+            _run(["git", "checkout", "-q", "-"], cwd=repo.root)
+            _run(["git", "merge", "-q", "-s", "ours", "-m", "merge side (ours)", "side"], cwd=repo.root)
+            _run(["git", "branch", "-D", "side"], cwd=repo.root)
+
+            # Control arm: the default, non-full-history walk really does
+            # drop the side commit here -- proving this is the exact gap
+            # --full-history exists to close, not a hypothetical one.
+            pruned = subprocess.run(
+                ["git", "rev-list", "--all", "--", STATE_REL_PATH],
+                cwd=repo.root, check=True, capture_output=True, text=True,
+            ).stdout.splitlines()
+            self.assertNotIn(side_sha, pruned)
+
+            with self.assertRaises(ws.CheckpointOriginationUnprovableError) as ctx:
+                ws.checkpoint_origination_provable(repo.root, "wi", "CP")
+            self.assertEqual(ctx.exception.evidence["route"], "observed")
+            self.assertEqual(ctx.exception.evidence["commit"], side_sha)
+
+    def test_origination_reference_commits_matches_rev_list(self):
+        with ScratchRepo() as repo:
+            sha = _commit_state(repo, _state_json())
+            commits = ws.origination_reference_commits(repo.root, STATE_REL_PATH)
+            self.assertEqual(commits, [sha])
+
+    def test_unresolvable_reference_refuses(self):
+        """A repository the `rev-list` invocation itself cannot run
+        against (no `.git` at all) refuses -- an unavailable reference is
+        never read as an empty one."""
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ws.CheckpointOriginationUnprovableError) as ctx:
+                ws.origination_reference_commits(Path(tmp), STATE_REL_PATH)
+            self.assertEqual(ctx.exception.evidence["route"], "reference_unresolvable")
+
+
 def _base_work_item(**overrides) -> dict:
     work_item = {
         "work_item_type": "process",

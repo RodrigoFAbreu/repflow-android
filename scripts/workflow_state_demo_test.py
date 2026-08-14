@@ -345,5 +345,48 @@ class TestLegacyPromotionAgainstRealMilestone8(unittest.TestCase):
         self.assertEqual(json.loads(state_path.read_text()), state)
 
 
+class TestCheckpointOriginationAgainstRealRepository(unittest.TestCase):
+    """WF8b's `D-Checkpoint-Ownership` origination-reference slice
+    (`checkpoint_origination_provable`), checked read-only against this
+    repository's own real, already-committed defect: the
+    `workflow-v2-1-core` Revision-80 plan-approval commit (`8f8d878`)
+    swept `v2-1-dry-run`'s dirty `S-CP3` `IN_PROGRESS` delta into `HEAD`
+    as a side effect of staging the whole plan-stage protected surface,
+    recorded in commit `25246a5`. This is the concrete case the S14/S15
+    dry-run scenarios need an explicit takeover for, once one exists."""
+
+    def test_v2_1_dry_run_s_cp3_origination_is_unprovable(self):
+        repo_root = _repo_root()
+        with self.assertRaises(ws.CheckpointOriginationUnprovableError) as ctx:
+            ws.checkpoint_origination_provable(repo_root, "v2-1-dry-run", "S-CP3")
+        evidence = ctx.exception.evidence
+        self.assertEqual(evidence["route"], "observed")
+        self.assertEqual(evidence["status"], "IN_PROGRESS")
+        self.assertEqual(evidence["commit"], "8f8d878c0985da96d9b462703b6c88ec5b3ab07b")
+
+    def test_a_never_started_checkpoint_id_admits(self):
+        repo_root = _repo_root()
+        result = ws.checkpoint_origination_provable(
+            repo_root, "workflow-v2-1-core", "NO-SUCH-CHECKPOINT-ID-EVER-USED",
+        )
+        self.assertEqual(result["decision"], "admit")
+
+    def test_bootstrap_driver_never_calls_this_slice(self):
+        """Scope-boundary regression: `/bootstrap-workflow-v2` derives
+        completion from commit trailers alone and never enters
+        `[2.1 step 1]` (D-Checkpoint-Ownership's own "Scope boundaries"
+        bullet), so this slice must stay unreachable from it -- confirmed
+        structurally, not merely by convention. `workflow-v2-1-core`'s own
+        `WF8b` checkpoint *is* observed `IN_PROGRESS` in committed history
+        (five commits, per the plan's "Scope boundaries" text) and would
+        itself refuse this check -- proving the point only if the
+        bootstrap driver never reaches it."""
+        repo_root = _repo_root()
+        command_text = (repo_root / ".claude/commands/bootstrap-workflow-v2.md").read_text()
+        self.assertNotIn("checkpoint_origination_provable", command_text)
+        with self.assertRaises(ws.CheckpointOriginationUnprovableError):
+            ws.checkpoint_origination_provable(repo_root, "workflow-v2-1-core", "WF8b")
+
+
 if __name__ == "__main__":
     unittest.main()

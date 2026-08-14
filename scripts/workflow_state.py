@@ -87,6 +87,19 @@ parent's own registry/mapping/completed-checkpoint history.
 `incomplete_children`/`complete_work_item`'s extended check implement
 "parent acceptance blocks on an incomplete child" (resolves `GPT-R9-016`).
 
+WF8b adds the first production slice of `D-Checkpoint-Ownership`
+(revisions 69-72 of the plan's "The origination reference" and "The read
+fails closed, and the partition is total"): `checkpoint_origination_provable`
+and its supporting `origination_reference_commits`/
+`_checkpoint_status_at_commit`, scanning every commit
+`git rev-list --all --full-history -- <state path>` enumerates for a
+decidable observation that a checkpoint's `IN_PROGRESS` was ever supplied
+by a checkout, merge, or reset rather than genuinely originated in this
+worktree. Deliberately bounded: no shared claim record, no mutation/
+handoff guard, no adoption, no explicit takeover -- those remain future
+`WF8b` scope. Wired into `/milestone-implement`'s `[2.1 step 1]` step 1c,
+alongside `verify_dirty_resume_safety`, on the resume path only.
+
 Stdlib-only, mirroring `scripts/workflow_fingerprint.py`'s own
 `docs/TECHNICAL_DECISIONS.md`-recorded constraint.
 
@@ -1453,6 +1466,210 @@ def verify_dirty_resume_safety(
             f"{path} has no expected_dirty_paths_by_work_item entry for {work_item_id!r} -- "
             f"this worktree never started (or lost the record for) this work item's IN_PROGRESS checkpoint"
         )
+
+
+# ---------------------------------------------------------------------------
+# WF8b: D-Checkpoint-Ownership -- the origination reference only (revisions
+# 69-72 of docs/ai-workflow/WORKFLOW_V2_PLAN.md's "The origination
+# reference" and "The read fails closed, and the partition is total").
+#
+# This is a bounded first production slice, not the full mechanism: no
+# shared claim record, no mutation/handoff guard, no explicit takeover, no
+# adoption. It answers exactly one question -- can this worktree prove a
+# locally `IN_PROGRESS` checkpoint was never observably supplied by a
+# checkout, merge, or reset from committed history? -- and raises rather
+# than deciding RESUME/FRESH/adopt itself, since those outcomes depend on
+# the still-unimplemented shared claim. See "Where the check belongs, and
+# the ordering" in the plan for the full reconciliation table this slice
+# is one input to.
+# ---------------------------------------------------------------------------
+
+
+class CheckpointOriginationUnprovableError(Exception):
+    """Raised when a checkpoint this worktree records `IN_PROGRESS` cannot
+    be proven to have been originated here: either its `IN_PROGRESS` is
+    observed at some commit in the origination reference (a checkout,
+    merge, or reset could have supplied it) or that reference's read is
+    itself undecidable at some commit. Per the plan's precedence rule, an
+    observed route always wins over an undecidable one found in the same
+    scan. Carries `.evidence` (`route`, the commit and status/reason, the
+    state path, and how many commits were examined) for the caller to
+    report. D-Checkpoint-Ownership's explicit-takeover escape is not yet
+    implemented, so this refusal currently has no automated recovery --
+    the caller must stop and report."""
+
+    def __init__(self, message: str, *, evidence: dict):
+        super().__init__(message)
+        self.evidence = evidence
+
+
+def origination_reference_commits(repo_root: Path, state_rel_path: str) -> list[str]:
+    """`D-Checkpoint-Ownership`'s origination reference, stated exactly:
+    every commit reachable from every ref in the repository (`--all`,
+    every linked worktree's own `HEAD` included, detached included) that
+    is not TREESAME to a parent for the state document (`--full-history`
+    retains merges and follows every parent, so a commit reachable only
+    through a merge's non-mainline side for this path is never silently
+    dropped by History Simplification's default pruning). Raises
+    `CheckpointOriginationUnprovableError` if the invocation itself cannot
+    be resolved -- an unavailable reference is refused, never read as
+    empty."""
+    try:
+        out = _run(
+            ["git", "rev-list", "--all", "--full-history", "--", state_rel_path],
+            cwd=repo_root,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise CheckpointOriginationUnprovableError(
+            f"origination reference could not be resolved for {state_rel_path!r}: {exc}",
+            evidence={"route": "reference_unresolvable", "state_rel_path": state_rel_path},
+        ) from exc
+    return [line for line in out.splitlines() if line]
+
+
+def _checkpoint_status_at_commit(
+    repo_root: Path, commit: str, work_item_id: str, checkpoint_id: str, state_rel_path: str,
+) -> tuple[str, dict]:
+    """One commit's contribution to the origination read, partitioned
+    exactly per the plan's "The read fails closed, and the partition is
+    total" table. Returns `(outcome, detail)`:
+
+    - `"in_progress"` -- the checkpoint's status is decidably `IN_PROGRESS`
+      at this commit (the observed refusal route);
+    - `"undecidable"` -- this commit's contribution cannot be decided:
+      unlistable tree/unresolvable commit, a state path present but not a
+      readable regular-file blob, an unparseable or non-object document, a
+      present-but-non-object member at any of the four levels
+      (`work_items`/the work item/`checkpoints`/the checkpoint entry), or
+      a checkpoint entry whose `status` is absent, not a string, or
+      outside `CHECKPOINT_STATUSES`;
+    - `"decidable"` -- this commit admits: the state path, or one of the
+      four keys, is decidably absent from this commit, or the checkpoint's
+      status is decidably something other than `IN_PROGRESS`.
+
+    Absence at a level is always a missing **key**, checked with `in`,
+    never a falsy or non-object value -- a present `null`/list/string/
+    number at any of the four levels is `"undecidable"`, not absence."""
+    listing = subprocess.run(
+        ["git", "ls-tree", commit, "--", state_rel_path],
+        cwd=repo_root, capture_output=True, text=True,
+    )
+    if listing.returncode != 0:
+        return "undecidable", {"commit": commit, "reason": "tree unlistable or commit unresolvable"}
+    line = listing.stdout.strip()
+    if not line:
+        return "decidable", {"commit": commit, "reason": "state path absent from tree"}
+    meta, _, _ = line.partition("\t")
+    mode = meta.split()[0]
+    blob_sha = meta.split()[2]
+    if mode not in ("100644", "100755"):
+        return "undecidable", {"commit": commit, "reason": f"state path is not a regular-file blob (mode {mode})"}
+    blob = subprocess.run(["git", "cat-file", "-p", blob_sha], cwd=repo_root, capture_output=True, text=True)
+    if blob.returncode != 0:
+        return "undecidable", {"commit": commit, "reason": "blob could not be read"}
+    try:
+        doc = json.loads(blob.stdout)
+    except json.JSONDecodeError:
+        return "undecidable", {"commit": commit, "reason": "state document unparseable"}
+    if not isinstance(doc, dict):
+        return "undecidable", {"commit": commit, "reason": "state document is not an object"}
+
+    if "work_items" not in doc:
+        return "decidable", {"commit": commit, "reason": "no work_items key"}
+    work_items = doc["work_items"]
+    if not isinstance(work_items, dict):
+        return "undecidable", {"commit": commit, "reason": "work_items is not an object"}
+
+    if work_item_id not in work_items:
+        return "decidable", {"commit": commit, "reason": f"no {work_item_id!r} entry"}
+    work_item = work_items[work_item_id]
+    if not isinstance(work_item, dict):
+        return "undecidable", {"commit": commit, "reason": f"{work_item_id!r} entry is not an object"}
+
+    if "checkpoints" not in work_item:
+        return "decidable", {"commit": commit, "reason": "no checkpoints key"}
+    checkpoints = work_item["checkpoints"]
+    if not isinstance(checkpoints, dict):
+        return "undecidable", {"commit": commit, "reason": "checkpoints is not an object"}
+
+    if checkpoint_id not in checkpoints:
+        return "decidable", {"commit": commit, "reason": f"no {checkpoint_id!r} entry"}
+    entry = checkpoints[checkpoint_id]
+    if not isinstance(entry, dict):
+        return "undecidable", {"commit": commit, "reason": f"{checkpoint_id!r} entry is not an object"}
+
+    status = entry.get("status")
+    if not isinstance(status, str) or status not in CHECKPOINT_STATUSES:
+        return "undecidable", {"commit": commit, "reason": f"status is not a readable checkpoint status ({status!r})"}
+    if status == "IN_PROGRESS":
+        return "in_progress", {"commit": commit, "status": status}
+    return "decidable", {"commit": commit, "status": status}
+
+
+def checkpoint_origination_provable(
+    repo_root: Path, work_item_id: str, checkpoint_id: str, *, state_rel_path: str | None = None,
+) -> dict:
+    """Whether this worktree can prove it originated `checkpoint_id`'s
+    local `IN_PROGRESS`, per `D-Checkpoint-Ownership`'s origination
+    reference. Scans every commit `origination_reference_commits`
+    enumerates; a decidable `IN_PROGRESS` observation anywhere refuses
+    unconditionally -- no supersession, no recency, no scoping to a
+    lifecycle instance, the reduction rule stated normatively in the plan
+    -- and, when both an observed and an undecidable commit exist in the
+    same reference, the observed route is reported in preference to the
+    undecidable one. Returns an evidence dict on success (admit); raises
+    `CheckpointOriginationUnprovableError` (carrying the same evidence
+    shape) on refusal.
+
+    This function answers only the origination question. It deliberately
+    does not itself decide `RESUME` vs `FRESH` vs adoption -- those
+    outcomes, per the plan's reconciliation table, also depend on the
+    shared claim record and mutation guard, neither of which this slice
+    implements."""
+    state_rel_path = state_rel_path or DEFAULT_STATE_PATH.as_posix()
+    commits = origination_reference_commits(repo_root, state_rel_path)
+    if not commits:
+        return {
+            "decision": "admit", "route": "no_reference_commits",
+            "state_rel_path": state_rel_path, "examined_commits": 0,
+        }
+
+    observed = None
+    undecidable = None
+    for commit in commits:
+        outcome, detail = _checkpoint_status_at_commit(repo_root, commit, work_item_id, checkpoint_id, state_rel_path)
+        if outcome == "in_progress" and observed is None:
+            observed = detail
+        elif outcome == "undecidable" and undecidable is None:
+            undecidable = detail
+
+    if observed is not None:
+        raise CheckpointOriginationUnprovableError(
+            f"{work_item_id!r} checkpoint {checkpoint_id!r} is IN_PROGRESS at commit "
+            f"{observed['commit']} in the origination reference -- a checkout, merge, or "
+            f"reset could have supplied this worktree's own IN_PROGRESS state, so automatic "
+            f"resume cannot be trusted (D-Checkpoint-Ownership's explicit-takeover escape is "
+            f"not yet implemented -- stop and reconcile manually)",
+            evidence={
+                "route": "observed", "commit": observed["commit"], "status": "IN_PROGRESS",
+                "state_rel_path": state_rel_path, "examined_commits": len(commits),
+            },
+        )
+    if undecidable is not None:
+        raise CheckpointOriginationUnprovableError(
+            f"{work_item_id!r} checkpoint {checkpoint_id!r}'s origination reference contains "
+            f"an undecidable commit ({undecidable['commit']}: {undecidable['reason']}) -- "
+            f"origination is unprovable, not proved",
+            evidence={
+                "route": "undecidable", "commit": undecidable["commit"],
+                "reason": undecidable["reason"], "state_rel_path": state_rel_path,
+                "examined_commits": len(commits),
+            },
+        )
+    return {
+        "decision": "admit", "route": "scanned_all_decidable",
+        "state_rel_path": state_rel_path, "examined_commits": len(commits),
+    }
 
 
 # ---------------------------------------------------------------------------

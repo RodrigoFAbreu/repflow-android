@@ -76,6 +76,18 @@ dirty-resume rule, `WF2`):
     explicitly discard it and restart from the checkpoint's own
     `start_commit`; never guessed either way (D3, missing-test items 31,
     43, 71).
+
+    Then call `workflow_state.checkpoint_origination_provable(repo_root,
+    work_item_id, checkpoint_id)` (`D-Checkpoint-Ownership`'s origination-
+    reference slice, `WF8b`) -- this worktree's own dirty-resume identity
+    is not, by itself, proof that its local `IN_PROGRESS` was never also
+    supplied by a checkout, merge, or reset from committed history.
+    `CheckpointOriginationUnprovableError` stops immediately: report the
+    evidence (`route`, the observing or undecidable commit, and how many
+    commits were examined) and require the user to reconcile manually --
+    `D-Checkpoint-Ownership`'s shared claim record, mutation guard and
+    explicit-takeover escape are not yet implemented, so there is no
+    automated recovery from this refusal yet.
 1d. **Fresh-start bookkeeping** (fresh start only): call
     `workflow_state.transition_checkpoint_in_progress(state,
     work_item_id, checkpoint_id, start_commit=<current HEAD>, now=<now>)`
