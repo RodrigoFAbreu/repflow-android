@@ -911,10 +911,76 @@ refusal). Record checkpoint 3's `status`/`start_commit` and
 `WORKTREE_IDENTITY.json` bytes here, so S14's no-mutation claim can be checked
 against a recorded before-state rather than asserted.
 
+**Additional setup action, added by `workflow-v2-1-core` revision 63
+(`D-Checkpoint-Ownership`): adopt the claim, in worktree A, before S14 runs.**
+Checkpoint 3 was started before the cross-worktree ownership contract existed,
+so no shared claim was published for it. Without one, worktree B would still
+classify it as a fresh start — the adoption path exists precisely for
+checkpoints interrupted before the mechanism landed, and this is the one in
+this repository. Once `WF8b` has implemented the contract, run the adoption
+operation for `v2-1-dry-run` **from worktree A**:
+
+- it is guarded so only the originating worktree can run it — it requires the
+  local state to record checkpoint 3 `IN_PROGRESS` and
+  `verify_dirty_resume_safety` to pass, so a foreign worktree cannot adopt;
+- it writes **no** authoritative state: `WORKFLOW_STATE.json`,
+  `.ai-review/runtime/WORKTREE_IDENTITY.json`, `scratch/c.txt`, `HEAD` and
+  `git status` must all be byte-identical across it, and that must be
+  **verified**, not assumed. Checkpoint 3 stays `IN_PROGRESS` at
+  `state_revision` 18 exactly as recorded above;
+- the only thing it creates is the shared claim record under
+  `.git/ai-workflow/checkpoint-claims/`, which lies outside every worktree's
+  working tree and therefore appears in no `git status`, no bundle, and no
+  content identity;
+- it implements nothing. This is deliberate: S15 still needs checkpoint 3
+  interrupted, so adoption must protect the checkpoint **without** resuming it.
+  Running `/milestone-implement` from worktree A to obtain the claim would
+  complete checkpoint 3 and destroy S15's premise.
+
+Record the claim record's path and bytes here too, so S14 can check them
+unchanged afterwards.
+
+- **Outcome (real, ran, deliberately left interrupted)**: a prior session
+  fresh-started checkpoint 3 in worktree A, per this step's own procedure:
+  `current_checkpoint_id` → `"S-CP3"`, `checkpoints["S-CP3"] = {"status":
+  "IN_PROGRESS", "start_commit": "8375b64f9ad9ad44afe7574841a62457f5d83cea"}`
+  (`WORKFLOW_STATE.json` `state_revision` 17 → 18), `.ai-review/runtime/WORKTREE_IDENTITY.json`
+  refreshed with a `v2-1-dry-run` entry pointing at worktree A
+  (`generated_at: "2026-08-12T12:55:14+01:00"`, sha256
+  `8482417e1dcfa8ca85f00b64224fb9a79c4805bdd05727b4ac1897efd4b4515e`), and
+  `docs/ai-workflow/dry-run/scratch/c.txt` created (uncommitted). All left
+  exactly there, deliberately, with no completion commit — confirmed
+  independently by a fresh session (this one): `git show
+  8375b64:docs/ai-workflow/WORKFLOW_STATE.json`'s `v2-1-dry-run` entry has
+  no `S-CP3` key at all (fresh-start bookkeeping is a working-tree-only
+  write, never committed by design at this step), and `git status --short`
+  in worktree A shows exactly the modified `WORKFLOW_STATE.json` plus the
+  untracked `scratch/c.txt` (and the pre-existing, unrelated
+  `verify_review_content_id.py`). Before-state recorded here for S14/S15 to
+  check against.
+
 ## S14 — Dirty IN_PROGRESS resume attempted from a mismatched worktree, refused
 
-- **Purpose**: prove `verify_dirty_resume_safety`'s failure path stops cleanly
-  rather than silently resuming or silently discarding.
+- **Purpose**: prove that a genuine linked worktree B, possessing only
+  committed repository state plus the shared coordination record, **refuses
+  before it can start the checkpoint or mutate any authoritative state** — and
+  that `verify_dirty_resume_safety`'s failure path stops cleanly rather than
+  silently resuming or silently discarding.
+
+  **This remains an end-to-end `/milestone-implement` test.** It is not
+  narrowed into a direct call of `verify_dirty_resume_safety`, and it does not
+  copy worktree A's `WORKFLOW_STATE.json` into B. Both of those were considered
+  as repairs when this scenario was found unexecutable, and both were rejected:
+  the first tests a function instead of the command's actual routing, which is
+  exactly where the defect lived, and the second manufactures the very state
+  whose absence is the point. Under `workflow-v2-1-core` revision 63's
+  `D-Checkpoint-Ownership`, B reaches the refusal on its own — the claim
+  adopted in worktree A during the setup step lives in the **shared Git common
+  directory**, which B resolves to the same absolute path by construction, so
+  B's own step 1c discovers that the work item is claimed and routes into
+  `verify_dirty_resume_safety` **before** the fresh-start branch it would
+  otherwise have taken. B's `WORKFLOW_STATE.json` stays byte-identical to its
+  own committed bytes throughout.
 
   **Two distinct refusals, both required.** `.ai-review/` is gitignored
   (`.gitignore:1`) and nothing under it is tracked, so a worktree created by
@@ -979,6 +1045,22 @@ against a recorded before-state rather than asserted.
   not just claimed; and checkpoint 3 is still `IN_PROGRESS`, byte-identical to
   the setup step's recorded before-state, afterwards.
 
+  **Additional evidence required by revision 63's architecture**, each checked
+  rather than asserted:
+  - B never reached the fresh-start branch: B's own `WORKFLOW_STATE.json` has
+    no `S-CP3` entry afterwards and is byte-identical to
+    `git show HEAD:docs/ai-workflow/WORKFLOW_STATE.json` in B;
+  - B created no `.ai-review/runtime/WORKTREE_IDENTITY.json` of its own in the
+    S14a case (the S14b case has only the one copied in, unchanged);
+  - the shared claim record is byte-identical before and after both
+    invocations — a refusal must neither release, refresh, nor overwrite it —
+    and no stray staging temp file appears beside it;
+  - the refusal names the claim holder (worktree A's path and checkpoint 3) and
+    points at the explicit takeover as the only escape. This is the ownership
+    evidence the refusal carries; record the exact text, and note that the
+    underlying error *class* is still `D3`'s, which is what keeps S14a and S14b
+    distinguishable.
+
   Note the error *messages* name neither worktree's concrete identity — both
   are descriptive ("a different worktree's identity than this one"). Do not
   record "the error names both values" as evidence; it does not. To evidence
@@ -989,6 +1071,78 @@ against a recorded before-state rather than asserted.
   branch (point 4 above), performed during S17; confirm `v2-1-dry-run`'s
   `WORKTREE_IDENTITY.json` entry for the primary worktree is unchanged from
   before this scenario.
+
+- **Outcome (blocked before mutation)**: worktree B was created
+  (`git worktree add /tmp/.../wf8b-s14-worktree -b wf8b-s14-scratch HEAD`,
+  at `8375b64f9ad9ad44afe7574841a62457f5d83cea`), isolated path/branch per
+  the authorization above. Before invoking `/milestone-implement
+  v2-1-dry-run` from it, tracing the command's own `[2.1 step 1]` procedure
+  against worktree B's actual checked-out state surfaced a real defect in
+  this scenario's own design: worktree B's `WORKFLOW_STATE.json` (checked
+  out at `HEAD`, ordinary Git worktree semantics) has no `S-CP3` entry at
+  all — that transition is deliberately uncommitted, worktree-A-local
+  content — so `select_next_checkpoint` would classify checkpoint 3 as a
+  **fresh start** from worktree B, never reaching `verify_dirty_resume_safety`
+  (resume-only) at all, and a literal invocation would instead perform a
+  real, forbidden mutation (fresh-start bookkeeping) inside worktree B's
+  own tracked `WORKFLOW_STATE.json`. Neither `/milestone-implement`'s
+  procedure nor any function call against it was executed from worktree B
+  — stopped at this analysis, before any mutation, per this document's own
+  "capture the exact evidence... create a remediation finding rather than
+  hand-editing around it" discipline. Full reproduction, root cause and
+  three proposed (undecided) resolution options in
+  `docs/ai-workflow/dry-run/WF8B_S14_FINDING_worktree_b_invisible_to_uncommitted_checkpoint.md`.
+  Worktree B and its branch were removed again immediately (not deferred to
+  S17, since nothing was ever run from it); checkpoint 3 in worktree A
+  confirmed unchanged, byte-identical to the setup step's recorded
+  before-state. **S15 is blocked on this finding's resolution** (same
+  checkpoint-3 dependency the setup step's own text describes).
+
+- **Outcome, follow-up analysis (2026-08-12, second session)**: the finding was
+  classified, its root cause established mechanically, and a repair designed and
+  stress-tested — still with zero mutation of `v2-1-dry-run` state and no
+  `/milestone-implement` invocation from any worktree. **The defect is not only
+  a defect in this scenario's specification: it is a genuine workflow
+  architecture defect.** `D3`'s dirty-resume rule protects only the worktree
+  that already knows it is resuming; the `IN_PROGRESS` transition is never
+  committed (confirmed: no commit reachable from `HEAD` has ever carried a
+  `v2-1-dry-run` checkpoint `IN_PROGRESS`), so no other worktree can discover
+  the claim, and `verify_dirty_resume_safety` is never routed to. Running the
+  real command from worktree B today would select `S-CP3`, start it as a fresh
+  checkpoint, and commit it `COMPLETE` while worktree A still holds it
+  `IN_PROGRESS` — verified against the real `workflow_state.py` functions. The
+  proposed repair records the *claim* in the shared Git common directory so
+  step 1b can route a foreign worktree into the existing, unchanged step 1c;
+  under it, **`S14a` and `S14b` become executable exactly as written above**,
+  with the same two error classes and no `WORKFLOW_STATE.json` copy. Five
+  bounded stress passes, 77 checks green, two defects found in the draft design
+  and fixed. Full analysis, routing and the required review path in
+  `docs/ai-workflow/dry-run/WF8B_S14_FINDING_worktree_b_invisible_to_uncommitted_checkpoint.md`
+  (follow-up section); executable evidence in
+  `docs/ai-workflow/dry-run/wf8b-s14-repro/`. **S14 and S15 remain blocked**,
+  now specifically on a `workflow-v2-1-core` plan revision (63) and its plan-review
+  gate — `v2-1-dry-run`'s own Revision 5 plan needs no change.
+
+- **Outcome, routing (2026-08-12, third session)**: `workflow-v2-1-core` plan
+  **Revision 63** was authored, adding `D-Checkpoint-Ownership` and amending
+  `D-Selection` rule 1 and `D3`'s dirty-resume paragraph, and this scenario's
+  text above was corrected to match that architecture and no further. Four
+  bounded author-side design/stress passes over the candidate design found and
+  fixed seven further defects in it before any scenario text was written; 171
+  checks are green across nine passes. **One correction to the second session's
+  own conclusion**: it recorded that under the proposed fix "`S14a` and `S14b`
+  become executable exactly as written above". They do not, quite — every
+  stress fixture through pass 5 had arranged the interrupted checkpoint *with*
+  a claim already taken, whereas the real checkpoint 3 was started before the
+  mechanism existed and therefore has none. In that configuration worktree B
+  still fresh-starts, which pass 6 reproduces directly. S14 therefore needs the
+  one **additional setup action** now recorded in the "S14/S15 setup step"
+  above (claim adoption in worktree A, implementing nothing and mutating no
+  authoritative state); with it, S14a and S14b are executable as written, still
+  end to end, still with no `WORKFLOW_STATE.json` copy into B. **S14 and S15
+  remain blocked** on Revision 63 completing its plan-review and approval path
+  and on `WF8b` then implementing the contract; nothing in this scenario has
+  been executed, and checkpoint 3 is untouched.
 
 ## S15 — Interrupted checkpoint recovery
 
@@ -1007,6 +1161,20 @@ against a recorded before-state rather than asserted.
   waits — does not auto-resume, does not auto-discard. Once the user chooses
   resume, checkpoint 3 completes normally, leaving all three scratch
   checkpoints `COMPLETE` for S7.
+
+  **Under revision 63's `D-Checkpoint-Ownership`**, the same recovery must also
+  demonstrate the ownership half, since S14 has just proved the refusal half:
+  - worktree A resolves ownership as a **resume** — it holds the claim adopted
+    at setup, and `verify_dirty_resume_safety` passes for it — so the refusal
+    S14 produced is proved to be specific to the foreign worktree, not a
+    general lock;
+  - on the **resume** path, the claim is released only **after** the
+    checkpoint commit exists, and the release must be observed in that order;
+  - on the **discard** path, the explicit discard releases the claim as well
+    as reverting the checkpoint to its `start_commit`, so the work item is left
+    genuinely unclaimed rather than locked;
+  - either way, confirm afterwards that no claim record remains for
+    `v2-1-dry-run` under `.git/ai-workflow/checkpoint-claims/`.
 - **Real approval gate**: the recovery decision itself (resume vs. discard)
   is effectively user-gated by design, even though no named command
   requires literal confirmation text here — treat the user's explicit
