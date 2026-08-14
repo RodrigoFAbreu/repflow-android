@@ -290,6 +290,18 @@ def _state_json(**work_items) -> str:
     return json.dumps({"schema_version": 1, "work_items": work_items})
 
 
+def _write_local_state(repo: "ScratchRepo", content: str) -> None:
+    """Writes `WORKFLOW_STATE.json` in the working tree only -- never
+    committed -- the exact "uncommitted delta" shape a real interrupted
+    checkpoint's fresh-start bookkeeping leaves (`transition_checkpoint_
+    in_progress` is a working-tree-only write by design). Used to set up
+    `adopt_claim`'s local-`IN_PROGRESS` precondition without polluting the
+    origination reference `_commit_state` feeds."""
+    full = repo.root / STATE_REL_PATH
+    full.parent.mkdir(parents=True, exist_ok=True)
+    full.write_text(content)
+
+
 class TestCheckpointOriginationReference(unittest.TestCase):
     """WF8b's `D-Checkpoint-Ownership` origination-reference slice
     (`checkpoint_origination_provable`/`origination_reference_commits`),
@@ -4335,6 +4347,78 @@ class TestCheckpointClaimRecord(unittest.TestCase):
             wt2 = repo.worktree("b")
             with self.assertRaises(ws.CheckpointOwnedByOtherWorktreeError):
                 ws.release_checkpoint(wt2, "wi", "CP", owner_token=claim["owner_token"], now="t2")
+
+
+class TestClaimAdoption(unittest.TestCase):
+    """`adopt_claim` -- "Reconciling the two authorities" (revisions
+    63-72): the one-time migration path for a checkpoint interrupted
+    before this mechanism existed."""
+
+    def test_refuses_when_local_state_has_no_such_checkpoint(self):
+        with ScratchRepo() as repo:
+            with self.assertRaises(ws.CheckpointNotInProgressLocallyError):
+                ws.adopt_claim(repo.root, "wi", "CP", now="t1")
+
+    def test_refuses_when_local_status_is_not_in_progress(self):
+        with ScratchRepo() as repo:
+            _write_local_state(repo, _state_json(wi={"checkpoints": {"CP": {"status": "COMPLETE"}}}))
+            with self.assertRaises(ws.CheckpointNotInProgressLocallyError):
+                ws.adopt_claim(repo.root, "wi", "CP", now="t1")
+
+    def test_dirty_resume_safety_checked_before_origination(self):
+        """No `WORKTREE_IDENTITY.json` at all -- `verify_dirty_resume_
+        safety`'s own error, not an origination refusal, proving ordering
+        (2) runs before (3)."""
+        with ScratchRepo() as repo:
+            _write_local_state(repo, _state_json(wi={"checkpoints": {"CP": {"status": "IN_PROGRESS"}}}))
+            with self.assertRaises(ws.WorktreeIdentityMissingError):
+                ws.adopt_claim(repo.root, "wi", "CP", now="t1")
+
+    def test_adoption_succeeds_when_origination_reference_is_silent(self):
+        with ScratchRepo() as repo:
+            ws.write_worktree_identity(repo.root, "wi", now="t0")
+            _write_local_state(repo, _state_json(wi={"checkpoints": {"CP": {"status": "IN_PROGRESS"}}}))
+            record = ws.adopt_claim(repo.root, "wi", "CP", now="t1")
+            self.assertEqual(record["checkpoint_id"], "CP")
+            self.assertTrue(record["adopted"])
+            self.assertEqual(ws.resolve_claim(repo.root, "wi"), record)
+
+    def test_adoption_is_idempotent(self):
+        with ScratchRepo() as repo:
+            ws.write_worktree_identity(repo.root, "wi", now="t0")
+            _write_local_state(repo, _state_json(wi={"checkpoints": {"CP": {"status": "IN_PROGRESS"}}}))
+            first = ws.adopt_claim(repo.root, "wi", "CP", now="t1")
+            second = ws.adopt_claim(repo.root, "wi", "CP", now="t2")
+            self.assertEqual(first["owner_token"], second["owner_token"])
+
+    def test_refuses_when_origination_reference_observes_in_progress_at_head(self):
+        """The committed-history case (3): this worktree's own local
+        `IN_PROGRESS` is fully explained by a checkout of committed
+        history, not by this worktree's own step 1d -- adoption must not
+        treat it as proof of origination."""
+        with ScratchRepo() as repo:
+            ws.write_worktree_identity(repo.root, "wi", now="t0")
+            _commit_state(repo, _state_json(wi={"checkpoints": {"CP": {"status": "IN_PROGRESS"}}}))
+            with self.assertRaises(ws.CheckpointOriginationUnprovableError) as ctx:
+                ws.adopt_claim(repo.root, "wi", "CP", now="t1")
+            self.assertEqual(ctx.exception.evidence["route"], "observed")
+
+    def test_refuses_foreign_claim_even_when_origination_admits(self):
+        with ScratchRepo() as repo:
+            wt2 = repo.worktree("b")
+            ws.claim_checkpoint(wt2, "wi", "CP", now="t0")
+            ws.write_worktree_identity(repo.root, "wi", now="t0")
+            _write_local_state(repo, _state_json(wi={"checkpoints": {"CP": {"status": "IN_PROGRESS"}}}))
+            with self.assertRaises(ws.CheckpointOwnedByOtherWorktreeError):
+                ws.adopt_claim(repo.root, "wi", "CP", now="t1")
+
+    def test_refuses_to_repoint_this_worktrees_own_claim_to_a_different_checkpoint(self):
+        with ScratchRepo() as repo:
+            ws.claim_checkpoint(repo.root, "wi", "CP1", now="t0")
+            ws.write_worktree_identity(repo.root, "wi", now="t0")
+            _write_local_state(repo, _state_json(wi={"checkpoints": {"CP2": {"status": "IN_PROGRESS"}}}))
+            with self.assertRaises(ws.CheckpointOwnershipStateMismatchError):
+                ws.adopt_claim(repo.root, "wi", "CP2", now="t1")
 
 
 class TestCheckpointMutationGuard(unittest.TestCase):

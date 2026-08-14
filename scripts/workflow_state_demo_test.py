@@ -371,6 +371,35 @@ class TestCheckpointOriginationAgainstRealRepository(unittest.TestCase):
         )
         self.assertEqual(result["decision"], "admit")
 
+    def test_adopt_claim_refuses_for_the_same_real_s_cp3_defect(self):
+        """`adopt_claim` composes `checkpoint_origination_provable`, so
+        the same real, already-committed defect (`8f8d878`) refuses
+        adoption too, with identical evidence -- confirming ordinary
+        adoption cannot protect the real `S-CP3` as this repository
+        stands today; only the explicit takeover (not yet implemented)
+        can. Read-only: the refusal is raised at the evidence-time
+        origination check, strictly before `adopt_claim` ever acquires
+        the mutation guard or publishes anything, so this call mutates
+        no repository state -- verified by an explicit before/after
+        `git status --short` comparison rather than assumed from the
+        exception alone."""
+        repo_root = _repo_root()
+        before = subprocess.run(
+            ["git", "status", "--short"], cwd=repo_root, check=True,
+            capture_output=True, text=True,
+        ).stdout
+        with self.assertRaises(ws.CheckpointOriginationUnprovableError) as ctx:
+            ws.adopt_claim(repo_root, "v2-1-dry-run", "S-CP3", now="demo")
+        evidence = ctx.exception.evidence
+        self.assertEqual(evidence["route"], "observed")
+        self.assertEqual(evidence["commit"], "8f8d878c0985da96d9b462703b6c88ec5b3ab07b")
+        after = subprocess.run(
+            ["git", "status", "--short"], cwd=repo_root, check=True,
+            capture_output=True, text=True,
+        ).stdout
+        self.assertEqual(before, after)
+        self.assertIsNone(ws.resolve_claim(repo_root, "v2-1-dry-run"))
+
     def test_bootstrap_driver_never_calls_this_slice(self):
         """Scope-boundary regression: `/bootstrap-workflow-v2` derives
         completion from commit trailers alone and never enters

@@ -123,15 +123,21 @@ is the authorized repair-by-overwrite a rotating operation uses when the
 taking worktree's own identity document is undecidable
 (`OPUS-R86-003`/`-004`).
 
-Deliberately bounded, continuing the prior slice's own stated scope:
-no `adopt_claim` (the adoption path lives under "Reconciling the two
-authorities", not "The record"/"Fencing"), no `resolve_ownership`/
-`classify_selection` (the `/milestone-implement` step 1c/1d/1f wiring
-lives under "Where the check belongs, and the ordering"), and no
-`WFR-66` identity-query enforcement (`authorize_identity_reference_gap`
-is a distinct implementation surface). Those, and executing `v2-1-dry-
-run`'s `S14`/`S15` scenarios for real against this slice, remain future
-`WF8b` scope.
+A third WF8b slice adds `adopt_claim` ("Reconciling the two authorities",
+revisions 63-72): the one-time migration path for a checkpoint
+interrupted before this mechanism existed, publishing a claim for a
+checkpoint this worktree already holds `IN_PROGRESS` -- guarded by the
+same origination reference the first slice built
+(`checkpoint_origination_provable`, re-evaluated a second time at
+publication under `guard_mutation_lock`), never by the dry-run
+prototype's superseded `committed_checkpoint_status`-only check.
+
+Deliberately still bounded: no `resolve_ownership`/`classify_selection`
+(the `/milestone-implement` step 1c/1d/1f wiring lives under "Where the
+check belongs, and the ordering"), and no `WFR-66` identity-query
+enforcement (`authorize_identity_reference_gap` is a distinct
+implementation surface). Those, and executing `v2-1-dry-run`'s `S14`/
+`S15` scenarios for real against this slice, remain future `WF8b` scope.
 
 Stdlib-only, mirroring `scripts/workflow_fingerprint.py`'s own
 `docs/TECHNICAL_DECISIONS.md`-recorded constraint.
@@ -1796,16 +1802,18 @@ def checkpoint_origination_provable(
 # checkpoint_ownership.py) is reference/reproduction evidence only.
 #
 # Scope, deliberately bounded per this session's own direction, continuing
-# the prior session's origination-reference slice: no `adopt_claim` (the
-# adoption path lives under "Reconciling the two authorities", not "The
-# record"/"Fencing"), no `resolve_ownership`/`classify_selection` (the
-# `/milestone-implement` step 1c/1d/1f wiring lives under "Where the
-# check belongs, and the ordering"), and no `WFR-66` identity-query
-# enforcement (a distinct implementation surface, `authorize_identity_
-# reference_gap`). Those remain future WF8b scope. This slice makes
-# `take_over_claim`/`recover_abandoned_destructive_guard` available and
-# independently tested, which is the prerequisite the plan names for
-# actually taking `v2-1-dry-run`'s interrupted `S-CP3` over for real.
+# the prior session's origination-reference slice: no `resolve_ownership`/
+# `classify_selection` (the `/milestone-implement` step 1c/1d/1f wiring
+# lives under "Where the check belongs, and the ordering"), and no
+# `WFR-66` identity-query enforcement (a distinct implementation surface,
+# `authorize_identity_reference_gap`). Those remain future WF8b scope.
+# `adopt_claim` itself ("Reconciling the two authorities") is defined
+# further below, after the claim-publication and mutation-guard
+# primitives it composes. This slice makes
+# `take_over_claim`/`recover_abandoned_destructive_guard`/`adopt_claim`
+# available and independently tested, which is the prerequisite the plan
+# names for actually taking `v2-1-dry-run`'s interrupted `S-CP3` over for
+# real.
 # ---------------------------------------------------------------------------
 
 
@@ -1829,6 +1837,13 @@ class CheckpointClaimTakeoverRefusedError(Exception):
     """Raised when an explicit takeover, guard clearance, or abandoned-
     guard recovery is attempted without the exact authorization its own
     contract requires."""
+
+
+class CheckpointNotInProgressLocallyError(Exception):
+    """Raised by `adopt_claim` when this worktree's own local
+    `WORKFLOW_STATE.json` does not record the checkpoint being adopted as
+    `IN_PROGRESS` -- adoption never invents an ownership fact where none
+    exists."""
 
 
 CLAIMS_RELDIR = "ai-workflow/checkpoint-claims"
@@ -2261,6 +2276,76 @@ def release_checkpoint(repo_root: Path, work_item_id: str, checkpoint_id: str, *
             f"completion is unaffected; the claim is released on the next invocation from "
             f"this worktree once the completion is durable"
         ) from exc
+
+
+# ---------------------------------------------------------------------------
+# Adoption -- "Reconciling the two authorities" (revisions 63-72). The
+# one-time migration path for a checkpoint interrupted before this
+# mechanism existed, including the real S-CP3 -- and the reason it can be
+# protected without recreating it. Authored fresh against the approved
+# revision-80 text; the unwired dry-run prototype's revision-68/69 draft
+# (checkpoint_ownership.py) checked origination against
+# `committed_checkpoint_status` alone, which the plan's own revision-69
+# correction superseded before this slice was written -- this function
+# calls `checkpoint_origination_provable` instead, never the superseded
+# check.
+# ---------------------------------------------------------------------------
+
+
+def adopt_claim(repo_root: Path, work_item_id: str, checkpoint_id: str, *, now: str,
+                state_rel_path: str | None = None) -> dict:
+    """Publish a claim for a checkpoint this worktree already holds
+    `IN_PROGRESS` but never claimed. Guarded so it can only ever run in
+    the originating worktree:
+
+    1. this worktree's own local `WORKFLOW_STATE.json` -- the working
+       tree, never `HEAD` -- must actually record `checkpoint_id`
+       `IN_PROGRESS` for `work_item_id`;
+    2. `verify_dirty_resume_safety` must pass -- **first**, so the
+       classes a foreign worktree sees here are unchanged;
+    3. `checkpoint_origination_provable` must admit: that same
+       `IN_PROGRESS` must be absent from the origination reference, and
+       that read must be decidable;
+    4. the same origination test is **re-evaluated at publication**,
+       under `guard_mutation_lock`, not only at evidence time -- no
+       observable gap separates the final check from the write;
+    5. `_claim_or_refuse`'s own foreign-claim/state-mismatch refusals
+       apply unchanged -- no foreign claim may exist.
+
+    Idempotent: an existing self-claim for this exact checkpoint is
+    returned unchanged (`_claim_or_refuse`'s own idempotence, unmodified
+    here). Writes **no** authoritative state -- not
+    `WORKFLOW_STATE.json`, not `WORKTREE_IDENTITY.json`, not the working
+    tree -- and never invents an ownership fact where none exists. Runs
+    automatically inside the future step-1c resume wiring, and is
+    separately invocable as an explicit setup operation for an
+    interrupted checkpoint that must be protected *without* being
+    resumed -- exactly `S14`'s need."""
+    state_rel_path = state_rel_path or DEFAULT_STATE_PATH.as_posix()
+    state = _load_json(repo_root / Path(state_rel_path)) or {}
+    work_items = state.get("work_items")
+    work_item = work_items.get(work_item_id) if isinstance(work_items, dict) else None
+    status = None
+    if isinstance(work_item, dict):
+        checkpoints = work_item.get("checkpoints")
+        if isinstance(checkpoints, dict):
+            entry = checkpoints.get(checkpoint_id)
+            if isinstance(entry, dict):
+                status = entry.get("status")
+    if status != "IN_PROGRESS":
+        raise CheckpointNotInProgressLocallyError(
+            f"{work_item_id!r} checkpoint {checkpoint_id!r} is not IN_PROGRESS in this "
+            f"worktree's own {state_rel_path} (status: {status!r}) -- there is nothing to "
+            f"adopt; adoption never invents an ownership fact where none exists"
+        )
+
+    verify_dirty_resume_safety(repo_root, work_item_id)
+    checkpoint_origination_provable(repo_root, work_item_id, checkpoint_id, state_rel_path=state_rel_path)
+
+    record = _build_claim_record(repo_root, work_item_id, checkpoint_id, now, adopted=True)
+    with guard_mutation_lock(repo_root, work_item_id):
+        checkpoint_origination_provable(repo_root, work_item_id, checkpoint_id, state_rel_path=state_rel_path)
+        return _claim_or_refuse(repo_root, work_item_id, record)
 
 
 def committed_checkpoint_status(repo_root: Path, work_item_id: str, checkpoint_id: str,
