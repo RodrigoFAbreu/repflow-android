@@ -923,6 +923,68 @@ class TestResolveCompletionObligationsPipeline(unittest.TestCase):
             verdicts = ws.resolve_completion_obligations(repo.root, work_item)
             self.assertEqual(verdicts["WFO-STATE-SERIALIZATION"].classification, "DIVERGED")
 
+    def test_diverged_when_a_gitignored_file_exists_on_the_commands_surface(self):
+        """OPUS-R101-004: a `.gitignore`d untracked file on `.claude/commands/`
+        must still be visible to the `DIVERGED` precondition -- it is a real,
+        harness-discoverable surface member, not legitimately-ignored
+        content."""
+        with ScratchRepo() as repo:
+            fx = _ObligationFixture(repo)
+            fx.seed_base()
+            work_item, _, _ = fx.approve()
+            (repo.root / ".gitignore").write_text(
+                (repo.root / ".gitignore").read_text() + "\n.claude/commands/local-sync.md\n"
+            )
+            (repo.root / ".claude/commands").mkdir(parents=True, exist_ok=True)
+            (repo.root / ".claude/commands/local-sync.md").write_text(
+                "---\nstate_writer: true\n---\n\nwrites the state file some other way\n"
+            )
+            verdicts = ws.resolve_completion_obligations(repo.root, work_item)
+            self.assertEqual(verdicts["WFO-STATE-SERIALIZATION"].classification, "DIVERGED")
+
+    def test_diverged_when_a_gitignored_file_exists_on_the_scripts_surface(self):
+        """Same shape as above, on the `scripts/` surface."""
+        with ScratchRepo() as repo:
+            fx = _ObligationFixture(repo)
+            fx.seed_base()
+            work_item, _, _ = fx.approve()
+            (repo.root / ".gitignore").write_text(
+                (repo.root / ".gitignore").read_text() + "\nscripts/local_sync.py\n"
+            )
+            (repo.root / "scripts/local_sync.py").write_text(
+                "# state_writer: true\nopen('docs/ai-workflow/WORKFLOW_STATE.json', 'w')\n"
+            )
+            verdicts = ws.resolve_completion_obligations(repo.root, work_item)
+            self.assertEqual(verdicts["WFO-STATE-SERIALIZATION"].classification, "DIVERGED")
+
+    def test_not_diverged_for_legitimately_ignored_content_outside_the_surfaces(self):
+        """Control arm: ignored content that is genuinely outside the two
+        declared surfaces (`.ai-review/`, already ignored by `ScratchRepo`'s
+        base `.gitignore`) must not trip `DIVERGED`."""
+        with ScratchRepo() as repo:
+            fx = _ObligationFixture(repo)
+            fx.seed_base()
+            work_item, _, _ = fx.approve()
+            (repo.root / ".ai-review/scratch").mkdir(parents=True)
+            (repo.root / ".ai-review/scratch/note.txt").write_text("not on any declared surface\n")
+            verdicts = ws.resolve_completion_obligations(repo.root, work_item)
+            self.assertEqual(verdicts["WFO-STATE-SERIALIZATION"].classification, "PASS")
+
+    def test_not_diverged_for_scripts_pycache_byproduct(self):
+        """`scripts/__pycache__/*.pyc` is produced merely by importing/
+        running the census's own `.py` files and can never be mistaken for
+        a real surface source file -- must not trip `DIVERGED` even though
+        it is untracked-and-ignored on the `scripts/` surface."""
+        with ScratchRepo() as repo:
+            fx = _ObligationFixture(repo)
+            fx.seed_base()
+            work_item, _, _ = fx.approve()
+            pycache = repo.root / "scripts/__pycache__"
+            pycache.mkdir(parents=True)
+            (pycache / "workflow_state.cpython-311.pyc").write_bytes(b"\x00\x01")
+            verdicts = ws.resolve_completion_obligations(repo.root, work_item)
+            self.assertEqual(verdicts["WFO-STATE-SERIALIZATION"].classification, "PASS")
+
     def test_verifier_dependency_unchanged_since_base_is_accepted_without_manifest_coverage(self):
         """Item 361(h): a closure dependency the manifest legitimately does
         not cover (because it never changed since `base_commit`) must

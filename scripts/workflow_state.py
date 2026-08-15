@@ -5536,11 +5536,22 @@ def _working_tree_diverges_from_commit(repo_root: Path, commit: str, surface_cen
             return True
     known = {e["path"] for e in surface_census}
     for prefix in STATE_WRITER_SURFACE_PREFIXES:
-        out = _run(["git", "ls-files", "--others", "--exclude-standard", "-z", "--", prefix], cwd=repo_root)
+        # No `--exclude-standard`: a `.gitignore`d file on a declared surface
+        # must still be visible to this scan (OPUS-R101-003 -- an ignored
+        # thirteenth writer would otherwise hide from both this precondition
+        # and the census, changing nothing about `obligation_content_id`).
+        # The one genuinely ignorable byproduct this repository's own
+        # surfaces produce is `scripts/__pycache__/*.pyc` (created merely by
+        # importing/running the census's own `.py` files) -- excluded by
+        # name, not by `.gitignore` membership, since it can never be
+        # mistaken for a real `.py`/`.md` surface source file.
+        out = _run(["git", "ls-files", "--others", "-z", "--", prefix], cwd=repo_root)
         for path in out.split("\x00"):
             if not path:
                 continue
             if prefix == "scripts/" and path.endswith("_test.py"):
+                continue
+            if path.endswith(".pyc") or "/__pycache__/" in path:
                 continue
             if path not in known:
                 return True
