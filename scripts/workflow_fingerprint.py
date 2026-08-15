@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# state_writer: false
 """Prototype: review-identity fingerprint for Workflow v2.1 core.
 
 Implements compute_review_content_id() (plan stage) and compute_bundle_id(),

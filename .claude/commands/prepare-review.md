@@ -1,5 +1,6 @@
 ---
 description: Ad-hoc review bundle for work outside the milestone workflow gates.
+state_writer: false
 ---
 
 For milestone-gated reviews (plan, implementation, post-fix, functional),

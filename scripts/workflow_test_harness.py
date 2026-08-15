@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# state_writer: false
 """Shared hermetic test fixtures for Workflow v2.1's own test suites
 (`WF8a-i`, `WFR-36`).
 

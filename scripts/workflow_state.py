@@ -170,6 +170,7 @@ Run the real-repository demonstration: python3 scripts/workflow_state_demo_test.
 
 from __future__ import annotations
 
+import ast
 import contextlib
 import copy
 import errno
@@ -179,11 +180,13 @@ import json
 import os
 import re
 import secrets
+import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, NamedTuple
 
 import workflow_fingerprint as fingerprint
 from workflow_fingerprint import (  # noqa: F401 - re-exported for callers
@@ -192,6 +195,14 @@ from workflow_fingerprint import (  # noqa: F401 - re-exported for callers
     validate_work_item_id,
     validate_work_item_type,
 )
+
+# state_writer: "publisher"
+# This module is the sole declared publisher on the `scripts/**` state-
+# writer surface (item 357(h)): it defines `state_lock`/`state_transaction`,
+# the serialization helper `discover_state_writers`'s own projection names,
+# and `resolve_completion_obligations`/the `WFO-STATE-SERIALIZATION`
+# conformance itself. No file under `scripts/` other than this one writes
+# `docs/ai-workflow/WORKFLOW_STATE.json`.
 
 DEFAULT_CONFIG_PATH = Path("docs/ai-workflow/WORKFLOW_CONFIG.json")
 DEFAULT_STATE_PATH = Path("docs/ai-workflow/WORKFLOW_STATE.json")
@@ -927,6 +938,130 @@ def _load_json(path: Path):
         return json.loads(text)
     except json.JSONDecodeError as exc:
         raise CorruptJsonError(f"{path}: {exc}") from exc
+
+
+# ---------------------------------------------------------------------------
+# D1: the state-writer serialization primitive (missing-test item 354(a),
+# `GPT-R74-002`/`GPT-R76-002`/`GPT-R76-003`). `.ai-review/runtime/
+# WORKFLOW_STATE.lock` is the repository-scoped `fcntl.flock(LOCK_EX)`
+# every production writer of `WORKFLOW_STATE.json` holds across its
+# complete read -> mutate -> canonical-serialize -> atomic-publish
+# critical section. Revision 58's persistent `os.link` lock with
+# owner-token takeover is superseded and is deliberately not
+# reintroduced here: it was reproduced losing an update (writer A took
+# the lock and read `{a:0,b:0}`, ownership was taken over, writer B read
+# and published `{a:0,b:1}`, and the still-live A then published its
+# stale `{a:1,b:0}`), because a generic state writer has no journal, no
+# owner-progress record and no mutation guard, and therefore no
+# mechanical way to tell a crashed holder from a paused one. This
+# primitive contains no takeover, no owner token and no user
+# authorization: a live holder is never displaced (a second writer
+# blocks until the first releases) and a crashed holder's lock is
+# released by the kernel the moment its file descriptor closes.
+# ---------------------------------------------------------------------------
+
+STATE_LOCK_PATH = Path(".ai-review/runtime/WORKFLOW_STATE.lock")
+
+
+class StateLockReentrancyError(Exception):
+    """Raised instead of deadlocking when the current process already
+    holds `WORKFLOW_STATE.lock` and attempts to acquire it again. A
+    generic `fcntl.flock(LOCK_EX)` blocks a second acquisition on the
+    same inode regardless of whether it comes from this process or a
+    foreign one (it serializes by open file description, not by pid), so
+    an unguarded nested `state_lock()` call would hang this process
+    against itself forever rather than fail -- item 354(b)'s "nested
+    state writes are asserted to raise an explicit re-entrancy refusal
+    rather than deadlock"."""
+
+
+def state_lock_path(repo_root: Path, path: Path = STATE_LOCK_PATH) -> Path:
+    return repo_root / path
+
+
+# Process-local reentrancy guard, keyed by the resolved lock file's own
+# path string. Not thread-local: nothing in this module's own design
+# calls into `state_lock`/`state_transaction` from more than one thread
+# of the same process -- every concurrency scenario item 354(b) requires
+# is exercised with real, separate *processes*.
+_state_lock_held: set[str] = set()
+
+
+@contextlib.contextmanager
+def state_lock(repo_root: Path, *, lock_path: Path = STATE_LOCK_PATH):
+    """`D1`'s state-writer primitive (item 354(a)): the lock file is
+    opened `O_CREAT | O_RDWR` and held under `fcntl.flock(LOCK_EX)` for
+    the whole `with` block, released by `LOCK_UN`/close on every exit
+    path including refusals and exceptions -- callers are required to
+    perform their **complete** read -> mutate -> canonical-serialize ->
+    atomic-publish sequence inside this block (`state_transaction` below
+    is the documented, reusable way to do that). Blocking: a contending
+    writer waits rather than fails. See the module section header above
+    for why no takeover/owner-token mechanism exists here."""
+    full = state_lock_path(repo_root, lock_path)
+    key = str(full)
+    if key in _state_lock_held:
+        raise StateLockReentrancyError(
+            f"{full} is already held by this process -- nested state "
+            f"writes are refused rather than deadlocked"
+        )
+    full.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(full, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    _state_lock_held.add(key)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
+        _state_lock_held.discard(key)
+
+
+def _publish_state_file(full_path: Path, state: dict) -> None:
+    """The canonical serialization + single `os.replace` publication for
+    `WORKFLOW_STATE.json`: a same-directory temp file, written whole and
+    `fsync`ed, then renamed over the target in one atomic step -- the
+    same shape `_publish_worktree_identity` uses. 2-space indent,
+    insertion key order and a trailing newline, matching this
+    repository's own on-disk convention for this file exactly (unlike
+    `WORKTREE_IDENTITY.json`, this file is not `sort_keys=True`)."""
+    full_path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(full_path.parent), prefix=f".{full_path.name}-", suffix=".tmp",
+    )
+    try:
+        with os.fdopen(fd, "w") as handle:
+            handle.write(json.dumps(state, indent=2) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_name, full_path)
+    except BaseException:
+        Path(tmp_name).unlink(missing_ok=True)
+        raise
+
+
+def state_transaction(repo_root: Path, mutator, *, path: Path = DEFAULT_STATE_PATH) -> dict:
+    """The single required entry point for every production writer of
+    `WORKFLOW_STATE.json` (item 354): holds `state_lock` across the
+    **complete** critical section -- re-read `path` from disk, call
+    `mutator(state) -> new_state` (every existing transition helper in
+    this module already has exactly this shape, so a caller passes one
+    of them, partially applied), canonically serialize, atomically
+    publish, then release. The re-read happens *inside* the lock, never
+    before it, which is what makes this the "acquires the primitive,
+    performs the read that feeds its write inside the critical section,
+    and holds it through the publish" shape item 354(c)'s conformance
+    requires -- the shape it must specifically reject is a writer that
+    locks only around its final write while publishing a value derived
+    from an earlier, unguarded read."""
+    full_path = repo_root / path
+    with state_lock(repo_root):
+        state = _load_json(full_path) or {}
+        new_state = mutator(state)
+        _publish_state_file(full_path, new_state)
+    return new_state
 
 
 # ---------------------------------------------------------------------------
@@ -4605,10 +4740,26 @@ def resolve_own_registry_completion_status(repo_root: Path, work_item: dict) -> 
     approval or a clean, committed-but-unapproved mutation. `RegistryCoverageError`
     alone (the checks above) only proves the file is safe/well-formed/
     self-declaring, never that it is the approved one."""
+    registry_data = _load_authoritative_registry_or_none(repo_root, work_item)
+    if registry_data is None:
+        return True, None
+    return registry_completion_status(work_item, registry_data)
+
+
+def _load_authoritative_registry_or_none(repo_root: Path, work_item: dict) -> dict | None:
+    """The loading half of `resolve_own_registry_completion_status`,
+    factored out so `resolve_completion_obligations` (item 356's own "no
+    registry parameter" requirement) can resolve the same authoritative
+    registry through the identical safe-path/existence/JSON-object/
+    self-declared-id/plan-approval-coverage checks rather than trusting a
+    caller-supplied dict -- the same trust boundary `GPT-R37-001` already
+    removed from `complete_work_item` one layer up. `None` means a
+    registry-less work item (e.g. the legacy `milestone-8` shape), never
+    a load failure -- a load failure always raises."""
     work_item_id = work_item["work_item_id"]
     registry_path = work_item.get("registry_path")
     if registry_path is None:
-        return True, None
+        return None
 
     try:
         fingerprint._validate_plan_stage_metadata_path(
@@ -4650,7 +4801,7 @@ def resolve_own_registry_completion_status(repo_root: Path, work_item: dict) -> 
 
     _assert_registry_covered_by_current_plan_approval(repo_root, work_item, registry_path)
 
-    return registry_completion_status(work_item, registry_data)
+    return registry_data
 
 
 def _assert_registry_covered_by_current_plan_approval(
@@ -4696,6 +4847,825 @@ def _assert_registry_covered_by_current_plan_approval(
         )
 
 
+# ---------------------------------------------------------------------------
+# D-Completion-Obligations (missing-test items 356/357/358/360/361, new
+# revision 59-62): completion-blocking obligations whose verdict is
+# *derived by execution*, by an independently technical-approval-authorized
+# verifier, against an immutable Git-object content identity -- never read
+# from a cached evidence record. `WF8b` declares exactly one this revision:
+# `WFO-STATE-SERIALIZATION`, item 354's state-writer-serialization
+# invariant.
+# ---------------------------------------------------------------------------
+
+
+class StateWriterDeclarationError(Exception):
+    """A file on a declared state-writer surface (`.claude/commands/**`,
+    `scripts/**` excluding `*_test.py`) has a missing, self-contradictory,
+    or otherwise unparseable `state_writer` declaration -- item
+    354(c)/357(g): this is a conformance failure, never a default, so an
+    undeclared new surface member cannot silently pass as a non-writer."""
+
+
+class VerifierClosureUnresolvableError(Exception):
+    """The `WFO-STATE-SERIALIZATION` verifier's static import-closure
+    analysis could not follow a construct (`importlib.import_module`, a
+    bare `__import__`, `exec`, a relative import) or could not read/parse
+    a blob it needed -- item 361(c): classifies `VERIFIER_UNRESOLVABLE`
+    rather than censusing optimistically."""
+
+
+class VerifierExecutionError(Exception):
+    """The isolated verifier subprocess failed to produce a well-formed
+    result -- classifies `VERIFIER_UNRESOLVABLE`/`REPLAY_UNRESOLVABLE`
+    at the call site rather than escaping."""
+
+
+class UnsatisfiedCompletionObligationError(Exception):
+    """Raised by `complete_work_item` when
+    `completion_obligations_satisfied(...)` is `False` -- naming every
+    outstanding obligation, its classification, and (for `FAIL`) the
+    specific failing conformance assertions (item 356(a)). Marking a
+    checkpoint `COMPLETE` by any means is therefore not sufficient by
+    itself to reach `MILESTONE_COMPLETE` while a declared obligation is
+    outstanding."""
+
+
+def _hardened_run(args: list[str], cwd: Path) -> str:
+    """Every Git object read this section performs is issued with
+    `--no-replace-objects`/`GIT_NO_REPLACE_OBJECTS=1` (items 356(p)/360/
+    361(i)): `git replace` refs rewrite what an object id resolves to and
+    would otherwise defeat exactly the content-addressing this whole
+    mechanism rests on -- both directions are asserted in this section's
+    own tests, including the dangerous one (substituting honest bytes
+    over a failing blob)."""
+    env = dict(os.environ)
+    env["GIT_NO_REPLACE_OBJECTS"] = "1"
+    result = subprocess.run(
+        ["git", "--no-replace-objects", *args], cwd=cwd, env=env, capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise subprocess.CalledProcessError(result.returncode, args, result.stdout, result.stderr)
+    return result.stdout
+
+
+def _hardened_run_bytes(args: list[str], cwd: Path) -> bytes:
+    env = dict(os.environ)
+    env["GIT_NO_REPLACE_OBJECTS"] = "1"
+    result = subprocess.run(
+        ["git", "--no-replace-objects", *args], cwd=cwd, env=env, capture_output=True,
+    )
+    if result.returncode != 0:
+        raise subprocess.CalledProcessError(result.returncode, args, result.stdout, result.stderr)
+    return result.stdout
+
+
+def _sha256_canonical(obj) -> str:
+    return hashlib.sha256(
+        json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+# The obligation's own bound conformance and the verifier that executes
+# it (item 358(e): "declared constants of the implementation rather than
+# caller parameters"). Today's derived closure is exactly these two
+# files -- a recorded observation of this repository, never a
+# hard-coded pair the closure resolver trusts blindly (item 361(a)).
+VERIFIER_ENTRY = "scripts/workflow_state.py"
+VERIFIER_SOURCE_ROOT = "scripts"
+COMPLETION_OBLIGATION_CONFORMANCE = {
+    "WFO-STATE-SERIALIZATION": "verify_wfo_state_serialization",
+}
+OBLIGATION_ID_RE = re.compile(r"^WFO-[A-Z0-9][A-Z0-9-]{0,47}$")
+
+
+# ---------------------------------------------------------------------------
+# One live writer-set discovery implementation, feeding both consumers
+# (item 357, `GPT-R77-002`'s required correction (1)/(5))
+# ---------------------------------------------------------------------------
+
+STATE_WRITER_SURFACE_PREFIXES = (".claude/commands/", "scripts/")
+
+_STATE_WRITER_DECLARATION_RE = re.compile(
+    r'(?m)^[ \t]*#{0,2}[ \t]*state_writer:[ \t]*(true|false|"publisher")[ \t]*$'
+)
+
+
+def _parse_state_writer_declarations(text: str) -> list[str]:
+    """Every declared value found in `text`, in encounter order -- a
+    caller checks both "missing" (empty result) and "contradictory"
+    (more than one distinct value) in one pass, matching item 357(g)'s
+    "a missing or contradictory declaration is a conformance failure,
+    never a default"."""
+    return [m.group(1).strip('"') for m in _STATE_WRITER_DECLARATION_RE.finditer(text)]
+
+
+def _ls_tree_at_commit(repo_root: Path, commit: str, prefix: str) -> list[dict]:
+    """Every tracked blob under `prefix` at `commit`, as `{path, mode,
+    blob}` -- hardened against `git replace`."""
+    out = _hardened_run(["ls-tree", "-r", "-z", commit, "--", prefix], cwd=repo_root)
+    entries = []
+    for line in out.split("\x00"):
+        if not line:
+            continue
+        meta, _, path = line.partition("\t")
+        parts = meta.split()
+        if len(parts) != 3:
+            continue
+        mode, obj_type, blob = parts
+        if obj_type != "blob":
+            continue
+        entries.append({"path": path, "mode": mode, "blob": blob})
+    return entries
+
+
+def _blob_mode_and_sha_at_commit(repo_root: Path, commit: str, path: str) -> tuple[str, str] | None:
+    """`(mode, blob)` for `path` at `commit`, or `None` if `path` does not
+    exist there -- `git ls-tree` exits `0` with empty output for a
+    missing path, unlike `cat-file -e`, so emptiness (not a nonzero
+    return code) is the absence signal."""
+    out = _hardened_run(["ls-tree", commit, "--", path], cwd=repo_root).strip()
+    if not out:
+        return None
+    meta, _, _ = out.split("\n")[0].partition("\t")
+    mode, _obj_type, blob = meta.split()
+    return mode, blob
+
+
+class Discovery(NamedTuple):
+    """`discover_state_writers`'s return value -- simultaneously (i) the
+    set the conformance validates and (ii) the projection hashed into
+    `obligation_content_id`, so the two cannot drift (item 357)."""
+    surface_census: tuple[dict, ...]
+    writers: tuple[str, ...]
+    publisher: str
+    non_writers: tuple[str, ...]
+
+
+def discover_state_writers(repo_root: Path, commit: str) -> Discovery:
+    """The **only** inventory of `WORKFLOW_STATE.json` writers anywhere in
+    this system (item 357): every tracked file under the two declared
+    surfaces at `commit` (`.claude/commands/**`, recursive and
+    extension-agnostic; `scripts/**` excluding `*_test.py`), cross-checked
+    against each file's own `state_writer` declaration
+    (`true`/`false`/`"publisher"`). A missing or contradictory declaration
+    fails closed (`StateWriterDeclarationError`) rather than defaulting to
+    non-writer. Returns the **complete** surface census (every tracked
+    file, not only the writers -- item 357(e): an undeclared file changes
+    the identity even though it declares nothing at all), the declared
+    writer subset, the sole declared publisher (required to be
+    `VERIFIER_ENTRY`), and the declared non-writer subset."""
+    census: list[dict] = []
+    for prefix in STATE_WRITER_SURFACE_PREFIXES:
+        for entry in _ls_tree_at_commit(repo_root, commit, prefix):
+            if prefix == "scripts/" and entry["path"].endswith("_test.py"):
+                continue
+            census.append(entry)
+    census.sort(key=lambda e: e["path"])
+
+    writers: list[str] = []
+    non_writers: list[str] = []
+    publisher: str | None = None
+    for entry in census:
+        path = entry["path"]
+        text = _hardened_run(["cat-file", "blob", entry["blob"]], cwd=repo_root)
+        declared = _parse_state_writer_declarations(text)
+        distinct = set(declared)
+        if len(distinct) != 1:
+            raise StateWriterDeclarationError(
+                f"{path!r} at {commit} has a missing or contradictory "
+                f"state_writer declaration (found: {declared!r})"
+            )
+        value = distinct.pop()
+        if value == "true":
+            writers.append(path)
+        elif value == "false":
+            non_writers.append(path)
+        else:  # "publisher"
+            if publisher is not None:
+                raise StateWriterDeclarationError(
+                    f'more than one file declares state_writer: "publisher" '
+                    f"({publisher!r} and {path!r}) -- exactly one is required"
+                )
+            publisher = path
+
+    if publisher is None:
+        raise StateWriterDeclarationError(
+            'no file on any declared surface declares state_writer: "publisher"'
+        )
+    if publisher != VERIFIER_ENTRY:
+        raise StateWriterDeclarationError(
+            f"the declared publisher {publisher!r} is not {VERIFIER_ENTRY!r}, "
+            f"the serialization helper the projection names"
+        )
+
+    return Discovery(
+        surface_census=tuple(census), writers=tuple(sorted(writers)),
+        publisher=publisher, non_writers=tuple(sorted(non_writers)),
+    )
+
+
+_NON_WRITER_VIOLATION_RE = re.compile(
+    r"_publish_state_file|state_transaction\s*\(|"
+    r"""open\([^)]*WORKFLOW_STATE\.json[^)]*['"]w"""
+)
+
+
+def verify_wfo_state_serialization(repo_root: str | Path, commit: str) -> dict:
+    """`WFO-STATE-SERIALIZATION`'s bound conformance (items 354(c), 356,
+    357) -- the function `resolve_completion_obligations` materializes
+    and executes in an isolated interpreter, with the live repository off
+    the module path (item 358(c)). Runs entirely off pinned-commit `git`
+    reads against `repo_root` (hardened against `git replace`); it never
+    touches the live state file or the live `WORKFLOW_STATE.lock` (item
+    356(n)), so it is safe to run from inside the terminal transition's
+    own held lock.
+
+    **What is actually checked, and why.** `WORKFLOW_STATE.json`'s twelve
+    writers are `.claude/commands/*.md` procedures an AI agent executes
+    from prose, not deterministic scripts a hermetic suite can run end to
+    end -- no test harness can "execute" natural language. The
+    mechanically checkable property is therefore that each declared
+    writer's *documented* critical section names `state_transaction`/
+    `state_lock`, the one primitive whose own process-level concurrency,
+    crash-release and re-entrancy properties are independently proven
+    against real processes (see `state_lock`/`state_transaction`'s own
+    hermetic suite in `workflow_state_test.py`) -- never a claim that a
+    given invocation of the command happened correctly, which is outside
+    any hermetic test's reach for an AI-followed procedure. A declared
+    non-writer must not itself call the publisher or open the state path
+    for writing; a plain **read** reference (as `scripts/prepare-ai-review.sh`
+    legitimately makes, to cross-check `record_bundle_generation` already
+    ran) does not violate this -- see that file's own `state_writer: false`
+    note."""
+    repo_root = Path(repo_root)
+    failing: list[str] = []
+    try:
+        discovery = discover_state_writers(repo_root, commit)
+    except StateWriterDeclarationError as exc:
+        return {"status": "FAIL", "detail": str(exc), "failing_assertions": [str(exc)]}
+
+    census_by_path = {e["path"]: e for e in discovery.surface_census}
+
+    for path in discovery.writers:
+        text = _hardened_run(["cat-file", "blob", census_by_path[path]["blob"]], cwd=repo_root)
+        if "state_transaction" not in text and "state_lock" not in text:
+            failing.append(
+                f"{path}: declared state_writer: true but its documented "
+                f"procedure does not name state_transaction/state_lock"
+            )
+
+    for path in discovery.non_writers:
+        text = _hardened_run(["cat-file", "blob", census_by_path[path]["blob"]], cwd=repo_root)
+        if _NON_WRITER_VIOLATION_RE.search(text):
+            failing.append(
+                f"{path}: declared state_writer: false but references the "
+                f"publisher or a write-mode open of the state path"
+            )
+
+    publisher_entry = census_by_path.get(discovery.publisher)
+    if publisher_entry is None:
+        failing.append(f"declared publisher {discovery.publisher!r} not found in the surface census")
+    else:
+        publisher_text = _hardened_run(["cat-file", "blob", publisher_entry["blob"]], cwd=repo_root)
+        if "def state_lock(" not in publisher_text or "def state_transaction(" not in publisher_text:
+            failing.append(
+                f"declared publisher {discovery.publisher!r} does not define "
+                f"state_lock/state_transaction"
+            )
+
+    if failing:
+        return {"status": "FAIL", "detail": "; ".join(failing), "failing_assertions": failing}
+    return {
+        "status": "PASS",
+        "detail": (
+            f"{len(discovery.writers)} writer(s), 1 publisher, "
+            f"{len(discovery.non_writers)} non-writer(s) all conform"
+        ),
+        "failing_assertions": [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# The verifier census is a dependency closure, not a file list (item 361,
+# `GPT-R79-002`)
+# ---------------------------------------------------------------------------
+
+
+def _blob_exists_at_commit(repo_root: Path, commit: str, path: str) -> bool:
+    env = dict(os.environ)
+    env["GIT_NO_REPLACE_OBJECTS"] = "1"
+    result = subprocess.run(
+        ["git", "--no-replace-objects", "cat-file", "-e", f"{commit}:{path}"],
+        cwd=repo_root, env=env, capture_output=True,
+    )
+    return result.returncode == 0
+
+
+def _module_candidate_paths(source_root: str, dotted_name: str) -> list[str]:
+    base = dotted_name.replace(".", "/")
+    return [f"{source_root}/{base}.py", f"{source_root}/{base}/__init__.py"]
+
+
+def _package_tracked_subtree(repo_root: Path, commit: str, package_dir: str) -> list[str]:
+    return [e["path"] for e in _ls_tree_at_commit(repo_root, commit, package_dir + "/") if e["path"].endswith(".py")]
+
+
+def _follow_import_name(
+    repo_root: Path, commit: str, source_root: str, dotted_name: str,
+    pending: list[str], seen: set[str],
+) -> None:
+    """Resolves `dotted_name`'s top-level component against `source_root`
+    at `commit`. A name that does not resolve there is a stdlib/
+    third-party dependency, legitimately outside the repository-local
+    closure (item 361(a)) -- isolated execution (item 358(c)) is what
+    catches a *wrongly* omitted repository-local dependency, not this
+    resolver refusing an ordinary standard-library import."""
+    top = dotted_name.split(".")[0]
+    for candidate in _module_candidate_paths(source_root, top):
+        if not _blob_exists_at_commit(repo_root, commit, candidate):
+            continue
+        if candidate.endswith("/__init__.py"):
+            if candidate not in seen:
+                pending.append(candidate)
+            package_dir = candidate[: -len("/__init__.py")]
+            for sub in _package_tracked_subtree(repo_root, commit, package_dir):
+                if sub not in seen and sub != candidate:
+                    pending.append(sub)
+        elif candidate not in seen:
+            pending.append(candidate)
+        return
+
+
+def _static_import_closure(repo_root: Path, commit: str, entry_path: str, source_root: str) -> list[str]:
+    """Items 361(a)/(b)/(c)/(d): static `ast` import closure over blobs at
+    `commit`, seeded at `entry_path`, following every `import X`/`from X
+    import ...` -- module level, function bodies, class bodies, `try:`
+    blocks alike -- that resolves to a tracked module or package on
+    `source_root`, transitively. A construct static analysis cannot
+    follow (`importlib.import_module`, a bare `__import__`, `exec`, a
+    relative import) raises `VerifierClosureUnresolvableError` rather
+    than being censused optimistically. Returns the ordered list of
+    repository-local paths visited (entry point first)."""
+    visited: list[str] = []
+    seen: set[str] = set()
+    pending = [entry_path]
+    while pending:
+        path = pending.pop(0)
+        if path in seen:
+            continue
+        seen.add(path)
+        visited.append(path)
+        if not _blob_exists_at_commit(repo_root, commit, path):
+            raise VerifierClosureUnresolvableError(f"{path!r} not found at {commit}")
+        text = _hardened_run(["show", f"{commit}:{path}"], cwd=repo_root)
+        try:
+            tree = ast.parse(text, filename=path)
+        except SyntaxError as exc:
+            raise VerifierClosureUnresolvableError(f"{path!r}: cannot parse at {commit} -- {exc}") from exc
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    _follow_import_name(repo_root, commit, source_root, alias.name, pending, seen)
+            elif isinstance(node, ast.ImportFrom):
+                if node.level and node.level > 0:
+                    raise VerifierClosureUnresolvableError(
+                        f"{path!r}: relative import (level {node.level}) cannot be "
+                        f"followed by static closure analysis"
+                    )
+                if node.module:
+                    _follow_import_name(repo_root, commit, source_root, node.module, pending, seen)
+            elif isinstance(node, ast.Call):
+                func = node.func
+                dynamic_name = None
+                if isinstance(func, ast.Attribute) and func.attr == "import_module":
+                    dynamic_name = "importlib.import_module"
+                elif isinstance(func, ast.Name) and func.id in ("__import__", "exec", "eval"):
+                    dynamic_name = func.id
+                if dynamic_name:
+                    raise VerifierClosureUnresolvableError(
+                        f"{path!r}: dynamic-import construct {dynamic_name}(...) "
+                        f"cannot be followed by static closure analysis"
+                    )
+    return visited
+
+
+def _census_module_names(census: list[dict]) -> list[str]:
+    """The importable module name each census entry materializes to under
+    `VERIFIER_SOURCE_ROOT`, for the isolated driver's own after-the-fact
+    "nothing resolved outside the scratch tree" self-check (item 361(e))."""
+    names = []
+    prefix = VERIFIER_SOURCE_ROOT.rstrip("/") + "/"
+    for entry in census:
+        rel = entry["path"]
+        rel = rel[len(prefix):] if rel.startswith(prefix) else rel
+        if rel.endswith("/__init__.py"):
+            names.append(rel[: -len("/__init__.py")].replace("/", "."))
+        elif rel.endswith(".py"):
+            names.append(rel[:-3].replace("/", "."))
+    return names
+
+
+def _materialize_census(scratch_dir: Path, repo_root: Path, census: list[dict]) -> None:
+    """Writes every `{path, blob}` census entry's bytes into `scratch_dir`,
+    preserving the module/package import layout relative to
+    `VERIFIER_SOURCE_ROOT`. Reads each blob directly by its recorded sha
+    (`git cat-file blob <blob>`), never via `<commit>:<path>` -- so replay
+    (`replay_completion_obligation`) materializes the *recorded* bytes
+    regardless of what `path` resolves to in later history (item
+    356(u)/361(i))."""
+    prefix = VERIFIER_SOURCE_ROOT.rstrip("/") + "/"
+    for entry in census:
+        rel = entry["path"]
+        rel = rel[len(prefix):] if rel.startswith(prefix) else rel
+        dest = scratch_dir / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(_hardened_run_bytes(["cat-file", "blob", entry["blob"]], cwd=repo_root))
+
+
+def _build_verifier_driver(
+    scratch_dir: Path, entry_module: str, conformance_name: str,
+    repo_root: Path, commit: str, module_names: list[str],
+) -> str:
+    """A tiny, self-contained driver script (never itself part of the
+    census/closure -- it carries no authority, it only sets `sys.path`
+    and calls the recorded verifier) that the isolated interpreter
+    executes: imports the materialized verifier entry module, calls its
+    named conformance function, and asserts from *inside itself* that
+    every census module resolved inside the scratch tree (item 361(e))
+    before printing the JSON result."""
+    return (
+        "import json, sys\n"
+        f"sys.path.insert(0, {str(scratch_dir)!r})\n"
+        "try:\n"
+        f"    import {entry_module} as _verifier_module\n"
+        f"    _result = _verifier_module.{conformance_name}({str(repo_root)!r}, {commit!r})\n"
+        "except Exception as _exc:\n"
+        "    print(json.dumps({'status': 'ERROR', 'detail': repr(_exc)}))\n"
+        "    sys.exit(1)\n"
+        f"_scratch = {str(scratch_dir)!r}\n"
+        f"for _name in {module_names!r}:\n"
+        "    _mod = sys.modules.get(_name)\n"
+        "    _f = getattr(_mod, '__file__', None) if _mod is not None else None\n"
+        "    if _f is not None and not str(_f).startswith(_scratch):\n"
+        "        print(json.dumps({'status': 'ERROR', 'detail': "
+        "'module ' + _name + ' resolved outside the scratch tree: ' + str(_f)}))\n"
+        "        sys.exit(1)\n"
+        "print(json.dumps(_result))\n"
+    )
+
+
+def _run_verifier_driver(scratch_dir: Path, driver_src: str, *, extra_env: dict | None = None) -> dict:
+    """Executes `driver_src` in a **fresh interpreter process** -- never
+    in-process, so an already-imported module cannot mask a missing
+    dependency -- launched in Python's isolated mode (`-I`, ignoring
+    `PYTHONPATH` and user site directories even when `extra_env` sets one
+    deliberately, item 358(c)/361(f)), with no bytecode writing (`-B`)
+    and no site processing (`-S`). `sys.path` is reset inside the driver
+    itself to the scratch tree plus the standard library alone -- the
+    live repository is not a module source."""
+    driver_dir = Path(tempfile.mkdtemp(prefix="wfo-verifier-driver-"))
+    try:
+        driver_path = driver_dir / "run_verifier.py"
+        driver_path.write_text(driver_src)
+        env = {"PATH": os.environ.get("PATH", "")}
+        if extra_env:
+            env.update(extra_env)
+        result = subprocess.run(
+            [sys.executable, "-I", "-B", "-S", str(driver_path)],
+            capture_output=True, text=True, env=env, timeout=120,
+        )
+    finally:
+        shutil.rmtree(driver_dir, ignore_errors=True)
+
+    stdout = result.stdout.strip()
+    if not stdout:
+        raise VerifierExecutionError(
+            f"isolated verifier process produced no output: rc={result.returncode} "
+            f"stderr={result.stderr!r}"
+        )
+    try:
+        payload = json.loads(stdout.splitlines()[-1])
+    except json.JSONDecodeError as exc:
+        raise VerifierExecutionError(
+            f"isolated verifier process produced non-JSON output: {stdout!r}"
+        ) from exc
+    if payload.get("status") == "ERROR":
+        raise VerifierExecutionError(payload.get("detail", "unknown isolated-verifier error"))
+    return payload
+
+
+def _execute_verifier_isolated(
+    repo_root: Path, commit: str, census: list[dict], conformance_name: str,
+    *, extra_env: dict | None = None,
+) -> dict:
+    """Materializes `census` from live Git objects at `commit` and
+    executes the named conformance function in isolation (items 358(c),
+    361(e))."""
+    scratch_dir = Path(tempfile.mkdtemp(prefix="wfo-verifier-scratch-"))
+    try:
+        _materialize_census(scratch_dir, repo_root, census)
+        entry_module = Path(VERIFIER_ENTRY).stem
+        driver_src = _build_verifier_driver(
+            scratch_dir, entry_module, conformance_name, repo_root, commit,
+            _census_module_names(census),
+        )
+        return _run_verifier_driver(scratch_dir, driver_src, extra_env=extra_env)
+    finally:
+        shutil.rmtree(scratch_dir, ignore_errors=True)
+
+
+def replay_completion_obligation(repo_root: Path, obligation_id: str, recorded: dict) -> dict:
+    """Item 356(u)/(z): re-executes the **recorded** `verifier_census` --
+    read by blob sha, never by `<commit>:<path>`, so later history cannot
+    substitute different bytes for the same path -- and reproduces the
+    recorded verdict exactly, regardless of what today's live
+    `scripts/workflow_state.py`/`workflow_fingerprint.py` say. Never calls
+    today's `derive_obligation_verdict`-equivalent with the recorded
+    commit; it materializes and runs the exact recorded implementation. A
+    recorded census blob that is genuinely no longer reachable classifies
+    `REPLAY_UNRESOLVABLE` rather than falling back to whatever is
+    running now."""
+    conformance_name = COMPLETION_OBLIGATION_CONFORMANCE.get(obligation_id)
+    if conformance_name is None:
+        return {"status": "UNKNOWN_OBLIGATION"}
+    census = recorded["verifier_census"]
+    scratch_dir = Path(tempfile.mkdtemp(prefix="wfo-verifier-replay-"))
+    try:
+        try:
+            _materialize_census(scratch_dir, repo_root, census)
+        except subprocess.CalledProcessError as exc:
+            return {"status": "REPLAY_UNRESOLVABLE", "detail": str(exc)}
+        entry_module = Path(VERIFIER_ENTRY).stem
+        driver_src = _build_verifier_driver(
+            scratch_dir, entry_module, conformance_name, repo_root,
+            recorded["source_commit"], _census_module_names(census),
+        )
+        try:
+            return _run_verifier_driver(scratch_dir, driver_src)
+        except VerifierExecutionError as exc:
+            return {"status": "REPLAY_UNRESOLVABLE", "detail": str(exc)}
+    finally:
+        shutil.rmtree(scratch_dir, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# The gate itself: authority resolution, the DIVERGED precondition, and
+# verdict derivation (items 356, 358, 360)
+# ---------------------------------------------------------------------------
+
+_TECHNICAL_APPROVAL_AUTHORITY_FIELDS = (
+    "status", "basis", "approved_review_content_id", "review_content_manifest",
+    "reviewed_content_commit", "reviewed_bundle_id", "user_confirmation",
+    "legacy_evidence", "waived_guarantees",
+)
+
+
+class ObligationVerdict(NamedTuple):
+    """`derive_obligation_verdict(obligation_id, subject_identity,
+    verifier_identity)`'s result, extended with the audit fields
+    `complete_work_item` records into `completion_obligations_accepted`
+    (item 356(m))."""
+    classification: str
+    detail: str
+    source_commit: str | None = None
+    obligation_content_id: str | None = None
+    verifier_identity_id: str | None = None
+    verifier_entry: str | None = None
+    verifier_source_root: str | None = None
+    verifier_census: tuple[dict, ...] = ()
+    technical_approval_commit: str | None = None
+    reviewed_content_commit: str | None = None
+    approved_review_content_id: str | None = None
+    base_commit: str | None = None
+    writer_count: int | None = None
+    failing_assertions: tuple[str, ...] = ()
+
+
+def _working_tree_diverges_from_commit(repo_root: Path, commit: str, surface_census) -> bool:
+    """Item 356's `DIVERGED` precondition: every path on a declared writer
+    surface must be byte-identical between the working tree and `commit`,
+    and no untracked file may exist on a surface. A precondition, never a
+    race fix -- the derivation itself never reads the working tree at
+    all; this only ever causes a refusal, keeping "the content that was
+    validated" and "the content that is installed" the same thing at
+    evaluation time."""
+    for entry in surface_census:
+        full = repo_root / entry["path"]
+        if not full.is_file() or full.is_symlink():
+            return True
+        if fingerprint._hash_object(repo_root, entry["path"]) != entry["blob"]:
+            return True
+    known = {e["path"] for e in surface_census}
+    for prefix in STATE_WRITER_SURFACE_PREFIXES:
+        out = _run(["git", "ls-files", "--others", "--exclude-standard", "-z", "--", prefix], cwd=repo_root)
+        for path in out.split("\x00"):
+            if not path:
+                continue
+            if prefix == "scripts/" and path.endswith("_test.py"):
+                continue
+            if path not in known:
+                return True
+    return False
+
+
+def _resolve_one_obligation(repo_root: Path, work_item: dict, obligation_id: str, commit: str) -> ObligationVerdict:
+    conformance_name = COMPLETION_OBLIGATION_CONFORMANCE.get(obligation_id)
+    if conformance_name is None:
+        return ObligationVerdict("UNKNOWN_OBLIGATION", f"no conformance is bound to {obligation_id!r}")
+
+    owner_id = work_item["work_item_id"]
+
+    try:
+        recomputed_id = approval_review_content_id(
+            repo_root, stage="implementation", base_commit=work_item["base_commit"],
+            work_item_type=work_item["work_item_type"], work_item_id=owner_id, head=commit,
+            artifacts_path=fingerprint.artifacts_path_for_work_item(owner_id),
+        )
+    except Exception as exc:  # noqa: BLE001 -- any failure to evaluate at all is VERIFIER_UNRESOLVABLE (item 358(d))
+        return ObligationVerdict("VERIFIER_UNRESOLVABLE", f"cannot recompute implementation-stage identity at {commit}: {exc!r}")
+
+    try:
+        approval_commit = discover_technical_approval_commit(
+            repo_root, owner_id, recomputed_id, work_item["base_commit"], commit,
+        )
+    except AmbiguousApprovalTrailerError as exc:
+        return ObligationVerdict("VERIFIER_UNAPPROVED", f"ambiguous Workflow-Technical-Approval commits: {exc}")
+    if approval_commit is None or not _is_ancestor(repo_root, approval_commit, commit):
+        return ObligationVerdict(
+            "VERIFIER_UNAPPROVED",
+            "no reachable, unambiguous Workflow-Technical-Approval commit carries "
+            "the recomputed implementation-stage identity",
+        )
+
+    try:
+        durable_state = json.loads(
+            _hardened_run(["cat-file", "blob", f"{approval_commit}:docs/ai-workflow/WORKFLOW_STATE.json"], cwd=repo_root)
+        )
+    except (subprocess.CalledProcessError, json.JSONDecodeError) as exc:
+        return ObligationVerdict("VERIFIER_UNAPPROVED", f"committed WORKFLOW_STATE.json at {approval_commit} is unreadable/malformed: {exc}")
+    durable_owner = durable_state.get("work_items", {}).get(owner_id)
+    durable_record = (durable_owner or {}).get("technical_approval")
+    if durable_record is None:
+        return ObligationVerdict("VERIFIER_UNAPPROVED", f"{approval_commit} commits no technical_approval record for {owner_id!r}")
+
+    if durable_record.get("status") != "CURRENT":
+        return ObligationVerdict("VERIFIER_UNAPPROVED", "durable technical_approval.status != CURRENT")
+    if durable_record.get("approved_review_content_id") != recomputed_id:
+        return ObligationVerdict("VERIFIER_UNAPPROVED", "durable approved_review_content_id does not match the recomputed identity")
+    reviewed_content_commit = durable_record.get("reviewed_content_commit")
+    if not (isinstance(reviewed_content_commit, str) and _GIT_OBJECT_ID_RE.match(reviewed_content_commit)):
+        return ObligationVerdict("VERIFIER_UNAPPROVED", "durable reviewed_content_commit is null or malformed")
+    manifest = durable_record.get("review_content_manifest") or []
+    if not manifest:
+        return ObligationVerdict("VERIFIER_UNAPPROVED", "durable review_content_manifest is empty")
+
+    live_record = work_item.get("technical_approval")
+    if live_record is None:
+        return ObligationVerdict("VERIFIER_UNAPPROVED", "no live technical_approval record")
+    diverging = [f for f in _TECHNICAL_APPROVAL_AUTHORITY_FIELDS if live_record.get(f) != durable_record.get(f)]
+    if diverging:
+        return ObligationVerdict("VERIFIER_UNAPPROVED", f"live technical_approval diverges from the durable record on: {diverging}")
+    if work_item.get("base_commit") != (durable_owner or {}).get("base_commit"):
+        return ObligationVerdict("VERIFIER_UNAPPROVED", "live base_commit does not equal the one the approval commit committed")
+
+    try:
+        closure_paths = _static_import_closure(repo_root, commit, VERIFIER_ENTRY, VERIFIER_SOURCE_ROOT)
+    except VerifierClosureUnresolvableError as exc:
+        return ObligationVerdict("VERIFIER_UNRESOLVABLE", str(exc))
+
+    manifest_by_path = {entry.get("path"): entry for entry in manifest}
+    census: list[dict] = []
+    for path in closure_paths:
+        found = _blob_mode_and_sha_at_commit(repo_root, commit, path)
+        if found is None:
+            return ObligationVerdict("VERIFIER_UNAPPROVED", f"verifier dependency {path!r} absent at {commit}")
+        mode, blob_at_c = found
+        if path in manifest_by_path:
+            approved_blob = manifest_by_path[path].get("blob")
+            if blob_at_c != approved_blob:
+                return ObligationVerdict(
+                    "VERIFIER_UNAPPROVED",
+                    f"verifier dependency {path!r} at {commit} ({blob_at_c}) is not "
+                    f"the approved blob ({approved_blob})",
+                )
+            source = "manifest"
+        else:
+            base_found = _blob_mode_and_sha_at_commit(repo_root, work_item["base_commit"], path)
+            if base_found is None or base_found[1] != blob_at_c:
+                return ObligationVerdict(
+                    "VERIFIER_UNAPPROVED",
+                    f"verifier dependency {path!r} is outside the approved manifest "
+                    f"and has changed since base_commit",
+                )
+            source = "unchanged_since_base"
+        census.append({"path": path, "mode": mode, "blob": blob_at_c, "source": source})
+
+    verifier_identity_id = _sha256_canonical({
+        "verifier_entry": VERIFIER_ENTRY, "verifier_source_root": VERIFIER_SOURCE_ROOT, "verifier_census": census,
+    })
+
+    try:
+        discovery = discover_state_writers(repo_root, commit)
+    except StateWriterDeclarationError as exc:
+        return ObligationVerdict("UNRESOLVABLE", f"discover_state_writers failed at {commit}: {exc}")
+    if _working_tree_diverges_from_commit(repo_root, commit, discovery.surface_census):
+        return ObligationVerdict("DIVERGED", "the working tree differs from the pinned commit on a declared writer surface")
+
+    conformance_blob = fingerprint._hash_object(repo_root, VERIFIER_ENTRY)
+    obligation_content_id = _sha256_canonical({
+        "obligation_id": obligation_id,
+        "surfaces": list(STATE_WRITER_SURFACE_PREFIXES),
+        "surface_census": [dict(e) for e in discovery.surface_census],
+        "writers": list(discovery.writers),
+        "publisher": discovery.publisher,
+        "conformance_blob": conformance_blob,
+    })
+
+    try:
+        result = _execute_verifier_isolated(repo_root, commit, census, conformance_name)
+    except VerifierExecutionError as exc:
+        return ObligationVerdict("VERIFIER_UNRESOLVABLE", str(exc))
+
+    classification = "PASS" if result.get("status") == "PASS" else "FAIL"
+    return ObligationVerdict(
+        classification, result.get("detail", ""), source_commit=commit,
+        obligation_content_id=obligation_content_id, verifier_identity_id=verifier_identity_id,
+        verifier_entry=VERIFIER_ENTRY, verifier_source_root=VERIFIER_SOURCE_ROOT,
+        verifier_census=tuple(census), technical_approval_commit=approval_commit,
+        reviewed_content_commit=reviewed_content_commit, approved_review_content_id=recomputed_id,
+        base_commit=work_item.get("base_commit"), writer_count=len(discovery.writers),
+        failing_assertions=tuple(result.get("failing_assertions", ())),
+    )
+
+
+def resolve_completion_obligations(
+    repo_root: Path, work_item: dict, *, expected_commit: str | None = None,
+) -> dict[str, ObligationVerdict]:
+    """`derive_obligation_verdict(obligation_id, subject_identity,
+    verifier_identity)`, for every obligation the work item's own
+    authoritatively-loaded registry declares (item 356). No `registry`
+    parameter and no `commit` parameter: both are resolved internally
+    (the registry through the same authoritative
+    `_load_authoritative_registry_or_none` resolution
+    `resolve_own_registry_completion_status` uses; the commit as the
+    live `HEAD`) so a caller cannot hand in a registry declaring no
+    obligations, or an identity at which a stale conformance once
+    passed, and satisfy the gate vacuously. `expected_commit`, if given,
+    is an **assertion** only -- a mismatch against the resolved `HEAD`
+    classifies every obligation `PIN_MOVED`, never a redirection of the
+    derivation. Returns `{}` for a work item that declares no obligation
+    (the verifier-authority requirement attaches to obligations, never to
+    work items -- item 358's "Authority is resolved per declared
+    obligation")."""
+    registry = _load_authoritative_registry_or_none(repo_root, work_item)
+    obligation_ids = sorted({
+        oid
+        for checkpoint in (registry or {}).get("checkpoints", [])
+        for oid in checkpoint.get("completion_obligations", [])
+    })
+    if not obligation_ids:
+        return {}
+
+    try:
+        head = _run(["git", "rev-parse", "HEAD"], cwd=repo_root).strip()
+    except subprocess.CalledProcessError as exc:
+        return {oid: ObligationVerdict("UNRESOLVABLE", f"cannot resolve HEAD: {exc}") for oid in obligation_ids}
+    if expected_commit is not None and expected_commit != head:
+        return {
+            oid: ObligationVerdict("PIN_MOVED", f"expected_commit {expected_commit!r} != live HEAD {head!r}")
+            for oid in obligation_ids
+        }
+
+    return {oid: _resolve_one_obligation(repo_root, work_item, oid, head) for oid in obligation_ids}
+
+
+def completion_obligations_satisfied(repo_root: Path, work_item: dict) -> tuple[bool, list[str]]:
+    """`True` only when **every** declared obligation derives `PASS`;
+    otherwise `False` plus the sorted outstanding obligation ids. A work
+    item declaring no obligation returns `(True, [])` without resolving
+    any technical approval at all (item 358, stress pass 3)."""
+    verdicts = resolve_completion_obligations(repo_root, work_item)
+    outstanding = sorted(oid for oid, v in verdicts.items() if v.classification != "PASS")
+    return (not outstanding, outstanding)
+
+
+def work_item_completion_status(repo_root: Path, work_item: dict) -> tuple[bool, str | None, list[str]]:
+    """The single authoritative terminal predicate: terminal **iff** the
+    registry status is terminal **and** every completion obligation
+    derives `PASS`. Composes `resolve_own_registry_completion_status`
+    and `completion_obligations_satisfied` rather than re-deriving either
+    (`select_next_checkpoint`/`registry_completion_status` keep their
+    exact current, registry-only semantics unchanged -- item 356(f)).
+    Performs no locking of its own: it is called *by* the terminal
+    transition while that transition already holds `state_lock`, and the
+    conformance it runs never touches the live state file or lock, so it
+    cannot deadlock against its own caller."""
+    is_terminal, outstanding_checkpoint_id = resolve_own_registry_completion_status(repo_root, work_item)
+    satisfied, outstanding_obligations = completion_obligations_satisfied(repo_root, work_item)
+    return (is_terminal and satisfied, outstanding_checkpoint_id, outstanding_obligations)
+
+
 def complete_work_item(state: dict, work_item_id: str, now: str, *, repo_root: Path) -> dict:
     """D1's completion/reset text: on `MILESTONE_COMPLETE` (or
     process-completion archival), the entry's phase becomes terminal and,
@@ -4715,7 +5685,22 @@ def complete_work_item(state: dict, work_item_id: str, now: str, *, repo_root: P
     caller-supplied dict -- `resolve_own_registry_completion_status`,
     `repo_root`-driven) and refuses via `IncompleteOwnCheckpointsError`,
     naming the outstanding checkpoint, when the item's own registry has any
-    checkpoint that is not `COMPLETE`."""
+    checkpoint that is not `COMPLETE`.
+
+    `D-Completion-Obligations` (item 356(a)): independent of, and in
+    addition to, both checks above, every completion obligation the
+    item's own registry declares must derive `PASS` --
+    `UnsatisfiedCompletionObligationError` otherwise, naming each
+    outstanding obligation, its classification, and (for `FAIL`) the
+    specific failing conformance assertions. Marking every registry
+    checkpoint `COMPLETE` -- by hand, by `complete_checkpoint(...)`, or
+    by any other means -- is therefore not sufficient by itself. This is
+    the gate the terminal transition's own single critical section
+    requires (item 356(j)): the caller of this function is expected to
+    hold `state_lock` for the whole re-read -> this call -> publish
+    sequence, since this function itself never acquires it and the
+    obligation conformance it runs never touches the live state file or
+    lock (item 356(n))."""
     blocking = incomplete_children(state, work_item_id)
     if blocking:
         raise IncompleteChildWorkItemError(
@@ -4732,12 +5717,29 @@ def complete_work_item(state: dict, work_item_id: str, now: str, *, repo_root: P
             f"if this is a continued-scope remediation round, or complete the checkpoint first)"
         )
 
+    verdicts = resolve_completion_obligations(repo_root, work_item)
+    outstanding = {oid: v for oid, v in verdicts.items() if v.classification != "PASS"}
+    if outstanding:
+        details = "; ".join(
+            f"{oid} ({v.classification}): {v.detail}"
+            + (f" -- failing: {list(v.failing_assertions)}" if v.classification == "FAIL" else "")
+            for oid, v in sorted(outstanding.items())
+        )
+        raise UnsatisfiedCompletionObligationError(
+            f"{work_item_id!r} cannot reach MILESTONE_COMPLETE -- outstanding "
+            f"completion obligation(s): {details}"
+        )
+
     new_state = copy.deepcopy(state)
     work_item = new_state["work_items"][work_item_id]
     work_item["phase"] = "MILESTONE_COMPLETE"
     work_item["current_checkpoint_id"] = None
     work_item["state_revision"] = work_item.get("state_revision", 1) + 1
     work_item["last_transition"] = now
+    if verdicts:
+        work_item["completion_obligations_accepted"] = {
+            oid: dict(v._asdict()) for oid, v in verdicts.items()
+        }
     if new_state.get("active_work_item_id") == work_item_id:
         new_state["active_work_item_id"] = None
     return new_state

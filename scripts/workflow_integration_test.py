@@ -466,16 +466,21 @@ class TestVersion21OnlyCommandsRefuseCleanlyForV1(unittest.TestCase):
 # below, for the two files where a real pre-v2.1 copy is actually
 # available to diff against.
 _GOLDEN_COMMAND_FILE_SHA256 = {
-    "milestone-plan.md": "394535aee69820d433460f39c48a484122b6286cbad105ac6ff35c7ec8326d33",
-    "milestone-implement.md": "48929dd4ec4bef853e4b20dacffe182ef3a8b44a14c50b79a909cee7209e05df",
-    "approve-review.md": "35520d29a1837f645ad718d419d56d38c2fa2f9aa113aa2be0f619fc9d8905b8",
-    "accept-milestone.md": "b20355327e560b09518e5305979bc844acb989a0b11fd6a6be00a9d750a9e9f4",
-    "prepare-functional-review.md": "37844421e1c63917d7970c8cdd00d6945d06c3a168eb7fb3be51205deb35fee3",
-    "apply-plan-review.md": "f79febd0ef769d72bc3ec065a55a536203b533d23db4cc3d9b7854b8d49b8834",
-    "apply-implementation-review.md": "eb90507a43d0ef51cfc59a85b5910c80e5c4a7618b7a8f018b9426fe395abc62",
-    "review-plan.md": "4cc5a74389c9714cf23fb7ed51bc3da5623bf99268ce118c1c2d59b995519c89",
-    "record-manual-plan-review.md": "0ce7893e968c412c41e3aca1afdfb8dca7d0060bbd0f38c2a6ec15c7b32669da",
-    "bootstrap-workflow-v2.md": "da4eb9c58ef521402cb84a583403ba1746239192f8d38ebf14896a6bb49622fd",
+    # Updated by WFO-STATE-SERIALIZATION (item 354/357): every writer
+    # command file below gained a `state_writer: true` frontmatter
+    # declaration and a "State-writer discipline" paragraph naming
+    # `workflow_state.state_transaction`/`state_lock` -- an intentional
+    # content change, not a regression.
+    "milestone-plan.md": "bb8d060530b1b691f66fcf673baf604ec5a14e782c74699ae8a65107f4a2c040",
+    "milestone-implement.md": "eae3dbf2a8f91899bf9020335c4a2209af271b72bca7c74d988a3fa735e5f206",
+    "approve-review.md": "474ffff548f73ff50f74563432c278646eb5e5a6de463c659e054d2b21cb9e75",
+    "accept-milestone.md": "10594c675de02b9a90e57963796ac75dee08f33a0a2a78b7d624346f0a3ab6d9",
+    "prepare-functional-review.md": "5b8026a4bd0293c7b3d1c94ef9814357ee815ce8b9b6b53b0f545917c1eb886d",
+    "apply-plan-review.md": "36cfc4f7029d0c22163c35bb80f2451a1f47c2b69a5e465d7789b1fa2f61db7b",
+    "apply-implementation-review.md": "bc1402c4b66b1e57acf043d98e9b534feca011b6e00dad142d378da7c97f5bb6",
+    "review-plan.md": "2df001613d95be37253ec4969b522a123a0705b9be1ad57c59ef74c0c35d00f2",
+    "record-manual-plan-review.md": "1382be84791ea61d210bec7f13b0043dfc3e841f7e8eed0bef697aa719414f75",
+    "bootstrap-workflow-v2.md": "4b7425dc9aa625b35f5e2ac35cb25bbccecb3f5d443ed78441edf0ed8680c53f",
 }
 
 

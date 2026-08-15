@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# state_writer: false
+# This script reads docs/ai-workflow/WORKFLOW_STATE.json (to cross-check
+# that record_bundle_generation already advanced reviewed_implementation_head
+# before regenerating a bundle) but never writes it -- the declaration
+# above is about publication, not about reference.
 # Build a review bundle under .ai-review/<work-item-id>/current/ (or the
 # flat .ai-review/current/ compatibility path for a non-plan stage with no
 # work-item-id given) and archive it. See docs/ai-workflow/REVIEW_PROTOCOL.md.
