@@ -193,6 +193,23 @@ dirty-resume rule, `WF2`):
    what ran and its real result — never claim a check passed that did not
    run.
 4. Enter `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`:
+   - if this work item has a `docs/ai-workflow/WORKFLOW_STATE.json` entry:
+     **first**, before writing any bundle file, call
+     `workflow_state.record_bundle_generation(state, work_item_id,
+     stage="implementation", head=<current HEAD SHA>, now=<now>)` (`WF4c`,
+     D-Approval-Commits' sole writer of `reviewed_implementation_head`),
+     persist the returned state to `WORKFLOW_STATE.json`, and commit it
+     **alone** — stage exactly that one path (never a broader `git add`)
+     and create one commit carrying `Workflow-Bundle-Generation-Record:
+     <work_item_id>/<implementation_revision>` +
+     `Workflow-Work-Item: <work_item_id>` trailers, no other trailer. This
+     durability commit must land *before* generation, never after
+     (`WF8B-003`, resolved `D-Approval-Commits` revision 28): a durability
+     commit made after generation is by definition one commit ahead of the
+     value it just wrote, permanently re-breaking
+     `/approve-review implementation`'s provenance-interval check on every
+     round. Skip this whole step for a work item with no state entry
+     (nothing to track);
    - write `<bundle_dir>/IMPLEMENTATION_SUMMARY.md` (what was built,
      per checkpoint, and why);
    - write `<bundle_dir>/TEST_RESULTS.md` (exact commands + results);
@@ -204,13 +221,8 @@ dirty-resume rule, `WF2`):
      [work_item_id]`, where `<base-sha>` is the milestone's starting
      commit; `<bundle_dir>` here resolves per
      `docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Bundle location"
-     (`workflow_fingerprint.resolve_bundle_dir`);
-   - if this work item has a `docs/ai-workflow/WORKFLOW_STATE.json` entry:
-     call `workflow_state.record_bundle_generation(state, work_item_id,
-     stage="implementation", head=<current HEAD SHA>, now=<now>)` (`WF4c`,
-     D-Approval-Commits' sole writer of `reviewed_implementation_head`) and
-     persist the returned state — this is what later makes
-     `AWAITING_TECHNICAL_APPROVAL` reachable at all; skip this call
-     entirely for a work item with no state entry (nothing to track).
+     (`workflow_fingerprint.resolve_bundle_dir`). Bundle files themselves
+     are never committed (gitignored, disposable, regeneratable) — only
+     the generation-record commit above is real Git history.
 5. Report the bundle location and **stop**. This is a hard gate — do not
    mark the milestone accepted, do not start the next milestone.

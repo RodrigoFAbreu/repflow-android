@@ -467,12 +467,12 @@ class TestVersion21OnlyCommandsRefuseCleanlyForV1(unittest.TestCase):
 # available to diff against.
 _GOLDEN_COMMAND_FILE_SHA256 = {
     "milestone-plan.md": "394535aee69820d433460f39c48a484122b6286cbad105ac6ff35c7ec8326d33",
-    "milestone-implement.md": "9d8453671756ba7a60e18d280b59d66836f216b21651fe78a5682e58bc1e8add",
-    "approve-review.md": "384c3197c34798b72fcc988421db8b64d8c84697c6565658957fd5a76150d08f",
+    "milestone-implement.md": "48929dd4ec4bef853e4b20dacffe182ef3a8b44a14c50b79a909cee7209e05df",
+    "approve-review.md": "35520d29a1837f645ad718d419d56d38c2fa2f9aa113aa2be0f619fc9d8905b8",
     "accept-milestone.md": "b20355327e560b09518e5305979bc844acb989a0b11fd6a6be00a9d750a9e9f4",
     "prepare-functional-review.md": "37844421e1c63917d7970c8cdd00d6945d06c3a168eb7fb3be51205deb35fee3",
     "apply-plan-review.md": "f79febd0ef769d72bc3ec065a55a536203b533d23db4cc3d9b7854b8d49b8834",
-    "apply-implementation-review.md": "96772a51cfe315560983c573483bf66ccf38793e31aedb1b5cbc9003f1367234",
+    "apply-implementation-review.md": "eb90507a43d0ef51cfc59a85b5910c80e5c4a7618b7a8f018b9426fe395abc62",
     "review-plan.md": "4cc5a74389c9714cf23fb7ed51bc3da5623bf99268ce118c1c2d59b995519c89",
     "record-manual-plan-review.md": "0ce7893e968c412c41e3aca1afdfb8dca7d0060bbd0f38c2a6ec15c7b32669da",
     "bootstrap-workflow-v2.md": "da4eb9c58ef521402cb84a583403ba1746239192f8d38ebf14896a6bb49622fd",

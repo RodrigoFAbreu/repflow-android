@@ -699,6 +699,69 @@ class InvalidBundleGenerationStageError(Exception):
     other (D-Approval-Commits, WF4c)."""
 
 
+class AmbiguousBundleGenerationRecordTrailerError(Exception):
+    """Raised by `discover_bundle_generation_record_commits` when more than
+    one commit reachable in `base_commit..head` carries a
+    `Workflow-Bundle-Generation-Record` trailer for the same
+    `<work_item_id>/<implementation_revision>` value and the first-parent-
+    ancestor tie-break does not resolve to exactly one (D-Commit-
+    Provenance; WF8B-003 remediation) -- e.g. a genuine second, unrelated
+    generation-record commit for the same round."""
+
+
+class BundleGenerationRecordNotFoundError(Exception):
+    """Raised when no `Workflow-Bundle-Generation-Record` commit is
+    reachable for the work item's current `implementation_revision` (or
+    when `reviewed_implementation_head`/`implementation_revision` is not
+    yet set at all) -- `AWAITING_TECHNICAL_APPROVAL`'s provenance-interval
+    check has nothing to validate against."""
+
+
+class HeadPastBundleGenerationRecordError(Exception):
+    """Raised when live HEAD is not exactly the discovered
+    `Workflow-Bundle-Generation-Record` commit `T` -- a further commit
+    landed after `T` carrying no provenance record of its own (D-Commit-
+    Provenance condition 1: HEAD must equal `T` exactly, never merely a
+    descendant of it)."""
+
+
+class ReviewedImplementationHeadNotAncestorError(Exception):
+    """Raised when `reviewed_implementation_head` is not an ancestor at
+    all of the discovered `Workflow-Bundle-Generation-Record` commit `T`
+    -- the provenance interval `reviewed_implementation_head..T` does not
+    exist."""
+
+
+class NonFirstParentProvenanceIntervalError(Exception):
+    """Raised when the provenance interval `reviewed_implementation_head..T`
+    is not a plain first-parent chain -- `reviewed_implementation_head` is
+    reachable from `T` only through a merge or a non-first-parent path, or
+    a commit inside the interval itself has more than one parent
+    (D-Commit-Provenance condition 2: "no widen-the-search fallback")."""
+
+
+class ProtectedPathInProvenanceIntervalError(Exception):
+    """Raised when a non-terminal commit inside the provenance interval
+    `reviewed_implementation_head..T` touches an implementation-stage
+    `protected` or unclassified path -- only the terminal
+    `Workflow-Bundle-Generation-Record` commit itself may exist between
+    `reviewed_implementation_head` and live HEAD; every other commit must
+    be excluded-only (D-Commit-Provenance condition 3)."""
+
+
+class MalformedBundleGenerationRecordCommitError(Exception):
+    """Raised when the discovered terminal commit `T` fails its own
+    ordinary-role commit contract (D-Commit-Provenance condition 4): it
+    must touch only `WORKFLOW_STATE.json`, its own `work_items[work_item_id]`
+    field changes must be a non-empty subset of `{phase,
+    reviewed_implementation_head, implementation_revision, state_revision,
+    last_transition}`, and it must carry exactly the two-trailer ordinary
+    set (`Workflow-Bundle-Generation-Record`, `Workflow-Work-Item`). The
+    recovered/superseded (`Workflow-Supersedes`) role is not implemented
+    -- a commit that isn't a clean ordinary-role match is rejected rather
+    than silently treated as recovered."""
+
+
 class RemediationChildAlreadyExistsError(Exception):
     """Raised when `create_remediation_child_work_item`'s deterministically
     derived `<parent>-remediation-<n>` id already names an existing entry
@@ -5004,6 +5067,245 @@ def record_bundle_generation(state: dict, work_item_id: str, *, stage: str, head
     work_item["state_revision"] = work_item.get("state_revision", 1) + 1
     work_item["last_transition"] = now
     return new_state
+
+
+# ---------------------------------------------------------------------------
+# D-Commit-Provenance / D-Approval-Commits, WF8B-003 remediation (WF8b):
+# the `Workflow-Bundle-Generation-Record` trailer and the provenance-
+# interval check that replaces a bare `reviewed_implementation_head ==
+# HEAD` comparison. `record_bundle_generation` above still writes
+# `reviewed_implementation_head`/`implementation_revision` into `state`
+# exactly as before; the caller is now responsible for persisting that
+# write as its own dedicated commit (touching only `WORKFLOW_STATE.json`,
+# carrying the trailers below) *before* generating the bundle, so no
+# later commit can ever land between the write and the commit that makes
+# it durable (D-Approval-Commits, WF8B-003's own worked contradiction).
+# Only the "ordinary" role is implemented here -- the recovered/
+# superseded (`Workflow-Supersedes`) role is out of scope for this
+# remediation slice; see `MalformedBundleGenerationRecordCommitError`.
+# ---------------------------------------------------------------------------
+
+
+ORDINARY_BUNDLE_GENERATION_RECORD_FIELDS = frozenset({
+    "phase", "reviewed_implementation_head", "implementation_revision",
+    "state_revision", "last_transition",
+})
+
+
+def discover_bundle_generation_record_commits(
+    repo_root: Path, work_item_id: str, base_commit: str, head: str = "HEAD",
+) -> dict[str, str]:
+    """Every commit reachable in `base_commit..head` carrying an exact
+    `Workflow-Bundle-Generation-Record: <work_item_id>/<implementation_revision>`
+    + `Workflow-Work-Item: <work_item_id>` trailer pair, requiring exactly
+    one match per `<work_item_id>/<implementation_revision>` value after
+    the shared first-parent-ancestor tie-break. Returns
+    `{"<work_item_id>/<implementation_revision>": commit_sha}`."""
+    return _discover_trailer_commits(
+        repo_root, "Workflow-Bundle-Generation-Record", work_item_id, base_commit, head,
+        ambiguous_error_cls=AmbiguousBundleGenerationRecordTrailerError,
+    )
+
+
+def discover_current_bundle_generation_record_commit(
+    repo_root: Path, work_item_id: str, base_commit: str, head: str, implementation_revision: int,
+) -> str | None:
+    """The specific `Workflow-Bundle-Generation-Record` commit for this
+    work item's *current* `implementation_revision`, or `None` if none is
+    reachable."""
+    matches = discover_bundle_generation_record_commits(repo_root, work_item_id, base_commit, head)
+    return matches.get(f"{work_item_id}/{implementation_revision}")
+
+
+def _commit_own_changed_paths(repo_root: Path, commit: str) -> set[str]:
+    """The paths a single commit itself changes, relative to its own
+    (first) parent -- distinct from `_changed_paths_between`, which
+    diffs two arbitrary endpoints of a range."""
+    parent = _run(["git", "rev-parse", f"{commit}^"], cwd=repo_root).strip()
+    return _changed_paths_between(repo_root, parent, commit)
+
+
+def _read_json_at_commit_or_empty(repo_root: Path, commit: str, rel_path: str) -> dict:
+    """`git show <commit>:<rel_path>`, parsed as JSON, or `{}` if the path
+    does not exist at that commit (e.g. a work item's very first
+    Workflow-Bundle-Generation-Record commit, whose parent predates
+    WORKFLOW_STATE.json's own creation)."""
+    result = subprocess.run(
+        ["git", "show", f"{commit}:{rel_path}"], cwd=repo_root, capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        return {}
+    return json.loads(result.stdout)
+
+
+def _work_item_field_diff(repo_root: Path, commit: str, work_item_id: str) -> set[str]:
+    """Field names that differ in `work_items[work_item_id]` between a
+    commit's own parent and the commit itself, read from each side's
+    actually-committed `WORKFLOW_STATE.json` -- never the working tree."""
+    parent = _run(["git", "rev-parse", f"{commit}^"], cwd=repo_root).strip()
+    state_rel = DEFAULT_STATE_PATH.as_posix()
+    before = _read_json_at_commit_or_empty(repo_root, parent, state_rel)
+    after = _read_json_at_commit_or_empty(repo_root, commit, state_rel)
+    before_item = before.get("work_items", {}).get(work_item_id, {})
+    after_item = after.get("work_items", {}).get(work_item_id, {})
+    keys = set(before_item) | set(after_item)
+    return {k for k in keys if before_item.get(k) != after_item.get(k)}
+
+
+def validate_bundle_generation_record_commit(repo_root: Path, commit: str, work_item_id: str) -> None:
+    """Validates a discovered `Workflow-Bundle-Generation-Record` commit
+    against its ordinary-role contract (D-Approval-Commits/D-Commit-
+    Provenance condition 4, revision 28 onward): touches only
+    `WORKFLOW_STATE.json`; its own `work_items[work_item_id]` field
+    changes are a non-empty subset of
+    `ORDINARY_BUNDLE_GENERATION_RECORD_FIELDS`; and it carries exactly
+    the two-trailer ordinary set, no other. Raises
+    `MalformedBundleGenerationRecordCommitError` naming the concrete
+    mismatch otherwise."""
+    changed_paths = _commit_own_changed_paths(repo_root, commit)
+    state_rel = DEFAULT_STATE_PATH.as_posix()
+    if changed_paths != {state_rel}:
+        raise MalformedBundleGenerationRecordCommitError(
+            f"{commit} carries a Workflow-Bundle-Generation-Record trailer but "
+            f"touches {sorted(changed_paths)}, not exactly {{{state_rel!r}}}"
+        )
+    field_diff = _work_item_field_diff(repo_root, commit, work_item_id)
+    if not field_diff or not field_diff <= ORDINARY_BUNDLE_GENERATION_RECORD_FIELDS:
+        raise MalformedBundleGenerationRecordCommitError(
+            f"{commit}'s own {work_item_id!r} field changes are {sorted(field_diff)}, "
+            f"not a non-empty subset of {sorted(ORDINARY_BUNDLE_GENERATION_RECORD_FIELDS)}"
+        )
+    trailers = _commit_trailers(repo_root, commit)
+    if set(trailers) != {"Workflow-Bundle-Generation-Record", "Workflow-Work-Item"}:
+        raise MalformedBundleGenerationRecordCommitError(
+            f"{commit} carries trailer set {sorted(trailers)}, not exactly the "
+            f"ordinary {{'Workflow-Bundle-Generation-Record', 'Workflow-Work-Item'}} set"
+        )
+
+
+def verify_implementation_provenance_interval(
+    repo_root: Path, work_item: dict, base_commit: str, head: str = "HEAD",
+) -> str:
+    """D-Commit-Provenance's "Provenance interval" check (revision 28
+    onward, `WF8B-003`) -- the real replacement for a bare
+    `reviewed_implementation_head == HEAD` comparison, which the
+    contradiction below has been proven to permanently re-break:
+    `record_bundle_generation`'s write must become a durable commit for
+    fresh-session resumption, and that durability commit is, by
+    definition, one commit ahead of whatever `reviewed_implementation_head`
+    itself names.
+
+    Given `P = reviewed_implementation_head` and the discovered current
+    `Workflow-Bundle-Generation-Record` commit `T` for this work item's
+    `implementation_revision`:
+
+    1. Live `head` must equal `T` exactly -- not merely a descendant of it
+       (`HeadPastBundleGenerationRecordError`).
+    2. `P` must be reachable from `T` via `T`'s own first-parent chain,
+       never merely reachable by some other path
+       (`ReviewedImplementationHeadNotAncestorError` if not reachable at
+       all, `NonFirstParentProvenanceIntervalError` if reachable only off
+       the first-parent chain); every commit strictly inside the interval
+       must itself have exactly one parent
+       (`NonFirstParentProvenanceIntervalError` on a merge).
+    3. Every non-terminal commit in the interval (strictly between `P`
+       and `T`) must classify implementation-stage excluded-only, in its
+       own right -- never merely net-unchanged across the whole interval
+       (`ProtectedPathInProvenanceIntervalError`).
+    4. `T` itself must pass `validate_bundle_generation_record_commit`.
+
+    Returns `T` on success. Raises `BundleGenerationRecordNotFoundError`
+    if `reviewed_implementation_head`/`implementation_revision` is not
+    yet set, or no matching commit is discoverable at all."""
+    work_item_id = work_item["work_item_id"]
+    p = work_item.get("reviewed_implementation_head")
+    implementation_revision = work_item.get("implementation_revision")
+    if not p or not implementation_revision:
+        raise BundleGenerationRecordNotFoundError(
+            f"{work_item_id!r} has no reviewed_implementation_head/implementation_revision yet"
+        )
+    t = discover_current_bundle_generation_record_commit(
+        repo_root, work_item_id, base_commit, head, implementation_revision,
+    )
+    if t is None:
+        raise BundleGenerationRecordNotFoundError(
+            f"no Workflow-Bundle-Generation-Record commit found for "
+            f"{work_item_id}/{implementation_revision} in {base_commit}..{head}"
+        )
+    live_head = _run(["git", "rev-parse", head], cwd=repo_root).strip()
+    if live_head != t:
+        raise HeadPastBundleGenerationRecordError(
+            f"live HEAD {live_head} is not exactly the discovered "
+            f"Workflow-Bundle-Generation-Record commit {t} for "
+            f"{work_item_id}/{implementation_revision} -- a further commit landed "
+            f"after it carrying no provenance record of its own"
+        )
+    if not _is_ancestor(repo_root, p, t):
+        raise ReviewedImplementationHeadNotAncestorError(
+            f"reviewed_implementation_head {p} is not an ancestor of the discovered "
+            f"Workflow-Bundle-Generation-Record commit {t}"
+        )
+    first_parent_chain = _first_parent_commits_ordered(repo_root, t)
+    if p not in first_parent_chain:
+        raise NonFirstParentProvenanceIntervalError(
+            f"reviewed_implementation_head {p} is reachable from {t} but not via "
+            f"{t}'s first-parent chain -- the provenance interval crosses a merge "
+            f"or a non-first-parent path"
+        )
+    p_index = first_parent_chain.index(p)
+    interval = first_parent_chain[:p_index]  # newest-first: [t, ..., commit-right-after-p]
+    non_terminal = interval[1:]  # excludes t itself
+    impl_protected_paths, impl_protected_prefixes, impl_excluded_paths, impl_excluded_prefixes = (
+        fingerprint.load_implementation_stage_classification(
+            repo_root, fingerprint.artifacts_path_for_work_item(work_item_id),
+        )
+    )
+    for commit in non_terminal:
+        parents = _run(["git", "rev-parse", f"{commit}^@"], cwd=repo_root).split()
+        if len(parents) != 1:
+            raise NonFirstParentProvenanceIntervalError(
+                f"{commit} in the provenance interval {p}..{t} is a merge commit "
+                f"({len(parents)} parents) -- the interval must be a plain first-parent chain"
+            )
+        for path in sorted(_commit_own_changed_paths(repo_root, commit)):
+            classification = fingerprint.classify_path_implementation_stage(
+                path, impl_protected_paths, impl_protected_prefixes,
+                impl_excluded_paths, impl_excluded_prefixes,
+            )
+            if classification != "excluded":
+                raise ProtectedPathInProvenanceIntervalError(
+                    f"{commit} in the provenance interval {p}..{t} touches "
+                    f"{path!r}, classified {classification!r}, not excluded -- only "
+                    f"the terminal Workflow-Bundle-Generation-Record commit itself "
+                    f"may exist between reviewed_implementation_head and live HEAD"
+                )
+    validate_bundle_generation_record_commit(repo_root, t, work_item_id)
+    return t
+
+
+def implementation_provenance_interval_reachable(
+    repo_root: Path, work_item: dict, base_commit: str, head: str = "HEAD",
+) -> bool:
+    """Boolean wrapper for `technical_approval_gate_reachable`'s
+    `head_matches_reviewed_implementation_head` argument: `True` exactly
+    when `verify_implementation_provenance_interval` finds a valid
+    interval, `False` for any of its named refusal reasons. A caller that
+    needs the concrete refusal reason (e.g. `/approve-review implementation`'s
+    own step 1 report) should call `verify_implementation_provenance_interval`
+    directly instead."""
+    try:
+        verify_implementation_provenance_interval(repo_root, work_item, base_commit, head)
+        return True
+    except (
+        BundleGenerationRecordNotFoundError,
+        HeadPastBundleGenerationRecordError,
+        ReviewedImplementationHeadNotAncestorError,
+        NonFirstParentProvenanceIntervalError,
+        ProtectedPathInProvenanceIntervalError,
+        MalformedBundleGenerationRecordCommitError,
+        AmbiguousBundleGenerationRecordTrailerError,
+    ):
+        return False
 
 
 # ---------------------------------------------------------------------------

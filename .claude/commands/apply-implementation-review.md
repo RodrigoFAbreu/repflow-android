@@ -35,15 +35,24 @@ Enter the `APPLYING_REVIEW_FEEDBACK` state of
    `/milestone-implement` step 3 before closing this pass.
 6. Commit coherent fixes (one commit per coherent fix, not one giant
    catch-all commit).
-7. Regenerate the bundle at the `post-fix` stage:
-   `./scripts/prepare-ai-review.sh <base-sha> post-fix [work_item_id]`. If this work item
-   has a `docs/ai-workflow/WORKFLOW_STATE.json` entry: call
-   `workflow_state.record_bundle_generation(state, work_item_id,
-   stage="post-fix", head=<current HEAD SHA>, now=<now>)` (`WF4c`,
-   D-Approval-Commits' sole writer of `reviewed_implementation_head`) and
-   persist the returned state — required before `AWAITING_TECHNICAL_APPROVAL`
-   can be reachable again; skip this call entirely for a work item with no
-   state entry.
+7. Regenerate the bundle at the `post-fix` stage. If this work item has a
+   `docs/ai-workflow/WORKFLOW_STATE.json` entry: **first**, before writing
+   any bundle file, call `workflow_state.record_bundle_generation(state,
+   work_item_id, stage="post-fix", head=<current HEAD SHA>, now=<now>)`
+   (`WF4c`, D-Approval-Commits' sole writer of `reviewed_implementation_head`),
+   persist the returned state to `WORKFLOW_STATE.json`, and commit it
+   **alone** — stage exactly that one path (never a broader `git add`) and
+   create one commit carrying `Workflow-Bundle-Generation-Record:
+   <work_item_id>/<implementation_revision>` +
+   `Workflow-Work-Item: <work_item_id>` trailers, no other trailer. This
+   durability commit must land *before* generation, never after
+   (`WF8B-003`, resolved `D-Approval-Commits` revision 28) — a durability
+   commit made after generation is by definition one commit ahead of the
+   value it just wrote, permanently re-breaking
+   `/approve-review implementation`'s provenance-interval check on every
+   round; skip this whole step for a work item with no state entry. Then
+   run `./scripts/prepare-ai-review.sh <base-sha> post-fix [work_item_id]`
+   — required before `AWAITING_TECHNICAL_APPROVAL` can be reachable again.
 8. If any Blocking finding remains unresolved, or the fix was structurally
    significant, stay in `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` and stop
    for another review round. Otherwise report readiness and that

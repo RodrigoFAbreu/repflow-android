@@ -952,6 +952,35 @@ section below, not left implicit.
 - **Cleanup**: none — reaching `MILESTONE_COMPLETE` here is itself part of
   scenario 16.
 
+- **Outcome (2026-08-15, real, blocked before mutation, then remediated)**:
+  the user invoked `/approve-review implementation v2-1-dry-run` for real.
+  Step 1's gate-reachability check refused: the then-installed
+  `head_matches_reviewed_implementation_head` argument was a bare
+  `reviewed_implementation_head == HEAD` equality
+  (`ae7ef4c...` vs live HEAD `34ce1dd...`, one commit further — the docs
+  commit recording S8's own outcome) — a live recurrence of the already-
+  tracked `WF8B-003` finding, whose plan-approved revision-28 fix
+  (splitting `reviewed_implementation_head`/`generation_head` via a
+  dedicated `Workflow-Bundle-Generation-Record` provenance commit) had
+  never actually been implemented in code. No write was attempted. Full
+  detail, reproduction, and remediation in
+  `WF8B_S9_FINDING_provenance_gate_never_implemented.md`: the provenance-
+  interval mechanism was implemented for real in `scripts/workflow_state.py`
+  (8 new hermetic tests, `TestImplementationProvenanceInterval`, full
+  suite green except the same pre-existing unrelated failures every prior
+  session has already flagged), and `.claude/commands/approve-review.md`/
+  `milestone-implement.md`/`apply-implementation-review.md`/
+  `apply-functional-review.md` were updated to build and consume it. S9
+  was **not** forced through by resyncing state to fake the old
+  equality rule — the generic mechanism the plan already specified was
+  built instead, per the user's own explicit instruction. A fresh
+  operator session may retry `/approve-review implementation
+  v2-1-dry-run` once the remediation's own dedicated
+  `Workflow-Bundle-Generation-Record` commit exists for `v2-1-dry-run`'s
+  current `implementation_revision` (created by the corrected
+  `/apply-implementation-review`/`/milestone-implement` ordering, not a
+  manual workaround).
+
 ## S10 — Functional-review findings and apply-functional-review remediation
 
 - **Purpose**: prove `/apply-functional-review`'s three-way branch

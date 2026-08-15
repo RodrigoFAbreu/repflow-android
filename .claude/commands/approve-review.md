@@ -70,17 +70,39 @@ actually load-bearing control for the Skill exposure path, not mechanism
    (`workflow_fingerprint.load_implementation_stage_classification(...)`) —
    `WORKFLOW_STATE.json`/`WORKFLOW_CONFIG.json` dirtiness never blocks this,
    by construction of that classification. Its
-   `head_matches_reviewed_implementation_head` argument
-   (`WF4c`, D-Approval-Commits) is exactly `work_item["reviewed_implementation_head"]
-   == <live HEAD SHA>` — `reviewed_implementation_head`'s sole writer is the
-   bundle generator (`workflow_state.record_bundle_generation`, called by
-   `/milestone-implement` at the `"implementation"` stage and
-   `/apply-implementation-review`/`/apply-functional-review`'s bounded-fix
-   branch at the `"post-fix"` stage); a `None` value (nothing has ever
-   generated a bundle for this work item) compares unequal to any HEAD, so
-   the gate is correctly unreachable until at least one bundle exists. A
-   `BLOCK` status, or an unmet additional condition, stops here — report
-   why, do not proceed.
+   `head_matches_reviewed_implementation_head` argument (`WF4c`,
+   D-Approval-Commits, revised `WF8B-003`) is **never** a bare
+   `work_item["reviewed_implementation_head"] == <live HEAD SHA>` equality
+   — that bare form was proven permanently self-invalidating (a mandatory
+   post-generation durability commit is always one commit ahead of the
+   value it just wrote, re-breaking the equality on every round; see
+   `docs/ai-workflow/WORKFLOW_V2_PLAN.md`'s "WF8b finding disposition
+   (revision 27 → 28)"). Call
+   `workflow_state.implementation_provenance_interval_reachable(repo_root,
+   work_item, base_commit)`, which is `True` exactly when
+   `workflow_state.verify_implementation_provenance_interval(...)` finds a
+   valid interval: live HEAD is exactly the discovered current
+   `Workflow-Bundle-Generation-Record: <work_item_id>/<implementation_revision>`
+   commit `T` (never merely a descendant of it), `reviewed_implementation_head`
+   is reachable from `T` via `T`'s own first-parent chain, every commit
+   strictly between them classifies implementation-stage excluded-only,
+   and `T` itself passes its own ordinary-role commit contract (touches
+   only `WORKFLOW_STATE.json`, changes only the five allowed fields,
+   carries exactly the two-trailer ordinary set). On refusal, call
+   `verify_implementation_provenance_interval` directly and report its
+   raised exception's message — it names the concrete reason (no record
+   commit found, a further unrecorded commit landed past `T`,
+   `reviewed_implementation_head` not an ancestor, a merge/non-first-parent
+   interval, a protected path inside the interval, or a malformed record
+   commit) rather than a bare boolean. A `None` `reviewed_implementation_head`
+   (nothing has ever generated a bundle for this work item) is caught the
+   same way, by `BundleGenerationRecordNotFoundError`. A `BLOCK` status, or
+   an unmet additional condition, stops here — report why, do not proceed.
+   *Recovered/superseded (`Workflow-Supersedes`) generation-record commits
+   are not yet implemented — only the ordinary (single ordinary-role
+   terminal commit) case is reachable; a work item that needs to recover
+   from an ambiguous or malformed record commit requires a fresh
+   `record_bundle_generation` round, not an automatic recovery path.*
 2. **Recompute fresh**: `bundle_id` over the current bundle and the
    stage-appropriate `review_content_id` (`scripts/workflow_fingerprint.py`)
    over the working tree. Display both, and the protected/excluded path

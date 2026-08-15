@@ -94,6 +94,7 @@ class ScratchRepo:
 
     def commit(self, subject: str, trailers: dict[str, str] | None = None, filename: str | None = None) -> str:
         filename = filename or f"{subject.replace(' ', '_')}.txt"
+        (self.root / filename).parent.mkdir(parents=True, exist_ok=True)
         (self.root / filename).write_text(subject + "\n")
         _run(["git", "add", filename], cwd=self.root)
         body = subject
@@ -3357,6 +3358,246 @@ class TestRecordBundleGeneration(unittest.TestCase):
         state = _base_state(wi=_base_work_item(reviewed_implementation_head=None, implementation_revision=None))
         ws.record_bundle_generation(state, "wi", stage="implementation", head="abc123", now="t1")
         self.assertIsNone(state["work_items"]["wi"]["reviewed_implementation_head"])
+
+
+def _write_test_artifacts_declaration(
+    repo: "ScratchRepo", work_item_id: str, *, protected_prefixes=None, excluded_prefixes=None,
+) -> None:
+    """A minimal implementation-stage classification declaration at the
+    real `artifacts_path_for_work_item` location: `src/` protected,
+    `docs/` (which also covers `WORKFLOW_STATE.json`) excluded, by
+    default -- committed immediately so later commits can be diffed
+    against it."""
+    rel = fingerprint.artifacts_path_for_work_item(work_item_id)
+    full = repo.root / rel
+    full.parent.mkdir(parents=True, exist_ok=True)
+    declaration = {
+        "schema_version": 2,
+        "work_item_id": work_item_id,
+        "implementation_stage": {
+            "protected_paths": {},
+            "protected_prefixes": {p: "test" for p in (protected_prefixes or ["src/"])},
+            "excluded_paths": {},
+            "excluded_prefixes": {p: "test" for p in (excluded_prefixes or ["docs/"])},
+        },
+    }
+    full.write_text(json.dumps(declaration))
+    _run(["git", "add", str(rel)], cwd=repo.root)
+    _run(["git", "commit", "-q", "-m", "artifacts declaration"], cwd=repo.root)
+
+
+def _commit_state_only(
+    repo: "ScratchRepo", work_item_id: str, work_item: dict, message: str,
+    trailers: dict[str, str] | None = None,
+) -> str:
+    """Commits `WORKFLOW_STATE.json` alone -- staging exactly that one
+    path, wrapping `work_item` in the real `{"work_items": {...}}` shape
+    -- mirroring the ordinary `Workflow-Bundle-Generation-Record` commit
+    contract (`validate_bundle_generation_record_commit`: touches only
+    `WORKFLOW_STATE.json`)."""
+    full = repo.root / STATE_REL_PATH
+    full.parent.mkdir(parents=True, exist_ok=True)
+    content = {"schema_version": 1, "work_items": {work_item_id: work_item}}
+    full.write_text(json.dumps(content, indent=2, ensure_ascii=False) + "\n")
+    _run(["git", "add", STATE_REL_PATH], cwd=repo.root)
+    body = message
+    if trailers:
+        body += "\n\n" + "\n".join(f"{k}: {v}" for k, v in trailers.items())
+    _run(["git", "commit", "-q", "-m", body], cwd=repo.root)
+    return repo.head()
+
+
+def _seed_base_provenance_state(repo: "ScratchRepo", work_item_id: str) -> None:
+    """Commits a baseline `WORKFLOW_STATE.json` (static fields like
+    `work_item_id` already present, `reviewed_implementation_head` unset)
+    *before* any protected content commit -- mirroring the real repository,
+    where `WORKFLOW_STATE.json` already exists and already carries every
+    static field by the time a generation-record commit runs. Without
+    this, a test's very first commit would show every field as "changed"
+    (added from nothing), including static ones no real generation-record
+    commit ever touches."""
+    _commit_state_only(repo, work_item_id, {
+        "work_item_id": work_item_id,
+        "reviewed_implementation_head": None,
+        "implementation_revision": 0,
+        "phase": "IMPLEMENTING",
+        "state_revision": 0,
+        "last_transition": "t0",
+    }, "seed base state")
+
+
+def _provenance_state(work_item_id: str, *, reviewed_implementation_head, implementation_revision) -> dict:
+    return {
+        "work_item_id": work_item_id,
+        "reviewed_implementation_head": reviewed_implementation_head,
+        "implementation_revision": implementation_revision,
+        "phase": "SELF_REVIEWING_IMPLEMENTATION",
+        "state_revision": implementation_revision + 1,
+        "last_transition": f"t{implementation_revision}",
+    }
+
+
+def _record_trailers(work_item_id: str, implementation_revision: int) -> dict[str, str]:
+    return {
+        "Workflow-Bundle-Generation-Record": f"{work_item_id}/{implementation_revision}",
+        "Workflow-Work-Item": work_item_id,
+    }
+
+
+class TestImplementationProvenanceInterval(unittest.TestCase):
+    """WF8B-003 remediation (WF8b): `verify_implementation_provenance_interval`
+    replaces a bare `reviewed_implementation_head == HEAD` comparison with
+    D-Commit-Provenance's "Provenance interval" check (revision 28
+    onward)."""
+
+    WI = "wi"
+
+    def test_exact_reviewed_head_zero_gap_is_reachable(self):
+        """T immediately follows P (the protected content commit) with no
+        intervening commits -- the simplest valid interval."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            t = _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            work_item = state | {"work_item_id": self.WI}
+            result = ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base)
+            self.assertEqual(result, t)
+            self.assertTrue(ws.implementation_provenance_interval_reachable(repo.root, work_item, repo.base))
+
+    def test_one_excluded_commit_between_p_and_t_is_reachable(self):
+        """A single excluded-only commit (mirroring a docs/outcome-record
+        commit) lands between P and T -- still a valid interval, since it
+        touches no protected path."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            repo.commit("unrelated excluded commit", filename="docs/notes.md")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            t = _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            work_item = state | {"work_item_id": self.WI}
+            result = ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base)
+            self.assertEqual(result, t)
+
+    def test_unrelated_descendant_commit_after_t_refuses(self):
+        """Live HEAD is one commit past the discovered T -- the exact
+        real-world shape WF8B-003 exists to catch: a further commit
+        landed carrying no provenance record of its own."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            repo.commit("trailing commit, no record", filename="docs/more.md")
+            work_item = state | {"work_item_id": self.WI}
+            with self.assertRaises(ws.HeadPastBundleGenerationRecordError):
+                ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base)
+            self.assertFalse(ws.implementation_provenance_interval_reachable(repo.root, work_item, repo.base))
+
+    def test_wrong_trailer_key_is_never_discovered_and_refuses(self):
+        """A commit that carries a misspelled/wrong trailer key is simply
+        not discovered -- the gate refuses with "not found", never a
+        silent match."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            _commit_state_only(repo, self.WI, state, "record gen", trailers={
+                "Workflow-Bundle-Generation-Recordx": f"{self.WI}/1",  # typo'd key
+                "Workflow-Work-Item": self.WI,
+            })
+            work_item = state | {"work_item_id": self.WI}
+            with self.assertRaises(ws.BundleGenerationRecordNotFoundError):
+                ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base)
+
+    def test_reviewed_head_not_an_ancestor_refuses(self):
+        """`reviewed_implementation_head` names a commit that isn't
+        actually an ancestor of the discovered T at all."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            repo.commit("protected fix", filename="src/Foo.kt")
+            bogus_p = repo.commit("unrelated commit, never reviewed", filename="src/Bar.kt")
+            # Reset to before bogus_p so it's a sibling, not an ancestor, of T.
+            _run(["git", "reset", "-q", "--hard", "HEAD^"], cwd=repo.root)
+            state = _provenance_state(self.WI, reviewed_implementation_head=bogus_p, implementation_revision=1)
+            _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            work_item = state | {"work_item_id": self.WI}
+            with self.assertRaises(ws.ReviewedImplementationHeadNotAncestorError):
+                ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base)
+
+    def test_second_unexpected_descendant_with_same_trailer_value_refuses(self):
+        """Two distinct commits both carry a Workflow-Bundle-Generation-Record
+        trailer for the exact same `<work_item_id>/<implementation_revision>`
+        value -- genuine ambiguity, not silently resolved (mirrors
+        `TestCheckpointTrailerDiscovery.test_genuine_ambiguity_raises`)."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            _commit_state_only(repo, self.WI, state, "record gen a", trailers=_record_trailers(self.WI, 1))
+            state_b = state | {"last_transition": "t1-again"}  # distinct content, same trailer value
+            _commit_state_only(repo, self.WI, state_b, "record gen b", trailers=_record_trailers(self.WI, 1))
+            work_item = state | {"work_item_id": self.WI}
+            with self.assertRaises(ws.AmbiguousBundleGenerationRecordTrailerError):
+                ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base)
+
+    def test_side_branch_merge_topology_refuses(self):
+        """`reviewed_implementation_head` is genuinely reachable from T,
+        but only through a merge's non-first-parent side -- T's own
+        first-parent chain never passes through it."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            fork_point = repo.head()
+            _run(["git", "checkout", "-q", "-b", "side"], cwd=repo.root)
+            p = repo.commit("protected fix on side", filename="src/Foo.kt")
+            _run(["git", "checkout", "-q", "-"], cwd=repo.root)
+            _run(["git", "reset", "-q", "--hard", fork_point], cwd=repo.root)
+            repo.commit("excluded commit on main", filename="docs/main-notes.md")
+            _run(["git", "merge", "-q", "--no-ff", "-m", "merge side", "side"], cwd=repo.root)
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            t = _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            work_item = state | {"work_item_id": self.WI}
+            with self.assertRaises(ws.NonFirstParentProvenanceIntervalError):
+                ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base)
+            self.assertFalse(ws.implementation_provenance_interval_reachable(repo.root, work_item, repo.base))
+            self.assertNotEqual(t, "")  # t is created; just never a valid interval terminus
+
+    def test_real_v2_1_dry_run_s8_to_s9_shape_becomes_reachable(self):
+        """Reproduces the exact real-repository shape WF8B-003 surfaced at
+        `v2-1-dry-run`'s own S9 gate: a protected scratch-marker fix
+        commit (S8's `ae7ef4c`-equivalent), followed by an excluded-only
+        docs/outcome-recording commit (S8's `34ce1dd`-equivalent), then a
+        dedicated ordinary Workflow-Bundle-Generation-Record commit --
+        the gate must become reachable, unlike the pre-remediation bare
+        `reviewed_implementation_head == HEAD` rule that blocked it."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(
+                repo, "v2-1-dry-run",
+                protected_prefixes=["docs/ai-workflow/dry-run/scratch/"],
+                excluded_prefixes=["docs/"],
+            )
+            _seed_base_provenance_state(repo, "v2-1-dry-run")
+            p = repo.commit("fix S-CP3 scratch marker", filename="docs/ai-workflow/dry-run/scratch/c.txt")
+            repo.commit(
+                "docs(wf8b): execute v2-1-dry-run's S8", filename="docs/ai-workflow/dry-run/WF8B_SCENARIOS.md",
+            )
+            state = _provenance_state("v2-1-dry-run", reviewed_implementation_head=p, implementation_revision=2)
+            t = _commit_state_only(
+                repo, "v2-1-dry-run", state, "record gen (post-fix)",
+                trailers=_record_trailers("v2-1-dry-run", 2),
+            )
+            work_item = state | {"work_item_id": "v2-1-dry-run"}
+            self.assertTrue(ws.implementation_provenance_interval_reachable(repo.root, work_item, repo.base))
+            self.assertEqual(
+                ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base), t,
+            )
 
 
 class TestRemediationChildWorkItem(unittest.TestCase):
