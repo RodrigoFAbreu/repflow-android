@@ -384,6 +384,72 @@ class TestVerifyWfoStateSerialization(unittest.TestCase):
             self.assertEqual(result["status"], "FAIL")
             self.assertTrue(any("sneaky" in a for a in result["failing_assertions"]))
 
+    def test_fails_when_a_writer_names_the_primitive_and_also_directly_opens_the_state_path(self):
+        """OPUS-R101-003: a declared writer that documents `state_transaction`
+        *and* a direct write-mode `open(...)` of the state path must fail --
+        the pre-fix behavior returned PASS here, which is the reproduction
+        this finding is built on."""
+        with ScratchRepo() as repo:
+            _seed_writer_surface(repo)
+            _write(
+                repo, ".claude/commands/evil.md",
+                "---\nstate_writer: true\n---\n\n"
+                "Normally use workflow_state.state_transaction(repo_root, mutator).\n"
+                "But for speed, step 4 instead does:\n"
+                "    open('docs/ai-workflow/WORKFLOW_STATE.json', 'w').write(json.dumps(state))\n",
+            )
+            commit = _commit_paths(repo, [".claude/commands/evil.md"], "writer bypassing the primitive")
+            result = ws.verify_wfo_state_serialization(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(any("evil" in a for a in result["failing_assertions"]))
+
+    def test_fails_when_a_writer_directly_calls_the_publisher(self):
+        with ScratchRepo() as repo:
+            _seed_writer_surface(repo)
+            _write(
+                repo, ".claude/commands/evil2.md",
+                "---\nstate_writer: true\n---\n\n"
+                "Uses state_transaction normally, but step 9 also calls "
+                "_publish_state_file(full_path, state) directly as a shortcut.\n",
+            )
+            commit = _commit_paths(repo, [".claude/commands/evil2.md"], "writer calling the publisher directly")
+            result = ws.verify_wfo_state_serialization(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL")
+
+    def test_fails_when_a_writer_documents_shell_redirection_onto_the_state_path(self):
+        with ScratchRepo() as repo:
+            _seed_writer_surface(repo)
+            _write(
+                repo, ".claude/commands/evil3.md",
+                "---\nstate_writer: true\n---\n\n"
+                "Uses state_transaction, but a fallback path runs:\n"
+                "    echo \"$new_state\" > docs/ai-workflow/WORKFLOW_STATE.json\n",
+            )
+            commit = _commit_paths(repo, [".claude/commands/evil3.md"], "writer using shell redirection")
+            result = ws.verify_wfo_state_serialization(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL")
+
+    def test_fails_when_a_writer_documents_sed_i_against_the_state_path(self):
+        with ScratchRepo() as repo:
+            _seed_writer_surface(repo)
+            _write(
+                repo, ".claude/commands/evil4.md",
+                "---\nstate_writer: true\n---\n\n"
+                "Uses state_transaction, but a one-off repair step runs:\n"
+                "    sed -i 's/foo/bar/' docs/ai-workflow/WORKFLOW_STATE.json\n",
+            )
+            commit = _commit_paths(repo, [".claude/commands/evil4.md"], "writer using sed -i")
+            result = ws.verify_wfo_state_serialization(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL")
+
+    def test_the_real_writers_still_pass_after_the_direct_write_check(self):
+        """Control arm: the direct-write check must not false-positive on the
+        twelve real writer commands' own legitimate prose."""
+        with ScratchRepo() as repo:
+            commit = _seed_writer_surface(repo)
+            result = ws.verify_wfo_state_serialization(repo.root, commit)
+            self.assertEqual(result["status"], "PASS")
+
     def test_fails_when_a_non_writer_calls_the_publisher(self):
         with ScratchRepo() as repo:
             _seed_writer_surface(repo)
@@ -408,6 +474,20 @@ class TestVerifyWfoStateSerialization(unittest.TestCase):
             commit = _commit_paths(repo, ["scripts/reader.sh"], "read-only reference")
             result = ws.verify_wfo_state_serialization(repo.root, commit)
             self.assertEqual(result["status"], "PASS")
+
+    def test_fails_when_a_non_writer_shell_script_redirects_onto_the_state_path(self):
+        """Widened detection (OPUS-R101-003) must catch a `.sh` surface
+        member bypassing the writer/non-writer split with shell redirection,
+        not only Python `open(...)` syntax."""
+        with ScratchRepo() as repo:
+            _seed_writer_surface(repo)
+            _write(
+                repo, "scripts/sneaky.sh",
+                "# state_writer: false\necho \"$new_state\" > docs/ai-workflow/WORKFLOW_STATE.json\n",
+            )
+            commit = _commit_paths(repo, ["scripts/sneaky.sh"], "non-writer shell redirection")
+            result = ws.verify_wfo_state_serialization(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL")
 
     def test_never_touches_the_live_state_file_or_lock(self):
         """Item 356(n): the conformance must be safe to run from inside the

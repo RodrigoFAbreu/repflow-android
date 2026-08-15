@@ -5120,9 +5120,25 @@ def discover_state_writers(repo_root: Path, commit: str) -> Discovery:
     )
 
 
+# Any surface member -- writer or non-writer -- that documents or performs a
+# write of the state path outside `_publish_state_file` is a direct-write
+# violation (OPUS-R101-003): a Python write-mode `open(...)`, a direct
+# `_publish_state_file` call, a shell redirection onto the state path, or an
+# in-place `sed -i` against it. Widened beyond Python syntax because
+# `scripts/prepare-ai-review.sh` (a non-writer) is on the surface today and a
+# `.sh` member could otherwise bypass detection entirely.
+_DIRECT_WRITE_VIOLATION_RE = re.compile(
+    r"_publish_state_file|"
+    r"""open\([^)]*WORKFLOW_STATE\.json[^)]*['"]w|"""
+    r">{1,2}\s*\S*WORKFLOW_STATE\.json|"
+    r"sed\s+-i[^\n]*WORKFLOW_STATE\.json"
+)
+
+# A declared non-writer must additionally never itself call the sanctioned
+# publisher wrapper -- that alone would mean it is initiating a write despite
+# declaring `state_writer: false`.
 _NON_WRITER_VIOLATION_RE = re.compile(
-    r"_publish_state_file|state_transaction\s*\(|"
-    r"""open\([^)]*WORKFLOW_STATE\.json[^)]*['"]w"""
+    _DIRECT_WRITE_VIOLATION_RE.pattern + r"|state_transaction\s*\("
 )
 
 
@@ -5168,6 +5184,12 @@ def verify_wfo_state_serialization(repo_root: str | Path, commit: str) -> dict:
             failing.append(
                 f"{path}: declared state_writer: true but its documented "
                 f"procedure does not name state_transaction/state_lock"
+            )
+        if _DIRECT_WRITE_VIOLATION_RE.search(text):
+            failing.append(
+                f"{path}: declared state_writer: true but its documented "
+                f"procedure also describes a direct write of the state path "
+                f"outside state_transaction/_publish_state_file"
             )
 
     for path in discovery.non_writers:
