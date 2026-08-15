@@ -57,3 +57,42 @@ record of checkpoint status (D-Registry); nothing here overrides it.
   three scratch checkpoints are `COMPLETE`).
 - **Functional-verification outcome:** not applicable (process checkpoint,
   no product-facing behavior).
+
+## `S-CP3` — Scratch checkpoint 3: create dry-run scratch file C (left `IN_PROGRESS` in worktree A for S14, then S15)
+
+- **Implementation evidence:** created
+  `docs/ai-workflow/dry-run/scratch/c.txt`, a single-line marker file, per
+  the plan's checkpoint acceptance criterion (`v2-1-dry-run-plan.md`'s
+  registry table row, WFR-DRY-3). The file and this checkpoint's
+  `IN_PROGRESS` transition were left uncommitted across two prior sessions
+  specifically to set up **S14** (mismatched-worktree refusal, run from a
+  temporary worktree B against this checkpoint's real ownership claim,
+  refused before any mutation) and **S15** (interrupted checkpoint
+  recovery, `docs/ai-workflow/dry-run/WF8B_SCENARIOS.md`). This session
+  resumed it under `D-Checkpoint-Ownership`: `[2.1 step 1a]`
+  `implementing_entry_reachable` returned `True`; `[1b]`
+  `select_next_checkpoint` returned `S-CP3`, matching the already-
+  `IN_PROGRESS` `current_checkpoint_id`; `[1c]`
+  `resolve_checkpoint_ownership` returned `RESUME` with the owner token
+  this worktree's own claim record already held (published by the prior
+  session's explicit takeover) — proving S14's refusal was specific to
+  the foreign worktree, not a general lock, exactly as this scenario's
+  own "ownership half" sub-bullets require. `1d` was skipped entirely
+  (resume, not fresh start/continue-claim). Per the user's explicit,
+  user-gated recovery choice (resume, not discard — S15's own
+  effectively-user-gated decision), `1f` then committed `S-CP3` complete
+  inside the same `"destructive"` `owner_mutation` guard window
+  `complete_checkpoint`'s state write ran in, verified the completion
+  durable at `HEAD` via `committed_checkpoint_status`, and only then
+  released the claim via `release_checkpoint` — confirmed afterwards that
+  no claim record remains for `v2-1-dry-run` under
+  `.git/ai-workflow/checkpoint-claims/`.
+- **Verification results:** file existence and one-line content confirmed
+  directly (`cat docs/ai-workflow/dry-run/scratch/c.txt`); no automated
+  test beyond this, per the plan's own "Missing tests: none beyond the
+  trivial file-existence check" self-review note.
+- **Review findings:** none yet — pending this checkpoint's own review
+  round (folded into S7's first implementation-stage bundle — all three
+  scratch checkpoints are now `COMPLETE`, so S7 is next).
+- **Functional-verification outcome:** not applicable (process checkpoint,
+  no product-facing behavior).
