@@ -1406,6 +1406,62 @@ section below, not left implicit.
   the rest of the checklist, via a real remediation commit (mirroring
   `2da0b66`), not a silent discard.
 
+- **Outcome (2026-08-15, real, seventh session)**: ran for real against live
+  repository state, deferred past S16 like S11 (`v2-1-dry-run` is already
+  `MILESTONE_COMPLETE`; both `plan_approval` and `technical_approval` are
+  still `status: CURRENT`, satisfying this scenario's own "any point after
+  S5" initial-state requirement literally, since it never says "before
+  `MILESTONE_COMPLETE`").
+
+  **Adaptation, recorded rather than silently substituted**: because the
+  item is terminal, no live forward command (`/approve-review`,
+  `/milestone-implement`, or anything else) remains reachable against it to
+  serve as "the next command in sequence" — every one of them refuses at
+  its own phase-entry gate before ever reaching a staleness check. This
+  session therefore invoked the underlying freshness primitive itself,
+  `workflow_state.approval_is_current(..., stage="implementation",
+  base_commit=e75a756d)` — the exact function every one of those commands
+  calls internally — directly, real against real repository state, not a
+  fixture. This is a deliberate, load-bearing scope adaptation of the
+  scenario to `v2-1-dry-run`'s own already-advanced real timeline (the same
+  kind of adaptation S16's own outcome note made for steps 3/5), not a
+  weaker substitute: the mechanism under test is the freshness check
+  itself, not any particular command's wrapper around it.
+
+  Baseline confirmed first: `approval_is_current(...)` → `True`.
+  `docs/ai-workflow/dry-run/scratch/c.txt` (a real
+  `docs/ai-workflow/registry/v2-1-dry-run-artifacts.json` protected-prefix
+  path) was then hand-edited to `"checkpoint 3 -- S12 drift"` and
+  **committed directly** (`e63bf32`, deliberately outside any checkpoint or
+  approval command) — a first attempt confirmed `approval_is_current`
+  checks **committed** content only (`approval_review_content_id`'s own
+  documented "commit-source, never worktree-source" contract), so an
+  uncommitted hand-edit alone was insensible to it, matching real drift's
+  actual shape (`2da0b66`'s own drift arrived via a real merge commit, not
+  a dirty working tree).
+
+  With the drift committed, `approval_is_current(...)` → `False`, exactly
+  as required. The mismatch itself: recomputed
+  `review_content_id` `b3f5a3bd...` against stored
+  `technical_approval.approved_review_content_id` `33139aaf...` — the
+  changed manifest entry is `scratch/c.txt`'s own blob
+  (`c414a6d...`, was `ca2ff4d...`), the other three protected-content
+  entries unchanged. This is exactly this scenario's own stated pass/fail
+  evidence: a named stale field (the technical-approval freshness check)
+  and mismatched `review_content_id` values, matching `2da0b66`'s shape.
+
+  Cleanup (`e907b90`): `scratch/c.txt` restored to blob `ca2ff4d`
+  (byte-identical to `ae7ef4c`'s originally-reviewed content) via a real
+  remediation commit, not a silent discard. Re-verified:
+  `approval_is_current(...)` → `True` again, `git status` clean except the
+  pre-existing, unrelated `verify_review_content_id.py`.
+  `WORKFLOW_STATE.json` itself was never written by this scenario — no
+  state transition occurred, matching "Expected state transition: none"
+  exactly; `technical_approval.status` was never actually flipped to
+  `STALE` on disk, since the point was proving the underlying detection
+  primitive, not exercising a persistence path no live command could reach
+  for this item anyway.
+
 ## S13 — Dirty IN_PROGRESS worktree resume in the same worktree
 
 - **Purpose**: prove `verify_dirty_resume_safety`'s success path: the same
