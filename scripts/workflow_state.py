@@ -3155,6 +3155,236 @@ def recover_abandoned_destructive_guard(repo_root: Path, work_item_id: str, chec
 
 
 # ---------------------------------------------------------------------------
+# WF8b: D-Checkpoint-Ownership -- "Where the check belongs, and the
+# ordering" (docs/ai-workflow/WORKFLOW_V2_PLAN.md, revisions 63-80). This
+# is `/milestone-implement`'s step 1c: the resolution step that
+# reconciles `WORKFLOW_STATE.json` against the shared claim, composing
+# every primitive the three prior WF8b sessions built (the origination
+# reference, the claim/guard/takeover machinery, `adopt_claim`) into the
+# outcome `step 1d`/`1f` act on.
+#
+# Authored fresh against the approved revision-80 text; the unwired
+# dry-run prototype's own `resolve_ownership`/`_attach_ownership_evidence`
+# (docs/ai-workflow/dry-run/wf8b-s14-repro/checkpoint_ownership.py) are
+# reference/reproduction evidence only, and predate two corrections this
+# implementation does not repeat: `_attach_ownership_evidence` returning
+# immediately on an absent claim (corrected, revision 70, `OPUS-R87-003`)
+# and the origination-specific evidence components revision 71
+# (`OPUS-R88-005`) adds for `CheckpointOriginationUnprovableError`.
+#
+# Scope, deliberately bounded per this session's own direction: no
+# `WFR-66` identity-query enforcement (a distinct implementation surface,
+# `authorize_identity_reference_gap`), and not yet wired into
+# `.claude/commands/milestone-implement.md`'s step 1d/1f orchestration of
+# the guarded state write / guarded commit -- this function is the
+# resolution primitive that wiring calls.
+# ---------------------------------------------------------------------------
+
+RESUME = "RESUME"
+FRESH = "FRESH"
+CONTINUE_CLAIM = "CONTINUE_CLAIM"
+NO_CHECKPOINT = "NO_CHECKPOINT"
+CHECKPOINT_OWNERSHIP_OUTCOMES = frozenset({RESUME, FRESH, CONTINUE_CLAIM, NO_CHECKPOINT})
+
+
+def _ownership_escape_hint(repo_root: Path, work_item_id: str, claim: dict | None) -> str:
+    """The escape named alongside every ownership-evidence attachment
+    (`OPUS-R84-001`, generalized to an absent claim by `OPUS-R87-003`):
+    what the operator does next, for every claim state -- absent,
+    self-owned, or foreign."""
+    if claim is None:
+        return (
+            f"no claim exists for {work_item_id!r} -- the escape for a locally IN_PROGRESS "
+            f"checkpoint this worktree cannot prove it originated is the explicit takeover "
+            f"(take_over_claim)"
+        )
+    if claim_is_this_worktree(repo_root, claim):
+        return (
+            f"{work_item_id!r} checkpoint {claim.get('checkpoint_id')!r} is claimed by this "
+            f"worktree ({claim.get('worktree_root')!r}); continue it here -- no takeover "
+            f"applies, and nothing needs to be removed by hand"
+        )
+    return (
+        f"{work_item_id!r} checkpoint {claim.get('checkpoint_id')!r} is claimed by worktree "
+        f"{claim.get('worktree_root')!r}; resume it there, or take the claim over explicitly "
+        f"(take_over_claim) after reviewing the takeover evidence"
+    )
+
+
+def _attach_ownership_evidence(repo_root: Path, exc: Exception, work_item_id: str, claim: dict | None) -> None:
+    """Annotate every refusal step 1c raises with the ownership evidence a
+    reviewer must be able to read off the exception rather than
+    re-deriving by hand: the claim record, the holder, the claimed
+    checkpoint, and the escape that applies (`OPUS-R84-001`). Attached
+    unconditionally, including when the claim is absent -- the prototype's
+    early return on `claim is None` is exactly the defect revision 70
+    (`OPUS-R87-003`) withdrew, since an absent claim is a load-bearing
+    observation for `CheckpointOriginationUnprovableError` and excluding
+    it left the class this repository is actually in (no claim for
+    `workflow-v2-1-core`) reporting nothing.
+
+    For `CheckpointOriginationUnprovableError` specifically, also attaches
+    the components revision 71 (`OPUS-R88-005`) adds: this worktree's own
+    local identity observation, and whether the claim is absent, foreign,
+    or self-owned -- so an operator reading the refusal is told the whole
+    picture, not just that origination is unprovable.
+
+    Idempotent: a refusal already carrying evidence (raised, then
+    re-raised through an outer handler) keeps its first attachment."""
+    if getattr(exc, "ownership_evidence", None) is not None:
+        return
+    exc.ownership_evidence = {
+        "claim": claim,
+        "holder": claim.get("worktree_root") if claim is not None else None,
+        "claimed_checkpoint": claim.get("checkpoint_id") if claim is not None else None,
+        "escape": _ownership_escape_hint(repo_root, work_item_id, claim),
+    }
+    if isinstance(exc, CheckpointOriginationUnprovableError):
+        if claim is None:
+            claim_state = "absent"
+        elif claim_is_this_worktree(repo_root, claim):
+            claim_state = "self_owned"
+        else:
+            claim_state = "foreign"
+        exc.ownership_evidence["local_identity"] = local_identity_observation(repo_root)
+        exc.ownership_evidence["claim_state"] = claim_state
+        exc.ownership_evidence["origination"] = dict(exc.evidence)
+
+
+def resolve_checkpoint_ownership(
+    repo_root: Path, work_item: dict, work_item_id: str, selected_id: str | None, *, now: str,
+) -> tuple[str, str | None, str | None]:
+    """`/milestone-implement`'s step 1c. `select_next_checkpoint` (1b)
+    stays pure and untouched; this is the new resolution step that
+    reconciles its result against the shared claim.
+
+    Returns `(outcome, checkpoint_id, owner_token)` where `outcome` is
+    `RESUME`, `FRESH`, `CONTINUE_CLAIM`, or the terminal `NO_CHECKPOINT`.
+    No mutation-capable outcome ever carries a `None` checkpoint id
+    (`GPT-R81-003`): an exhausted registry is `NO_CHECKPOINT`, which
+    re-enters the command's existing "nothing to implement this
+    invocation" path and never reaches step 1d. `owner_token` is `None`
+    only for `NO_CHECKPOINT` and `FRESH`, where step 1d mints it by
+    acquiring the claim -- before any state write.
+
+    The internal order is the security property: whenever either
+    authority (the local `WORKFLOW_STATE.json` or the shared claim) says
+    this work item is contended, `verify_dirty_resume_safety` -- the sole
+    proof of worktree *instance* origination (revision 68, `OPUS-R85-001`;
+    a self-owned claim is never a substitute, since it proves only a
+    *location*) -- runs before any branch that can mutate. Every refusal
+    raised from that point on carries the ownership evidence
+    (`_attach_ownership_evidence`)."""
+    checkpoints = work_item.get("checkpoints", {})
+    current_id = work_item.get("current_checkpoint_id")
+    local_in_progress = (
+        current_id if checkpoints.get(current_id, {}).get("status") == "IN_PROGRESS" else None
+    )
+    claim = resolve_claim(repo_root, work_item_id)
+
+    if claim is None and local_in_progress is None:
+        # The ordinary uncontended case, which must stay exactly as
+        # permissive as it is today.
+        if selected_id is None:
+            return NO_CHECKPOINT, None, None
+        return FRESH, selected_id, None
+
+    try:
+        verify_dirty_resume_safety(repo_root, work_item_id)
+
+        # A foreign claim is refused here even though `verify_dirty_resume_
+        # safety` already passed: a worktree carrying a valid identity
+        # record of its own for this work item -- a displaced owner after a
+        # takeover, typically -- passes that check and is refused one line
+        # later, by `CheckpointOwnedByOtherWorktreeError`, instead.
+        if claim is not None and not claim_is_this_worktree(repo_root, claim):
+            raise CheckpointOwnedByOtherWorktreeError(
+                f"{work_item_id!r} checkpoint {claim.get('checkpoint_id')!r} is claimed by "
+                f"worktree {claim.get('worktree_root')!r}"
+            )
+
+        if local_in_progress is not None:
+            if claim is None:
+                # Locally interrupted with no shared claim: a checkpoint
+                # started before this mechanism existed (the real
+                # `workflow-v2-1-core:WF8b`, and `v2-1-dry-run:S-CP3`), or a
+                # claim lost out of band. `adopt_claim` owns the full
+                # origination test (and re-evaluates it at publication) --
+                # this branch does not duplicate it.
+                if selected_id is not None and selected_id != local_in_progress:
+                    raise CheckpointOwnershipStateMismatchError(
+                        f"{work_item_id!r}'s WORKFLOW_STATE.json records {local_in_progress!r} "
+                        f"IN_PROGRESS but selection resolved {selected_id!r} -- reporting rather "
+                        f"than guessing which is right"
+                    )
+                adopted = adopt_claim(repo_root, work_item_id, local_in_progress, now=now)
+                return RESUME, local_in_progress, adopted.get("owner_token")
+
+            claimed_id = claim.get("checkpoint_id")
+            if local_in_progress != claimed_id or (selected_id is not None and selected_id != claimed_id):
+                raise CheckpointOwnershipStateMismatchError(
+                    f"this worktree claims {work_item_id!r} checkpoint {claimed_id!r}, its "
+                    f"WORKFLOW_STATE.json records {local_in_progress!r} IN_PROGRESS, and "
+                    f"selection resolved {selected_id!r} -- reporting rather than guessing "
+                    f"which is right"
+                )
+            return RESUME, claimed_id, claim.get("owner_token")
+
+        # Nothing is locally IN_PROGRESS. Since the uncontended branch above
+        # already excluded "claim is None and local_in_progress is None",
+        # and the foreign-claim check above already excluded a foreign
+        # claim, the claim here is self-owned.
+        claimed_id = claim.get("checkpoint_id")
+        local_status = checkpoints.get(claimed_id, {}).get("status")
+
+        if local_status is None:
+            # Crashed between publishing the claim and writing the state
+            # (1d's own ordering exists to keep this window narrow, never
+            # to close it). The owner finishes its own acquisition -- this
+            # releases nothing and discards nothing, so it is not a
+            # stale-claim release.
+            if selected_id is not None and selected_id != claimed_id:
+                raise CheckpointOwnershipStateMismatchError(
+                    f"this worktree claims {work_item_id!r} checkpoint {claimed_id!r} with no "
+                    f"local state entry, but selection resolved {selected_id!r} -- reporting "
+                    f"rather than guessing"
+                )
+            return CONTINUE_CLAIM, claimed_id, claim.get("owner_token")
+
+        if local_status == "COMPLETE":
+            # The single automatic release in the whole design: a
+            # self-owned claim on a checkpoint whose completion is
+            # **durable** (committed at HEAD), i.e. a crash between step
+            # 1f's commit and its release. The working tree alone saying
+            # `COMPLETE` is not enough -- `select_next_checkpoint` already
+            # ran against this same local state, so `selected_id` is
+            # already the concrete next checkpoint (or `None` because the
+            # registry is exhausted), and reselecting here would duplicate
+            # rather than trust that.
+            durable = committed_checkpoint_status(repo_root, work_item_id, claimed_id)
+            if durable == "COMPLETE":
+                release_checkpoint(repo_root, work_item_id, claimed_id,
+                                   owner_token=claim.get("owner_token"), now=now)
+                if selected_id is None:
+                    return NO_CHECKPOINT, None, None
+                return FRESH, selected_id, None
+            raise CheckpointOwnershipStateMismatchError(
+                f"this worktree's claim on {work_item_id!r} checkpoint {claimed_id!r} shows "
+                f"COMPLETE in the working tree but {durable!r} in the committed state at HEAD "
+                f"-- refusing to release a claim whose completion is not durable"
+            )
+
+        raise CheckpointOwnershipStateMismatchError(
+            f"this worktree holds a claim on {work_item_id!r} checkpoint {claimed_id!r}, but "
+            f"its WORKFLOW_STATE.json records status {local_status!r} with nothing IN_PROGRESS "
+            f"-- reporting rather than guessing whether to resume or discard"
+        )
+    except Exception as exc:
+        _attach_ownership_evidence(repo_root, exc, work_item_id, claim)
+        raise
+
+
+# ---------------------------------------------------------------------------
 # WF4a-iii: D-States' "no protected path is dirty" gate condition
 # ---------------------------------------------------------------------------
 

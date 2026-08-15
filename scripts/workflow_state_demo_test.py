@@ -400,6 +400,38 @@ class TestCheckpointOriginationAgainstRealRepository(unittest.TestCase):
         self.assertEqual(before, after)
         self.assertIsNone(ws.resolve_claim(repo_root, "v2-1-dry-run"))
 
+    def test_resolve_checkpoint_ownership_refuses_for_the_same_real_s_cp3_defect(self):
+        """`resolve_checkpoint_ownership` ("Where the check belongs, and
+        the ordering") composes `adopt_claim`, so the same real,
+        already-committed defect (`8f8d878`) refuses through the new
+        step-1c resolution function too, with the same origination
+        evidence plus the local-identity/claim-state components revision
+        71 (`OPUS-R88-005`) adds. Read-only: verified by an explicit
+        before/after `git status --short` comparison rather than assumed
+        from the exception alone."""
+        repo_root = _repo_root()
+        state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
+        work_item = state["work_items"]["v2-1-dry-run"]
+        self.assertEqual(work_item["current_checkpoint_id"], "S-CP3")
+        self.assertEqual(work_item["checkpoints"]["S-CP3"]["status"], "IN_PROGRESS")
+        before = subprocess.run(
+            ["git", "status", "--short"], cwd=repo_root, check=True,
+            capture_output=True, text=True,
+        ).stdout
+        with self.assertRaises(ws.CheckpointOriginationUnprovableError) as ctx:
+            ws.resolve_checkpoint_ownership(repo_root, work_item, "v2-1-dry-run", "S-CP3", now="demo")
+        evidence = ctx.exception.ownership_evidence
+        self.assertEqual(evidence["origination"]["route"], "observed")
+        self.assertEqual(evidence["origination"]["commit"], "8f8d878c0985da96d9b462703b6c88ec5b3ab07b")
+        self.assertEqual(evidence["claim_state"], "absent")
+        self.assertIn(evidence["local_identity"]["state"], ("valid", "absent", "undecidable"))
+        after = subprocess.run(
+            ["git", "status", "--short"], cwd=repo_root, check=True,
+            capture_output=True, text=True,
+        ).stdout
+        self.assertEqual(before, after)
+        self.assertIsNone(ws.resolve_claim(repo_root, "v2-1-dry-run"))
+
     def test_bootstrap_driver_never_calls_this_slice(self):
         """Scope-boundary regression: `/bootstrap-workflow-v2` derives
         completion from commit trailers alone and never enters
@@ -413,6 +445,7 @@ class TestCheckpointOriginationAgainstRealRepository(unittest.TestCase):
         repo_root = _repo_root()
         command_text = (repo_root / ".claude/commands/bootstrap-workflow-v2.md").read_text()
         self.assertNotIn("checkpoint_origination_provable", command_text)
+        self.assertNotIn("resolve_checkpoint_ownership", command_text)
         with self.assertRaises(ws.CheckpointOriginationUnprovableError):
             ws.checkpoint_origination_provable(repo_root, "workflow-v2-1-core", "WF8b")
 

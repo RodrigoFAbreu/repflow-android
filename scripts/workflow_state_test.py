@@ -4421,6 +4421,245 @@ class TestClaimAdoption(unittest.TestCase):
                 ws.adopt_claim(repo.root, "wi", "CP2", now="t1")
 
 
+class TestResolveCheckpointOwnership(unittest.TestCase):
+    """`resolve_checkpoint_ownership` -- `/milestone-implement`'s step 1c
+    ("Where the check belongs, and the ordering"), the reconciliation
+    table under "Reconciling the two authorities" in full: every row of
+
+        | local WORKFLOW_STATE.json | shared claim | outcome |
+
+    from docs/ai-workflow/WORKFLOW_V2_PLAN.md, asserted against the real
+    function rather than the unwired dry-run prototype it is authored
+    fresh against."""
+
+    def test_uncontended_no_claim_no_local_in_progress_is_fresh(self):
+        with ScratchRepo() as repo:
+            wi = _base_work_item(current_checkpoint_id=None, checkpoints={})
+            outcome, checkpoint_id, token = ws.resolve_checkpoint_ownership(
+                repo.root, wi, "wi", "CP", now="t1")
+            self.assertEqual((outcome, checkpoint_id, token), (ws.FRESH, "CP", None))
+
+    def test_uncontended_nothing_selectable_is_no_checkpoint(self):
+        """`GPT-R81-003`: an exhausted registry is terminal, never a
+        mutation-capable `FRESH` carrying no checkpoint id."""
+        with ScratchRepo() as repo:
+            wi = _base_work_item(current_checkpoint_id=None, checkpoints={})
+            outcome, checkpoint_id, token = ws.resolve_checkpoint_ownership(
+                repo.root, wi, "wi", None, now="t1")
+            self.assertEqual((outcome, checkpoint_id, token), (ws.NO_CHECKPOINT, None, None))
+
+    def test_uncontended_case_does_not_require_worktree_identity(self):
+        """The ordinary uncontended case must stay exactly as permissive
+        as it is today -- no `WORKTREE_IDENTITY.json` is ever required
+        when neither authority says this work item is live."""
+        with ScratchRepo() as repo:
+            self.assertFalse((repo.root / ".ai-review").exists())
+            wi = _base_work_item(current_checkpoint_id=None, checkpoints={})
+            ws.resolve_checkpoint_ownership(repo.root, wi, "wi", "CP", now="t1")
+            self.assertFalse((repo.root / ".ai-review" / "runtime" / "WORKTREE_IDENTITY.json").exists())
+
+    def test_contended_via_local_in_progress_with_no_identity_refuses(self):
+        """Local `IN_PROGRESS` alone is enough to make this contended, even
+        with no claim at all -- `verify_dirty_resume_safety` still runs."""
+        with ScratchRepo() as repo:
+            wi = _base_work_item(current_checkpoint_id="CP",
+                                 checkpoints={"CP": {"status": "IN_PROGRESS"}})
+            with self.assertRaises(ws.WorktreeIdentityMissingError) as ctx:
+                ws.resolve_checkpoint_ownership(repo.root, wi, "wi", "CP", now="t1")
+            self.assertIsNotNone(ctx.exception.ownership_evidence)
+            self.assertIsNone(ctx.exception.ownership_evidence["claim"])
+            self.assertIn("takeover", ctx.exception.ownership_evidence["escape"])
+
+    def test_contended_via_foreign_claim_alone_with_no_identity_refuses(self):
+        """A published claim alone is enough to make this contended, even
+        with nothing locally `IN_PROGRESS`."""
+        with ScratchRepo() as repo:
+            wt2 = repo.worktree("b")
+            ws.claim_checkpoint(wt2, "wi", "CP", now="t0")
+            wi = _base_work_item(current_checkpoint_id=None, checkpoints={})
+            with self.assertRaises(ws.WorktreeIdentityMissingError):
+                ws.resolve_checkpoint_ownership(repo.root, wi, "wi", "CP", now="t1")
+
+    def test_adoption_then_resume_when_origination_reference_is_silent(self):
+        with ScratchRepo() as repo:
+            ws.write_worktree_identity(repo.root, "wi", now="t0")
+            _write_local_state(repo, _state_json(wi={"checkpoints": {"CP": {"status": "IN_PROGRESS"}}}))
+            wi = _base_work_item(current_checkpoint_id="CP",
+                                 checkpoints={"CP": {"status": "IN_PROGRESS"}})
+            outcome, checkpoint_id, token = ws.resolve_checkpoint_ownership(
+                repo.root, wi, "wi", "CP", now="t1")
+            self.assertEqual((outcome, checkpoint_id), (ws.RESUME, "CP"))
+            self.assertIsNotNone(token)
+            claim = ws.resolve_claim(repo.root, "wi")
+            self.assertTrue(claim["adopted"])
+            self.assertEqual(claim["owner_token"], token)
+
+    def test_adoption_refuses_when_origination_reference_observes_in_progress(self):
+        """The committed-history case: this worktree's own local
+        `IN_PROGRESS` is fully explained by a checkout of committed
+        history, not by this worktree's own step 1d. The refusal carries
+        both the origination evidence and the local-identity/claim-state
+        components revision 71 (`OPUS-R88-005`) adds."""
+        with ScratchRepo() as repo:
+            ws.write_worktree_identity(repo.root, "wi", now="t0")
+            _commit_state(repo, _state_json(wi={"checkpoints": {"CP": {"status": "IN_PROGRESS"}}}))
+            wi = _base_work_item(current_checkpoint_id="CP",
+                                 checkpoints={"CP": {"status": "IN_PROGRESS"}})
+            with self.assertRaises(ws.CheckpointOriginationUnprovableError) as ctx:
+                ws.resolve_checkpoint_ownership(repo.root, wi, "wi", "CP", now="t1")
+            evidence = ctx.exception.ownership_evidence
+            self.assertEqual(evidence["claim"], None)
+            self.assertEqual(evidence["claim_state"], "absent")
+            self.assertEqual(evidence["local_identity"]["state"], "valid")
+            self.assertEqual(evidence["origination"]["route"], "observed")
+
+    def test_resume_when_claim_self_owned_matches_local_in_progress(self):
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t0")
+            ws.write_worktree_identity(repo.root, "wi", now="t0")
+            wi = _base_work_item(current_checkpoint_id="CP",
+                                 checkpoints={"CP": {"status": "IN_PROGRESS"}})
+            outcome, checkpoint_id, token = ws.resolve_checkpoint_ownership(
+                repo.root, wi, "wi", "CP", now="t1")
+            self.assertEqual((outcome, checkpoint_id, token), (ws.RESUME, "CP", claim["owner_token"]))
+
+    def test_refuses_when_claim_self_owned_disagrees_with_local_in_progress(self):
+        with ScratchRepo() as repo:
+            ws.claim_checkpoint(repo.root, "wi", "CP1", now="t0")
+            ws.write_worktree_identity(repo.root, "wi", now="t0")
+            wi = _base_work_item(current_checkpoint_id="CP2",
+                                 checkpoints={"CP2": {"status": "IN_PROGRESS"}})
+            with self.assertRaises(ws.CheckpointOwnershipStateMismatchError) as ctx:
+                ws.resolve_checkpoint_ownership(repo.root, wi, "wi", "CP2", now="t1")
+            self.assertEqual(ctx.exception.ownership_evidence["claimed_checkpoint"], "CP1")
+
+    def test_foreign_claim_refuses_even_with_valid_identity_for_this_work_item(self):
+        """`S14a`/`S14b` are not the only classes a foreign worktree can
+        see: one carrying a valid identity record of its own for this
+        work item -- a displaced owner after a takeover, typically --
+        passes `verify_dirty_resume_safety` and is refused one line
+        later, by the foreign-claim row, with `CheckpointOwnedByOtherWorktreeError`."""
+        with ScratchRepo() as repo:
+            ws.write_worktree_identity(repo.root, "wi", now="t0")
+            wt2 = repo.worktree("b")
+            claim = ws.claim_checkpoint(wt2, "wi", "CP", now="t0")
+            wi = _base_work_item(current_checkpoint_id=None, checkpoints={})
+            with self.assertRaises(ws.CheckpointOwnedByOtherWorktreeError) as ctx:
+                ws.resolve_checkpoint_ownership(repo.root, wi, "wi", "CP", now="t1")
+            evidence = ctx.exception.ownership_evidence
+            self.assertEqual(evidence["holder"], claim["worktree_root"])
+            self.assertIn("resume it there", evidence["escape"])
+
+    def test_continue_claim_when_self_claim_has_no_local_entry_at_all(self):
+        """The crash window between publishing the claim and writing the
+        state (1d's own ordering keeps it narrow, never closes it)."""
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t0")
+            ws.write_worktree_identity(repo.root, "wi", now="t0")
+            wi = _base_work_item(current_checkpoint_id=None, checkpoints={})
+            outcome, checkpoint_id, token = ws.resolve_checkpoint_ownership(
+                repo.root, wi, "wi", None, now="t1")
+            self.assertEqual((outcome, checkpoint_id, token),
+                            (ws.CONTINUE_CLAIM, "CP", claim["owner_token"]))
+
+    def test_continue_claim_refuses_when_selection_disagrees(self):
+        with ScratchRepo() as repo:
+            ws.claim_checkpoint(repo.root, "wi", "CP", now="t0")
+            ws.write_worktree_identity(repo.root, "wi", now="t0")
+            wi = _base_work_item(current_checkpoint_id=None, checkpoints={})
+            with self.assertRaises(ws.CheckpointOwnershipStateMismatchError):
+                ws.resolve_checkpoint_ownership(repo.root, wi, "wi", "SOMETHING_ELSE", now="t1")
+
+    def test_durable_completion_releases_and_returns_fresh_with_next_checkpoint(self):
+        """The single automatic release in the whole design: a self-owned
+        claim on a checkpoint whose completion is durable (committed at
+        `HEAD`), i.e. a crash between step 1f's commit and its release."""
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t0")
+            ws.write_worktree_identity(repo.root, "wi", now="t0")
+            _commit_state(repo, _state_json(wi={"checkpoints": {"CP": {"status": "COMPLETE"}}}))
+            wi = _base_work_item(current_checkpoint_id=None,
+                                 checkpoints={"CP": {"status": "COMPLETE"}})
+            outcome, checkpoint_id, token = ws.resolve_checkpoint_ownership(
+                repo.root, wi, "wi", "NEXT", now="t1")
+            self.assertEqual((outcome, checkpoint_id, token), (ws.FRESH, "NEXT", None))
+            self.assertIsNone(ws.resolve_claim(repo.root, "wi"))
+
+    def test_durable_completion_with_nothing_left_releases_and_returns_no_checkpoint(self):
+        with ScratchRepo() as repo:
+            ws.claim_checkpoint(repo.root, "wi", "CP", now="t0")
+            ws.write_worktree_identity(repo.root, "wi", now="t0")
+            _commit_state(repo, _state_json(wi={"checkpoints": {"CP": {"status": "COMPLETE"}}}))
+            wi = _base_work_item(current_checkpoint_id=None,
+                                 checkpoints={"CP": {"status": "COMPLETE"}})
+            outcome, checkpoint_id, token = ws.resolve_checkpoint_ownership(
+                repo.root, wi, "wi", None, now="t1")
+            self.assertEqual((outcome, checkpoint_id, token), (ws.NO_CHECKPOINT, None, None))
+            self.assertIsNone(ws.resolve_claim(repo.root, "wi"))
+
+    def test_completion_not_yet_durable_refuses_and_keeps_the_claim(self):
+        """A6: the working tree saying `COMPLETE` is not enough -- the
+        commit hasn't happened yet, so releasing now would hand the work
+        item to another worktree while the completion is still
+        uncommitted."""
+        with ScratchRepo() as repo:
+            ws.claim_checkpoint(repo.root, "wi", "CP", now="t0")
+            ws.write_worktree_identity(repo.root, "wi", now="t0")
+            wi = _base_work_item(current_checkpoint_id=None,
+                                 checkpoints={"CP": {"status": "COMPLETE"}})
+            with self.assertRaises(ws.CheckpointOwnershipStateMismatchError):
+                ws.resolve_checkpoint_ownership(repo.root, wi, "wi", "NEXT", now="t1")
+            self.assertIsNotNone(ws.resolve_claim(repo.root, "wi"))
+
+    def test_self_claim_with_unexpected_local_status_refuses_rather_than_guesses(self):
+        with ScratchRepo() as repo:
+            ws.claim_checkpoint(repo.root, "wi", "CP", now="t0")
+            ws.write_worktree_identity(repo.root, "wi", now="t0")
+            wi = _base_work_item(current_checkpoint_id=None,
+                                 checkpoints={"CP": {"status": "BOGUS"}})
+            with self.assertRaises(ws.CheckpointOwnershipStateMismatchError):
+                ws.resolve_checkpoint_ownership(repo.root, wi, "wi", None, now="t1")
+
+    def test_outcome_is_always_one_of_the_four_named_constants(self):
+        self.assertEqual(ws.CHECKPOINT_OWNERSHIP_OUTCOMES,
+                         {ws.RESUME, ws.FRESH, ws.CONTINUE_CLAIM, ws.NO_CHECKPOINT})
+
+
+class TestOwnershipEvidenceAttachment(unittest.TestCase):
+    """`_attach_ownership_evidence` -- carries the claim record, the
+    holder, the claimed checkpoint, and the escape on *every* refusal,
+    including an absent claim (corrected, revision 70, `OPUS-R87-003`;
+    the unwired dry-run prototype's own version returns early on
+    `claim is None`, which is exactly the defect withdrawn)."""
+
+    def test_attaches_evidence_even_when_claim_is_absent(self):
+        with ScratchRepo() as repo:
+            exc = ws.CheckpointOwnershipStateMismatchError("boom")
+            ws._attach_ownership_evidence(repo.root, exc, "wi", None)
+            self.assertIsNotNone(exc.ownership_evidence)
+            self.assertIsNone(exc.ownership_evidence["claim"])
+            self.assertIsNone(exc.ownership_evidence["holder"])
+            self.assertIn("takeover", exc.ownership_evidence["escape"])
+
+    def test_is_idempotent_keeps_first_attachment(self):
+        with ScratchRepo() as repo:
+            exc = ws.CheckpointOwnershipStateMismatchError("boom")
+            ws._attach_ownership_evidence(repo.root, exc, "wi", None)
+            first = exc.ownership_evidence
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t0")
+            ws._attach_ownership_evidence(repo.root, exc, "wi", claim)
+            self.assertIs(exc.ownership_evidence, first)
+            self.assertIsNone(exc.ownership_evidence["claim"])
+
+    def test_self_owned_claim_names_continuation_not_a_removal(self):
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t0")
+            exc = ws.CheckpointOwnershipStateMismatchError("boom")
+            ws._attach_ownership_evidence(repo.root, exc, "wi", claim)
+            self.assertIn("continue it here", exc.ownership_evidence["escape"])
+            self.assertIn("no takeover applies", exc.ownership_evidence["escape"])
+
+
 class TestCheckpointMutationGuard(unittest.TestCase):
     def test_owner_mutation_happy_path_releases_guard(self):
         with ScratchRepo() as repo:

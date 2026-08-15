@@ -58,45 +58,80 @@ dirty-resume rule, `WF2`):
     `workflow_state.select_next_checkpoint(work_item, registry)`
     (D-Selection's rules 1/2/4 -- pure and deterministic, missing-test
     item 28).
-    - Returns `None`: every registry checkpoint is already `COMPLETE`.
-      Nothing to implement this invocation -- skip straight to step 2
-      below (do not re-implement anything, do not re-select).
+    - Returns `None`: every registry checkpoint is already `COMPLETE`
+      *in this worktree's own local state* -- pass `None` through to 1c
+      as `selected_id` regardless (do not skip to step 2 yet: `1c` may
+      still release a stale self-owned claim and return a concrete
+      `FRESH` checkpoint or the terminal `NO_CHECKPOINT`).
     - Raises `NoCheckpointReadyError`: stop, report the named blocked
       checkpoint and its unmet dependencies verbatim -- never silently
       idle (rule 4).
-    - Otherwise: the returned id is this invocation's checkpoint. If it
-      equals `current_checkpoint_id` with status `IN_PROGRESS`, this is a
-      **resume** (rule 1); otherwise it is a **fresh start**.
-1c. **Resume-safety** (resume only): call
-    `workflow_state.verify_dirty_resume_safety(repo_root, work_item_id)`
-    before touching anything else. `WorktreeIdentityMissingError`/
-    `WorktreeIdentityMismatchError` stop immediately -- report the
-    concrete mismatch and require the user to either resume from the
-    worktree that actually started this checkpoint's uncommitted work, or
-    explicitly discard it and restart from the checkpoint's own
-    `start_commit`; never guessed either way (D3, missing-test items 31,
-    43, 71).
-
-    Then call `workflow_state.checkpoint_origination_provable(repo_root,
-    work_item_id, checkpoint_id)` (`D-Checkpoint-Ownership`'s origination-
-    reference slice, `WF8b`) -- this worktree's own dirty-resume identity
-    is not, by itself, proof that its local `IN_PROGRESS` was never also
-    supplied by a checkout, merge, or reset from committed history.
-    `CheckpointOriginationUnprovableError` stops immediately: report the
-    evidence (`route`, the observing or undecidable commit, and how many
-    commits were examined) and require the user to reconcile manually --
-    `D-Checkpoint-Ownership`'s shared claim record, mutation guard and
-    explicit-takeover escape are not yet implemented, so there is no
-    automated recovery from this refusal yet.
-1d. **Fresh-start bookkeeping** (fresh start only): call
-    `workflow_state.transition_checkpoint_in_progress(state,
-    work_item_id, checkpoint_id, start_commit=<current HEAD>, now=<now>)`
-    and persist the returned state to `docs/ai-workflow/WORKFLOW_STATE.json`,
-    then call `workflow_state.write_worktree_identity(repo_root,
-    work_item_id, now=<now>)` -- D3's named writer for
-    `.ai-review/runtime/WORKTREE_IDENTITY.json`, creating or refreshing
-    only this work item's own keyed entry at exactly this transition
-    (`OPUS-R6-026`, missing-test item 43).
+    - Otherwise: the returned id is passed through to 1c as
+      `selected_id`. Classification (resume vs. fresh start vs.
+      continuing an interrupted claim) is decided wholly by 1c, not
+      here.
+1c. **Resolve ownership** (`D-Checkpoint-Ownership`, "Where the check
+    belongs, and the ordering", `WF8b`): call
+    `workflow_state.resolve_checkpoint_ownership(repo_root, work_item,
+    work_item_id, selected_id, now=<now>)`. Returns `(outcome,
+    checkpoint_id, owner_token)` where `outcome` is `RESUME`, `FRESH`,
+    `CONTINUE_CLAIM`, or the terminal `NO_CHECKPOINT`. No
+    mutation-capable outcome ever carries a `None` checkpoint id.
+    - `NO_CHECKPOINT`: nothing to implement this invocation -- skip
+      straight to step 2 below (do not re-implement anything, do not
+      re-select).
+    - `RESUME`: this worktree's own claim already covers `checkpoint_id`
+      and the local state already records it `IN_PROGRESS`. Skip 1d
+      entirely and go straight to 1e.
+    - `FRESH`: an ordinary, uncontended start. Proceed to 1d's
+      fresh-start branch. `owner_token` is `None` here -- 1d mints it.
+    - `CONTINUE_CLAIM`: this worktree's own claim exists for
+      `checkpoint_id` but the local state write never happened (a crash
+      between claim publication and the state write). Proceed to 1d's
+      continue-claim branch, using the returned `owner_token` directly --
+      never re-acquire a claim that already exists.
+    - Any exception (`WorktreeIdentityMissingError`,
+      `WorktreeIdentityMismatchError`, `CorruptJsonError`,
+      `CheckpointOwnedByOtherWorktreeError`,
+      `CheckpointOwnershipStateMismatchError`,
+      `CheckpointOriginationUnprovableError`,
+      `CheckpointOwnershipUnavailableError`): stop immediately, before
+      touching anything else. Report the attached
+      `exc.ownership_evidence` in full (`claim`, `holder`,
+      `claimed_checkpoint`, `escape`, and -- for
+      `CheckpointOriginationUnprovableError` -- also `local_identity`,
+      `claim_state`, and `origination`) and require the user to act on
+      the named escape: resume from the worktree that actually holds the
+      claim, explicitly take the claim over
+      (`workflow_state.take_over_claim`), or reconcile manually. Never
+      guessed (D3, missing-test items 31, 43, 71).
+1d. **Establish identity, acquire, then write state under the guard**
+    (`FRESH`/`CONTINUE_CLAIM` only -- skipped entirely for `RESUME`).
+    Both mutations below are covered by the fenced compare-and-delete
+    guard described in "Which mutations are guarded, exhaustively":
+    - **`FRESH`**, in this exact order (both orderings are load-bearing,
+      not stylistic -- claim before state so a crash between them still
+      leaves behind the authority that protects the checkpoint; identity
+      before claim so the crash window `CONTINUE_CLAIM` exists for can
+      never be entered without it):
+      1. call `workflow_state.write_worktree_identity(repo_root,
+         work_item_id, now=<now>)` -- the establishing write, outside any
+         guard, since no claim/token exists yet;
+      2. call `workflow_state.claim_checkpoint(repo_root, work_item_id,
+         checkpoint_id, now=<now>)`, which mints `owner_token`;
+      3. inside `workflow_state.owner_mutation(repo_root, work_item_id,
+         owner_token, checkpoint_id=checkpoint_id, step="1d",
+         step_class=workflow_state.DESTRUCTIVE, now=<now>)`: refresh
+         `write_worktree_identity` again, call
+         `workflow_state.transition_checkpoint_in_progress(state,
+         work_item_id, checkpoint_id, start_commit=<current HEAD>,
+         now=<now>)`, and persist the returned state to
+         `docs/ai-workflow/WORKFLOW_STATE.json`.
+    - **`CONTINUE_CLAIM`**: identity and the claim already exist and
+      `owner_token` is already known from 1c -- only step 3 above runs
+      (the guarded state write: refresh `write_worktree_identity` +
+      `transition_checkpoint_in_progress` + persist). Never re-acquire
+      the claim.
 1e. **Implement exactly that one checkpoint**: follow
     `CLAUDE.md`/`AGENTS.md`/`.github/copilot-instructions.md`/
     `.github/instructions/*` for layer boundaries, migrations, and enum
@@ -109,21 +144,37 @@ dirty-resume rule, `WF2`):
     new dependency category, unapproved schema migration, destructive
     operation, repeated verification failure, unrelated working-tree
     changes), in which case stop here instead of committing.
-1f. **Commit**: one commit for this checkpoint's changes, carrying
-    `Workflow-Checkpoint: <id>` + `Workflow-Work-Item: <work_item_id>`
-    trailers (D-Commit-Provenance's exact trailer shape -- this command
-    only writes the trailer, it never needs to search for one itself; the
-    exact scoped lookup later checks use is
-    `workflow_state.discover_checkpoint_commits`, `WF4a-iii`). In the same
-    commit, call `workflow_state.complete_checkpoint(state, work_item_id,
-    checkpoint_id, registry, now=<now>)` and persist the returned state to
-    `docs/ai-workflow/WORKFLOW_STATE.json` -- checkpoint-complete-vs-
-    all-complete semantics: `phase` stays `IMPLEMENTING` unless every
-    registry checkpoint is now `COMPLETE`, in which case it becomes
-    `SELF_REVIEWING_IMPLEMENTATION` as part of this same write. The state
-    file is the sole writable record of checkpoint status from this point
-    on; the trailer is verification evidence, never a second source of
-    truth.
+1f. **Commit, verify durable, then release** (`D-Checkpoint-Ownership`'s
+    fenced compare-and-delete, `WF8b`). Inside
+    `workflow_state.owner_mutation(repo_root, work_item_id, owner_token,
+    checkpoint_id=checkpoint_id, step="1f-commit",
+    step_class=workflow_state.DESTRUCTIVE, now=<now>)`:
+    - call `workflow_state.complete_checkpoint(state, work_item_id,
+      checkpoint_id, registry, now=<now>)` and persist the returned state
+      to `docs/ai-workflow/WORKFLOW_STATE.json` -- checkpoint-complete-vs-
+      all-complete semantics: `phase` stays `IMPLEMENTING` unless every
+      registry checkpoint is now `COMPLETE`, in which case it becomes
+      `SELF_REVIEWING_IMPLEMENTATION` as part of this same write. The
+      state file is the sole writable record of checkpoint status from
+      this point on; the trailer below is verification evidence, never a
+      second source of truth;
+    - then create one commit for this checkpoint's changes, carrying
+      `Workflow-Checkpoint: <id>` + `Workflow-Work-Item: <work_item_id>`
+      trailers (D-Commit-Provenance's exact trailer shape -- this command
+      only writes the trailer, it never needs to search for one itself;
+      the exact scoped lookup later checks use is
+      `workflow_state.discover_checkpoint_commits`, `WF4a-iii`).
+
+    Both acts happen inside the same `"destructive"` guard window so a
+    takeover landing between them cannot leave two worktrees each
+    believing they completed the checkpoint. Once the guard is released
+    (on exiting `owner_mutation`), verify the completion is durable --
+    `workflow_state.committed_checkpoint_status(repo_root, work_item_id,
+    checkpoint_id) == "COMPLETE"` -- and only then call
+    `workflow_state.release_checkpoint(repo_root, work_item_id,
+    checkpoint_id, owner_token=owner_token, now=<now>)`. Releasing before
+    the commit is durable would hand the work item to another worktree
+    while the completion is still uncommitted.
 1g. **Stop immediately** -- never continue to the next checkpoint, and
     never continue into step 2 in the same invocation even when this was
     the last checkpoint (a later invocation observes the phase change and

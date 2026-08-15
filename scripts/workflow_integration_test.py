@@ -467,7 +467,7 @@ class TestVersion21OnlyCommandsRefuseCleanlyForV1(unittest.TestCase):
 # available to diff against.
 _GOLDEN_COMMAND_FILE_SHA256 = {
     "milestone-plan.md": "082a444fac6193493af7da5307f3008d6684a19456fb57af297dbfa21d4082a6",
-    "milestone-implement.md": "c6aa36b8a07e780e6ee4ffc6caca06688e40f101c65fd87833fc5d90411af92c",
+    "milestone-implement.md": "9d8453671756ba7a60e18d280b59d66836f216b21651fe78a5682e58bc1e8add",
     "approve-review.md": "384c3197c34798b72fcc988421db8b64d8c84697c6565658957fd5a76150d08f",
     "accept-milestone.md": "b20355327e560b09518e5305979bc844acb989a0b11fd6a6be00a9d750a9e9f4",
     "prepare-functional-review.md": "37844421e1c63917d7970c8cdd00d6945d06c3a168eb7fb3be51205deb35fee3",
