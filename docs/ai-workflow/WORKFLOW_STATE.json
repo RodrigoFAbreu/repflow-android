@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_work_item_id": "v2-1-dry-run-legacy",
+  "active_work_item_id": "workflow-v2-1-core",
   "work_items": {
     "workflow-v2-1-core": {
       "work_item_type": "process",
@@ -17,8 +17,8 @@
       "functional_review_round": null,
       "base_commit": "162154d3e5e10eb65e109833acae4b4fb01fc5d6",
       "reviewed_implementation_head": "20f89de3c030ebd89d69bcd5afffb830096f8c2b",
-      "current_checkpoint_id": "WF8b",
-      "last_completed_checkpoint_id": "WF-Activate",
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": "WF8b",
       "checkpoints": {
         "WF0": {
           "status": "COMPLETE",
@@ -85,7 +85,7 @@
           "start_commit": "984a4736f9209ce1c92f6e7a4c76e4e184485f58"
         },
         "WF8b": {
-          "status": "IN_PROGRESS",
+          "status": "COMPLETE",
           "start_commit": "e75a756d42751ef18eee842a958cc2c888086772"
         }
       },
@@ -259,8 +259,8 @@
           ]
         }
       ],
-      "state_revision": 90,
-      "last_transition": "2026-08-14T23:08:40+01:00"
+      "state_revision": 91,
+      "last_transition": "2026-08-15T12:15:00+01:00"
     },
     "milestone-8": {
       "work_item_type": "product",
@@ -330,174 +330,6 @@
       "blocking_decisions": [],
       "state_revision": 1,
       "last_transition": "2026-07-31T12:00:00+01:00"
-    },
-    "v2-1-dry-run": {
-      "work_item_type": "process",
-      "work_item_kind": "synthetic",
-      "work_item_id": "v2-1-dry-run",
-      "parent_work_item_id": null,
-      "plan_path": "docs/ai-workflow/dry-run/v2-1-dry-run-plan.md",
-      "registry_path": "docs/ai-workflow/registry/v2-1-dry-run-registry.json",
-      "mapping_path": "docs/ai-workflow/requirements/v2-1-dry-run-mapping.json",
-      "governing_workflow_version": "2.1",
-      "phase": "MILESTONE_COMPLETE",
-      "plan_revision": 5,
-      "implementation_revision": 6,
-      "functional_review_round": null,
-      "base_commit": "e75a756d42751ef18eee842a958cc2c888086772",
-      "reviewed_implementation_head": "c916ead3a51088a6b965ada48a99b25e27adb6d8",
-      "current_checkpoint_id": null,
-      "last_completed_checkpoint_id": "S-CP3",
-      "checkpoints": {
-        "S-CP1": {
-          "status": "COMPLETE",
-          "start_commit": "96dcf8769e854e4a63a59e826ce046ac200671ca"
-        },
-        "S-CP2": {
-          "status": "COMPLETE",
-          "start_commit": "dcaec48602ff4600588af5c14a15f4112aef0ad3"
-        },
-        "S-CP3": {
-          "status": "COMPLETE",
-          "start_commit": "8375b64f9ad9ad44afe7574841a62457f5d83cea"
-        }
-      },
-      "current_bundle_id": null,
-      "plan_approval": {
-        "status": "CURRENT",
-        "basis": "USER_OVERRIDE",
-        "reviewed_bundle_id": "e90b8c90f050a67660c7202aee5326f64df019758140628ae827362ca0d09f27",
-        "approved_review_content_id": "79e5e1df81df92de3845e7c680718c46dcaf4d1df475ade351a023bfd88b2a8d",
-        "review_content_manifest": [
-          {
-            "path": "docs/ai-workflow/dry-run/v2-1-dry-run-plan.md",
-            "exists": true,
-            "mode": "100644",
-            "blob": "46af543fce3cbc804164fe65b526d61bd3a17991"
-          },
-          {
-            "path": "docs/ai-workflow/registry/v2-1-dry-run-registry.json",
-            "exists": true,
-            "mode": "100644",
-            "blob": "282e1311e293a46e815b838e8ddf47e77df3a25e"
-          },
-          {
-            "path": "docs/ai-workflow/requirements/v2-1-dry-run-mapping.json",
-            "exists": true,
-            "mode": "100644",
-            "blob": "c67ea2708620299a3a5668670423f74fadb00594"
-          }
-        ],
-        "reviewed_content_commit": null,
-        "legacy_evidence": null,
-        "user_confirmation": "/approve-review plan v2-1-dry-run",
-        "waived_guarantees": [],
-        "recorded_at": "2026-08-12T01:34:07+01:00"
-      },
-      "technical_approval": {
-        "status": "CURRENT",
-        "basis": "USER_OVERRIDE",
-        "reviewed_bundle_id": "ba997396129c802b219506a81cf4a429a898d5553823de6cd1310e02563c3848",
-        "approved_review_content_id": "33139aaf7e637fc32dfd86a31f73c6153e32d2dc0a4ff8c4fa46ee2afe131a96",
-        "review_content_manifest": [
-          {
-            "path": "docs/ai-workflow/dry-run/scratch/a.txt",
-            "exists": true,
-            "mode": "100644",
-            "blob": "d1f3047815ebf192c4dba621c50b37497e78c735"
-          },
-          {
-            "path": "docs/ai-workflow/dry-run/scratch/b.txt",
-            "exists": true,
-            "mode": "100644",
-            "blob": "da20f5fd2d5c770e1e287cebb551505ca677b450"
-          },
-          {
-            "path": "docs/ai-workflow/dry-run/scratch/c.txt",
-            "exists": true,
-            "mode": "100644",
-            "blob": "ca2ff4d749994cf8d3c984a2e15e9a36cdac6483"
-          },
-          {
-            "path": "docs/ai-workflow/registry/v2-1-dry-run-artifacts.json",
-            "exists": true,
-            "mode": "100644",
-            "blob": "96f9e6915d981f0300b601333689f5ee9e2ae896"
-          }
-        ],
-        "reviewed_content_commit": "c916ead3a51088a6b965ada48a99b25e27adb6d8",
-        "legacy_evidence": null,
-        "user_confirmation": "/approve-review implementation v2-1-dry-run",
-        "waived_guarantees": [],
-        "recorded_at": "2026-08-15T11:17:30+01:00"
-      },
-      "plan_review_stages": {
-        "review_content_id": "79e5e1df81df92de3845e7c680718c46dcaf4d1df475ade351a023bfd88b2a8d",
-        "local_model_plan_review": {
-          "bundle_id": "e90b8c90f050a67660c7202aee5326f64df019758140628ae827362ca0d09f27",
-          "verdict": "APPROVE",
-          "round": 4,
-          "completed_at": "2026-08-12T00:13:38+01:00"
-        },
-        "manual_external_plan_review": {
-          "bundle_id": "e90b8c90f050a67660c7202aee5326f64df019758140628ae827362ca0d09f27",
-          "verdict": "APPROVE",
-          "round": 1,
-          "completed_at": "2026-08-12T00:24:31+01:00"
-        }
-      },
-      "functional_acceptance_status": null,
-      "blocking_decisions": [],
-      "state_revision": 30,
-      "last_transition": "2026-08-15T11:46:44+01:00"
-    },
-    "v2-1-dry-run-legacy": {
-      "work_item_type": "product",
-      "work_item_kind": "synthetic",
-      "work_item_id": "v2-1-dry-run-legacy",
-      "parent_work_item_id": null,
-      "plan_path": "docs/ai-workflow/dry-run/v2-1-dry-run-legacy-plan.md",
-      "registry_path": null,
-      "mapping_path": null,
-      "governing_workflow_version": "2.1",
-      "phase": "AWAITING_FUNCTIONAL_REVIEW",
-      "plan_revision": 1,
-      "implementation_revision": null,
-      "functional_review_round": null,
-      "base_commit": "dc4381a348c114ec4967174c4e6a76ac00b1a537",
-      "reviewed_implementation_head": null,
-      "current_checkpoint_id": null,
-      "last_completed_checkpoint_id": null,
-      "checkpoints": {},
-      "current_bundle_id": null,
-      "plan_approval": null,
-      "technical_approval": {
-        "status": "CURRENT",
-        "basis": "LEGACY_V1",
-        "reviewed_bundle_id": null,
-        "approved_review_content_id": "fca405fbeaf4ea1f4f155af96c9daed41c7221e52c1596da0a8e7637e05824fe",
-        "review_content_manifest": null,
-        "reviewed_content_commit": "dc4381a348c114ec4967174c4e6a76ac00b1a537",
-        "legacy_evidence": {
-          "branch_reconciliation": {
-            "reviewed_content_commit": "dc4381a348c114ec4967174c4e6a76ac00b1a537",
-            "reachable_from": "HEAD at import time (fabricated evidence for WF8b S11 dry-run scenario, mirrors milestone-8's real branch-reconciliation ancestor check)",
-            "active_milestone_confirms": "docs/ACTIVE_MILESTONE.md at import-time HEAD contains 'accepted and closed', reused per WF8B_SCENARIOS.md S11's 'fabricated but well-formed technical_approval' design decision -- this entry is not a real product milestone"
-          },
-          "rounds": []
-        },
-        "user_confirmation": "Fabricated legacy evidence for WF8b S11 dry-run scenario (v2-1-dry-run-legacy), per docs/ai-workflow/dry-run/WF8B_SCENARIOS.md's locked-in 'S11 -- Milestone 8 stays untouched' design decision. Throwaway synthetic item created solely to prove the D-Legacy phase 2 (WF-M8b) adoption mechanism; base_commit == reviewed_content_commit by construction so this item's own implementation-stage manifest is trivially empty.",
-        "waived_guarantees": [
-          "no_bundle_id",
-          "no_telemetry"
-        ],
-        "recorded_at": "2026-08-15T00:00:00+01:00"
-      },
-      "plan_review_stages": null,
-      "functional_acceptance_status": null,
-      "blocking_decisions": [],
-      "state_revision": 2,
-      "last_transition": "2026-08-15T11:57:50+01:00"
     }
   }
 }
