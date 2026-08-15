@@ -11,7 +11,7 @@
       "registry_path": "docs/ai-workflow/registry/workflow-v2-1-core-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json",
       "governing_workflow_version": "1",
-      "phase": "IMPLEMENTING",
+      "phase": "SELF_REVIEWING_IMPLEMENTATION",
       "plan_revision": 80,
       "implementation_revision": 10,
       "functional_review_round": null,
@@ -259,8 +259,8 @@
           ]
         }
       ],
-      "state_revision": 92,
-      "last_transition": "2026-08-15T14:08:12+01:00"
+      "state_revision": 93,
+      "last_transition": "2026-08-15T15:34:48+01:00"
     },
     "milestone-8": {
       "work_item_type": "product",
