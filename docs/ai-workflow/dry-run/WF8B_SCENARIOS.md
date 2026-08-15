@@ -2006,6 +2006,66 @@ unchanged afterwards.
   not just this last scenario.
 - **Cleanup**: this scenario *is* the cleanup for every prior one.
 
+- **Outcome (2026-08-15, real, seventh session, WF8b now COMPLETE)**: ran for
+  real against live repository state, with explicit user confirmation
+  obtained before the commit (the diff was shown in full and approved,
+  consistent with this repo's general commit-authorization discipline).
+
+  `active_work_item_id` restored to `"workflow-v2-1-core"` from
+  `.ai-review/runtime/DRY_RUN_RESUME.json`'s `prior_active_work_item_id`
+  (unchanged since `9317b1c`'s own write); the marker file and
+  `.ai-review/v2-1-dry-run/` (the only bundle directory either synthetic
+  item ever produced — `v2-1-dry-run-legacy` never ran `/milestone-plan`,
+  so it never had one) were both deleted. `work_items["v2-1-dry-run"]` and
+  `work_items["v2-1-dry-run-legacy"]` were removed from
+  `WORKFLOW_STATE.json` entirely — neither survives into the real
+  post-dry-run state. The leftover S14 scratch worktree/branch
+  (`wf8b-s14-worktree`, `wf8b-s14-scratch`), deferred cleanup per S14's own
+  text, was removed via `git worktree remove --force` /
+  `git branch -D`, confirmed gone from `git worktree list` afterward.
+  `workflow-v2-1-core`'s own dict changed only as its final checkpoint's
+  own completion: `checkpoints.WF8b.status` `IN_PROGRESS` →
+  `COMPLETE`, `current_checkpoint_id` `"WF8b"` → `null`,
+  `last_completed_checkpoint_id` `"WF-Activate"` → `"WF8b"` — `WF8b` is
+  the registry's final entry, so all 17 checkpoints are now `COMPLETE`.
+  Committed as `f37c4e0`, carrying `Workflow-Checkpoint: WF8b` +
+  `Workflow-Work-Item: workflow-v2-1-core`.
+
+  **Pass/fail evidence, both readings of this scenario's own text,
+  recorded rather than picking one silently**: the narrow reading
+  (`workflow-v2-1-core`'s record immediately before `f37c4e0` vs.
+  immediately after) is genuinely byte-identical except exactly the four
+  checkpoint-completion fields named above — diffed and shown to the user
+  before committing, confirmed again after. The literal wide reading
+  (`9317b1c`'s parent vs. now) is **not** byte-identical — real,
+  legitimate `workflow-v2-1-core`-scoped progress landed across the whole
+  WF8b period (`WF1a` through `WF-Activate` completing, the `WF8B-003`
+  finding's entire revision-28-through-56 plan-review saga, real
+  plan-/technical-approval advances), every one of those changes carrying
+  its own `Workflow-Work-Item: workflow-v2-1-core` trailer, none
+  originating from any `v2-1-dry-run(-legacy)` scenario command — exactly
+  what this scenario's own "isolation" property means and what every
+  individual scenario's own before/after diff (S1 through S16) already
+  confirmed one command at a time. Treating the wide reading as a literal
+  temporal freeze would be impossible by construction (it would forbid
+  `workflow-v2-1-core` from making any real progress during a
+  multi-week dry run) and contradicts this file's own repeated "The real
+  `workflow-v2-1-core` record is untouched by any scenario here" framing,
+  which is about scenario-command isolation, not a time-freeze.
+
+  `docs/ai-workflow/dry-run/*` (this scenarios file, the finding
+  write-ups, the plan doc, the scratch marker files) and the
+  `v2-1-dry-run`/`v2-1-dry-run-legacy` `-artifacts.json`/registry/mapping
+  files were deliberately **not** deleted — this scenario's own text names
+  only `work_items` entries, bundle directories, and the marker file, and
+  this execution evidence has real historical value (referenced throughout
+  this document).
+
+  **`workflow-v2-1-core` is not itself closed by this commit** —
+  `technical_approval`/`functional_acceptance_status` remain gated by the
+  separate `WF8B-003` blocking-decision thread; only `WF8b`'s own
+  checkpoint bookkeeping, and the dry run built to prove it, finish here.
+
 ---
 
 ## Execution ordering note
