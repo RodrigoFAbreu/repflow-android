@@ -1319,6 +1319,68 @@ section below, not left implicit.
   overall WF8b cleanup (S17) — it must never survive into the real
   `WORKFLOW_STATE.json` post-dry-run.
 
+- **Outcome (2026-08-15, real, seventh session)**: ran for real against live
+  repository state. `v2-1-dry-run-legacy` was created by a real
+  `import_legacy_work_item(...)` call (commit `6c6cb13`), with
+  `base_commit == reviewed_content_commit` (both milestone-8's real
+  `dc4381a3`) by deliberate construction, and its own
+  `docs/ai-workflow/registry/v2-1-dry-run-legacy-artifacts.json` declarations
+  file widened to full top-level-repository exclusion coverage (empty
+  `protected_paths`/`protected_prefixes`) after the first attempt showed
+  `promote_legacy_work_item`'s `any_protected_path_changed_since` freshness
+  check fails closed (`UnclassifiedPathError`) on any changed path neither
+  set names — unlike `import_legacy_work_item`'s own manifest computation,
+  which stayed trivially empty regardless because its `base`/`commit` were
+  identical. `verify_legacy_branch_reconciliation` passed for real (`dc4381a3`
+  confirmed a real ancestor of `HEAD`; `docs/ACTIVE_MILESTONE.md` at `HEAD`
+  confirmed to contain `"accepted and closed"`).
+
+  `promote_legacy_work_item(...)` then ran for real against the resolved
+  target: `LEGACY_READY` → `AWAITING_FUNCTIONAL_REVIEW`,
+  `governing_workflow_version` `"1"` → `"2.1"`, `active_work_item_id` →
+  `v2-1-dry-run-legacy`. `-U0` diff against the pre-transition snapshot
+  confirmed exactly `active_work_item_id`/`governing_workflow_version`/
+  `phase`/`state_revision`/`last_transition` changed — `technical_approval`
+  byte-identical, this scenario's own stated pass/fail evidence exactly.
+  `milestone-8`'s entry confirmed byte-identical throughout (same diff),
+  per this scenario's locked-in decision.
+
+  **The `docs/ACTIVE_MILESTONE.md` concern, resolved rather than
+  triggered**: step 3, read literally, names `docs/ACTIVE_MILESTONE.md`
+  unconditionally with no work-item scoping in its own text. Rather than a
+  naive append, this session followed the same per-work-item `` `<id>` —
+  functional review checklist `` heading convention already established
+  and load-bearing for `v2-1-dry-run`'s own S9/S10 checklists earlier in
+  this same file (a convention the command text itself never states, but
+  does not forbid either) — a new, distinctly-titled
+  `` `v2-1-dry-run-legacy` — functional review checklist (legacy adoption,
+  S11) `` section, touching no other section. This is **not** the failure
+  mode this scenario's locked-in decision 3 warned about (an *incorrect*
+  write) — no destructive or unrelated mutation occurred, confirmed by the
+  provenance commit's own single-file diff. Step 3a's checklist-evidence
+  provenance commit ran for real (`1320bb5`), preceded by a real,
+  read-only `discover_current_functional_checklist_evidence(...)` call
+  confirming no prior evidence existed for this round.
+
+  **A second, different edge case discovered by this same literal
+  execution, recorded rather than worked around**: `v2-1-dry-run-legacy`'s
+  `implementation_revision` is `null` — a `LEGACY_V1`-imported item never
+  passes through the ordinary `PLANNING`→`IMPLEMENTING` cycle that sets
+  it — so step 3a's round-scoped prefix and commit trailer both become the
+  literal string `v2-1-dry-run-legacy/None/`. Verified mechanically
+  functional (no exception; `discover_current_functional_checklist_evidence`
+  returns `None` cleanly and stays self-consistent on repeat lookup with
+  the same `None` value) but semantically wrong for any legacy-imported
+  item's evidence trailer — `/prepare-functional-review`'s step 3a text
+  never anticipates a `null` `implementation_revision`. Filed as an
+  observation in `docs/ACTIVE_MILESTONE.md`'s own new section rather than
+  patched ad hoc; a real fix (e.g. a legacy-specific round token in place
+  of the raw integer) is command-contract work for a future plan revision,
+  not decided here.
+
+  Both discovered gaps are genuine but non-blocking for S11's own pass/fail
+  evidence, which is satisfied exactly as stated above.
+
 ## S12 — Approval/content drift remediation cycle
 
 - **Purpose**: prove the freshness/staleness detection this repository
