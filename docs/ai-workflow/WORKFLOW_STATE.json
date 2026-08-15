@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_work_item_id": null,
+  "active_work_item_id": "v2-1-dry-run-legacy",
   "work_items": {
     "workflow-v2-1-core": {
       "work_item_type": "process",
@@ -450,6 +450,54 @@
       "blocking_decisions": [],
       "state_revision": 30,
       "last_transition": "2026-08-15T11:46:44+01:00"
+    },
+    "v2-1-dry-run-legacy": {
+      "work_item_type": "product",
+      "work_item_kind": "synthetic",
+      "work_item_id": "v2-1-dry-run-legacy",
+      "parent_work_item_id": null,
+      "plan_path": "docs/ai-workflow/dry-run/v2-1-dry-run-legacy-plan.md",
+      "registry_path": null,
+      "mapping_path": null,
+      "governing_workflow_version": "2.1",
+      "phase": "AWAITING_FUNCTIONAL_REVIEW",
+      "plan_revision": 1,
+      "implementation_revision": null,
+      "functional_review_round": null,
+      "base_commit": "dc4381a348c114ec4967174c4e6a76ac00b1a537",
+      "reviewed_implementation_head": null,
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": null,
+      "checkpoints": {},
+      "current_bundle_id": null,
+      "plan_approval": null,
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "LEGACY_V1",
+        "reviewed_bundle_id": null,
+        "approved_review_content_id": "fca405fbeaf4ea1f4f155af96c9daed41c7221e52c1596da0a8e7637e05824fe",
+        "review_content_manifest": null,
+        "reviewed_content_commit": "dc4381a348c114ec4967174c4e6a76ac00b1a537",
+        "legacy_evidence": {
+          "branch_reconciliation": {
+            "reviewed_content_commit": "dc4381a348c114ec4967174c4e6a76ac00b1a537",
+            "reachable_from": "HEAD at import time (fabricated evidence for WF8b S11 dry-run scenario, mirrors milestone-8's real branch-reconciliation ancestor check)",
+            "active_milestone_confirms": "docs/ACTIVE_MILESTONE.md at import-time HEAD contains 'accepted and closed', reused per WF8B_SCENARIOS.md S11's 'fabricated but well-formed technical_approval' design decision -- this entry is not a real product milestone"
+          },
+          "rounds": []
+        },
+        "user_confirmation": "Fabricated legacy evidence for WF8b S11 dry-run scenario (v2-1-dry-run-legacy), per docs/ai-workflow/dry-run/WF8B_SCENARIOS.md's locked-in 'S11 -- Milestone 8 stays untouched' design decision. Throwaway synthetic item created solely to prove the D-Legacy phase 2 (WF-M8b) adoption mechanism; base_commit == reviewed_content_commit by construction so this item's own implementation-stage manifest is trivially empty.",
+        "waived_guarantees": [
+          "no_bundle_id",
+          "no_telemetry"
+        ],
+        "recorded_at": "2026-08-15T00:00:00+01:00"
+      },
+      "plan_review_stages": null,
+      "functional_acceptance_status": null,
+      "blocking_decisions": [],
+      "state_revision": 2,
+      "last_transition": "2026-08-15T11:57:50+01:00"
     }
   }
 }

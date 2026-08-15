@@ -1,0 +1,30 @@
+{
+  "schema_version": 2,
+  "work_item_id": "v2-1-dry-run-legacy",
+  "_comment": "Implementation-stage classification declarations for the throwaway v2-1-dry-run-legacy item, created solely to exercise D-Legacy phase 2 (WF-M8b) adoption for real during WF8b's S11 dry-run scenario (docs/ai-workflow/dry-run/WF8B_SCENARIOS.md). This item has no real implementation deliverable of its own -- protected sets are intentionally empty and every real repository path is excluded by top-level prefix/path, mirroring milestone-8-artifacts.json's own widened-at-adoption-time shape (D-Legacy phase 2's own reasoning: a dormant legacy item must not be staled by a concurrent work item's own ordinary commits). Its own reviewed_content_commit (dc4381a348c114ec4967174c4e6a76ac00b1a537, milestone-8's round-4-approved commit) equals its base_commit by construction, so at import time this item's manifest was trivially empty regardless of this file's exclusion breadth; the breadth here exists for WF-M8b's later any_protected_path_changed_since(reviewed_content_commit, HEAD, ...) freshness re-check, which fails closed (UnclassifiedPathError) on any changed path neither set names. Never consumed by any live plan-stage bundle (this item never runs /milestone-plan); removed entirely, along with the work_items entry it classifies for, as part of WF8b's S17 cleanup.",
+  "implementation_stage": {
+    "protected_paths": {},
+    "protected_prefixes": {},
+    "excluded_paths": {
+      "AGENTS.md": "repository guidance, not this synthetic item's implementation deliverable",
+      "CLAUDE.md": "repository guidance, not this synthetic item's implementation deliverable",
+      "README.md": "repository content, not this synthetic item's implementation deliverable",
+      ".editorconfig": "repository housekeeping, not an implementation deliverable",
+      ".gitignore": "repository housekeeping, not an implementation deliverable",
+      "build.gradle.kts": "product build configuration, not this synthetic item's implementation deliverable",
+      "gradle.properties": "product build configuration, not this synthetic item's implementation deliverable",
+      "gradlew": "product build tooling, not this synthetic item's implementation deliverable",
+      "gradlew.bat": "product build tooling, not this synthetic item's implementation deliverable",
+      "settings.gradle.kts": "product build configuration, not this synthetic item's implementation deliverable"
+    },
+    "excluded_prefixes": {
+      "app/": "product source/test/build/migration content -- entirely out of scope for this throwaway workflow-tooling dry-run item",
+      ".claude/": "workflow command files -- workflow-v2-1-core's own deliverables, this synthetic item only ever invokes them, never edits them",
+      "config/": "build/lint configuration -- outside this synthetic item's declared footprint",
+      "docs/": "all documentation, including workflow-v2-1-core's plan/state/registry/requirements content and this dry run's own scenario/finding write-ups -- none of it is this throwaway item's own implementation deliverable",
+      ".github/": "CI and repository automation -- outside this synthetic item's declared footprint",
+      "gradle/": "build tooling -- outside this synthetic item's declared footprint",
+      "scripts/": "workflow-v2-1-core's own tooling scripts and tests -- this synthetic item only ever invokes them, never edits them"
+    }
+  }
+}
