@@ -1081,6 +1081,68 @@ section below, not left implicit.
   state.
 - **Cleanup**: none.
 
+- **Outcome (2026-08-15, real, reached its own defined stop boundary)**: ran
+  for real, continuing the same session that finished S9, against live HEAD
+  `63b47f0...` (S9's own last commit).
+
+  **Seeding a genuine defect, honestly** (same discipline as S8): a
+  committed defect, not a transient edit. `docs/ai-workflow/dry-run/scratch/b.txt`
+  (`S-CP2`'s own marker, correct since its completion commit `8375b64`)
+  changed from "checkpoint 2" to "checkpoint 1" — a plausible copy-paste
+  mistake from `a.txt`'s text, committed at `3d2f3fd` ("plant a real S10
+  defect in v2-1-dry-run's S-CP2 marker"). `<feedback_dir>/FUNCTIONAL_REVIEW.md`
+  was written as a real, free-form functional-review finding (role
+  `functional_review`, no binding-field requirement per
+  `docs/ai-workflow/REVIEW_PROTOCOL.md` — functional review has no
+  `bundle_id`/`review_content_id` of its own), classified as one Important
+  **defect** finding against flow 1 of `v2-1-dry-run`'s own functional
+  checklist in `docs/ACTIVE_MILESTONE.md`.
+
+  **`D-Functional-Remediation`'s bounded branch, exercised for real**:
+  1. **Stale-before-edit ordering**: `workflow_state.mark_technical_approval_stale(state,
+     "v2-1-dry-run", now=...)` called and persisted to
+     `docs/ai-workflow/WORKFLOW_STATE.json` on disk — `technical_approval.status`
+     `CURRENT` → `STALE`, `state_revision` `25` → `26` — **before** touching
+     `scratch/b.txt`. Reproduced the actual committed defect first (`git
+     show 3d2f3fd:docs/ai-workflow/dry-run/scratch/b.txt`) before making
+     any edit.
+  2. Fixed `scratch/b.txt` back to "checkpoint 2", verified byte-identical
+     to `8375b64`'s original content.
+  3. Committed the stale `WORKFLOW_STATE.json` write and the fix together,
+     one coherent commit, `fae7420` ("fix(wf8b): correct v2-1-dry-run
+     S-CP2 scratch marker per S10 finding") — `git show
+     fae7420:docs/ai-workflow/WORKFLOW_STATE.json` independently confirmed
+     `technical_approval.status` reads `STALE` in that exact commit,
+     satisfying this scenario's own pass/fail evidence line.
+  4. Bundle regeneration, post-fix: `record_bundle_generation(state,
+     "v2-1-dry-run", stage="post-fix", head="fae7420...", now=...)` called
+     and persisted **first**, in its own dedicated commit touching only
+     `WORKFLOW_STATE.json` (`0f3ef83`, `Workflow-Bundle-Generation-Record:
+     v2-1-dry-run/5` + `Workflow-Work-Item: v2-1-dry-run`) — before
+     regenerating, per S7's already-established correct ordering.
+     `reviewed_implementation_head` `7c1032c...` → `fae7420...`,
+     `implementation_revision` `4` → `5`. `technical_approval.status`
+     remains `STALE` (this call never writes it, `D-Approval-Commits`'
+     sole-writer split confirmed for real). The four author-written files
+     were rewritten to describe this round's real finding/fix (unlike
+     rounds 3/4, which had no new content to describe); `./scripts/prepare-ai-review.sh
+     e75a756... post-fix v2-1-dry-run` then run twice for idempotency —
+     both runs reproduced `review_content_id` `33139aaf...` (**unchanged**,
+     a second real "same-content post-fix republication" instance,
+     independently recomputed before either run) and the same `bundle_id`
+     `6b884729...` both times.
+
+  **Not yet run**: per the command's own step 5 ("do not proceed to
+  step 6/7... the stop is for the whole round"), this invocation stops
+  here. A fresh implementation-review round (`REVIEW_FEEDBACK.md` +
+  `/apply-implementation-review v2-1-dry-run`) against this new
+  `post-fix` round-5 bundle, then the repeat, user-gated
+  `/approve-review implementation v2-1-dry-run` this scenario's own
+  "Expected state transition" line requires, are both deferred to a
+  following session — `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` is
+  reachable, not yet `AWAITING_TECHNICAL_APPROVAL`. S10's own bounded
+  branch is otherwise complete for real.
+
 ## S11 — Legacy Workflow v1 import/adoption path
 
 - **Purpose**: prove `/prepare-functional-review`'s `LEGACY_READY` adoption
