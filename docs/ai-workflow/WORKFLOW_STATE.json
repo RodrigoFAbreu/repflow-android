@@ -342,10 +342,10 @@
       "governing_workflow_version": "2.1",
       "phase": "AWAITING_FUNCTIONAL_REVIEW",
       "plan_revision": 5,
-      "implementation_revision": 4,
+      "implementation_revision": 5,
       "functional_review_round": null,
       "base_commit": "e75a756d42751ef18eee842a958cc2c888086772",
-      "reviewed_implementation_head": "7c1032c814c0be618b68c4c1a03ed81900346301",
+      "reviewed_implementation_head": "fae742056dcf021e54b4aca7a213495f3b50a826",
       "current_checkpoint_id": null,
       "last_completed_checkpoint_id": "S-CP3",
       "checkpoints": {
@@ -448,8 +448,8 @@
       },
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 26,
-      "last_transition": "2026-08-15T10:50:00+01:00"
+      "state_revision": 27,
+      "last_transition": "2026-08-15T10:52:00+01:00"
     }
   }
 }
