@@ -981,6 +981,40 @@ section below, not left implicit.
   `/apply-implementation-review`/`/milestone-implement` ordering, not a
   manual workaround).
 
+- **Outcome (2026-08-15, real, `/approve-review implementation` succeeded)**:
+  the user re-invoked `/approve-review implementation v2-1-dry-run` in the
+  same session, after the remediation above landed. Two further real gaps
+  surfaced and were fixed in the same investigation, each discovered only
+  by actually attempting the next step, never by inspection alone:
+  `scripts/prepare-ai-review.sh`'s own round-identity preflight
+  (`GPT-R42-001`/`GPT-R43-001`) independently assumed the same bare
+  `reviewed_implementation_head == head_sha` equality the gate itself no
+  longer requires — fixed to fall back to the same interval check, with a
+  new positive hermetic test (`7c1032c`); and every commit landing after a
+  round's own generation-record commit (including the remediation commits
+  themselves) reopens the gap by construction, requiring a fresh, real
+  `record_bundle_generation` round each time rather than a resync — rounds
+  3 and 4 (`70d3559`, `74e001a`) were both genuine, not fabricated. The
+  command's own steps were then executed by hand (real function calls,
+  since `/approve-review` is `disable-model-invocation: true` and user-only
+  by construction): step 1's gate returned reachable for the first time;
+  step 2's `assert_local_generation_matches` raised nothing (bundle
+  regenerated immediately beforehand, no intervening commit); step 3
+  resolved `USER_OVERRIDE` (S8's `REVISE` round was never superseded by a
+  formal `APPROVE`, matching S5's own plan-approval precedent); step 5
+  persisted `technical_approval` (`basis: USER_OVERRIDE`,
+  `reviewed_content_commit: 7c1032c...`) and transitioned `phase` to
+  `AWAITING_FUNCTIONAL_REVIEW`; step 6 created the metadata-only approval
+  commit `8b72452` (`Workflow-Technical-Approval` +
+  `Workflow-Work-Item` trailers, `WORKFLOW_STATE.json` alone); step 6a's
+  `verify_post_approval_manifest_match` raised nothing. Full suite green
+  (637 tests) except the same pre-existing, unrelated WFR-row-count
+  failure. **S9's implementation-approval half is complete for real.**
+  Not yet run: `/prepare-functional-review v2-1-dry-run` and the final
+  `/accept-milestone` — per this document's own reordering note, S10
+  (functional finding + `apply-functional-review` remediation) should run
+  next, ahead of final acceptance.
+
 ## S10 — Functional-review findings and apply-functional-review remediation
 
 - **Purpose**: prove `/apply-functional-review`'s three-way branch
