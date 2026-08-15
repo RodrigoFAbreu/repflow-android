@@ -959,6 +959,62 @@ unchanged afterwards.
   `verify_review_content_id.py`). Before-state recorded here for S14/S15 to
   check against.
 
+- **Additional setup action, outcome (real, 2026-08-15, sixth `D-Checkpoint-Ownership`
+  session, worktree A)**: confirmed first, read-only, that ordinary
+  `adopt_claim` genuinely cannot protect the real checkpoint 3, exactly as
+  the fourth session's own demo-test evidence predicted:
+  `checkpoint_origination_provable(repo_root, "v2-1-dry-run", "S-CP3", ...)`
+  raised `CheckpointOriginationUnprovableError` with `{"route": "observed",
+  "commit": "8f8d878c0985da96d9b462703b6c88ec5b3ab07b", "status":
+  "IN_PROGRESS", "examined_commits": 32}` -- inspecting that commit
+  (`docs(workflow-v2): record Revision 80 plan approval`) confirms it swept
+  the *whole* `WORKFLOW_STATE.json` file into a `workflow-v2-1-core`-scoped
+  docs commit and incidentally captured `v2-1-dry-run`'s then-dirty
+  `S-CP3: IN_PROGRESS` bookkeeping in real committed history, even though
+  that write was always meant to stay working-tree-only. So this setup step
+  used **explicit takeover**, not adoption, per the fourth session's own
+  conclusion that only takeover can protect this specific checkpoint.
+  `takeover_evidence(repo_root, "v2-1-dry-run")` was computed read-only:
+  no claim, no guard held (`claim_observation_id: "absent"`), this
+  worktree's own `local_identity` valid and matching the setup step's
+  recorded `WORKTREE_IDENTITY.json` sha256 (`8482417e...4b4515e`) exactly.
+  `takeover_authorization_literal("v2-1-dry-run", evidence, "S-CP3")`
+  resolved to `"take over v2-1-dry-run claim absent holding none as
+  S-CP3"`; the evidence was shown to the user and the user typed that exact
+  literal back (asked once to select authorize/decline, then asked again
+  to actually supply the literal itself, since a selection alone is not
+  the reviewed-evidence confirmation this gate requires).
+  `take_over_claim(repo_root, "v2-1-dry-run", "S-CP3",
+  now="2026-08-15T01:49:38+01:00", user_authorization=<that literal>)`
+  ran for real and returned a fresh claim record
+  (`owner_token 7e6e5521e8609cbb2e8b97265063f376`, `takeover_count: 1`,
+  `adopted: false`) published at
+  `.git/ai-workflow/checkpoint-claims/ee28c6f2...329a182.json` -- outside
+  every worktree's working tree, confirmed by `git check-ignore` reporting
+  the path as not inside this repository at all.
+
+  Verified by exact byte comparison, before vs. after: `docs/ai-workflow/
+  WORKFLOW_STATE.json` (`eff46735...9f91`), `docs/ai-workflow/dry-run/
+  scratch/c.txt` (`e9131917...96385`), `git status --short`, and `git
+  rev-parse HEAD` (`d5ad89d...`) are all byte-identical -- no authoritative
+  state moved. **One deviation from this step's own description, recorded
+  rather than smoothed over**: `.ai-review/runtime/WORKTREE_IDENTITY.json`
+  is *not* byte-identical (`8482417e...` -> `a52fad7a...`), because
+  `take_over_claim` (unlike `adopt_claim`) calls
+  `_establish_or_repair_identity` unconditionally to establish the taking
+  worktree's own identity record -- this step's text assumed ordinary
+  adoption, which never touches that file, and did not anticipate takeover
+  doing so. The diff is a `generated_at` refresh plus a
+  `expected_dirty_paths_by_work_item["v2-1-dry-run"]` recompute against
+  *current* real dirty state (`scratch/c.txt` + `verify_review_content_id.py`,
+  dropping the now-clean `WORKFLOW_STATE.json` entry) rather than the
+  values recorded when the checkpoint started -- content
+  `verify_dirty_resume_safety` never inspects per its own docstring, so
+  this does not affect worktree A's own future resumability, but it is a
+  genuine, if harmless, behavioral gap between this step's specified
+  contract and `take_over_claim`'s actual one, worth a plan/command-doc
+  note, not itself a blocking defect for S14/S15.
+
 ## S14 — Dirty IN_PROGRESS resume attempted from a mismatched worktree, refused
 
 - **Purpose**: prove that a genuine linked worktree B, possessing only
@@ -1143,6 +1199,64 @@ unchanged afterwards.
   remain blocked** on Revision 63 completing its plan-review and approval path
   and on `WF8b` then implementing the contract; nothing in this scenario has
   been executed, and checkpoint 3 is untouched.
+
+- **Outcome (real, executed, 2026-08-15, sixth `D-Checkpoint-Ownership` session)**:
+  ran for real against live repository state, with worktree A's checkpoint 3
+  protected by the explicit takeover recorded in the setup step above.
+  Worktree B created exactly per the authorization: `git worktree add
+  /home/rodrigo/.claude/jobs/ef13a727/tmp/wf8b-s14-worktree -b
+  wf8b-s14-scratch d5ad89d67d7c31485a2630a160bf92d044fe20b1` -- an isolated
+  temporary path and branch, never reused from any other scenario.
+
+  **S14a (missing identity)**: from worktree B, with no
+  `.ai-review/runtime/` directory at all (confirmed before running), the
+  `[2.1 step 1]` procedure was followed exactly as `.claude/commands/
+  milestone-implement.md` states it -- `implementing_entry_reachable`
+  (`True`), `select_next_checkpoint` (returned `"S-CP3"`), then
+  `resolve_checkpoint_ownership(repo_root, work_item, "v2-1-dry-run",
+  "S-CP3", now=...)`. It raised `WorktreeIdentityMissingError` exactly as
+  required (never reaching a fresh-start branch), carrying
+  `.ownership_evidence` naming the claim (`worktree_root` = worktree A's
+  real path, `checkpoint_id: "S-CP3"`), `holder` = worktree A's path,
+  `claimed_checkpoint: "S-CP3"`, and `escape` naming both "resume it
+  there" and the explicit takeover. `git status --short` in worktree B
+  immediately after: empty -- no `.ai-review/runtime/` directory was
+  created, no tracked file touched.
+
+  **S14b (mismatched identity)**: worktree A's real, current
+  `.ai-review/runtime/WORKTREE_IDENTITY.json` was copied byte-for-byte
+  into worktree B (sha256 `a52fad7a...5303d5a6caa`, the post-takeover
+  value). Re-running the same `[2.1 step 1]` sequence from worktree B now
+  raised `WorktreeIdentityMismatchError` instead -- confirming the two
+  refusal classes really are distinguishable, not both collapsing to the
+  same error -- with the identical `.ownership_evidence` (same claim,
+  holder, claimed checkpoint, escape). `git rev-parse --show-toplevel
+  --git-common-dir` from worktree B printed worktree B's own path plus the
+  one shared `git_common_dir`, confirming the shared-claims resolution
+  mechanism reads the same absolute path from both worktrees by
+  construction. `git status --short` in worktree B: still empty (the
+  copied identity file is gitignored, confirmed via `git check-ignore -v`
+  matching `.gitignore:1`'s `.ai-review/` pattern) -- no tracked mutation
+  either.
+
+  **Verification, both invocations**: the shared claim record
+  (`.git/ai-workflow/checkpoint-claims/ee28c6f2...329a182.json`) is
+  byte-identical before and after both S14a and S14b, with no stray
+  sibling temp file beside it; worktree A's own `docs/ai-workflow/
+  WORKFLOW_STATE.json`, `docs/ai-workflow/dry-run/scratch/c.txt`, and
+  `HEAD` are all byte-identical to their state immediately after the
+  setup step's takeover -- neither invocation from worktree B touched
+  worktree A in any way. Checkpoint 3 remains `IN_PROGRESS` in worktree A
+  throughout, unchanged, exactly as S15 requires.
+
+  **Cleanup deferred, per this scenario's own text**: worktree B and its
+  `wf8b-s14-scratch` branch are left in place (nothing was run from B
+  beyond the two authorized refused invocations plus the one identity-file
+  copy between them), removal deferred to S17's overall cleanup as this
+  scenario's own "Cleanup" line specifies -- not immediate, since real
+  invocations *were* run from it this time (unlike the earlier
+  blocked-before-mutation attempts, which removed B immediately because
+  nothing had been run).
 
 ## S15 — Interrupted checkpoint recovery
 
