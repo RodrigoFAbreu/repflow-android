@@ -1714,6 +1714,105 @@ class TestWorkItemRouting(unittest.TestCase):
         self.assertEqual(new_state["work_items"]["wi"]["governing_workflow_version"], "3")
 
 
+class TestPublishPlanRevision(unittest.TestCase):
+    """`D-Plan-Revision-Publication`/`WFR-65`, missing-test item 371's
+    hermetic half (sub-items a-c, e): the single sanctioned writer of a
+    plan-revision bump into `WORKFLOW_STATE.json`'s non-authoritative
+    mirror, which also performs the plan-review phase transition in the
+    same operation."""
+
+    def test_v1_governed_end_to_end_publication(self):
+        """Item 371(a)/(d), v1 half: a governing-v1 continued-scope plan
+        revision opened from `IMPLEMENTING` mirrors the registry's
+        `plan_revision` immediately and enters
+        `AWAITING_EXTERNAL_PLAN_REVIEW`, and the result passes
+        `validate_state` against a registry declaring the same revision --
+        no manual repair required."""
+        wi = _base_work_item(
+            governing_workflow_version="1", phase="IMPLEMENTING",
+            plan_revision=62, state_revision=5, last_transition="t0",
+        )
+        state = _base_state(wi=wi)
+        new_state = ws.publish_plan_revision(state, "wi", 63, "t1")
+        item = new_state["work_items"]["wi"]
+        self.assertEqual(item["plan_revision"], 63)
+        self.assertEqual(item["phase"], "AWAITING_EXTERNAL_PLAN_REVIEW")
+        self.assertEqual(item["state_revision"], 6)
+        self.assertEqual(item["last_transition"], "t1")
+        # input state untouched (every mutator in this module returns a
+        # fresh dict rather than mutating its argument)
+        self.assertEqual(state["work_items"]["wi"]["plan_revision"], 62)
+        # the mirror now agrees with a registry declaring the same revision
+        registry = {"work_item_id": "wi", "plan_revision": 63, "checkpoints": []}
+        ws.validate_state(new_state, registry=registry)
+
+    def test_v21_governed_enters_awaiting_local_plan_review(self):
+        """Item 371(d): a `"2.1"`-governed item's target phase is
+        `AWAITING_LOCAL_PLAN_REVIEW`, never `AWAITING_EXTERNAL_PLAN_REVIEW`
+        -- `D-Plan-Review-Stages` always enters local review first."""
+        wi = _v21_work_item(phase="REVISING_PLAN", plan_revision=4, state_revision=2)
+        new_state = ws.publish_plan_revision(_base_state(wi=wi), "wi", 5, "t1")
+        item = new_state["work_items"]["wi"]
+        self.assertEqual(item["plan_revision"], 5)
+        self.assertEqual(item["phase"], "AWAITING_LOCAL_PLAN_REVIEW")
+
+    def test_idempotent_retry_is_a_true_no_op(self):
+        """Item 371(b): re-running with the same `plan_revision` and the
+        resulting phase already reached is a no-op -- no `state_revision`/
+        `last_transition` bump -- so an interrupted revision is retried
+        rather than repaired."""
+        wi = _base_work_item(
+            governing_workflow_version="1", phase="AWAITING_EXTERNAL_PLAN_REVIEW",
+            plan_revision=63, state_revision=6, last_transition="t1",
+        )
+        state = _base_state(wi=wi)
+        result = ws.publish_plan_revision(state, "wi", 63, "t2")
+        self.assertIs(result, state)
+        self.assertEqual(result["work_items"]["wi"]["state_revision"], 6)
+        self.assertEqual(result["work_items"]["wi"]["last_transition"], "t1")
+
+    def test_touches_no_other_work_item(self):
+        """Item 371(b): publication alters no other work item's entry."""
+        wi = _base_work_item(governing_workflow_version="1", phase="IMPLEMENTING", plan_revision=1)
+        other = _base_work_item(
+            work_item_id="other", governing_workflow_version="2.1",
+            phase="IMPLEMENTING", plan_revision=9, state_revision=3, last_transition="tX",
+        )
+        state = _base_state(wi=wi, other=other)
+        new_state = ws.publish_plan_revision(state, "wi", 2, "t1")
+        self.assertEqual(new_state["work_items"]["other"], other)
+
+    def test_refuses_terminal_phase_item(self):
+        """Item 371(c): refuses a terminal-phase item outright."""
+        wi = _base_work_item(
+            governing_workflow_version="1", phase="MILESTONE_COMPLETE", plan_revision=1,
+        )
+        with self.assertRaises(ws.TerminalPlanRevisionPublicationError):
+            ws.publish_plan_revision(_base_state(wi=wi), "wi", 2, "t1")
+
+    def test_unsupported_governing_version_rejected(self):
+        wi = _base_work_item(governing_workflow_version="3", phase="IMPLEMENTING", plan_revision=1)
+        with self.assertRaises(ws.UnsupportedGoverningVersionError):
+            ws.publish_plan_revision(_base_state(wi=wi), "wi", 2, "t1")
+
+    def test_written_through_d1_serialized_state_write_primitive(self):
+        """Item 371(c): the exhaustive call sites write through
+        `state_transaction` (`D1`'s serialized primitive), never as a
+        plain JSON edit -- exercised here end to end against a real
+        on-disk state file."""
+        with ScratchRepo() as repo:
+            state_path = repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json"
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            wi = _base_work_item(governing_workflow_version="1", phase="IMPLEMENTING", plan_revision=1)
+            state_path.write_text(json.dumps(_base_state(wi=wi)))
+            mutator = lambda state: ws.publish_plan_revision(state, "wi", 2, "t1")
+            result = ws.state_transaction(repo.root, mutator, path=Path("docs/ai-workflow/WORKFLOW_STATE.json"))
+            self.assertEqual(result["work_items"]["wi"]["plan_revision"], 2)
+            on_disk = json.loads(state_path.read_text())
+            self.assertEqual(on_disk["work_items"]["wi"]["plan_revision"], 2)
+            self.assertEqual(on_disk["work_items"]["wi"]["phase"], "AWAITING_EXTERNAL_PLAN_REVIEW")
+
+
 class TestWorkItemCompletion(unittest.TestCase):
     def test_completing_active_item_resets_pointer(self):
         state = _base_state(wi=_base_work_item(phase="AWAITING_USER_ACCEPTANCE"))

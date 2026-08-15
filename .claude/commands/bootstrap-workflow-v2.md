@@ -41,6 +41,23 @@ until `docs/ai-workflow/WORKFLOW_STATE.json` exists to read it from
    null, user_confirmation: <the user's actual go-ahead text>, recorded_at:
    <WF0's commit timestamp>}`. Set `active_work_item_id` to
    `"workflow-v2-1-core"` if not already set to some other item.
+   **Self-discovered-revision obligation** (`D-Plan-Revision-Publication`,
+   `WFR-65`): once the entry above is read/initialized, read the
+   registry's own on-disk `plan_revision`
+   (`docs/ai-workflow/registry/workflow-v2-1-core-registry.json`). If it
+   is strictly greater than the just-read/initialized entry's own
+   `plan_revision` mirror -- someone bumped the registry (and the plan
+   document's own `Revision N` title) without going through the ordinary
+   `/milestone-plan`/`/apply-plan-review` flow, since this work item is
+   permanently `"1"`-governed and driven only by this command -- call
+   `workflow_state.publish_plan_revision(state, "workflow-v2-1-core",
+   <the registry's plan_revision>, now)` and persist the returned state,
+   which mirrors the value and transitions `phase` to
+   `AWAITING_EXTERNAL_PLAN_REVIEW`. **Stop immediately** after this write
+   and report it -- the item now needs external plan review before any
+   checkpoint work resumes; do not proceed to step 2 or step 3 in the same
+   invocation. If the registry's `plan_revision` is not ahead of the
+   mirror, this obligation is a no-op and step 2 proceeds normally.
 2. **Durability guard**: before selecting the next checkpoint, recompute
    the plan-stage `review_content_id`
    (`python3 scripts/workflow_fingerprint.py <base_commit>`) and compare

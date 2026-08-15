@@ -620,6 +620,13 @@ class PlanRevisionMirrorMismatchError(Exception):
     is a data-integrity defect, not a legitimate state."""
 
 
+class TerminalPlanRevisionPublicationError(Exception):
+    """Raised by `publish_plan_revision` (`D-Plan-Revision-Publication`,
+    `WFR-65`) when the named work item's `phase` is already terminal
+    (`MILESTONE_COMPLETE`) -- a plan revision can never be published
+    against an item that has already reached its own terminal state."""
+
+
 class MissingRegistryForPlanRevisionMirrorCheckError(Exception):
     """Raised by `validate_state`'s `repo_root`-driven whole-state
     plan-revision-mirror check (`GPT-R31-003`) when a work item declares a
@@ -4726,6 +4733,59 @@ def route_work_item(
     # else: a different item is active and non-terminal -- left alone;
     # repointing active_work_item_id is always an explicit, separate act.
 
+    return new_state
+
+
+def publish_plan_revision(state: dict, work_item_id: str, plan_revision: int, now: str) -> dict:
+    """`D-Plan-Revision-Publication`'s single sanctioned writer of a
+    plan-revision bump (`WFR-65`): the operation that writes a new
+    `plan_revision` into a work item's registry must, in the same
+    operation and before any bundle is generated, publish that same value
+    to `WORKFLOW_STATE.json`'s non-authoritative mirror through this one
+    entry point -- never as a plain JSON edit. Sets `plan_revision` to the
+    given value and `phase` to `AWAITING_EXTERNAL_PLAN_REVIEW` for a
+    `"1"`-governed item or `AWAITING_LOCAL_PLAN_REVIEW` for a `"2.1"`-governed
+    one (`D-Plan-Review-Stages` enters local review first).
+
+    Exhaustive call sites (named, not left to convention): `/milestone-plan`
+    step 3's `[2.1]` registry write; `/apply-plan-review` step 5, on both
+    branches, whenever the revision counter advances as part of applying
+    feedback; `/bootstrap-workflow-v2`'s step 1 state-sync, for a
+    self-discovered revision of the permanently-`"1"`-governed
+    `workflow-v2-1-core` opened while `IMPLEMENTING`.
+
+    Idempotent: re-running with the same `plan_revision` and the resulting
+    phase already reached is a true no-op -- no `state_revision`/
+    `last_transition` bump -- so an interrupted revision is retried rather
+    than repaired. Refuses a terminal-phase item
+    (`TerminalPlanRevisionPublicationError`) and, by construction, touches
+    no `work_items` entry other than `work_item_id`'s own."""
+    work_item = state["work_items"][work_item_id]
+    if work_item.get("phase") in TERMINAL_PHASES:
+        raise TerminalPlanRevisionPublicationError(
+            f"{work_item_id!r} is at terminal phase {work_item.get('phase')!r} -- "
+            f"a plan revision can never be published against a completed work item"
+        )
+    governing_version = work_item.get("governing_workflow_version")
+    if governing_version == "2.1":
+        target_phase = "AWAITING_LOCAL_PLAN_REVIEW"
+    elif governing_version == "1":
+        target_phase = "AWAITING_EXTERNAL_PLAN_REVIEW"
+    else:
+        raise UnsupportedGoverningVersionError(
+            f"{work_item_id!r} has governing_workflow_version {governing_version!r}, "
+            f"expected \"1\" or \"2.1\""
+        )
+
+    if work_item.get("plan_revision") == plan_revision and work_item.get("phase") == target_phase:
+        return state
+
+    new_state = copy.deepcopy(state)
+    new_work_item = new_state["work_items"][work_item_id]
+    new_work_item["plan_revision"] = plan_revision
+    new_work_item["phase"] = target_phase
+    new_work_item["state_revision"] = new_work_item.get("state_revision", 1) + 1
+    new_work_item["last_transition"] = now
     return new_state
 
 

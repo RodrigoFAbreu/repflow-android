@@ -471,16 +471,27 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # declaration and a "State-writer discipline" paragraph naming
     # `workflow_state.state_transaction`/`state_lock` -- an intentional
     # content change, not a regression.
-    "milestone-plan.md": "bb8d060530b1b691f66fcf673baf604ec5a14e782c74699ae8a65107f4a2c040",
+    "milestone-plan.md": "72f8f5af38ee5b546f85f0e36b2a5034f7b87094b38cbd728658754f56572bf9",
     "milestone-implement.md": "eae3dbf2a8f91899bf9020335c4a2209af271b72bca7c74d988a3fa735e5f206",
     "approve-review.md": "474ffff548f73ff50f74563432c278646eb5e5a6de463c659e054d2b21cb9e75",
     "accept-milestone.md": "10594c675de02b9a90e57963796ac75dee08f33a0a2a78b7d624346f0a3ab6d9",
     "prepare-functional-review.md": "5b8026a4bd0293c7b3d1c94ef9814357ee815ce8b9b6b53b0f545917c1eb886d",
-    "apply-plan-review.md": "36cfc4f7029d0c22163c35bb80f2451a1f47c2b69a5e465d7789b1fa2f61db7b",
+    # apply-plan-review.md/bootstrap-workflow-v2.md (D-Plan-Revision-Publication,
+    # WFR-65): intentional content change, publish_plan_revision wiring.
+    "apply-plan-review.md": "9b2db7b030c29be3ed466c57842b71e51e78847726bf09a3dd938db085384002",
+    # apply-implementation-review.md: left UNCHANGED and still failing here,
+    # deliberately -- this file's content drifted from this recorded hash
+    # before this revision's own work began (confirmed via `git stash`: the
+    # mismatch is present with none of this revision's edits applied), and
+    # this revision's scope is D-Plan-Revision-Publication/WFR-65 only, not
+    # the unrelated R101-002 residue that produced this drift. Same
+    # disclosure discipline as the WFR-row-count failure in
+    # TestRequirementsMappingTableConformance below: named, not silently
+    # fixed by an unrelated change.
     "apply-implementation-review.md": "bc1402c4b66b1e57acf043d98e9b534feca011b6e00dad142d378da7c97f5bb6",
     "review-plan.md": "2df001613d95be37253ec4969b522a123a0705b9be1ad57c59ef74c0c35d00f2",
     "record-manual-plan-review.md": "1382be84791ea61d210bec7f13b0043dfc3e841f7e8eed0bef697aa719414f75",
-    "bootstrap-workflow-v2.md": "4b7425dc9aa625b35f5e2ac35cb25bbccecb3f5d443ed78441edf0ed8680c53f",
+    "bootstrap-workflow-v2.md": "c15f55482bd55a466bef0e594eda54bde26ea29fc95e6de90446a80eb9e2c036",
 }
 
 

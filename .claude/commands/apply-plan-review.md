@@ -37,8 +37,21 @@ Enter the `REVISING_PLAN` state of `docs/ai-workflow/MILESTONE_WORKFLOW.md`.
 4. For any finding you reject, write the rejection with concrete repository
    evidence (file path, line, existing test, or doc reference) directly in
    the plan doc's decisions section — not a separate rebuttal file.
-5. Update `<bundle_dir>/REVIEW_REQUEST.md` to reflect the revision and
-   rerun `./scripts/prepare-ai-review.sh <base-sha> plan <work_item_id>` to refresh the
+5. Whenever applying this round's findings advances the plan's own
+   revision counter, regenerate `registry_path`/`mapping_path` at the new
+   `plan_revision` (`workflow_state.generate_registry(...)`/
+   `generate_mapping(...)`/`write_registry_and_mapping(...)`, unchanged
+   checkpoints/requirements unless this round's accepted findings changed
+   them), then call `workflow_state.publish_plan_revision(state,
+   work_item_id, plan_revision, now)` and persist the returned state to
+   `docs/ai-workflow/WORKFLOW_STATE.json` — in the same operation, before
+   the bundle below is regenerated, and on both this step's governing-version
+   branches alike (`D-Plan-Revision-Publication`, `WFR-65`). This step
+   applies only to a work item with an existing `WORKFLOW_STATE.json`
+   entry (`registry_path` non-null); an ordinary `"1"`-governed milestone
+   with no such entry is unaffected, unchanged. Update
+   `<bundle_dir>/REVIEW_REQUEST.md` to reflect the revision and rerun
+   `./scripts/prepare-ai-review.sh <base-sha> plan <work_item_id>` to refresh the
    bundle (`work_item_id` is **required** for the plan stage, never
    resolved from the live `active_work_item_id` -- `D-Fingerprint-Generalization`).
 6. If the `Status` was `BLOCK`, or if you made major structural changes to

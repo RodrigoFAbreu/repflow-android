@@ -910,6 +910,88 @@ class TestPrepareAiReviewShPlanStageRequiredArgument(unittest.TestCase):
             self.assertIn("declares base_commit", result.stderr)
             self.assertFalse((repo.root / ".ai-review").exists())
 
+    def test_371f_plan_revision_mirror_disagreement_refuses_before_any_content(self):
+        """Item 371(f) (`D-Plan-Revision-Publication`, `WFR-65`): the plan
+        stage refuses, before generating any bundle content, when the
+        resolved work item's `WORKFLOW_STATE.json` `plan_revision` mirror
+        disagrees with its own registry's `plan_revision` -- naming both
+        values, exactly as it already refuses a `base_commit` disagreement
+        (`test_163` above). The registry and the plan document's own
+        `(Revision N)` title are bumped together (so `load_plan_revision`'s
+        own cross-check passes and the *mirror* disagreement, not a
+        registry/title disagreement, is what's exercised), while
+        `WORKFLOW_STATE.json`'s mirror is deliberately left behind --
+        exactly the unowned-bump shape `D-Plan-Revision-Publication`
+        documents this repository once hit for real."""
+        with h.ScratchRepo() as repo:
+            script_path = self._install_scripts(repo)
+            _write_second_item(repo, "second-item", plan_revision=1)
+            repo.commit_plan_docs_as_base()
+
+            # Correct the declared base_commit (same fixup
+            # test_153_successful_run_writes_a_bound_manifest below uses),
+            # then bump the registry's plan_revision and the plan
+            # document's own title together -- so load_plan_revision's
+            # cross-check passes and the *mirror* disagreement, not a
+            # registry/title disagreement, is what's exercised -- while
+            # WORKFLOW_STATE.json's plan_revision mirror is deliberately
+            # left behind.
+            state_path = repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json"
+            state = json.loads(state_path.read_text())
+            state["work_items"]["second-item"]["base_commit"] = repo.base
+            state_path.write_text(json.dumps(state))
+            registry_path = repo.root / "docs" / "ai-workflow" / "registry" / "second-item-registry.json"
+            registry = json.loads(registry_path.read_text())
+            registry["plan_revision"] = 2
+            registry_path.write_text(json.dumps(registry))
+            plan_path = repo.root / "docs" / "ai-workflow" / "WORKFLOW_V2_PLAN.md"
+            plan_path.write_text("# Plan (Revision 2)\n\nplan v2\n")
+            subprocess.run(["git", "add", "-A"], cwd=repo.root, check=True, capture_output=True)
+            subprocess.run(
+                ["git", "commit", "-q", "-m", "fix base_commit; bump registry plan_revision only"],
+                cwd=repo.root, check=True, capture_output=True,
+            )
+
+            result = subprocess.run(
+                ["bash", str(script_path), repo.base, "plan", "second-item"],
+                cwd=repo.root, capture_output=True, text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("plan_revision mirror is '1'", result.stderr)
+            self.assertIn("registry declares plan_revision '2'", result.stderr)
+            self.assertFalse((repo.root / ".ai-review").exists())
+
+    def test_371f_plan_revision_mirror_agreement_proceeds(self):
+        """Item 371(f)'s positive half: an agreeing mirror/registry pair
+        proceeds unchanged -- the new check is not a false-positive
+        refusal on the ordinary case every other test in this class
+        already exercises."""
+        with h.ScratchRepo() as repo:
+            script_path = self._install_scripts(repo)
+            _write_second_item(repo, "second-item", plan_revision=1)
+            repo.commit_plan_docs_as_base()
+            state_path = repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json"
+            state = json.loads(state_path.read_text())
+            state["work_items"]["second-item"]["base_commit"] = repo.base
+            state_path.write_text(json.dumps(state))
+            subprocess.run(["git", "add", "-A"], cwd=repo.root, check=True, capture_output=True)
+            subprocess.run(
+                ["git", "commit", "-q", "-m", "fix declared base_commit"],
+                cwd=repo.root, check=True, capture_output=True,
+            )
+            digest, _ = fingerprint.compute_review_content_id_plan_stage_for_work_item(
+                repo.root, "second-item",
+            )
+            bundle_dir = repo.root / ".ai-review" / "second-item" / "current"
+            bundle_dir.mkdir(parents=True)
+            (bundle_dir / "REVIEW_REQUEST.md").write_text(f"stage: plan\nreview_content_id: {digest}\n")
+            result = subprocess.run(
+                ["bash", str(script_path), repo.base, "plan", "second-item"],
+                cwd=repo.root, capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue((bundle_dir / "MANIFEST.md").is_file())
+
     def test_153_successful_run_writes_a_bound_manifest(self):
         with h.ScratchRepo() as repo:
             script_path = self._install_scripts(repo)

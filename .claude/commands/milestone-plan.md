@@ -106,7 +106,14 @@ compatibility path.
      (`D-Fingerprint-Generalization`), never left for a later approval
      command to invent. `SELF_REVIEWING_PLAN` (step 4) must confirm the
      inherited `excluded_paths`/`excluded_prefixes` actually fit this
-     item's own plan footprint before the bundle is generated.
+     item's own plan footprint before the bundle is generated. Then, in
+     the same operation, call `workflow_state.publish_plan_revision(state,
+     work_item_id, plan_revision, now)` and persist the returned state to
+     `docs/ai-workflow/WORKFLOW_STATE.json` — the sole point that mirrors
+     this revision's `plan_revision` into the state file and performs
+     `D-Plan-Review-Stages`' phase transition into
+     `AWAITING_LOCAL_PLAN_REVIEW`, before this revision's bundle is ever
+     generated (`D-Plan-Revision-Publication`, `WFR-65`).
 4. Enter `SELF_REVIEWING_PLAN`: critically check the plan for missing
    requirements, migration risk, usability gaps, unnecessary complexity, and
    missing tests. Revise the plan in place — do not write a separate

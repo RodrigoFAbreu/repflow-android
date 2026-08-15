@@ -64,14 +64,18 @@ if ! BASE_SHA=$(git rev-parse --verify "${BASE_SHA}^{commit}" 2>/dev/null); then
 fi
 
 # --- plan-stage-only: cross-check the resolved work item's own declared
-# base_commit against the resolved BASE_SHA before generating any bundle
-# content (fail-closed matrix condition 13, OPUS-R27-003/OPUS-R28-006).
-# Routed through fingerprint.resolve_plan_stage_metadata -- the same
-# resolver every other plan-stage read in this design uses -- never a
-# second, ad hoc metadata reader.
+# base_commit against the resolved BASE_SHA, and its WORKFLOW_STATE.json
+# plan_revision mirror against its own registry's plan_revision, before
+# generating any bundle content (fail-closed matrix condition 13,
+# OPUS-R27-003/OPUS-R28-006; the plan-revision mirror check is
+# D-Plan-Revision-Publication/WFR-65's detection half). Routed through
+# fingerprint.resolve_plan_stage_metadata -- the same resolver every other
+# plan-stage read in this design uses -- never a second, ad hoc metadata
+# reader.
 if [[ "$STAGE" == "plan" ]]; then
   PLAN_STAGE_BASE_CHECK=$(
     PYTHONPATH="$REPO_ROOT/scripts:${PYTHONPATH:-}" python3 - "$WORK_ITEM_ID" "$BASE_SHA" "$REPO_ROOT" <<'PYEOF'
+import json
 import sys
 from pathlib import Path
 import workflow_fingerprint as fingerprint
@@ -83,16 +87,29 @@ except Exception as exc:  # noqa: BLE001 -- surfaced verbatim to the operator be
     print(f"error::{type(exc).__name__}: {exc}")
     sys.exit(0)
 if metadata.base_commit != base_sha:
-    print(f"mismatch::{metadata.base_commit}")
+    print(f"mismatch_base::{metadata.base_commit}")
+    sys.exit(0)
+state_path = repo_root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json"
+state = json.loads(state_path.read_text())
+mirror_plan_revision = state.get("work_items", {}).get(work_item_id, {}).get("plan_revision")
+if mirror_plan_revision != metadata.plan_revision:
+    print(f"mismatch_revision::{mirror_plan_revision}::{metadata.plan_revision}")
     sys.exit(0)
 print("ok")
 PYEOF
   )
   case "$PLAN_STAGE_BASE_CHECK" in
     ok) ;;
-    mismatch::*)
-      DECLARED_BASE_COMMIT=${PLAN_STAGE_BASE_CHECK#mismatch::}
+    mismatch_base::*)
+      DECLARED_BASE_COMMIT=${PLAN_STAGE_BASE_CHECK#mismatch_base::}
       echo "error: work item '$WORK_ITEM_ID' declares base_commit '$DECLARED_BASE_COMMIT', but the requested base '$REQUESTED_BASE_SHA' resolves to '$BASE_SHA' -- refusing to generate bundle content for a disagreeing base (D-Fingerprint-Generalization, fail-closed matrix condition 13)" >&2
+      exit 1
+      ;;
+    mismatch_revision::*)
+      REVISION_DETAIL=${PLAN_STAGE_BASE_CHECK#mismatch_revision::}
+      MIRROR_PLAN_REVISION=${REVISION_DETAIL%%::*}
+      REGISTRY_PLAN_REVISION=${REVISION_DETAIL#*::}
+      echo "error: work item '$WORK_ITEM_ID' WORKFLOW_STATE.json plan_revision mirror is '$MIRROR_PLAN_REVISION', but its registry declares plan_revision '$REGISTRY_PLAN_REVISION' -- refusing to generate bundle content for a disagreeing plan-revision mirror (D-Plan-Revision-Publication, WFR-65)" >&2
       exit 1
       ;;
     error::*)
@@ -100,7 +117,7 @@ PYEOF
       exit 1
       ;;
     *)
-      echo "error: unexpected plan-stage base-commit check output: $PLAN_STAGE_BASE_CHECK" >&2
+      echo "error: unexpected plan-stage base-commit/plan-revision check output: $PLAN_STAGE_BASE_CHECK" >&2
       exit 1
       ;;
   esac
