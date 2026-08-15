@@ -1143,6 +1143,73 @@ section below, not left implicit.
   reachable, not yet `AWAITING_TECHNICAL_APPROVAL`. S10's own bounded
   branch is otherwise complete for real.
 
+- **Outcome (2026-08-15, real, S10's deferred items completed for real, in a
+  fresh `/bootstrap-workflow-v2` session)**: continuing from the previous
+  session's stop point, real HEAD `c916ead...`.
+
+  **Fresh implementation-review round, real**: `<feedback_dir>/
+  REVIEW_FEEDBACK.md` was written against round 5's bundle (`bundle_id
+  6b884729...`, `generation_head 0f3ef83...`) — direct re-inspection of
+  all three scratch markers (`a.txt`/`b.txt`/`c.txt`, all confirmed
+  correct), `Status: APPROVE`, zero Blocking, zero Important findings.
+  Validated for real: `workflow_fingerprint.parse_review_feedback_binding_fields`
+  + `assert_feedback_matches_bundle`, no exception. `/apply-implementation-review`'s
+  steps 2-4 (reproduce/fix/reject) were no-ops (nothing to reproduce, fix,
+  or reject); step 5's full hermetic suite re-run: 655/656 green, the one
+  failure the same pre-existing, unrelated `workflow_integration_test.py`
+  WFR-row-count staleness every prior session has already flagged; step 6
+  (commit fixes): none, there was no fix.
+
+  **Provenance-gap closure, round 6**: round 5's own outcome-recording docs
+  commit (`c916ead`, excluded-path) had landed after round 5's own
+  `Workflow-Bundle-Generation-Record` commit (`0f3ef83`), reopening the
+  `WF8B-003` interval gap by construction — the exact recurring pattern S9's
+  own outcome text already documented. `record_bundle_generation(state,
+  "v2-1-dry-run", stage="post-fix", head="c916ead...", now=...)` called and
+  persisted first, alone, in its own commit (`c11ec01`,
+  `Workflow-Bundle-Generation-Record: v2-1-dry-run/6` +
+  `Workflow-Work-Item: v2-1-dry-run`) — `reviewed_implementation_head`
+  `fae7420...` → `c916ead...`, `implementation_revision` `5` → `6`. The
+  four author-written bundle files were updated to describe this round;
+  `./scripts/prepare-ai-review.sh e75a756... post-fix v2-1-dry-run` then
+  run twice for idempotency — both runs reproduced `review_content_id`
+  `33139aaf...` (**unchanged**, a third real "same-content post-fix
+  republication" instance) and the same `bundle_id` `ba997396...` both
+  times. Independently verified, live, with zero commits between the
+  record commit and generation: `implementation_provenance_interval_reachable`
+  → `True`, `any_protected_path_dirty` → `False`,
+  `technical_approval_gate_reachable` → `True`.
+
+  **`/approve-review implementation v2-1-dry-run`, real, user-invoked**: the
+  user directly invoked the installed command this session (literal
+  confirmation `/approve-review implementation v2-1-dry-run`, satisfying
+  `validate_user_confirmation`'s named-item/named-stage requirement). Ran
+  by hand (real function calls, `disable-model-invocation: true`,
+  user-only by construction): step 1's gate check confirmed reachable
+  (identical to the live check above); step 2's
+  `assert_local_generation_matches` raised nothing (zero intervening
+  commits since round 6's regeneration); step 3's `resolve_approval_basis`
+  → `USER_OVERRIDE` (round 6's recomputed `bundle_id` `ba997396...`
+  differs from `REVIEW_FEEDBACK.md`'s reviewed `bundle_id` `6b884729...`,
+  since that feedback reviewed round 5's bundle and round 6 exists purely
+  to close the provenance gap, not to re-review new content — same pattern
+  as S9's own approval); step 5 persisted `technical_approval`
+  (`basis: USER_OVERRIDE`, `reviewed_content_commit: c916ead...`,
+  `status: STALE → CURRENT`), `phase` stays `AWAITING_FUNCTIONAL_REVIEW`
+  (unchanged, per S7's own established finding — nothing downstream reads
+  `phase` to decide this gate); step 6 created the metadata-only approval
+  commit `9fd3c72` (`Workflow-Technical-Approval` + `Workflow-Work-Item`
+  trailers, `WORKFLOW_STATE.json` alone); step 6a's
+  `verify_post_approval_manifest_match` raised nothing. **S10's own
+  "Expected state transition" line is now fully satisfied for real —
+  `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` → (fresh review round) →
+  `AWAITING_TECHNICAL_APPROVAL` → `/approve-review implementation` →
+  `AWAITING_FUNCTIONAL_REVIEW`.**
+
+  Not yet run: S9's own still-deferred final steps
+  (`/prepare-functional-review v2-1-dry-run` for this new revision, and the
+  final `/accept-milestone`), and S11-S17 — next, from a following session.
+
 ## S11 — Legacy Workflow v1 import/adoption path
 
 - **Purpose**: prove `/prepare-functional-review`'s `LEGACY_READY` adoption
