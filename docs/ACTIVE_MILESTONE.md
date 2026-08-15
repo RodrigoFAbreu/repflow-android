@@ -315,3 +315,128 @@ repeated freely.
   are live fixture state for the not-yet-run S13/S14/S15 scenarios.
 
 Findings go in `.ai-review/v2-1-dry-run/feedback/FUNCTIONAL_REVIEW.md`.
+
+---
+
+## `v2-1-dry-run` — functional review checklist (implementation revision 6)
+
+This section supersedes the implementation-revision-4 section immediately
+above for review purposes — that section is left in place as historical
+evidence for `WF8b`'s S9 scenario, not edited. This section is the same
+synthetic `v2-1-dry-run` work item's checklist for `WF8b`'s **S10** scenario
+(`docs/ai-workflow/dry-run/WF8B_SCENARIOS.md`): a real functional-review
+finding was filed against revision 4's content, `/apply-functional-review`'s
+bounded-remediation branch fixed it, and a fresh implementation-review round
+plus a repeat, user-gated `/approve-review implementation v2-1-dry-run`
+carried `technical_approval` back to `CURRENT` at implementation revision 6.
+
+**Context**: `docs/ai-workflow/dry-run/scratch/b.txt` (`S-CP2`'s marker) was
+deliberately corrupted to "checkpoint 1" (commit `3d2f3fd`) to give S10's
+functional-review finding real content to point at. Per
+`D-Functional-Remediation`'s bounded branch:
+`workflow_state.mark_technical_approval_stale` flipped
+`technical_approval.status` to `STALE` *before* the fix landed (verified in
+the fix commit `fae7420` itself); the fix restored `scratch/b.txt` to
+"checkpoint 2", byte-identical to its original completion commit `8375b64`;
+a post-fix bundle was regenerated (`implementation_revision` `4` → `5`,
+`review_content_id` unchanged at
+`33139aaf7e637fc32dfd86a31f73c6153e32d2dc0a4ff8c4fa46ee2afe131a96` — the
+fix restored, not changed, protected content). A fresh implementation-review
+round then returned a clean `APPROVE` (zero findings) against round 5's
+bundle; a provenance-gap-closure round 6 (`record_bundle_generation`, commit
+`c11ec01`) advanced `reviewed_implementation_head` to `c916ead` /
+`implementation_revision` to `6` with no content change, closing the same
+`WF8B-003`-pattern gap S9 already documented once. The user then
+re-invoked `/approve-review implementation v2-1-dry-run` for real:
+`technical_approval` is now `status: CURRENT`, `basis: USER_OVERRIDE`,
+`reviewed_content_commit: c916ead`, recorded by the metadata-only approval
+commit `9fd3c72`. `phase` remains `AWAITING_FUNCTIONAL_REVIEW` throughout
+(nothing downstream reads `phase` to decide this gate, per S7's own
+established finding).
+
+### Setup
+
+No Android app / Gradle changes are involved. Process tooling only. No
+build/install step is needed; everything below runs with `python3` from
+the repo root.
+
+### Automated verification (re-confirmed this session, current)
+
+Re-run independently immediately before this checklist section was written
+(no source/test file has changed since `technical_approval`'s
+`reviewed_content_commit`, `c916ead` — only metadata-only commits since):
+
+| Suite | Tests |
+|---|---|
+| `scripts/workflow_fingerprint_test.py` | 122/122 |
+| `scripts/workflow_fingerprint_generalization_test.py` | 60/60 |
+| `scripts/workflow_state_test.py` | 408/408 |
+| `scripts/workflow_test_harness_test.py` | 19/19 |
+| `scripts/workflow_integration_test.py` | 46/47 |
+
+The one `workflow_integration_test.py` failure is the same pre-existing,
+unrelated WFR-row-count staleness already documented across this dry run's
+own outcome notes (`test_every_wfr_row_description_matches_json_exactly`:
+67 actual table rows vs. an assertion still pegged at 60 from a much
+earlier plan revision) — not a functional regression and not in scope for
+this review.
+
+### Test data
+
+None to seed — this checks the repository's own real, already-committed
+state (`v2-1-dry-run`'s own entry in `docs/ai-workflow/WORKFLOW_STATE.json`,
+and the three scratch files its checkpoints created).
+
+### Flows to exercise manually
+
+1. **Scratch checkpoints exist as committed, all three, all correct.**
+   Confirm `docs/ai-workflow/dry-run/scratch/a.txt`, `scratch/b.txt`, and
+   `scratch/c.txt` all exist and are tracked (`git ls-files` shows all
+   three — unlike the implementation-revision-4 checklist above, `c.txt`
+   was already tracked by this point, via `S-CP3`'s own completion commit
+   `8b70136`, well before S7/S8; that earlier section's "not tracked yet"
+   note describes an even-earlier point in the dry run's own timeline, not
+   this one). Confirm their content reads "checkpoint 1", "checkpoint 2",
+   "checkpoint 3" respectively — `scratch/b.txt` in particular, since it is
+   the file S10's finding and fix both touched.
+2. **`v2-1-dry-run`'s own state is internally consistent.** Confirm
+   `docs/ai-workflow/WORKFLOW_STATE.json`'s `work_items["v2-1-dry-run"]`
+   shows `phase: "AWAITING_FUNCTIONAL_REVIEW"`,
+   `last_completed_checkpoint_id: "S-CP3"`,
+   `implementation_revision: 6`, and `technical_approval.status: "CURRENT"`
+   with `reviewed_content_commit: "c916ead..."`.
+3. **The stale-before-edit ordering actually happened.** Confirm commit
+   `fae7420` (`git show fae7420:docs/ai-workflow/WORKFLOW_STATE.json`)
+   itself carries `technical_approval.status: "STALE"` for `v2-1-dry-run` —
+   the intermediate state, not just today's end state — alongside the
+   `scratch/b.txt` fix, in the same commit.
+4. **The real command surface, not just the hermetic fixtures, drove the
+   repeat approval.** Confirm `9fd3c72` (the second technical-approval
+   commit) carries a `Workflow-Technical-Approval` trailer and a
+   `Workflow-Work-Item: v2-1-dry-run` trailer, and that `c11ec01`
+   (round 6's provenance-gap-closure commit) carries a
+   `Workflow-Bundle-Generation-Record: v2-1-dry-run/6` trailer.
+5. **Re-run the automated suite yourself** (table above) and confirm the
+   same result independently, rather than trusting this document's claim
+   alone.
+
+### Expected result
+
+All five checks above pass exactly as described; no step requires any
+write to the real repository (all read-only), so this review can be
+repeated freely.
+
+### Known limitations / out of scope for this review
+
+- `v2-1-dry-run` has no product surface — this review exercises process
+  tooling only, per `WF8b`'s own purpose.
+- `WF8b` itself is **not** complete: S11 through S17 remain unexecuted as
+  of this checklist. This review covers S9's still-deferred
+  functional-review-preparation half (this section) and S10's bounded
+  remediation, not the final `/accept-milestone` step.
+- `docs/ai-workflow/dry-run/verify_review_content_id.py` remains
+  deliberately uncommitted — do not commit or clean it up; it answers a
+  read-only review question (`GPT-DRY-R1-002`) and is not itself dry-run
+  scratch fixture state.
+
+Findings go in `.ai-review/v2-1-dry-run/feedback/FUNCTIONAL_REVIEW.md`.
