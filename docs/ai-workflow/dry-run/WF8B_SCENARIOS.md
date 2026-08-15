@@ -1015,6 +1015,46 @@ section below, not left implicit.
   (functional finding + `apply-functional-review` remediation) should run
   next, ahead of final acceptance.
 
+- **Outcome (2026-08-15, real, `/prepare-functional-review v2-1-dry-run`
+  succeeded)**: run for real in the same session. Step 0 resolved the
+  named target `v2-1-dry-run`; step 0a's `LEGACY_READY` adoption scan was
+  skipped (`phase` was already `AWAITING_FUNCTIONAL_REVIEW`, not
+  `LEGACY_READY` — S9's own `/approve-review implementation` had already
+  performed that transition). Step 1's automated-verification recheck ran
+  independently: 655/656 across the five hermetic suites, the one failure
+  being the same pre-existing, unrelated `workflow_integration_test.py`
+  WFR-row-count staleness (67 vs. an assertion still pegged at 60) this
+  document has already flagged repeatedly — no source/test regression.
+  Steps 2-3 wrote a new, distinct `## v2-1-dry-run — functional review
+  checklist (implementation revision 4)` section into the real
+  `docs/ACTIVE_MILESTONE.md`, appended after the existing Milestone 8 and
+  `workflow-v2-1-core` sections without touching either — this is the
+  documented, plan-approved (`D-Scoped-Remediation-Acceptance`) shared use
+  of that one fixed `functional_checklist_path`, not the S11-flagged
+  cross-item collision (S11's own concern is about a *different*,
+  unrelated throwaway item's adoption path incorrectly touching this same
+  file; `v2-1-dry-run`'s own functional review genuinely belongs in this
+  file by the plan's own design). Step 3a's provenance commit ran by hand
+  (real function calls, since `/prepare-functional-review` is a real,
+  non-gated command but has no direct CLI entry point here): computed
+  blob `01fc1f317354619db04fca72a6db41a0a8e6a412` via `git hash-object`;
+  `workflow_state.discover_current_functional_checklist_evidence(...,
+  "v2-1-dry-run", base_commit, head=bc0770b, implementation_revision=4)`
+  returned `None` (no prior evidence for this round); staged **only**
+  `docs/ACTIVE_MILESTONE.md` (confirmed via `git status --short` that the
+  pre-existing, deliberately-uncommitted `scratch/c.txt` and
+  `verify_review_content_id.py` were left untouched) and committed
+  `d22bdf4` carrying `Workflow-Functional-Checklist:
+  v2-1-dry-run/4/01fc1f317354619db04fca72a6db41a0a8e6a412` +
+  `Workflow-Work-Item: v2-1-dry-run`. **S9's functional-review-preparation
+  half is complete for real.** `v2-1-dry-run` has no outstanding
+  checkpoint at this point (`S-CP1`-`S-CP3` all `COMPLETE`), so step 4's
+  `/accept-scoped-remediation` evidence-binding instruction does not apply
+  to this invocation. Not yet run: S10 (functional finding +
+  `/apply-functional-review` bounded remediation, per this document's own
+  reordering note) and S9's own final `/accept-milestone` step, both
+  deferred to a following session.
+
 ## S10 — Functional-review findings and apply-functional-review remediation
 
 - **Purpose**: prove `/apply-functional-review`'s three-way branch
