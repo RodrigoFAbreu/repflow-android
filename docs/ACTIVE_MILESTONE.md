@@ -480,8 +480,87 @@ as an observation for `workflow-v2-1-core`'s own eventual, real
 question, since it also has no `ROADMAP.md` entry), not as a blocking
 defect — nothing about it left real repository state incorrect.
 
-Not yet run: **S11** (legacy import/adoption, throwaway item only),
-**S12** (approval/content-drift detection), and **S17** (pointer
-restoration — `active_work_item_id` back to `workflow-v2-1-core`, dry-run
-cleanup). `S13`-`S15` already ran earlier in this dry run, interleaved
-with checkpoint implementation.
+Not yet run: **S12** (approval/content-drift detection) and **S17**
+(pointer restoration — `active_work_item_id` back to
+`workflow-v2-1-core`, dry-run cleanup). `S13`-`S15` already ran earlier
+in this dry run, interleaved with checkpoint implementation. **S11**
+(legacy import/adoption) ran for real immediately below.
+
+## `v2-1-dry-run-legacy` — functional review checklist (legacy adoption, S11)
+
+This is a **throwaway synthetic item** created solely to exercise `D-Legacy`
+phase 2 (`WF-M8b`)'s adoption transition for real
+(`docs/ai-workflow/dry-run/WF8B_SCENARIOS.md`'s S11). It has no product
+surface and no real implementation content — its `technical_approval`
+(`basis: LEGACY_V1`) is fabricated evidence, not a real review, per S11's
+own locked-in design decision. This item never adopts, reopens, or changes
+`milestone-8`'s entry, which remains untouched throughout.
+
+Per S11's own text, a full acceptance cycle for this item is optional and
+is abbreviated here: the pass condition is the `LEGACY_READY` →
+`AWAITING_FUNCTIONAL_REVIEW` transition itself
+(`workflow_state.promote_legacy_work_item`, run for real), not a genuine
+functional-review pass.
+
+### Setup
+
+None — no Android app / Gradle involvement, no build/install step.
+
+### Automated verification
+
+Not applicable. This item never ran `/milestone-implement` or
+`/apply-implementation-review` — its `technical_approval` was established
+directly by legacy import (`import_legacy_work_item`), not by that
+pipeline, so there is no implementation-stage test suite scoped to it to
+re-confirm.
+
+### Test data
+
+None to seed — this checks the repository's own real, already-committed
+`docs/ai-workflow/WORKFLOW_STATE.json` state for this item.
+
+### Flows to exercise manually
+
+1. **Adoption transitioned the right fields, nothing else.** Confirm
+   `work_items["v2-1-dry-run-legacy"]` now shows
+   `phase: "AWAITING_FUNCTIONAL_REVIEW"`,
+   `governing_workflow_version: "2.1"`, and `active_work_item_id` ==
+   `"v2-1-dry-run-legacy"`; confirm `technical_approval` is byte-identical
+   to its state immediately after import (`basis: "LEGACY_V1"`,
+   `reviewed_content_commit`/`approved_review_content_id` unchanged).
+2. **Milestone 8 is untouched.** Confirm `work_items["milestone-8"]` is
+   byte-identical to its state before this scenario ran — same
+   `governing_workflow_version: "1"`, same `phase: "LEGACY_READY"`... no,
+   `phase` for `milestone-8` is not `LEGACY_READY` (it was already
+   promoted/accepted separately) — confirm whatever its actual current
+   phase is remains unchanged by this scenario, since adoption ran only
+   against `v2-1-dry-run-legacy`'s own resolved target.
+
+### Expected result
+
+Both checks above pass; no step requires any write beyond the one
+adoption transition already performed (real, not simulated) and this
+checklist section itself.
+
+### Known limitations / out of scope for this review
+
+- This item is fabricated evidence for a workflow-mechanism dry run, not a
+  real product milestone — no functional flows exist to exercise beyond
+  the state-transition checks above.
+- **Discovered edge case, recorded rather than worked around**: this
+  item's `implementation_revision` is `null` (a `LEGACY_V1`-imported item
+  never passes through the ordinary `PLANNING`→`IMPLEMENTING` cycle that
+  sets it). `/prepare-functional-review`'s step 3a reads
+  `implementation_revision` live and folds it into both the
+  `discover_current_functional_checklist_evidence` round-scope prefix and
+  the `Workflow-Functional-Checklist` commit trailer; for this item that
+  produces the literal prefix `v2-1-dry-run-legacy/None/` — mechanically
+  functional (verified: `discover_current_functional_checklist_evidence`
+  returns `None` cleanly with no exception when queried with
+  `implementation_revision=None`, and its own round-scoped-prefix
+  contract is symmetric enough that a repeat lookup with the same `None`
+  value stays self-consistent), but semantically wrong for any
+  `LEGACY_V1` item's evidence trailer. Not a blocker for S11's own pass/fail
+  evidence (the adoption transition itself, checked above), and not
+  fixed ad hoc here — filed for the same remediation routing S11's other
+  discovered gap uses.
