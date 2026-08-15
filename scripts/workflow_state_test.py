@@ -3446,14 +3446,20 @@ class TestMarkTechnicalApprovalStale(unittest.TestCase):
 
 class TestRecordBundleGeneration(unittest.TestCase):
     def test_first_implementation_stage_call_sets_head_and_revision_one(self):
-        state = _base_state(wi=_base_work_item(reviewed_implementation_head=None, implementation_revision=None))
+        state = _base_state(wi=_base_work_item(
+            phase="SELF_REVIEWING_IMPLEMENTATION",
+            reviewed_implementation_head=None, implementation_revision=None,
+        ))
         new_state = ws.record_bundle_generation(state, "wi", stage="implementation", head="abc123", now="t1")
         wi = new_state["work_items"]["wi"]
         self.assertEqual(wi["reviewed_implementation_head"], "abc123")
         self.assertEqual(wi["implementation_revision"], 1)
 
     def test_post_fix_call_advances_head_and_increments_revision(self):
-        state = _base_state(wi=_base_work_item(reviewed_implementation_head="abc123", implementation_revision=1))
+        state = _base_state(wi=_base_work_item(
+            phase="APPLYING_REVIEW_FEEDBACK",
+            reviewed_implementation_head="abc123", implementation_revision=1,
+        ))
         new_state = ws.record_bundle_generation(state, "wi", stage="post-fix", head="def456", now="t2")
         wi = new_state["work_items"]["wi"]
         self.assertEqual(wi["reviewed_implementation_head"], "def456")
@@ -3465,9 +3471,91 @@ class TestRecordBundleGeneration(unittest.TestCase):
             ws.record_bundle_generation(state, "wi", stage="plan", head="abc123", now="t1")
 
     def test_original_state_untouched(self):
-        state = _base_state(wi=_base_work_item(reviewed_implementation_head=None, implementation_revision=None))
+        state = _base_state(wi=_base_work_item(
+            phase="SELF_REVIEWING_IMPLEMENTATION",
+            reviewed_implementation_head=None, implementation_revision=None,
+        ))
         ws.record_bundle_generation(state, "wi", stage="implementation", head="abc123", now="t1")
         self.assertIsNone(state["work_items"]["wi"]["reviewed_implementation_head"])
+
+    def test_first_call_writes_target_phase(self):
+        """OPUS-R101-001: `record_bundle_generation` must itself write
+        `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`, asserted from the
+        returned state (the caller persists it, mirroring the committed
+        blob a fresh session would re-read)."""
+        state = _base_state(wi=_base_work_item(phase="SELF_REVIEWING_IMPLEMENTATION"))
+        new_state = ws.record_bundle_generation(state, "wi", stage="implementation", head="abc123", now="t1")
+        self.assertEqual(
+            new_state["work_items"]["wi"]["phase"], "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+        )
+
+    def test_post_fix_call_writes_target_phase(self):
+        state = _base_state(wi=_base_work_item(phase="APPLYING_REVIEW_FEEDBACK"))
+        new_state = ws.record_bundle_generation(state, "wi", stage="post-fix", head="def456", now="t2")
+        self.assertEqual(
+            new_state["work_items"]["wi"]["phase"], "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+        )
+
+    def test_illegal_source_phase_refused_naming_actual_and_legal_phases(self):
+        state = _base_state(wi=_base_work_item(phase="IMPLEMENTING"))
+        with self.assertRaises(ws.IllegalBundleGenerationSourcePhaseError) as ctx:
+            ws.record_bundle_generation(state, "wi", stage="implementation", head="abc123", now="t1")
+        self.assertIn("IMPLEMENTING", str(ctx.exception))
+        self.assertIn("SELF_REVIEWING_IMPLEMENTATION", str(ctx.exception))
+        self.assertIn("APPLYING_REVIEW_FEEDBACK", str(ctx.exception))
+
+    def test_post_fix_from_illegal_source_phase_also_refused(self):
+        state = _base_state(wi=_base_work_item(phase="AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW"))
+        with self.assertRaises(ws.IllegalBundleGenerationSourcePhaseError):
+            ws.record_bundle_generation(state, "wi", stage="post-fix", head="def456", now="t2")
+
+    def test_bundle_generation_target_and_recovery_phase_pair_are_both_reachable(self):
+        """Narrower guard than OPUS-R101-001's own suggested blanket
+        all-17-phases sweep (see IMPLEMENTATION_SUMMARY.md for why that
+        broader test was not added as-is): the specific pair this finding's
+        reproduction is about -- `record_bundle_generation`'s target
+        (`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`) and
+        `enter_applying_review_feedback`'s target
+        (`APPLYING_REVIEW_FEEDBACK`) -- must each be written by a real,
+        named module-level function, not merely declared in `KNOWN_PHASES`."""
+        import ast
+        source = Path(ws.__file__).read_text()
+        tree = ast.parse(source)
+        written_phases: set[str] = set()
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Assign)
+                and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Subscript)
+                and isinstance(node.targets[0].slice, ast.Constant)
+                and node.targets[0].slice.value == "phase"
+                and isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str)
+            ):
+                written_phases.add(node.value.value)
+        self.assertIn("AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW", written_phases)
+        self.assertIn("APPLYING_REVIEW_FEEDBACK", written_phases)
+
+
+class TestEnterApplyingReviewFeedback(unittest.TestCase):
+    def test_sets_phase_from_legal_source(self):
+        state = _base_state(wi=_base_work_item(phase="AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW"))
+        new_state = ws.enter_applying_review_feedback(state, "wi", now="t1")
+        self.assertEqual(new_state["work_items"]["wi"]["phase"], "APPLYING_REVIEW_FEEDBACK")
+
+    def test_refused_from_illegal_source_phase(self):
+        state = _base_state(wi=_base_work_item(phase="IMPLEMENTING"))
+        with self.assertRaises(ws.IllegalApplyingReviewFeedbackEntryPhaseError) as ctx:
+            ws.enter_applying_review_feedback(state, "wi", now="t1")
+        self.assertIn("IMPLEMENTING", str(ctx.exception))
+        self.assertIn("AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW", str(ctx.exception))
+
+    def test_original_state_untouched(self):
+        state = _base_state(wi=_base_work_item(phase="AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW"))
+        ws.enter_applying_review_feedback(state, "wi", now="t1")
+        self.assertEqual(
+            state["work_items"]["wi"]["phase"], "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+        )
 
 
 def _write_test_artifacts_declaration(
@@ -3537,11 +3625,16 @@ def _seed_base_provenance_state(repo: "ScratchRepo", work_item_id: str) -> None:
 
 
 def _provenance_state(work_item_id: str, *, reviewed_implementation_head, implementation_revision) -> dict:
+    """The state as committed *by* the generation-record commit `T` --
+    `phase` is therefore the ordinary target
+    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`, not a source phase
+    (OPUS-R101-001: a fixture that hard-codes the same phase on both sides
+    of `T` can never exercise the phase-transition contract)."""
     return {
         "work_item_id": work_item_id,
         "reviewed_implementation_head": reviewed_implementation_head,
         "implementation_revision": implementation_revision,
-        "phase": "SELF_REVIEWING_IMPLEMENTATION",
+        "phase": "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
         "state_revision": implementation_revision + 1,
         "last_transition": f"t{implementation_revision}",
     }

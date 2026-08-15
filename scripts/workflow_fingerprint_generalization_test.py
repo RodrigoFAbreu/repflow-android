@@ -1136,6 +1136,7 @@ class TestPrepareAiReviewShImplementationStageHeadGuard(unittest.TestCase):
             entry = dict(baseline_entry)
             entry["reviewed_implementation_head"] = impl_head
             entry["implementation_revision"] = 1
+            entry["phase"] = "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW"
             entry["state_revision"] = 2
             entry["last_transition"] = "t1"
             state_for_record = {

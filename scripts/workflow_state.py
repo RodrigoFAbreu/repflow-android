@@ -710,6 +710,26 @@ class InvalidBundleGenerationStageError(Exception):
     other (D-Approval-Commits, WF4c)."""
 
 
+BUNDLE_GENERATION_LEGAL_SOURCE_PHASES = frozenset({
+    "SELF_REVIEWING_IMPLEMENTATION", "APPLYING_REVIEW_FEEDBACK",
+})
+
+
+class IllegalBundleGenerationSourcePhaseError(Exception):
+    """Raised when `record_bundle_generation` is called from a phase other
+    than `SELF_REVIEWING_IMPLEMENTATION` (round's first bundle) or
+    `APPLYING_REVIEW_FEEDBACK` (`post-fix` bundle) -- OPUS-R101-001,
+    missing-test item 275: a behavioral refusal, never a silent proceed,
+    naming the actual phase and both legal ones."""
+
+
+class IllegalApplyingReviewFeedbackEntryPhaseError(Exception):
+    """Raised when `enter_applying_review_feedback` is called from a phase
+    other than `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`
+    (`docs/ai-workflow/MILESTONE_WORKFLOW.md`'s documented entry
+    condition: "implementation review feedback exists")."""
+
+
 class AmbiguousBundleGenerationRecordTrailerError(Exception):
     """Raised by `discover_bundle_generation_record_commits` when more than
     one commit reachable in `base_commit..head` carries a
@@ -6145,7 +6165,13 @@ def record_bundle_generation(state: dict, work_item_id: str, *, stage: str, head
     (`None` -> `1` on the first call, incrementing on every call after --
     `implementation_revision` itself is never part of either fingerprint
     projection, so this bump alone never stales `technical_approval`,
-    `approval_is_current`'s own missing-test item 11)."""
+    `approval_is_current`'s own missing-test item 11). Also `phase`'s sole
+    writer for this transition (OPUS-R101-001): refuses outright, naming
+    the actual phase and both legal ones, unless called from
+    `SELF_REVIEWING_IMPLEMENTATION` or `APPLYING_REVIEW_FEEDBACK`, and
+    always sets the durable target `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`
+    -- the "Ordinary bundle-publication phase transition" contract,
+    `WFR-61`'s five-field mutation."""
     if stage not in ("implementation", "post-fix"):
         raise InvalidBundleGenerationStageError(
             f"reviewed_implementation_head is written only at the "
@@ -6153,8 +6179,39 @@ def record_bundle_generation(state: dict, work_item_id: str, *, stage: str, head
         )
     new_state = copy.deepcopy(state)
     work_item = new_state["work_items"][work_item_id]
+    current_phase = work_item.get("phase")
+    if current_phase not in BUNDLE_GENERATION_LEGAL_SOURCE_PHASES:
+        raise IllegalBundleGenerationSourcePhaseError(
+            f"record_bundle_generation invoked from phase {current_phase!r}, "
+            f"but the only legal source phases are "
+            f"{sorted(BUNDLE_GENERATION_LEGAL_SOURCE_PHASES)}"
+        )
+    work_item["phase"] = "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW"
     work_item["reviewed_implementation_head"] = head
     work_item["implementation_revision"] = (work_item.get("implementation_revision") or 0) + 1
+    work_item["state_revision"] = work_item.get("state_revision", 1) + 1
+    work_item["last_transition"] = now
+    return new_state
+
+
+def enter_applying_review_feedback(state: dict, work_item_id: str, now: str) -> dict:
+    """`APPLYING_REVIEW_FEEDBACK`'s durable writer (OPUS-R101-001):
+    `/apply-implementation-review` step 0's "Enter the
+    `APPLYING_REVIEW_FEEDBACK` state" had no writer behind it at all before
+    this. Refuses outright from any phase other than
+    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` -- the phase
+    `MILESTONE_WORKFLOW.md` documents as this state's entry condition
+    ("implementation review feedback exists")."""
+    new_state = copy.deepcopy(state)
+    work_item = new_state["work_items"][work_item_id]
+    current_phase = work_item.get("phase")
+    if current_phase != "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW":
+        raise IllegalApplyingReviewFeedbackEntryPhaseError(
+            f"enter_applying_review_feedback invoked from phase "
+            f"{current_phase!r}, but the only legal source phase is "
+            f"'AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW'"
+        )
+    work_item["phase"] = "APPLYING_REVIEW_FEEDBACK"
     work_item["state_revision"] = work_item.get("state_revision", 1) + 1
     work_item["last_transition"] = now
     return new_state
@@ -6265,6 +6322,19 @@ def validate_bundle_generation_record_commit(repo_root: Path, commit: str, work_
         raise MalformedBundleGenerationRecordCommitError(
             f"{commit}'s own {work_item_id!r} field changes are {sorted(field_diff)}, "
             f"not a non-empty subset of {sorted(ORDINARY_BUNDLE_GENERATION_RECORD_FIELDS)}"
+        )
+    if "phase" not in field_diff:
+        raise MalformedBundleGenerationRecordCommitError(
+            f"{commit}'s own {work_item_id!r} field changes {sorted(field_diff)} do not "
+            f"include 'phase' -- an ordinary bundle-generation-record commit must always "
+            f"transition phase (OPUS-R101-001)"
+        )
+    after = _read_json_at_commit_or_empty(repo_root, commit, state_rel)
+    committed_phase = after.get("work_items", {}).get(work_item_id, {}).get("phase")
+    if committed_phase != "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW":
+        raise MalformedBundleGenerationRecordCommitError(
+            f"{commit} sets {work_item_id!r}'s phase to {committed_phase!r}, not the "
+            f"required target 'AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW'"
         )
     trailers = _commit_trailers(repo_root, commit)
     if set(trailers) != {"Workflow-Bundle-Generation-Record", "Workflow-Work-Item"}:

@@ -6,7 +6,14 @@ state_writer: true
 **State-writer discipline (D1, item 354):** every `docs/ai-workflow/WORKFLOW_STATE.json` write this command performs -- everywhere a step below says "persist the returned state" -- is performed by calling `workflow_state.state_transaction(repo_root, mutator)`, never by a separate read-then-write: `state_transaction` holds `.ai-review/runtime/WORKFLOW_STATE.lock` (`workflow_state.state_lock`, `fcntl.flock(LOCK_EX)`) across the complete re-read -> apply-the-named-function -> canonical-serialize -> atomic-publish sequence in one process invocation, so `mutator` is the exact transition function each step below names (e.g. `lambda state: workflow_state.<fn>(state, ...)`), applied to freshly re-read state rather than to a snapshot taken before the lock was acquired.
 
 Enter the `APPLYING_REVIEW_FEEDBACK` state of
-`docs/ai-workflow/MILESTONE_WORKFLOW.md`.
+`docs/ai-workflow/MILESTONE_WORKFLOW.md` by calling
+`workflow_state.state_transaction(repo_root, lambda state:
+workflow_state.enter_applying_review_feedback(state, work_item_id, now=<now>))`
+(OPUS-R101-001: this state's real, durable writer -- refuses outright,
+naming the actual phase, unless the work item's current phase is
+`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`) and persisting the returned
+state. Skip this call, and stay silent about phase, for a work item with
+no `docs/ai-workflow/WORKFLOW_STATE.json` entry.
 
 `<bundle_dir>`/`<feedback_dir>` below resolve per
 `docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Bundle location"
