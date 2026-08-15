@@ -1789,6 +1789,73 @@ unchanged afterwards.
 - **Cleanup**: none yet — this is the precondition for S17, not cleanup
   itself.
 
+- **Outcome (2026-08-15, real, reached its own defined stop boundary)**: ran
+  for real, out of the checklist's own suggested order (S11/S12 had not yet
+  run — nothing in `/accept-milestone`'s own contract makes them a
+  precondition, since neither creates a child of `v2-1-dry-run`; a
+  clarifying question was asked and the user chose to proceed with S16
+  now), against live HEAD `e20d83b...` (S9's revision-6 functional-review
+  checklist commit).
+
+  The user supplied literal confirmation text in the same turn ("I confirm
+  acceptance of v2-1-dry-run."), after an initial bare
+  `/accept-milestone v2-1-dry-run` invocation correctly did **not** proceed
+  — `validate_user_confirmation`'s stage check requires the literal
+  substring `"acceptance"`, which the bare slash-command text does not
+  contain, so this session asked rather than inferring consent, per the
+  command's own "never fabricate, infer, or carry over" rule.
+  `validate_user_confirmation(text, work_item_id="v2-1-dry-run",
+  stage="acceptance")` then ran for real against the supplied text — no
+  exception. Step 2: no working-tree change since the last full run, so
+  no rerun (confirmed via `git status`/`git rev-parse HEAD` against the
+  same HEAD the prior session's `/prepare-functional-review` run left).
+  Step 2a's advisory pre-flight ran first, for real:
+  `resolve_own_registry_completion_status` → `(True, None)`;
+  `milestone_complete_gate_reachable(phase="AWAITING_FUNCTIONAL_REVIEW",
+  is_terminal=True)` → `True`. The authoritative
+  `workflow_state.complete_work_item(state, "v2-1-dry-run", now=..., 
+  repo_root=...)` call then succeeded — no `IncompleteChildWorkItemError`
+  (`v2-1-dry-run` has no child work items), no
+  `IncompleteOwnCheckpointsError` (`S-CP1`-`S-CP3` all `COMPLETE`) —
+  **this scenario's own stated pass/fail evidence, exactly**. Persisted
+  to `WORKFLOW_STATE.json`, diffed `-U0` to confirm exactly the four
+  intended fields changed (`active_work_item_id` → `null`,
+  `work_items["v2-1-dry-run"].phase` → `MILESTONE_COMPLETE`,
+  `state_revision` `29` → `30`, `last_transition` updated), nothing else
+  in the ~6900-line file touched, written with `ensure_ascii=False` per
+  this document's own S6-recorded lesson.
+
+  **Steps 3 and 5, deliberately not performed — a genuine command-contract
+  gap, recorded rather than worked around**: `docs/ROADMAP.md` has zero
+  mentions of `v2-1-dry-run` or `workflow-v2-1-core` (`grep` confirmed,
+  read-only) — process work items were never given `ROADMAP.md` entries,
+  so step 3 ("mark the milestone complete" in `ROADMAP.md`) has no target
+  to act on. Step 5 ("archive this milestone's execution/reference plans
+  to `docs/milestones/completed/`") was not performed either: doing so
+  would misfile a throwaway synthetic item's dry-run plan doc into the
+  real completed-milestones archive reserved for actual product/process
+  milestones, directly contradicting this document's own "Isolation"
+  section ("The real `workflow-v2-1-core` record is untouched by any
+  scenario here"). Step 4 was honored narrowly instead: a completion note
+  was appended to `docs/ACTIVE_MILESTONE.md`'s own `v2-1-dry-run` section
+  (there was never a top-level "Active plan" entry for this item to
+  clear — that section belongs to Milestone 8 alone) — full detail in
+  that note itself. Step 7 required no change: the real "Next action"
+  section already correctly points at `docs/ROADMAP.md`, unaffected by
+  a work item that was never part of it. State + doc note committed
+  together as `b4c8c42`, carrying `Workflow-Work-Item: v2-1-dry-run` (no
+  dedicated acceptance/completion trailer exists in this repository's
+  conventions — `.claude/commands/accept-milestone.md` step 6 specifies
+  none, unlike `/approve-review`'s explicit trailer requirements).
+
+  This gap is filed as an observation, not a blocking defect: nothing
+  about it left real repository state incorrect, and it is worth
+  `workflow-v2-1-core`'s own eventual real `/accept-milestone` invocation
+  accounting for, since that item also has no `ROADMAP.md` entry and will
+  likely face the identical question.
+
+  **Not yet run**: S11, S12, S17 — next, from a following session.
+
 ## S17 — Restoration of prior_active_work_item_id and dry-run pointer removal
 
 - **Purpose**: prove the exit half of `D-Self-Governance`'s WF8b
