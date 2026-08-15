@@ -186,7 +186,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Mapping, NamedTuple
+from typing import Callable, Mapping, NamedTuple
 
 import workflow_fingerprint as fingerprint
 from workflow_fingerprint import (  # noqa: F401 - re-exported for callers
@@ -1098,17 +1098,26 @@ def _first_parent_commits_ordered(repo_root: Path, head: str = "HEAD") -> list[s
 def _discover_trailer_commits(
     repo_root: Path, trailer_key: str, work_item_id: str, base_commit: str,
     head: str, *, ambiguous_error_cls: type[Exception],
+    verify: Callable[[Path, str, str], bool] | None = None,
 ) -> dict[str, str]:
     """Generic D-Commit-Provenance search shared by checkpoint- and
     approval-trailer discovery (WF4a-iii generalizes the WF1a checkpoint-
     only search): every commit reachable in `base_commit..head` carrying
     an exact `trailer_key: <value>` + `Workflow-Work-Item: <work_item_id>`
-    trailer pair, requiring exactly one match per trailer value after the
-    stated tie-break (prefer a first-parent ancestor of `head`). Returns
-    `{trailer_value: commit_sha}`. Genuine ambiguity (more than one
-    first-parent-ancestor match) raises `ambiguous_error_cls` rather than
-    silently picking (resolves OPUS-R6-022; missing-test items 39, 50,
-    62, 64)."""
+    trailer pair, requiring exactly one match per trailer value after two
+    filters applied in order: (1) prefer a first-parent ancestor of `head`;
+    (2) if more than one first-parent-ancestor candidate still remains, an
+    optional caller-supplied `verify(repo_root, commit, value) -> bool`
+    role-specific predicate narrows further -- exactly one verified
+    survivor resolves, zero or more than one is still genuine ambiguity.
+    This helper stays role-neutral by design: `verify` is `None` for every
+    call site except `discover_checkpoint_commits`, which alone knows what
+    "this candidate is the real one" means for a checkpoint trailer
+    (item 39). Returns `{trailer_value: commit_sha}`. Genuine ambiguity
+    (more than one candidate survives both filters, or filter (1) alone
+    already leaves more than one with no `verify` to break the tie)
+    raises `ambiguous_error_cls` rather than silently picking (resolves
+    OPUS-R6-022; missing-test items 39, 50, 62, 64)."""
     out = _run(["git", "log", "--format=%H", f"{base_commit}..{head}"], cwd=repo_root)
     commits = [line for line in out.splitlines() if line]
 
@@ -1131,15 +1140,44 @@ def _discover_trailer_commits(
         tie_broken = [c for c in candidates if c in first_parent]
         if len(tie_broken) == 1:
             resolved[value] = tie_broken[0]
-        else:
+            continue
+        if len(tie_broken) > 1 and verify is not None:
+            verified = [c for c in tie_broken if verify(repo_root, c, value)]
+            if len(verified) == 1:
+                resolved[value] = verified[0]
+                continue
             raise ambiguous_error_cls(
                 f"{trailer_key} {value!r} for work item {work_item_id!r} has "
-                f"{len(candidates)} trailer matches in {base_commit}..{head}, and "
-                f"{len(tie_broken)} remain after the first-parent-ancestor "
-                f"tie-break (candidates: {candidates}); needs a Workflow-Supersedes "
+                f"{len(candidates)} trailer matches in {base_commit}..{head}, "
+                f"{len(tie_broken)} first-parent-ancestor candidates, and "
+                f"{len(verified)} that pass role-specific verification "
+                f"(candidates: {candidates}); needs a Workflow-Supersedes "
                 f"trailer or an explicit WORKFLOW_STATE.json annotation"
             )
+        raise ambiguous_error_cls(
+            f"{trailer_key} {value!r} for work item {work_item_id!r} has "
+            f"{len(candidates)} trailer matches in {base_commit}..{head}, and "
+            f"{len(tie_broken)} remain after the first-parent-ancestor "
+            f"tie-break (candidates: {candidates}); needs a Workflow-Supersedes "
+            f"trailer or an explicit WORKFLOW_STATE.json annotation"
+        )
     return resolved
+
+
+def _checkpoint_commit_claims_complete(
+    repo_root: Path, commit: str, checkpoint_id: str, work_item_id: str,
+) -> bool:
+    """Role-specific verification predicate for checkpoint-trailer
+    tie-breaking (item 39): whether `commit`'s own *committed*
+    `WORKFLOW_STATE.json` -- never live/worktree state -- records
+    `checkpoint_id` as `COMPLETE` for `work_item_id`. Reuses
+    `_read_json_at_commit_or_empty`, the same committed-state inspection
+    mechanism `_work_item_field_diff`/bundle-generation validation already
+    rely on, rather than trusting anything the working tree currently
+    says."""
+    state = _read_json_at_commit_or_empty(repo_root, commit, DEFAULT_STATE_PATH.as_posix())
+    entry = state.get("work_items", {}).get(work_item_id, {}).get("checkpoints", {}).get(checkpoint_id, {})
+    return entry.get("status") == "COMPLETE"
 
 
 def discover_checkpoint_commits(
@@ -1148,14 +1186,21 @@ def discover_checkpoint_commits(
     """Full D-Commit-Provenance search: every commit reachable in
     `base_commit..head` carrying an exact `Workflow-Checkpoint: <id>` +
     `Workflow-Work-Item: <work_item_id>` trailer pair, requiring exactly
-    one match per checkpoint id after the stated tie-break (prefer a
-    first-parent ancestor of `head`). Returns `{checkpoint_id: commit_sha}`.
-    Genuine ambiguity (more than one first-parent-ancestor match) raises
-    rather than silently picking (resolves OPUS-R6-022; missing-test items
-    50, 62, 64)."""
+    one match per checkpoint id after the stated two-filter tie-break:
+    (1) prefer a first-parent ancestor of `head`; (2) if more than one
+    first-parent-ancestor candidate remains, prefer the one whose own
+    committed `WORKFLOW_STATE.json` records this checkpoint `COMPLETE`
+    for `work_item_id` (`_checkpoint_commit_claims_complete`, item 39).
+    Returns `{checkpoint_id: commit_sha}`. Genuine ambiguity (more than
+    one candidate survives both filters, or the result remains
+    undecidable) raises rather than silently picking (resolves
+    OPUS-R6-022; missing-test items 39, 50, 62, 64)."""
     return _discover_trailer_commits(
         repo_root, "Workflow-Checkpoint", work_item_id, base_commit, head,
         ambiguous_error_cls=AmbiguousCheckpointTrailerError,
+        verify=lambda root, commit, checkpoint_id: _checkpoint_commit_claims_complete(
+            root, commit, checkpoint_id, work_item_id,
+        ),
     )
 
 

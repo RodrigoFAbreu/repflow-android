@@ -44,6 +44,28 @@ class TestAgainstRealRepository(unittest.TestCase):
         # WF1a's own commit is what this test suite is committed inside of.
         self.assertIn("WF1a", discovered)
 
+    def test_all_seventeen_checkpoints_resolve_with_wf8b_canonical(self):
+        """Item 39's real-repository proof: `WF8b` carries the
+        `Workflow-Checkpoint: WF8b` trailer on sixteen distinct commits
+        (this work item's own continued-scope WF8b round left many
+        commits along the way, all first-parent ancestors of `HEAD`), so
+        filter (1) alone cannot disambiguate it -- only the role-specific
+        verification tie-break (`_checkpoint_commit_claims_complete`) can,
+        by finding the one commit whose own committed
+        `WORKFLOW_STATE.json` records `WF8b` as `COMPLETE` for
+        `workflow-v2-1-core`. All seventeen registered checkpoints resolve
+        to exactly one commit each, and `WF8b` resolves to `f37c4e0`, the
+        real completion commit (`feat(wf8b): S17 -- restore active
+        pointer, remove dry-run entries, complete WF8b`)."""
+        repo_root = _repo_root()
+        discovered = ws.discover_checkpoint_commits(repo_root, WORK_ITEM_ID, BASE_COMMIT)
+        registry = json.loads((repo_root / "docs/ai-workflow/registry/workflow-v2-1-core-registry.json").read_text())
+        registered_ids = [entry["id"] for entry in registry["checkpoints"]]
+        self.assertEqual(len(registered_ids), 17)
+        for checkpoint_id in registered_ids:
+            self.assertIn(checkpoint_id, discovered, f"{checkpoint_id} did not resolve")
+        self.assertEqual(discovered["WF8b"], "f37c4e04f2358c8d1d5dec333b43538e2f087d15")
+
     def test_real_config_file_is_schema_valid(self):
         repo_root = _repo_root()
         config = ws.load_config(repo_root)
@@ -153,7 +175,19 @@ class TestAgainstRealRepository(unittest.TestCase):
         ).stdout
         self.assertIn(f"Workflow-Plan-Approval: {approval['approved_review_content_id']}", body)
         self.assertIn(f"Workflow-Work-Item: {WORK_ITEM_ID}", body)
-        self.assertIn(approval["reviewed_bundle_id"], body)
+
+        # Finding B: the full `reviewed_bundle_id` is not a normative
+        # commit-trailer/body requirement (Revision 80 specifies neither a
+        # bundle-id trailer nor the full id in free-text prose -- prose
+        # may legitimately truncate it, as this repository's real approval
+        # commit does). The durable source of truth is the approval
+        # commit's own *committed* WORKFLOW_STATE.json, not its free-form
+        # message -- verify against that instead.
+        committed_state = ws._read_json_at_commit_or_empty(
+            repo_root, discovered, "docs/ai-workflow/WORKFLOW_STATE.json",
+        )
+        committed_approval = committed_state["work_items"][WORK_ITEM_ID]["plan_approval"]
+        self.assertEqual(committed_approval["reviewed_bundle_id"], approval["reviewed_bundle_id"])
 
         for entry in approval["review_content_manifest"]:
             blob = subprocess.run(
@@ -411,28 +445,26 @@ class TestCheckpointOriginationAgainstRealRepository(unittest.TestCase):
         ).stdout
         self.assertEqual(before, after)
 
-    def test_adopt_claim_refuses_as_not_in_progress_once_s_cp3_is_complete(self):
+    def test_adopt_claim_refuses_as_not_in_progress_once_v2_1_dry_run_is_removed(self):
         """`adopt_claim`'s own first precondition -- this worktree's local
         `WORKFLOW_STATE.json` must record `checkpoint_id` `IN_PROGRESS` --
         is checked *before* `checkpoint_origination_provable` ever runs
-        (`adopt_claim`'s own docstring, step 1 before step 3). Now that
-        WF8b S15 (2026-08-15) has completed `v2-1-dry-run`'s real `S-CP3`
-        for real and released its claim, that precondition is false
-        (status `COMPLETE`), so `adopt_claim` refuses with
-        `CheckpointNotInProgressLocallyError` -- a different, more
-        immediate refusal than the origination defect this test's prior
-        form exercised, since there is now genuinely nothing to adopt.
-        Supersedes this test's original form (`adopt_claim` still refuses
-        for the same real S-CP3 defect`, which asserted
-        `CheckpointOriginationUnprovableError` and a byte-identical claim
-        record) -- that assertion is now false, not stale evidence to
-        preserve, because the claim no longer exists (`release_checkpoint`
-        removed it as part of the same completion) and the precondition
-        `adopt_claim` checks first now fails on its own terms. Read-only:
-        verified by an explicit before/after `git status --short`
-        comparison and by confirming no claim file exists before or
-        after."""
+        (`adopt_claim`'s own docstring, step 1 before step 3). S17
+        (`f37c4e0`, 2026-08-15) removed `v2-1-dry-run`'s dry-run entries
+        from `WORKFLOW_STATE.json` entirely -- it is no longer a
+        `COMPLETE` entry, it is *absent* -- so that precondition now reads
+        a `None` status rather than `COMPLETE`, and `adopt_claim` still
+        refuses with `CheckpointNotInProgressLocallyError`, just with a
+        different reported status. Supersedes this test's S15-era form
+        (`... once s_cp3_is_complete`, asserting `"COMPLETE"` in the
+        refusal message) -- that assertion is now false, not stale
+        evidence to preserve, since S17's cleanup removed the item rather
+        than leaving it completed. Read-only: verified by an explicit
+        before/after `git status --short` comparison and by confirming no
+        claim file exists before or after."""
         repo_root = _repo_root()
+        state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
+        self.assertNotIn("v2-1-dry-run", state["work_items"])
         claim_file = ws.claim_path(repo_root, "v2-1-dry-run")
         self.assertFalse(claim_file.exists())
         before = subprocess.run(
@@ -441,7 +473,7 @@ class TestCheckpointOriginationAgainstRealRepository(unittest.TestCase):
         ).stdout
         with self.assertRaises(ws.CheckpointNotInProgressLocallyError) as ctx:
             ws.adopt_claim(repo_root, "v2-1-dry-run", "S-CP3", now="demo")
-        self.assertIn("COMPLETE", str(ctx.exception))
+        self.assertIn("status: None", str(ctx.exception))
         after = subprocess.run(
             ["git", "status", "--short"], cwd=repo_root, check=True,
             capture_output=True, text=True,
@@ -450,46 +482,39 @@ class TestCheckpointOriginationAgainstRealRepository(unittest.TestCase):
         self.assertFalse(claim_file.exists())
         self.assertIsNone(ws.resolve_claim(repo_root, "v2-1-dry-run"))
 
-    def test_resolve_checkpoint_ownership_reaches_no_checkpoint_once_s_cp3_is_complete(self):
-        """`resolve_checkpoint_ownership` reaches the terminal
-        `NO_CHECKPOINT` outcome for `v2-1-dry-run` now that all three
-        scratch checkpoints (`S-CP1`/S2, `S-CP2`/S13, `S-CP3`/S15) are
-        `COMPLETE`: `select_next_checkpoint` returns `None` (D-Selection's
-        own "every checkpoint COMPLETE" case), and 1c's own "nothing
-        remains selectable, nothing to release" branch returns
-        `(NO_CHECKPOINT, None, None)` -- there is no stale self-owned
-        claim to release either, since WF8b S15's completion already
-        released it in the same session that made it durable. Supersedes
-        this test's original form (`... resumes after the real S-CP3
-        takeover`, asserting `RESUME` against a claim that no longer
-        exists) -- that assertion is now false, not stale evidence to
-        preserve, since the whole point of S15 was to carry `S-CP3`
-        through to completion, not leave it perpetually `IN_PROGRESS`.
-        Read-only for this call: verified by an explicit before/after
+    def test_no_stale_claim_survives_v2_1_dry_run_removal(self):
+        """S17 removed `v2-1-dry-run` from live `work_items` entirely,
+        which also means there is no `work_item` dict left to drive
+        `select_next_checkpoint`/`resolve_checkpoint_ownership` against
+        for this id anymore -- the claim-side read-only invariant that
+        still applies is simply that no claim file was left behind by the
+        removal (`release_checkpoint` already released S-CP3's claim
+        during WF8b S15, before S17 removed the item itself), so there is
+        nothing for a fresh session to adopt or resolve ownership of.
+        Supersedes this test's S15-era form
+        (`..._reaches_no_checkpoint_once_s_cp3_is_complete`, which read
+        `state["work_items"]["v2-1-dry-run"]` and drove
+        `resolve_checkpoint_ownership` against it) -- that lookup now
+        raises `KeyError` since the entry no longer exists, so the
+        checkpoint-selection assertions no longer apply; the claim/
+        read-only assertions they were paired with do still apply and are
+        preserved here. Read-only: verified by an explicit before/after
         `git status --short` comparison."""
         repo_root = _repo_root()
         state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
-        work_item = state["work_items"]["v2-1-dry-run"]
-        registry = json.loads((repo_root / work_item["registry_path"]).read_text())
-        self.assertIsNone(work_item["current_checkpoint_id"])
-        self.assertEqual(work_item["checkpoints"]["S-CP3"]["status"], "COMPLETE")
-        selected = ws.select_next_checkpoint(work_item, registry)
-        self.assertIsNone(selected)
+        self.assertNotIn("v2-1-dry-run", state["work_items"])
+        claim_file = ws.claim_path(repo_root, "v2-1-dry-run")
         before = subprocess.run(
             ["git", "status", "--short"], cwd=repo_root, check=True,
             capture_output=True, text=True,
         ).stdout
-        outcome, checkpoint_id, owner_token = ws.resolve_checkpoint_ownership(
-            repo_root, work_item, "v2-1-dry-run", selected, now="demo")
+        self.assertFalse(claim_file.exists())
+        self.assertIsNone(ws.resolve_claim(repo_root, "v2-1-dry-run"))
         after = subprocess.run(
             ["git", "status", "--short"], cwd=repo_root, check=True,
             capture_output=True, text=True,
         ).stdout
         self.assertEqual(before, after)
-        self.assertEqual(outcome, ws.NO_CHECKPOINT)
-        self.assertIsNone(checkpoint_id)
-        self.assertIsNone(owner_token)
-        self.assertIsNone(ws.resolve_claim(repo_root, "v2-1-dry-run"))
 
     def test_bootstrap_driver_never_calls_this_slice(self):
         """Scope-boundary regression: `/bootstrap-workflow-v2` derives

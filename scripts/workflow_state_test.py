@@ -263,12 +263,96 @@ class TestCheckpointTrailerDiscovery(unittest.TestCase):
 
     def test_genuine_ambiguity_raises(self):
         """Two first-parent-ancestor commits both carrying the same
-        trailer pair is genuine ambiguity, not silently resolved."""
+        trailer pair is genuine ambiguity only once the role-specific
+        verification tie-break (item 39) also fails to pick a single
+        survivor -- here neither commit's own committed
+        `WORKFLOW_STATE.json` claims `WF0` as `COMPLETE` (neither commit
+        touches that file at all), so zero candidates verify and the
+        result stays undecidable, not silently resolved."""
         with ScratchRepo() as repo:
             repo.commit("wf0-a", trailers={"Workflow-Checkpoint": "WF0", "Workflow-Work-Item": "wi"})
             repo.commit("wf0-b", trailers={"Workflow-Checkpoint": "WF0", "Workflow-Work-Item": "wi"})
             with self.assertRaises(ws.AmbiguousCheckpointTrailerError):
                 ws.discover_checkpoint_commits(repo.root, "wi", repo.base)
+
+    def test_verification_tie_break_resolves_when_one_candidate_claims_complete(self):
+        """Item 39's real requirement: two first-parent-ancestor commits
+        carry the same checkpoint trailer, but only one's own committed
+        `WORKFLOW_STATE.json` records that checkpoint `COMPLETE` for this
+        work item -- that candidate resolves, the other (which claims a
+        different status) is rejected by the verification filter."""
+        with ScratchRepo() as repo:
+            _commit_state_with_trailers(
+                repo, _state_json(wi={"checkpoints": {"WF0": {"status": "IN_PROGRESS"}}}),
+                trailers={"Workflow-Checkpoint": "WF0", "Workflow-Work-Item": "wi"},
+            )
+            complete_sha = _commit_state_with_trailers(
+                repo, _state_json(wi={"checkpoints": {"WF0": {"status": "COMPLETE"}}}),
+                trailers={"Workflow-Checkpoint": "WF0", "Workflow-Work-Item": "wi"},
+            )
+            discovered = ws.discover_checkpoint_commits(repo.root, "wi", repo.base)
+            self.assertEqual(discovered, {"WF0": complete_sha})
+
+    def test_verification_tie_break_still_refuses_when_both_candidates_claim_complete(self):
+        """Genuine ambiguity persists when *both* first-parent-ancestor
+        candidates' own committed state claims `COMPLETE` -- verification
+        narrows, it does not manufacture a winner out of two equally
+        plausible survivors."""
+        with ScratchRepo() as repo:
+            _commit_state_with_trailers(
+                repo, _state_json_marked("a", wi={"checkpoints": {"WF0": {"status": "COMPLETE"}}}),
+                trailers={"Workflow-Checkpoint": "WF0", "Workflow-Work-Item": "wi"},
+            )
+            _commit_state_with_trailers(
+                repo, _state_json_marked("b", wi={"checkpoints": {"WF0": {"status": "COMPLETE"}}}),
+                trailers={"Workflow-Checkpoint": "WF0", "Workflow-Work-Item": "wi"},
+            )
+            with self.assertRaises(ws.AmbiguousCheckpointTrailerError):
+                ws.discover_checkpoint_commits(repo.root, "wi", repo.base)
+
+    def test_verification_tie_break_refuses_when_zero_candidates_claim_complete(self):
+        """Zero valid survivors after verification is still refused, not
+        treated as "no opinion, pick the first one"."""
+        with ScratchRepo() as repo:
+            _commit_state_with_trailers(
+                repo, _state_json_marked("a", wi={"checkpoints": {"WF0": {"status": "IN_PROGRESS"}}}),
+                trailers={"Workflow-Checkpoint": "WF0", "Workflow-Work-Item": "wi"},
+            )
+            _commit_state_with_trailers(
+                repo, _state_json_marked("b", wi={"checkpoints": {"WF0": {"status": "IN_PROGRESS"}}}),
+                trailers={"Workflow-Checkpoint": "WF0", "Workflow-Work-Item": "wi"},
+            )
+            with self.assertRaises(ws.AmbiguousCheckpointTrailerError):
+                ws.discover_checkpoint_commits(repo.root, "wi", repo.base)
+
+    def test_duplicate_trailer_resolves_via_first_parent_before_verification(self):
+        """The two-filter contract's ordering: when the first-parent
+        filter alone already narrows to one candidate, verification is
+        never consulted -- a cherry-picked/duplicate off-first-parent
+        trailer resolves exactly as before, even if the winning commit's
+        own committed state does not (yet) claim `COMPLETE`."""
+        with ScratchRepo() as repo:
+            _run(["git", "checkout", "-q", "-b", "side"], cwd=repo.root)
+            _commit_state_with_trailers(
+                repo, _state_json(wi={"checkpoints": {"WF0": {"status": "COMPLETE"}}}),
+                trailers={"Workflow-Checkpoint": "WF0", "Workflow-Work-Item": "wi"},
+                message="wf0-side",
+            )
+            _run(["git", "checkout", "-q", "-"], cwd=repo.root)
+            main_sha = _commit_state_with_trailers(
+                repo, _state_json(wi={"checkpoints": {"WF0": {"status": "IN_PROGRESS"}}}),
+                trailers={"Workflow-Checkpoint": "WF0", "Workflow-Work-Item": "wi"},
+                message="wf0-main",
+            )
+            # `-X ours`: both branches add the same WORKFLOW_STATE.json
+            # path with different content (no common-ancestor version to
+            # three-way-merge), so the merge itself needs a resolution
+            # strategy -- irrelevant to what this test is proving, which
+            # is purely about trailer/commit tie-breaking, not merge
+            # content.
+            _run(["git", "merge", "-q", "--no-ff", "-X", "ours", "-m", "merge side", "side"], cwd=repo.root)
+            discovered = ws.discover_checkpoint_commits(repo.root, "wi", repo.base)
+            self.assertEqual(discovered, {"WF0": main_sha})
 
 
 STATE_REL_PATH = "docs/ai-workflow/WORKFLOW_STATE.json"
@@ -287,8 +371,34 @@ def _commit_state(repo: "ScratchRepo", content: str, message: str = "state") -> 
     return repo.head()
 
 
+def _commit_state_with_trailers(
+    repo: "ScratchRepo", content: str, trailers: dict[str, str], message: str = "state",
+) -> str:
+    """Like `_commit_state`, but the commit also carries the given Git
+    trailers -- the shape a real checkpoint commit takes (it both advances
+    `WORKFLOW_STATE.json` and carries `Workflow-Checkpoint`/
+    `Workflow-Work-Item` trailers in the same commit), used by the
+    checkpoint-trailer-discovery verification tie-break tests (item 39)."""
+    full = repo.root / STATE_REL_PATH
+    full.parent.mkdir(parents=True, exist_ok=True)
+    full.write_text(content)
+    _run(["git", "add", STATE_REL_PATH], cwd=repo.root)
+    body = message + "\n\n" + "\n".join(f"{k}: {v}" for k, v in trailers.items())
+    _run(["git", "commit", "-q", "-m", body], cwd=repo.root)
+    return repo.head()
+
+
 def _state_json(**work_items) -> str:
     return json.dumps({"schema_version": 1, "work_items": work_items})
+
+
+def _state_json_marked(marker: str, **work_items) -> str:
+    """Like `_state_json`, plus an inert top-level marker field -- used
+    where two commits must carry deliberately identical checkpoint status
+    (to exercise the verification tie-break's "both claim it" or "neither
+    claims it" branches) but still need distinct blob content, since Git
+    refuses an empty commit whose tree would be byte-identical to HEAD's."""
+    return json.dumps({"schema_version": 1, "work_items": work_items, "_test_marker": marker})
 
 
 def _write_local_state(repo: "ScratchRepo", content: str) -> None:
