@@ -440,3 +440,48 @@ repeated freely.
   scratch fixture state.
 
 Findings go in `.ai-review/v2-1-dry-run/feedback/FUNCTIONAL_REVIEW.md`.
+
+### `v2-1-dry-run` — MILESTONE_COMPLETE (S16, real, 2026-08-15)
+
+The user gave literal `/accept-milestone`-stage confirmation for
+`v2-1-dry-run` ("I confirm acceptance of v2-1-dry-run."), validated for
+real by `workflow_state.validate_user_confirmation`. The advisory
+terminal-reachability pre-flight
+(`resolve_own_registry_completion_status` → `is_terminal=True`,
+`milestone_complete_gate_reachable` → `True`) and the authoritative
+`workflow_state.complete_work_item` call both succeeded — no
+`IncompleteChildWorkItemError` (no remediation child of `v2-1-dry-run`
+exists) and no `IncompleteOwnCheckpointsError` (`S-CP1`-`S-CP3` all
+`COMPLETE`), proving S16's own pass/fail evidence exactly.
+`work_items["v2-1-dry-run"].phase` is now `MILESTONE_COMPLETE`;
+`active_work_item_id` reset to `null` (it pointed here).
+
+**A genuine gap in `/accept-milestone`'s steps 3/5, recorded rather than
+worked around**: those steps ("update `docs/ROADMAP.md` to mark the
+milestone complete"; "archive this milestone's execution/reference plans
+to `docs/milestones/completed/`") are written for a real product/process
+milestone with a `ROADMAP.md` entry and a top-level "Active plan" section
+in this file. `v2-1-dry-run` has neither — `grep` confirms zero mentions
+of it (or of `workflow-v2-1-core`) anywhere in `docs/ROADMAP.md`, and its
+own plan doc (`docs/ai-workflow/dry-run/v2-1-dry-run-plan.md`) was never
+linked from this file's top "Active plan" section, which belongs to
+Milestone 8 alone. Steps 3 and 5 were therefore **not** performed:
+step 3 has no entry to mark, and step 5 would misfile a throwaway
+synthetic item's dry-run plan into the real completed-milestones
+archive, contradicting `WF8B_SCENARIOS.md`'s own "Isolation" discipline
+("The real `workflow-v2-1-core` record is untouched by any scenario
+here"). Step 4 is honored narrowly and correctly instead: this note *is*
+that section's move into a factual "complete" state — there was never a
+top-level "Active plan" entry for this item to clear. Step 7 ("Next
+action") is unaffected: it already correctly points at the real
+`docs/ROADMAP.md`, which `v2-1-dry-run` was never part of. This is filed
+as an observation for `workflow-v2-1-core`'s own eventual, real
+`/accept-milestone` invocation to account for (it likely faces the same
+question, since it also has no `ROADMAP.md` entry), not as a blocking
+defect — nothing about it left real repository state incorrect.
+
+Not yet run: **S11** (legacy import/adoption, throwaway item only),
+**S12** (approval/content-drift detection), and **S17** (pointer
+restoration — `active_work_item_id` back to `workflow-v2-1-core`, dry-run
+cleanup). `S13`-`S15` already ran earlier in this dry run, interleaved
+with checkpoint implementation.

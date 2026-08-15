@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_work_item_id": "v2-1-dry-run",
+  "active_work_item_id": null,
   "work_items": {
     "workflow-v2-1-core": {
       "work_item_type": "process",
@@ -340,7 +340,7 @@
       "registry_path": "docs/ai-workflow/registry/v2-1-dry-run-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/v2-1-dry-run-mapping.json",
       "governing_workflow_version": "2.1",
-      "phase": "AWAITING_FUNCTIONAL_REVIEW",
+      "phase": "MILESTONE_COMPLETE",
       "plan_revision": 5,
       "implementation_revision": 6,
       "functional_review_round": null,
@@ -448,8 +448,8 @@
       },
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 29,
-      "last_transition": "2026-08-15T11:17:30+01:00"
+      "state_revision": 30,
+      "last_transition": "2026-08-15T11:46:44+01:00"
     }
   }
 }
