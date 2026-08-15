@@ -93,9 +93,14 @@ record of checkpoint status (D-Registry); nothing here overrides it.
   directly (`cat docs/ai-workflow/dry-run/scratch/c.txt`); no automated
   test beyond this, per the plan's own "Missing tests: none beyond the
   trivial file-existence check" self-review note.
-- **Review findings:** none — covered by S7's first implementation-stage
-  self-review (2026-08-15): file content confirmed correct, commit trailer
-  uniquely discoverable via `workflow_state.discover_checkpoint_commits`,
-  no blocking/important findings.
+- **Review findings:** S7's first implementation-stage self-review
+  (2026-08-15) found no blocking/important findings, content confirmed
+  correct at that time. S8 (2026-08-15, real, `/apply-implementation-review`)
+  then exercised a genuine `REVISE` round against this exact file: a
+  deliberately-planted defect was committed on top (`b8d4899`, "checkpoint
+  2" instead of "checkpoint 3"), reproduced directly against that commit,
+  and fixed (`ae7ef4c`), restoring content byte-identical to this
+  checkpoint's own original completion commit `ac1df00`. Full record in
+  `docs/ai-workflow/dry-run/WF8B_SCENARIOS.md`'s S8 outcome note.
 - **Functional-verification outcome:** not applicable (process checkpoint,
   no product-facing behavior).

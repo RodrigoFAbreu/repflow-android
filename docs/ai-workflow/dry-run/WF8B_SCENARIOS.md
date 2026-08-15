@@ -832,6 +832,95 @@ section below, not left implicit.
   differs from S7's value and matches the fix commit's SHA.
 - **Cleanup**: none.
 
+- **Outcome (2026-08-15, real, reached its own defined stop boundary)**: ran
+  for real, continuing the same session that executed S7, against live HEAD
+  `910c2ccba95c3fc7b6faa0eace9e3b0181bd9e9f` (S7's own bundle-generation
+  head, unchanged since).
+
+  **Seeding a genuine defect, honestly**: a transient working-tree-only edit
+  (plant then immediately revert) was tried first and rejected on review —
+  it would leave the "fix" byte-identical to the never-touched committed
+  content, with no diff for step 6's required fix commit to carry, and it
+  would make the finding's own claim ("the bundle contains this defect")
+  false, since a bundle's `files/` snapshot is frozen at generation time and
+  cannot retroactively pick up a later uncommitted edit. Resolved by
+  actually **committing** the defect first (`b8d4899`, "plant a real S8
+  defect in v2-1-dry-run's S-CP3 marker") — `docs/ai-workflow/dry-run/scratch/c.txt`
+  changed from "checkpoint 3" (correct, `S-CP3`'s own original completion
+  commit `ac1df00`) to "checkpoint 2" (a plausible copy-paste mistake from
+  `b.txt`'s text). `<feedback_dir>/REVIEW_FEEDBACK.md` was written
+  referencing S7's already-generated bundle identity exactly
+  (`bundle_id 618657d3...`, `base_commit e75a756d...`,
+  `work_item v2-1-dry-run` — all still valid, since bundle identity binds
+  to captured content and metadata, not to what happens at later commits)
+  and states explicitly, in its own "Verification" section, that the S7
+  bundle's frozen snapshot does **not** contain this defect — so the
+  finding cannot be misread as evidence the archived, already-reviewed
+  bundle was itself wrong.
+
+  **Step 0** (dual-mode branch): `governing_workflow_version: "2.1"`
+  confirmed from `WORKFLOW_STATE.json`; no version-specific behavior beyond
+  the exit-state naming, per the command's own text.
+
+  **Step 1** (binding-field validation): `parse_review_feedback_binding_fields`
+  + `assert_feedback_matches_bundle`, called for real against the live
+  feedback file and the current `MANIFEST.md`'s recorded identifiers — no
+  exception, `status: REVISE`.
+
+  **Step 2** (reproduce before fixing): `git show b8d4899:docs/ai-workflow/dry-run/scratch/c.txt`
+  confirmed the committed defect directly, before changing anything — not
+  the reviewer's word taken at face value.
+
+  **Step 3** (fix): `docs/ai-workflow/dry-run/scratch/c.txt` corrected back
+  to "checkpoint 3", byte-identical to `ac1df00`'s content.
+
+  **Step 4**: no rejected findings — the one Important finding was
+  validated and fixed as-is.
+
+  **Step 5** (verification): `git diff --name-only b8d4899 -- app/ gradle/
+  build.gradle.kts settings.gradle.kts` empty, so the standard Android
+  suite (`/milestone-implement` step 3) does not apply and was not run,
+  same reasoning as S7; narrow verification is the direct content re-check
+  above.
+
+  **Step 6** (commit): one coherent fix commit, `ae7ef4c250a638fe358bd89d54bc3271bc401bd2`
+  ("fix(wf8b): correct v2-1-dry-run S-CP3 scratch marker per S8 finding"),
+  no special trailer (matching the precedent of every real
+  `workflow-v2-1-core` implementation-review fix commit in this
+  repository's own history — e.g. `c98e7e6`, `7bef596` — neither of which
+  carries a `Workflow-Checkpoint` trailer, since a review-feedback fix
+  commit is not itself a checkpoint-completion event).
+
+  **Step 7** (bundle regeneration, correct order per S7's own established
+  finding): `record_bundle_generation(state, "v2-1-dry-run",
+  stage="post-fix", head="ae7ef4c...", now=...)` called and persisted
+  first (`reviewed_implementation_head` `910c2ccb...` → `ae7ef4c...`,
+  `implementation_revision` `1` → `2`, `state_revision` `20` → `21`, `git
+  diff -U0` confirmed exactly those three `v2-1-dry-run` fields changed);
+  the four author-written files updated to describe this round; then
+  `./scripts/prepare-ai-review.sh e75a756... post-fix v2-1-dry-run`, run
+  twice for idempotency. **Real, independently interesting result**: this
+  round's `review_content_id` is **unchanged** from S7's
+  (`33139aaf7e637fc32dfd86a31f73c6153e32d2dc0a4ff8c4fa46ee2afe131a96`) —
+  independently recomputed via `compute_review_content_id_implementation_stage`
+  before writing `REVIEW_REQUEST.md`, then reproduced identically by the
+  script's own write→recompute check, because the fix restored the
+  protected content to be byte-identical to what S7 already hashed. Only
+  `bundle_id` advances (`618657d3...` → `b98f2461...`, since it also binds
+  `reviewed_implementation_head`/`generation_head`/`implementation_revision`).
+  This is a real, exercised instance of `D-Commit-Provenance`'s
+  "Same-content post-fix republication" branch, not a hermetic-test-only
+  claim.
+
+  **Step 8** (readiness report): `reviewed_implementation_head` (`ae7ef4c...`)
+  now equals live HEAD exactly — independently re-verified read-only after
+  the state write. `AWAITING_TECHNICAL_APPROVAL` is reachable; per the
+  command's own text, `/approve-review implementation` was **not**
+  auto-invoked — that remains the user's own call, for a later session.
+
+  **Not yet run**: `/approve-review implementation v2-1-dry-run` (**S9**'s
+  own first user-gated action) — next, from a later session.
+
 ## S9 — Functional-review preparation and explicit user acceptance
 
 - **Purpose**: prove `/approve-review implementation` (user-gated,
