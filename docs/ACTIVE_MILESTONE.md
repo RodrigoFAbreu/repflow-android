@@ -213,3 +213,105 @@ repeated freely.
   list) — not blocking for this functional review.
 
 Findings go in `.ai-review/workflow-v2-1-core/feedback/FUNCTIONAL_REVIEW.md`.
+
+---
+
+## `v2-1-dry-run` — functional review checklist (implementation revision 4)
+
+This section is unrelated to the roadmap/Milestone 8 content above and to
+the `workflow-v2-1-core` section above it. It is the synthetic
+`v2-1-dry-run` work item's **own** functional-review checklist — evidence
+for `WF8b`'s S9 scenario (`docs/ai-workflow/dry-run/WF8B_SCENARIOS.md`),
+proving `/prepare-functional-review`'s real checklist-writing path for a
+`"2.1"`-governed, state-tracked work item. `v2-1-dry-run` has no product
+surface of its own: its "implementation" is three trivial scratch-file
+checkpoints (`S-CP1`/`S-CP2`/`S-CP3`,
+`docs/ai-workflow/registry/v2-1-dry-run-registry.json`), created solely to
+exercise the real checkpoint/approval/review command surface end to end.
+
+**Context**: `technical_approval` for `v2-1-dry-run` implementation
+revision 4 is now recorded (`basis: USER_OVERRIDE`, commit `7c1032c`,
+`review_content_id`
+`33139aaf7e637fc32dfd86a31f73c6153e32d2dc0a4ff8c4fa46ee2afe131a96`),
+landed via a real `/approve-review implementation v2-1-dry-run` invocation
+(commit `8b72452`) after S9's provenance-gate remediation (see
+`docs/ai-workflow/dry-run/WF8B_S9_FINDING_provenance_gate_never_implemented.md`).
+`phase` transitioned to `AWAITING_FUNCTIONAL_REVIEW` as part of that same
+approval. Per `WF8B_SCENARIOS.md`'s own reordering note, S10 (a
+functional-review finding + `/apply-functional-review` bounded
+remediation) is exercised next, ahead of S9's final `/accept-milestone`
+step.
+
+### Setup
+
+No Android app / Gradle changes are involved. Process tooling only. No
+build/install step is needed; everything below runs with `python3` from
+the repo root.
+
+### Automated verification (re-confirmed this session, current)
+
+Re-run independently immediately before this checklist was written (no
+source/test file has changed since `technical_approval`'s
+`reviewed_content_commit`, `7c1032c` — only metadata-only commits since):
+
+| Suite | Tests |
+|---|---|
+| `scripts/workflow_fingerprint_test.py` | 122/122 |
+| `scripts/workflow_fingerprint_generalization_test.py` | 60/60 |
+| `scripts/workflow_state_test.py` | 408/408 |
+| `scripts/workflow_test_harness_test.py` | 19/19 |
+| `scripts/workflow_integration_test.py` | 46/47 |
+
+The one `workflow_integration_test.py` failure is the same pre-existing,
+unrelated WFR-row-count staleness already documented across this dry
+run's own outcome notes (a static assertion on
+`docs/ai-workflow/WORKFLOW_V2_PLAN.md`'s requirements-table row count,
+last synced at a much earlier plan revision; not a functional regression
+and not in scope for this review).
+
+### Test data
+
+None to seed — this checks the repository's own real, already-committed
+state (`v2-1-dry-run`'s own entry in
+`docs/ai-workflow/WORKFLOW_STATE.json`, and the three scratch files its
+checkpoints created).
+
+### Flows to exercise manually
+
+1. **Scratch checkpoints exist as committed.** Confirm
+   `docs/ai-workflow/dry-run/scratch/a.txt` and `scratch/b.txt` exist and
+   are tracked (`git ls-files` shows both); `scratch/c.txt` exists but is
+   deliberately **not** tracked yet — it is live S13-S15 dirty-worktree
+   fixture state, not a defect.
+2. **`v2-1-dry-run`'s own state is internally consistent.** Confirm
+   `docs/ai-workflow/WORKFLOW_STATE.json`'s `work_items["v2-1-dry-run"]`
+   shows `phase: "AWAITING_FUNCTIONAL_REVIEW"`,
+   `last_completed_checkpoint_id: "S-CP3"`, and `technical_approval.status:
+   "CURRENT"` with `reviewed_content_commit: "7c1032c..."`.
+3. **The real command surface, not just the hermetic fixtures, drove this
+   round.** Confirm `8b72452` (the technical-approval commit) carries a
+   `Workflow-Technical-Approval` trailer and a `Workflow-Work-Item:
+   v2-1-dry-run` trailer, and that `bc0770b` (this outcome's own
+   documentation commit) is metadata-only (`docs/` only).
+4. **Re-run the automated suite yourself** (table above) and confirm the
+   same result independently, rather than trusting this document's claim
+   alone.
+
+### Expected result
+
+All four checks above pass exactly as described; no step requires any
+write to the real repository (all read-only), so this review can be
+repeated freely.
+
+### Known limitations / out of scope for this review
+
+- `v2-1-dry-run` has no product surface — this review exercises process
+  tooling only, per `WF8b`'s own purpose.
+- `WF8b` itself is **not** complete: S10 through S17 remain unexecuted as
+  of this checklist. This review covers only S9's implementation-approval
+  and functional-review-preparation halves.
+- `scratch/c.txt` and `docs/ai-workflow/dry-run/verify_review_content_id.py`
+  are deliberately left uncommitted — do not commit or clean them up; they
+  are live fixture state for the not-yet-run S13/S14/S15 scenarios.
+
+Findings go in `.ai-review/v2-1-dry-run/feedback/FUNCTIONAL_REVIEW.md`.
