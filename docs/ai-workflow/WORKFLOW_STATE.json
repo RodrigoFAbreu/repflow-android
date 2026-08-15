@@ -340,7 +340,7 @@
       "registry_path": "docs/ai-workflow/registry/v2-1-dry-run-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/v2-1-dry-run-mapping.json",
       "governing_workflow_version": "2.1",
-      "phase": "SELF_REVIEWING_IMPLEMENTATION",
+      "phase": "AWAITING_FUNCTIONAL_REVIEW",
       "plan_revision": 5,
       "implementation_revision": 4,
       "functional_review_round": null,
@@ -394,7 +394,43 @@
         "waived_guarantees": [],
         "recorded_at": "2026-08-12T01:34:07+01:00"
       },
-      "technical_approval": null,
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "USER_OVERRIDE",
+        "reviewed_bundle_id": "e60f7ab4eb6da5645825c5d433146852d3c972d77615cc7847b6744895f9da09",
+        "approved_review_content_id": "33139aaf7e637fc32dfd86a31f73c6153e32d2dc0a4ff8c4fa46ee2afe131a96",
+        "review_content_manifest": [
+          {
+            "path": "docs/ai-workflow/dry-run/scratch/a.txt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d1f3047815ebf192c4dba621c50b37497e78c735"
+          },
+          {
+            "path": "docs/ai-workflow/dry-run/scratch/b.txt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "da20f5fd2d5c770e1e287cebb551505ca677b450"
+          },
+          {
+            "path": "docs/ai-workflow/dry-run/scratch/c.txt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ca2ff4d749994cf8d3c984a2e15e9a36cdac6483"
+          },
+          {
+            "path": "docs/ai-workflow/registry/v2-1-dry-run-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "96f9e6915d981f0300b601333689f5ee9e2ae896"
+          }
+        ],
+        "reviewed_content_commit": "7c1032c814c0be618b68c4c1a03ed81900346301",
+        "legacy_evidence": null,
+        "user_confirmation": "/approve-review implementation v2-1-dry-run",
+        "waived_guarantees": [],
+        "recorded_at": "2026-08-15T03:50:00+01:00"
+      },
       "plan_review_stages": {
         "review_content_id": "79e5e1df81df92de3845e7c680718c46dcaf4d1df475ade351a023bfd88b2a8d",
         "local_model_plan_review": {
@@ -412,8 +448,8 @@
       },
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 24,
-      "last_transition": "2026-08-15T03:45:00+01:00"
+      "state_revision": 25,
+      "last_transition": "2026-08-15T03:50:00+01:00"
     }
   }
 }
