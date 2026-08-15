@@ -3508,7 +3508,7 @@ def _commit_state_only(
     full = repo.root / STATE_REL_PATH
     full.parent.mkdir(parents=True, exist_ok=True)
     content = {"schema_version": 1, "work_items": {work_item_id: work_item}}
-    full.write_text(json.dumps(content, indent=2, ensure_ascii=False) + "\n")
+    full.write_bytes(ws._serialize_state(content))
     _run(["git", "add", STATE_REL_PATH], cwd=repo.root)
     body = message
     if trailers:
@@ -5575,6 +5575,50 @@ class TestAbandonedDestructiveGuardRecovery(unittest.TestCase):
             new_lease = ws.acquire_guard(repo.root, "wi", holder_owner_token=record["owner_token"],
                                          checkpoint_id="CP", step="1d", step_class=ws.ORDINARY, now="t4")
             ws.release_guard(repo.root, "wi", new_lease)
+
+
+class TestCanonicalStateSerialization(unittest.TestCase):
+    """OPUS-R101-005: `_serialize_state` is the single source of truth for
+    `WORKFLOW_STATE.json` bytes, deliberately `ensure_ascii=True`, shared by
+    production publication and by this suite's own direct-write fixture
+    (`_commit_state_only`) so the two can never disagree."""
+
+    def test_round_trip_is_byte_stable_for_non_ascii_content(self):
+        state = {
+            "schema_version": 1,
+            "work_items": {
+                "wi": {
+                    "note": "WF8b finding disposition (revision 53 → 54) — done",
+                    "emoji": "\U0001F600",
+                }
+            },
+        }
+        first = ws._serialize_state(state)
+        second = ws._serialize_state(json.loads(first.decode("utf-8")))
+        self.assertEqual(first, second)
+
+    def test_serialization_is_pure_ascii_bytes(self):
+        state = {"schema_version": 1, "work_items": {"wi": {"note": "→—"}}}
+        payload = ws._serialize_state(state)
+        self.assertTrue(all(b < 128 for b in payload))
+        self.assertTrue(payload.endswith(b"\n"))
+
+    def test_publish_state_file_uses_the_canonical_serialization(self):
+        with ScratchRepo() as repo:
+            full_path = repo.root / "docs/ai-workflow/WORKFLOW_STATE.json"
+            state = {"schema_version": 1, "work_items": {"wi": {"note": "→"}}}
+            ws._publish_state_file(full_path, state)
+            self.assertEqual(full_path.read_bytes(), ws._serialize_state(state))
+
+    def test_live_workflow_state_bytes_equal_canonical_serialization_of_its_own_parsed_content(self):
+        """The live repository's own `docs/ai-workflow/WORKFLOW_STATE.json`
+        must already be in the canonical form -- proves the silent
+        re-encoding OPUS-R101-005 found is not merely fixed going forward
+        but that the live file matches the now-explicit contract today."""
+        live_path = Path(__file__).resolve().parent.parent / "docs/ai-workflow/WORKFLOW_STATE.json"
+        raw = live_path.read_bytes()
+        parsed = json.loads(raw.decode("utf-8"))
+        self.assertEqual(raw, ws._serialize_state(parsed))
 
 
 class TestIdentityDocumentSerialization(unittest.TestCase):

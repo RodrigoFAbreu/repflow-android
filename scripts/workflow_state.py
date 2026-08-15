@@ -1019,21 +1019,32 @@ def state_lock(repo_root: Path, *, lock_path: Path = STATE_LOCK_PATH):
         _state_lock_held.discard(key)
 
 
+def _serialize_state(state: dict) -> bytes:
+    """The one canonical `WORKFLOW_STATE.json` serialization (OPUS-R101-005):
+    2-space indent, insertion key order, `ensure_ascii=True` (deliberately
+    chosen, not the `json.dumps` default-by-accident it replaces -- this
+    repository's live file already carries prose with non-ASCII characters,
+    e.g. `→`/`—`, and this is the form it is already in), and a
+    trailing newline. The single source of truth for both production
+    publication (`_publish_state_file`) and the hermetic test fixture that
+    writes `WORKFLOW_STATE.json` directly (`_commit_state_only`), so the two
+    can never disagree -- unlike `WORKTREE_IDENTITY.json`, this file is not
+    `sort_keys=True`."""
+    return (json.dumps(state, indent=2, ensure_ascii=True) + "\n").encode("utf-8")
+
+
 def _publish_state_file(full_path: Path, state: dict) -> None:
     """The canonical serialization + single `os.replace` publication for
     `WORKFLOW_STATE.json`: a same-directory temp file, written whole and
     `fsync`ed, then renamed over the target in one atomic step -- the
-    same shape `_publish_worktree_identity` uses. 2-space indent,
-    insertion key order and a trailing newline, matching this
-    repository's own on-disk convention for this file exactly (unlike
-    `WORKTREE_IDENTITY.json`, this file is not `sort_keys=True`)."""
+    same shape `_publish_worktree_identity` uses."""
     full_path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(
         dir=str(full_path.parent), prefix=f".{full_path.name}-", suffix=".tmp",
     )
     try:
-        with os.fdopen(fd, "w") as handle:
-            handle.write(json.dumps(state, indent=2) + "\n")
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(_serialize_state(state))
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(tmp_name, full_path)
