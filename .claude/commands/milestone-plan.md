@@ -43,16 +43,26 @@ compatibility path.
      `docs/ai-workflow/WORKFLOW_V2_PLAN.md`-equivalent, `docs/ai-workflow/registry/<work_item_id>-registry.json`,
      `docs/ai-workflow/requirements/<work_item_id>-mapping.json`, and the
      resolved base commit respectively (`D-Fingerprint-Generalization`).
-     Call `workflow_state.route_work_item(...)`, passing all four, (D1's
-     create-or-resume routing: creates a fresh `work_items[id]` entry
-     fixing `governing_workflow_version` from the config default at this
-     moment, or advances `plan_revision`/`state_revision` on an existing
-     non-terminal entry -- the same call also idempotently accepts these
-     four facts on a *resumed*, pre-declared entry that still has some or
-     all of them `null`, e.g. a synthetic dry-run item created with only
-     `plan_path` set; refuses a terminal-phase id reuse, and refuses a
-     genuine conflict on an already-non-null fact) and persist the
-     returned state to `docs/ai-workflow/WORKFLOW_STATE.json`.
+     Call `workflow_state.route_work_item(...)`, passing all four **and
+     `repo_root`**, (D1's create-or-resume routing: creates a fresh
+     `work_items[id]` entry fixing `governing_workflow_version` from the
+     config default at this moment, or advances
+     `plan_revision`/`state_revision` on an existing non-terminal entry --
+     the same call also idempotently accepts these four facts on a
+     *resumed*, pre-declared entry that still has some or all of them
+     `null`, e.g. a synthetic dry-run item created with only `plan_path`
+     set; refuses a terminal-phase id reuse, and refuses a genuine conflict
+     on an already-non-null fact) and persist the returned state to
+     `docs/ai-workflow/WORKFLOW_STATE.json`. On a **fresh** id,
+     `repo_root` also gates the id against `D-Checkpoint-Ownership`'s
+     origination reference (`WFR-66`): a `work_item_id` that has ever
+     appeared there is permanently non-reusable and refuses with
+     `ws.WorkItemIdReusedError` (report the refusal and stop; use a
+     different id). An undecidable reference read refuses with
+     `ws.IdentityReferenceUndecidableError` -- present `.evidence` to the
+     user and, only on their explicit authorization of the literal it
+     derives, clear it with `workflow_state.authorize_identity_reference_gap(...)`
+     before retrying `route_work_item(...)`.
 2. Load only documentation relevant to that milestone: the linked execution
    guide, the reference guide only for unresolved detail, and any of
    `docs/DOMAIN_GLOSSARY.md`, `docs/UX_FLOWS.md`,
@@ -74,7 +84,15 @@ compatibility path.
      content at the paths step 1 `[2.1]` just declared:
      `docs/ai-workflow/registry/<work_item_id>-registry.json` and
      `docs/ai-workflow/requirements/<work_item_id>-mapping.json` — the
-     sole writer either file should ever have (D-Registry). Embed
+     sole writer either file should ever have (D-Registry). Before writing,
+     this call also checks every checkpoint id genuinely *new* to this
+     revision (absent from whatever registry currently sits on disk)
+     against `D-Checkpoint-Ownership`'s origination reference (`WFR-66`) —
+     an id kept live across revisions is never rechecked, only one
+     reintroduced after retirement — refusing with `ws.CheckpointIdReusedError`
+     (pick a different id) or `ws.IdentityReferenceUndecidableError` (same
+     `authorize_identity_reference_gap` escape as above, scoped to this
+     `(work_item_id, checkpoint_id)` pair). Embed
      `workflow_state.render_registry_markdown(registry)`'s output as the
      plan document's own generated, human-readable checkpoint table —
      never hand-edited, never itself hashed. In the same pass, call

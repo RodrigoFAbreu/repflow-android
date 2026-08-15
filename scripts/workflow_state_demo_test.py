@@ -449,6 +449,43 @@ class TestCheckpointOriginationAgainstRealRepository(unittest.TestCase):
         with self.assertRaises(ws.CheckpointOriginationUnprovableError):
             ws.checkpoint_origination_provable(repo_root, "workflow-v2-1-core", "WF8b")
 
+    def test_identity_reference_admits_refuses_this_repositorys_own_reused_work_item_id(self):
+        """WFR-66's identity-query enforcement against real history: the
+        plan's own "one concrete instance" fact -- `workflow-v2-1-core`
+        as a `work_item_id` has, obviously, appeared in every commit that
+        ever touched its own `WORKFLOW_STATE.json` entry -- so a fresh
+        attempt to *create* a work item under this same id must be
+        permanently refused, on the identity-existence query alone,
+        before `route_work_item` ever reaches the terminal-phase check.
+        Read-only."""
+        repo_root = _repo_root()
+        before = subprocess.run(
+            ["git", "status", "--short"], cwd=repo_root, check=True,
+            capture_output=True, text=True,
+        ).stdout
+        with self.assertRaises(ws.WorkItemIdReusedError):
+            ws.identity_reference_admits(repo_root, WORK_ITEM_ID)
+        after = subprocess.run(
+            ["git", "status", "--short"], cwd=repo_root, check=True,
+            capture_output=True, text=True,
+        ).stdout
+        self.assertEqual(before, after)
+
+    def test_identity_reference_admits_refuses_this_repositorys_own_wf8b_pair(self):
+        """The same fact `checkpoint_origination_provable` already proves
+        for `workflow-v2-1-core`/`WF8b` (observed `IN_PROGRESS` at five
+        real commits) also makes it a decidably-observed pair for the
+        *identity* query, so a future registry that tried to reintroduce
+        a retired `WF8b` id would be refused the identical way."""
+        repo_root = _repo_root()
+        with self.assertRaises(ws.CheckpointIdReusedError):
+            ws.identity_reference_admits(repo_root, WORK_ITEM_ID, "WF8b")
+
+    def test_identity_reference_admits_admits_a_genuinely_unused_id(self):
+        repo_root = _repo_root()
+        result = ws.identity_reference_admits(repo_root, "an-id-never-used-anywhere-in-this-history")
+        self.assertEqual(result["decision"], "admit")
+
 
 if __name__ == "__main__":
     unittest.main()

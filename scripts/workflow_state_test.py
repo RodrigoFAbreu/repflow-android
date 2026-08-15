@@ -462,6 +462,378 @@ class TestCheckpointOriginationReference(unittest.TestCase):
             self.assertEqual(ctx.exception.evidence["route"], "reference_unresolvable")
 
 
+class TestIdentityReferenceReadPartition(unittest.TestCase):
+    """WFR-66's identity-query enforcement: the read partition
+    (`_identity_query_at_commit`/`_scan_identity_reference`), disjoint
+    from and stated separately from the origination test's own partition
+    though both scan the same reference (`OPUS-R90-003`)."""
+
+    def test_no_reference_commits_admits(self):
+        with ScratchRepo() as repo:
+            result = ws._scan_identity_reference(repo.root, "wi")
+            self.assertEqual(result["decision"], "admit")
+            self.assertEqual(result["route"], "no_reference_commits")
+
+    def test_work_item_id_never_observed_admits(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, _state_json())  # empty work_items
+            result = ws._scan_identity_reference(repo.root, "wi")
+            self.assertEqual(result["decision"], "admit")
+            self.assertEqual(result["route"], "scanned_all_decidable")
+
+    def test_work_item_id_key_present_is_observed_whatever_its_value(self):
+        """Key presence at the queried level is the whole of what an
+        existence query asks -- a `null` value still refuses, which is
+        exactly where this partition diverges from the origination
+        table's own (there, `null` is undecidable)."""
+        with ScratchRepo() as repo:
+            sha = _commit_state(repo, json.dumps({"schema_version": 1, "work_items": {"wi": None}}))
+            result = ws._scan_identity_reference(repo.root, "wi")
+            self.assertEqual(result["decision"], "observed")
+            self.assertEqual(result["commit"], sha)
+
+    def test_checkpoint_pair_key_present_is_observed_whatever_its_value(self):
+        with ScratchRepo() as repo:
+            sha = _commit_state(repo, _state_json(wi={"checkpoints": {"CP": None}}))
+            result = ws._scan_identity_reference(repo.root, "wi", "CP")
+            self.assertEqual(result["decision"], "observed")
+            self.assertEqual(result["commit"], sha)
+
+    def test_checkpoint_pair_absent_when_only_a_different_checkpoint_present(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, _state_json(wi={"checkpoints": {"OTHER": {"status": "COMPLETE"}}}))
+            result = ws._scan_identity_reference(repo.root, "wi", "CP")
+            self.assertEqual(result["decision"], "admit")
+
+    def test_checkpoint_pair_absent_when_work_item_id_itself_never_appears(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, _state_json())
+            result = ws._scan_identity_reference(repo.root, "wi", "CP")
+            self.assertEqual(result["decision"], "admit")
+
+    def test_work_items_non_object_is_undecidable_for_work_item_query(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, json.dumps({"schema_version": 1, "work_items": 4}))
+            with self.assertRaises(ws.IdentityReferenceUndecidableError) as ctx:
+                ws._scan_identity_reference(repo.root, "wi")
+            self.assertEqual(len(ctx.exception.evidence["undecidable_commits"]), 1)
+
+    def test_work_item_entry_non_object_is_undecidable_for_pair_query(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, json.dumps({"schema_version": 1, "work_items": {"wi": 4}}))
+            with self.assertRaises(ws.IdentityReferenceUndecidableError):
+                ws._scan_identity_reference(repo.root, "wi", "CP")
+
+    def test_checkpoints_non_object_is_undecidable_for_pair_query(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, _state_json(wi={"checkpoints": 4}))
+            with self.assertRaises(ws.IdentityReferenceUndecidableError):
+                ws._scan_identity_reference(repo.root, "wi", "CP")
+
+    def test_each_commit_judged_on_its_own_document_decidable_absence_does_not_mask_a_later_undecidable(self):
+        """A commit that never mentions `wi` at all is decidably absent
+        for the pair query; a *later* commit undecidable for the work
+        item entry still raises, since the reduction rule requires every
+        examined commit to be decidable before admitting."""
+        with ScratchRepo() as repo:
+            _commit_state(repo, _state_json())  # no "wi" key: decidable absent
+            _commit_state(repo, json.dumps({"schema_version": 1, "work_items": {"wi": 4}}))
+            with self.assertRaises(ws.IdentityReferenceUndecidableError):
+                ws._scan_identity_reference(repo.root, "wi", "CP")
+
+    def test_unresolvable_reference_raises_identity_specific_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ws.IdentityReferenceUndecidableError) as ctx:
+                ws._scan_identity_reference(Path(tmp), "wi")
+            self.assertTrue(ctx.exception.evidence.get("reference_unresolvable"))
+
+    def test_reduction_rule_observed_wins_over_undecidable_anywhere_in_scan(self):
+        """Any observation anywhere binds, no supersession, no recency --
+        and here the two routes differ in whether an escape exists at
+        all, so an observed commit's unescapable refusal wins over an
+        undecidable commit found in the same scan regardless of order."""
+        with ScratchRepo() as repo:
+            _commit_state(repo, "{not valid json")
+            sha = _commit_state(repo, json.dumps({"schema_version": 1, "work_items": {"wi": {}}}))
+            result = ws._scan_identity_reference(repo.root, "wi")
+            self.assertEqual(result["decision"], "observed")
+            self.assertEqual(result["commit"], sha)
+
+    def test_full_scan_collects_every_undecidable_commit_not_only_the_first(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, "{not valid json 1", message="bad1")
+            _commit_state(repo, "{not valid json 2", message="bad2")
+            with self.assertRaises(ws.IdentityReferenceUndecidableError) as ctx:
+                ws._scan_identity_reference(repo.root, "wi")
+            self.assertEqual(len(ctx.exception.evidence["undecidable_commits"]), 2)
+
+
+class TestGapObservationIdAndLiteral(unittest.TestCase):
+    def test_digest_is_deterministic_and_order_independent(self):
+        evidence_a = {
+            "work_item_id": "wi", "checkpoint_id": None, "reference_unresolvable": False,
+            "undecidable_commits": [{"commit": "b", "failure_class": "x"}, {"commit": "a", "failure_class": "y"}],
+        }
+        evidence_b = {
+            "work_item_id": "wi", "checkpoint_id": None, "reference_unresolvable": False,
+            "undecidable_commits": [{"commit": "a", "failure_class": "y"}, {"commit": "b", "failure_class": "x"}],
+        }
+        self.assertEqual(ws.gap_observation_id(evidence_a), ws.gap_observation_id(evidence_b))
+
+    def test_digest_changes_with_identity(self):
+        base = {"work_item_id": "wi", "checkpoint_id": None, "reference_unresolvable": False,
+                "undecidable_commits": [{"commit": "a", "failure_class": "x"}]}
+        other = {**base, "work_item_id": "other"}
+        self.assertNotEqual(ws.gap_observation_id(base), ws.gap_observation_id(other))
+        other_cp = {**base, "checkpoint_id": "CP"}
+        self.assertNotEqual(ws.gap_observation_id(base), ws.gap_observation_id(other_cp))
+
+    def test_digest_changes_with_undecidable_set(self):
+        base = {"work_item_id": "wi", "checkpoint_id": None, "reference_unresolvable": False,
+                "undecidable_commits": [{"commit": "a", "failure_class": "x"}]}
+        changed = {**base, "undecidable_commits": [{"commit": "a", "failure_class": "different"}]}
+        self.assertNotEqual(ws.gap_observation_id(base), ws.gap_observation_id(changed))
+
+    def test_literal_carries_checkpoint_id_only_for_pair_query(self):
+        evidence = {"work_item_id": "wi", "checkpoint_id": None, "reference_unresolvable": False,
+                    "undecidable_commits": []}
+        literal = ws.identity_reference_gap_authorization_literal("wi", None, evidence)
+        self.assertTrue(literal.startswith("authorize identity reference gap wi gap "))
+        pair_evidence = {**evidence, "checkpoint_id": "CP"}
+        pair_literal = ws.identity_reference_gap_authorization_literal("wi", "CP", pair_evidence)
+        self.assertIn("checkpoint CP", pair_literal)
+
+
+class TestAuthorizeIdentityReferenceGap(unittest.TestCase):
+    def _undecidable_evidence(self, repo, work_item_id="wi", checkpoint_id=None):
+        with self.assertRaises(ws.IdentityReferenceUndecidableError) as ctx:
+            ws._scan_identity_reference(repo.root, work_item_id, checkpoint_id)
+        return ctx.exception.evidence
+
+    def test_wrong_literal_refused(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, "{not valid json")
+            evidence = self._undecidable_evidence(repo)
+            with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
+                ws.authorize_identity_reference_gap(
+                    repo.root, "wi", now="t", user_authorization="wrong", evidence=evidence)
+
+    def test_evidence_identity_mismatch_refused(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, "{not valid json")
+            evidence = self._undecidable_evidence(repo)
+            literal = ws.identity_reference_gap_authorization_literal("other", None, evidence)
+            with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
+                ws.authorize_identity_reference_gap(
+                    repo.root, "other", now="t", user_authorization=literal, evidence=evidence)
+
+    def test_happy_path_publishes_a_durable_record(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, "{not valid json")
+            evidence = self._undecidable_evidence(repo)
+            literal = ws.identity_reference_gap_authorization_literal("wi", None, evidence)
+            record = ws.authorize_identity_reference_gap(
+                repo.root, "wi", now="t1", user_authorization=literal, evidence=evidence)
+            self.assertEqual(record["work_item_id"], "wi")
+            self.assertIsNone(record["checkpoint_id"])
+            self.assertFalse(record["consumed"])
+            path = ws.identity_gap_authorization_path(repo.root, ws.gap_observation_id(evidence))
+            self.assertTrue(path.exists())
+
+    def test_idempotent_second_call_recognises_existing_record_rather_than_erroring(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, "{not valid json")
+            evidence = self._undecidable_evidence(repo)
+            literal = ws.identity_reference_gap_authorization_literal("wi", None, evidence)
+            first = ws.authorize_identity_reference_gap(
+                repo.root, "wi", now="t1", user_authorization=literal, evidence=evidence)
+            second = ws.authorize_identity_reference_gap(
+                repo.root, "wi", now="t2", user_authorization=literal, evidence=evidence)
+            self.assertEqual(first, second)  # t1 preserved -- not re-authorized
+
+    def test_stale_evidence_refused_when_reference_changed(self):
+        """A commit repaired (or a new undecidable one added) between the
+        evidence and the authorization changes the digest -- refused,
+        having recorded nothing."""
+        with ScratchRepo() as repo:
+            _commit_state(repo, "{not valid json")
+            evidence = self._undecidable_evidence(repo)
+            literal = ws.identity_reference_gap_authorization_literal("wi", None, evidence)
+            _commit_state(repo, "{also not valid json", message="second bad commit")
+            with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
+                ws.authorize_identity_reference_gap(
+                    repo.root, "wi", now="t", user_authorization=literal, evidence=evidence)
+
+    def test_refused_when_identity_now_decidably_observed(self):
+        """Once a *second* commit decidably observes "wi", the reduction
+        rule makes the whole scan resolve to "observed" rather than
+        "undecidable" (an observed commit always wins) -- so a fresh
+        evidence-independent re-scan hits the "now decidably observed"
+        branch, never the digest-mismatch one."""
+        with ScratchRepo() as repo:
+            _commit_state(repo, "{not valid json")
+            evidence = self._undecidable_evidence(repo)
+            literal = ws.identity_reference_gap_authorization_literal("wi", None, evidence)
+            _commit_state(repo, _state_json(wi={}))
+            with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError) as ctx:
+                ws.authorize_identity_reference_gap(
+                    repo.root, "wi", now="t", user_authorization=literal, evidence=evidence)
+            self.assertIn("now decidably observed", str(ctx.exception))
+
+    def test_refused_when_the_query_now_admits_on_its_own(self):
+        """The undecidable commit becoming unreachable from every ref
+        (ordinary history maintenance -- `reset --hard` past it here)
+        flips the reference's own scan to "admit": no gap remains to
+        authorize."""
+        with ScratchRepo() as repo:
+            before = repo.head()
+            _commit_state(repo, "{not valid json")
+            evidence = self._undecidable_evidence(repo)
+            literal = ws.identity_reference_gap_authorization_literal("wi", None, evidence)
+            _run(["git", "reset", "--hard", before], cwd=repo.root)
+            with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError) as ctx:
+                ws.authorize_identity_reference_gap(
+                    repo.root, "wi", now="t", user_authorization=literal, evidence=evidence)
+            self.assertIn("no gap remains to authorize", str(ctx.exception))
+
+
+class TestIdentityReferenceAdmits(unittest.TestCase):
+    def test_decidable_absence_admits(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, _state_json())
+            result = ws.identity_reference_admits(repo.root, "wi")
+            self.assertEqual(result["decision"], "admit")
+
+    def test_observed_work_item_id_raises_reused_error(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, _state_json(wi={}))
+            with self.assertRaises(ws.WorkItemIdReusedError):
+                ws.identity_reference_admits(repo.root, "wi")
+
+    def test_observed_checkpoint_pair_raises_reused_error(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, _state_json(wi={"checkpoints": {"CP": {"status": "COMPLETE"}}}))
+            with self.assertRaises(ws.CheckpointIdReusedError):
+                ws.identity_reference_admits(repo.root, "wi", "CP")
+
+    def test_undecidable_without_authorization_raises(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, "{not valid json")
+            with self.assertRaises(ws.IdentityReferenceUndecidableError):
+                ws.identity_reference_admits(repo.root, "wi")
+
+    def test_undecidable_with_matching_authorization_admits(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, "{not valid json")
+            with self.assertRaises(ws.IdentityReferenceUndecidableError) as ctx:
+                ws.identity_reference_admits(repo.root, "wi")
+            evidence = ctx.exception.evidence
+            literal = ws.identity_reference_gap_authorization_literal("wi", None, evidence)
+            ws.authorize_identity_reference_gap(
+                repo.root, "wi", now="t", user_authorization=literal, evidence=evidence)
+            result = ws.identity_reference_admits(repo.root, "wi")
+            self.assertEqual(result["decision"], "admit")
+            self.assertEqual(result["route"], "authorized_gap")
+
+    def test_authorization_for_a_different_identity_does_not_admit_this_one(self):
+        """The digest binds the identity -- an authorized gap for `wi`
+        never admits `other`, even against byte-identical undecidable
+        commits."""
+        with ScratchRepo() as repo:
+            _commit_state(repo, "{not valid json")
+            with self.assertRaises(ws.IdentityReferenceUndecidableError) as ctx:
+                ws.identity_reference_admits(repo.root, "wi")
+            evidence = ctx.exception.evidence
+            literal = ws.identity_reference_gap_authorization_literal("wi", None, evidence)
+            ws.authorize_identity_reference_gap(
+                repo.root, "wi", now="t", user_authorization=literal, evidence=evidence)
+            with self.assertRaises(ws.IdentityReferenceUndecidableError):
+                ws.identity_reference_admits(repo.root, "other")
+
+
+class TestWorkItemCreationIdentityEnforcement(unittest.TestCase):
+    def test_omitted_repo_root_skips_the_check(self):
+        """Backward compatible: a caller that never supplies `repo_root`
+        (the in-memory/testing convenience this function always had) gets
+        the unchanged, repo-independent routing."""
+        state = _base_state()
+        config = ws.default_config()
+        new_state = ws.route_work_item(
+            state, config, work_item_id="wi", work_item_type="process",
+            work_item_kind="process", plan_path="p", registry_path="r",
+            plan_revision=1, now="t",
+        )
+        self.assertIn("wi", new_state["work_items"])
+
+    def test_fresh_id_never_observed_is_created(self):
+        with ScratchRepo() as repo:
+            new_state = ws.route_work_item(
+                _base_state(), ws.default_config(), work_item_id="wi", work_item_type="process",
+                work_item_kind="process", plan_path="p", registry_path="r",
+                plan_revision=1, now="t", repo_root=repo.root,
+            )
+            self.assertIn("wi", new_state["work_items"])
+
+    def test_fresh_id_observed_in_history_is_refused(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, _state_json(wi={}))
+            with self.assertRaises(ws.WorkItemIdReusedError):
+                ws.route_work_item(
+                    _base_state(), ws.default_config(), work_item_id="wi", work_item_type="process",
+                    work_item_kind="process", plan_path="p", registry_path="r",
+                    plan_revision=1, now="t", repo_root=repo.root,
+                )
+
+    def test_resuming_an_existing_entry_never_reaches_the_check(self):
+        """The check applies only to the fresh-id branch -- a resume
+        (the id already lives in `state`) is untouched, even for an id
+        that also happens to be historically observed."""
+        with ScratchRepo() as repo:
+            _commit_state(repo, _state_json(wi={}))
+            state = _base_state(wi=_base_work_item())
+            new_state = ws.route_work_item(
+                state, ws.default_config(), work_item_id="wi", work_item_type="process",
+                work_item_kind="process", plan_path="p", registry_path="r",
+                plan_revision=2, now="t", repo_root=repo.root,
+            )
+            self.assertEqual(new_state["work_items"]["wi"]["plan_revision"], 2)
+
+
+class TestRegistryCheckpointIdReuseEnforcement(unittest.TestCase):
+    def _write(self, repo, checkpoint_ids):
+        registry = ws.generate_registry("wi", 1, [
+            {"id": cid, "name": cid, "depends_on": [], "complexity": 1, "session_target": "1"}
+            for cid in checkpoint_ids
+        ])
+        mapping = ws.generate_mapping(
+            "wi", {"R1": {"description": "d", "checkpoint_ids": checkpoint_ids}}, registry=registry,
+        )
+        ws.write_registry_and_mapping(repo.root, Path("reg.json"), Path("map.json"), registry, mapping)
+
+    def test_first_write_of_a_never_observed_id_succeeds(self):
+        with ScratchRepo() as repo:
+            self._write(repo, ["A"])
+            self.assertTrue((repo.root / "reg.json").exists())
+
+    def test_new_id_observed_historically_for_this_work_item_is_refused(self):
+        with ScratchRepo() as repo:
+            _commit_state(repo, _state_json(wi={"checkpoints": {"RETIRED": {"status": "COMPLETE"}}}))
+            with self.assertRaises(ws.CheckpointIdReusedError):
+                self._write(repo, ["RETIRED"])
+
+    def test_id_kept_live_across_revisions_is_in_place_redefinition_not_reuse(self):
+        """A checkpoint id present in the registry currently on disk is
+        never re-checked on a later write, even if it is (as it always
+        will be, once any checkpoint starts) observed in committed
+        history -- in-place redefinition must stay legal."""
+        with ScratchRepo() as repo:
+            self._write(repo, ["A"])
+            _commit_state(repo, _state_json(wi={"checkpoints": {"A": {"status": "IN_PROGRESS"}}}))
+            self._write(repo, ["A", "B"])  # "A" unchanged, "B" genuinely new
+            registry = json.loads((repo.root / "reg.json").read_text())
+            self.assertEqual([c["id"] for c in registry["checkpoints"]], ["A", "B"])
+
+
 def _base_work_item(**overrides) -> dict:
     work_item = {
         "work_item_type": "process",
@@ -1486,15 +1858,16 @@ class TestRegistryMappingGenerator(unittest.TestCase):
             ws.generate_mapping("wi", {"R1": {"description": "d", "checkpoint_ids": ["A"]}}, registry=registry)
 
     def test_write_registry_and_mapping_round_trips(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+        # A real Git repo (OPUS-R89-005's checkpoint-id-reuse check reads
+        # D-Checkpoint-Ownership's origination reference, which needs one).
+        with ScratchRepo() as repo:
             registry = ws.generate_registry("wi", 1, [
                 {"id": "A", "name": "a", "depends_on": [], "complexity": 1, "session_target": "1"},
             ])
             mapping = ws.generate_mapping("wi", {"R1": {"description": "d", "checkpoint_ids": ["A"]}}, registry=registry)
-            ws.write_registry_and_mapping(root, Path("reg.json"), Path("map.json"), registry, mapping)
-            self.assertEqual(json.loads((root / "reg.json").read_text()), registry)
-            self.assertEqual(json.loads((root / "map.json").read_text()), mapping)
+            ws.write_registry_and_mapping(repo.root, Path("reg.json"), Path("map.json"), registry, mapping)
+            self.assertEqual(json.loads((repo.root / "reg.json").read_text()), registry)
+            self.assertEqual(json.loads((repo.root / "map.json").read_text()), mapping)
 
     def test_write_refuses_bad_coverage_even_if_caller_bypassed_generate(self):
         """Fail-closed guard: write_registry_and_mapping re-validates even

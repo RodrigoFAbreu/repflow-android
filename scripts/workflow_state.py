@@ -132,12 +132,34 @@ same origination reference the first slice built
 publication under `guard_mutation_lock`), never by the dry-run
 prototype's superseded `committed_checkpoint_status`-only check.
 
-Deliberately still bounded: no `resolve_ownership`/`classify_selection`
-(the `/milestone-implement` step 1c/1d/1f wiring lives under "Where the
-check belongs, and the ordering"), and no `WFR-66` identity-query
-enforcement (`authorize_identity_reference_gap` is a distinct
-implementation surface). Those, and executing `v2-1-dry-run`'s `S14`/
-`S15` scenarios for real against this slice, remain future `WF8b` scope.
+A fourth WF8b slice adds `/milestone-implement`'s own step 1c/1d/1f
+wiring ("Where the check belongs, and the ordering"):
+`resolve_checkpoint_ownership` (the full "Reconciling the two
+authorities" table -- RESUME/FRESH/CONTINUE_CLAIM/NO_CHECKPOINT, the
+foreign-claim refusal, the adopt-then-resume branch, the single
+automatic release, and the two defensive mismatch refusals) and
+`_attach_ownership_evidence`/`_ownership_escape_hint`, which annotate
+every refusal 1c raises with `.ownership_evidence` unconditionally,
+including on an absent claim, plus origination-specific evidence
+components for `CheckpointOriginationUnprovableError` specifically.
+
+A fifth WF8b slice adds `WFR-66`'s identity-query enforcement: the
+identity queries' own read partition (`_identity_query_at_commit`/
+`_scan_identity_reference`, distinct from and disjoint with the
+origination test's own partition, though both scan the same reference),
+the two permanent, unescapable observed-id refusals
+(`WorkItemIdReusedError`/`CheckpointIdReusedError`, wired into
+`route_work_item`'s fresh-id branch and `write_registry_and_mapping`'s
+delta-scoped checkpoint-id check), and the evidence-bound,
+non-replayable, repository-serialized escape from the undecidable case
+(`authorize_identity_reference_gap`, `recover_abandoned_destructive_
+guard`'s own signature) with its durable record under
+`$(git rev-parse --git-common-dir)/ai-workflow/identity-gap-authorizations/`.
+
+Deliberately still bounded: no WFR-66 enforcement wired into any
+`.claude/commands/*.md` operator flow beyond the two library call sites
+above, and executing `v2-1-dry-run`'s `S14`/`S15` scenarios for real
+against this design remains future `WF8b` scope.
 
 Stdlib-only, mirroring `scripts/workflow_fingerprint.py`'s own
 `docs/TECHNICAL_DECISIONS.md`-recorded constraint.
@@ -3385,6 +3407,523 @@ def resolve_checkpoint_ownership(
 
 
 # ---------------------------------------------------------------------------
+# WF8b: D-Checkpoint-Ownership -- WFR-66's identity-query enforcement
+# (docs/ai-workflow/WORKFLOW_V2_PLAN.md, "The origination reference"'s
+# "The contract covers the identity queries too" / "The identity queries'
+# own read partition", plus D1's/D-Registry's own enforcement-point text).
+#
+# Reuses `origination_reference_commits` -- the identity queries and the
+# origination test share one reference, just two different read
+# partitions over it (`OPUS-R90-003`): the origination test asks whether
+# a *status* was ever IN_PROGRESS; these ask whether a *key* -- a
+# work_item_id, or a (work_item_id, checkpoint_id) pair -- was ever
+# present at all, which fails closed in the opposite direction (key
+# presence is itself the observation, undecidability is scoped to the
+# containers strictly *above* the queried key, and the two partitions
+# disagree on four of the document shapes explicitly enumerated in the
+# plan's "two tables genuinely diverge" paragraph).
+#
+# Two permanent, unescapable refusals name a decidable observation
+# directly (`WorkItemIdReusedError`/`CheckpointIdReusedError`); one
+# escapable refusal (`IdentityReferenceUndecidableError`) is cleared only
+# by the evidence-bound, non-replayable, repository-serialized
+# `authorize_identity_reference_gap` -- `recover_abandoned_destructive_
+# guard`'s own signature, deliberately, per `OPUS-R91-003`.
+# ---------------------------------------------------------------------------
+
+
+class IdentityReferenceUndecidableError(Exception):
+    """Raised by a WFR-66 identity-enforcement query (work-item creation
+    or registry checkpoint-id validation) when D-Checkpoint-Ownership's
+    origination reference cannot establish, at one or more commits,
+    whether the queried key -- a work_item_id, or a (work_item_id,
+    checkpoint_id) pair -- is present or absent. Distinct from a
+    decidable observation, which is a permanent, unescapable refusal this
+    exception is never raised for (`WorkItemIdReusedError`/
+    `CheckpointIdReusedError` instead, since it names a binding rather
+    than a repairable repository condition). Carries `.evidence` (the
+    undecidable commits and their failure classes, the identity queried,
+    and the examined-commit count) for `authorize_identity_reference_gap`'s
+    digest and for the operator to inspect. Cleared only by that
+    operation's explicit, evidence-bound, non-replayable authorization."""
+
+    def __init__(self, message: str, *, evidence: dict):
+        super().__init__(message)
+        self.evidence = evidence
+
+
+class WorkItemIdReusedError(Exception):
+    """Raised when work-item creation names a `work_item_id` decidably
+    observed at some commit in D-Checkpoint-Ownership's origination
+    reference -- ids are permanently non-reusable (D1, revision 71,
+    `OPUS-R88-004`), a stronger and historical-evidence-bound check than
+    `WorkItemTerminalReuseError`'s narrower, live-state-only one."""
+
+
+class CheckpointIdReusedError(Exception):
+    """Raised when a registry write reintroduces a `checkpoint_id`
+    decidably observed for that work item at some commit in
+    D-Checkpoint-Ownership's origination reference -- checkpoint ids are
+    permanently non-reusable within their work item, but only for ids
+    genuinely new to this revision: an id kept live across revisions is
+    in-place redefinition, not reuse, and stays legal (D-Registry,
+    revision 72, `OPUS-R89-005`)."""
+
+
+class IdentityGapAuthorizationUnavailableError(Exception):
+    """Raised when the durable identity-reference-gap-authorization
+    record cannot be read or written -- fails closed rather than
+    proceeding unprotected."""
+
+
+IDENTITY_GAP_AUTHORIZATIONS_RELDIR = "ai-workflow/identity-gap-authorizations"
+IDENTITY_GAP_LOCK_RELPATH = "ai-workflow/identity-gap.lock"
+
+
+def _identity_query_at_commit(
+    repo_root: Path, commit: str, state_rel_path: str, work_item_id: str, checkpoint_id: str | None,
+) -> tuple[str, dict]:
+    """One commit's contribution to an identity-reference query -- "has
+    this work_item_id (checkpoint_id=None) or this (work_item_id,
+    checkpoint_id) pair ever been observed?" -- per "The identity
+    queries' own read partition". Returns `(outcome, detail)`:
+
+    - `"observed"` -- the queried key is decidably **present** at its own
+      level, whatever its value -- key presence is the whole of what an
+      existence query asks, so this wins unescapably over every other
+      row for the same commit, and is checked directly with `in` before
+      the value is ever inspected, which is what keeps the rows disjoint
+      by construction rather than by a separately-stated precedence rule;
+    - `"undecidable"` -- the reader cannot establish presence or absence
+      of the queried key itself: an unlistable tree, an unresolvable
+      commit, a state path present but not a readable regular-file blob,
+      an unparseable or non-object document, or a non-object container
+      strictly *above* the queried key (`work_items` for the work-item
+      query; `work_items`, the work item entry, or `checkpoints` for the
+      pair query);
+    - `"decidable"` -- the queried key is decidably **absent**: a missing
+      key, established with `in`, at every level examined on the way to
+      it."""
+    listing = subprocess.run(
+        ["git", "ls-tree", commit, "--", state_rel_path],
+        cwd=repo_root, capture_output=True, text=True,
+    )
+    if listing.returncode != 0:
+        return "undecidable", {"commit": commit, "failure_class": "tree unlistable or commit unresolvable"}
+    line = listing.stdout.strip()
+    if not line:
+        return "decidable", {"commit": commit, "reason": "state path absent from tree"}
+    meta, _, _ = line.partition("\t")
+    mode = meta.split()[0]
+    blob_sha = meta.split()[2]
+    if mode not in ("100644", "100755"):
+        return "undecidable", {"commit": commit,
+                                "failure_class": f"state path is not a regular-file blob (mode {mode})"}
+    blob = subprocess.run(["git", "cat-file", "-p", blob_sha], cwd=repo_root, capture_output=True, text=True)
+    if blob.returncode != 0:
+        return "undecidable", {"commit": commit, "failure_class": "blob could not be read"}
+    try:
+        doc = json.loads(blob.stdout)
+    except json.JSONDecodeError:
+        return "undecidable", {"commit": commit, "failure_class": "state document unparseable"}
+    if not isinstance(doc, dict):
+        return "undecidable", {"commit": commit, "failure_class": "state document is not an object"}
+
+    if "work_items" not in doc:
+        return "decidable", {"commit": commit, "reason": "no work_items key"}
+    work_items = doc["work_items"]
+    if not isinstance(work_items, dict):
+        return "undecidable", {"commit": commit, "failure_class": "work_items is not an object"}
+
+    if checkpoint_id is None:
+        if work_item_id in work_items:
+            return "observed", {"commit": commit, "reason": f"{work_item_id!r} key present in work_items"}
+        return "decidable", {"commit": commit, "reason": f"no {work_item_id!r} entry"}
+
+    if work_item_id not in work_items:
+        return "decidable", {"commit": commit, "reason": f"no {work_item_id!r} entry"}
+    work_item = work_items[work_item_id]
+    if not isinstance(work_item, dict):
+        return "undecidable", {"commit": commit, "failure_class": f"{work_item_id!r} entry is not an object"}
+
+    if "checkpoints" not in work_item:
+        return "decidable", {"commit": commit, "reason": "no checkpoints key"}
+    checkpoints = work_item["checkpoints"]
+    if not isinstance(checkpoints, dict):
+        return "undecidable", {"commit": commit, "failure_class": "checkpoints is not an object"}
+
+    if checkpoint_id in checkpoints:
+        return "observed", {"commit": commit, "reason": f"{checkpoint_id!r} key present in checkpoints"}
+    return "decidable", {"commit": commit, "reason": f"no {checkpoint_id!r} entry"}
+
+
+def _scan_identity_reference(
+    repo_root: Path, work_item_id: str, checkpoint_id: str | None = None, *,
+    state_rel_path: str | None = None,
+) -> dict:
+    """Scans every commit `origination_reference_commits` enumerates for
+    WFR-66's two enforcement points. A decidable observation anywhere
+    binds -- no supersession, no recency, no scoping to a lifecycle
+    instance, the same reduction rule the origination test states, shared
+    without exception -- and wins over any undecidable commit found in
+    the same scan, since the two routes here differ in whether an escape
+    exists at all rather than merely in which refusal is reported.
+
+    Returns an evidence dict with `"decision"` `"observed"` or `"admit"`.
+    Raises `IdentityReferenceUndecidableError` (never returns
+    `"undecidable"`) when the reference itself cannot be resolved or when
+    any commit is undecidable for the queried key itself and no commit
+    decidably observes it."""
+    state_rel_path = state_rel_path or DEFAULT_STATE_PATH.as_posix()
+    try:
+        commits = origination_reference_commits(repo_root, state_rel_path)
+    except CheckpointOriginationUnprovableError as exc:
+        raise IdentityReferenceUndecidableError(
+            f"the identity reference could not be resolved for {state_rel_path!r}: {exc}",
+            evidence={
+                "route": "undecidable", "work_item_id": work_item_id, "checkpoint_id": checkpoint_id,
+                "state_rel_path": state_rel_path, "examined_commits": 0,
+                "reference_unresolvable": True, "undecidable_commits": [],
+            },
+        ) from exc
+    if not commits:
+        return {
+            "decision": "admit", "route": "no_reference_commits", "work_item_id": work_item_id,
+            "checkpoint_id": checkpoint_id, "state_rel_path": state_rel_path, "examined_commits": 0,
+        }
+
+    observed = None
+    undecidable_commits: list[dict] = []
+    for commit in commits:
+        outcome, detail = _identity_query_at_commit(repo_root, commit, state_rel_path, work_item_id, checkpoint_id)
+        if outcome == "observed" and observed is None:
+            observed = detail
+        elif outcome == "undecidable":
+            undecidable_commits.append({"commit": detail["commit"], "failure_class": detail["failure_class"]})
+
+    if observed is not None:
+        return {
+            "decision": "observed", "commit": observed["commit"], "reason": observed["reason"],
+            "work_item_id": work_item_id, "checkpoint_id": checkpoint_id,
+            "state_rel_path": state_rel_path, "examined_commits": len(commits),
+        }
+    if undecidable_commits:
+        identity = f"{work_item_id!r}" + (f"/{checkpoint_id!r}" if checkpoint_id is not None else "")
+        raise IdentityReferenceUndecidableError(
+            f"the identity reference for {identity} is undecidable at {len(undecidable_commits)} "
+            f"commit(s) -- neither observed nor provably never observed; "
+            f"authorize_identity_reference_gap is the one explicit, evidence-bound escape",
+            evidence={
+                "route": "undecidable", "work_item_id": work_item_id, "checkpoint_id": checkpoint_id,
+                "state_rel_path": state_rel_path, "examined_commits": len(commits),
+                "reference_unresolvable": False, "undecidable_commits": undecidable_commits,
+            },
+        )
+    return {
+        "decision": "admit", "route": "scanned_all_decidable", "work_item_id": work_item_id,
+        "checkpoint_id": checkpoint_id, "state_rel_path": state_rel_path, "examined_commits": len(commits),
+    }
+
+
+def gap_observation_id(evidence: Mapping) -> str:
+    """The digest `authorize_identity_reference_gap`'s literal and
+    durable record both bind to: the exact set of undecidable commits and
+    the failure class observed at each, **plus the identity being
+    authorized** (`work_item_id`, and `checkpoint_id` when the query is
+    the pair query) -- so an authorization written against one damaged
+    commit can never clear a different one that appeared since, and can
+    never be replayed against a different identity (`OPUS-R91-003`)."""
+    commits = sorted(
+        (
+            {"commit": entry["commit"], "failure_class": entry["failure_class"]}
+            for entry in evidence.get("undecidable_commits", [])
+        ),
+        key=lambda entry: entry["commit"],
+    )
+    payload = {
+        "work_item_id": evidence.get("work_item_id"),
+        "checkpoint_id": evidence.get("checkpoint_id"),
+        "reference_unresolvable": bool(evidence.get("reference_unresolvable", False)),
+        "undecidable_commits": commits,
+    }
+    blob = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(blob).hexdigest()
+
+
+def identity_reference_gap_authorization_literal(
+    work_item_id: str, checkpoint_id: str | None, evidence: Mapping,
+) -> str:
+    """`authorize identity reference gap <work_item_id> [checkpoint
+    <checkpoint_id>] gap <gap_observation_id>` -- distinct in every
+    component from the takeover's and the abandoned-guard recovery's own
+    literals, unwritable from memory, and validated against the
+    re-derived digest rather than merely parsed."""
+    oid = gap_observation_id(evidence)
+    if checkpoint_id is not None:
+        return f"authorize identity reference gap {work_item_id} checkpoint {checkpoint_id} gap {oid}"
+    return f"authorize identity reference gap {work_item_id} gap {oid}"
+
+
+def identity_gap_authorizations_dir(repo_root: Path) -> Path:
+    _, common_dir, _ = _git_identity(repo_root)
+    return Path(common_dir) / IDENTITY_GAP_AUTHORIZATIONS_RELDIR
+
+
+def identity_gap_authorization_path(repo_root: Path, gap_oid: str) -> Path:
+    """Named by a digest of the digest -- the same "token, not a path"
+    discipline the claim record uses -- so no crafted
+    `gap_observation_id` value can ever address anything outside this
+    directory."""
+    token = hashlib.sha256(gap_oid.encode()).hexdigest()
+    return identity_gap_authorizations_dir(repo_root) / f"{token}.json"
+
+
+def identity_gap_lock_path(repo_root: Path) -> Path:
+    _, common_dir, _ = _git_identity(repo_root)
+    return Path(common_dir) / IDENTITY_GAP_LOCK_RELPATH
+
+
+@contextlib.contextmanager
+def identity_gap_lock(repo_root: Path):
+    """The repository-level `fcntl.flock` leaf `authorize_identity_
+    reference_gap` runs its re-derive-then-publish sequence inside,
+    because at work-item creation there is no work item, no claim and no
+    per-work-item mutation guard to serialize on -- the entire
+    concurrency apparatus this design otherwise relies on is keyed on an
+    entity that does not exist yet at this call site (`OPUS-R91-003`).
+    Never acquired while the per-work-item mutation guard, the
+    per-worktree identity `flock`, or `D1`'s state-writer `flock` is
+    held, and none of those three is acquired while this one is held --
+    see `D-Approval-Commits`' single lock-ordering site for the complete
+    set. Stable, never unlinked, process-scoped; released by the kernel
+    on process death."""
+    path = identity_gap_lock_path(repo_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)
+
+
+def _stage_identity_gap_authorization_payload(path: Path, record: dict) -> Path:
+    payload = json.dumps(record, indent=2, sort_keys=True) + "\n"
+    _assert_not_symlink(path.parent, "identity-gap-authorizations directory")
+    _assert_not_symlink(path, "identity-gap-authorization record")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=".gap-", suffix=".tmp")
+        with os.fdopen(fd, "w") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except OSError as exc:
+        raise IdentityGapAuthorizationUnavailableError(
+            f"cannot stage an identity-reference-gap authorization next to {path} ({exc})"
+        ) from exc
+    return Path(tmp_name)
+
+
+def _publish_identity_gap_authorization_exclusive(path: Path, record: dict) -> None:
+    """Atomic in both senses, exactly as the claim record's own exclusive
+    publication is: the whole payload is staged at a same-directory temp
+    name and then `os.link`ed into place, so `os.link`'s `EEXIST` **is**
+    the non-replayability check -- the test and the write are one
+    operation, with no read-then-write window between them."""
+    tmp = _stage_identity_gap_authorization_payload(path, record)
+    try:
+        os.link(tmp, path)
+    except FileExistsError:
+        raise
+    except OSError as exc:
+        raise IdentityGapAuthorizationUnavailableError(f"cannot publish {path} ({exc})") from exc
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _read_identity_gap_authorization(path: Path) -> dict | None:
+    _assert_not_symlink(path.parent, "identity-gap-authorizations directory")
+    _assert_not_symlink(path, "identity-gap-authorization record")
+    try:
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise IdentityGapAuthorizationUnavailableError(f"cannot read {path} ({exc})") from exc
+    try:
+        with os.fdopen(fd, "rb") as handle:
+            raw = handle.read()
+    except OSError as exc:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        raise IdentityGapAuthorizationUnavailableError(f"cannot read {path} ({exc})") from exc
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise IdentityGapAuthorizationUnavailableError(f"{path} is not valid JSON ({exc})") from exc
+    if not isinstance(data, dict) or data.get("schema_version") != 1:
+        raise IdentityGapAuthorizationUnavailableError(
+            f"{path} has an unsupported shape/schema_version (expected 1)")
+    return data
+
+
+def authorize_identity_reference_gap(
+    repo_root: Path, work_item_id: str, checkpoint_id: str | None = None, *,
+    now: str, user_authorization: str | None, evidence: Mapping,
+) -> dict:
+    """WFR-66's one explicit, evidence-bound, non-replayable escape from
+    `IdentityReferenceUndecidableError` (`recover_abandoned_destructive_
+    guard`'s own signature, deliberately -- every parameter that sibling
+    needs, this one needs for the same reason, `OPUS-R91-003`).
+
+    `evidence` is the `.evidence` a caller's own `IdentityReferenceUndecidableError`
+    carried; this function never re-scans the reference to build its own
+    evidence from scratch -- the caller already did, and a fresh scan here
+    would let a second, cheaper read silently substitute for the one the
+    user was actually shown. It re-derives the digest and re-scans only to
+    check the evidence is still current, never to source it.
+
+    Never overrides a decidable observation: with the gap authorized, the
+    query still refuses if any decidable commit observes the identity --
+    this only ever admits the undecidability, never the binding.
+    Idempotent rather than consumed on read: a crash between this
+    record's publication and the creation it authorizes resumes, on
+    retry, by recognising its own completed authorization."""
+    if evidence.get("route") != "undecidable":
+        raise CheckpointClaimTakeoverRefusedError(
+            "authorize_identity_reference_gap requires evidence of an undecidable identity "
+            "reference read -- there is nothing to authorize")
+    if evidence.get("work_item_id") != work_item_id or evidence.get("checkpoint_id") != checkpoint_id:
+        raise CheckpointClaimTakeoverRefusedError(
+            f"the supplied evidence was taken for "
+            f"({evidence.get('work_item_id')!r}, {evidence.get('checkpoint_id')!r}), not "
+            f"({work_item_id!r}, {checkpoint_id!r}) -- refusing to authorize a gap against an "
+            f"identity the evidence never observed")
+
+    oid = gap_observation_id(evidence)
+    expected = identity_reference_gap_authorization_literal(work_item_id, checkpoint_id, evidence)
+    if user_authorization != expected:
+        raise CheckpointClaimTakeoverRefusedError(
+            f"authorizing an identity-reference gap requires the literal authorization "
+            f"{expected!r}, derived from the evidence just presented -- refusing to admit an "
+            f"unprovable identity on an inference or on a remembered literal")
+
+    state_rel_path = evidence.get("state_rel_path") or DEFAULT_STATE_PATH.as_posix()
+
+    with identity_gap_lock(repo_root):
+        path = identity_gap_authorization_path(repo_root, oid)
+        existing = _read_identity_gap_authorization(path)
+        if existing is not None:
+            if existing.get("work_item_id") != work_item_id or existing.get("checkpoint_id") != checkpoint_id:
+                raise CheckpointClaimTakeoverRefusedError(
+                    f"a gap authorization already exists at {path} bound to a different "
+                    f"identity -- this should be unreachable, since the digest binds the "
+                    f"identity")
+            return existing
+
+        try:
+            fresh = _scan_identity_reference(repo_root, work_item_id, checkpoint_id,
+                                             state_rel_path=state_rel_path)
+        except IdentityReferenceUndecidableError as exc:
+            if gap_observation_id(exc.evidence) != oid:
+                raise CheckpointClaimTakeoverRefusedError(
+                    f"the identity reference changed between the evidence the user authorized "
+                    f"({oid}) and this authorization ({gap_observation_id(exc.evidence)}) -- "
+                    f"refusing, having recorded nothing; present fresh evidence and obtain a "
+                    f"fresh authorization"
+                ) from exc
+            # still undecidable, same digest -- proceed to publish below.
+        else:
+            identity = f"{work_item_id!r}" + (f"/{checkpoint_id!r}" if checkpoint_id is not None else "")
+            if fresh["decision"] == "observed":
+                raise CheckpointClaimTakeoverRefusedError(
+                    f"{identity} is now decidably observed at commit {fresh['commit']} -- "
+                    f"refusing to authorize a gap against a binding that now exists")
+            raise CheckpointClaimTakeoverRefusedError(
+                f"{identity} is now decidably absent from the identity reference -- no gap "
+                f"remains to authorize; the query now admits on its own")
+
+        record = {
+            "schema_version": 1,
+            "gap_observation_id": oid,
+            "work_item_id": work_item_id,
+            "checkpoint_id": checkpoint_id,
+            "undecidable_commits": list(evidence.get("undecidable_commits", [])),
+            "authorized_at": now,
+            "authorizing_worktree_git_dir": _worktree_git_dir(repo_root),
+            "consumed": False,
+        }
+        _publish_identity_gap_authorization_exclusive(path, record)
+        return record
+
+
+def mark_identity_reference_gap_consumed(repo_root: Path, gap_oid: str) -> None:
+    """Diagnostic bookkeeping only, run once the identity/registry
+    creation the gap authorized has completed -- the refusal a
+    *different* identity receives never depends on this flag, so a crash
+    before this runs simply leaves `consumed: false` on an authorization
+    whose creation already happened, with no correctness consequence."""
+    with identity_gap_lock(repo_root):
+        path = identity_gap_authorization_path(repo_root, gap_oid)
+        record = _read_identity_gap_authorization(path)
+        if record is None or record.get("consumed"):
+            return
+        record["consumed"] = True
+        payload = json.dumps(record, indent=2, sort_keys=True) + "\n"
+        fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=".gap-", suffix=".tmp")
+        with os.fdopen(fd, "w") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_name, path)
+
+
+def identity_reference_admits(
+    repo_root: Path, work_item_id: str, checkpoint_id: str | None = None, *,
+    state_rel_path: str | None = None,
+) -> dict:
+    """The one check `D1`'s work-item-creation refusal and `D-Registry`'s
+    checkpoint-id-reuse refusal both perform (`OPUS-R89-005`/`OPUS-R90-003`):
+    has this `work_item_id` (`checkpoint_id=None`) or this
+    `(work_item_id, checkpoint_id)` pair ever been observed in
+    D-Checkpoint-Ownership's origination reference? A decidable
+    observation is a permanent, unescapable refusal
+    (`WorkItemIdReusedError`/`CheckpointIdReusedError`). An undecidable
+    reference refuses with `IdentityReferenceUndecidableError` unless a
+    matching `authorize_identity_reference_gap` record already exists, in
+    which case the undecidability is recognised as authorized and the
+    query admits -- never a decidable observation, only ever the gap."""
+    try:
+        result = _scan_identity_reference(repo_root, work_item_id, checkpoint_id,
+                                          state_rel_path=state_rel_path)
+    except IdentityReferenceUndecidableError as exc:
+        oid = gap_observation_id(exc.evidence)
+        record = _read_identity_gap_authorization(identity_gap_authorization_path(repo_root, oid))
+        if record is None:
+            raise
+        if record.get("work_item_id") != work_item_id or record.get("checkpoint_id") != checkpoint_id:
+            raise
+        return {"decision": "admit", "route": "authorized_gap", "gap_observation_id": oid,
+                "work_item_id": work_item_id, "checkpoint_id": checkpoint_id}
+    if result["decision"] == "observed":
+        if checkpoint_id is None:
+            raise WorkItemIdReusedError(
+                f"work_item_id {work_item_id!r} has already appeared in D-Checkpoint-Ownership's "
+                f"origination reference (commit {result['commit']}) -- work-item ids are "
+                f"permanently non-reusable (D1, OPUS-R88-004)")
+        raise CheckpointIdReusedError(
+            f"checkpoint id {checkpoint_id!r} has already been observed for work item "
+            f"{work_item_id!r} in D-Checkpoint-Ownership's origination reference (commit "
+            f"{result['commit']}) -- checkpoint ids this work item has ever had observed are "
+            f"permanently non-reusable, even after removal or renaming (D-Registry, "
+            f"OPUS-R88-004/OPUS-R89-005)")
+    return result
+
+
+# ---------------------------------------------------------------------------
 # WF4a-iii: D-States' "no protected path is dirty" gate condition
 # ---------------------------------------------------------------------------
 
@@ -3679,10 +4218,39 @@ def write_registry_and_mapping(
     taught this design once). Re-validates immediately before writing as a
     fail-closed guard against a stale or hand-built argument, even though
     `generate_registry`/`generate_mapping` should already have validated
-    their own output."""
+    their own output.
+
+    **Checkpoint-id reuse** (new, revision 72, `OPUS-R89-005`): before
+    writing, every checkpoint id in `registry` that is *not already
+    present* in whatever registry currently sits at `registry_path` (none,
+    for the first-ever write) is checked against `D-Checkpoint-Ownership`'s
+    origination reference via `identity_reference_admits`. This is
+    deliberately a **delta** check, scoped to ids genuinely new to this
+    revision: an id kept live across revisions -- `workflow-v2-1-core`'s
+    own `WF8b`, redefined across dozens of revisions -- is in-place
+    redefinition, not reuse, and the plan states this boundary explicitly
+    rather than refusing ordinary plan revision. An id that *is* new to
+    this revision and decidably observed historically (renamed back,
+    reintroduced after removal) refuses with `CheckpointIdReusedError`; an
+    undecidable reference read refuses with `IdentityReferenceUndecidableError`,
+    cleared only by `authorize_identity_reference_gap`."""
     validate_registry_topological_order(registry)
     validate_registry_mapping_coverage(registry, mapping)
-    (repo_root / registry_path).write_text(json.dumps(registry, indent=2) + "\n")
+
+    full_registry_path = repo_root / registry_path
+    previous_ids: set[str] = set()
+    if full_registry_path.exists():
+        previous = json.loads(full_registry_path.read_text())
+        previous_ids = {checkpoint["id"] for checkpoint in previous.get("checkpoints", [])}
+    new_ids = [
+        checkpoint["id"] for checkpoint in registry.get("checkpoints", [])
+        if checkpoint["id"] not in previous_ids
+    ]
+    work_item_id = registry.get("work_item_id")
+    for checkpoint_id in new_ids:
+        identity_reference_admits(repo_root, work_item_id, checkpoint_id)
+
+    full_registry_path.write_text(json.dumps(registry, indent=2) + "\n")
     (repo_root / mapping_path).write_text(json.dumps(mapping, indent=2) + "\n")
 
 
@@ -3787,6 +4355,7 @@ def route_work_item(
     work_item_kind: str, plan_path: str, registry_path: str,
     plan_revision: int, now: str,
     mapping_path: str | None = None, base_commit: str | None = None,
+    repo_root: Path | None = None,
 ) -> dict:
     """D1's routing text, in full: `/milestone-plan` creates or updates the
     item under `work_items[id]`. Returns a new state dict (does not mutate
@@ -3819,6 +4388,17 @@ def route_work_item(
       currently active (or this item already is) -- routing never steals
       focus from unrelated in-flight, non-terminal work (D1's "resume-focus
       pointer, not an execution lock").
+    - **A fresh id is additionally checked against `D-Checkpoint-Ownership`'s
+      origination reference** (new, revision 71, `OPUS-R88-004`): an id
+      that has ever appeared there is permanently non-reusable, refused
+      with `WorkItemIdReusedError` -- a stronger, historical check than
+      the terminal-phase one above, which only ever sees *live* state.
+      This check runs only when `repo_root` is supplied; a caller that
+      omits it gets the unchanged, repo-independent routing this function
+      always had (an in-memory/testing convenience, never the production
+      call site's own path). An undecidable reference read raises
+      `IdentityReferenceUndecidableError`, cleared only by the explicit
+      `authorize_identity_reference_gap`.
     """
     validate_work_item_id(work_item_id)
     validate_work_item_type(work_item_type)
@@ -3836,6 +4416,8 @@ def route_work_item(
         )
 
     if existing is None:
+        if repo_root is not None:
+            identity_reference_admits(repo_root, work_item_id, None)
         validate_governing_version(config["default_workflow_version"], config)
         work_items[work_item_id] = default_work_item(
             work_item_id=work_item_id, work_item_type=work_item_type,
