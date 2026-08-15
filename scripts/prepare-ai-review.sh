@@ -179,12 +179,12 @@ if [[ ( "$STAGE" == "implementation" || "$STAGE" == "post-fix" ) && -n "$WORK_IT
   fi
 
   GUARD_CHECK=$(
-    python3 - "$REPO_ROOT" "$WORK_ITEM_ID" "$HEAD_SHA" "$PREV_HEAD" "$PREV_REVISION" <<'PYEOF'
+    python3 - "$REPO_ROOT" "$WORK_ITEM_ID" "$HEAD_SHA" "$PREV_HEAD" "$PREV_REVISION" "$BASE_SHA" <<'PYEOF'
 import json
 import sys
 from pathlib import Path
 
-repo_root, work_item_id, head_sha, prev_head, prev_revision = sys.argv[1:6]
+repo_root, work_item_id, head_sha, prev_head, prev_revision, base_sha = sys.argv[1:7]
 state_path = Path(repo_root) / "docs/ai-workflow/WORKFLOW_STATE.json"
 state = json.loads(state_path.read_text())
 work_item = state.get("work_items", {}).get(work_item_id)
@@ -194,12 +194,40 @@ if work_item is None:
 
 recorded_head = work_item.get("reviewed_implementation_head")
 if recorded_head != head_sha:
-    print("status: mismatch")
-    print(
-        f"reason: reviewed_implementation_head {recorded_head!r} does not "
-        f"match this generation's head {head_sha!r} (GPT-R42-001)"
-    )
-    sys.exit(0)
+    # Not bare equality -- WF8B-003's remediation (D-Commit-Provenance)
+    # allows reviewed_implementation_head to lag head_sha by a bounded,
+    # validated provenance interval (the dedicated Workflow-Bundle-
+    # Generation-Record commit this generation's own durability write
+    # creates, plus any excluded-only commits before it). Reuse the same
+    # check /approve-review implementation's own gate uses, never a
+    # second, independent notion of "close enough".
+    sys.path.insert(0, str(Path(repo_root) / "scripts"))
+    import workflow_state as ws
+    interval_ok = False
+    interval_reason = None
+    if recorded_head:
+        try:
+            interval_ok = ws.implementation_provenance_interval_reachable(
+                Path(repo_root), work_item, base_sha, head_sha,
+            )
+        except Exception:
+            interval_ok = False
+        if not interval_ok:
+            try:
+                ws.verify_implementation_provenance_interval(
+                    Path(repo_root), work_item, base_sha, head_sha,
+                )
+            except Exception as exc:
+                interval_reason = str(exc)
+    if not interval_ok:
+        print("status: mismatch")
+        print(
+            f"reason: reviewed_implementation_head {recorded_head!r} does not "
+            f"match this generation's head {head_sha!r} (GPT-R42-001), and no "
+            f"valid provenance interval reaches it either"
+            + (f": {interval_reason}" if interval_reason else "")
+        )
+        sys.exit(0)
 
 live_revision = work_item.get("implementation_revision")
 if prev_head and prev_revision:

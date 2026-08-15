@@ -788,7 +788,7 @@ class TestRouteWorkItemResumeBranchDeclarationFacts(unittest.TestCase):
 
             scripts_dir = repo.root / "scripts"
             scripts_dir.mkdir(parents=True, exist_ok=True)
-            for name in ("prepare-ai-review.sh", "workflow_fingerprint.py"):
+            for name in ("prepare-ai-review.sh", "workflow_fingerprint.py", "workflow_state.py"):
                 dest = scripts_dir / name
                 shutil.copy(_REAL_SCRIPTS_DIR / name, dest)
             script_path = scripts_dir / "prepare-ai-review.sh"
@@ -879,7 +879,7 @@ class TestPrepareAiReviewShPlanStageRequiredArgument(unittest.TestCase):
     def _install_scripts(self, repo):
         scripts_dir = repo.root / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
-        for name in ("prepare-ai-review.sh", "workflow_fingerprint.py"):
+        for name in ("prepare-ai-review.sh", "workflow_fingerprint.py", "workflow_state.py"):
             dest = scripts_dir / name
             shutil.copy(_REAL_SCRIPTS_DIR / name, dest)
         script_path = scripts_dir / "prepare-ai-review.sh"
@@ -972,7 +972,7 @@ class TestPrepareAiReviewShImplementationStageHeadGuard(unittest.TestCase):
     def _install_scripts(self, repo):
         scripts_dir = repo.root / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
-        for name in ("prepare-ai-review.sh", "workflow_fingerprint.py"):
+        for name in ("prepare-ai-review.sh", "workflow_fingerprint.py", "workflow_state.py"):
             dest = scripts_dir / name
             shutil.copy(_REAL_SCRIPTS_DIR / name, dest)
         script_path = scripts_dir / "prepare-ai-review.sh"
@@ -1074,6 +1074,104 @@ class TestPrepareAiReviewShImplementationStageHeadGuard(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             manifest_text = (bundle_dir / "MANIFEST.md").read_text()
             self.assertIn(f"reviewed_implementation_head: {impl_head}", manifest_text)
+
+    def test_valid_provenance_interval_with_excluded_only_commit_succeeds(self):
+        """WF8B-003 remediation: `reviewed_implementation_head` need not
+        equal `head_sha` exactly any more -- a bounded interval of
+        excluded-only commits followed by a dedicated ordinary
+        `Workflow-Bundle-Generation-Record` commit for the exact head is
+        equally valid, reusing the same
+        `workflow_state.implementation_provenance_interval_reachable`
+        check `/approve-review implementation`'s own gate uses. `notes.txt`
+        is declared excluded from the start (not widened in a later
+        commit), so the interim commit inside the interval never touches a
+        protected path itself."""
+        with h.ScratchRepo() as repo:
+            work_item_id = "wi"
+            (repo.root / ".gitignore").write_text(".ai-review/\n")
+            repo.write_plan_docs(work_item_id=work_item_id, plan_revision=1)
+            declarations = ws.generate_artifacts_declarations(
+                work_item_id, "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+                f"docs/ai-workflow/registry/{work_item_id}-registry.json",
+                f"docs/ai-workflow/requirements/{work_item_id}-mapping.json",
+            )
+            declarations["implementation_stage"]["protected_paths"]["impl.txt"] = "test fixture content"
+            declarations["implementation_stage"]["excluded_paths"]["notes.txt"] = "test fixture, excluded"
+            declarations["implementation_stage"]["excluded_paths"]["docs/ai-workflow/WORKFLOW_STATE.json"] = (
+                "runtime state, never protected"
+            )
+            artifacts_path = repo.root / "docs" / "ai-workflow" / "registry" / f"{work_item_id}-artifacts.json"
+            artifacts_path.write_text(json.dumps(declarations) + "\n")
+            repo.commit_plan_docs_as_base()
+            impl_head = repo.commit("implement thing", filename="impl.txt")  # P
+
+            bundle_dir = self._write_review_request(repo, work_item_id, repo.base, impl_head)
+
+            # A baseline WORKFLOW_STATE.json commit -- static fields (work_item_id,
+            # paths, ...) already present -- so the record commit's own field
+            # diff below reflects only what actually changes, not every field
+            # appearing "added from nothing" (mirrors workflow_state_test.py's
+            # own _seed_base_provenance_state).
+            baseline_entry = ws.default_work_item(
+                work_item_id=work_item_id, work_item_type="process", work_item_kind="process",
+                plan_path="docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+                registry_path=f"docs/ai-workflow/registry/{work_item_id}-registry.json",
+                mapping_path=f"docs/ai-workflow/requirements/{work_item_id}-mapping.json",
+                base_commit=repo.base, governing_workflow_version="1",
+                plan_revision=1, last_transition="t0",
+            )
+            baseline_entry["state_revision"] = 1
+            repo.commit_files(
+                "seed base state",
+                {"docs/ai-workflow/WORKFLOW_STATE.json": json.dumps(
+                    {"schema_version": 1, "active_work_item_id": work_item_id,
+                     "work_items": {work_item_id: baseline_entry}},
+                    indent=2,
+                ) + "\n"},
+            )
+
+            excluded_commit = repo.commit("unrelated excluded commit", filename="notes.txt")
+            self.assertNotEqual(excluded_commit, impl_head)
+
+            entry = dict(baseline_entry)
+            entry["reviewed_implementation_head"] = impl_head
+            entry["implementation_revision"] = 1
+            entry["state_revision"] = 2
+            entry["last_transition"] = "t1"
+            state_for_record = {
+                "schema_version": 1, "active_work_item_id": work_item_id,
+                "work_items": {work_item_id: entry},
+            }
+            record_commit = repo.commit_files(
+                "record gen",
+                {"docs/ai-workflow/WORKFLOW_STATE.json": json.dumps(state_for_record, indent=2) + "\n"},
+                trailers={
+                    "Workflow-Bundle-Generation-Record": f"{work_item_id}/1",
+                    "Workflow-Work-Item": work_item_id,
+                },
+            )
+
+            script_path = self._install_scripts(repo)
+            result = subprocess.run(
+                ["bash", str(script_path), repo.base, "post-fix", work_item_id],
+                cwd=repo.root, capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            manifest_text = (bundle_dir / "MANIFEST.md").read_text()
+            # write_manifest_with_verified_identifiers_implementation_stage
+            # writes the live generation head as both MANIFEST.md fields "by
+            # construction" (its own docstring) -- unrelated to and unchanged
+            # by this fix, which only widens the *preflight*'s notion of
+            # in-agreement. WORKFLOW_STATE.json's own on-disk
+            # reviewed_implementation_head (impl_head, not record_commit) is
+            # what the preflight actually validated via the new interval
+            # check -- confirmed directly, not inferred from the manifest.
+            self.assertIn(f"generation_head: {record_commit}", manifest_text)
+            self.assertIn(f"reviewed_implementation_head: {record_commit}", manifest_text)
+            live_state = json.loads((repo.root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
+            self.assertEqual(
+                live_state["work_items"][work_item_id]["reviewed_implementation_head"], impl_head,
+            )
 
     def _write_state_entry(self, repo, work_item_id, *, base, head, revision):
         entry = ws.default_work_item(
