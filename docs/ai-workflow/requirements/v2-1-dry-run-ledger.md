@@ -26,9 +26,10 @@ record of checkpoint status (D-Registry); nothing here overrides it.
   test beyond this, per the plan's own "Missing tests: none beyond the
   trivial file-existence check" self-review note — this item's purpose is
   proving the real command surface, not payload logic.
-- **Review findings:** none yet — pending this checkpoint's own review
-  round (folded into S7's first implementation-stage bundle, once all
-  three scratch checkpoints are `COMPLETE`).
+- **Review findings:** none — covered by S7's first implementation-stage
+  self-review (2026-08-15): file content confirmed correct, commit trailer
+  uniquely discoverable via `workflow_state.discover_checkpoint_commits`,
+  no blocking/important findings.
 - **Functional-verification outcome:** not applicable (process checkpoint,
   no product-facing behavior).
 
@@ -52,9 +53,10 @@ record of checkpoint status (D-Registry); nothing here overrides it.
   directly (`cat docs/ai-workflow/dry-run/scratch/b.txt`); no automated
   test beyond this, per the plan's own "Missing tests: none beyond the
   trivial file-existence check" self-review note.
-- **Review findings:** none yet — pending this checkpoint's own review
-  round (folded into S7's first implementation-stage bundle, once all
-  three scratch checkpoints are `COMPLETE`).
+- **Review findings:** none — covered by S7's first implementation-stage
+  self-review (2026-08-15): file content confirmed correct, commit trailer
+  uniquely discoverable via `workflow_state.discover_checkpoint_commits`,
+  no blocking/important findings.
 - **Functional-verification outcome:** not applicable (process checkpoint,
   no product-facing behavior).
 
@@ -91,8 +93,9 @@ record of checkpoint status (D-Registry); nothing here overrides it.
   directly (`cat docs/ai-workflow/dry-run/scratch/c.txt`); no automated
   test beyond this, per the plan's own "Missing tests: none beyond the
   trivial file-existence check" self-review note.
-- **Review findings:** none yet — pending this checkpoint's own review
-  round (folded into S7's first implementation-stage bundle — all three
-  scratch checkpoints are now `COMPLETE`, so S7 is next).
+- **Review findings:** none — covered by S7's first implementation-stage
+  self-review (2026-08-15): file content confirmed correct, commit trailer
+  uniquely discoverable via `workflow_state.discover_checkpoint_commits`,
+  no blocking/important findings.
 - **Functional-verification outcome:** not applicable (process checkpoint,
   no product-facing behavior).

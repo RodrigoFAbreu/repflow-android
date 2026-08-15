@@ -707,6 +707,108 @@ section below, not left implicit.
   exactly.
 - **Cleanup**: none.
 
+- **Outcome (2026-08-15, real, reached its own defined stop boundary)**: ran
+  for real, in a fresh session (this session began via a real `/clear` +
+  `/bootstrap-workflow-v2`, resuming purely from repository state), against
+  live HEAD `910c2ccba95c3fc7b6faa0eace9e3b0181bd9e9f` — the same commit
+  `S-CP3`'s completion (S15) left `HEAD` at. `phase` was already
+  `SELF_REVIEWING_IMPLEMENTATION`, written by `complete_checkpoint` itself
+  as part of `S-CP3`'s completing commit once every registry checkpoint
+  became `COMPLETE` — confirmed this is the correct, only writer: no
+  function anywhere in `workflow_state.py` ever sets `phase` to the literal
+  string `"AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW"` (grepped for
+  `["phase"] = ` across the whole module). `KNOWN_PHASES` lists it as a
+  valid allowlist entry, but `technical_approval_gate_reachable` — the
+  actual entry-condition function S9 depends on — never reads `phase` at
+  all; it composes purely from `latest_round_status`, `protected_path_dirty`,
+  and `head_matches_reviewed_implementation_head`. So "entering
+  `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`" is real (the bundle exists,
+  `reviewed_implementation_head` is set, the gate is genuinely awaited) but
+  is never represented as a literal `phase` write for a `"2.1"` item —
+  `phase` stays `SELF_REVIEWING_IMPLEMENTATION` through this whole window,
+  by design, matching the module's own "allowlist, not a transition graph"
+  comment. Not a defect: nothing downstream reads `phase` to decide this
+  gate; recorded here because it is exactly the kind of easy-to-assume
+  gap this dry run exists to surface.
+
+  **Precondition** confirmed first, read-only: all 46 paths changed or
+  newly untracked since `base_commit` (`e75a756d42751ef18eee842a958cc2c888086772`)
+  classify successfully under `v2-1-dry-run-artifacts.json`'s
+  `implementation_stage` declaration (`classify_path_implementation_stage`,
+  direct probe, zero `UnclassifiedPathError`) — exactly 4 `protected`
+  (`scratch/{a,b,c}.txt` plus the declarations file itself), 42 `excluded`
+  (all concurrent `workflow-v2-1-core` `D-Checkpoint-Ownership` work in the
+  same commit range).
+
+  **Step 2 (self-review)**: reviewed the three scratch deliverables, the
+  ledger, the registry, and the mapping — no missing requirements,
+  migration risk, usability gap, or missing test beyond what the plan's own
+  self-review already scoped. `workflow_state.discover_checkpoint_commits`
+  confirmed exactly one commit per checkpoint id, matching
+  `D-Commit-Provenance`'s exact-scoped-match requirement. No blocking or
+  important findings.
+
+  **Step 3 (verification)**: `git diff --name-only <base>...HEAD -- app/
+  gradle/ build.gradle.kts settings.gradle.kts` returned empty — no
+  Android/product code touched by any of the three checkpoints, so
+  `./gradlew spotlessCheck detekt lintDebug testDebugUnitTest`/
+  `connectedDebugAndroidTest` do not apply and were not run (stated
+  explicitly in `TEST_RESULTS.md`, not silently skipped). Ran the
+  verification the plan's own self-review notes actually call for instead:
+  file-existence/content check on all three scratch markers (pass) and the
+  checkpoint-commit trailer-discovery check above.
+
+  **Step 4 (bundle generation) — real ordering subtlety caught before any
+  bad write**: `.claude/commands/milestone-implement.md` step 4 lists
+  `record_bundle_generation` as its *last* bullet, after
+  `prepare-ai-review.sh`. Running the script first for a scoped
+  implementation-stage bundle fails closed instead:
+  `scripts/prepare-ai-review.sh`'s round-identity preflight (`GPT-R42-001`/
+  `GPT-R43-001`) requires `work_items[work_item_id].reviewed_implementation_head`
+  to already equal the generation `HEAD_SHA` *before* the script runs, for
+  any work item with a `WORKFLOW_STATE.json` entry — the script's own
+  comment states this explicitly ("must already have been called and
+  persisted... BEFORE this script runs, never after"). Confirmed by direct
+  code read before attempting the wrong order (not by a failed run): the
+  correct real sequence is `record_bundle_generation` **first** (persisted
+  to `WORKFLOW_STATE.json`: `reviewed_implementation_head` `null` → HEAD,
+  `implementation_revision` `null` → `1`, `state_revision` 19 → 20, diffed
+  `-U0` to confirm exactly those three `v2-1-dry-run` fields changed,
+  nothing else), *then* the four author-written files
+  (`REVIEW_REQUEST.md`/`IMPLEMENTATION_SUMMARY.md`/`TEST_RESULTS.md`;
+  `CONTEXT_FILES.txt` left as previously recorded — still accurate), *then*
+  `./scripts/prepare-ai-review.sh e75a756... implementation v2-1-dry-run`.
+  This is a genuine documentation gap in the command file (the step-4
+  bullet order is misleading for any scoped `"2.1"` implementation/post-fix
+  bundle), not a script defect — the script's own behavior is correct and
+  intentional, and its guard is what caught the ordering before any wrong
+  write happened. Filed as an observation here rather than a blocking
+  finding, since this session avoided the wrong order by reading the code
+  first; a future session following the command file's bullets literally,
+  top to bottom, would hit `GUARD_STATUS: mismatch` and stop with a clear
+  named error, not a silent corruption — worth a real command-doc fix
+  eventually, out of scope to silently patch mid-dry-run per this
+  document's own discipline.
+
+  Ran real: `review_content_id` computed independently first
+  (`33139aaf7e637fc32dfd86a31f73c6153e32d2dc0a4ff8c4fa46ee2afe131a96`) and
+  stated in `REVIEW_REQUEST.md` before generation, then
+  `prepare-ai-review.sh` reproduced the identical value
+  (write → recompute → equal) and `bundle_id`
+  `618657d3533947fbf22cccf8ec243dce3109c58827d8f5815bb855b24f0297cf`
+  (write → recompute → equal); rerunning the script a second time for the
+  same HEAD reproduced both identifiers unchanged (idempotent
+  regeneration, `GPT-R43-001`'s "same head, no bump" branch), exit 0 both
+  times, reproducibility check (on-disk vs. archive-extracted) passed
+  silently both runs. Bundle at `.ai-review/v2-1-dry-run/current/`
+  (archive: `.ai-review/v2-1-dry-run/review-bundle.tar.gz`).
+
+  **Not yet run**: an actual external implementation-review verdict — S7's
+  own stopping point is the bundle existing and `reviewed_implementation_head`
+  matching live HEAD, per its own "Pass/fail evidence" line; obtaining a
+  real `REVISE` verdict with a genuine planted defect (S8's own setup) is
+  next, from a later session.
+
 ## S8 — External implementation review returning REVISE and remediation
 
 - **Purpose**: prove `/apply-implementation-review`'s validation
