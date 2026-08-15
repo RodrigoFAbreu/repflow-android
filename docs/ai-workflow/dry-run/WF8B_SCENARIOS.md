@@ -1055,6 +1055,55 @@ section below, not left implicit.
   reordering note) and S9's own final `/accept-milestone` step, both
   deferred to a following session.
 
+- **Outcome (2026-08-15, real, `/prepare-functional-review v2-1-dry-run`
+  rerun for real after S10's bounded remediation, in a fresh
+  `/bootstrap-workflow-v2` session)**: continuing from S10's own second
+  outcome block's stop point, real HEAD `c6704d7...`. `technical_approval`
+  had gone `STALE` → `CURRENT` again (S10's forced repeat approval,
+  `reviewed_content_commit: c916ead`, approval commit `9fd3c72`), so this
+  invocation's step 0/0a resolved `v2-1-dry-run` at
+  `phase: AWAITING_FUNCTIONAL_REVIEW` (never `LEGACY_READY`), skipping
+  straight to step 1 exactly as the first S9 run did. Step 1's
+  automated-verification recheck ran independently, for real, all five
+  hermetic suites individually: 122/122, 60/60, 408/408, 19/19, 46/47 —
+  655/656 total, the one failure the same pre-existing, unrelated
+  `test_every_wfr_row_description_matches_json_exactly` staleness (67
+  actual table rows vs. an assertion pegged at 60) every prior session has
+  already flagged, independently re-confirmed via `-v` traceback, not a
+  new regression. Steps 2-3 wrote a new, distinct
+  `## v2-1-dry-run — functional review checklist (implementation revision
+  6)` section into the real `docs/ACTIVE_MILESTONE.md`, appended after the
+  existing revision-4 section without editing it — including a
+  correction, made honestly rather than silently: the revision-4 section's
+  own flow 1 had claimed `scratch/c.txt` was "deliberately not tracked
+  yet," which a direct `git ls-files` check at this session's start showed
+  is no longer (and, checked against the commit graph, was never actually
+  true at revision-4's own write time either — `S-CP3`'s completion commit
+  `8b70136` predates every commit that section's own text was written
+  against) an accurate description; the new revision-6 section states the
+  corrected fact directly rather than perpetuating it, and the revision-4
+  section itself was left untouched, per this document's own
+  "append, don't edit" discipline. Step 3a's provenance commit ran by hand
+  (same reasoning as S9's first run — no direct CLI entry point here):
+  computed blob `f3e0648caf54969dc07e93b21a1ed0e5005fac16` via
+  `git hash-object`; `workflow_state.discover_current_functional_checklist_evidence(...,
+  "v2-1-dry-run", base_commit, head=c6704d7, implementation_revision=6)`
+  returned `None` (no prior evidence for this round); `git status --short`
+  confirmed only `docs/ACTIVE_MILESTONE.md` was modified (the pre-existing,
+  deliberately-uncommitted `verify_review_content_id.py` untouched); staged
+  and committed **only** that path as `1440ec0`, carrying
+  `Workflow-Functional-Checklist:
+  v2-1-dry-run/6/f3e0648caf54969dc07e93b21a1ed0e5005fac16` +
+  `Workflow-Work-Item: v2-1-dry-run`. **S9's functional-review-preparation
+  half is now complete for real at implementation revision 6.** Per step 5,
+  reported and stopped — this is a hard gate for the user's own manual
+  testing. Not yet run: S9's own final `/accept-milestone` step (user-gated,
+  **deliberately not attempted by this session** — S11-S12 are unaffected
+  by acceptance ordering and could run first, but S9's own scenario text
+  scopes acceptance to *after* S10/S12, so this session did not reorder
+  further on its own judgment) and S11-S17, deferred to a following
+  session.
+
 ## S10 — Functional-review findings and apply-functional-review remediation
 
 - **Purpose**: prove `/apply-functional-review`'s three-way branch
