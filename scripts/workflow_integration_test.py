@@ -47,6 +47,7 @@ Stdlib-only. Run: python3 scripts/workflow_integration_test.py
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import re
@@ -1739,6 +1740,345 @@ class TestPlanStageApprovalCommitMembership(unittest.TestCase):
                         repo.root, wi, Path("docs/ai-workflow/WORKFLOW_STATE.json"),
                     )
                     self.assertEqual(plan.artifacts_declaration_path, artifacts_rel)
+
+
+class TestPlanApprovalFailureAtomicityTransaction(unittest.TestCase):
+    """WF8c (g), part 1 (`WFR-63`, missing-test items 349/350): the durable
+    `PLAN_APPROVAL_JOURNAL`, the ownership assertion, the three-way outcome
+    classifier, and the index-only rollback, exercised against real
+    `ScratchRepo` git history end to end. Not yet wired into
+    `.claude/commands/approve-review.md` -- these tests exercise
+    `workflow_state.py`'s new library functions directly, the same way
+    `TestPlanStageApprovalCommitMembership` above exercises the
+    conditional-fifth-member mechanics it composes with."""
+
+    def _setup(self, repo: h.ScratchRepo, wi: str) -> tuple[dict, dict, str, fingerprint.PlanApprovalCommitPlan]:
+        """Settles a clean, already-committed four-member plan-stage
+        fixture (no pending fifth member -- kept simple; the fifth-member
+        interaction is `resolve_plan_stage_approval_commit_paths`'s own
+        already-tested concern, not this transaction's), writes
+        `AWAITING_PLAN_APPROVAL` state, and returns
+        `(pre_state, record, review_content_id, plan)`."""
+        repo.write_plan_docs(work_item_id=wi)
+        repo.commit_plan_docs_as_base()
+        work_item = h.base_work_item(
+            work_item_id=wi, governing_workflow_version="1", phase="AWAITING_PLAN_APPROVAL",
+            plan_path="docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+            registry_path=f"docs/ai-workflow/registry/{wi}-registry.json",
+            mapping_path=f"docs/ai-workflow/requirements/{wi}-mapping.json",
+            base_commit=repo.base,
+        )
+        repo.write_workflow_state(**{wi: work_item})
+        pre_state = json.loads((repo.root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
+
+        plan = fingerprint.resolve_plan_stage_approval_commit_paths(
+            repo.root, wi, Path("docs/ai-workflow/WORKFLOW_STATE.json"),
+        )
+        self.assertIsNone(plan.artifacts_declaration_path)  # confirms the simple four-member case
+
+        protected = h.plan_stage_protected_paths(wi)
+        review_content_id, _ = fingerprint.compute_review_content_id_plan_stage(
+            repo.root, repo.base, work_item_type="process", work_item_id=wi,
+            plan_revision=1, protected=protected,
+            excluded_paths=h.plan_stage_excluded_paths(),
+            excluded_prefixes=h.plan_stage_excluded_prefixes(),
+        )
+        record = ws.build_approval_record(
+            basis="EXTERNAL_APPROVE", stage="plan",
+            user_confirmation=f"I confirm plan approval for {wi}, plan stage.", now="t1",
+            reviewed_bundle_id="b1", approved_review_content_id=review_content_id,
+            review_content_manifest=[{"path": "x", "exists": True, "mode": "100644", "blob": "y"}],
+        )
+        return pre_state, record, review_content_id, plan
+
+    def _open_journal(self, repo: h.ScratchRepo, wi: str, pre_state: dict, record: dict,
+                       review_content_id: str, plan: fingerprint.PlanApprovalCommitPlan) -> dict:
+        return ws.open_plan_approval_journal(
+            repo.root, work_item_id=wi, base_commit=repo.base, pre_state=pre_state,
+            record=record, approval_now="t1", expected_bundle_id="b1",
+            expected_review_content_id=review_content_id, applicable_paths=plan.paths,
+            fifth_member_applies=plan.artifacts_declaration_path is not None,
+            fifth_member_sha256=plan.artifacts_declaration_sha256,
+            user_confirmation=f"I confirm plan approval for {wi}, plan stage.",
+            quiescence_authorization=f"quiescence authorized for {wi} plan",
+        )
+
+    def _commit_plan_approval(self, repo: h.ScratchRepo, wi: str, plan, review_content_id: str) -> str:
+        ws.stage_plan_approval_commit_paths(repo.root, plan.paths)
+        body = f"plan approval\n\nWorkflow-Plan-Approval: {review_content_id}\nWorkflow-Work-Item: {wi}"
+        _run(["git", "commit", "-q", "-m", body], cwd=repo.root)
+        return repo.head()
+
+    # -- open/read/close -----------------------------------------------
+
+    def test_open_journal_captures_expected_identity_and_state_bytes(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            head_before = repo.head()
+
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+
+            self.assertEqual(journal["schema_version"], 3)
+            self.assertRegex(journal["owner_token"], r"^[0-9a-f]{32}$")
+            self.assertEqual(journal["takeover_count"], 0)
+            self.assertEqual(journal["previous_owner_tokens"], [])
+            self.assertEqual(journal["work_item_id"], wi)
+            self.assertEqual(journal["stage"], "plan")
+            self.assertEqual(journal["pre_procedure_head"], head_before)
+            self.assertEqual(journal["base_commit"], repo.base)
+            self.assertEqual(journal["expected_review_content_id"], review_content_id)
+            self.assertEqual(sorted(journal["applicable_paths"]), sorted(plan.paths))
+            self.assertFalse(journal["fifth_member_applies"])
+            self.assertIsNone(journal["fifth_member_sha256"])
+
+            pre_bytes = base64.b64decode(journal["pre_procedure_state_b64"])
+            self.assertEqual(pre_bytes, ws._serialize_state(pre_state))
+            self.assertEqual(journal["pre_procedure_state_sha256"], hashlib.sha256(pre_bytes).hexdigest())
+
+            expected_post_state = ws.apply_plan_approval(pre_state, wi, record, "t1")
+            post_bytes = base64.b64decode(journal["expected_post_state_b64"])
+            self.assertEqual(post_bytes, ws._serialize_state(expected_post_state))
+            self.assertEqual(json.loads(post_bytes)["work_items"][wi]["phase"], "IMPLEMENTING")
+            self.assertEqual(journal["expected_post_state_sha256"], hashlib.sha256(post_bytes).hexdigest())
+
+            # Read back independently agrees.
+            reread = ws.read_plan_approval_journal(repo.root)
+            self.assertEqual(reread, journal)
+
+    def test_journal_is_gitignored_and_invisible_to_git_status(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            (repo.root / ".gitignore").write_text(".ai-review/\n")
+            _run(["git", "add", ".gitignore"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "gitignore"], cwd=repo.root)
+            status_before = _run(["git", "status", "--porcelain"], cwd=repo.root)
+
+            self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+
+            status_after = _run(["git", "status", "--porcelain"], cwd=repo.root)
+            self.assertEqual(status_after, status_before)
+
+    def test_second_open_refuses_without_disturbing_the_first(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            first = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+
+            with self.assertRaises(ws.PlanApprovalTransactionInProgressError):
+                self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+
+            self.assertEqual(ws.read_plan_approval_journal(repo.root), first)
+
+    def test_read_journal_returns_none_when_absent(self):
+        with h.ScratchRepo() as repo:
+            self.assertIsNone(ws.read_plan_approval_journal(repo.root))
+
+    def test_read_journal_rejects_wrong_schema_version(self):
+        with h.ScratchRepo() as repo:
+            path = ws.plan_approval_journal_path(repo.root)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({"schema_version": 1}))
+            with self.assertRaises(ws.PlanApprovalJournalUnavailableError):
+                ws.read_plan_approval_journal(repo.root)
+
+    def test_read_journal_rejects_missing_fields(self):
+        with h.ScratchRepo() as repo:
+            path = ws.plan_approval_journal_path(repo.root)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({"schema_version": 3, "owner_token": "a" * 32}))
+            with self.assertRaises(ws.PlanApprovalJournalUnavailableError):
+                ws.read_plan_approval_journal(repo.root)
+
+    def test_close_journal_is_idempotent(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+            ws.close_plan_approval_journal(repo.root)
+            self.assertIsNone(ws.read_plan_approval_journal(repo.root))
+            ws.close_plan_approval_journal(repo.root)  # no error on an already-absent journal
+
+    # -- ownership --------------------------------------------------------
+
+    def test_assert_owner_succeeds_for_correct_token_and_fails_for_wrong_token(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+
+            reread = ws.assert_plan_approval_journal_owner(repo.root, journal["owner_token"])
+            self.assertEqual(reread, journal)
+
+            with self.assertRaises(ws.PlanApprovalOwnershipError):
+                ws.assert_plan_approval_journal_owner(repo.root, "0" * 32)
+
+    def test_assert_owner_raises_when_no_transaction_open(self):
+        with h.ScratchRepo() as repo:
+            with self.assertRaises(ws.NoPlanApprovalTransactionError):
+                ws.assert_plan_approval_journal_owner(repo.root, "0" * 32)
+
+    # -- classifier ---------------------------------------------------
+
+    def test_classify_not_committed_when_nothing_happened(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+
+            self.assertEqual(
+                ws.classify_plan_approval_outcome(repo.root, journal),
+                ws.PLAN_APPROVAL_OUTCOME_NOT_COMMITTED,
+            )
+
+    def test_classify_committed_when_the_matching_commit_lands_directly_on_pre_procedure_head(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+
+            self._commit_plan_approval(repo, wi, plan, review_content_id)
+
+            self.assertEqual(
+                ws.classify_plan_approval_outcome(repo.root, journal),
+                ws.PLAN_APPROVAL_OUTCOME_COMMITTED,
+            )
+
+    def test_classify_ambiguous_when_an_unrelated_commit_lands_between_journal_open_and_the_approval_commit(self):
+        """Real provenance concern: if another commit slips in between
+        this transaction's own pinned `pre_procedure_head` and the
+        eventual approval commit, the approval commit's first parent no
+        longer matches what the journal pinned -- a concurrent writer
+        may have interleaved, so this must never be silently treated as
+        this transaction's own success."""
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+
+            (repo.root / "unrelated.txt").write_text("interleaved commit\n")
+            _run(["git", "add", "unrelated.txt"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "an unrelated commit lands first"], cwd=repo.root)
+
+            self._commit_plan_approval(repo, wi, plan, review_content_id)
+
+            self.assertEqual(
+                ws.classify_plan_approval_outcome(repo.root, journal),
+                ws.PLAN_APPROVAL_OUTCOME_AMBIGUOUS,
+            )
+
+    def test_classify_ambiguous_when_head_moved_but_no_matching_commit_exists(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+
+            (repo.root / "unrelated.txt").write_text("head moved, no approval commit\n")
+            _run(["git", "add", "unrelated.txt"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "unrelated"], cwd=repo.root)
+
+            self.assertEqual(
+                ws.classify_plan_approval_outcome(repo.root, journal),
+                ws.PLAN_APPROVAL_OUTCOME_AMBIGUOUS,
+            )
+
+    def test_classify_ambiguous_when_the_trailer_search_itself_is_ambiguous(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+
+            for subject in ("approve-a", "approve-b"):
+                repo.commit(subject, trailers={
+                    "Workflow-Plan-Approval": review_content_id, "Workflow-Work-Item": wi,
+                })
+
+            self.assertEqual(
+                ws.classify_plan_approval_outcome(repo.root, journal),
+                ws.PLAN_APPROVAL_OUTCOME_AMBIGUOUS,
+            )
+
+    # -- rollback -------------------------------------------------------
+
+    def test_rollback_unstages_and_closes_the_journal_when_not_committed(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+            head_before = repo.head()
+
+            # Simulate a failure partway through staging (item 350's
+            # "rollback after a staged-set/blob failure" scenario).
+            ws.stage_plan_approval_commit_paths(repo.root, plan.paths)
+            self.assertNotEqual(
+                _run(["git", "diff", "--name-only", "--cached", "HEAD"], cwd=repo.root).strip(), "",
+            )
+
+            self.assertEqual(
+                ws.classify_plan_approval_outcome(repo.root, journal),
+                ws.PLAN_APPROVAL_OUTCOME_NOT_COMMITTED,
+            )
+            ws.rollback_plan_approval_transaction(repo.root, owner_token=journal["owner_token"])
+
+            self.assertEqual(
+                _run(["git", "diff", "--name-only", "--cached", "HEAD"], cwd=repo.root).strip(), "",
+            )
+            self.assertEqual(repo.head(), head_before)
+            self.assertIsNone(ws.read_plan_approval_journal(repo.root))
+
+    def test_rollback_refuses_for_the_wrong_owner_token(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+
+            with self.assertRaises(ws.PlanApprovalOwnershipError):
+                ws.rollback_plan_approval_transaction(repo.root, owner_token="0" * 32)
+            # journal survives an unauthorized rollback attempt
+            self.assertEqual(ws.read_plan_approval_journal(repo.root), journal)
+
+    def test_rollback_refuses_when_live_state_already_carries_the_transactions_own_identity(self):
+        """The invariant-violation safety net: if the live
+        `WORKFLOW_STATE.json` already shows this exact transaction's
+        post-approval identity under `phase: IMPLEMENTING` -- e.g. a
+        step-8b-equivalent materialization ran out of band -- rollback
+        must refuse rather than silently discard what may be the only
+        record that the approval actually took effect."""
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+
+            post_state = ws.apply_plan_approval(pre_state, wi, record, "t1")
+            (repo.root / "docs/ai-workflow/WORKFLOW_STATE.json").write_text(
+                json.dumps(post_state, indent=2),
+            )
+
+            with self.assertRaises(ws.PlanApprovalRollbackInvariantViolationError):
+                ws.rollback_plan_approval_transaction(repo.root, owner_token=journal["owner_token"])
+            # journal is left in place, not closed
+            self.assertIsNotNone(ws.read_plan_approval_journal(repo.root))
+
+    def test_rollback_verification_failure_when_head_has_moved_leaves_the_journal_in_place(self):
+        """Defense in depth against calling rollback without classifying
+        first: if `HEAD` has genuinely moved past `pre_procedure_head`
+        (e.g. a concurrent commit landed), a bare `git reset --mixed
+        HEAD` cannot and must not be reported as having restored the
+        pre-transaction state."""
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+
+            (repo.root / "unrelated.txt").write_text("a concurrent commit\n")
+            _run(["git", "add", "unrelated.txt"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "concurrent"], cwd=repo.root)
+
+            with self.assertRaises(ws.PlanApprovalRollbackVerificationError):
+                ws.rollback_plan_approval_transaction(repo.root, owner_token=journal["owner_token"])
+            # journal is left in place, not closed
+            self.assertIsNotNone(ws.read_plan_approval_journal(repo.root))
 
 
 if __name__ == "__main__":

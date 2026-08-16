@@ -171,6 +171,7 @@ Run the real-repository demonstration: python3 scripts/workflow_state_demo_test.
 from __future__ import annotations
 
 import ast
+import base64
 import contextlib
 import copy
 import errno
@@ -1725,6 +1726,363 @@ def rollback_plan_approval_write(
     else:
         _run(["git", "reset", "HEAD"], cwd=repo_root)
     (repo_root / state_path).write_bytes(pre_write_bytes)
+
+
+# ---------------------------------------------------------------------------
+# WF8c (g), part 1: WFR-63's plan-approval failure-atomicity transaction --
+# the durable journal, the ownership assertion, the three-way outcome
+# classifier, and an index-only rollback (missing-test items 349/350),
+# built once at the permanent site's future home
+# (`.claude/commands/approve-review.md` steps 4a/6, `D-Approval-Commits`'
+# "Bootstrap plan-approval procedure").
+#
+# Deliberately bounded to this part: no mutation/handoff guard or explicit-
+# takeover contract (D-Approval-Commits' "Fencing"/"Takeover" sections --
+# this journal's own exclusive `os.link` publish is already safe against
+# concurrent *opening*, which is all a single-owner, non-interrupted flow
+# needs; serializing later steps against each other and against a takeover
+# is a distinct concern left to the command-integration follow-up that
+# wires this into `/approve-review` for real), no index-pinned-blob writer
+# for `WORKFLOW_STATE.json` itself or step 8b's materialization (item 351,
+# the "never write the working tree before the commit exists" redesign),
+# and no amend recovery (item 347's 3-way interruption classification).
+# `rollback_plan_approval_write` above is the OLD model (restores
+# `pre_write_bytes` to the working tree) and stays exactly as it is for
+# its own existing callers -- it is not reused here: this transaction
+# never writes `WORKFLOW_STATE.json` to the working tree before a durable
+# commit exists, so there is nothing for a rollback to restore, only a
+# read-only safety assertion (`rollback_plan_approval_transaction` below).
+# ---------------------------------------------------------------------------
+
+
+PLAN_APPROVAL_JOURNAL_PATH = Path(".ai-review/runtime/PLAN_APPROVAL_JOURNAL.json")
+PLAN_APPROVAL_JOURNAL_SCHEMA_VERSION = 3
+
+PLAN_APPROVAL_OUTCOME_COMMITTED = "COMMITTED"
+PLAN_APPROVAL_OUTCOME_NOT_COMMITTED = "NOT_COMMITTED"
+PLAN_APPROVAL_OUTCOME_AMBIGUOUS = "AMBIGUOUS"
+
+
+class PlanApprovalTransactionInProgressError(Exception):
+    """Raised by `open_plan_approval_journal` when a journal already
+    exists -- a transaction is already mid-flight for this repository
+    (the journal is repository-scoped, not per-work-item: only
+    `workflow-v2-1-core` ever opens one, and only one at a time).
+    Refuses rather than overwriting; resuming or taking over an existing
+    transaction is a distinct, explicit operation this slice does not
+    yet implement."""
+
+
+class PlanApprovalJournalUnavailableError(Exception):
+    """Raised when the journal file exists but cannot be read/parsed, or
+    does not carry the expected schema/fields -- fails closed rather
+    than guessing at a torn or foreign-shaped record."""
+
+
+class NoPlanApprovalTransactionError(Exception):
+    """Raised by an operation that requires an open journal (ownership
+    assertion, rollback) when none exists."""
+
+
+class PlanApprovalOwnershipError(Exception):
+    """Raised when a caller's own `owner_token` does not match the
+    journal's current one -- this session is not (or is no longer) the
+    transaction's owner."""
+
+
+class PlanApprovalRollbackInvariantViolationError(Exception):
+    """Raised by `rollback_plan_approval_transaction`'s pre-reset safety
+    assertion if the live state's own entry for this work item already
+    carries the transaction's own post-approval identity under `phase:
+    "IMPLEMENTING"` -- that combination would mean the approval already
+    took durable effect despite classification finding `NOT_COMMITTED`,
+    an invariant violation this function refuses to paper over."""
+
+
+class PlanApprovalRollbackVerificationError(Exception):
+    """Raised by `rollback_plan_approval_transaction` when the post-reset
+    repository state does not match what a genuine rollback must
+    produce (a clean index, live `HEAD` back at the journal's own
+    `pre_procedure_head`) -- the journal is left in place and nothing is
+    reported as rolled back, rather than claiming success on an
+    unverified reset."""
+
+
+def plan_approval_journal_path(repo_root: Path, path: Path = PLAN_APPROVAL_JOURNAL_PATH) -> Path:
+    return repo_root / path
+
+
+def open_plan_approval_journal(
+    repo_root: Path, *, work_item_id: str, base_commit: str, pre_state: dict,
+    record: dict, approval_now: str, expected_bundle_id: str,
+    expected_review_content_id: str, applicable_paths: tuple[str, ...],
+    fifth_member_applies: bool, fifth_member_sha256: str | None,
+    user_confirmation: str, quiescence_authorization: str,
+    path: Path = PLAN_APPROVAL_JOURNAL_PATH,
+) -> dict:
+    """Opens the durable, crash-resumable plan-approval transaction
+    journal (`WFR-63`, missing-test item 349): this invocation's own
+    **first** durable mutation, called before `apply_plan_approval`/any
+    Git staging. Captures everything a fresh, resuming, or rolling-back
+    session needs without ever re-trusting `WORKFLOW_STATE.json`'s own
+    live content for it: the exact pre-transaction commit
+    (`pre_procedure_head`), the exact pre-transaction state bytes
+    (`pre_procedure_state_b64`/`_sha256`, serialized via the same
+    canonical `_serialize_state` every production writer uses), and --
+    computed here, before any mutation, via the same pure
+    `apply_plan_approval` the eventual write uses -- the exact expected
+    post-approval state bytes (`expected_post_state_b64`/`_sha256`), so
+    every later step verifies against a value pinned before the
+    transaction began rather than recomputing it (and potentially
+    drifting) along the way.
+
+    Published by the same exclusive, no-partial-write primitive
+    `D-Checkpoint-Ownership`'s `_publish_claim_exclusive` uses for
+    checkpoint claims: write a complete temp file in the same directory,
+    `fsync` it, then `os.link` it into place (`FileExistsError` means a
+    transaction is already open --
+    `PlanApprovalTransactionInProgressError`, never a silent overwrite
+    or a block), then `fsync` the containing directory. There is no
+    window in which a reader can observe a partially-written journal,
+    and a crash between the two file operations leaves nothing at the
+    final pathname at all. Gitignored (`.ai-review/`), worktree-local,
+    never a `WORKFLOW_STATE.json` field."""
+    full_path = plan_approval_journal_path(repo_root, path)
+    full_path.parent.mkdir(parents=True, exist_ok=True)
+    repo_root_id, git_common_dir, worktree_root = _git_identity(repo_root)
+    pre_procedure_head = _run(["git", "rev-parse", "HEAD"], cwd=repo_root).strip()
+    pre_state_bytes = _serialize_state(pre_state)
+    expected_post_state = apply_plan_approval(pre_state, work_item_id, record, approval_now)
+    expected_post_state_bytes = _serialize_state(expected_post_state)
+    journal = {
+        "schema_version": PLAN_APPROVAL_JOURNAL_SCHEMA_VERSION,
+        "owner_token": secrets.token_hex(16),
+        "takeover_count": 0,
+        "previous_owner_tokens": [],
+        "quiescence_authorization": quiescence_authorization,
+        "work_item_id": work_item_id,
+        "stage": "plan",
+        "repo_root": repo_root_id,
+        "git_common_dir": git_common_dir,
+        "worktree_root": worktree_root,
+        "pre_procedure_head": pre_procedure_head,
+        "pre_procedure_state_b64": base64.b64encode(pre_state_bytes).decode("ascii"),
+        "pre_procedure_state_sha256": hashlib.sha256(pre_state_bytes).hexdigest(),
+        "base_commit": base_commit,
+        "expected_bundle_id": expected_bundle_id,
+        "expected_review_content_id": expected_review_content_id,
+        "applicable_paths": sorted(applicable_paths),
+        "fifth_member_applies": fifth_member_applies,
+        "fifth_member_sha256": fifth_member_sha256,
+        "user_confirmation": user_confirmation,
+        "approval_now": approval_now,
+        "expected_post_state_b64": base64.b64encode(expected_post_state_bytes).decode("ascii"),
+        "expected_post_state_sha256": hashlib.sha256(expected_post_state_bytes).hexdigest(),
+        "created_at": approval_now,
+    }
+    payload = (json.dumps(journal, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(full_path.parent), prefix=".plan-approval-journal-", suffix=".tmp",
+    )
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(tmp_name, full_path)
+        except FileExistsError:
+            raise PlanApprovalTransactionInProgressError(
+                f"{full_path} already exists -- a plan-approval transaction is already open "
+                f"for this repository; resume or take over the existing one rather than "
+                f"opening a second one"
+            )
+        dir_fd = os.open(str(full_path.parent), os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+    finally:
+        Path(tmp_name).unlink(missing_ok=True)
+    return journal
+
+
+_PLAN_APPROVAL_JOURNAL_REQUIRED_STR_FIELDS = (
+    "owner_token", "quiescence_authorization", "work_item_id", "stage",
+    "repo_root", "git_common_dir", "worktree_root", "pre_procedure_head",
+    "pre_procedure_state_b64", "pre_procedure_state_sha256", "base_commit",
+    "expected_bundle_id", "expected_review_content_id", "user_confirmation",
+    "approval_now", "expected_post_state_b64", "expected_post_state_sha256",
+    "created_at",
+)
+
+
+def read_plan_approval_journal(repo_root: Path, path: Path = PLAN_APPROVAL_JOURNAL_PATH) -> dict | None:
+    """Reads and validates the journal, or returns `None` if none is
+    open. Fails closed (`PlanApprovalJournalUnavailableError`) on any
+    unreadable, unparseable, or malformed record -- an undecidable
+    journal must never be mistaken for "no transaction in progress"."""
+    full_path = plan_approval_journal_path(repo_root, path)
+    try:
+        raw = full_path.read_bytes()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise PlanApprovalJournalUnavailableError(f"cannot read {full_path} ({exc})") from exc
+    try:
+        journal = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise PlanApprovalJournalUnavailableError(
+            f"{full_path} could not be parsed as JSON ({exc})"
+        ) from exc
+    if not isinstance(journal, dict) or journal.get("schema_version") != PLAN_APPROVAL_JOURNAL_SCHEMA_VERSION:
+        raise PlanApprovalJournalUnavailableError(
+            f"{full_path} has an unsupported shape/schema_version "
+            f"(expected {PLAN_APPROVAL_JOURNAL_SCHEMA_VERSION})"
+        )
+    missing = [
+        field for field in _PLAN_APPROVAL_JOURNAL_REQUIRED_STR_FIELDS
+        if not isinstance(journal.get(field), str)
+    ]
+    if not isinstance(journal.get("applicable_paths"), list):
+        missing.append("applicable_paths")
+    if not isinstance(journal.get("fifth_member_applies"), bool):
+        missing.append("fifth_member_applies")
+    if missing:
+        raise PlanApprovalJournalUnavailableError(f"{full_path} is missing/malformed fields {missing}")
+    return journal
+
+
+def close_plan_approval_journal(repo_root: Path, path: Path = PLAN_APPROVAL_JOURNAL_PATH) -> None:
+    """Deletes the journal -- idempotent, an already-absent journal is
+    success. Callers close only after a transaction has genuinely
+    reached a durable terminal state (a verified commit, or a verified
+    rollback); this function performs no such check itself."""
+    plan_approval_journal_path(repo_root, path).unlink(missing_ok=True)
+
+
+def assert_plan_approval_journal_owner(
+    repo_root: Path, owner_token: str, path: Path = PLAN_APPROVAL_JOURNAL_PATH,
+) -> dict:
+    """Re-reads the journal and requires it to be open and to name
+    `owner_token` as its current owner -- the ownership check every
+    mutating step of the transaction must pass immediately before it
+    acts. Raises `NoPlanApprovalTransactionError` if no journal is open,
+    `PlanApprovalOwnershipError` if one is open under a different
+    token. Returns the freshly re-read journal."""
+    journal = read_plan_approval_journal(repo_root, path)
+    if journal is None:
+        raise NoPlanApprovalTransactionError(
+            "no plan-approval transaction is open -- nothing to assert ownership of"
+        )
+    if journal["owner_token"] != owner_token:
+        raise PlanApprovalOwnershipError(
+            f"this session's owner_token {owner_token!r} does not match the journal's "
+            f"current owner_token {journal['owner_token']!r}"
+        )
+    return journal
+
+
+def classify_plan_approval_outcome(repo_root: Path, journal: dict) -> str:
+    """The three-way outcome classifier missing-test item 350 requires:
+    decides whether the transaction `journal` describes actually landed,
+    from durable Git state alone -- **never** from a command's exit
+    status and **never** from `WORKFLOW_STATE.json`'s own live content.
+    Shared by both the in-session post-commit check and a fresh/
+    resuming session's own recovery classification -- both call this
+    function against the same journal and get the same answer for the
+    same repository state.
+
+    - `COMMITTED`: exactly one commit carries
+      `Workflow-Plan-Approval: <journal['expected_review_content_id']>`
+      + `Workflow-Work-Item: <journal['work_item_id']>`, reachable in
+      `journal['base_commit']..HEAD` (`discover_plan_approval_commit`,
+      already `D-Commit-Provenance`'s exact/scoped/ancestry-limited
+      search), and that commit's own first parent is exactly
+      `journal['pre_procedure_head']` -- the approval commit this
+      journal itself describes, built directly on the exact state this
+      transaction pinned, nothing else.
+    - `NOT_COMMITTED`: no such commit exists, and live `HEAD` is still
+      exactly `journal['pre_procedure_head']` -- nothing happened, safe
+      to roll back.
+    - `AMBIGUOUS`: everything else -- a matching commit exists but its
+      first parent disagrees (something else landed between journal-open
+      and commit-creation), or no matching commit exists but `HEAD` has
+      moved anyway, or the underlying trailer search itself cannot
+      resolve a single commit (`AmbiguousApprovalTrailerError`). Never
+      auto-resolved: a caller must stop and report, never guess."""
+    try:
+        commit = discover_plan_approval_commit(
+            repo_root, journal["work_item_id"], journal["expected_review_content_id"],
+            journal["base_commit"], head="HEAD",
+        )
+    except AmbiguousApprovalTrailerError:
+        return PLAN_APPROVAL_OUTCOME_AMBIGUOUS
+    live_head = _run(["git", "rev-parse", "HEAD"], cwd=repo_root).strip()
+    if commit is None:
+        if live_head == journal["pre_procedure_head"]:
+            return PLAN_APPROVAL_OUTCOME_NOT_COMMITTED
+        return PLAN_APPROVAL_OUTCOME_AMBIGUOUS
+    first_parent = _run(["git", "rev-parse", f"{commit}^"], cwd=repo_root).strip()
+    if first_parent == journal["pre_procedure_head"]:
+        return PLAN_APPROVAL_OUTCOME_COMMITTED
+    return PLAN_APPROVAL_OUTCOME_AMBIGUOUS
+
+
+def rollback_plan_approval_transaction(
+    repo_root: Path, *, owner_token: str, state_path: Path = DEFAULT_STATE_PATH,
+    path: Path = PLAN_APPROVAL_JOURNAL_PATH,
+) -> None:
+    """The failure-atomicity transaction's own rollback (missing-test
+    item 350): call only once `classify_plan_approval_outcome` has
+    returned `NOT_COMMITTED` for the open journal. Writes **zero**
+    `WORKFLOW_STATE.json` bytes -- unlike the older, retired-for-this-
+    purpose `rollback_plan_approval_write` above, this transaction never
+    writes that file to the working tree before a commit exists, so
+    there is nothing to restore; only a read-only safety assertion that
+    the live state does not already, impossibly, carry this
+    transaction's own post-approval identity.
+
+    1. Ownership (`assert_plan_approval_journal_owner`) -- only this
+       transaction's own owner may roll it back.
+    2. Safety assertion: the live work item's own entry must not already
+       be `phase: "IMPLEMENTING"` with
+       `plan_approval.approved_review_content_id ==
+       journal['expected_review_content_id']`
+       (`PlanApprovalRollbackInvariantViolationError` otherwise).
+    3. `git reset --mixed HEAD` -- the whole index back to `HEAD`,
+       working tree untouched (named explicitly; never `--soft`/
+       `--hard`).
+    4. Verify before believing: the index is clean and live `HEAD` is
+       still exactly `journal['pre_procedure_head']`. Either failing
+       means the repository is not in the state this rollback expects --
+       stop, leave the journal in place, raise
+       (`PlanApprovalRollbackVerificationError`) rather than claim
+       success.
+    5. Close the journal -- reached only once (4) has verified."""
+    journal = assert_plan_approval_journal_owner(repo_root, owner_token, path)
+    state = _load_json(repo_root / state_path) or {}
+    work_item = (state.get("work_items") or {}).get(journal["work_item_id"]) or {}
+    plan_approval = work_item.get("plan_approval") or {}
+    if (work_item.get("phase") == "IMPLEMENTING"
+            and plan_approval.get("approved_review_content_id") == journal["expected_review_content_id"]):
+        raise PlanApprovalRollbackInvariantViolationError(
+            f"{journal['work_item_id']}'s live state already carries phase IMPLEMENTING with "
+            f"approved_review_content_id {journal['expected_review_content_id']!r} -- this "
+            f"transaction's own post-approval identity is already live despite classification "
+            f"finding NOT_COMMITTED; refusing to roll back an approval that may have already "
+            f"taken effect"
+        )
+    _run(["git", "reset", "--mixed", "HEAD"], cwd=repo_root)
+    staged = _run(["git", "diff", "--name-only", "--cached", "HEAD"], cwd=repo_root).strip()
+    live_head = _run(["git", "rev-parse", "HEAD"], cwd=repo_root).strip()
+    if staged or live_head != journal["pre_procedure_head"]:
+        raise PlanApprovalRollbackVerificationError(
+            f"post-reset verification failed: staged={staged!r}, HEAD={live_head!r}, "
+            f"expected HEAD {journal['pre_procedure_head']!r} -- the journal is left in "
+            f"place, nothing is reported as rolled back"
+        )
+    close_plan_approval_journal(repo_root, path)
 
 
 # ---------------------------------------------------------------------------
