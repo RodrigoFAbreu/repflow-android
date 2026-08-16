@@ -1010,12 +1010,17 @@ class TestRequirementsMappingTableConformance(unittest.TestCase):
     def test_every_wfr_row_description_matches_json_exactly(self):
         table_rows = self._table_rows()
         requirements = self.mapping["requirements"]
-        # Sanity: the extraction itself found all 60 rows (WFR-01 through
-        # WFR-60, the current count as of revision 27's D-Scoped-
-        # Remediation-Acceptance -- WFR-53 through WFR-60 added/amended by
-        # revisions 22/23/25 on top of the original 52), not an empty or
-        # partial set (which would make the per-row loop below vacuous).
-        self.assertEqual(len(table_rows), 60)
+        # Sanity: the extraction found a non-empty set of rows whose count
+        # matches the JSON side exactly (item 166, `WF8c` clause (f),
+        # `OPUS-R113-001`: a hardcoded row count here went stale every time
+        # a WFR was added -- 60 at revision 27, 69 as of this revision --
+        # so this derives the expected size from `requirements` itself
+        # instead of a literal that needs bumping forever). Both sides
+        # non-empty guards the per-row loop below against passing vacuously
+        # on two empty sets, which the set-equality check alone could not
+        # rule out.
+        self.assertGreater(len(requirements), 0)
+        self.assertEqual(len(table_rows), len(requirements))
         self.assertEqual(set(table_rows), set(requirements))
         mismatches = []
         for req_id, table_cell in table_rows.items():
