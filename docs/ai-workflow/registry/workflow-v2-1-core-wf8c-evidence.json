@@ -413,6 +413,61 @@
       "item": 209,
       "evidence": "workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_fresh_confirmation_for_corrected_evidence_succeeds",
       "note": "After a fresh confirmation naming the corrected (current) evidence commit, verification succeeds and binds to it -- proving the prior refusal (item 208) is not a permanent block"
+    },
+    {
+      "item": 273,
+      "evidence": "workflow_state_test.TestRecordBundleGeneration.test_end_to_end_implementation_round_reaches_external_review_durably",
+      "note": "New this round (batch 7): a real pre-bundle SELF_REVIEWING_IMPLEMENTATION round exercises record_bundle_generation end to end -- durable post-S phase read, S independently passes validate_bundle_generation_record_commit, and a separately re-derived fresh-session read agrees"
+    },
+    {
+      "item": 274,
+      "evidence": "workflow_state_test.TestRecordBundleGeneration.test_post_fix_end_to_end_round_converges_on_the_same_target_phase",
+      "note": "New this round (batch 7): the same end-to-end flow from the post-fix source phase APPLYING_REVIEW_FEEDBACK after a REVISE round converges on the identical target phase and passes the same role validator"
+    },
+    {
+      "item": 275,
+      "evidence": "workflow_state_test.TestRecordBundleGeneration.test_illegal_source_phase_refused_naming_actual_and_legal_phases",
+      "note": "record_bundle_generation invoked from any phase other than the two legal source phases refuses outright, naming the actual phase and both legal ones"
+    },
+    {
+      "item": 276,
+      "evidence": "workflow_state_test.TestSameContentRepublicationEndToEnd.test_terminal_commit_with_wrong_target_phase_refuses",
+      "note": "New this round (batch 7): an otherwise well-formed ordinary T that commits a hand-edited target phase other than AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW is refused by validate_bundle_generation_record_commit's terminal-commit check"
+    },
+    {
+      "item": 304,
+      "evidence": "workflow_state_test.TestApprovalGateReachability.test_block_never_reaches_gate",
+      "note": "A current, bundle-matching, parse-valid BLOCK feedback file makes the gate unreachable -- approval_gate_reachable('BLOCK') is False, with no override path"
+    },
+    {
+      "item": 305,
+      "evidence": "workflow_state_test.TestApprovalGateReachability.test_missing_feedback_never_reaches_gate",
+      "note": "New this round (batch 7): a missing/unreadable current BLOCK feedback file yields no discoverable status (None), which approval_gate_reachable refuses identically to a literal BLOCK"
+    },
+    {
+      "item": 307,
+      "evidence": "workflow_state_test.TestApprovalBasisResolution.test_revise_round_with_no_override_text_refuses_to_write",
+      "note": "New this round (batch 7): a current, bundle-matching, parse-valid REVISE feedback file with no override text supplied refuses via the mechanism-independent confirmation guard, which runs before the APPROVE/REVISE branch"
+    },
+    {
+      "item": 308,
+      "evidence": "workflow_state_test.TestApprovalBasisResolution.test_revise_round_requires_override_text",
+      "note": "The same current REVISE state, with literal stage-and-work-item-named override text supplied, resolves basis USER_OVERRIDE"
+    },
+    {
+      "item": 309,
+      "evidence": "workflow_state_test.TestApprovalBasisResolution.test_pinned_block_refuses_even_with_no_feedback_file_at_all",
+      "note": "New this round (batch 7): feedback missing entirely (latest_round_status=None) is refused identically to BLOCK once a durable pin exists for the current bundle_id -- closing, together with item 306's stale-bundle case, the two cases revision 37's 'not BLOCK' rule left open"
+    },
+    {
+      "item": 345,
+      "evidence": "workflow_integration_test.TestPlanStageApprovalCommitMembership.test_declaration_never_committed_resolves_five_member_set",
+      "note": "The corrected commit step creates exactly one approval commit containing the artifacts declaration together with the four ordinary approval files, clean working tree, unchanged trailer shape, post-approval manifest verification still succeeds"
+    },
+    {
+      "item": 346,
+      "evidence": "workflow_integration_test.TestPlanStageApprovalCommitMembership",
+      "note": "Both boundary properties of the conditional-inclusion rule: (a) no gratuitous inclusion when the declaration is byte-identical to HEAD (test_declaration_already_committed_and_unchanged_resolves_four_member_set) and (b) bundle-freshness refusal when the declaration moved on again after bundle generation (test_stale_declaration_between_preflight_and_commit_refuses_before_any_mutation) -- bound to the whole class since no single test states both halves of this compound item"
     }
   ]
 }

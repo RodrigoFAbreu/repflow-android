@@ -2164,6 +2164,14 @@ class TestApprovalGateReachability(unittest.TestCase):
         """Missing-test item 15."""
         self.assertFalse(ws.approval_gate_reachable("BLOCK"))
 
+    def test_missing_feedback_never_reaches_gate(self):
+        """Item 305 (`WF8c`): deleting, renaming, or otherwise making the
+        current `BLOCK` feedback file unreadable yields no discoverable
+        status (`None`), which must leave the gate unreachable exactly
+        like a literal `BLOCK` -- a `BLOCK` cannot be converted into an
+        override-eligible state merely by losing its feedback file."""
+        self.assertFalse(ws.approval_gate_reachable(None))
+
     def test_technical_gate_blocked_by_dirty_protected_path(self):
         self.assertFalse(ws.technical_approval_gate_reachable(
             latest_round_status="APPROVE", protected_path_dirty=True,
@@ -2320,6 +2328,19 @@ class TestApprovalBasisResolution(unittest.TestCase):
         )
         self.assertEqual(basis, "USER_OVERRIDE")
 
+    def test_revise_round_with_no_override_text_refuses_to_write(self):
+        """Item 307 (`WF8c`): a current, bundle-matching, parse-valid
+        `REVISE` feedback file with no override text supplied refuses --
+        `resolve_approval_basis`'s mechanism-independent confirmation
+        guard runs before the `APPROVE`/`REVISE` branch is even reached,
+        so a matching bundle_id never substitutes for it the way it does
+        for `EXTERNAL_APPROVE`."""
+        with self.assertRaises(ws.UserConfirmationRejectedError):
+            ws.resolve_approval_basis(
+                latest_round_status="REVISE", feedback_bundle_id="b1", current_bundle_id="b1",
+                user_confirmation="", work_item_id="wi", stage="implementation",
+            )
+
     def test_block_never_reaches_either_basis(self):
         """Missing-test item 15."""
         with self.assertRaises(ws.BlockCannotApproveError):
@@ -2361,6 +2382,20 @@ class TestApprovalBasisResolution(unittest.TestCase):
             user_confirmation="approve wi plan", work_item_id="wi", stage="plan",
         )
         self.assertEqual(basis, "EXTERNAL_APPROVE")
+
+    def test_pinned_block_refuses_even_with_no_feedback_file_at_all(self):
+        """Item 309 (`WF8c`): feedback missing entirely (a work item never
+        yet reviewed this round, `latest_round_status=None`) is refused
+        identically to a literal `BLOCK` once a durable pin exists for the
+        current bundle_id -- the pin check runs before `latest_round_status`
+        is even consulted, so neither a stale/different bundle (item 306)
+        nor a wholly absent one can become an override basis."""
+        with self.assertRaises(ws.BlockCannotApproveError):
+            ws.resolve_approval_basis(
+                latest_round_status=None, feedback_bundle_id=None, current_bundle_id="b1",
+                user_confirmation="override wi implementation", work_item_id="wi", stage="implementation",
+                pinned_block=True,
+            )
 
 
 class TestTechnicalReviewBlockPins(unittest.TestCase):
@@ -4134,6 +4169,101 @@ class TestRecordBundleGeneration(unittest.TestCase):
         self.assertIn("AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW", written_phases)
         self.assertIn("APPLYING_REVIEW_FEEDBACK", written_phases)
 
+    def test_end_to_end_implementation_round_reaches_external_review_durably(self):
+        """Item 273 (`WF8c`): a real pre-bundle implementation round --
+        starting from `SELF_REVIEWING_IMPLEMENTATION` -- exercises
+        `record_bundle_generation` end to end: immediately after the
+        durability commit `S` lands, `WORKFLOW_STATE.json` durably reads
+        `phase == AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`; `S`
+        independently passes the same role validator
+        (`validate_bundle_generation_record_commit`) `/approve-review
+        implementation` later uses; and a fresh session -- re-derived
+        directly from Git via a separate read, never from this process's
+        own in-memory return value -- sees the same external-review
+        phase."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, "wi")
+            _seed_base_provenance_state(repo, "wi")
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            pre_state = _base_state(wi={
+                "work_item_id": "wi",
+                "reviewed_implementation_head": None,
+                "implementation_revision": None,
+                "phase": "SELF_REVIEWING_IMPLEMENTATION",
+                "state_revision": 0,
+                "last_transition": "t0",
+            })
+            post_state = ws.record_bundle_generation(
+                pre_state, "wi", stage="implementation", head=p, now="t1",
+            )
+            wi_after = post_state["work_items"]["wi"]
+            s = _commit_state_only(
+                repo, "wi", wi_after, "record gen",
+                trailers=_record_trailers("wi", wi_after["implementation_revision"]),
+            )
+
+            durable = ws._read_json_at_commit_or_empty(repo.root, s, STATE_REL_PATH)
+            self.assertEqual(
+                durable["work_items"]["wi"]["phase"], "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+            )
+            ws.validate_bundle_generation_record_commit(repo.root, s, "wi")  # must not raise
+
+            fresh_session = ws._read_json_at_commit_or_empty(repo.root, "HEAD", STATE_REL_PATH)
+            self.assertEqual(
+                fresh_session["work_items"]["wi"]["phase"], "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+            )
+
+    def test_post_fix_end_to_end_round_converges_on_the_same_target_phase(self):
+        """Item 274 (`WF8c`): the same end-to-end flow as item 273,
+        exercised from the post-fix source phase
+        `APPLYING_REVIEW_FEEDBACK` after a `REVISE` round -- produces the
+        identical target phase (`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`)
+        and passes the same role validator, confirming the two legal
+        source phases converge on one target."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, "wi")
+            _seed_base_provenance_state(repo, "wi")
+            p1 = repo.commit("protected fix round 1", filename="src/Foo.kt")
+            pre_round_one = _base_state(wi={
+                "work_item_id": "wi",
+                "reviewed_implementation_head": None,
+                "implementation_revision": None,
+                "phase": "SELF_REVIEWING_IMPLEMENTATION",
+                "state_revision": 0,
+                "last_transition": "t0",
+            })
+            round_one = ws.record_bundle_generation(
+                pre_round_one, "wi", stage="implementation", head=p1, now="t1",
+            )
+            wi_round_one = round_one["work_items"]["wi"]
+            _commit_state_only(
+                repo, "wi", wi_round_one, "record gen round 1",
+                trailers=_record_trailers("wi", wi_round_one["implementation_revision"]),
+            )
+
+            # REVISE round: the reviewer sends feedback, work resumes via
+            # the dedicated APPLYING_REVIEW_FEEDBACK writer.
+            feedback_intermediate = ws.enter_applying_review_feedback(round_one, "wi", now="t1b")
+            wi_feedback = feedback_intermediate["work_items"]["wi"]
+            _commit_state_only(repo, "wi", wi_feedback, "enter applying review feedback")
+            p2 = repo.commit("protected fix round 2", filename="src/Foo.kt")
+
+            round_two = ws.record_bundle_generation(
+                feedback_intermediate, "wi", stage="post-fix", head=p2, now="t2",
+            )
+            wi_round_two = round_two["work_items"]["wi"]
+            s2 = _commit_state_only(
+                repo, "wi", wi_round_two, "record gen round 2",
+                trailers=_record_trailers("wi", wi_round_two["implementation_revision"]),
+            )
+
+            self.assertEqual(wi_round_two["phase"], "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW")
+            durable = ws._read_json_at_commit_or_empty(repo.root, s2, STATE_REL_PATH)
+            self.assertEqual(
+                durable["work_items"]["wi"]["phase"], "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+            )
+            ws.validate_bundle_generation_record_commit(repo.root, s2, "wi")  # must not raise
+
 
 class TestEnterApplyingReviewFeedback(unittest.TestCase):
     def test_sets_phase_from_legal_source(self):
@@ -4926,6 +5056,27 @@ class TestSameContentRepublicationEndToEnd(unittest.TestCase):
             # satisfying this assertion for the wrong reason.
             self.assertIn(s2, str(ctx.exception))
             self.assertIn("reviewed_implementation_head", str(ctx.exception))
+
+    def test_terminal_commit_with_wrong_target_phase_refuses(self):
+        """Item 276 (`WF8c`): an otherwise well-formed ordinary `T` that
+        sets `phase` to any value other than
+        `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` (here, a hand-edited
+        `AWAITING_TECHNICAL_APPROVAL`) refuses the terminal-commit
+        role-specific check -- confirming the exact target phase value is
+        enforced, not merely "some phase change occurred"."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            wrong_phase_state = state | {"phase": "AWAITING_TECHNICAL_APPROVAL"}
+            t = _commit_state_only(
+                repo, self.WI, wrong_phase_state, "record gen", trailers=_record_trailers(self.WI, 1),
+            )
+            with self.assertRaises(ws.MalformedBundleGenerationRecordCommitError) as ctx:
+                ws.validate_bundle_generation_record_commit(repo.root, t, self.WI)
+            self.assertIn("AWAITING_TECHNICAL_APPROVAL", str(ctx.exception))
+            self.assertIn("AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW", str(ctx.exception))
 
 
 class TestApplyImplementationProvenanceRecovery(unittest.TestCase):
