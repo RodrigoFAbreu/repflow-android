@@ -143,6 +143,36 @@
       "item": 328,
       "evidence": "workflow_state_test.TestTechnicalReviewBlockPins",
       "note": "PinLedgerMonotonicityError: removal/mutation of an existing pin refused, exactly-one-append allowed, duplicate bundle_id refused (WF8c clause (a), pin half)"
+    },
+    {
+      "item": 235,
+      "evidence": "workflow_state_test.TestRegistryReadBoundToCurrentPlanApproval.test_all_protected_paths_matching_approved_bytes_succeeds",
+      "note": "Regression guard: a multi-path manifest where nothing has drifted still succeeds -- the amended registry-approval-freshness check is not overly strict"
+    },
+    {
+      "item": 236,
+      "evidence": "workflow_state_test.TestRegistryReadBoundToCurrentPlanApproval.test_newly_plan_approved_registry_revision_succeeds",
+      "note": "Regression guard: a genuinely revised registry covered by its own fresh plan_approval is trusted, not treated as automatically stale"
+    },
+    {
+      "item": 237,
+      "evidence": "workflow_state_test.TestRegistryReadBoundToCurrentPlanApproval.test_terminal_routing_refuses_stale_plan_metadata",
+      "note": "The shared choke point (resolve_own_registry_completion_status) protects complete_work_item/`/accept-milestone`'s terminal routing identically to the non-terminal path"
+    },
+    {
+      "item": 238,
+      "evidence": "workflow_state_test.TestRecordBundleGeneration.test_first_implementation_stage_call_sets_head_and_revision_one",
+      "note": "implementation_revision advancement against a first-ever round (no prior reviewed_implementation_head) always advances from no revision to revision 1"
+    },
+    {
+      "item": 245,
+      "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_side_branch_merge_topology_refuses",
+      "note": "A non-first-parent (merge side-branch) edge anywhere in the interval makes it unenumerable and refuses (WFR-61's generalized provenance-interval gate)"
+    },
+    {
+      "item": 246,
+      "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_exact_reviewed_head_zero_gap_is_reachable",
+      "note": "An ordinary (non-recovered) round's interval -- exactly one commit, T = S -- continues to be accepted, the generalized interval definition's regression guard"
     }
   ]
 }
