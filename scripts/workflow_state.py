@@ -5401,6 +5401,70 @@ _NON_WRITER_VIOLATION_RE = re.compile(
 
 
 # ---------------------------------------------------------------------------
+# `WFR-67`'s machine-readable `review-subject: bundle | verdict | none`
+# header line (`WF8c` item (h), part 1) -- every `.claude/commands/*.md`
+# file declares exactly one value, discovered the same fail-closed way
+# `discover_state_writers` discovers `state_writer:` above: a missing or
+# contradictory declaration is a conformance failure, never a default.
+#
+# This discovery function covers the *declaration* half only. WFR-67's own
+# text additionally requires the declaration to be "cross-checked against
+# the three semantic disjuncts and against the presence of the shared
+# assertion" -- deriving each file's expected value from its own prose
+# (does it read `REVIEW_FEEDBACK.md`? recompute/compare `bundle_id`?
+# present a bundle as ready for review?) and confirming
+# `workflow_fingerprint.assert_bundle_not_rejected` actually appears at the
+# right points. That derivation is separate, deferred `WF8c` scope; this
+# function and its conformance test instead pin the **known-correct**
+# classification (the nine consumers/four exempt split `WFR-67`'s own
+# revision-80 text states by name) as an explicit expected-value table, so
+# a file that drifts from it is still caught, even though the check is
+# against a recorded table rather than re-derived from first principles.
+# ---------------------------------------------------------------------------
+
+REVIEW_SUBJECT_SURFACE_PREFIX = ".claude/commands/"
+
+_REVIEW_SUBJECT_DECLARATION_RE = re.compile(
+    r'(?m)^[ \t]*review-subject:[ \t]*(bundle|verdict|none)[ \t]*$'
+)
+
+
+class ReviewSubjectDeclarationError(Exception):
+    """A `.claude/commands/*.md` file has a missing, contradictory, or
+    unrecognized `review-subject:` declaration (`WFR-67`)."""
+
+
+def _parse_review_subject_declarations(text: str) -> list[str]:
+    """Every declared `review-subject:` value found in `text`, in
+    encounter order -- mirrors `_parse_state_writer_declarations`'s own
+    "missing vs. contradictory, never a default" discipline."""
+    return list(_REVIEW_SUBJECT_DECLARATION_RE.findall(text))
+
+
+def discover_review_subject_declarations(repo_root: Path, commit: str) -> dict[str, str]:
+    """Every tracked `.claude/commands/*.md` file's own declared
+    `review-subject:` value at `commit`, keyed by path. A missing or
+    contradictory declaration fails closed
+    (`ReviewSubjectDeclarationError`, naming what was found) rather than
+    defaulting to `"none"`."""
+    declarations: dict[str, str] = {}
+    for entry in _ls_tree_at_commit(repo_root, commit, REVIEW_SUBJECT_SURFACE_PREFIX):
+        path = entry["path"]
+        if not path.endswith(".md"):
+            continue
+        text = _hardened_run(["cat-file", "blob", entry["blob"]], cwd=repo_root)
+        declared = _parse_review_subject_declarations(text)
+        distinct = set(declared)
+        if len(distinct) != 1:
+            raise ReviewSubjectDeclarationError(
+                f"{path!r} at {commit} has a missing or contradictory "
+                f"review-subject declaration (found: {declared!r})"
+            )
+        declarations[path] = distinct.pop()
+    return declarations
+
+
+# ---------------------------------------------------------------------------
 # WF8c (m): the reconciliation table's own machine-readable
 # `{item: (status, owner)}` universe -- WFR-68 property (i)'s "re-derives
 # this item set from the reconciliation table itself at the pinned commit,

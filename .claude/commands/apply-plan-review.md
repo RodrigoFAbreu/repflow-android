@@ -1,6 +1,7 @@
 ---
 description: Apply external plan-review feedback and revise the plan.
 state_writer: true
+review-subject: verdict
 ---
 
 **State-writer discipline (D1, item 354):** every `docs/ai-workflow/WORKFLOW_STATE.json` write this command performs -- everywhere a step below says "persist the returned state" -- is performed by calling `workflow_state.state_transaction(repo_root, mutator)`, never by a separate read-then-write: `state_transaction` holds `.ai-review/runtime/WORKFLOW_STATE.lock` (`workflow_state.state_lock`, `fcntl.flock(LOCK_EX)`) across the complete re-read -> apply-the-named-function -> canonical-serialize -> atomic-publish sequence in one process invocation, so `mutator` is the exact transition function each step below names (e.g. `lambda state: workflow_state.<fn>(state, ...)`), applied to freshly re-read state rather than to a snapshot taken before the lock was acquired.
@@ -29,11 +30,19 @@ Enter the `REVISING_PLAN` state of `docs/ai-workflow/MILESTONE_WORKFLOW.md`.
    `assert_feedback_matches_bundle` against the current recomputed
    `bundle_id`/`base_commit`/`work_item_id`, `WFR-03`) — stale or
    mismatched feedback is a reason to stop and say so, not to apply.
+   **`REJECTED`-bundle refusal, first of two** (`WFR-67`): also call
+   `workflow_fingerprint.assert_bundle_not_rejected(repo_root,
+   work_item_id)` here; a `BundleRejectedError` stops the command, naming
+   the marker path and its recorded detail.
 2. For every Blocking, Important, and Optional finding: validate it against
    the actual repository (read the relevant code/docs, do not take the
    finding's premise on faith).
-3. Apply accepted findings to the plan (`<bundle_dir>/PLAN.md` and the
-   real execution/reference plan doc).
+3. **`REJECTED`-bundle refusal, second of two, under this step's own
+   mutation guard** (`WFR-67`): immediately before the first edit below,
+   re-call `workflow_fingerprint.assert_bundle_not_rejected(repo_root,
+   work_item_id)` — a withdrawal landing between step 1 and here must
+   still be caught. Apply accepted findings to the plan
+   (`<bundle_dir>/PLAN.md` and the real execution/reference plan doc).
 4. For any finding you reject, write the rejection with concrete repository
    evidence (file path, line, existing test, or doc reference) directly in
    the plan doc's decisions section — not a separate rebuttal file.

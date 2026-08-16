@@ -759,5 +759,89 @@ class TestCheckpointReachabilityConformanceLive(unittest.TestCase):
         self.assertEqual(result["status"], "PASS", result["detail"])
 
 
+class TestReviewSubjectDeclarationsLive(unittest.TestCase):
+    """`WFR-67`'s `review-subject:` header conformance (`WF8c` item (h),
+    part 1), run against this repository's real thirteen command files at
+    live `HEAD` -- proves the declaration half actually landed on every
+    file the plan's own revision-80 text names, not only against synthetic
+    fixtures. As documented at `discover_review_subject_declarations`'s own
+    docstring, the *value* each file carries here is a recorded,
+    known-correct table (the nine-consumer/four-exempt split that text
+    states by name), not yet re-derived from each file's own prose against
+    the three semantic disjuncts -- that derivation is separate, deferred
+    `WF8c` scope. `recover-implementation-provenance.md` (added after
+    `WFR-67`'s design was finalized, `WF8c` item (b)) is correctly outside
+    the named "all thirteen" and carries no declaration at all."""
+
+    EXPECTED = {
+        ".claude/commands/accept-milestone.md": "none",
+        ".claude/commands/accept-scoped-remediation.md": "none",
+        ".claude/commands/apply-functional-review.md": "bundle",
+        ".claude/commands/apply-implementation-review.md": "verdict",
+        ".claude/commands/apply-plan-review.md": "verdict",
+        ".claude/commands/approve-review.md": "bundle",
+        ".claude/commands/bootstrap-workflow-v2.md": "none",
+        ".claude/commands/milestone-implement.md": "bundle",
+        ".claude/commands/milestone-plan.md": "bundle",
+        ".claude/commands/prepare-functional-review.md": "none",
+        ".claude/commands/prepare-review.md": "bundle",
+        ".claude/commands/record-manual-plan-review.md": "verdict",
+        ".claude/commands/review-plan.md": "bundle",
+    }
+
+    # The "twice" consumers (existing pre-mutation refusal point + the
+    # operation's own mutation guard) vs. the "once" report-only consumers
+    # (revision 79: "the single assertion immediately preceding the report
+    # IS the mutation-guard assertion").
+    EXPECTED_ASSERTION_COUNT = {
+        ".claude/commands/apply-implementation-review.md": 2,
+        ".claude/commands/apply-plan-review.md": 2,
+        ".claude/commands/approve-review.md": 2,
+        ".claude/commands/record-manual-plan-review.md": 2,
+        ".claude/commands/review-plan.md": 2,
+        ".claude/commands/apply-functional-review.md": 1,
+        ".claude/commands/milestone-implement.md": 1,
+        ".claude/commands/milestone-plan.md": 1,
+        ".claude/commands/prepare-review.md": 1,
+    }
+
+    def test_all_thirteen_command_files_declare_the_expected_value(self):
+        repo_root = _repo_root()
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_root, check=True,
+            capture_output=True, text=True,
+        ).stdout.strip()
+        declarations = ws.discover_review_subject_declarations(repo_root, head)
+        self.assertEqual(declarations, self.EXPECTED)
+
+    def test_recover_implementation_provenance_has_no_declaration(self):
+        repo_root = _repo_root()
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_root, check=True,
+            capture_output=True, text=True,
+        ).stdout.strip()
+        declarations = ws.discover_review_subject_declarations(repo_root, head)
+        self.assertNotIn(".claude/commands/recover-implementation-provenance.md", declarations)
+
+    def test_every_non_exempt_file_calls_the_shared_assertion_the_expected_number_of_times(self):
+        repo_root = _repo_root()
+        for rel_path, expected_count in self.EXPECTED_ASSERTION_COUNT.items():
+            text = (repo_root / rel_path).read_text()
+            actual = text.count("assert_bundle_not_rejected")
+            self.assertEqual(
+                actual, expected_count,
+                f"{rel_path}: expected {expected_count} call(s) to "
+                f"assert_bundle_not_rejected, found {actual}",
+            )
+
+    def test_every_exempt_file_never_calls_the_assertion(self):
+        repo_root = _repo_root()
+        exempt = [p for p, v in self.EXPECTED.items() if v == "none"]
+        self.assertEqual(len(exempt), 4)
+        for rel_path in exempt:
+            text = (repo_root / rel_path).read_text()
+            self.assertNotIn("assert_bundle_not_rejected", text)
+
+
 if __name__ == "__main__":
     unittest.main()

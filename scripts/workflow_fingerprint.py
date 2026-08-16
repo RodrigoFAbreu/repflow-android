@@ -462,6 +462,14 @@ class BundleRelocationPartialMoveError(Exception):
     left diagnosable rather than bound to a manifest as if complete."""
 
 
+class BundleRejectedError(Exception):
+    """Raised by `assert_bundle_not_rejected` (`WFR-67`) when a work
+    item's `REJECTED` marker is present, or its presence could not be
+    determined -- refuses before the caller's own first durable write,
+    read, or report, naming the marker path and whatever diagnostic
+    content it holds."""
+
+
 WORK_ITEM_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
 # D1's controlled vocabulary. "synthetic" (WF8b's dry-run item) is a
@@ -1829,6 +1837,78 @@ def relocate_flat_bundle_to_scoped_layout(repo_root: Path, work_item_id: str) ->
         shutil.move(str(flat_archive), str(dest_archive))
 
     verify_relocation_file_set_complete(source_snapshot, dest_dir)
+
+
+# ---------------------------------------------------------------------------
+# `REJECTED`-marker consumer-side assertion (`WFR-67`, `WF8c` item (h), part
+# 1) -- the marker itself is work-item-scoped rather than stage-scoped (it
+# sits beside the `current/` every stage shares), so one shared resolver and
+# one shared assertion serve every consumer and every writer alike, exactly
+# as `assert_local_generation_matches` does for worktree/HEAD staleness. The
+# generator-side write of this marker (the ordered, fail-closed quarantine
+# withdrawal `prepare-ai-review.sh` performs on a failed generation) is not
+# yet built -- deferred, separately tracked, WF8c scope remains open on that
+# half. This half is the read-side refusal every consumer and writer call
+# site needs regardless, and is independently correct and testable: a
+# hand-written marker refuses exactly as a generator-written one would.
+# ---------------------------------------------------------------------------
+
+
+def resolve_rejected_marker_path(repo_root: Path, work_item_id: str) -> Path:
+    """The work-item-scoped `REJECTED` marker path, repo-root-relative --
+    sibling to `resolve_bundle_dir`'s own `current/` (`.ai-review/
+    <work_item_id>/REJECTED`, or the flat `.ai-review/REJECTED` under the
+    same compatibility rule `resolve_bundle_dir` itself uses), so the two
+    resolvers can never disagree about which layout a work item is on."""
+    return resolve_bundle_dir(repo_root, work_item_id).parent / "REJECTED"
+
+
+def assert_bundle_not_rejected(repo_root: Path, work_item_id: str) -> None:
+    """`WFR-67`'s shared consumer-side assertion: refuse, before the
+    caller's own first durable write, read, or report, if `work_item_id`'s
+    `REJECTED` marker is present. Presence alone refuses -- an empty,
+    truncated, or unreadable marker degrades the diagnostic, it never
+    passes as "not rejected" -- and a presence check that cannot complete
+    (`EACCES`/`ENOTDIR`/`ELOOP` on the marker's parent directory) is
+    treated as present rather than absent, since the obvious fail-open
+    reading is wrong for a refusal marker. This uses `os.stat` directly
+    rather than `Path.is_file()`: pathlib's own `is_file()`/`is_dir()`
+    silently swallow `ENOTDIR`/`ELOOP` (returning `False`, indistinguishable
+    from a genuinely absent marker), which would defeat exactly the
+    "cannot complete" case this assertion must treat as present. Every
+    required consumer (`/review-plan`, `/record-manual-plan-review`,
+    `/apply-plan-review`, `/approve-review` at both stages,
+    `/apply-implementation-review`, the hand-off reports of
+    `/milestone-plan`/`/milestone-implement`/`/prepare-review`, and
+    `/apply-functional-review`'s bounded-fix branch) and every writer
+    immediately preceding a `record_bundle_generation` call shares this
+    one function, so the policy cannot drift command by command."""
+    marker_path = resolve_rejected_marker_path(repo_root, work_item_id)
+    full_path = Path(repo_root) / marker_path
+    try:
+        os.stat(full_path)
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise BundleRejectedError(
+            f"{marker_path}'s presence could not be determined ({exc!r}); "
+            f"treated as present -- {work_item_id}'s current bundle is "
+            f"refused until a fresh, successful generation completes and "
+            f"clears it"
+        ) from exc
+    try:
+        detail = full_path.read_text().strip()
+    except OSError as exc:
+        detail = f"<unreadable: {exc!r}>"
+    if not detail:
+        detail = "<empty marker>"
+    raise BundleRejectedError(
+        f"{work_item_id}'s current bundle is REJECTED ({marker_path}: "
+        f"{detail}) -- refusing before this operation's first durable "
+        f"write, read, or report; a fresh, successful generation is "
+        f"required before this work item's bundle is reviewable, "
+        f"ingestible, or approvable again"
+    )
 
 
 # ---------------------------------------------------------------------------

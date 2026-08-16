@@ -2,6 +2,7 @@
 description: Implement the approved plan checkpoint by checkpoint, then stop for external implementation review.
 argument-hint: [work-item-id]
 state_writer: true
+review-subject: bundle
 ---
 
 **State-writer discipline (D1, item 354):** every `docs/ai-workflow/WORKFLOW_STATE.json` write this command performs -- everywhere a step below says "persist the returned state" -- is performed by calling `workflow_state.state_transaction(repo_root, mutator)`, never by a separate read-then-write: `state_transaction` holds `.ai-review/runtime/WORKFLOW_STATE.lock` (`workflow_state.state_lock`, `fcntl.flock(LOCK_EX)`) across the complete re-read -> apply-the-named-function -> canonical-serialize -> atomic-publish sequence in one process invocation, so `mutator` is the exact transition function each step below names (e.g. `lambda state: workflow_state.<fn>(state, ...)`), applied to freshly re-read state rather than to a snapshot taken before the lock was acquired.
@@ -202,7 +203,14 @@ dirty-resume rule, `WF2`):
    run.
 4. Enter `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`:
    - if this work item has a `docs/ai-workflow/WORKFLOW_STATE.json` entry:
-     **first**, before writing any bundle file, call
+     **`REJECTED`-bundle refusal, this command's sole assertion, immediately
+     preceding `record_bundle_generation`** (`WFR-67`, one of the three
+     named writer call sites; this consuming act is a report following a
+     write rather than a mid-operation guard, so the single assertion
+     immediately preceding the write below is also the assertion that
+     guards the report in step 5): call
+     `workflow_fingerprint.assert_bundle_not_rejected(repo_root,
+     work_item_id)` here. **First**, before writing any bundle file, call
      `workflow_state.record_bundle_generation(state, work_item_id,
      stage="implementation", head=<current HEAD SHA>, now=<now>)` (`WF4c`,
      D-Approval-Commits' sole writer of `reviewed_implementation_head`),

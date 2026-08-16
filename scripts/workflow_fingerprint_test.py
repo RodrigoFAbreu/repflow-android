@@ -1918,6 +1918,78 @@ class TestBundleLayoutResolver(unittest.TestCase):
                 wf.resolve_bundle_dir(repo.root, "Not_A_Valid_Slug!")
 
 
+class TestRejectedBundleMarker(unittest.TestCase):
+    """`WFR-67`'s shared `REJECTED`-marker resolver/assertion (`WF8c`
+    item (h), part 1: the consumer-side read half). The generator-side
+    write (the ordered quarantine withdrawal) is separate, deferred
+    scope -- these tests exercise the read/refuse contract directly
+    against a hand-written marker, which is exactly how a real,
+    generator-written marker would be observed too."""
+
+    def test_resolves_flat_path_when_scoped_dir_absent(self):
+        with ScratchRepo() as repo:
+            self.assertEqual(
+                wf.resolve_rejected_marker_path(repo.root, "workflow-v2-1-core"),
+                Path(".ai-review/REJECTED"),
+            )
+
+    def test_resolves_scoped_path_once_scoped_layout_exists(self):
+        with ScratchRepo() as repo:
+            (repo.root / ".ai-review" / "workflow-v2-1-core" / "current").mkdir(parents=True)
+            self.assertEqual(
+                wf.resolve_rejected_marker_path(repo.root, "workflow-v2-1-core"),
+                Path(".ai-review/workflow-v2-1-core/REJECTED"),
+            )
+
+    def test_passes_when_no_marker_present(self):
+        with ScratchRepo() as repo:
+            wf.assert_bundle_not_rejected(repo.root, "workflow-v2-1-core")
+
+    def test_refuses_with_marker_content_when_marker_present(self):
+        with ScratchRepo() as repo:
+            marker = repo.root / ".ai-review" / "REJECTED"
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text("withdrawal failed at: archive removal; surviving path: .ai-review/current\n")
+            with self.assertRaises(wf.BundleRejectedError) as ctx:
+                wf.assert_bundle_not_rejected(repo.root, "workflow-v2-1-core")
+            self.assertIn("REJECTED", str(ctx.exception))
+            self.assertIn("archive removal", str(ctx.exception))
+
+    def test_refuses_on_presence_alone_for_empty_marker(self):
+        """An empty/truncated marker degrades the diagnostic -- it never
+        passes as "not rejected" (revision 79, `GPT-OPUS-R97-006`)."""
+        with ScratchRepo() as repo:
+            marker = repo.root / ".ai-review" / "REJECTED"
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text("")
+            with self.assertRaises(wf.BundleRejectedError) as ctx:
+                wf.assert_bundle_not_rejected(repo.root, "workflow-v2-1-core")
+            self.assertIn("empty marker", str(ctx.exception))
+
+    def test_refuses_when_marker_parent_is_not_a_directory(self):
+        """A presence check that cannot complete (`EACCES`/`ENOTDIR`/
+        `ELOOP`) is treated as present, never as absent (revision 80,
+        `OPUS-R98-004`) -- simulated here via `ENOTDIR`: `.ai-review`
+        itself, the marker's own parent, is a regular file rather than a
+        directory, so `os.stat` on the marker path cannot complete.
+        `Path.is_file()` would silently swallow this and report "absent"
+        instead -- the reason `assert_bundle_not_rejected` uses `os.stat`
+        directly rather than pathlib's own presence check."""
+        with ScratchRepo() as repo:
+            (repo.root / ".ai-review").write_text("not a directory\n")
+            with self.assertRaises(wf.BundleRejectedError) as ctx:
+                wf.assert_bundle_not_rejected(repo.root, "workflow-v2-1-core")
+            self.assertIn("could not be determined", str(ctx.exception))
+
+    def test_two_work_items_have_independent_markers(self):
+        with ScratchRepo() as repo:
+            (repo.root / ".ai-review" / "milestone-8" / "current").mkdir(parents=True)
+            (repo.root / ".ai-review" / "milestone-8" / "REJECTED").write_text("blocked\n")
+            wf.assert_bundle_not_rejected(repo.root, "workflow-v2-1-core")
+            with self.assertRaises(wf.BundleRejectedError):
+                wf.assert_bundle_not_rejected(repo.root, "milestone-8")
+
+
 class TestGenerationDiagnosticMetadata(unittest.TestCase):
     """`worktree_root`/`generation_head` recorded in `MANIFEST.md` as
     diagnostic metadata, and the repository-local-only staleness check

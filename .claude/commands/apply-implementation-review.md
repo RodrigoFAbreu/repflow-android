@@ -1,6 +1,7 @@
 ---
 description: Apply external implementation-review feedback and prepare for another review round if needed.
 state_writer: true
+review-subject: verdict
 ---
 
 **State-writer discipline (D1, item 354):** every `docs/ai-workflow/WORKFLOW_STATE.json` write this command performs -- everywhere a step below says "persist the returned state" -- is performed by calling `workflow_state.state_transaction(repo_root, mutator)`, never by a separate read-then-write: `state_transaction` holds `.ai-review/runtime/WORKFLOW_STATE.lock` (`workflow_state.state_lock`, `fcntl.flock(LOCK_EX)`) across the complete re-read -> apply-the-named-function -> canonical-serialize -> atomic-publish sequence in one process invocation, so `mutator` is the exact transition function each step below names (e.g. `lambda state: workflow_state.<fn>(state, ...)`), applied to freshly re-read state rather than to a snapshot taken before the lock was acquired.
@@ -33,6 +34,10 @@ no `docs/ai-workflow/WORKFLOW_STATE.json` entry.
    `assert_feedback_matches_bundle` against the current recomputed
    `bundle_id`/`base_commit`/`work_item_id`, `WFR-03`) — stale or
    mismatched feedback is a reason to stop and say so, not to apply.
+   **`REJECTED`-bundle refusal, first of two** (`WFR-67`): also call
+   `workflow_fingerprint.assert_bundle_not_rejected(repo_root,
+   work_item_id)` here; a `BundleRejectedError` stops the command, naming
+   the marker path and its recorded detail.
    **Durable `BLOCK`-verdict pin** (`D2a`, `WF8c` item (a)): once the
    feedback is confirmed current, bundle-matching, and parse-valid, and
    before taking any other action, check its `status` field. If it is
@@ -68,8 +73,14 @@ no `docs/ai-workflow/WORKFLOW_STATE.json` entry.
 6. Commit coherent fixes (one commit per coherent fix, not one giant
    catch-all commit).
 7. Regenerate the bundle at the `post-fix` stage. If this work item has a
-   `docs/ai-workflow/WORKFLOW_STATE.json` entry: **first**, before writing
-   any bundle file, call `workflow_state.resolve_bundle_generation_outcome(
+   `docs/ai-workflow/WORKFLOW_STATE.json` entry: **`REJECTED`-bundle
+   refusal, second of two, under this step's own mutation guard,
+   immediately preceding `record_bundle_generation`** (`WFR-67`, one of
+   the three named writer call sites): re-call
+   `workflow_fingerprint.assert_bundle_not_rejected(repo_root,
+   work_item_id)` here, before the precondition call below — a withdrawal
+   landing between step 1 and here must still be caught. **First**, before
+   writing any bundle file, call `workflow_state.resolve_bundle_generation_outcome(
    repo_root, work_item, base_commit=<base-sha>, head=<current HEAD SHA>)`
    (WF8c (c), D-Commit-Provenance "Same-content post-fix republication") to
    learn which of the two legal outcomes applies — `("ordinary", None)` when

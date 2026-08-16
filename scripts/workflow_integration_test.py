@@ -471,32 +471,39 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # declaration and a "State-writer discipline" paragraph naming
     # `workflow_state.state_transaction`/`state_lock` -- an intentional
     # content change, not a regression.
-    "milestone-plan.md": "72f8f5af38ee5b546f85f0e36b2a5034f7b87094b38cbd728658754f56572bf9",
-    "milestone-implement.md": "be2d6f3f7e55fa610aa10fa01cc4cf2835f40e6c7f8f41623253396a1d66451d",
+    #
+    # All ten entries below further updated by WF8c item (h), part 1
+    # (`WFR-67`): every file gained a `review-subject:` frontmatter
+    # declaration, and every declared consumer among them gained its
+    # `workflow_fingerprint.assert_bundle_not_rejected(...)` call site(s)
+    # at the points `WFR-67`'s own text names -- intentional content
+    # change, not a regression.
+    "milestone-plan.md": "310271edac2f76351e8bcd93d540a955050b15b1291de3f008bd61b4678617ad",
+    "milestone-implement.md": "fdcbb5fc7ff15c0e5607d3e7144db50a2e5ee26c8db346c72ea8cda05f542197",
     # approve-review.md (WF8c item (c), same-content bundle-generation
     # republication idempotency; further updated WF8c item (b): the
     # trailing caveat naming the dedicated /recover-implementation-provenance
     # command as "not yet built" is corrected now that it exists) --
     # intentional content change.
-    "approve-review.md": "51105704ee10448410a289b2394b8feaa2189ec54d0227836e43663bc047108e",
-    "accept-milestone.md": "10594c675de02b9a90e57963796ac75dee08f33a0a2a78b7d624346f0a3ab6d9",
-    "prepare-functional-review.md": "5b8026a4bd0293c7b3d1c94ef9814357ee815ce8b9b6b53b0f545917c1eb886d",
+    "approve-review.md": "67909403ccc4268889648e6c40068efeafd129188119b3f0103ba2691cdd8cca",
+    "accept-milestone.md": "3822aa4adb7838dfc76a8a41fe102d32d0435ce2ed740939662bb37035a07f70",
+    "prepare-functional-review.md": "1b4a08cc0a28c09e0031f73e6003f23fd96fdc6c3fe22553e9f2408c1798f8cd",
     # apply-plan-review.md/bootstrap-workflow-v2.md (D-Plan-Revision-Publication,
     # WFR-65): intentional content change, publish_plan_revision wiring.
-    "apply-plan-review.md": "9b2db7b030c29be3ed466c57842b71e51e78847726bf09a3dd938db085384002",
+    "apply-plan-review.md": "fbfa7e9c980720c77c547cbdce01a4e75ec1bbba69c1be5cbf2fc6584e514ae6",
     # apply-implementation-review.md (WF8c item (c)): step 7's
     # record_bundle_generation call site widened to first resolve the
     # outcome (resolve_bundle_generation_outcome) and write the matching
     # ordinary/recovered-role trailer set -- intentional content change.
-    "apply-implementation-review.md": "0c6c9f5f71699b87982f08e4129cded50f6a0c85506886993ddffb692a784a16",
-    "review-plan.md": "2df001613d95be37253ec4969b522a123a0705b9be1ad57c59ef74c0c35d00f2",
-    "record-manual-plan-review.md": "1382be84791ea61d210bec7f13b0043dfc3e841f7e8eed0bef697aa719414f75",
+    "apply-implementation-review.md": "d86d648502b1ef2d742cbba1830835e50b0a2ed6e9c5dbac058616971c1e34c1",
+    "review-plan.md": "f9651dae8aa5078c6931ec0aa99c01dc0916514b9cca8573f6d558f3335a063d",
+    "record-manual-plan-review.md": "d2296026ff2440425f0bb133757d368edf9461781dc8e5fd5331ef707ce2de37",
     # bootstrap-workflow-v2.md (WF8c scope clauses (l)/(p)/(q), GPT-R108-002/
     # OPUS-R109-004): the driver-range text made checkpoint-agnostic
     # (OPUS-R102-009), a NO_CHECKPOINT terminal-wrap-up branch added to step
     # 3, and step 6 bound explicitly to complete_checkpoint(...) -- WF8c's
     # own first invocation, intentional content change.
-    "bootstrap-workflow-v2.md": "5eb35715f8a282caf8b7664c7f34d52287bb256e66998197bd56490305b739d7",
+    "bootstrap-workflow-v2.md": "00825ef6f60224e4f7d7a33bf9a392079aa282caaf4801c98e8a330ff25fdf22",
 }
 
 
@@ -710,6 +717,21 @@ class TestGoldenV1BehaviorAgainstPreV21BaseCommit(unittest.TestCase):
     separately confirms step 1's real addition is present and applies
     unconditionally (not gated behind a `"2.1"`-only block) rather than
     silently ignoring it.
+
+    `WF8c` item (h), part 1 (`WFR-67`) adds a fourth genuine, real,
+    version-unconditional delta to each file, following the identical
+    `WFR-03` pattern above: `/milestone-plan`'s step 7 and
+    `/apply-plan-review`'s step 3 each gain a
+    `workflow_fingerprint.assert_bundle_not_rejected(...)` call --
+    `REJECTED`-bundle refusal applies to every governing version alike,
+    nothing about it is `"2.1"`-specific. Both steps are therefore
+    excluded from the byte-equality comparisons below (`/milestone-plan`'s
+    joined set narrows from `"123457"` to `"12345"`; `/apply-plan-review`'s
+    from `"2346"` to `"246"`), the remaining steps were independently
+    re-verified byte-identical to a fresh `git show` of the real base
+    commit before the two hash constants below were recomputed, and each
+    addition's presence and unconditional placement is separately asserted
+    below, mirroring `test_apply_plan_review_step1_wfr03_addition_is_present_and_version_unconditional`.
     """
 
     def test_milestone_plan_v1_steps_equal_pre_v21_base_commit_modulo_known_renames(self):
@@ -718,15 +740,31 @@ class TestGoldenV1BehaviorAgainstPreV21BaseCommit(unittest.TestCase):
         # Step 6 excluded: D-Fingerprint-Generalization's required
         # <work_item_id> argument is a genuine v1-visible behavior change,
         # asserted separately below, not folded into this byte-equality
-        # comparison (see this class's own docstring).
+        # comparison (see this class's own docstring). Step 7 excluded:
+        # WFR-67's assert_bundle_not_rejected addition (WF8c item (h),
+        # part 1), same reasoning, asserted separately below.
         normalized = "".join(
             _normalize_v1_path_variables(_strip_bracketed_2_1_bullets(steps[n]))
-            for n in "123457"
+            for n in "12345"
         )
         self.assertEqual(
             hashlib.sha256(normalized.encode()).hexdigest(),
-            "c9d325c869a4395796d855bbf52d73a6c47061ce040593bda3c70c7793704dbf",
+            "e70115cd0afe40d04d92c1895623f2500d7d210ca5912966a740a04ef3728fb3",
         )
+
+    def test_milestone_plan_step7_wfr67_addition_is_present_and_version_unconditional(self):
+        current = _command_text("milestone-plan.md")
+        steps = _extract_numbered_steps(current)
+        step7 = steps["7"]
+        self.assertIn("assert_bundle_not_rejected", step7)
+        self.assertIn("WFR-67", step7)
+        # The addition lives in step 7 itself, outside both the step-0
+        # dual-mode block and any "[2.1]"-tagged sub-step -- it applies to
+        # both governing versions equally, exactly as WFR-67's own scope
+        # (bundle-integrity, not gated by governing_workflow_version)
+        # intends.
+        step0 = steps.get("0", "")
+        self.assertNotIn("WFR-67", step0)
 
     def test_milestone_plan_step6_requires_work_item_id_for_plan_stage(self):
         current = _command_text("milestone-plan.md")
@@ -741,14 +779,25 @@ class TestGoldenV1BehaviorAgainstPreV21BaseCommit(unittest.TestCase):
         # <work_item_id> argument is a genuine v1-visible behavior change
         # here too (same reasoning as milestone-plan.md's step 6 above),
         # asserted separately below rather than folded into this
-        # byte-equality comparison.
+        # byte-equality comparison. Step 3 excluded: WFR-67's
+        # assert_bundle_not_rejected addition (WF8c item (h), part 1),
+        # same reasoning, asserted separately below.
         current = _command_text("apply-plan-review.md")
         steps = _extract_numbered_steps(current)
-        normalized = "".join(_normalize_v1_path_variables(steps[n]) for n in "2346")
+        normalized = "".join(_normalize_v1_path_variables(steps[n]) for n in "246")
         self.assertEqual(
             hashlib.sha256(normalized.encode()).hexdigest(),
-            "06f1c04f0593946201dfcab1bad03dd3930e82037767b885a1c38099e6c9483c",
+            "1af695495d148c5568e0030222fb4bae32327cfdcee2db64b934c2196aa18854",
         )
+
+    def test_apply_plan_review_step3_wfr67_addition_is_present_and_version_unconditional(self):
+        current = _command_text("apply-plan-review.md")
+        steps = _extract_numbered_steps(current)
+        step3 = steps["3"]
+        self.assertIn("assert_bundle_not_rejected", step3)
+        self.assertIn("WFR-67", step3)
+        step0 = steps.get("0", "")
+        self.assertNotIn("WFR-67", step0)
 
     def test_apply_plan_review_step5_requires_work_item_id_for_plan_stage(self):
         current = _command_text("apply-plan-review.md")

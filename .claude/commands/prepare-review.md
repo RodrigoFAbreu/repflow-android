@@ -1,6 +1,7 @@
 ---
 description: Ad-hoc review bundle for work outside the milestone workflow gates.
 state_writer: false
+review-subject: bundle
 ---
 
 For milestone-gated reviews (plan, implementation, post-fix, functional),
@@ -33,4 +34,11 @@ than** `plan` (see step 3).
    is `plan`** (never resolved from the live `active_work_item_id` for
    that stage, `D-Fingerprint-Generalization`) and remains optional for
    every other stage.
-4. Report the bundle location. Do not commit `.ai-review/`.
+4. **`REJECTED`-bundle refusal, this command's sole assertion, immediately
+   preceding the report** (`WFR-67`): when a tracked `work-item-id`
+   applies, call `workflow_fingerprint.assert_bundle_not_rejected(repo_root,
+   work_item_id)` here — for a report-only consuming act, this single
+   assertion is also the mutation-guard assertion. Skip this call for a
+   genuinely ad-hoc review with no tracked work item at all (nothing to
+   resolve a marker path against). Report the bundle location. Do not
+   commit `.ai-review/`.

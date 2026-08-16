@@ -2,6 +2,7 @@
 description: Ingest an already-pasted manual external reviewer's verdict as the manual_external_plan_review stage of the two-stage plan-review protocol ("2.1" work items only).
 argument-hint: "[work-item-id]"
 state_writer: true
+review-subject: verdict
 ---
 
 **State-writer discipline (D1, item 354):** every `docs/ai-workflow/WORKFLOW_STATE.json` write this command performs -- everywhere a step below says "persist the returned state" -- is performed by calling `workflow_state.state_transaction(repo_root, mutator)`, never by a separate read-then-write: `state_transaction` holds `.ai-review/runtime/WORKFLOW_STATE.lock` (`workflow_state.state_lock`, `fcntl.flock(LOCK_EX)`) across the complete re-read -> apply-the-named-function -> canonical-serialize -> atomic-publish sequence in one process invocation, so `mutator` is the exact transition function each step below names (e.g. `lambda state: workflow_state.<fn>(state, ...)`), applied to freshly re-read state rather than to a snapshot taken before the lock was acquired.
@@ -44,6 +45,10 @@ second ingestion path.
 5. **Recompute fresh**: the current `bundle_id` and plan-stage
    `review_content_id`, identical in mechanism to `/review-plan`'s own
    (staleness/wrong-worktree handling included).
+   **`REJECTED`-bundle refusal, first of two** (`WFR-67`): also call
+   `workflow_fingerprint.assert_bundle_not_rejected(repo_root,
+   work_item_id)` here; a `BundleRejectedError` stops the command, naming
+   the marker path and its recorded detail.
 6. **Validate before writing anything**
    (`workflow_state.validate_manual_plan_review_preconditions`), in order:
    - the feedback's declared role is exactly `manual_external_plan_review`
@@ -66,7 +71,12 @@ second ingestion path.
    values, never block on it (a wrapper-only bundle regeneration between
    upload and paste, new `bundle_id`/unchanged `review_content_id`, must
    not invalidate the manual stage).
-7. **Write set, exact**:
+7. **Write set, exact.** **`REJECTED`-bundle refusal, second of two,
+   under this step's own mutation guard** (`WFR-67`): immediately before
+   the first write below, re-call
+   `workflow_fingerprint.assert_bundle_not_rejected(repo_root,
+   work_item_id)` — a withdrawal landing between step 5/6 and here must
+   still be caught.
    - `APPROVE`: via `workflow_state.record_manual_plan_review(...,
      verdict="APPROVE", bundle_id=<the feedback's own bundle_id,
      verbatim>, ...)` — the resolved work item's `manual_external_plan_review`

@@ -362,6 +362,87 @@ class TestDiscoverStateWriters(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# WFR-67 (WF8c item (h), part 1): discover_review_subject_declarations
+# ---------------------------------------------------------------------------
+
+
+def _seed_review_subject_surface(repo):
+    """A minimal two-file fixture: one `bundle` consumer, one `none`
+    exempt file."""
+    _write(
+        repo, ".claude/commands/consumer-one.md",
+        "---\nreview-subject: bundle\n---\n\nconsumes a bundle here\n",
+    )
+    _write(
+        repo, ".claude/commands/exempt-one.md",
+        "---\nreview-subject: none\n---\n\nno bundle identity\n",
+    )
+    _run(["git", "add", "-A"], cwd=repo.root)
+    _run(["git", "commit", "-q", "-m", "seed review-subject surface"], cwd=repo.root)
+    return repo.head()
+
+
+class TestDiscoverReviewSubjectDeclarations(unittest.TestCase):
+    def test_discovers_each_declared_value(self):
+        with ScratchRepo() as repo:
+            commit = _seed_review_subject_surface(repo)
+            declarations = ws.discover_review_subject_declarations(repo.root, commit)
+            self.assertEqual(declarations[".claude/commands/consumer-one.md"], "bundle")
+            self.assertEqual(declarations[".claude/commands/exempt-one.md"], "none")
+
+    def test_verdict_value_is_recognized(self):
+        with ScratchRepo() as repo:
+            _seed_review_subject_surface(repo)
+            _write(
+                repo, ".claude/commands/verdict-one.md",
+                "---\nreview-subject: verdict\n---\n\napplies feedback\n",
+            )
+            commit = _commit_paths(repo, [".claude/commands/verdict-one.md"], "add verdict consumer")
+            declarations = ws.discover_review_subject_declarations(repo.root, commit)
+            self.assertEqual(declarations[".claude/commands/verdict-one.md"], "verdict")
+
+    def test_missing_declaration_fails_closed(self):
+        with ScratchRepo() as repo:
+            _seed_review_subject_surface(repo)
+            _write(repo, ".claude/commands/undeclared.md", "no declaration anywhere\n")
+            commit = _commit_paths(repo, [".claude/commands/undeclared.md"], "undeclared subject")
+            with self.assertRaises(ws.ReviewSubjectDeclarationError):
+                ws.discover_review_subject_declarations(repo.root, commit)
+
+    def test_unrecognized_value_fails_closed(self):
+        with ScratchRepo() as repo:
+            _seed_review_subject_surface(repo)
+            _write(
+                repo, ".claude/commands/typo.md",
+                "---\nreview-subject: bundel\n---\n",
+            )
+            commit = _commit_paths(repo, [".claude/commands/typo.md"], "typo'd subject")
+            with self.assertRaises(ws.ReviewSubjectDeclarationError):
+                ws.discover_review_subject_declarations(repo.root, commit)
+
+    def test_contradictory_declaration_fails_closed(self):
+        with ScratchRepo() as repo:
+            _seed_review_subject_surface(repo)
+            _write(
+                repo, ".claude/commands/contradictory.md",
+                "---\nreview-subject: bundle\n---\n\nreview-subject: none\n",
+            )
+            commit = _commit_paths(repo, [".claude/commands/contradictory.md"], "contradictory subject")
+            with self.assertRaises(ws.ReviewSubjectDeclarationError):
+                ws.discover_review_subject_declarations(repo.root, commit)
+
+    def test_non_markdown_files_ignored(self):
+        with ScratchRepo() as repo:
+            _seed_review_subject_surface(repo)
+            _write(repo, ".claude/commands/README.txt", "not a command file, no declaration\n")
+            commit = _commit_paths(repo, [".claude/commands/README.txt"], "add stray non-md file")
+            declarations = ws.discover_review_subject_declarations(repo.root, commit)
+            self.assertEqual(set(declarations), {
+                ".claude/commands/consumer-one.md", ".claude/commands/exempt-one.md",
+            })
+
+
+# ---------------------------------------------------------------------------
 # item 354(c): verify_wfo_state_serialization (the bound conformance)
 # ---------------------------------------------------------------------------
 

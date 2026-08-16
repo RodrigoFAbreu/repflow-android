@@ -1,6 +1,7 @@
 ---
 description: Classify and fix user functional-testing findings, then return to the functional-review gate.
 state_writer: true
+review-subject: bundle
 ---
 
 **State-writer discipline (D1, item 354):** every `docs/ai-workflow/WORKFLOW_STATE.json` write this command performs -- everywhere a step below says "persist the returned state" -- is performed by calling `workflow_state.state_transaction(repo_root, mutator)`, never by a separate read-then-write: `state_transaction` holds `.ai-review/runtime/WORKFLOW_STATE.lock` (`workflow_state.state_lock`, `fcntl.flock(LOCK_EX)`) across the complete re-read -> apply-the-named-function -> canonical-serialize -> atomic-publish sequence in one process invocation, so `mutator` is the exact transition function each step below names (e.g. `lambda state: workflow_state.<fn>(state, ...)`), applied to freshly re-read state rather than to a snapshot taken before the lock was acquired.
@@ -67,8 +68,14 @@ all in the same invocation.
   2. Make the fix (step 4's normal work: regression test included).
   3. Commit the fix (one coherent commit; do not bundle it with an
      unrelated finding's fix).
-  4. Regenerate the bundle at the `post-fix` stage. **First**, before
-     writing any bundle file, call `workflow_state.resolve_bundle_generation_outcome(
+  4. Regenerate the bundle at the `post-fix` stage. **`REJECTED`-bundle
+     refusal, this branch's sole assertion, immediately preceding
+     `record_bundle_generation`** (`WFR-67`, one of the three named writer
+     call sites; this branch is a consumer scoped by act, since it creates
+     the refused bundle rather than receiving one): call
+     `workflow_fingerprint.assert_bundle_not_rejected(repo_root,
+     work_item_id)` here, before the precondition call below. **First**,
+     before writing any bundle file, call `workflow_state.resolve_bundle_generation_outcome(
      repo_root, work_item, base_commit=<base-sha>, head=<current HEAD SHA>)`
      (WF8c (c), D-Commit-Provenance "Same-content post-fix republication")
      to learn which of the two legal outcomes applies — `("ordinary", None)`

@@ -2,6 +2,7 @@
 description: Independently review the current plan bundle as the local_model_plan_review stage of the two-stage plan-review protocol ("2.1" work items only).
 argument-hint: "[work-item-id]"
 state_writer: true
+review-subject: bundle
 ---
 
 **State-writer discipline (D1, item 354):** every `docs/ai-workflow/WORKFLOW_STATE.json` write this command performs -- everywhere a step below says "persist the returned state" -- is performed by calling `workflow_state.state_transaction(repo_root, mutator)`, never by a separate read-then-write: `state_transaction` holds `.ai-review/runtime/WORKFLOW_STATE.lock` (`workflow_state.state_lock`, `fcntl.flock(LOCK_EX)`) across the complete re-read -> apply-the-named-function -> canonical-serialize -> atomic-publish sequence in one process invocation, so `mutator` is the exact transition function each step below names (e.g. `lambda state: workflow_state.<fn>(state, ...)`), applied to freshly re-read state rather than to a snapshot taken before the lock was acquired.
@@ -51,6 +52,10 @@ not a verified precondition; no check here depends on session freshness.
    `workflow_fingerprint.assert_local_generation_matches(repo_root,
    <bundle_dir>/MANIFEST.md)` and stop, naming both, on a
    `WorktreeOrHeadMismatchError` (`D-Bundle-Manifest`, `WFR-17`).
+   **`REJECTED`-bundle refusal, first of two** (`WFR-67`): also call
+   `workflow_fingerprint.assert_bundle_not_rejected(repo_root,
+   work_item_id)` here; a `BundleRejectedError` stops the command, naming
+   the marker path and its recorded detail.
 6. **Independently verify** every finding the plan document claims as
    addressed against the actual repository state — never take the
    disposition table's word for it — and search for new findings, exactly
@@ -69,7 +74,12 @@ not a verified precondition; no check here depends on session freshness.
      `local_model_plan_review` round on record, or `1` if none);
    - a completion timestamp.
    Malformed prior feedback is reported and stops rather than guessed at.
-8. **Write set, exact**:
+8. **Write set, exact.** **`REJECTED`-bundle refusal, second of two,
+   under this step's own mutation guard** (`WFR-67`): immediately before
+   the first write below, re-call
+   `workflow_fingerprint.assert_bundle_not_rejected(repo_root,
+   work_item_id)` — a withdrawal landing between step 5 and here must
+   still be caught.
    - `APPROVE`: `REVIEW_FEEDBACK.md`, plus — via
      `workflow_state.record_local_plan_review(..., verdict="APPROVE", ...)`
      — the resolved work item's `local_model_plan_review` ledger fields and

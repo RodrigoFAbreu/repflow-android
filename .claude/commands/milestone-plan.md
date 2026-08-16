@@ -1,6 +1,7 @@
 ---
 description: Plan the next incomplete milestone/checkpoint and stop for external plan review.
 state_writer: true
+review-subject: bundle
 ---
 
 **State-writer discipline (D1, item 354):** every `docs/ai-workflow/WORKFLOW_STATE.json` write this command performs -- everywhere a step below says "persist the returned state" -- is performed by calling `workflow_state.state_transaction(repo_root, mutator)`, never by a separate read-then-write: `state_transaction` holds `.ai-review/runtime/WORKFLOW_STATE.lock` (`workflow_state.state_lock`, `fcntl.flock(LOCK_EX)`) across the complete re-read -> apply-the-named-function -> canonical-serialize -> atomic-publish sequence in one process invocation, so `mutator` is the exact transition function each step below names (e.g. `lambda state: workflow_state.<fn>(state, ...)`), applied to freshly re-read state rather than to a snapshot taken before the lock was acquired.
@@ -130,5 +131,10 @@ compatibility path.
    - run `./scripts/prepare-ai-review.sh <base-sha> plan <work_item_id>`
      (`work_item_id` is **required** for the plan stage, never resolved
      from the live `active_work_item_id` -- `D-Fingerprint-Generalization`).
-7. Report the bundle location and **stop**. Do not implement anything. This
-   is a hard gate — wait for `<feedback_dir>/REVIEW_FEEDBACK.md`.
+7. **`REJECTED`-bundle refusal, this command's sole assertion, immediately
+   preceding the hand-off report** (`WFR-67`): call
+   `workflow_fingerprint.assert_bundle_not_rejected(repo_root,
+   work_item_id)` here — for a report-only consuming act, this single
+   assertion is also the mutation-guard assertion. Report the bundle
+   location and **stop**. Do not implement anything. This is a hard gate —
+   wait for `<feedback_dir>/REVIEW_FEEDBACK.md`.

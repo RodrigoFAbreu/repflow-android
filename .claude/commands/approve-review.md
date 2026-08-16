@@ -3,6 +3,7 @@ description: Approve the plan or implementation stage for the active (or named) 
 argument-hint: <plan|implementation> [work-item-id]
 disable-model-invocation: true
 state_writer: true
+review-subject: bundle
 ---
 
 **State-writer discipline (D1, item 354):** every `docs/ai-workflow/WORKFLOW_STATE.json` write this command performs -- everywhere a step below says "persist the returned state" -- is performed by calling `workflow_state.state_transaction(repo_root, mutator)`, never by a separate read-then-write: `state_transaction` holds `.ai-review/runtime/WORKFLOW_STATE.lock` (`workflow_state.state_lock`, `fcntl.flock(LOCK_EX)`) across the complete re-read -> apply-the-named-function -> canonical-serialize -> atomic-publish sequence in one process invocation, so `mutator` is the exact transition function each step below names (e.g. `lambda state: workflow_state.<fn>(state, ...)`), applied to freshly re-read state rather than to a snapshot taken before the lock was acquired.
@@ -159,7 +160,11 @@ actually load-bearing control for the Skill exposure path, not mechanism
    is the actual first-party Milestone-8 incident (a stale bundle read
    from a different worktree). Never skip this because the recomputed
    `bundle_id` happens to still match; the two checks catch different
-   failure modes.
+   failure modes. **`REJECTED`-bundle refusal, first of two, both stages**
+   (`WFR-67`): also call
+   `workflow_fingerprint.assert_bundle_not_rejected(repo_root,
+   work_item_id)` here; a `BundleRejectedError` stops the command, naming
+   the marker path and its recorded detail.
 3. **Resolve the basis**: call `workflow_state.resolve_approval_basis(...)`
    with the feedback round's status/bundle_id, the freshly recomputed
    current bundle_id, this turn's literal `user_confirmation` text (if the
@@ -221,7 +226,12 @@ actually load-bearing control for the Skill exposure path, not mechanism
     (`resolve_plan_stage_approval_commit_paths`'s own return value) for
     step 6's re-verification. Implementation stage: unchanged, no
     resolution step — its four members are fixed.
-5. **Write it**: capture `docs/ai-workflow/WORKFLOW_STATE.json`'s current
+5. **Write it.** **`REJECTED`-bundle refusal, second of two, under this
+   step's own mutation guard, both stages** (`WFR-67`): immediately before
+   this step's own write, re-call
+   `workflow_fingerprint.assert_bundle_not_rejected(repo_root,
+   work_item_id)` — a withdrawal landing between step 2 and here must
+   still be caught. Capture `docs/ai-workflow/WORKFLOW_STATE.json`'s current
    working-tree bytes first (`pre_write_bytes` — needed only if step 6/6a
    fails and step 6b's rollback runs). Then call
    `workflow_state.apply_plan_approval(...)` or `apply_technical_approval(...)`,
