@@ -338,6 +338,81 @@
       "item": 280,
       "evidence": "workflow_state_test.TestImplementationProvenanceRecoveryEndToEnd.test_second_sequential_recovery_chain_validates",
       "note": "The canonical two-recovery chain P -> S -> U1 -> S2 -> U2 -> S3 succeeds end to end -- S and S2 both pass their own role-specific generation-record validation (not merely path classification) inside the same successful verify_implementation_provenance_interval call this test already asserts for item 268"
+    },
+    {
+      "item": 172,
+      "evidence": "workflow_state_test.TestRegistryCompletionStatusAndGates.test_scoped_remediation_gate_reachable_truth_table",
+      "note": "/accept-scoped-remediation's phase gate refuses whenever phase != AWAITING_FUNCTIONAL_REVIEW (single boolean-equality code path; phase='IMPLEMENTING' is the truth table's exercised negative case, the same branch AWAITING_TECHNICAL_APPROVAL/MILESTONE_COMPLETE would take)"
+    },
+    {
+      "item": 179,
+      "evidence": "workflow_state_test.TestCompleteWorkItemOwnRegistryGuard.test_raises_incomplete_own_checkpoints_when_own_registry_non_terminal",
+      "note": "End-to-end reproduction: technical_approval CURRENT with a non-terminal own registry still refuses MILESTONE_COMPLETE via complete_work_item directly, proving no documented path reaches it without first routing through /accept-scoped-remediation (same test bound to item 170, this item is its end-to-end framing)"
+    },
+    {
+      "item": 180,
+      "evidence": "workflow_state_test.TestApplyScopedRemediationAcceptance.test_is_pure_no_side_effects_until_caller_persists_and_commits",
+      "note": "apply_scoped_remediation_acceptance is a pure in-memory transform; a simulated interruption between the state write and the caller's own commit step leaves neither in effect (item 180's state-write/commit atomicity claim)"
+    },
+    {
+      "item": 183,
+      "evidence": "workflow_state_test.TestCompleteWorkItemOwnRegistryGuard",
+      "note": "RegistryCoverageError for every named sub-case: missing file, untracked file, malformed JSON, non-object JSON (test_registry_coverage_missing_file/_untracked_file/_malformed_json/_not_a_json_object)"
+    },
+    {
+      "item": 184,
+      "evidence": "workflow_state_test.TestCompleteWorkItemOwnRegistryGuard.test_registry_coverage_wrong_work_item_id",
+      "note": "RegistryCoverageError when the on-disk registry's own declared work_item_id disagrees with the work item being completed -- the foreign/mismatched-registry case"
+    },
+    {
+      "item": 185,
+      "evidence": "workflow_state_test.TestApplyScopedRemediationAcceptance.test_entry_has_exactly_eleven_documented_fields",
+      "note": "scoped_remediation_acceptance entry schema asserted against SCOPED_REMEDIATION_ACCEPTANCE_FIELDS, exactly eleven fields"
+    },
+    {
+      "item": 188,
+      "evidence": "workflow_state_test.TestResolveScopedRemediationRound.test_distinct_implementation_revision_is_a_new_round_not_a_replay",
+      "note": "A genuinely new remediation round (distinct implementation_revision) against a checkpoint already scoped-accepted once resolves NoExistingRound, never a conflicting duplicate"
+    },
+    {
+      "item": 189,
+      "evidence": "workflow_state_test.TestResolveScopedRemediationRound",
+      "note": "Same-round collision refused as ConflictingDuplicate, naming the disagreeing field, across every documented field: active_work_item_id_at_acceptance, functional_checklist_evidence_commit, functional_checklist_path (revision 26 widened set)"
+    },
+    {
+      "item": 193,
+      "evidence": "workflow_state_test.TestResolveScopedRemediationRound.test_ambiguous_history",
+      "note": "resolve_scoped_remediation_round reports AmbiguousHistory when discover_scoped_remediation_commits raises AmbiguousScopedRemediationTrailerError, from trailer matching alone before WORKFLOW_STATE.json content is read"
+    },
+    {
+      "item": 195,
+      "evidence": "workflow_state_test.TestFunctionalChecklistTrailerDiscovery",
+      "note": "Checklist-evidence discovery is idempotent by content: unchanged content re-committed twice resolves identically (test_interrupted_preparation_is_safe_to_retry), a genuinely corrected checklist produces a new distinct current commit ahead of the earlier one (test_corrected_checklist_produces_new_current_evidence_ahead_of_earlier)"
+    },
+    {
+      "item": 199,
+      "evidence": "workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_fresh_confirmation_for_corrected_evidence_succeeds",
+      "note": "Pre-commit evidence guard binds to the round's current checklist-evidence commit only when the current-turn confirmation itself names that current commit -- positive half of item 199's narrowing claim (revision 27, GPT-R40-001)"
+    },
+    {
+      "item": 200,
+      "evidence": "workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_stale_confirmation_after_correction_wrong_commit",
+      "note": "A confirmation naming a stale, superseded evidence commit is refused rather than silently upgraded to the newer current evidence -- discovery identifying the newer commit as current never alone authorizes an existing confirmation to it"
+    },
+    {
+      "item": 207,
+      "evidence": "workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_happy_path_returns_current_evidence",
+      "note": "Ordinary happy path: confirmation names evidence commit A, A remains the round's current (only) checklist-evidence commit, verification succeeds"
+    },
+    {
+      "item": 208,
+      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd.test_wrong_evidence_commit_is_refused_as_stale",
+      "note": "A second, distinct evidence commit created after the user's confirmation named the first makes that confirmation stale; /accept-scoped-remediation's own orchestration (not just the unit-level guard) refuses via StaleFunctionalChecklistConfirmationError"
+    },
+    {
+      "item": 209,
+      "evidence": "workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_fresh_confirmation_for_corrected_evidence_succeeds",
+      "note": "After a fresh confirmation naming the corrected (current) evidence commit, verification succeeds and binds to it -- proving the prior refusal (item 208) is not a permanent block"
     }
   ]
 }
