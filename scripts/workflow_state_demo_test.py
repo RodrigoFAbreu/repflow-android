@@ -676,15 +676,15 @@ class TestCheckpointOriginationAgainstRealRepository(unittest.TestCase):
 
 
 class TestReconciliationTableLedgerStatusAgreement(unittest.TestCase):
-    """WF8c (m), part 1's own "teeth check" against this repository's real
+    """WF8c (m)'s own "teeth check" against this repository's real
     content -- mirrors item 72's own registry/view agreement test's role
     in this file. Confirms `docs/ai-workflow/registry/workflow-v2-1-core-
-    ledger-status.json` (generated via `parse_reconciliation_table`) is
-    still a faithful, total, duplicate-free transcription of the live
-    plan's own '### Reconciliation table' -- not itself WFR-68's own
-    verifier (that binds later), but the same live-repository agreement
-    property, checked here against `HEAD` the way `verify_wfo_ledger_
-    coverage` will check it against a pinned commit once it exists."""
+    ledger-status.json` (generated via `parse_reconciliation_table`) is a
+    faithful, total, duplicate-free transcription of the live plan's own
+    '### Reconciliation table', and that `verify_wfo_ledger_coverage`
+    (`WFR-68`'s own bound verifier, exercised against synthetic fixtures
+    in `workflow_state_completion_obligations_test.py`) is now wired up
+    and has real teeth against this repository's own content at `HEAD`."""
 
     def test_ledger_status_json_matches_the_live_reconciliation_table_exactly(self):
         repo_root = _repo_root()
@@ -712,15 +712,35 @@ class TestReconciliationTableLedgerStatusAgreement(unittest.TestCase):
                 f"item {entry['item']} disagrees between the plan table and ledger-status.json",
             )
 
-    def test_ledger_status_json_not_yet_bound_as_a_completion_obligation_conformance(self):
-        """WF8c (m) is a multi-part item -- this session builds only the
-        parse/artifact half. The full verifier (properties (ii)-(iv), the
-        adversarial arms) is deliberately not bound yet, so `WFO-LEDGER-
-        COVERAGE` must keep resolving `UNKNOWN_OBLIGATION`, exactly the
-        fail-closed interim state WFR-68 itself specifies -- this guards
-        against a future accidental/partial binding being mistaken for
-        the real thing."""
-        self.assertNotIn("WFO-LEDGER-COVERAGE", ws.COMPLETION_OBLIGATION_CONFORMANCE)
+    def test_ledger_status_json_is_now_bound_as_a_completion_obligation_conformance(self):
+        """WF8c (m)'s remaining scope lands `verify_wfo_ledger_coverage`
+        (properties (ii)-(iv), the four adversarial arms) and binds it --
+        the standing guard from the part-1 session is updated in place,
+        never deleted, to assert the new state rather than the old
+        interim `UNKNOWN_OBLIGATION` one."""
+        self.assertEqual(
+            ws.COMPLETION_OBLIGATION_CONFORMANCE.get("WFO-LEDGER-COVERAGE"), "verify_wfo_ledger_coverage",
+        )
+
+    def test_real_ledger_status_json_does_not_yet_pass_the_bound_verifier(self):
+        """Binding the verifier this session does not itself populate real
+        evidence for any of the 211 reconciliation-table items -- every
+        `IMPLEMENTED` entry in the real `workflow-v2-1-core-ledger-
+        status.json` still carries `evidence: null` (property (ii)), so
+        `verify_wfo_ledger_coverage` against live HEAD correctly still
+        derives `FAIL`, naming those items -- confirming the newly-bound
+        verifier has real teeth against this repository's own actual
+        content, not only against synthetic fixtures. `WFR-69`'s own
+        pre-flight above keeps refusing `WF8c`'s checkpoint completion for
+        the identical underlying reason."""
+        repo_root = _repo_root()
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_root, check=True,
+            capture_output=True, text=True,
+        ).stdout.strip()
+        result = ws.verify_wfo_ledger_coverage(repo_root, head)
+        self.assertEqual(result["status"], "FAIL")
+        self.assertTrue(any("evidence" in a for a in result["failing_assertions"]))
 
 
 class TestCheckpointReachabilityConformanceLive(unittest.TestCase):

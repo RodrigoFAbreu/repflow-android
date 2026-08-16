@@ -5247,6 +5247,7 @@ VERIFIER_ENTRY = "scripts/workflow_state.py"
 VERIFIER_SOURCE_ROOT = "scripts"
 COMPLETION_OBLIGATION_CONFORMANCE = {
     "WFO-STATE-SERIALIZATION": "verify_wfo_state_serialization",
+    "WFO-LEDGER-COVERAGE": "verify_wfo_ledger_coverage",
 }
 OBLIGATION_ID_RE = re.compile(r"^WFO-[A-Z0-9][A-Z0-9-]{0,47}$")
 
@@ -5400,17 +5401,20 @@ _NON_WRITER_VIOLATION_RE = re.compile(
 
 
 # ---------------------------------------------------------------------------
-# WF8c (m), part 1: the reconciliation table's own machine-readable
+# WF8c (m): the reconciliation table's own machine-readable
 # `{item: (status, owner)}` universe -- WFR-68 property (i)'s "re-derives
 # this item set from the reconciliation table itself at the pinned commit,
 # never from the artifact's own enumeration" requirement. `docs/ai-workflow/
 # registry/<work_item_id>-ledger-status.json` (generated from this parse) is
-# WFO-LEDGER-COVERAGE's subject artifact. The obligation's full verifier --
-# property (ii) evidence-for-`IMPLEMENTED`, properties (iii)/(iv)
-# monotonicity/governance-scope, and item 355's own conformance test -- is
-# deliberately not bound in `COMPLETION_OBLIGATION_CONFORMANCE` yet: it
-# stays correctly fail-closed (`UNKNOWN_OBLIGATION`), exactly the interim
-# state WFR-68 itself describes, until a later WF8c session builds the rest.
+# WFO-LEDGER-COVERAGE's subject artifact. The obligation's full verifier
+# (`verify_wfo_ledger_coverage`, below `verify_wfo_state_serialization`,
+# properties (ii)-(iv) and the adversarial arms) is now bound in
+# `COMPLETION_OBLIGATION_CONFORMANCE` -- real evidence population for the
+# reconciliation table's 211 items (both `WF8b`'s historically-`IMPLEMENTED`
+# entries and `WF8c`'s own incremental delivery) remains separate, ongoing
+# work: `WFR-69`'s pre-flight above correctly keeps refusing `WF8c`'s own
+# checkpoint completion until every open item is evidenced, exactly as
+# designed.
 # ---------------------------------------------------------------------------
 
 
@@ -5971,6 +5975,256 @@ def verify_wfo_state_serialization(repo_root: str | Path, commit: str) -> dict:
             f"{len(discovery.writers)} writer(s), 1 publisher, "
             f"{len(discovery.non_writers)} non-writer(s) all conform"
         ),
+        "failing_assertions": [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# WFO-LEDGER-COVERAGE's own bound conformance (WFR-68 properties (i)-(iv);
+# WF8c item (m)'s remaining scope) -- the approval-bound counterpart to
+# `_pre_flight_wfo_ledger_coverage` above: that one gates a single
+# checkpoint's own completion against the *live working tree*; this one
+# gates `complete_work_item` against a *pinned, technically-approved*
+# commit, through the same `resolve_completion_obligations` machinery
+# `WFO-STATE-SERIALIZATION` already exercises. The obligation is
+# permanently bound to this one work item by construction -- the
+# reconciliation table and its ledger are `workflow-v2-1-core`-specific
+# artifacts, not a general per-work-item mechanism -- so, exactly like
+# `VERIFIER_ENTRY`/`VERIFIER_SOURCE_ROOT` above (item 358(e)), the work
+# item id is a declared constant of this implementation rather than a
+# parameter the fixed `(repo_root, commit)` verifier signature has no
+# room for.
+# ---------------------------------------------------------------------------
+
+LEDGER_COVERAGE_WORK_ITEM_ID = "workflow-v2-1-core"
+
+
+def _git_show_json_at_commit(repo_root: Path, commit: str, rel_path: Path | str):
+    """Reads and parses a JSON file at a **pinned commit** (never the
+    working tree) via `git show`. Returns `None` when the path does not
+    exist at `commit`; raises `json.JSONDecodeError` on malformed JSON --
+    unlike the working-tree helper `_read_json_from_working_tree` (which
+    treats either case as "no evidence recorded"), the approval-bound
+    verifier must not silently treat a corrupted artifact as absent."""
+    try:
+        text = _hardened_run(["show", f"{commit}:{rel_path}"], cwd=repo_root)
+    except subprocess.CalledProcessError:
+        return None
+    return json.loads(text)
+
+
+def _materialize_scripts_tree_at_commit(repo_root: Path, commit: str) -> Path:
+    """Every tracked file under `scripts/` at `commit`, written into a
+    fresh scratch directory preserving relative paths -- broader than a
+    single verifier's own static import closure (`_materialize_census`),
+    since an evidence test id named in `<work_item_id>-ledger-status.json`
+    /`<work_item_id>-wf8c-evidence.json` can be any test module under
+    `scripts/`, not only `VERIFIER_ENTRY`'s own dependency closure.
+    Caller owns cleanup."""
+    scratch_dir = Path(tempfile.mkdtemp(prefix="wfo-ledger-evidence-scratch-"))
+    for entry in _ls_tree_at_commit(repo_root, commit, "scripts/"):
+        rel = entry["path"][len("scripts/"):]
+        dest = scratch_dir / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(_hardened_run_bytes(["cat-file", "blob", entry["blob"]], cwd=repo_root))
+    return scratch_dir
+
+
+def _run_named_test_in_scratch(scratch_dir: Path, test_id: str) -> tuple[bool, str]:
+    """Same "resolvable, executable, re-executes green" requirement
+    `_load_and_run_named_test` enforces for `WFR-69`'s live-working-tree
+    pre-flight, run instead against an already-materialized pinned-commit
+    scratch tree -- `WFO-LEDGER-COVERAGE` property (ii)'s own
+    approval-bound evidence re-execution, which must never trust the live
+    working tree (item 358(c)'s isolation rationale applies identically
+    here). A fresh, isolated interpreter per test id, exactly as
+    `_load_and_run_named_test` uses."""
+    driver_dir = Path(tempfile.mkdtemp(prefix="wfo-ledger-evidence-driver-"))
+    try:
+        driver_path = driver_dir / "run_evidence.py"
+        driver_path.write_text(
+            "import json, sys, unittest\n"
+            f"sys.path.insert(0, {str(scratch_dir)!r})\n"
+            "try:\n"
+            f"    _suite = unittest.TestLoader().loadTestsFromName({test_id!r})\n"
+            "except Exception as _exc:\n"
+            "    print(json.dumps({'ok': False, 'detail': 'unresolvable: ' + repr(_exc)}))\n"
+            "    sys.exit(0)\n"
+            "if _suite.countTestCases() == 0:\n"
+            "    print(json.dumps({'ok': False, 'detail': 'resolved to zero test cases'}))\n"
+            "    sys.exit(0)\n"
+            "_result = unittest.TestResult()\n"
+            "_suite.run(_result)\n"
+            "_ok = _result.wasSuccessful()\n"
+            "_detail = '' if _ok else str(_result.failures + _result.errors)\n"
+            "print(json.dumps({'ok': _ok, 'detail': _detail}))\n"
+        )
+        env = {"PATH": os.environ.get("PATH", "")}
+        proc = subprocess.run(
+            [sys.executable, "-I", "-B", "-S", str(driver_path)],
+            capture_output=True, text=True, env=env, timeout=120, cwd=str(scratch_dir),
+        )
+    finally:
+        shutil.rmtree(driver_dir, ignore_errors=True)
+
+    stdout = proc.stdout.strip()
+    if not stdout:
+        return False, f"isolated evidence process produced no output: rc={proc.returncode} stderr={proc.stderr!r}"
+    try:
+        payload = json.loads(stdout.splitlines()[-1])
+    except json.JSONDecodeError:
+        return False, f"isolated evidence process produced non-JSON output: {stdout!r}"
+    return bool(payload.get("ok")), payload.get("detail", "")
+
+
+def verify_wfo_ledger_coverage(repo_root: str | Path, commit: str) -> dict:
+    """`WFO-LEDGER-COVERAGE`'s bound conformance (`WFR-68` properties
+    (i)-(iv); `WF8c` item (m)'s remaining scope) -- re-derives, at the
+    pinned `commit`, whether `docs/ai-workflow/registry/workflow-v2-1-
+    core-ledger-status.json` is a total, injective, honest transcription
+    of `WORKFLOW_V2_PLAN.md`'s own '### Reconciliation table' at that
+    same commit.
+
+    (i) **Totality and uniqueness**: every item the reconciliation table
+    names (`parse_reconciliation_table`, never the artifact's own
+    enumeration) has exactly one ledger entry; a table item with no
+    ledger entry (the omission attack), a ledger entry naming no real
+    table item, or two ledger entries for the same item (the duplication
+    attack, `OPUS-R103-003`) are each a named `FAIL`.
+
+    (ii) **Evidence for `IMPLEMENTED`**: an entry whose ledger `status` is
+    `IMPLEMENTED` must name a test id -- its own `evidence` field, or
+    (only when that is absent) the companion `<work_item_id>-wf8c-
+    evidence.json`'s entry for the same item -- that resolves and
+    re-executes green against the pinned commit's own `scripts/` tree, in
+    a fresh isolated interpreter; an unevidenced or failing `IMPLEMENTED`
+    is `FAIL`, never a pass (the relabel attack).
+
+    (iii)/(iv) **Monotonicity and governance scope**: for every item
+    whose ledger `status` differs from the table's own recorded status,
+    the *only* permitted difference is an evidenced move to `IMPLEMENTED`
+    -- catching the downward-relabel attack (`GPT-R106-001`, e.g. a
+    `SUPERSEDED`/`none` rewrite of a still-open item with no corresponding
+    plan-revision change) and any other divergence alike. `owner_
+    checkpoint` must equal the table's own resolved owner for every item
+    regardless of status, since only a fresh approved plan revision may
+    change it. The table itself *is* this obligation's baseline --
+    property (iv)'s own stated rule for "no prior artifact exists yet",
+    true throughout `WF8c`'s own first build of this verifier, since the
+    table's per-item `(status, owner)` pairs have not changed since
+    revision 82 and no prior `ledger-status.json` was ever itself the
+    subject of a technical approval."""
+    repo_root = Path(repo_root)
+    failing: list[str] = []
+
+    try:
+        table = parse_reconciliation_table(repo_root, commit)
+    except ReconciliationTableParseError as exc:
+        detail = f"reconciliation table unparseable at {commit}: {exc}"
+        return {"status": "FAIL", "detail": detail, "failing_assertions": [detail]}
+
+    ledger_path = ledger_status_path_for_work_item(LEDGER_COVERAGE_WORK_ITEM_ID)
+    try:
+        ledger = _git_show_json_at_commit(repo_root, commit, ledger_path)
+    except json.JSONDecodeError as exc:
+        detail = f"{ledger_path} malformed at {commit}: {exc}"
+        return {"status": "FAIL", "detail": detail, "failing_assertions": [detail]}
+    if not isinstance(ledger, dict) or not isinstance(ledger.get("entries"), list):
+        detail = f"{ledger_path} does not exist, or has no 'entries' list, at {commit}"
+        return {"status": "FAIL", "detail": detail, "failing_assertions": [detail]}
+
+    companion_path = wf8c_evidence_path_for_work_item(LEDGER_COVERAGE_WORK_ITEM_ID)
+    try:
+        companion = _git_show_json_at_commit(repo_root, commit, companion_path)
+    except json.JSONDecodeError as exc:
+        detail = f"{companion_path} malformed at {commit}: {exc}"
+        return {"status": "FAIL", "detail": detail, "failing_assertions": [detail]}
+    companion_evidence: dict[int, str] = {}
+    if isinstance(companion, dict):
+        for record in companion.get("entries", []):
+            if not isinstance(record, dict):
+                continue
+            c_item, c_ev = record.get("item"), record.get("evidence")
+            if isinstance(c_item, int) and isinstance(c_ev, str) and c_ev:
+                companion_evidence.setdefault(c_item, c_ev)
+
+    occurrences: dict[int, int] = {}
+    by_item: dict[int, dict] = {}
+    for record in ledger["entries"]:
+        if not isinstance(record, dict) or not isinstance(record.get("item"), int):
+            failing.append(f"ledger entry with no well-formed integer 'item': {record!r}")
+            continue
+        item = record["item"]
+        occurrences[item] = occurrences.get(item, 0) + 1
+        by_item.setdefault(item, record)
+
+    for item, count in sorted(occurrences.items()):
+        if count > 1:
+            failing.append(f"item {item}: {count} ledger entries name the same item (duplicate entry)")
+
+    table_items, ledger_items = set(table.keys()), set(occurrences.keys())
+    for item in sorted(table_items - ledger_items):
+        failing.append(f"item {item}: in the reconciliation table but has no ledger entry (omission)")
+    for item in sorted(ledger_items - table_items):
+        failing.append(f"item {item}: ledger entry names no real reconciliation-table item")
+
+    scratch_dir: Path | None = None
+    try:
+        for item, table_row in sorted(table.items()):
+            if occurrences.get(item) != 1:
+                continue  # already flagged above (duplicate or missing)
+            entry = by_item[item]
+            entry_status, entry_owner = entry.get("status"), entry.get("owner_checkpoint")
+            table_status, table_owner = table_row["status"], table_row["owner"]
+
+            # (iii)/(iv) governance scope: the ledger's status must equal the
+            # table's own, or be an evidenced upgrade to IMPLEMENTED -- no
+            # other divergence is ever permitted, regardless of whether the
+            # table itself already says IMPLEMENTED (a historically-delivered
+            # item) or something still open.
+            if entry_status != table_status and entry_status != "IMPLEMENTED":
+                failing.append(
+                    f"item {item}: ledger status {entry_status!r} diverges from the reconciliation "
+                    f"table's {table_status!r} -- the only permitted divergence is an evidenced move "
+                    f"to IMPLEMENTED"
+                )
+                continue
+
+            # (iv) owner_checkpoint must always equal the table's own
+            # resolved owner -- only a fresh approved plan revision may
+            # change it, whatever the entry's status.
+            if entry_owner != table_owner:
+                failing.append(
+                    f"item {item}: ledger owner_checkpoint {entry_owner!r} disagrees with the "
+                    f"reconciliation table's {table_owner!r}"
+                )
+                continue
+
+            # (ii) evidence for IMPLEMENTED -- unconditional: an entry whose
+            # status is IMPLEMENTED must be evidenced whether the table
+            # already said IMPLEMENTED (a historically-delivered item) or
+            # this is a fresh upgrade from an open status.
+            if entry_status != "IMPLEMENTED":
+                continue
+            entry_evidence = entry.get("evidence")
+            evidence = entry_evidence if isinstance(entry_evidence, str) and entry_evidence else companion_evidence.get(item)
+            if not isinstance(evidence, str) or not evidence:
+                failing.append(f"item {item}: IMPLEMENTED with no evidence entry")
+                continue
+            if scratch_dir is None:
+                scratch_dir = _materialize_scripts_tree_at_commit(repo_root, commit)
+            ok, detail = _run_named_test_in_scratch(scratch_dir, evidence)
+            if not ok:
+                failing.append(f"item {item}: evidence {evidence!r} does not re-execute green: {detail}")
+    finally:
+        if scratch_dir is not None:
+            shutil.rmtree(scratch_dir, ignore_errors=True)
+
+    if failing:
+        return {"status": "FAIL", "detail": "; ".join(failing), "failing_assertions": failing}
+    return {
+        "status": "PASS",
+        "detail": f"all {len(table)} reconciliation-table items accounted for in {ledger_path}",
         "failing_assertions": [],
     }
 

@@ -8,7 +8,8 @@
 `replay_completion_obligation`, and `complete_work_item`'s
 `UnsatisfiedCompletionObligationError` gate -- missing-test items
 356/357/358/360/361), covering the `WFO-STATE-SERIALIZATION` obligation
-`WF8b` continued scope declares.
+`WF8b` continued scope declares, plus `verify_wfo_ledger_coverage`
+(`WFO-LEDGER-COVERAGE`, `WFR-68`, `WF8c` item (m)).
 
 Runs entirely against disposable scratch Git repositories, mirroring
 `workflow_state_test.py`'s own pattern. `resolve_completion_obligations`'s
@@ -1134,6 +1135,250 @@ class TestCompleteWorkItemObligationGate(unittest.TestCase):
             self.assertIsNone(outstanding_checkpoint)
             with self.assertRaises(ws.UnsatisfiedCompletionObligationError):
                 ws.complete_work_item(state, fx.WORK_ITEM_ID, now="t", repo_root=repo.root)
+
+
+# ---------------------------------------------------------------------------
+# WF8c (m), remaining scope: `WFO-LEDGER-COVERAGE`'s own bound conformance
+# (`verify_wfo_ledger_coverage`, `WFR-68` properties (i)-(iv) plus the four
+# adversarial arms). Mirrors `TestVerifyWfoStateSerialization`'s own
+# in-process, real-function pattern (not the stubbed pipeline fixture
+# above) -- the pipeline machinery itself (`VERIFIER_UNAPPROVED`/
+# `DIVERGED`/`PIN_MOVED` classification) is obligation-agnostic and
+# already exhaustively covered against `WFO-STATE-SERIALIZATION`.
+# ---------------------------------------------------------------------------
+
+_LEDGER_COVERAGE_TABLE_FIXTURE = """### Reconciliation table
+
+| Items | Topic | Status | Owner | Evidence / rationale |
+|---|---|---|---|---|
+| 1 | thing one | IMPLEMENTED | WF8b | already delivered |
+| 2 | thing two | ABSENT | WF8c | still missing |
+| 3 | thing three | SUPERSEDED | none (superseded) | design superseded |
+| 4 | thing four | PARTIAL | WF8b for the delivered core; WF8c for the rest | partially delivered |
+"""
+
+_LEDGER_COVERAGE_EVIDENCE_MODULE = """import unittest
+
+class OkCase(unittest.TestCase):
+    def test_pass(self):
+        self.assertTrue(True)
+
+class BrokenCase(unittest.TestCase):
+    def test_fail(self):
+        self.assertTrue(False)
+"""
+
+_DEFAULT_CONSISTENT_LEDGER_ENTRIES = [
+    {"item": 1, "status": "IMPLEMENTED", "owner_checkpoint": "WF8b",
+     "evidence": "fixture_ledger_evidence_test.OkCase.test_pass"},
+    {"item": 2, "status": "ABSENT", "owner_checkpoint": "WF8c"},
+    {"item": 3, "status": "SUPERSEDED", "owner_checkpoint": "none"},
+    {"item": 4, "status": "IMPLEMENTED", "owner_checkpoint": "WF8c",
+     "evidence": "fixture_ledger_evidence_test.OkCase.test_pass"},
+]
+
+
+def _seed_ledger_coverage_fixture(repo, *, ledger_entries, companion_entries=None, evidence_module=_LEDGER_COVERAGE_EVIDENCE_MODULE):
+    ledger_path = str(ws.ledger_status_path_for_work_item(ws.LEDGER_COVERAGE_WORK_ITEM_ID))
+    _write(repo, "docs/ai-workflow/WORKFLOW_V2_PLAN.md", _LEDGER_COVERAGE_TABLE_FIXTURE)
+    _write(repo, ledger_path, json.dumps({"entries": ledger_entries}))
+    paths = ["docs/ai-workflow/WORKFLOW_V2_PLAN.md", ledger_path]
+    if companion_entries is not None:
+        companion_path = str(ws.wf8c_evidence_path_for_work_item(ws.LEDGER_COVERAGE_WORK_ITEM_ID))
+        _write(repo, companion_path, json.dumps({"entries": companion_entries}))
+        paths.append(companion_path)
+    if evidence_module is not None:
+        _write(repo, "scripts/fixture_ledger_evidence_test.py", evidence_module)
+        paths.append("scripts/fixture_ledger_evidence_test.py")
+    return _commit_paths(repo, paths, "seed ledger coverage fixture")
+
+
+class TestVerifyWfoLedgerCoverage(unittest.TestCase):
+    def test_pass_when_ledger_matches_table_and_evidence_is_green(self):
+        with ScratchRepo() as repo:
+            commit = _seed_ledger_coverage_fixture(repo, ledger_entries=_DEFAULT_CONSISTENT_LEDGER_ENTRIES)
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "PASS", result.get("detail"))
+
+    def test_fails_when_ledger_file_is_missing(self):
+        with ScratchRepo() as repo:
+            _write(repo, "docs/ai-workflow/WORKFLOW_V2_PLAN.md", _LEDGER_COVERAGE_TABLE_FIXTURE)
+            commit = _commit_paths(repo, ["docs/ai-workflow/WORKFLOW_V2_PLAN.md"], "plan only, no ledger")
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertIn("does not exist", result["detail"])
+
+    def test_fails_when_ledger_json_is_malformed(self):
+        with ScratchRepo() as repo:
+            ledger_path = str(ws.ledger_status_path_for_work_item(ws.LEDGER_COVERAGE_WORK_ITEM_ID))
+            _write(repo, "docs/ai-workflow/WORKFLOW_V2_PLAN.md", _LEDGER_COVERAGE_TABLE_FIXTURE)
+            _write(repo, ledger_path, "{not json")
+            commit = _commit_paths(repo, ["docs/ai-workflow/WORKFLOW_V2_PLAN.md", ledger_path], "malformed ledger")
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertIn("malformed", result["detail"])
+
+    def test_fails_on_omission_attack_missing_item_entry(self):
+        with ScratchRepo() as repo:
+            entries = [e for e in _DEFAULT_CONSISTENT_LEDGER_ENTRIES if e["item"] != 2]
+            commit = _seed_ledger_coverage_fixture(repo, ledger_entries=entries)
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(any("item 2" in a and "omission" in a for a in result["failing_assertions"]))
+
+    def test_fails_on_extraneous_ledger_entry(self):
+        with ScratchRepo() as repo:
+            entries = list(_DEFAULT_CONSISTENT_LEDGER_ENTRIES) + [
+                {"item": 999, "status": "SUPERSEDED", "owner_checkpoint": "none"},
+            ]
+            commit = _seed_ledger_coverage_fixture(repo, ledger_entries=entries)
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(any("item 999" in a for a in result["failing_assertions"]))
+
+    def test_fails_on_duplicate_entry_arm_c(self):
+        """OPUS-R103-003's own adversarial arm (c): a second, redundant
+        entry for an already-covered item is a FAIL naming that item, not
+        merely tolerated as a stricter totality pass."""
+        with ScratchRepo() as repo:
+            entries = list(_DEFAULT_CONSISTENT_LEDGER_ENTRIES) + [
+                {"item": 2, "status": "ABSENT", "owner_checkpoint": "WF8c"},
+            ]
+            commit = _seed_ledger_coverage_fixture(repo, ledger_entries=entries)
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(any("item 2" in a and "duplicate" in a for a in result["failing_assertions"]))
+
+    def test_duplicate_check_does_not_false_positive_on_a_clean_artifact(self):
+        """Confirms arm (c) is not merely a stricter totality check: arm
+        (i) re-run unchanged on a non-duplicated artifact still passes."""
+        with ScratchRepo() as repo:
+            commit = _seed_ledger_coverage_fixture(repo, ledger_entries=_DEFAULT_CONSISTENT_LEDGER_ENTRIES)
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "PASS")
+
+    def test_fails_on_unevidenced_implemented_relabel_attack_arm_a(self):
+        with ScratchRepo() as repo:
+            entries = [dict(e) for e in _DEFAULT_CONSISTENT_LEDGER_ENTRIES]
+            for e in entries:
+                if e["item"] == 2:
+                    e["status"] = "IMPLEMENTED"
+                    e["owner_checkpoint"] = "WF8c"
+                    e.pop("evidence", None)
+            commit = _seed_ledger_coverage_fixture(repo, ledger_entries=entries)
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(any("item 2" in a and "evidence" in a for a in result["failing_assertions"]))
+
+    def test_fails_when_evidence_test_fails(self):
+        with ScratchRepo() as repo:
+            entries = [dict(e) for e in _DEFAULT_CONSISTENT_LEDGER_ENTRIES]
+            for e in entries:
+                if e["item"] == 4:
+                    e["evidence"] = "fixture_ledger_evidence_test.BrokenCase.test_fail"
+            commit = _seed_ledger_coverage_fixture(repo, ledger_entries=entries)
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(any("item 4" in a for a in result["failing_assertions"]))
+
+    def test_fails_when_evidence_id_is_unresolvable(self):
+        with ScratchRepo() as repo:
+            entries = [dict(e) for e in _DEFAULT_CONSISTENT_LEDGER_ENTRIES]
+            for e in entries:
+                if e["item"] == 4:
+                    e["evidence"] = "fixture_ledger_evidence_test.NoSuchCase.test_nope"
+            commit = _seed_ledger_coverage_fixture(repo, ledger_entries=entries)
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(any("item 4" in a for a in result["failing_assertions"]))
+
+    def test_fails_on_downward_relabel_attack_arm_d(self):
+        """GPT-R106-001's own adversarial arm (d): moving a still-open
+        item to SUPERSEDED/none with no corresponding plan-revision change
+        is a FAIL naming that item -- covered by the general governance-
+        scope rule, no item-318-specific special case needed."""
+        with ScratchRepo() as repo:
+            entries = [dict(e) for e in _DEFAULT_CONSISTENT_LEDGER_ENTRIES]
+            for e in entries:
+                if e["item"] == 2:  # table: ABSENT/WF8c
+                    e["status"] = "SUPERSEDED"
+                    e["owner_checkpoint"] = "none"
+            commit = _seed_ledger_coverage_fixture(repo, ledger_entries=entries)
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(any("item 2" in a for a in result["failing_assertions"]))
+
+    def test_fails_when_owner_checkpoint_changes_without_a_status_change(self):
+        with ScratchRepo() as repo:
+            entries = [dict(e) for e in _DEFAULT_CONSISTENT_LEDGER_ENTRIES]
+            for e in entries:
+                if e["item"] == 2:
+                    e["owner_checkpoint"] = "WF8b"  # table resolves this row's owner to WF8c
+            commit = _seed_ledger_coverage_fixture(repo, ledger_entries=entries)
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(any("item 2" in a and "owner" in a for a in result["failing_assertions"]))
+
+    def test_fails_when_an_implemented_upgrade_also_changes_owner(self):
+        with ScratchRepo() as repo:
+            entries = [dict(e) for e in _DEFAULT_CONSISTENT_LEDGER_ENTRIES]
+            for e in entries:
+                if e["item"] == 4:
+                    e["owner_checkpoint"] = "WF8b"  # table's PARTIAL row resolves owner to WF8c
+            commit = _seed_ledger_coverage_fixture(repo, ledger_entries=entries)
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(any("item 4" in a and "owner" in a for a in result["failing_assertions"]))
+
+    def test_companion_file_supplies_evidence_when_ledger_entry_omits_it(self):
+        with ScratchRepo() as repo:
+            entries = [dict(e) for e in _DEFAULT_CONSISTENT_LEDGER_ENTRIES]
+            for e in entries:
+                if e["item"] == 4:
+                    e.pop("evidence", None)
+            commit = _seed_ledger_coverage_fixture(
+                repo, ledger_entries=entries,
+                companion_entries=[{"item": 4, "evidence": "fixture_ledger_evidence_test.OkCase.test_pass"}],
+            )
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "PASS", result.get("detail"))
+
+    def test_ledgers_own_evidence_wins_over_a_conflicting_companion_entry(self):
+        with ScratchRepo() as repo:
+            commit = _seed_ledger_coverage_fixture(
+                repo, ledger_entries=_DEFAULT_CONSISTENT_LEDGER_ENTRIES,  # item 4 already has passing evidence
+                companion_entries=[{"item": 4, "evidence": "fixture_ledger_evidence_test.BrokenCase.test_fail"}],
+            )
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "PASS", result.get("detail"))
+
+    def test_fails_when_companion_json_is_malformed(self):
+        with ScratchRepo() as repo:
+            ledger_path = str(ws.ledger_status_path_for_work_item(ws.LEDGER_COVERAGE_WORK_ITEM_ID))
+            companion_path = str(ws.wf8c_evidence_path_for_work_item(ws.LEDGER_COVERAGE_WORK_ITEM_ID))
+            _write(repo, "docs/ai-workflow/WORKFLOW_V2_PLAN.md", _LEDGER_COVERAGE_TABLE_FIXTURE)
+            _write(repo, ledger_path, json.dumps({"entries": _DEFAULT_CONSISTENT_LEDGER_ENTRIES}))
+            _write(repo, companion_path, "{not json")
+            commit = _commit_paths(
+                repo, ["docs/ai-workflow/WORKFLOW_V2_PLAN.md", ledger_path, companion_path], "malformed companion",
+            )
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertIn("malformed", result["detail"])
+
+    def test_reads_the_pinned_commit_not_the_working_tree(self):
+        with ScratchRepo() as repo:
+            commit = _seed_ledger_coverage_fixture(repo, ledger_entries=_DEFAULT_CONSISTENT_LEDGER_ENTRIES)
+            ledger_path = repo.root / ws.ledger_status_path_for_work_item(ws.LEDGER_COVERAGE_WORK_ITEM_ID)
+            ledger_path.write_text("garbage, not json, not even close")
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "PASS", result.get("detail"))
+
+    def test_bound_in_completion_obligation_conformance(self):
+        self.assertEqual(
+            ws.COMPLETION_OBLIGATION_CONFORMANCE.get("WFO-LEDGER-COVERAGE"), "verify_wfo_ledger_coverage",
+        )
+        self.assertTrue(callable(getattr(ws, "verify_wfo_ledger_coverage", None)))
 
 
 if __name__ == "__main__":
