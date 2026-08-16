@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import stat
 import subprocess
@@ -1428,6 +1429,56 @@ class TestPrepareAiReviewShImplementationStageHeadGuard(unittest.TestCase):
                 for p in bundle_dir.rglob("*") if p.is_file()
             }
             self.assertEqual(before, after)
+            self.assertEqual(before_archive, archive.read_bytes())
+
+    def test_interrupted_archive_write_leaves_previous_archive_intact(self):
+        """Item 318 (WF8c scope clause (j), `OPUS-R102-011`): an
+        interrupted or failed archive write must never replace the
+        previously valid `review-bundle.tar.gz` -- unlike
+        `test_refused_regeneration_leaves_current_byte_identical` above
+        (which exercises a *preflight* refusal, before the script ever
+        reaches the archive step), this exercises a failure *during* the
+        archive step itself, with every earlier guard satisfied. A fake
+        `tar` shadowing the real one on `PATH` writes garbage to its
+        destination argument and exits non-zero, simulating a real
+        interrupted/failed write (e.g. disk full, killed process)
+        independently of any actual disk condition. Before the
+        temp-file-plus-rename fix this reproducibly corrupts
+        `review-bundle.tar.gz` in place; the fix's rename step is only
+        reached once `tar` itself has already succeeded, so a failing
+        `tar` never touches the real archive path at all."""
+        with h.ScratchRepo() as repo:
+            work_item_id = "wi"
+            script_path = self._install_scripts(repo)
+            self._generate_first_round(repo, work_item_id, script_path)
+
+            archive = repo.root / ".ai-review" / work_item_id / "review-bundle.tar.gz"
+            before_archive = archive.read_bytes()
+
+            impl_head_2 = repo.commit("second implementation change", filename="impl.txt")
+            self._write_review_request(repo, work_item_id, repo.base, impl_head_2)
+            self._write_state_entry(repo, work_item_id, base=repo.base, head=impl_head_2, revision=2)
+
+            fake_bin = repo.root / "fake-bin"
+            fake_bin.mkdir()
+            fake_tar = fake_bin / "tar"
+            fake_tar.write_text(
+                "#!/bin/sh\n"
+                "# Simulates an interrupted/failed tar invocation: partially\n"
+                "# writes to its destination argument, then fails.\n"
+                'out="$2"\n'
+                'printf \'CORRUPTED-INTERRUPTED-TAR-OUTPUT\' > "$out"\n'
+                "exit 1\n"
+            )
+            fake_tar.chmod(fake_tar.stat().st_mode | stat.S_IEXEC)
+
+            env = dict(os.environ)
+            env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+            result = subprocess.run(
+                ["bash", str(script_path), repo.base, "post-fix", work_item_id],
+                cwd=repo.root, capture_output=True, text=True, env=env,
+            )
+            self.assertNotEqual(result.returncode, 0)
             self.assertEqual(before_archive, archive.read_bytes())
 
 

@@ -407,8 +407,14 @@ elif [[ ( "$STAGE" == "implementation" || "$STAGE" == "post-fix" ) && -n "$WORK_
 fi
 
 # --- archive ---
+# Item 318 (WF8c scope clause (j), OPUS-R102-011): write to a temp file
+# first, then rename onto the real archive path -- an interrupted or
+# failed tar invocation must never leave the previously valid archive
+# corrupted or truncated in place.
 ARCHIVE="$ROOT_DIR/review-bundle.tar.gz"
-tar -czf "$ARCHIVE" -C "$ROOT_DIR" current
+ARCHIVE_TMP="$ARCHIVE.tmp"
+tar -czf "$ARCHIVE_TMP" -C "$ROOT_DIR" current
+mv -f "$ARCHIVE_TMP" "$ARCHIVE"
 
 # --- reproducibility check (D-Fingerprint-Generalization, GPT-R30-001/003):
 # when a manifest was written above, require bundle_id equality across
