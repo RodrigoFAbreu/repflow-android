@@ -137,17 +137,16 @@ actually load-bearing control for the Skill exposure path, not mechanism
    `BundleGenerationRecordNotFoundError`. A `BLOCK` status, or an unmet
    additional condition, stops here — report why, do not proceed.
    *The recovered-role commit shape and its supersession-chain validation
-   are implemented (`WF8c` (c), reachable today via
-   `/apply-implementation-review`'s and `/apply-functional-review`'s own
-   `resolve_bundle_generation_outcome`-driven `record_bundle_generation`
-   call); the dedicated `/recover-implementation-provenance` command
-   itself (`WF8c` (b), recovery from a bundle staled by a concurrent
-   excluded-only commit while already in
-   `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`) is not yet built — a work
-   item needing that specific recovery still requires a fresh
-   `record_bundle_generation` round from `APPLYING_REVIEW_FEEDBACK`/
-   `SELF_REVIEWING_IMPLEMENTATION` instead, not an automatic recovery
-   path from this phase.*
+   are implemented (`WF8c` (c), reachable via `/apply-implementation-review`'s
+   and `/apply-functional-review`'s own `resolve_bundle_generation_outcome`-
+   driven `record_bundle_generation` call) and, separately, via the
+   dedicated `/recover-implementation-provenance` command (`WF8c` (b)),
+   invocable only from `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` itself,
+   for a bundle staled by a concurrent excluded-only commit landing after
+   `T` while no new implementation round has started — the only phase from
+   which `record_bundle_generation`'s own two entry phases
+   (`APPLYING_REVIEW_FEEDBACK`/`SELF_REVIEWING_IMPLEMENTATION`) are
+   unreachable without first re-entering a review-feedback cycle.*
 2. **Recompute fresh**: `bundle_id` over the current bundle and the
    stage-appropriate `review_content_id` (`scripts/workflow_fingerprint.py`)
    over the working tree. Display both, and the protected/excluded path

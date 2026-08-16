@@ -474,13 +474,11 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     "milestone-plan.md": "72f8f5af38ee5b546f85f0e36b2a5034f7b87094b38cbd728658754f56572bf9",
     "milestone-implement.md": "eae3dbf2a8f91899bf9020335c4a2209af271b72bca7c74d988a3fa735e5f206",
     # approve-review.md (WF8c item (c), same-content bundle-generation
-    # republication idempotency): step 1's provenance-interval description
-    # widened from the ordinary-role-only case to name the recovered role
-    # and its chain-continuity check, and the trailing "not yet
-    # implemented" caveat narrowed to name only the still-unbuilt
-    # dedicated /recover-implementation-provenance command (WF8c item (b))
-    # -- intentional content change.
-    "approve-review.md": "3aa04a699e1c993a52feba9e569ed283e7132b3ec46cfc0d11b394443ead0a92",
+    # republication idempotency; further updated WF8c item (b): the
+    # trailing caveat naming the dedicated /recover-implementation-provenance
+    # command as "not yet built" is corrected now that it exists) --
+    # intentional content change.
+    "approve-review.md": "51105704ee10448410a289b2394b8feaa2189ec54d0227836e43663bc047108e",
     "accept-milestone.md": "10594c675de02b9a90e57963796ac75dee08f33a0a2a78b7d624346f0a3ab6d9",
     "prepare-functional-review.md": "5b8026a4bd0293c7b3d1c94ef9814357ee815ce8b9b6b53b0f545917c1eb886d",
     # apply-plan-review.md/bootstrap-workflow-v2.md (D-Plan-Revision-Publication,

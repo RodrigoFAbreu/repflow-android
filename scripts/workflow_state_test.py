@@ -4657,6 +4657,247 @@ class TestSameContentRepublicationEndToEnd(unittest.TestCase):
             self.assertIn("reviewed_implementation_head", str(ctx.exception))
 
 
+class TestApplyImplementationProvenanceRecovery(unittest.TestCase):
+    """`WF8c` (b), `WFR-62`: `apply_implementation_provenance_recovery`'s
+    own state-half contract -- the recovered-role field set, minus `phase`
+    itself since recovery never transitions it (unlike
+    `record_bundle_generation`'s two entry points, both of which
+    transition *into* `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`)."""
+
+    def test_bumps_state_revision_and_last_transition_only(self):
+        state = _base_state(wi={
+            "work_item_id": "wi", "phase": "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+            "reviewed_implementation_head": "p" * 40, "implementation_revision": 1,
+            "state_revision": 3, "last_transition": "t3",
+        })
+        new_state = ws.apply_implementation_provenance_recovery(state, "wi", now="t4")
+        work_item = new_state["work_items"]["wi"]
+        self.assertEqual(work_item["phase"], "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW")
+        self.assertEqual(work_item["reviewed_implementation_head"], "p" * 40)
+        self.assertEqual(work_item["implementation_revision"], 1)
+        self.assertEqual(work_item["state_revision"], 4)
+        self.assertEqual(work_item["last_transition"], "t4")
+
+    def test_illegal_source_phase_refused(self):
+        state = _base_state(wi={
+            "work_item_id": "wi", "phase": "SELF_REVIEWING_IMPLEMENTATION",
+            "reviewed_implementation_head": "p" * 40, "implementation_revision": 1,
+            "state_revision": 3, "last_transition": "t3",
+        })
+        with self.assertRaises(ws.IllegalImplementationProvenanceRecoverySourcePhaseError):
+            ws.apply_implementation_provenance_recovery(state, "wi", now="t4")
+
+    def test_original_state_untouched(self):
+        state = _base_state(wi={
+            "work_item_id": "wi", "phase": "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+            "reviewed_implementation_head": "p" * 40, "implementation_revision": 1,
+            "state_revision": 3, "last_transition": "t3",
+        })
+        before = copy.deepcopy(state)
+        ws.apply_implementation_provenance_recovery(state, "wi", now="t4")
+        self.assertEqual(state, before)
+
+
+class TestVerifyImplementationProvenanceRecovery(unittest.TestCase):
+    """`WF8c` (b), `WFR-62`: the read-only precondition pair
+    `/recover-implementation-provenance` runs before creating anything --
+    reuses `WF8c` (c)'s own `resolve_bundle_generation_outcome`, adding
+    only the phase gate and the already-current-tip no-op refusal."""
+
+    WI = "wi"
+
+    def test_illegal_source_phase_refused(self):
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            head = repo.commit("resolved via excluded content", filename="docs/notes.md")
+            work_item = state | {
+                "work_item_id": self.WI, "work_item_type": "process",
+                "phase": "SELF_REVIEWING_IMPLEMENTATION",
+            }
+            with self.assertRaises(ws.IllegalImplementationProvenanceRecoverySourcePhaseError):
+                ws.verify_implementation_provenance_recovery(
+                    repo.root, work_item, base_commit=repo.base, head=head,
+                )
+
+    def test_content_differs_not_applicable(self):
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected v1", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            head = repo.commit("protected v2", filename="src/Foo.kt")
+            work_item = state | {"work_item_id": self.WI, "work_item_type": "process"}
+            with self.assertRaises(ws.ImplementationProvenanceRecoveryNotApplicableError):
+                ws.verify_implementation_provenance_recovery(
+                    repo.root, work_item, base_commit=repo.base, head=head,
+                )
+
+    def test_nothing_to_recover_when_head_already_current(self):
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            t = _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            work_item = state | {"work_item_id": self.WI, "work_item_type": "process"}
+            with self.assertRaises(ws.ImplementationProvenanceRecoveryNotApplicableError):
+                ws.verify_implementation_provenance_recovery(
+                    repo.root, work_item, base_commit=repo.base, head=t,
+                )
+
+    def test_protected_commit_in_interval_propagates_underlying_error(self):
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = _write_and_commit(repo, "src/Foo.kt", "v1\n", "protected v1")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            _write_and_commit(repo, "src/Foo.kt", "v2\n", "protected edit")
+            head = _write_and_commit(repo, "src/Foo.kt", "v1\n", "protected revert")
+            work_item = state | {"work_item_id": self.WI, "work_item_type": "process"}
+            with self.assertRaises(ws.ProtectedPathInProvenanceIntervalError):
+                ws.verify_implementation_provenance_recovery(
+                    repo.root, work_item, base_commit=repo.base, head=head,
+                )
+
+    def test_identical_content_with_clean_excluded_interval_returns_t(self):
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            t = _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            head = repo.commit("resolved via excluded content", filename="docs/notes.md")
+            work_item = state | {"work_item_id": self.WI, "work_item_type": "process"}
+            result = ws.verify_implementation_provenance_recovery(
+                repo.root, work_item, base_commit=repo.base, head=head,
+            )
+            self.assertEqual(result, t)
+
+
+class TestImplementationProvenanceRecoveryEndToEnd(unittest.TestCase):
+    """`WF8c` (b), `WFR-62`: the full round trip from
+    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` itself --
+    `verify_implementation_provenance_recovery` sanctions the recovery,
+    `apply_implementation_provenance_recovery` produces the state to
+    commit, the caller commits it as a recovered-role
+    `Workflow-Supersedes` commit, and
+    `verify_implementation_provenance_interval` validates the resulting
+    chain -- the standalone counterpart of
+    `TestSameContentRepublicationEndToEnd`, entered from
+    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` rather than
+    `APPLYING_REVIEW_FEEDBACK`/`SELF_REVIEWING_IMPLEMENTATION`."""
+
+    WI = "wi"
+    WORK_ITEM_TYPE = "process"
+
+    def _seed_base_state(self, repo: "ScratchRepo") -> None:
+        """Like `_seed_base_provenance_state`, plus `work_item_type` baked
+        in from this work item's very first committed state -- must be
+        present identically across every commit in the chain (never
+        introduced partway through) or it would itself register as a
+        spurious field change against
+        `validate_bundle_generation_record_commit`'s exact-subset check,
+        exactly as `TestSameContentRepublicationEndToEnd._seed_base_state`
+        documents for the same reason."""
+        _commit_state_only(repo, self.WI, {
+            "work_item_id": self.WI, "work_item_type": self.WORK_ITEM_TYPE,
+            "reviewed_implementation_head": None, "implementation_revision": 0,
+            "phase": "IMPLEMENTING", "state_revision": 0, "last_transition": "t0",
+        }, "seed base state")
+
+    def test_single_recovery_then_full_interval_validates(self):
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            self._seed_base_state(repo)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(
+                self.WI, reviewed_implementation_head=p, implementation_revision=1,
+            ) | {"work_item_type": self.WORK_ITEM_TYPE}
+            t = _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            head = repo.commit("legitimate excluded-only doc fix", filename="docs/notes.md")
+
+            work_item = state | {"work_item_id": self.WI}
+            resolved_t = ws.verify_implementation_provenance_recovery(
+                repo.root, work_item, base_commit=repo.base, head=head,
+            )
+            self.assertEqual(resolved_t, t)
+
+            new_state = ws.apply_implementation_provenance_recovery(
+                _base_state(**{self.WI: work_item}), self.WI, now="t9",
+            )
+            s2_work_item = new_state["work_items"][self.WI]
+            self.assertEqual(s2_work_item["reviewed_implementation_head"], p)
+            self.assertEqual(s2_work_item["implementation_revision"], 1)
+            self.assertEqual(s2_work_item["phase"], "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW")
+
+            s2 = _commit_state_only(
+                repo, self.WI, s2_work_item, "recover stale generation_head",
+                trailers=_recovered_trailers(self.WI, 1, resolved_t),
+            )
+            final_work_item = s2_work_item | {"work_item_id": self.WI}
+            result = ws.verify_implementation_provenance_interval(repo.root, final_work_item, repo.base)
+            self.assertEqual(result, s2)
+            self.assertTrue(
+                ws.implementation_provenance_interval_reachable(repo.root, final_work_item, repo.base),
+            )
+
+    def test_second_sequential_recovery_chain_validates(self):
+        """D-Commit-Provenance "Multiple sequential recoveries /
+        supersession chain", exercised via the standalone recovery command
+        rather than `record_bundle_generation`'s own same-content path: a
+        second recovery, invoked again from
+        `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` after the first `S2` is
+        itself staled by a further excluded-only commit, produces
+        `P -> T -> U1 -> S2 -> U2 -> S3`, and the approval gate validates
+        the entire chain."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            self._seed_base_state(repo)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(
+                self.WI, reviewed_implementation_head=p, implementation_revision=1,
+            ) | {"work_item_type": self.WORK_ITEM_TYPE}
+            t = _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            head1 = repo.commit("first excluded-only doc fix", filename="docs/notes-a.md")
+
+            work_item_1 = state | {"work_item_id": self.WI}
+            resolved_t_1 = ws.verify_implementation_provenance_recovery(
+                repo.root, work_item_1, base_commit=repo.base, head=head1,
+            )
+            self.assertEqual(resolved_t_1, t)
+            s2_work_item = ws.apply_implementation_provenance_recovery(
+                _base_state(**{self.WI: work_item_1}), self.WI, now="t9",
+            )["work_items"][self.WI]
+            s2 = _commit_state_only(
+                repo, self.WI, s2_work_item, "recover stale generation_head 1",
+                trailers=_recovered_trailers(self.WI, 1, resolved_t_1),
+            )
+
+            head2 = repo.commit("second excluded-only doc fix", filename="docs/notes-b.md")
+            work_item_2 = s2_work_item | {"work_item_id": self.WI, "work_item_type": self.WORK_ITEM_TYPE}
+            resolved_t_2 = ws.verify_implementation_provenance_recovery(
+                repo.root, work_item_2, base_commit=repo.base, head=head2,
+            )
+            self.assertEqual(resolved_t_2, s2)
+            s3_work_item = ws.apply_implementation_provenance_recovery(
+                _base_state(**{self.WI: work_item_2}), self.WI, now="t10",
+            )["work_items"][self.WI]
+            s3 = _commit_state_only(
+                repo, self.WI, s3_work_item, "recover stale generation_head 2",
+                trailers=_recovered_trailers(self.WI, 1, resolved_t_2),
+            )
+
+            final_work_item = s3_work_item | {"work_item_id": self.WI}
+            result = ws.verify_implementation_provenance_interval(repo.root, final_work_item, repo.base)
+            self.assertEqual(result, s3)
+
+
 class TestRemediationChildWorkItem(unittest.TestCase):
     def test_creates_child_with_derived_id_and_parent_link(self):
         state = _base_state(parent=_base_work_item(

@@ -6538,10 +6538,11 @@ def enter_applying_review_feedback(state: dict, work_item_id: str, now: str) -> 
 # later commit can ever land between the write and the commit that makes
 # it durable (D-Approval-Commits, WF8B-003's own worked contradiction).
 # Both the "ordinary" role and the recovered/superseded
-# (`Workflow-Supersedes`) role are implemented here (WF8c (c)/(b) partial
-# -- the dedicated `/recover-implementation-provenance` command itself
-# remains WF8c (b), not yet built; only `record_bundle_generation`'s own
-# same-content-republication writer of a recovered-role commit is).
+# (`Workflow-Supersedes`) role are implemented here (WF8c (c)/(b)): the
+# dedicated `/recover-implementation-provenance` command's own two
+# primitives (`verify_implementation_provenance_recovery`/
+# `apply_implementation_provenance_recovery`, WF8c (b)) live further below
+# in this same section, past `resolve_bundle_generation_outcome`.
 # ---------------------------------------------------------------------------
 
 
@@ -7111,6 +7112,125 @@ def resolve_bundle_generation_outcome(
         impl_classification,
     )
     return "same_content", t
+
+
+# ---------------------------------------------------------------------------
+# D-Commit-Provenance "Stale generation_head recovery" (WF8c (b), `WFR-62`):
+# the dedicated `/recover-implementation-provenance` command's own two
+# primitives -- a read-only precondition (`verify_implementation_provenance_
+# recovery`) and the recovered-role commit's state half
+# (`apply_implementation_provenance_recovery`). Both reuse WF8c (c)'s own
+# `resolve_bundle_generation_outcome`/`_classify_generation_record_interval`
+# machinery rather than a second, separately maintained copy of the same
+# content-equality-plus-interval-classification check -- the two commands
+# differ only in *which* phase may invoke them and in leaving `phase`
+# value-unchanged rather than transitioning it.
+# ---------------------------------------------------------------------------
+
+
+class IllegalImplementationProvenanceRecoverySourcePhaseError(Exception):
+    """Raised when `verify_implementation_provenance_recovery`/
+    `apply_implementation_provenance_recovery` is invoked from a phase
+    other than `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` -- the only phase
+    `/recover-implementation-provenance` (WF8c (b)) may run from: recovery
+    repairs a stale `generation_head` for the round *currently* awaiting
+    external review, never a round still being written
+    (`SELF_REVIEWING_IMPLEMENTATION`/`APPLYING_REVIEW_FEEDBACK` already
+    have their own same-content path through `record_bundle_generation`'s
+    `outcome="same_content"`, WF8c (c)) and never any other phase."""
+
+
+class ImplementationProvenanceRecoveryNotApplicableError(Exception):
+    """Raised when `resolve_bundle_generation_outcome` returns anything
+    other than `("same_content", t)` for the candidate recovery head --
+    either no prior round exists yet, or the protected implementation-stage
+    content at the candidate head genuinely differs from
+    `reviewed_implementation_head`'s, or the candidate head is already the
+    current `Workflow-Bundle-Generation-Record` commit itself (nothing to
+    recover -- an idempotent-retry no-op, never a redundant second `S2`).
+    Recovery exists only to repair a `generation_head` staled by a
+    legitimate excluded-only commit landing after `T`; content that has
+    genuinely changed needs a fresh bundle-generation round
+    (`record_bundle_generation` with `outcome="ordinary"`), never this
+    command."""
+
+
+def verify_implementation_provenance_recovery(
+    repo_root: Path, work_item: dict, *, base_commit: str, head: str = "HEAD",
+) -> str:
+    """`/recover-implementation-provenance`'s own read-only precondition
+    pair (WF8c (b), `WFR-62`): refuses outright unless (a) the work item's
+    current phase is exactly `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`
+    (`IllegalImplementationProvenanceRecoverySourcePhaseError`), (b)
+    `resolve_bundle_generation_outcome` -- the identical content-equality-
+    plus-interval-classification precondition WF8c (c) already built and
+    tested for `record_bundle_generation`'s own same-content path, never a
+    second, separately maintained copy -- resolves to `("same_content",
+    t)` for candidate `head` against live `T`, and (c) `t` is not already
+    `head` itself (`ImplementationProvenanceRecoveryNotApplicableError` for
+    either failure, or whichever of `resolve_bundle_generation_outcome`'s
+    own named exceptions the classification itself raises: a fail-closed
+    backstop, never a silent proceed). Returns `t`, the commit the
+    caller's `S2` recovery commit must supersede, on success -- performs
+    no state mutation and no Git write of its own."""
+    work_item_id = work_item["work_item_id"]
+    phase = work_item.get("phase")
+    if phase != "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW":
+        raise IllegalImplementationProvenanceRecoverySourcePhaseError(
+            f"recover_implementation_provenance invoked for {work_item_id!r} from phase "
+            f"{phase!r}, but the only legal source phase is "
+            f"'AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW'"
+        )
+    outcome, t = resolve_bundle_generation_outcome(
+        repo_root, work_item, base_commit=base_commit, head=head,
+    )
+    if outcome != "same_content" or t is None:
+        raise ImplementationProvenanceRecoveryNotApplicableError(
+            f"{work_item_id!r}'s candidate head {head} does not qualify for recovery -- "
+            f"resolve_bundle_generation_outcome returned {(outcome, t)!r}, not "
+            f"('same_content', <commit>); protected implementation-stage content has "
+            f"genuinely changed (or no prior round exists), so a fresh bundle-generation "
+            f"round is required instead of recovery"
+        )
+    resolved_head = _run(["git", "rev-parse", head], cwd=repo_root).strip()
+    if t == resolved_head:
+        raise ImplementationProvenanceRecoveryNotApplicableError(
+            f"{work_item_id!r}'s candidate head {resolved_head} is already the current "
+            f"Workflow-Bundle-Generation-Record commit -- nothing to recover"
+        )
+    return t
+
+
+def apply_implementation_provenance_recovery(state: dict, work_item_id: str, now: str) -> dict:
+    """The state half of `/recover-implementation-provenance`'s `S2`
+    commit (WF8c (b), `WFR-62`): recovery never changes `phase`'s *value*
+    -- the work item was already `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`
+    and remains there -- only `state_revision`/`last_transition` change,
+    the recovered-role field set `record_bundle_generation`'s own
+    `same_content` outcome already uses, minus `phase` itself since there
+    is no transition to *perform* here (unlike that function's two entry
+    points, both of which do transition into this phase).
+    `reviewed_implementation_head`/`implementation_revision` are never
+    touched, exactly as the recovered role requires. Refuses via
+    `IllegalImplementationProvenanceRecoverySourcePhaseError` if the
+    freshly re-read state's phase is not
+    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` at the moment this mutator
+    actually runs inside `state_transaction`'s lock -- an independent
+    check, never merely trusting the caller's own already-passed
+    `verify_implementation_provenance_recovery` precondition, since a race
+    could have moved the phase between that read and this write."""
+    new_state = copy.deepcopy(state)
+    work_item = new_state["work_items"][work_item_id]
+    phase = work_item.get("phase")
+    if phase != "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW":
+        raise IllegalImplementationProvenanceRecoverySourcePhaseError(
+            f"apply_implementation_provenance_recovery invoked for {work_item_id!r} from "
+            f"phase {phase!r}, but the only legal source phase is "
+            f"'AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW'"
+        )
+    work_item["state_revision"] = work_item.get("state_revision", 1) + 1
+    work_item["last_transition"] = now
+    return new_state
 
 
 # ---------------------------------------------------------------------------
