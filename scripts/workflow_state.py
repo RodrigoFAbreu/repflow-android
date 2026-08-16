@@ -5402,10 +5402,23 @@ _NON_WRITER_VIOLATION_RE = re.compile(
 
 # ---------------------------------------------------------------------------
 # `WFR-67`'s machine-readable `review-subject: bundle | verdict | none`
-# header line (`WF8c` item (h), part 1) -- every `.claude/commands/*.md`
-# file declares exactly one value, discovered the same fail-closed way
-# `discover_state_writers` discovers `state_writer:` above: a missing or
-# contradictory declaration is a conformance failure, never a default.
+# header line (`WF8c` item (h), part 1) -- discovered the same fail-closed
+# way `discover_state_writers` discovers `state_writer:` above: a missing
+# or contradictory declaration is a conformance failure, never a default.
+#
+# Deliberately scoped to a **fixed named roster**, not "every tracked
+# `.claude/commands/*.md` file" the way `discover_state_writers`' own
+# `STATE_WRITER_SURFACE_PREFIXES` scans its whole prefix: `WFR-67`'s own
+# revision-80 text names an exact, closed set -- "the counts become nine
+# consumers and four exempt over the same thirteen files" -- fixed at the
+# moment that text was written. `.claude/commands/recover-implementation-
+# provenance.md` (added afterward, `WF8c` item (b)) postdates that design
+# and was never classified by it; whether it belongs in the roster at all
+# is exactly the kind of "re-derive from this file's own prose against the
+# three semantic disjuncts" judgment call this function's own docstring
+# already defers, not something a scan-everything default should decide
+# by silently demanding a declaration this file's own history never
+# assigned it.
 #
 # This discovery function covers the *declaration* half only. WFR-67's own
 # text additionally requires the declaration to be "cross-checked against
@@ -5422,7 +5435,21 @@ _NON_WRITER_VIOLATION_RE = re.compile(
 # against a recorded table rather than re-derived from first principles.
 # ---------------------------------------------------------------------------
 
-REVIEW_SUBJECT_SURFACE_PREFIX = ".claude/commands/"
+REVIEW_SUBJECT_ROSTER = frozenset({
+    ".claude/commands/accept-milestone.md",
+    ".claude/commands/accept-scoped-remediation.md",
+    ".claude/commands/apply-functional-review.md",
+    ".claude/commands/apply-implementation-review.md",
+    ".claude/commands/apply-plan-review.md",
+    ".claude/commands/approve-review.md",
+    ".claude/commands/bootstrap-workflow-v2.md",
+    ".claude/commands/milestone-implement.md",
+    ".claude/commands/milestone-plan.md",
+    ".claude/commands/prepare-functional-review.md",
+    ".claude/commands/prepare-review.md",
+    ".claude/commands/record-manual-plan-review.md",
+    ".claude/commands/review-plan.md",
+})
 
 _REVIEW_SUBJECT_DECLARATION_RE = re.compile(
     r'(?m)^[ \t]*review-subject:[ \t]*(bundle|verdict|none)[ \t]*$'
@@ -5430,8 +5457,9 @@ _REVIEW_SUBJECT_DECLARATION_RE = re.compile(
 
 
 class ReviewSubjectDeclarationError(Exception):
-    """A `.claude/commands/*.md` file has a missing, contradictory, or
-    unrecognized `review-subject:` declaration (`WFR-67`)."""
+    """A file on `REVIEW_SUBJECT_ROSTER` has a missing, contradictory, or
+    unrecognized `review-subject:` declaration (`WFR-67`), or is absent
+    from `commit` entirely."""
 
 
 def _parse_review_subject_declarations(text: str) -> list[str]:
@@ -5442,17 +5470,18 @@ def _parse_review_subject_declarations(text: str) -> list[str]:
 
 
 def discover_review_subject_declarations(repo_root: Path, commit: str) -> dict[str, str]:
-    """Every tracked `.claude/commands/*.md` file's own declared
-    `review-subject:` value at `commit`, keyed by path. A missing or
-    contradictory declaration fails closed
-    (`ReviewSubjectDeclarationError`, naming what was found) rather than
-    defaulting to `"none"`."""
+    """`REVIEW_SUBJECT_ROSTER`'s own declared `review-subject:` value at
+    `commit`, keyed by path. A missing or contradictory declaration fails
+    closed (`ReviewSubjectDeclarationError`, naming what was found) rather
+    than defaulting to `"none"`; a roster path absent from `commit`
+    entirely fails closed the same way."""
     declarations: dict[str, str] = {}
-    for entry in _ls_tree_at_commit(repo_root, commit, REVIEW_SUBJECT_SURFACE_PREFIX):
-        path = entry["path"]
-        if not path.endswith(".md"):
-            continue
-        text = _hardened_run(["cat-file", "blob", entry["blob"]], cwd=repo_root)
+    for path in sorted(REVIEW_SUBJECT_ROSTER):
+        resolved = _blob_mode_and_sha_at_commit(repo_root, commit, path)
+        if resolved is None:
+            raise ReviewSubjectDeclarationError(f"{path!r} does not exist at {commit}")
+        _mode, blob = resolved
+        text = _hardened_run(["cat-file", "blob", blob], cwd=repo_root)
         declared = _parse_review_subject_declarations(text)
         distinct = set(declared)
         if len(distinct) != 1:

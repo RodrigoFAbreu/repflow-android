@@ -366,80 +366,92 @@ class TestDiscoverStateWriters(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
-def _seed_review_subject_surface(repo):
-    """A minimal two-file fixture: one `bundle` consumer, one `none`
-    exempt file."""
-    _write(
-        repo, ".claude/commands/consumer-one.md",
-        "---\nreview-subject: bundle\n---\n\nconsumes a bundle here\n",
-    )
-    _write(
-        repo, ".claude/commands/exempt-one.md",
-        "---\nreview-subject: none\n---\n\nno bundle identity\n",
-    )
+def _seed_review_subject_surface(repo, *, omit: str | None = None):
+    """Every path on `ws.REVIEW_SUBJECT_ROSTER`, each declaring
+    `review-subject: bundle` -- a faithful (if content-wise fictional)
+    stand-in for the real thirteen-file roster, since
+    `discover_review_subject_declarations` is deliberately scoped to that
+    fixed named set rather than scanning `.claude/commands/` wholesale
+    (`REVIEW_SUBJECT_ROSTER`'s own docstring: a file the real roster never
+    named, like `recover-implementation-provenance.md`, must never be
+    silently demanded a declaration it was never assigned). `omit`, if
+    given, skips writing that one roster path entirely -- used to prove a
+    roster member absent from the commit fails closed."""
+    for path in sorted(ws.REVIEW_SUBJECT_ROSTER):
+        if path == omit:
+            continue
+        _write(repo, path, "---\nreview-subject: bundle\n---\n\nfixture\n")
     _run(["git", "add", "-A"], cwd=repo.root)
     _run(["git", "commit", "-q", "-m", "seed review-subject surface"], cwd=repo.root)
     return repo.head()
 
 
 class TestDiscoverReviewSubjectDeclarations(unittest.TestCase):
-    def test_discovers_each_declared_value(self):
+    def test_discovers_every_roster_path(self):
         with ScratchRepo() as repo:
             commit = _seed_review_subject_surface(repo)
             declarations = ws.discover_review_subject_declarations(repo.root, commit)
-            self.assertEqual(declarations[".claude/commands/consumer-one.md"], "bundle")
-            self.assertEqual(declarations[".claude/commands/exempt-one.md"], "none")
+            self.assertEqual(set(declarations), set(ws.REVIEW_SUBJECT_ROSTER))
+            self.assertTrue(all(v == "bundle" for v in declarations.values()))
 
-    def test_verdict_value_is_recognized(self):
+    def test_verdict_and_none_values_are_recognized(self):
         with ScratchRepo() as repo:
             _seed_review_subject_surface(repo)
-            _write(
-                repo, ".claude/commands/verdict-one.md",
-                "---\nreview-subject: verdict\n---\n\napplies feedback\n",
-            )
-            commit = _commit_paths(repo, [".claude/commands/verdict-one.md"], "add verdict consumer")
+            one = sorted(ws.REVIEW_SUBJECT_ROSTER)[0]
+            two = sorted(ws.REVIEW_SUBJECT_ROSTER)[1]
+            _write(repo, one, "---\nreview-subject: verdict\n---\n\nfixture\n")
+            _write(repo, two, "---\nreview-subject: none\n---\n\nfixture\n")
+            commit = _commit_paths(repo, [one, two], "vary two roster values")
             declarations = ws.discover_review_subject_declarations(repo.root, commit)
-            self.assertEqual(declarations[".claude/commands/verdict-one.md"], "verdict")
+            self.assertEqual(declarations[one], "verdict")
+            self.assertEqual(declarations[two], "none")
+
+    def test_roster_path_absent_from_commit_fails_closed(self):
+        with ScratchRepo() as repo:
+            missing = sorted(ws.REVIEW_SUBJECT_ROSTER)[0]
+            commit = _seed_review_subject_surface(repo, omit=missing)
+            with self.assertRaises(ws.ReviewSubjectDeclarationError):
+                ws.discover_review_subject_declarations(repo.root, commit)
 
     def test_missing_declaration_fails_closed(self):
         with ScratchRepo() as repo:
             _seed_review_subject_surface(repo)
-            _write(repo, ".claude/commands/undeclared.md", "no declaration anywhere\n")
-            commit = _commit_paths(repo, [".claude/commands/undeclared.md"], "undeclared subject")
+            target = sorted(ws.REVIEW_SUBJECT_ROSTER)[0]
+            _write(repo, target, "no declaration anywhere\n")
+            commit = _commit_paths(repo, [target], "undeclared subject")
             with self.assertRaises(ws.ReviewSubjectDeclarationError):
                 ws.discover_review_subject_declarations(repo.root, commit)
 
     def test_unrecognized_value_fails_closed(self):
         with ScratchRepo() as repo:
             _seed_review_subject_surface(repo)
-            _write(
-                repo, ".claude/commands/typo.md",
-                "---\nreview-subject: bundel\n---\n",
-            )
-            commit = _commit_paths(repo, [".claude/commands/typo.md"], "typo'd subject")
+            target = sorted(ws.REVIEW_SUBJECT_ROSTER)[0]
+            _write(repo, target, "---\nreview-subject: bundel\n---\n")
+            commit = _commit_paths(repo, [target], "typo'd subject")
             with self.assertRaises(ws.ReviewSubjectDeclarationError):
                 ws.discover_review_subject_declarations(repo.root, commit)
 
     def test_contradictory_declaration_fails_closed(self):
         with ScratchRepo() as repo:
             _seed_review_subject_surface(repo)
-            _write(
-                repo, ".claude/commands/contradictory.md",
-                "---\nreview-subject: bundle\n---\n\nreview-subject: none\n",
-            )
-            commit = _commit_paths(repo, [".claude/commands/contradictory.md"], "contradictory subject")
+            target = sorted(ws.REVIEW_SUBJECT_ROSTER)[0]
+            _write(repo, target, "---\nreview-subject: bundle\n---\n\nreview-subject: none\n")
+            commit = _commit_paths(repo, [target], "contradictory subject")
             with self.assertRaises(ws.ReviewSubjectDeclarationError):
                 ws.discover_review_subject_declarations(repo.root, commit)
 
-    def test_non_markdown_files_ignored(self):
+    def test_a_file_outside_the_roster_is_never_enumerated(self):
+        """`recover-implementation-provenance.md`-shaped case: a real
+        `.claude/commands/*.md` file that carries no `review-subject:`
+        declaration at all must not fail this discovery, since it was
+        never on `REVIEW_SUBJECT_ROSTER` in the first place."""
         with ScratchRepo() as repo:
-            _seed_review_subject_surface(repo)
-            _write(repo, ".claude/commands/README.txt", "not a command file, no declaration\n")
-            commit = _commit_paths(repo, [".claude/commands/README.txt"], "add stray non-md file")
+            commit = _seed_review_subject_surface(repo)
+            _write(repo, ".claude/commands/outside-the-roster.md", "no declaration, and that's fine\n")
+            commit = _commit_paths(repo, [".claude/commands/outside-the-roster.md"], "add non-roster file")
             declarations = ws.discover_review_subject_declarations(repo.root, commit)
-            self.assertEqual(set(declarations), {
-                ".claude/commands/consumer-one.md", ".claude/commands/exempt-one.md",
-            })
+            self.assertNotIn(".claude/commands/outside-the-roster.md", declarations)
+            self.assertEqual(set(declarations), set(ws.REVIEW_SUBJECT_ROSTER))
 
 
 # ---------------------------------------------------------------------------
