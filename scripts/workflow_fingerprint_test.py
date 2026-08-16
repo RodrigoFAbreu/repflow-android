@@ -2067,6 +2067,51 @@ class TestGenerationDiagnosticMetadata(unittest.TestCase):
             with self.assertRaises(wf.WorktreeOrHeadMismatchError):
                 wf.assert_local_generation_matches(repo.root, manifest_path)
 
+    def test_local_staleness_unweakened_by_reviewed_head_generation_head_split(self):
+        """Item 229 (`WF8c`): the local-staleness check's original
+        Milestone-8-incident coverage survives the `reviewed_implementation_
+        head`/`generation_head` split unweakened -- (1) a bundle whose
+        `generation_head` names a different `worktree_root` is still
+        refused (mirrors `test_local_generation_check_stops_on_worktree_
+        root_mismatch` above, exercised again here as part of the same
+        item), and (2) a bundle whose `generation_head` is a real,
+        genuine ancestor of live HEAD -- not a fabricated hash -- is still
+        refused once an unrelated, later commit lands, since the check is
+        exact-equality on `generation_head`, never "is an ancestor of"."""
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            repo.commit_plan_docs_as_base()
+            bundle_dir = self._bundle_dir(repo)
+            _write_review_request_with_content_id(repo, bundle_dir)
+            wf.write_manifest_with_verified_identifiers(
+                repo.root, bundle_dir, repo.base,
+                work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=7,
+            )
+            manifest_path = bundle_dir / "MANIFEST.md"
+
+            # (1) worktree_root mismatch.
+            content = manifest_path.read_text()
+            tampered = wf._WORKTREE_ROOT_LINE_RE.sub("worktree_root: /some/other/worktree", content)
+            manifest_path.write_text(tampered)
+            with self.assertRaises(wf.WorktreeOrHeadMismatchError):
+                wf.assert_local_generation_matches(repo.root, manifest_path)
+            manifest_path.write_text(content)  # restore for part (2)
+
+            # (2) generation_head is a genuine ancestor of live HEAD, but
+            # an unrelated, later commit landed since generation.
+            recorded_head = repo.head()
+            (repo.root / "unrelated.txt").write_text("later, unrelated change\n")
+            _run(["git", "add", "unrelated.txt"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "unrelated later commit"], cwd=repo.root)
+            self.assertNotEqual(repo.head(), recorded_head)
+            ancestor_check = subprocess.run(
+                ["git", "merge-base", "--is-ancestor", recorded_head, repo.head()],
+                cwd=repo.root,
+            )
+            self.assertEqual(ancestor_check.returncode, 0)  # genuinely an ancestor, not a fabricated hash
+            with self.assertRaises(wf.WorktreeOrHeadMismatchError):
+                wf.assert_local_generation_matches(repo.root, manifest_path)
+
     def test_missing_manifest_metadata_is_not_a_local_mismatch(self):
         """An older bundle generated before WF5 landed has no
         worktree_root/generation_head lines at all -- absence is not

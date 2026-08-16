@@ -498,6 +498,31 @@
       "item": 359,
       "evidence": "workflow_fingerprint_demo_test.TestImplementationStageAgainstRealRepository.test_real_diff_since_base_commit_classifies_exhaustively",
       "note": "Real-repository conformance: every tracked-plus-untracked path changed since base_commit (currently including both docs/ai-workflow/dry-run/ files and, when dirty, docs/improvements/ paths) classifies under the implementation-stage declaration without raising UnclassifiedPathError, enumerated exhaustively via subTest rather than stopping at the first exception -- the exact totality property item 359 requires"
+    },
+    {
+      "item": 177,
+      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd.test_fresh_session_reselects_same_outstanding_checkpoint",
+      "note": "New test (no prior coverage existed): after a real /accept-scoped-remediation acceptance, state and registry are both re-read from disk/Git alone (git show HEAD:<path>, no in-memory carryover) and select_next_checkpoint re-selects the same outstanding checkpoint -- no new pointer or marker file exists to read"
+    },
+    {
+      "item": 206,
+      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd.test_checklist_correction_first_confirmation_refused_second_succeeds",
+      "note": "New test (no prior coverage existed): two distinct Workflow-Functional-Checklist evidence commits for the same round (a checklist correction); confirming the original, now-superseded evidence is refused as stale, and only a second confirmation naming the corrected evidence reaches scoped acceptance, bound to the corrected commit/blob"
+    },
+    {
+      "item": 214,
+      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd.test_checklist_correction_first_confirmation_refused_second_succeeds",
+      "note": "Same test as item 206 (restates the identical GPT-R40-001 failure scenario as its own end-to-end reproduction) -- the checklist-correction-between-review-and-acceptance flow is refused on the stale confirmation and succeeds only on the corrected one"
+    },
+    {
+      "item": 229,
+      "evidence": "workflow_fingerprint_test.TestGenerationDiagnosticMetadata.test_local_staleness_unweakened_by_reviewed_head_generation_head_split",
+      "note": "New test (no prior coverage existed): assert_local_generation_matches still refuses a worktree_root mismatch, and still refuses once a genuine ancestor generation_head (verified via git merge-base --is-ancestor, not a fabricated hash) is left behind by an unrelated later commit -- the local-staleness check's original Milestone-8-incident coverage is unweakened by the reviewed_implementation_head/generation_head split"
+    },
+    {
+      "item": 241,
+      "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_bare_head_equality_with_no_generation_record_refuses",
+      "note": "New test (no prior coverage existed): live HEAD exactly equal to reviewed_implementation_head (bare equality genuinely holds), with zero commits made afterward and so no discoverable Workflow-Bundle-Generation-Record commit at all -- the pre-WF8B-003 bare-equality branch is confirmed gone even in the one shape where the old rule would have silently accepted"
     }
   ]
 }

@@ -4482,6 +4482,26 @@ class TestImplementationProvenanceInterval(unittest.TestCase):
             with self.assertRaises(ws.BundleGenerationRecordNotFoundError):
                 ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base)
 
+    def test_bare_head_equality_with_no_generation_record_refuses(self):
+        """Item 241: `/approve-review implementation` refuses live HEAD
+        exactly equal to `reviewed_implementation_head` when no
+        current-revision `Workflow-Bundle-Generation-Record` commit is
+        discoverable at all -- confirming the pre-`WF8B-003` bare-equality
+        branch (`reviewed_implementation_head == HEAD` alone treated as
+        sufficient) is gone, never silently still accepted, even in the
+        one shape where bare equality genuinely holds."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            work_item = state | {"work_item_id": self.WI}
+            self.assertEqual(repo.head(), p)  # bare equality genuinely holds
+            self.assertEqual(work_item["reviewed_implementation_head"], repo.head())
+            with self.assertRaises(ws.BundleGenerationRecordNotFoundError):
+                ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base)
+            self.assertFalse(ws.implementation_provenance_interval_reachable(repo.root, work_item, repo.base))
+
     def test_reviewed_head_not_an_ancestor_refuses(self):
         """`reviewed_implementation_head` names a commit that isn't
         actually an ancestor of the discovered T at all."""
@@ -6716,6 +6736,63 @@ class TestScopedRemediationEndToEnd(unittest.TestCase):
                     repo, resumed_state, confirmed_commit=evidence_sha, confirmed_blob=blob,
                     confirmation_text_override=bad_text,
                 )
+
+    def test_fresh_session_reselects_same_outstanding_checkpoint(self):
+        """Item 177: after `/accept-scoped-remediation`, a brand-new
+        process re-reading `WORKFLOW_STATE.json`/the registry from disk
+        alone (no in-memory carryover) re-selects the same outstanding
+        checkpoint via `select_next_checkpoint`/`/bootstrap-workflow-v2`'s
+        own step 3 -- no new pointer or marker file exists to read."""
+        with ScratchRepo() as repo:
+            state, evidence_sha, blob = self._seed(repo)
+            self._accept(repo, state, confirmed_commit=evidence_sha, confirmed_blob=blob)
+            # Fresh session: both state and registry re-read from disk/Git
+            # alone, never carried over from this process's own memory.
+            resumed_state = json.loads(_run_capture(["git", "show", f"HEAD:{self.STATE_PATH}"], repo.root))
+            resumed_registry = json.loads(_run_capture(["git", "show", f"HEAD:{self.REGISTRY_PATH}"], repo.root))
+            work_item = resumed_state["work_items"][self.WI]
+            self.assertEqual(work_item["phase"], "IMPLEMENTING")
+            self.assertEqual(ws.select_next_checkpoint(work_item, resumed_registry), "B")
+
+    def test_checklist_correction_first_confirmation_refused_second_succeeds(self):
+        """Items 206/214: a checklist correction landing between the
+        user's review and `/accept-scoped-remediation`'s invocation (two
+        distinct `/prepare-functional-review` evidence commits for the
+        same round) is refused rather than silently accepted when
+        confirmed against the original, now-superseded evidence; only a
+        second, fresh confirmation naming the corrected evidence reaches
+        scoped acceptance, bound to the corrected evidence -- no manual
+        out-of-contract commit, no false ambiguity, no false replay, and
+        no silent binding to unreviewed evidence -- the full `GPT-R40-001`
+        failure scenario, defeated."""
+        with ScratchRepo() as repo:
+            state, original_sha, original_blob = self._seed(repo)
+            # A checklist correction: a second /prepare-functional-review
+            # pass, producing a second, distinct evidence commit for the
+            # exact same round.
+            _write(repo, self.CHECKLIST_PATH, "checklist v2 -- corrected\n")
+            _commit_paths(repo, [self.CHECKLIST_PATH], "checklist corrected")
+            corrected_blob = self._blob(repo)
+            corrected_sha = _commit_empty(repo, "checklist evidence (corrected)", trailers={
+                "Workflow-Functional-Checklist": f"{self.WI}/1/{corrected_blob}",
+                "Workflow-Work-Item": self.WI,
+            })
+            self.assertNotEqual(corrected_sha, original_sha)
+            self.assertNotEqual(corrected_blob, original_blob)
+
+            # First confirmation names the *original* evidence -- refused,
+            # since the round's current evidence has already moved on.
+            with self.assertRaises(ws.StaleFunctionalChecklistConfirmationError):
+                self._accept(repo, state, confirmed_commit=original_sha, confirmed_blob=original_blob)
+
+            # Second, explicit confirmation naming the *corrected* evidence
+            # succeeds, bound to the corrected commit/blob.
+            new_state, _commit_sha = self._accept(
+                repo, state, confirmed_commit=corrected_sha, confirmed_blob=corrected_blob,
+            )
+            entry = new_state["work_items"][self.WI]["scoped_remediation_acceptance"][0]
+            self.assertEqual(entry["functional_checklist_evidence_commit"], corrected_sha)
+            self.assertEqual(entry["functional_checklist_blob"], corrected_blob)
 
 
 def _run_capture(args, cwd):
