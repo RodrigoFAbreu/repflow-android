@@ -2493,5 +2493,222 @@ class TestPlanApprovalMutationGuardAndTakeover(unittest.TestCase):
             self.assertIsNone(evidence["outcome"])
 
 
+_STATE_PATH = Path("docs/ai-workflow/WORKFLOW_STATE.json")
+
+
+class TestPlanApprovalStateBlobPinAndMaterialize(unittest.TestCase):
+    """WF8c (g), part 3 (`WFR-63`): the index-pinned-blob writer for
+    `WORKFLOW_STATE.json` (step-6.1b-state-pin) and step 8b's
+    materialization, exercised directly against real `ScratchRepo` git
+    history the same way parts 1 and 2 exercise the journal and the
+    guard/takeover contract -- not yet wired into a guarded-mutation
+    caller or `.claude/commands/approve-review.md`.
+
+    `TestPlanApprovalFailureAtomicityTransaction._setup` leaves
+    `WORKFLOW_STATE.json` written but *uncommitted* (parts 1/2 never
+    needed it at `HEAD`, since the journal captures `pre_state` as a
+    plain dict). This part's own primitives read the file's mode *at
+    `HEAD`*, matching this repository's own real invariant --
+    `WORKFLOW_STATE.json` is always already tracked before any approval
+    round begins -- so `_setup` below commits it first, before the
+    journal opens (its own `pre_procedure_head` must be pinned after
+    that commit, not before, or the classifier would see a spurious
+    concurrent commit)."""
+
+    def _setup(self, repo: h.ScratchRepo, wi: str):
+        pre_state, record, review_content_id, plan = TestPlanApprovalFailureAtomicityTransaction._setup(
+            self, repo, wi,
+        )
+        _run(["git", "add", str(_STATE_PATH)], cwd=repo.root)
+        _run(["git", "commit", "-q", "-m", "seed workflow state"], cwd=repo.root)
+        return pre_state, record, review_content_id, plan
+
+    def _open_journal(self, repo: h.ScratchRepo, wi: str, *args):
+        return TestPlanApprovalFailureAtomicityTransaction._open_journal(self, repo, wi, *args)
+
+    def _expected_bytes(self, journal: dict) -> bytes:
+        return base64.b64decode(journal["expected_post_state_b64"])
+
+    def _commit_pinned_state(
+        self, repo: h.ScratchRepo, wi: str, plan, journal: dict, review_content_id: str,
+    ) -> str:
+        """Stages `plan.paths` minus `_STATE_PATH` via the ordinary `git
+        add` mechanism, pins the state blob directly into the index,
+        verifies both, and creates the approval commit -- a full
+        end-to-end pass through this part's own primitives (not
+        necessarily the eventual production step ordering, which remains
+        a follow-up session's scope to fix in place)."""
+        ordinary_paths = tuple(p for p in plan.paths if p != str(_STATE_PATH))
+        ws.stage_plan_approval_commit_paths(repo.root, ordinary_paths)
+        ws.pin_plan_approval_state_blob(repo.root, self._expected_bytes(journal))
+        ws.verify_staged_plan_approval_state_blob(repo.root, journal["expected_post_state_sha256"])
+        body = f"plan approval\n\nWorkflow-Plan-Approval: {review_content_id}\nWorkflow-Work-Item: {wi}"
+        _run(["git", "commit", "-q", "-m", body], cwd=repo.root)
+        return repo.head()
+
+    # -- pin ----------------------------------------------------------
+
+    def test_pin_stages_the_expected_bytes_without_touching_the_working_tree(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+            pre_bytes = (repo.root / _STATE_PATH).read_bytes()
+            expected_bytes = self._expected_bytes(journal)
+            self.assertNotEqual(pre_bytes, expected_bytes)
+
+            blob_sha = ws.pin_plan_approval_state_blob(repo.root, expected_bytes)
+
+            self.assertIn(len(blob_sha), (40, 64))
+            self.assertRegex(blob_sha, r"^[0-9a-f]+$")
+            # working tree is untouched
+            self.assertEqual((repo.root / _STATE_PATH).read_bytes(), pre_bytes)
+            # the index carries the new content instead
+            staged = subprocess.run(
+                ["git", "show", f":{_STATE_PATH}"], cwd=repo.root, capture_output=True, check=True,
+            ).stdout
+            self.assertEqual(staged, expected_bytes)
+            # both a staged diff (index vs HEAD) and an unstaged diff (worktree vs index) exist
+            self.assertIn(
+                str(_STATE_PATH),
+                _run(["git", "diff", "--name-only", "--cached", "HEAD"], cwd=repo.root).splitlines(),
+            )
+            self.assertIn(
+                str(_STATE_PATH), _run(["git", "diff", "--name-only"], cwd=repo.root).splitlines(),
+            )
+
+    def test_pin_precondition_refuses_when_state_path_already_staged_and_dirty(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+            (repo.root / _STATE_PATH).write_text(
+                (repo.root / _STATE_PATH).read_text() + "\n",
+            )
+            _run(["git", "add", str(_STATE_PATH)], cwd=repo.root)
+
+            with self.assertRaises(ws.DirtyIndexBeforeStagingError):
+                ws.pin_plan_approval_state_blob(repo.root, self._expected_bytes(journal))
+
+    def test_pin_raises_when_state_path_absent_at_head(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+
+            with self.assertRaises(ws.PlanApprovalStateBlobUnavailableError):
+                ws.pin_plan_approval_state_blob(
+                    repo.root, self._expected_bytes(journal),
+                    state_path=Path("docs/ai-workflow/DOES_NOT_EXIST.json"),
+                )
+
+    # -- verify staged --------------------------------------------------
+
+    def test_verify_staged_state_blob_passes_then_fails_after_a_foreign_restage(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+            ws.pin_plan_approval_state_blob(repo.root, self._expected_bytes(journal))
+
+            ws.verify_staged_plan_approval_state_blob(repo.root, journal["expected_post_state_sha256"])
+
+            # A foreign restage over the same path (e.g. a concurrent writer) must be
+            # caught rather than trusted on the earlier pin's word alone.
+            tampered_sha = subprocess.run(
+                ["git", "hash-object", "-w", "--stdin"], cwd=repo.root,
+                input=b'{"tampered": true}\n', capture_output=True, check=True,
+            ).stdout.decode("ascii").strip()
+            _run(
+                ["git", "update-index", "--cacheinfo", f"100644,{tampered_sha},{_STATE_PATH}"],
+                cwd=repo.root,
+            )
+
+            with self.assertRaises(ws.StagedStateBlobMismatchError):
+                ws.verify_staged_plan_approval_state_blob(repo.root, journal["expected_post_state_sha256"])
+
+    # -- end to end: pin, commit, verify committed, materialize ---------
+
+    def test_end_to_end_pin_commit_materialize_matches_apply_plan_approval(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+            pre_bytes = (repo.root / _STATE_PATH).read_bytes()
+
+            commit = self._commit_pinned_state(repo, wi, plan, journal, review_content_id)
+
+            # working tree is still untouched immediately after the commit
+            self.assertEqual((repo.root / _STATE_PATH).read_bytes(), pre_bytes)
+            self.assertEqual(
+                ws.classify_plan_approval_outcome(repo.root, journal), ws.PLAN_APPROVAL_OUTCOME_COMMITTED,
+            )
+            ws.verify_committed_plan_approval_state_blob(
+                repo.root, commit, journal["expected_post_state_sha256"],
+            )
+
+            ws.materialize_plan_approval_state(repo.root, commit, journal["expected_post_state_sha256"])
+
+            expected_bytes = self._expected_bytes(journal)
+            self.assertEqual((repo.root / _STATE_PATH).read_bytes(), expected_bytes)
+            self.assertEqual(json.loads(expected_bytes)["work_items"][wi]["phase"], "IMPLEMENTING")
+            # the working tree now matches HEAD/the index exactly for this path
+            self.assertEqual(
+                _run(["git", "status", "--porcelain", "--", str(_STATE_PATH)], cwd=repo.root), "",
+            )
+
+    def test_verify_committed_state_blob_raises_on_mismatch(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+            commit = self._commit_pinned_state(repo, wi, plan, journal, review_content_id)
+
+            with self.assertRaises(ws.CommittedStateBlobMismatchError):
+                ws.verify_committed_plan_approval_state_blob(repo.root, commit, "0" * 64)
+
+    # -- materialize ------------------------------------------------------
+
+    def test_materialize_refuses_unverified_committed_content_and_leaves_working_tree_untouched(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+            pre_bytes = (repo.root / _STATE_PATH).read_bytes()
+            commit = self._commit_pinned_state(repo, wi, plan, journal, review_content_id)
+
+            with self.assertRaises(ws.CommittedStateBlobMismatchError):
+                ws.materialize_plan_approval_state(repo.root, commit, "0" * 64)
+
+            self.assertEqual((repo.root / _STATE_PATH).read_bytes(), pre_bytes)
+
+    def test_materialize_leaves_no_stray_temp_file(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+            commit = self._commit_pinned_state(repo, wi, plan, journal, review_content_id)
+
+            ws.materialize_plan_approval_state(repo.root, commit, journal["expected_post_state_sha256"])
+
+            leftovers = list((repo.root / _STATE_PATH.parent).glob(f".{_STATE_PATH.name}-*.tmp"))
+            self.assertEqual(leftovers, [])
+
+    def test_materialize_is_byte_identical_to_git_show_at_commit(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+            commit = self._commit_pinned_state(repo, wi, plan, journal, review_content_id)
+
+            ws.materialize_plan_approval_state(repo.root, commit, journal["expected_post_state_sha256"])
+
+            committed = subprocess.run(
+                ["git", "show", f"{commit}:{_STATE_PATH}"], cwd=repo.root,
+                capture_output=True, check=True,
+            ).stdout
+            self.assertEqual((repo.root / _STATE_PATH).read_bytes(), committed)
+
+
 if __name__ == "__main__":
     unittest.main()

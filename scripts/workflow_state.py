@@ -2110,12 +2110,13 @@ def rollback_plan_approval_transaction(
 # above rather than a checkpoint claim, plus the journal's own owner
 # progress record, which `D-Checkpoint-Ownership` has no equivalent of.
 #
-# Deliberately bounded to this part: no index-pinned-blob writer for
-# `WORKFLOW_STATE.json` or step 8b's materialization, no amend recovery,
-# and no `.claude/commands/approve-review.md` integration -- those remain a
-# follow-up session's scope. This part exercises the guard/takeover
-# machinery directly against the journal part 1 already built. There is
-# deliberately no in-band recovery for an abandoned `"destructive"` guard
+# Deliberately bounded to this part: no amend recovery, and no
+# `.claude/commands/approve-review.md` integration -- those remain a
+# follow-up session's scope (the index-pinned-blob writer for
+# `WORKFLOW_STATE.json` and step 8b's materialization are built below,
+# part 3). This part exercises the guard/takeover machinery directly
+# against the journal part 1 already built. There is deliberately no
+# in-band recovery for an abandoned `"destructive"` guard
 # (`D-Checkpoint-Ownership`'s `recover_abandoned_destructive_guard` has
 # one; this transaction's own guard contract explicitly does not -- "a
 # `"destructive"` guard abandoned in the current epoch has no in-band
@@ -2656,6 +2657,217 @@ def _replace_plan_approval_journal(
             os.close(dir_fd)
     finally:
         Path(tmp_name).unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# WF8c (g), part 3: WFR-63's index-pinned-blob writer for
+# `WORKFLOW_STATE.json` (step-6.1b-state-pin) and step 8b's materialization
+# (`D-Approval-Commits` revision 56's "no intermediate state can satisfy the
+# currently-installed `/bootstrap-workflow-v2`'s own durability guard": the
+# post-approval state is pinned into the Git index and materialized into the
+# working tree only after a verified durable approval commit exists, so the
+# working-tree copy of `WORKFLOW_STATE.json` never shows post-approval bytes
+# before there is a commit to back them).
+#
+# `pin_plan_approval_state_blob` deliberately does not use
+# `stage_plan_approval_commit_paths`'s ordinary `git add` (which always
+# reads the working tree): it writes the journal's own pinned
+# `expected_post_state_b64` bytes as a Git blob object
+# (`git hash-object -w --stdin`) and stages that blob directly into the
+# index (`git update-index --cacheinfo`), leaving the working-tree file
+# byte-identical to `HEAD` throughout. `materialize_plan_approval_state`
+# is the one and only later write to that file's working-tree copy,
+# performed from the approval commit's own committed bytes, never a fresh
+# re-serialization -- so what lands on disk is always exactly what the
+# commit already carries.
+#
+# Three independent sha256 checks against the journal's own
+# `expected_post_state_sha256`, mirroring the conditional fifth member's
+# staged/committed pair above (`verify_staged_blob_sha256`/
+# `verify_committed_blob_sha256`) plus one further check this transaction's
+# redesign specifically requires: staged (`verify_staged_plan_approval_state_blob`),
+# committed (`verify_committed_plan_approval_state_blob`), and materialized
+# (`materialize_plan_approval_state`'s own post-write re-read). Deliberately
+# bounded to this part: these are library primitives only, exercised
+# directly against real `ScratchRepo` git history -- the caller that will
+# wrap each in `plan_approval_guarded_mutation(..., step="step-6.1b-state-pin"
+# | "step-8b-materialize", ...)`, the amend recovery (item 347's 3-way
+# interruption classification), and the `.claude/commands/approve-review.md`
+# integration itself all remain a follow-up session's scope.
+# ---------------------------------------------------------------------------
+
+
+class PlanApprovalStateBlobUnavailableError(Exception):
+    """Raised by `pin_plan_approval_state_blob` when `state_path` does not
+    exist at `HEAD` -- there is no committed file mode to pin a new blob
+    against. `WORKFLOW_STATE.json` always exists once `WF1a` has landed,
+    so this is not a case this transaction's own contract needs to
+    recover from, only fail closed on."""
+
+
+class StagedStateBlobMismatchError(Exception):
+    """`WORKFLOW_STATE.json`'s *staged* (Git index) content, immediately
+    after `pin_plan_approval_state_blob`, does not sha256-match the plan-
+    approval journal's own pinned `expected_post_state_sha256` -- defense
+    against a race between journal-open and staging, mirroring
+    `StagedBlobMismatchError`'s role for the conditional fifth member,
+    built as a separate, dedicated class rather than shared with it: the
+    two check different paths for different reasons (an ordinary `git
+    add` there; a direct index-blob pin here) and their messages should
+    say so."""
+
+
+class CommittedStateBlobMismatchError(Exception):
+    """`WORKFLOW_STATE.json`'s *committed* content does not sha256-match
+    the sha256 pinned in the plan-approval journal -- raised by
+    `verify_committed_plan_approval_state_blob`, and again, as its own
+    precondition, by `materialize_plan_approval_state`, which refuses to
+    copy unverified committed content into the working tree."""
+
+
+class MaterializedStateBlobMismatchError(Exception):
+    """Raised by `materialize_plan_approval_state` when the bytes it just
+    wrote to `WORKFLOW_STATE.json`'s working-tree copy, re-read from disk,
+    do not sha256-match what was written -- the third and final of the
+    three checks `WFR-63` requires (staged, committed, materialized),
+    verified rather than assumed."""
+
+
+def pin_plan_approval_state_blob(
+    repo_root: Path, expected_state_bytes: bytes, *, state_path: Path = DEFAULT_STATE_PATH,
+) -> str:
+    """step-6.1b-state-pin: writes `expected_state_bytes` -- the plan-
+    approval journal's own pinned `expected_post_state_b64`, decoded by
+    the caller -- as a Git blob object and stages it at `state_path`
+    directly in the index (`git update-index --add --cacheinfo`), without
+    ever writing those bytes to the working-tree copy of that file. This
+    is the transaction's one deliberate departure from
+    `stage_plan_approval_commit_paths`'s ordinary `git add` (which always
+    reads the working tree): `WORKFLOW_STATE.json`'s post-approval content
+    must never be observable on disk before a durable, verified commit
+    exists, so the working-tree file is left exactly as it was -- still
+    the pre-approval bytes -- for the whole window between this call and
+    `materialize_plan_approval_state` (step 8b).
+
+    Precondition: `state_path`'s own staged content must already equal
+    `HEAD` (`git diff --cached HEAD -- state_path` empty) --
+    `DirtyIndexBeforeStagingError` otherwise, the same exception
+    `stage_plan_approval_commit_paths`'s own analogous precondition
+    raises, for the same reason: a clearer diagnostic than discovering a
+    stray earlier pin only in a later staged-set assertion.
+
+    Returns the written blob's Git object id (informational only --
+    verification against the journal's own pinned identity is
+    `verify_staged_plan_approval_state_blob`, by content sha256, not this
+    object id, so it is unaffected by which hash algorithm the repository
+    itself uses for Git objects)."""
+    already = _run(
+        ["git", "diff", "--name-only", "--cached", "HEAD", "--", str(state_path)], cwd=repo_root,
+    ).strip()
+    if already:
+        raise DirtyIndexBeforeStagingError(
+            f"{state_path} is already staged and differs from HEAD before "
+            f"step-6.1b-state-pin ran -- resolve or unstage it first"
+        )
+    mode_and_sha = _blob_mode_and_sha_at_commit(repo_root, "HEAD", str(state_path))
+    if mode_and_sha is None:
+        raise PlanApprovalStateBlobUnavailableError(
+            f"{state_path} does not exist at HEAD -- cannot determine its file mode "
+            f"to pin a new blob in its place"
+        )
+    mode, _head_blob = mode_and_sha
+    blob_sha = subprocess.run(
+        ["git", "hash-object", "-w", "--stdin"], cwd=repo_root,
+        input=expected_state_bytes, capture_output=True, check=True,
+    ).stdout.decode("ascii").strip()
+    _run(
+        ["git", "update-index", "--add", "--cacheinfo", f"{mode},{blob_sha},{state_path}"],
+        cwd=repo_root,
+    )
+    return blob_sha
+
+
+def verify_staged_plan_approval_state_blob(
+    repo_root: Path, expected_sha256: str, *, state_path: Path = DEFAULT_STATE_PATH,
+) -> None:
+    """Re-verifies `state_path`'s *staged* (Git index) content against
+    `expected_sha256` -- call after `pin_plan_approval_state_blob`, before
+    creating the commit, to close the race window between pinning and
+    commit creation. Raises `StagedStateBlobMismatchError` on a
+    mismatch."""
+    content = subprocess.run(
+        ["git", "show", f":{state_path}"], cwd=repo_root, capture_output=True, check=True,
+    ).stdout
+    actual = hashlib.sha256(content).hexdigest()
+    if actual != expected_sha256:
+        raise StagedStateBlobMismatchError(
+            f"{state_path}: staged blob sha256 {actual} does not match the sha256 "
+            f"{expected_sha256} pinned in the plan-approval journal"
+        )
+
+
+def verify_committed_plan_approval_state_blob(
+    repo_root: Path, commit: str, expected_sha256: str, *, state_path: Path = DEFAULT_STATE_PATH,
+) -> None:
+    """Re-verifies `state_path`'s *committed* content at `commit` against
+    `expected_sha256` -- defense in depth beyond
+    `verify_post_approval_manifest_match`'s own full projection-digest
+    check, isolating exactly this member if the two ever disagree. Raises
+    `CommittedStateBlobMismatchError` on a mismatch."""
+    actual = hashlib.sha256(_read_committed_bytes(repo_root, commit, str(state_path))).hexdigest()
+    if actual != expected_sha256:
+        raise CommittedStateBlobMismatchError(
+            f"{state_path} at {commit}: committed blob sha256 {actual} does not match "
+            f"the sha256 {expected_sha256} pinned in the plan-approval journal"
+        )
+
+
+def materialize_plan_approval_state(
+    repo_root: Path, commit: str, expected_sha256: str, *, state_path: Path = DEFAULT_STATE_PATH,
+) -> None:
+    """step-8b-materialize: the transaction's one and only write to
+    `state_path`'s actual working-tree copy, performed only after the
+    approval commit is durable (`classify_plan_approval_outcome` ==
+    `COMMITTED`). Reads `commit`'s own committed bytes for `state_path`
+    and, as its own precondition -- independent of whether the caller
+    already ran `verify_committed_plan_approval_state_blob` --
+    sha256-verifies them against `expected_sha256`
+    (`CommittedStateBlobMismatchError` on a mismatch: refuses to
+    materialize unverified content). Writes those exact bytes, never a
+    fresh re-serialization, via the same same-directory-temp-file-plus-
+    `fsync`-plus-`os.replace` publication `_publish_state_file` uses, so a
+    crash mid-write leaves either the old bytes or the new ones, never a
+    torn file. Re-reads the result and sha256-verifies it before returning
+    (`MaterializedStateBlobMismatchError` on a mismatch) -- the third and
+    final of the three checks `WFR-63` requires (staged, committed,
+    materialized)."""
+    committed_bytes = _read_committed_bytes(repo_root, commit, str(state_path))
+    actual = hashlib.sha256(committed_bytes).hexdigest()
+    if actual != expected_sha256:
+        raise CommittedStateBlobMismatchError(
+            f"{state_path} at {commit}: committed blob sha256 {actual} does not match "
+            f"the sha256 {expected_sha256} pinned in the plan-approval journal -- "
+            f"refusing to materialize unverified content"
+        )
+    full_path = repo_root / state_path
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(full_path.parent), prefix=f".{full_path.name}-", suffix=".tmp",
+    )
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(committed_bytes)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_name, full_path)
+    except BaseException:
+        Path(tmp_name).unlink(missing_ok=True)
+        raise
+    materialized_sha256 = hashlib.sha256(full_path.read_bytes()).hexdigest()
+    if materialized_sha256 != expected_sha256:
+        raise MaterializedStateBlobMismatchError(
+            f"{state_path}: materialized working-tree bytes sha256 {materialized_sha256} "
+            f"do not match the expected sha256 {expected_sha256} immediately after writing"
+        )
 
 
 # ---------------------------------------------------------------------------
