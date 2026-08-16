@@ -2293,6 +2293,21 @@ class TestUserConfirmationGuard(unittest.TestCase):
     def test_acceptance_stage_supported_for_accept_milestone(self):
         ws.validate_user_confirmation("I accept the wi milestone acceptance", work_item_id="wi", stage="acceptance")
 
+    def test_scoped_remediation_stage_confirmation_not_accepted_for_acceptance(self):
+        """Missing-test item 175: extends test_confirmation_naming_wrong_
+        stage_rejected's non-interchangeability property to the fourth
+        APPROVAL_STAGES member -- a scoped_remediation confirmation never
+        satisfies stage="acceptance" for the same work item, and vice
+        versa, since neither stage keyword is a substring of the other."""
+        scoped_text = "I confirm scoped_remediation for wi"
+        acceptance_text = "I confirm acceptance for wi"
+        ws.validate_user_confirmation(scoped_text, work_item_id="wi", stage="scoped_remediation")  # no raise
+        ws.validate_user_confirmation(acceptance_text, work_item_id="wi", stage="acceptance")  # no raise
+        with self.assertRaises(ws.UserConfirmationRejectedError):
+            ws.validate_user_confirmation(scoped_text, work_item_id="wi", stage="acceptance")
+        with self.assertRaises(ws.UserConfirmationRejectedError):
+            ws.validate_user_confirmation(acceptance_text, work_item_id="wi", stage="scoped_remediation")
+
 
 class TestApprovalBasisResolution(unittest.TestCase):
     """WF4a-ii, D2's basis decision."""
@@ -6518,12 +6533,15 @@ class TestScopedRemediationEndToEnd(unittest.TestCase):
         state = {"schema_version": 1, "active_work_item_id": self.WI, "work_items": {self.WI: work_item}}
         return state, evidence_sha, blob
 
-    def _accept(self, repo, state, *, confirmed_commit, confirmed_blob, now="2026-01-01T00:00:00+00:00"):
+    def _accept(
+        self, repo, state, *, confirmed_commit, confirmed_blob,
+        now="2026-01-01T00:00:00+00:00", confirmation_text_override=None,
+    ):
         """Simulates /accept-scoped-remediation's own orchestration
         end-to-end, calling exactly the functions the command doc
         specifies, in order."""
         work_item = state["work_items"][self.WI]
-        confirmation_text = (
+        confirmation_text = confirmation_text_override or (
             "I confirm scoped_remediation for swi\n"
             f"Functional checklist evidence commit: {confirmed_commit}\n"
             f"Functional checklist evidence blob: {confirmed_blob}\n"
@@ -6665,6 +6683,39 @@ class TestScopedRemediationEndToEnd(unittest.TestCase):
             # and /accept-milestone now succeeds via complete_work_item directly
             new_state = ws.complete_work_item(state, self.WI, now="t", repo_root=repo.root)
             self.assertEqual(new_state["work_items"][self.WI]["phase"], "MILESTONE_COMPLETE")
+
+    def test_confirmation_validated_before_replay_classification_runs(self):
+        """Item 196: current-turn user confirmation for stage=
+        "scoped_remediation" is validated before resolve_scoped_
+        remediation_round ever runs -- refused identically whether a live
+        round already exists (which would otherwise resolve ExactReplay)
+        or not (which would otherwise proceed as a new acceptance),
+        proving validate_user_confirmation's call site in _accept's own
+        step order precedes both outcomes rather than being reachable
+        only on one of them."""
+        with ScratchRepo() as repo:
+            state, evidence_sha, blob = self._seed(repo)
+            bad_text = (
+                f"Functional checklist evidence commit: {evidence_sha}\n"
+                f"Functional checklist evidence blob: {blob}\n"
+            )  # names neither the work item nor the stage
+            # No existing round yet -- would otherwise be NoExistingRound.
+            with self.assertRaises(ws.UserConfirmationRejectedError):
+                self._accept(
+                    repo, state, confirmed_commit=evidence_sha, confirmed_blob=blob,
+                    confirmation_text_override=bad_text,
+                )
+            # Accept for real, so a matching round now exists.
+            self._accept(repo, state, confirmed_commit=evidence_sha, confirmed_blob=blob)
+            resumed_state = json.loads(_run_capture(["git", "show", f"HEAD:{self.STATE_PATH}"], repo.root))
+            # A round now exists for this exact key -- would otherwise be
+            # ExactReplay -- but the same bad confirmation is refused
+            # identically, before that classification ever runs.
+            with self.assertRaises(ws.UserConfirmationRejectedError):
+                self._accept(
+                    repo, resumed_state, confirmed_commit=evidence_sha, confirmed_blob=blob,
+                    confirmation_text_override=bad_text,
+                )
 
 
 def _run_capture(args, cwd):

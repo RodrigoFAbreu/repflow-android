@@ -468,6 +468,36 @@
       "item": 346,
       "evidence": "workflow_integration_test.TestPlanStageApprovalCommitMembership",
       "note": "Both boundary properties of the conditional-inclusion rule: (a) no gratuitous inclusion when the declaration is byte-identical to HEAD (test_declaration_already_committed_and_unchanged_resolves_four_member_set) and (b) bundle-freshness refusal when the declaration moved on again after bundle generation (test_stale_declaration_between_preflight_and_commit_refuses_before_any_mutation) -- bound to the whole class since no single test states both halves of this compound item"
+    },
+    {
+      "item": 175,
+      "evidence": "workflow_state_test.TestUserConfirmationGuard.test_scoped_remediation_stage_confirmation_not_accepted_for_acceptance",
+      "note": "New test (no prior coverage existed): extends the existing plan-vs-implementation non-interchangeability property to the fourth APPROVAL_STAGES member, scoped_remediation vs acceptance, in both directions"
+    },
+    {
+      "item": 178,
+      "evidence": "workflow_state_test.TestWorkItemCompletion.test_completing_active_item_resets_pointer",
+      "note": "_base_work_item's default carries no registry_path key (None via .get), and the test passes a non-repository repo_root=Path('.') that would fail any real registry load -- complete_work_item succeeds anyway, proving no registry load is attempted for the registry_path: null (legacy milestone-8) shape"
+    },
+    {
+      "item": 182,
+      "evidence": "workflow_state_test.TestResolveScopedRemediationRound.test_exact_replay",
+      "note": "resolve_scoped_remediation_round's own signature carries no phase parameter at all, so its ExactReplay classification is structurally phase-independent by construction; this test exercises the exact-round-replay path (keyed by outstanding_checkpoint_id/implementation_revision, no new commit, existing commit reported) that item 182 requires 'regardless of the current phase'"
+    },
+    {
+      "item": 196,
+      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd.test_confirmation_validated_before_replay_classification_runs",
+      "note": "New test (no prior coverage existed): a confirmation naming neither the work item nor the stage is refused identically whether a live round already exists (would otherwise resolve ExactReplay) or not (would otherwise proceed as a new acceptance), proving validate_user_confirmation's call site precedes resolve_scoped_remediation_round in both cases"
+    },
+    {
+      "item": 203,
+      "evidence": "workflow_state_test.TestResolveScopedRemediationRound.test_malformed_unsupported_schema_version",
+      "note": "An entry with acceptance_record_version=1 (any value other than 2) resolves to MalformedAcceptanceRecord naming acceptance_record_version in its reason, exact match to item 203's claim"
+    },
+    {
+      "item": 359,
+      "evidence": "workflow_fingerprint_demo_test.TestImplementationStageAgainstRealRepository.test_real_diff_since_base_commit_classifies_exhaustively",
+      "note": "Real-repository conformance: every tracked-plus-untracked path changed since base_commit (currently including both docs/ai-workflow/dry-run/ files and, when dirty, docs/improvements/ paths) classifies under the implementation-stage declaration without raising UnclassifiedPathError, enumerated exhaustively via subTest rather than stopping at the first exception -- the exact totality property item 359 requires"
     }
   ]
 }
