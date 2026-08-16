@@ -665,8 +665,33 @@ class InvalidApprovalRecordError(Exception):
 
 
 class BlockCannotApproveError(Exception):
-    """Raised when the most recently reviewed round's status is `BLOCK` --
-    D-States: `BLOCK` never reaches either approval basis by any path."""
+    """Raised when the most recently reviewed round's status is `BLOCK`, or
+    a durable `technical_review_block_pins` (`D2a`) entry exists for the
+    current bundle -- D-States: `BLOCK` never reaches either approval basis
+    by any path, and a pinned bundle can never become override-eligible
+    again by any later edit of the mutable feedback file (`WF8c` item (a),
+    `OPUS-R102-002`)."""
+
+
+class PinLedgerMonotonicityError(Exception):
+    """Raised by `state_transaction`'s durability enforcement (`D2a`,
+    revision 40, `GPT-R56-004`) when a candidate state's
+    `technical_review_block_pins` for some work item disagrees with the
+    freshly re-read pre-mutation state by more than the append of zero or
+    one new, previously-unseen pin -- a missing, mutated, or removed prior
+    entry all raise this. The ledger is append-only and permanent: every
+    previously-committed pin must remain present and field-identical
+    forever, an invariant enforced on every state write (`state_transaction`
+    is D1's sole write choke point), not only on
+    `record_technical_review_block_pin`'s own call site."""
+
+
+class DuplicateTechnicalReviewBlockPinError(Exception):
+    """Raised when a work item's `technical_review_block_pins` ledger
+    contains more than one entry for the same `bundle_id` -- D2a's writer
+    (`record_technical_review_block_pin`) is idempotent by construction and
+    never produces this; a duplicate here means the field was written by
+    some other path."""
 
 
 class UserConfirmationRejectedError(Exception):
@@ -1080,6 +1105,56 @@ def _publish_state_file(full_path: Path, state: dict) -> None:
         raise
 
 
+def _assert_technical_review_block_pins_monotonic(previous_state: dict, new_state: dict) -> None:
+    """D2a's durability enforcement (revision 40, `GPT-R56-004`): every
+    `technical_review_block_pins` entry present in the freshly re-read
+    pre-mutation state must remain present and field-identical in the
+    mutator's output, for every work item, with the only legal difference
+    being the append of zero or one new, previously-unseen pin (by
+    `bundle_id`). Wired into `state_transaction` itself (D1's sole write
+    choke point, item 354) rather than only into
+    `record_technical_review_block_pin`'s own call site, so "append-only,
+    permanent, never cleared" is an enforced invariant of every write, not
+    a prose claim a different mutator could quietly violate."""
+    prev_work_items = (previous_state or {}).get("work_items") or {}
+    new_work_items = (new_state or {}).get("work_items") or {}
+    for work_item_id in set(prev_work_items) | set(new_work_items):
+        prev_work_item = prev_work_items.get(work_item_id) or {}
+        prev_pins = prev_work_item.get("technical_review_block_pins") or []
+        new_work_item = new_work_items.get(work_item_id)
+        if new_work_item is None:
+            if prev_pins:
+                raise PinLedgerMonotonicityError(
+                    f"{work_item_id}: technical_review_block_pins had {len(prev_pins)} "
+                    f"entr{'y' if len(prev_pins) == 1 else 'ies'} in the pre-state but the "
+                    f"work item is absent from the candidate state"
+                )
+            continue
+        new_pins = new_work_item.get("technical_review_block_pins") or []
+        new_by_bundle = {pin.get("bundle_id"): pin for pin in new_pins}
+        for prev_pin in prev_pins:
+            bundle_id = prev_pin.get("bundle_id")
+            new_pin = new_by_bundle.get(bundle_id)
+            if new_pin is None:
+                raise PinLedgerMonotonicityError(
+                    f"{work_item_id}: technical_review_block_pins entry for bundle_id "
+                    f"{bundle_id!r} present in the pre-state is missing from the "
+                    f"candidate state -- pins are append-only and permanent"
+                )
+            if new_pin != prev_pin:
+                raise PinLedgerMonotonicityError(
+                    f"{work_item_id}: technical_review_block_pins entry for bundle_id "
+                    f"{bundle_id!r} was mutated -- pins must stay field-identical once "
+                    f"written (was {prev_pin!r}, now {new_pin!r})"
+                )
+        added = len(new_pins) - len(prev_pins)
+        if added not in (0, 1):
+            raise PinLedgerMonotonicityError(
+                f"{work_item_id}: technical_review_block_pins changed size by {added} "
+                f"in one state write -- at most one new pin may be appended per write"
+            )
+
+
 def state_transaction(repo_root: Path, mutator, *, path: Path = DEFAULT_STATE_PATH) -> dict:
     """The single required entry point for every production writer of
     `WORKFLOW_STATE.json` (item 354): holds `state_lock` across the
@@ -1093,11 +1168,15 @@ def state_transaction(repo_root: Path, mutator, *, path: Path = DEFAULT_STATE_PA
     and holds it through the publish" shape item 354(c)'s conformance
     requires -- the shape it must specifically reject is a writer that
     locks only around its final write while publishing a value derived
-    from an earlier, unguarded read."""
+    from an earlier, unguarded read. Also enforces D2a's pin-ledger
+    monotonicity (`_assert_technical_review_block_pins_monotonic`) against
+    every candidate before it is ever published, for every caller, whether
+    or not this particular write touches that field."""
     full_path = repo_root / path
     with state_lock(repo_root):
         state = _load_json(full_path) or {}
         new_state = mutator(state)
+        _assert_technical_review_block_pins_monotonic(state, new_state)
         _publish_state_file(full_path, new_state)
     return new_state
 
@@ -4623,6 +4702,7 @@ def default_work_item(
         "current_bundle_id": None,
         "plan_approval": None,
         "technical_approval": None,
+        "technical_review_block_pins": [],
         "plan_review_stages": None,
         "functional_acceptance_status": None,
         "blocking_decisions": [],
@@ -5990,14 +6070,25 @@ def approval_gate_reachable(latest_round_status: str) -> bool:
 def technical_approval_gate_reachable(
     *, latest_round_status: str, protected_path_dirty: bool,
     head_matches_reviewed_implementation_head: bool,
+    pinned_block: bool = False,
 ) -> bool:
     """`AWAITING_TECHNICAL_APPROVAL`'s entry condition: the shared
     reachability rule above, plus "no protected path is dirty" (D3;
     `WORKFLOW_STATE.json`/`WORKFLOW_CONFIG.json` dirtiness never blocks
     this) and current committed content matching
-    `reviewed_implementation_head` exactly."""
+    `reviewed_implementation_head` exactly -- plus, now, D2a's durable
+    `BLOCK`-verdict pin (`WF8c` item (a)): refuses whenever `pinned_block`
+    is `True`, **regardless of what `latest_round_status` says**. The
+    caller computes `pinned_block` via
+    `is_technical_review_block_pinned(work_item, current_bundle_id)`
+    against the just-recomputed current `bundle_id` -- this function stays
+    pure and never reads state/bundles itself. A pinned bundle can never
+    become reachable again by any later edit of the mutable feedback file,
+    including a status-preserving-binding overwrite that changes only
+    `Status:` from `BLOCK` to `REVISE` (`GPT-R55-002`)."""
     return (
-        approval_gate_reachable(latest_round_status)
+        not pinned_block
+        and approval_gate_reachable(latest_round_status)
         and not protected_path_dirty
         and head_matches_reviewed_implementation_head
     )
@@ -6064,6 +6155,7 @@ def validate_user_confirmation(text: str, *, work_item_id: str, stage: str) -> N
 def resolve_approval_basis(
     *, latest_round_status: str, feedback_bundle_id: str | None, current_bundle_id: str,
     user_confirmation: str | None, work_item_id: str, stage: str,
+    pinned_block: bool = False,
 ) -> str:
     """D2's basis decision, run *inside* the approval gate, never as an
     entry precondition (OPUS-R6-004): `EXTERNAL_APPROVE` only when the
@@ -6076,7 +6168,26 @@ def resolve_approval_basis(
     `EXTERNAL_APPROVE` does not additionally prompt for override
     *justification* text (missing-test item 13), but still requires the
     same named-item/stage confirmation already gathered as part of
-    invoking `/approve-review` in the current turn."""
+    invoking `/approve-review` in the current turn.
+
+    `pinned_block` (`D2a`, `WF8c` item (a), `OPUS-R102-002`) is the
+    positive-membership fix for the laundering path a bare `latest_round_status
+    == "BLOCK"` check cannot close on its own: `latest_round_status` is
+    whatever the caller read from `REVIEW_FEEDBACK.md` *this turn*, and that
+    mutable file can be edited from `BLOCK` to `REVISE` after a `BLOCK` was
+    already durably pinned (`record_technical_review_block_pin`) for the
+    exact same `current_bundle_id`, leaving every binding field --
+    including `Reviewed bundle ID:` -- unchanged. The caller computes
+    `pinned_block` via `is_technical_review_block_pinned(work_item,
+    current_bundle_id)`; when `True`, this function refuses exactly like a
+    literal `BLOCK`, regardless of what `latest_round_status` says."""
+    if pinned_block:
+        raise BlockCannotApproveError(
+            f"{work_item_id}/{stage}: a durable BLOCK-verdict pin exists for the "
+            f"current bundle ({current_bundle_id!r}) -- neither EXTERNAL_APPROVE nor "
+            f"USER_OVERRIDE is reachable, regardless of what REVIEW_FEEDBACK.md "
+            f"currently says"
+        )
     if latest_round_status == "BLOCK":
         raise BlockCannotApproveError(
             f"{work_item_id}/{stage}: latest reviewed round status is BLOCK -- "
@@ -6151,6 +6262,60 @@ def validate_approval_record(record: dict, *, stage: str) -> None:
     for guarantee in record.get("waived_guarantees") or []:
         if guarantee not in WAIVED_GUARANTEES:
             raise InvalidApprovalRecordError(f"unknown waived_guarantees entry: {guarantee!r}")
+
+
+# ---------------------------------------------------------------------------
+# D2a: durable BLOCK-verdict pin (`technical_review_block_pins`) -- keyed
+# by bundle_id alone, permanent, disjoint from REVIEW_FEEDBACK.md (mutable
+# workspace state) and from plan_approval/technical_approval (which record
+# an *approval* decision, never a BLOCK verdict). WF8c item (a).
+# ---------------------------------------------------------------------------
+
+
+def is_technical_review_block_pinned(work_item: dict, bundle_id: str) -> bool:
+    """Whether `technical_review_block_pins` contains an entry for the
+    exact `bundle_id` -- D2a's "regardless of what REVIEW_FEEDBACK.md
+    currently says" refusal predicate, computed once so both
+    `technical_approval_gate_reachable` and `resolve_approval_basis` can
+    consult the identical fact."""
+    pins = work_item.get("technical_review_block_pins") or []
+    return any(pin.get("bundle_id") == bundle_id for pin in pins)
+
+
+def record_technical_review_block_pin(
+    state: dict, work_item_id: str, *, bundle_id: str, review_content_id: str, now: str,
+) -> dict:
+    """D2a's writer: durably pins a `BLOCK` verdict against the exact
+    `bundle_id` it was observed for, once and permanently. Called by both
+    `/apply-implementation-review` (the ordinary first reader of freshly
+    placed feedback) and `/approve-review implementation`'s own gate
+    evaluation (defense in depth), before either takes any other action --
+    a small `WORKFLOW_STATE.json`-only commit, the same shape every other
+    small durability write in this design already uses.
+
+    Idempotent: a pin already present for the exact `bundle_id` is never
+    duplicated -- this returns the identical `state` object, unchanged, so
+    a caller can compare the result against what it passed in (`is`/`==`)
+    to decide that no new commit is needed for a repeat observation of an
+    already-pinned `BLOCK`. What this does not claim: a pin is written
+    only once some command actually parses the `BLOCK` feedback -- a
+    feedback file edited from `BLOCK` to `REVISE` before any workflow
+    command ever reads it leaves no pin, identically to the file having
+    been written as `REVISE` from the start."""
+    work_item = state["work_items"][work_item_id]
+    if is_technical_review_block_pinned(work_item, bundle_id):
+        return state
+    new_state = copy.deepcopy(state)
+    new_work_item = new_state["work_items"][work_item_id]
+    new_work_item.setdefault("technical_review_block_pins", [])
+    new_work_item["technical_review_block_pins"].append({
+        "bundle_id": bundle_id,
+        "review_content_id": review_content_id,
+        "recorded_at": now,
+    })
+    new_work_item["state_revision"] = new_work_item.get("state_revision", 1) + 1
+    new_work_item["last_transition"] = now
+    return new_state
 
 
 def apply_plan_approval(state: dict, work_item_id: str, record: dict, now: str) -> dict:
@@ -7410,6 +7575,36 @@ def _validate_plan_review_stages(work_item: dict) -> None:
             )
 
 
+def _validate_technical_review_block_pins(work_item: dict) -> None:
+    """D2a's shape check: `technical_review_block_pins`, if present, is a
+    list of `{bundle_id, review_content_id, recorded_at}` objects with no
+    extra/missing keys and no duplicate `bundle_id` (pins are keyed by
+    `bundle_id` alone, permanently -- `record_technical_review_block_pin`
+    is idempotent by construction and never produces a duplicate itself)."""
+    pins = work_item.get("technical_review_block_pins")
+    if pins is None:
+        return
+    if not isinstance(pins, list):
+        raise CorruptJsonError(
+            f"work_items[{work_item['work_item_id']!r}].technical_review_block_pins must be a list"
+        )
+    seen: set[str] = set()
+    for pin in pins:
+        if not isinstance(pin, dict) or set(pin) != {"bundle_id", "review_content_id", "recorded_at"}:
+            raise CorruptJsonError(
+                f"work_items[{work_item['work_item_id']!r}].technical_review_block_pins entry "
+                f"has unexpected shape: {pin!r}"
+            )
+        bundle_id = pin["bundle_id"]
+        if bundle_id in seen:
+            raise DuplicateTechnicalReviewBlockPinError(
+                f"work_items[{work_item['work_item_id']!r}].technical_review_block_pins has "
+                f"more than one entry for bundle_id {bundle_id!r} -- pins are keyed by "
+                f"bundle_id alone"
+            )
+        seen.add(bundle_id)
+
+
 def _validate_work_item(work_item_id: str, work_item: dict) -> None:
     if work_item.get("work_item_id") != work_item_id:
         raise WorkItemIdKeyMismatchError(
@@ -7437,6 +7632,7 @@ def _validate_work_item(work_item_id: str, work_item: dict) -> None:
         )
 
     _validate_plan_review_stages(work_item)
+    _validate_technical_review_block_pins(work_item)
 
 
 def validate_state(state: dict, *, registry: dict | None = None, repo_root: Path | None = None) -> None:

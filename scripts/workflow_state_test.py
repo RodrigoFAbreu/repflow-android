@@ -2182,6 +2182,24 @@ class TestApprovalGateReachability(unittest.TestCase):
             head_matches_reviewed_implementation_head=True,
         ))
 
+    def test_technical_gate_pinned_block_refuses_even_when_otherwise_reachable(self):
+        """D2a (WF8c item (a)): a durable pin refuses the gate regardless
+        of what latest_round_status/protected_path_dirty/head-matching say
+        -- every other predicate here is deliberately set to its own
+        "reachable" value to prove pinned_block alone is decisive."""
+        self.assertFalse(ws.technical_approval_gate_reachable(
+            latest_round_status="APPROVE", protected_path_dirty=False,
+            head_matches_reviewed_implementation_head=True, pinned_block=True,
+        ))
+
+    def test_technical_gate_pinned_block_defaults_false(self):
+        """Backward compatible: omitting pinned_block behaves exactly as
+        before D2a existed."""
+        self.assertTrue(ws.technical_approval_gate_reachable(
+            latest_round_status="REVISE", protected_path_dirty=False,
+            head_matches_reviewed_implementation_head=True,
+        ))
+
     def test_v1_plan_gate_ignores_plan_review_stages(self):
         self.assertTrue(ws.plan_approval_gate_reachable(
             latest_round_status="APPROVE", governing_workflow_version="1",
@@ -2309,6 +2327,213 @@ class TestApprovalBasisResolution(unittest.TestCase):
                 latest_round_status="BLOCK", feedback_bundle_id="b1", current_bundle_id="b1",
                 user_confirmation="override wi plan", work_item_id="wi", stage="plan",
             )
+
+    def test_pinned_block_refuses_a_stale_bundle_revise_laundering_the_current_pin(self):
+        """D2a (WF8c item (a), OPUS-R102-002): the exact laundering path the
+        review reproduced -- a stale-bundle REVISE round (feedback_bundle_id
+        disagrees with current_bundle_id, so latest_round_status alone
+        would only ever demand override text, never refuse outright) must
+        still refuse outright when a durable pin exists for the *current*
+        bundle_id, exactly as if latest_round_status were itself BLOCK."""
+        with self.assertRaises(ws.BlockCannotApproveError):
+            ws.resolve_approval_basis(
+                latest_round_status="REVISE", feedback_bundle_id="STALE-BUNDLE-FROM-AN-OLD-ROUND",
+                current_bundle_id="FRESH-BUNDLE-ID", user_confirmation="override wi implementation",
+                work_item_id="wi", stage="implementation", pinned_block=True,
+            )
+
+    def test_pinned_block_refuses_even_with_a_matching_approve(self):
+        """A pin outranks even a fresh, bundle-matching APPROVE round --
+        once pinned, a bundle_id can never become override-eligible again
+        by any means, only by a genuinely new bundle_id."""
+        with self.assertRaises(ws.BlockCannotApproveError):
+            ws.resolve_approval_basis(
+                latest_round_status="APPROVE", feedback_bundle_id="b1", current_bundle_id="b1",
+                user_confirmation="approve wi implementation", work_item_id="wi", stage="implementation",
+                pinned_block=True,
+            )
+
+    def test_pinned_block_defaults_false(self):
+        """Backward compatible: omitting pinned_block behaves exactly as
+        before D2a existed."""
+        basis = ws.resolve_approval_basis(
+            latest_round_status="APPROVE", feedback_bundle_id="b1", current_bundle_id="b1",
+            user_confirmation="approve wi plan", work_item_id="wi", stage="plan",
+        )
+        self.assertEqual(basis, "EXTERNAL_APPROVE")
+
+
+class TestTechnicalReviewBlockPins(unittest.TestCase):
+    """D2a, WF8c item (a): the durable, append-only, permanent
+    technical_review_block_pins ledger -- writer idempotency, the
+    positive-membership predicate, shape validation, and the
+    state_transaction-wired monotonicity enforcement."""
+
+    def test_writer_appends_a_pin_with_the_expected_shape(self):
+        state = _base_state(wi=_base_work_item())
+        new_state = ws.record_technical_review_block_pin(
+            state, "wi", bundle_id="b1", review_content_id="c1", now="t1",
+        )
+        pins = new_state["work_items"]["wi"]["technical_review_block_pins"]
+        self.assertEqual(pins, [{"bundle_id": "b1", "review_content_id": "c1", "recorded_at": "t1"}])
+        ws.validate_state(new_state)  # must not raise
+
+    def test_writer_does_not_mutate_the_input_state(self):
+        state = _base_state(wi=_base_work_item())
+        ws.record_technical_review_block_pin(state, "wi", bundle_id="b1", review_content_id="c1", now="t1")
+        self.assertNotIn("technical_review_block_pins", state["work_items"]["wi"])
+
+    def test_writer_bumps_state_revision_and_last_transition(self):
+        wi = _base_work_item(state_revision=4, last_transition="t0")
+        state = _base_state(wi=wi)
+        new_state = ws.record_technical_review_block_pin(
+            state, "wi", bundle_id="b1", review_content_id="c1", now="t1",
+        )
+        self.assertEqual(new_state["work_items"]["wi"]["state_revision"], 5)
+        self.assertEqual(new_state["work_items"]["wi"]["last_transition"], "t1")
+
+    def test_writer_is_idempotent_on_repeat_observation(self):
+        """A pin already present for the exact bundle_id is never
+        duplicated -- the writer returns the identical state object so a
+        caller can skip committing on a repeat observation."""
+        state = _base_state(wi=_base_work_item())
+        once = ws.record_technical_review_block_pin(state, "wi", bundle_id="b1", review_content_id="c1", now="t1")
+        twice = ws.record_technical_review_block_pin(once, "wi", bundle_id="b1", review_content_id="c1", now="t2")
+        self.assertIs(twice, once)
+        self.assertEqual(len(twice["work_items"]["wi"]["technical_review_block_pins"]), 1)
+
+    def test_writer_records_a_second_distinct_bundle_as_a_second_pin(self):
+        state = _base_state(wi=_base_work_item())
+        once = ws.record_technical_review_block_pin(state, "wi", bundle_id="b1", review_content_id="c1", now="t1")
+        twice = ws.record_technical_review_block_pin(once, "wi", bundle_id="b2", review_content_id="c2", now="t2")
+        self.assertEqual(
+            [p["bundle_id"] for p in twice["work_items"]["wi"]["technical_review_block_pins"]], ["b1", "b2"],
+        )
+
+    def test_is_pinned_predicate(self):
+        wi = _base_work_item(technical_review_block_pins=[
+            {"bundle_id": "b1", "review_content_id": "c1", "recorded_at": "t1"},
+        ])
+        self.assertTrue(ws.is_technical_review_block_pinned(wi, "b1"))
+        self.assertFalse(ws.is_technical_review_block_pinned(wi, "b2"))
+
+    def test_is_pinned_predicate_absent_field(self):
+        self.assertFalse(ws.is_technical_review_block_pinned(_base_work_item(), "b1"))
+
+    def test_validate_state_rejects_non_list(self):
+        wi = _base_work_item(technical_review_block_pins="not-a-list")
+        with self.assertRaises(ws.CorruptJsonError):
+            ws.validate_state(_base_state(wi=wi))
+
+    def test_validate_state_rejects_malformed_entry_shape(self):
+        wi = _base_work_item(technical_review_block_pins=[{"bundle_id": "b1"}])
+        with self.assertRaises(ws.CorruptJsonError):
+            ws.validate_state(_base_state(wi=wi))
+
+    def test_validate_state_rejects_duplicate_bundle_id(self):
+        wi = _base_work_item(technical_review_block_pins=[
+            {"bundle_id": "b1", "review_content_id": "c1", "recorded_at": "t1"},
+            {"bundle_id": "b1", "review_content_id": "c2", "recorded_at": "t2"},
+        ])
+        with self.assertRaises(ws.DuplicateTechnicalReviewBlockPinError):
+            ws.validate_state(_base_state(wi=wi))
+
+    def test_validate_state_accepts_a_well_formed_ledger(self):
+        wi = _base_work_item(technical_review_block_pins=[
+            {"bundle_id": "b1", "review_content_id": "c1", "recorded_at": "t1"},
+            {"bundle_id": "b2", "review_content_id": "c2", "recorded_at": "t2"},
+        ])
+        ws.validate_state(_base_state(wi=wi))  # must not raise
+
+    def test_monotonicity_allows_appending_exactly_one_new_pin(self):
+        prev = _base_state(wi=_base_work_item(technical_review_block_pins=[
+            {"bundle_id": "b1", "review_content_id": "c1", "recorded_at": "t1"},
+        ]))
+        new = _base_state(wi=_base_work_item(technical_review_block_pins=[
+            {"bundle_id": "b1", "review_content_id": "c1", "recorded_at": "t1"},
+            {"bundle_id": "b2", "review_content_id": "c2", "recorded_at": "t2"},
+        ]))
+        ws._assert_technical_review_block_pins_monotonic(prev, new)  # must not raise
+
+    def test_monotonicity_allows_a_no_op_write(self):
+        state = _base_state(wi=_base_work_item(technical_review_block_pins=[
+            {"bundle_id": "b1", "review_content_id": "c1", "recorded_at": "t1"},
+        ]))
+        ws._assert_technical_review_block_pins_monotonic(state, state)  # must not raise
+
+    def test_monotonicity_rejects_removing_an_existing_pin(self):
+        prev = _base_state(wi=_base_work_item(technical_review_block_pins=[
+            {"bundle_id": "b1", "review_content_id": "c1", "recorded_at": "t1"},
+        ]))
+        new = _base_state(wi=_base_work_item(technical_review_block_pins=[]))
+        with self.assertRaises(ws.PinLedgerMonotonicityError):
+            ws._assert_technical_review_block_pins_monotonic(prev, new)
+
+    def test_monotonicity_rejects_mutating_an_existing_pin(self):
+        """Closes GPT-R56-004's gap: a status-preserving-binding-preserving
+        edit that changes only recorded_at (or any other field) of an
+        already-committed pin must be rejected just as hard as a removal."""
+        prev = _base_state(wi=_base_work_item(technical_review_block_pins=[
+            {"bundle_id": "b1", "review_content_id": "c1", "recorded_at": "t1"},
+        ]))
+        new = _base_state(wi=_base_work_item(technical_review_block_pins=[
+            {"bundle_id": "b1", "review_content_id": "c1", "recorded_at": "TAMPERED"},
+        ]))
+        with self.assertRaises(ws.PinLedgerMonotonicityError):
+            ws._assert_technical_review_block_pins_monotonic(prev, new)
+
+    def test_monotonicity_rejects_appending_more_than_one_pin_in_one_write(self):
+        prev = _base_state(wi=_base_work_item(technical_review_block_pins=[]))
+        new = _base_state(wi=_base_work_item(technical_review_block_pins=[
+            {"bundle_id": "b1", "review_content_id": "c1", "recorded_at": "t1"},
+            {"bundle_id": "b2", "review_content_id": "c2", "recorded_at": "t2"},
+        ]))
+        with self.assertRaises(ws.PinLedgerMonotonicityError):
+            ws._assert_technical_review_block_pins_monotonic(prev, new)
+
+    def test_monotonicity_ignores_work_items_with_no_prior_pins(self):
+        prev = _base_state(wi=_base_work_item())
+        new = _base_state(wi=_base_work_item(technical_review_block_pins=[
+            {"bundle_id": "b1", "review_content_id": "c1", "recorded_at": "t1"},
+        ]))
+        ws._assert_technical_review_block_pins_monotonic(prev, new)  # must not raise
+
+    def test_state_transaction_end_to_end_enforces_monotonicity(self):
+        """Wired into state_transaction itself (D1's sole write choke
+        point), not only into record_technical_review_block_pin's own call
+        site -- a hand-written mutator that drops an existing pin is
+        refused here too."""
+        with ScratchRepo() as repo:
+            state_path = repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json"
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            wi = _base_work_item(technical_review_block_pins=[
+                {"bundle_id": "b1", "review_content_id": "c1", "recorded_at": "t1"},
+            ])
+            state_path.write_text(json.dumps(_base_state(wi=wi)))
+
+            def drop_pin(state):
+                new_state = copy.deepcopy(state)
+                new_state["work_items"]["wi"]["technical_review_block_pins"] = []
+                return new_state
+
+            with self.assertRaises(ws.PinLedgerMonotonicityError):
+                ws.state_transaction(repo.root, drop_pin, path=Path("docs/ai-workflow/WORKFLOW_STATE.json"))
+            # Refused before publication -- the on-disk file still carries the original pin.
+            on_disk = json.loads(state_path.read_text())
+            self.assertEqual(len(on_disk["work_items"]["wi"]["technical_review_block_pins"]), 1)
+
+    def test_state_transaction_end_to_end_allows_the_writer_through(self):
+        with ScratchRepo() as repo:
+            state_path = repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json"
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state_path.write_text(json.dumps(_base_state(wi=_base_work_item())))
+            mutator = lambda state: ws.record_technical_review_block_pin(
+                state, "wi", bundle_id="b1", review_content_id="c1", now="t1",
+            )
+            result = ws.state_transaction(repo.root, mutator, path=Path("docs/ai-workflow/WORKFLOW_STATE.json"))
+            self.assertEqual(len(result["work_items"]["wi"]["technical_review_block_pins"]), 1)
+            on_disk = json.loads(state_path.read_text())
+            self.assertEqual(len(on_disk["work_items"]["wi"]["technical_review_block_pins"]), 1)
 
 
 class TestApprovalRecordShape(unittest.TestCase):

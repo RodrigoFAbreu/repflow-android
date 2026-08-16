@@ -473,22 +473,20 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # content change, not a regression.
     "milestone-plan.md": "72f8f5af38ee5b546f85f0e36b2a5034f7b87094b38cbd728658754f56572bf9",
     "milestone-implement.md": "eae3dbf2a8f91899bf9020335c4a2209af271b72bca7c74d988a3fa735e5f206",
-    "approve-review.md": "474ffff548f73ff50f74563432c278646eb5e5a6de463c659e054d2b21cb9e75",
+    # approve-review.md/apply-implementation-review.md (D2a, WF8c item (a),
+    # OPUS-R102-002): the durable BLOCK-verdict pin writer/gate wiring --
+    # intentional content change. This also folds in and resolves the
+    # apply-implementation-review.md drift previously disclosed here (its
+    # content had drifted from an earlier recorded hash before this
+    # checkpoint's own work began, for reasons unrelated to D2a; that gap
+    # is closed by this same edit rather than carried forward).
+    "approve-review.md": "02dcd1105f35a9996bc495041d54a5e3c8f759c6b6bb1ea3b49ffbd7aa582158",
     "accept-milestone.md": "10594c675de02b9a90e57963796ac75dee08f33a0a2a78b7d624346f0a3ab6d9",
     "prepare-functional-review.md": "5b8026a4bd0293c7b3d1c94ef9814357ee815ce8b9b6b53b0f545917c1eb886d",
     # apply-plan-review.md/bootstrap-workflow-v2.md (D-Plan-Revision-Publication,
     # WFR-65): intentional content change, publish_plan_revision wiring.
     "apply-plan-review.md": "9b2db7b030c29be3ed466c57842b71e51e78847726bf09a3dd938db085384002",
-    # apply-implementation-review.md: left UNCHANGED and still failing here,
-    # deliberately -- this file's content drifted from this recorded hash
-    # before this revision's own work began (confirmed via `git stash`: the
-    # mismatch is present with none of this revision's edits applied), and
-    # this revision's scope is D-Plan-Revision-Publication/WFR-65 only, not
-    # the unrelated R101-002 residue that produced this drift. Same
-    # disclosure discipline as the WFR-row-count failure in
-    # TestRequirementsMappingTableConformance below: named, not silently
-    # fixed by an unrelated change.
-    "apply-implementation-review.md": "bc1402c4b66b1e57acf043d98e9b534feca011b6e00dad142d378da7c97f5bb6",
+    "apply-implementation-review.md": "08ec458c00428541a517aef0cc2b5665dbf8b3468375ad077e44cefb5f153dbf",
     "review-plan.md": "2df001613d95be37253ec4969b522a123a0705b9be1ad57c59ef74c0c35d00f2",
     "record-manual-plan-review.md": "1382be84791ea61d210bec7f13b0043dfc3e841f7e8eed0bef697aa719414f75",
     # bootstrap-workflow-v2.md (WF8c scope clauses (l)/(p)/(q), GPT-R108-002/

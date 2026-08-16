@@ -63,10 +63,31 @@ actually load-bearing control for the Skill exposure path, not mechanism
    missing/mismatched `Reviewed bundle ID:`/`Reviewed base commit:`/
    `Work item:` fields are not fatal to reading the file (an
    `EXTERNAL_APPROVE` basis simply becomes unreachable, per step 3), but
-   report the mismatch naming both values (`WFR-03`). Call
+   report the mismatch naming both values (`WFR-03`).
+   **Implementation stage only — durable `BLOCK`-verdict pin, defense in
+   depth** (`D2a`, `WF8c` item (a)): recompute the current implementation-
+   stage `bundle_id` now (the same recomputation step 2 repeats and
+   displays; reuse this value through steps 1-3 of this invocation rather
+   than recomputing it a third time). If the feedback's `status` is
+   exactly `BLOCK`: call `workflow_state.state_transaction(repo_root,
+   lambda state: workflow_state.record_technical_review_block_pin(state,
+   work_item_id, bundle_id=<the current bundle_id>,
+   review_content_id=<the current implementation-stage review_content_id>,
+   now=<now>))` and persist the returned state — idempotent, exactly as
+   `/apply-implementation-review` step 1's own writer call, present here
+   only as a second, independent recording path in case that command's
+   own write was never reached. Then compute `pinned =
+   workflow_state.is_technical_review_block_pinned(work_item, <the current
+   bundle_id>)` (re-reading the work item after the call above, so a pin
+   just recorded is already reflected) and pass it as `pinned_block` to
+   both `technical_approval_gate_reachable` below and `resolve_approval_basis`
+   in step 3. Plan stage: `pinned_block` is never computed or passed — D2a
+   is an implementation-stage-only mechanism.
+   Call
    `workflow_state.approval_gate_reachable(status)` for the plan stage on a
    `"1"` item (`plan_approval_gate_reachable(...)` on a `"2.1"` item), or
-   `workflow_state.technical_approval_gate_reachable(...)` for the
+   `workflow_state.technical_approval_gate_reachable(...,
+   pinned_block=pinned)` for the
    implementation stage. The latter's `protected_path_dirty` argument is
    `workflow_state.any_protected_path_dirty(...)` (`WF4a-iii`), called with
    the implementation-stage classification
@@ -124,7 +145,12 @@ actually load-bearing control for the Skill exposure path, not mechanism
    current bundle_id, this turn's literal `user_confirmation` text (if the
    user has not supplied it this turn, ask for it naming the exact
    `work_item_id` and stage, then stop and wait — never guess it),
-   `work_item_id`, and `stage`. `BlockCannotApproveError`/
+   `work_item_id`, `stage`, and — implementation stage only — step 1's
+   `pinned_block` (`D2a`, `WF8c` item (a)): the same positive-membership
+   fact already passed to `technical_approval_gate_reachable`, so a
+   pinned bundle refuses through this call too even if some other path
+   ever reached step 3 without step 1's own gate check. Plan stage: never
+   passed (D2a is implementation-stage-only). `BlockCannotApproveError`/
    `UserConfirmationRejectedError` stop the command; report the concrete
    reason.
 4. **Build the record**: `workflow_state.build_approval_record(...)`, with

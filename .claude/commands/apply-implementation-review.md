@@ -33,6 +33,28 @@ no `docs/ai-workflow/WORKFLOW_STATE.json` entry.
    `assert_feedback_matches_bundle` against the current recomputed
    `bundle_id`/`base_commit`/`work_item_id`, `WFR-03`) — stale or
    mismatched feedback is a reason to stop and say so, not to apply.
+   **Durable `BLOCK`-verdict pin** (`D2a`, `WF8c` item (a)): once the
+   feedback is confirmed current, bundle-matching, and parse-valid, and
+   before taking any other action, check its `status` field. If it is
+   exactly `BLOCK` and this work item has a
+   `docs/ai-workflow/WORKFLOW_STATE.json` entry: call
+   `workflow_state.state_transaction(repo_root, lambda state:
+   workflow_state.record_technical_review_block_pin(state, work_item_id,
+   bundle_id=<the just-recomputed current bundle_id>,
+   review_content_id=<the just-recomputed current implementation-stage
+   review_content_id>, now=<now>))` and persist the returned state. This
+   is idempotent — a pin already present for the exact `bundle_id` is
+   returned unchanged (compare the result to the state read immediately
+   before this call; if identical, no new commit is needed for this
+   repeat observation). A genuine new pin is committed alone (stage
+   exactly `docs/ai-workflow/WORKFLOW_STATE.json`, never a broader `git
+   add`), carrying no special trailer beyond the ordinary
+   `Workflow-Work-Item: <work_item_id>` — the same small,
+   `WORKFLOW_STATE.json`-only durability shape every other small write in
+   this design uses. This step never blocks the remediation steps below —
+   pinning durably records the `BLOCK` observation so it can never later
+   become override-eligible by an edit to the mutable feedback file; it
+   does not change how Blocking/Important findings are triaged.
 2. Reproduce and validate every Blocking and Important finding against the
    actual code/tests before changing anything. Do not apply a finding you
    cannot reproduce or verify — reject it with evidence instead.
