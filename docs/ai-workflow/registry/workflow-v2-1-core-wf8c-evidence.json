@@ -283,6 +283,61 @@
       "item": 213,
       "evidence": "workflow_state_test.TestResolveScopedRemediationRound.test_conflicting_duplicate_wrong_evidence_commit",
       "note": "resolve_scoped_remediation_round's exact-replay comparison validates functional_checklist_evidence_commit as one of the eight canonical fields -- a disagreement here is refused as ConflictingDuplicate, not reported ExactReplay"
+    },
+    {
+      "item": 221,
+      "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_second_unexpected_descendant_with_same_trailer_value_refuses",
+      "note": "Two distinct commits both carrying a Workflow-Bundle-Generation-Record trailer for the identical (work_item_id, implementation_revision) pair refuse as ambiguous, never silently picking the nearer one -- exact match to the item's own claim"
+    },
+    {
+      "item": 216,
+      "evidence": "workflow_state_test.TestImplementationProvenanceInterval",
+      "note": "The provenance-interval gate's accept/refuse distinction from the plain SHA-equality rule it replaces: the class's own accept-case tests (e.g. test_exact_reviewed_head_zero_gap_is_reachable, test_one_excluded_commit_between_p_and_t_is_reachable) prove reviewed_implementation_head != live HEAD is accepted whenever the discovered provenance commit T exists; test_wrong_trailer_key_is_never_discovered_and_refuses proves the same inequality refuses when no such commit is discoverable at all"
+    },
+    {
+      "item": 242,
+      "evidence": "workflow_state_test.TestImplementationProvenanceRecoveryEndToEnd.test_single_recovery_then_full_interval_validates",
+      "note": "WFR-62 recovery command (WF8c clause (b)): P -> S -> U -> S2 real commit-graph shape, S2 created as first-parent child of U carrying the unchanged trailer plus Workflow-Supersedes, interval reachable/valid afterward, implementation_revision unchanged throughout"
+    },
+    {
+      "item": 243,
+      "evidence": "workflow_state_test.TestVerifyImplementationProvenanceRecovery.test_content_differs_not_applicable",
+      "note": "Recovery refuses (ImplementationProvenanceRecoveryNotApplicableError) outright when the candidate content genuinely differs from reviewed_implementation_head's -- a genuinely new round is never treated as recoverable staleness"
+    },
+    {
+      "item": 247,
+      "evidence": "workflow_state_test.TestVerifyImplementationProvenanceRecovery.test_protected_commit_in_interval_propagates_underlying_error",
+      "note": "GPT-R46-002 scenario A regression guard, exact reproduction: a protected-path edit followed by a byte-for-byte revert leaves endpoint content equal, but the recovery precondition still refuses (ProtectedPathInProvenanceIntervalError), naming the protected-path commit found mid-interval"
+    },
+    {
+      "item": 252,
+      "evidence": "workflow_state_test.TestApplyImplementationProvenanceRecovery.test_bumps_state_revision_and_last_transition_only",
+      "note": "apply_implementation_provenance_recovery's own contract, directly asserted: phase/reviewed_implementation_head/implementation_revision confirmed byte-identical before and after, state_revision advanced by exactly one -- the operation's 'no round-identity field changes' guarantee"
+    },
+    {
+      "item": 254,
+      "evidence": "workflow_state_test.TestSameContentRepublicationEndToEnd.test_malformed_field_diff_recovered_commit_refuses",
+      "note": "A recovery commit S2 that touches a WORKFLOW_STATE.json field outside phase/state_revision/last_transition (reviewed_implementation_head, illegally changed) refuses the terminal-commit role-specific check, naming the offending commit and field"
+    },
+    {
+      "item": 262,
+      "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_exact_reviewed_head_zero_gap_is_reachable",
+      "note": "An ordinary generation-record commit S carrying exactly the canonical two-trailer set is discovered by the scoped lookup and validates as the terminal member of a one-commit interval (same regression-guard test already bound to item 246)"
+    },
+    {
+      "item": 268,
+      "evidence": "workflow_state_test.TestImplementationProvenanceRecoveryEndToEnd.test_second_sequential_recovery_chain_validates",
+      "note": "Two independent sequential recoveries (S -> S2, then S2 -> S3) both preserve implementation_revision unchanged; the resulting five-commit first-parent graph P -> S -> U1 -> S2 -> U2 -> S3 is produced and independently validated by verify_implementation_provenance_interval, with S3 the confirmed current terminus"
+    },
+    {
+      "item": 271,
+      "evidence": "workflow_state_test.TestSameContentRepublicationEndToEnd.test_orphan_recovered_role_commit_with_no_predecessor_refuses",
+      "note": "A Workflow-Supersedes trailer naming a plausible-looking target (P) that is never itself a generation-record commit -- outside the matched set for this (work_item_id, implementation_revision) pair -- is refused as malformed provenance (MalformedProvenanceSupersessionChainError), never silently accepted"
+    },
+    {
+      "item": 280,
+      "evidence": "workflow_state_test.TestImplementationProvenanceRecoveryEndToEnd.test_second_sequential_recovery_chain_validates",
+      "note": "The canonical two-recovery chain P -> S -> U1 -> S2 -> U2 -> S3 succeeds end to end -- S and S2 both pass their own role-specific generation-record validation (not merely path classification) inside the same successful verify_implementation_provenance_interval call this test already asserts for item 268"
     }
   ]
 }
