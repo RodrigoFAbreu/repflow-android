@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "work_item_id": "workflow-v2-1-core",
+  "_comment": "WFR-68's companion evidence-binding artifact (WFO-LEDGER-COVERAGE property (ii)): binds a reconciliation-table item to the exact dotted unittest test id that discharges it, read by scripts/workflow_state.py's _reconciliation_evidence_by_item() alongside <work_item_id>-ledger-status.json's own per-entry evidence field. Populated incrementally, WF8c session by session (session_target: 'multiple sessions, deliberately not 1') -- this is the first evidence-backfill increment, covering items with an unambiguous, single-purpose test already naming that item number in its own docstring. Every entry below was independently verified (python3 -m unittest <evidence>) to resolve and pass before being recorded here. Items not yet listed here remain unresolved by _pre_flight_wfo_ledger_coverage until a later session adds their evidence -- expected and correct for a checkpoint whose own session_target is multiple sessions.",
+  "generated_at_commit": "e3be7321a7ca06a8cda55f9fa667551dc1001a0f",
+  "entries": [
+    {
+      "item": 166,
+      "evidence": "workflow_integration_test.TestRequirementsMappingTableConformance.test_every_wfr_row_description_matches_json_exactly",
+      "note": "Requirements-table row-count conformance, now derived rather than a literal (WF8c clause (f))"
+    },
+    {
+      "item": 231,
+      "evidence": "workflow_state_test.TestRegistryReadBoundToCurrentPlanApproval",
+      "note": "Protected-document approval freshness for a non-registry plan-stage path (WF8c clause (i)), dirty half"
+    },
+    {
+      "item": 232,
+      "evidence": "workflow_state_test.TestRegistryReadBoundToCurrentPlanApproval",
+      "note": "Protected-document approval freshness for a non-registry plan-stage path (WF8c clause (i)), clean-committed-but-unapproved half"
+    },
+    {
+      "item": 267,
+      "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_forbidden_mutation_alongside_generation_record_refuses",
+      "note": "Cross-work-item forbidden-mutation check in the provenance interval (WF8c clause (d))"
+    },
+    {
+      "item": 318,
+      "evidence": "workflow_fingerprint_generalization_test.TestPrepareAiReviewShImplementationStageHeadGuard.test_interrupted_archive_write_leaves_previous_archive_intact",
+      "note": "Archive generation is temp-file-plus-rename, interruption-safe (WF8c clause (j))"
+    },
+    {
+      "item": 339,
+      "evidence": "workflow_fingerprint_test.TestGenerationDiagnosticMetadata.test_require_metadata_default_false_matches_pre_existing_behavior",
+      "note": "assert_local_generation_matches require_metadata default False (WF8c clause (k))"
+    },
+    {
+      "item": 340,
+      "evidence": "workflow_fingerprint_test.TestGenerationDiagnosticMetadata.test_current_worktree_root_and_head_ignores_worktree_identity_json",
+      "note": "current_worktree_root_and_head reads live Git, not WORKTREE_IDENTITY.json (WF8c clause (k))"
+    },
+    {
+      "item": 342,
+      "evidence": "workflow_integration_test.TestAssertLocalGenerationMatchesCallSiteConformance",
+      "note": "assert_local_generation_matches two-live-caller conformance (WF8c clause (k))"
+    },
+    {
+      "item": 343,
+      "evidence": "workflow_integration_test.TestGenerationDiagnosticMetadataCallerWordingConformance",
+      "note": "Caller-facing documentation names both live callers (WF8c clause (k))"
+    },
+    {
+      "item": 344,
+      "evidence": "workflow_fingerprint_demo_test.TestImplementationStageAgainstRealRepository.test_review_protocol_md_is_a_real_protected_path_not_excluded",
+      "note": "REVIEW_PROTOCOL.md is an implementation-stage protected path, not excluded (WF8c clause (k))"
+    },
+    {
+      "item": 349,
+      "evidence": "workflow_integration_test.TestPlanApprovalFailureAtomicityTransaction",
+      "note": "WFR-63 plan-approval failure-atomicity transaction: durable journal (WF8c clause (g), part 1)"
+    },
+    {
+      "item": 350,
+      "evidence": "workflow_integration_test.TestPlanApprovalFailureAtomicityTransaction",
+      "note": "WFR-63 plan-approval failure-atomicity transaction: outcome classifier + index-only rollback (WF8c clause (g), part 1)"
+    },
+    {
+      "item": 354,
+      "evidence": "workflow_state_completion_obligations_test.TestStateLock",
+      "note": "state_lock/state_transaction primitive, real concurrent-process serialization"
+    },
+    {
+      "item": 355,
+      "evidence": "workflow_state_demo_test.TestCheckpointReachabilityConformanceLive.test_holds_against_the_live_repository",
+      "note": "Checkpoint-reachability conformance, run against this repository's real live content (WF8c clause (m), part 2)"
+    },
+    {
+      "item": 356,
+      "evidence": "workflow_state_completion_obligations_test.TestCompleteWorkItemObligationGate",
+      "note": "complete_work_item's UnsatisfiedCompletionObligationError gate"
+    },
+    {
+      "item": 357,
+      "evidence": "workflow_state_completion_obligations_test.TestDiscoverStateWriters",
+      "note": "discover_state_writers: writer/publisher/non-writer classification"
+    },
+    {
+      "item": 358,
+      "evidence": "workflow_state_completion_obligations_test.TestResolveCompletionObligationsPipeline",
+      "note": "resolve_completion_obligations end-to-end pipeline"
+    },
+    {
+      "item": 360,
+      "evidence": "workflow_state_completion_obligations_test.TestResolveCompletionObligationsPipeline",
+      "note": "resolve_completion_obligations end-to-end pipeline"
+    },
+    {
+      "item": 361,
+      "evidence": "workflow_state_completion_obligations_test.TestIsolatedExecution",
+      "note": "Verifier isolated execution: -I mode, PYTHONPATH ignored, scratch-tree-only"
+    },
+    {
+      "item": 368,
+      "evidence": "workflow_state_test.TestRealProcessConcurrentTakeover",
+      "note": "Real-OS-process concurrent-takeover arm (WF8c clause (e))"
+    },
+    {
+      "item": 371,
+      "evidence": "workflow_state_test.TestPublishPlanRevision",
+      "note": "publish_plan_revision: v1/2.1 governed publication, idempotent retry"
+    },
+    {
+      "item": 376,
+      "evidence": "workflow_state_test.TestReconciliationTableParsing.test_resolve_owner_picks_leftmost_occurring_checkpoint_not_a_fixed_preference",
+      "note": "Reconciliation-table owner resolution picks the leftmost-occurring checkpoint"
+    }
+  ]
+}
