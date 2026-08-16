@@ -11,8 +11,8 @@
       "registry_path": "docs/ai-workflow/registry/workflow-v2-1-core-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json",
       "governing_workflow_version": "1",
-      "phase": "SELF_REVIEWING_IMPLEMENTATION",
-      "plan_revision": 80,
+      "phase": "IMPLEMENTING",
+      "plan_revision": 90,
       "implementation_revision": 10,
       "functional_review_round": null,
       "base_commit": "162154d3e5e10eb65e109833acae4b4fb01fc5d6",
@@ -93,8 +93,8 @@
       "plan_approval": {
         "status": "CURRENT",
         "basis": "EXTERNAL_APPROVE",
-        "reviewed_bundle_id": "53c9d2da3a6b6d23d43f92c6b4d77813383b1b5ea661874c541fd33b8ad4a904",
-        "approved_review_content_id": "841057c6a5ebf7e51ac8c12587e494fdcf10549a49aa2b6c89e13e2a0178b51e",
+        "reviewed_bundle_id": "325006bce01ba509483cee87eb429bf5c51255d3ecf871251b3a005aec9ec4ed",
+        "approved_review_content_id": "a5310ef3834f6c7cdc602a1b865786594d1c9311416a5a6b80b2718ba8ca2395",
         "review_content_manifest": [
           {
             "path": "docs/TECHNICAL_DECISIONS.md",
@@ -112,26 +112,26 @@
             "path": "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
             "exists": true,
             "mode": "100644",
-            "blob": "f8674e26b819caef049d2977a33b5f1f86d56ed1"
+            "blob": "c870c653ea1ca8f89564208ccf49353e69cd0d3e"
           },
           {
             "path": "docs/ai-workflow/registry/workflow-v2-1-core-registry.json",
             "exists": true,
             "mode": "100644",
-            "blob": "c21a6ecbd49386bf09578c20e9bce9eb3cf7ea49"
+            "blob": "1af4d212baa823febb742c856852378d867fd4ef"
           },
           {
             "path": "docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json",
             "exists": true,
             "mode": "100644",
-            "blob": "baf62c8916561a1c5b433b4cf81a39426896de58"
+            "blob": "2763e0ae3106e69d1672f4bfbfc0ff5c4e681537"
           }
         ],
         "reviewed_content_commit": null,
         "legacy_evidence": null,
-        "user_confirmation": "I confirm approval of the workflow-v2-1-core plan stage. I also explicitly authorize the state-writer quiescence window for workflow-v2-1-core plan for this approval transaction.",
+        "user_confirmation": "I confirm approval of the workflow-v2-1-core plan stage.",
         "waived_guarantees": [],
-        "recorded_at": "2026-08-14T23:08:40+01:00"
+        "recorded_at": "2026-08-16T03:36:57+01:00"
       },
       "technical_approval": {
         "status": "CURRENT",
@@ -257,10 +257,21 @@
             "WF8b resumption",
             "GPT-R44 application"
           ]
+        },
+        {
+          "id": "OPUS-R101-002",
+          "recorded_at": "2026-08-15T16:24:27+01:00",
+          "title": "WF8b marked COMPLETE while a mechanically verified subset of its own continued-scope ledger was undelivered, foreclosing the non-terminal recovery path -- reconciled by Revision 81 via a new successor checkpoint WF8c and a new completion obligation WFO-LEDGER-COVERAGE",
+          "summary": "OPUS-R101-002 (Blocking, .ai-review/workflow-v2-1-core/feedback/REVIEW_FEEDBACK.md:175-278, filed against implementation round 10, commit c91234f): WF8b.status == \"COMPLETE\" while a mechanically verified subset of the ~210-item missing-test ledger owed to its continued scope (items 167-376) was absent from the installed implementation -- making the registry terminal and permanently foreclosing /accept-scoped-remediation, the one non-terminal recovery path this plan built for exactly this situation, the moment technical_approval would be recorded. Reconciled by Revision 81 (docs/ai-workflow/WORKFLOW_V2_PLAN.md, \"Revision 81 -- convergence: OPUS-R101-002 ledger reconciliation and WF8c\"): WF8b is not reopened -- its completion stands for everything it genuinely delivered, a large real body of work independently confirmed by two classification passes (D-Scoped-Remediation-Acceptance, the ordinary-role bundle-generation provenance gate, D1's state-writer lock, D-Completion-Obligations, and D-Checkpoint-Ownership in full). A new successor checkpoint, WF8c (depends_on WF8b), owns the genuinely remaining work: WFR-62's stale-generation_head recovery (/recover-implementation-provenance, the Workflow-Supersedes trailer -- confirmed entirely absent, the implementation's own docstrings admit as much), same-content bundle-generation republication idempotency (record_bundle_generation unconditionally advances implementation_revision on every call today), item 267's cross-work-item forbidden-mutation gap, item 368(d)'s missing concurrent-takeover test, item 166's stale row-count literal, WFR-63's bootstrap plan-approval transaction (re-scoping question flagged for external review rather than resolved silently, since /approve-review's own permanent conditional fifth-member logic already works without it), and WFR-67's REJECTED-bundle lifecycle / review-subject: declarations (also confirmed entirely absent). Items 314-338's atomic/staged bundle-publication redesign is deemed superseded rather than owed to any checkpoint -- the live, documented design (REVIEW_PROTOCOL.md) is and remains the flat current/ directory this redesign proposed replacing, and it operated incident-free through 80 plan revisions and the whole of WF8b's dry run -- flagged explicitly for external review to confirm or overturn, not decided unilaterally. A new completion obligation, WFO-LEDGER-COVERAGE (WFR-68), is declared on WF8c's own registry entry, reusing D-Completion-Obligations' existing execution-based verifier architecture, fail-closed (UNKNOWN_OBLIGATION) until WF8c builds and gets approval for it -- so WF8c's own eventual COMPLETE status cannot reproduce this exact failure one level up. Item 355 (the checkpoint-reachability conformance rule) is rewritten in checkpoint-agnostic form; its revision-58-through-80 hardcoded-WF8b text is retained as unedited history. registry now 18 checkpoints, requirements table now 68 rows, published via publish_plan_revision to plan_revision 81, phase AWAITING_EXTERNAL_PLAN_REVIEW. Not yet resolved: WF8c is not yet implemented.",
+          "disposition": "Routed to plan design -- see \"Revision 81 -- convergence: OPUS-R101-002 ledger reconciliation and WF8c\" in docs/ai-workflow/WORKFLOW_V2_PLAN.md (Revision 81, phase AWAITING_EXTERNAL_PLAN_REVIEW, awaiting external plan review). WF8b is not reopened. Not yet implemented -- this decision remains open until WF8c is planned in detail, implemented, and its WFO-LEDGER-COVERAGE obligation derives PASS.",
+          "blocks": [
+            "WF8c implementation",
+            "a second technical_approval-driven completion attempt"
+          ]
         }
       ],
-      "state_revision": 93,
-      "last_transition": "2026-08-15T15:34:48+01:00"
+      "state_revision": 104,
+      "last_transition": "2026-08-16T03:36:57+01:00"
     },
     "milestone-8": {
       "work_item_type": "product",
