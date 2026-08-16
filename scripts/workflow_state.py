@@ -5027,15 +5027,22 @@ def _assert_registry_covered_by_current_plan_approval(
     `resolve_own_registry_completion_status` is about to trust for
     terminality must be exactly the bytes `plan_approval` covers, not
     merely a safely-resolvable, well-formed, self-declaring tracked file.
-    Reuses `plan_approval.review_content_manifest`'s own per-path blob
-    record (already the durable, approval-time snapshot every plan
-    approval writes) rather than recomputing a whole fresh plan-stage
-    projection with a guessed `base_commit` -- this work item's own
-    continued-scope rounds compute that projection against the
+    Reuses `plan_approval.review_content_manifest`'s own per-path
+    exists/mode/blob record (already the durable, approval-time snapshot
+    every plan approval writes) rather than recomputing a whole fresh
+    plan-stage projection with a guessed `base_commit` -- this work
+    item's own continued-scope rounds compute that projection against the
     plan-approval commit, not `work_item["base_commit"]`
     (`REVIEW_REQUEST.md`'s own documented convention), so there is no
     single `base_commit` value this helper could safely assume; a direct
-    blob comparison needs none."""
+    per-path snapshot comparison needs none.
+
+    Items 231/232 (`WF8c`): checks *every* path named in the manifest,
+    not merely `registry_path` -- a different plan-stage protected
+    document (the plan, the mapping, `TECHNICAL_DECISIONS.md`, the audit
+    doc) carrying a dirty or committed-but-never-approved mutation must
+    refuse registry-derived completion exactly as a tampered registry
+    itself would, even though the registry's own bytes are unchanged."""
     work_item_id = work_item["work_item_id"]
     plan_approval = work_item.get("plan_approval")
     if plan_approval is None or plan_approval.get("status") != "CURRENT":
@@ -5053,14 +5060,21 @@ def _assert_registry_covered_by_current_plan_approval(
             f"named in the current plan_approval.review_content_manifest -- cannot "
             f"prove the read registry bytes are plan-approved"
         )
-    live_blob = fingerprint._hash_object(repo_root, registry_path)
-    approved_blob = approved_entry.get("blob")
-    if live_blob != approved_blob:
-        raise StalePlanApprovalRegistryReadError(
-            f"work_items[{work_item_id!r}].registry_path {registry_path!r} live blob "
-            f"{live_blob!r} does not match the current plan_approval's recorded blob "
-            f"{approved_blob!r} -- the registry was modified after plan approval"
-        )
+    for entry in manifest:
+        path = entry.get("path")
+        live_snapshot = fingerprint._snapshot_worktree(repo_root, path)
+        approved_snapshot = {
+            "exists": entry.get("exists"), "mode": entry.get("mode"), "blob": entry.get("blob"),
+        }
+        if live_snapshot != approved_snapshot:
+            raise StalePlanApprovalRegistryReadError(
+                f"work_items[{work_item_id!r}]'s plan-stage protected path {path!r} "
+                f"live state {live_snapshot!r} does not match the current "
+                f"plan_approval's recorded manifest entry {approved_snapshot!r} -- "
+                f"registry-derived completion cannot be trusted while any plan-stage "
+                f"protected document carries unapproved content, even when "
+                f"{registry_path!r} itself is unchanged"
+            )
 
 
 # ---------------------------------------------------------------------------

@@ -4499,6 +4499,7 @@ class TestRegistryReadBoundToCurrentPlanApproval(unittest.TestCase):
     registry's own bytes/blob."""
 
     REGISTRY_PATH = "registry.json"
+    OTHER_PROTECTED_PATH = "plan.md"
 
     def _registry(self, *, tag="v1"):
         return {
@@ -4615,6 +4616,70 @@ class TestRegistryReadBoundToCurrentPlanApproval(unittest.TestCase):
             )
             with self.assertRaises(ws.StalePlanApprovalRegistryReadError):
                 ws.resolve_own_registry_completion_status(repo.root, work_item)
+
+    def test_dirty_other_protected_path_refuses_even_when_registry_unchanged(self):
+        """Items 231/232 (`WF8c`): a *different* plan-stage protected
+        document (here standing in for the plan doc, mapping,
+        `TECHNICAL_DECISIONS.md`, or the audit doc) going dirty after
+        approval must refuse registry-derived completion exactly as a
+        dirty registry would -- even though `registry.json` itself is
+        byte-identical to what `plan_approval` covers."""
+        with ScratchRepo() as repo:
+            self._write_registry(repo)
+            _write(repo, self.OTHER_PROTECTED_PATH, "plan v1\n")
+            _commit_paths(repo, [self.REGISTRY_PATH, self.OTHER_PROTECTED_PATH], "registry + plan")
+            plan_approval = _current_plan_approval_covering(
+                repo, self.REGISTRY_PATH, self.OTHER_PROTECTED_PATH,
+            )
+            _write(repo, self.OTHER_PROTECTED_PATH, "plan v1 -- tampered\n")  # dirty, never committed
+            work_item = _base_work_item(
+                registry_path=self.REGISTRY_PATH, plan_approval=plan_approval,
+                checkpoints=self._checkpoints(b_complete=False),
+            )
+            with self.assertRaises(ws.StalePlanApprovalRegistryReadError):
+                ws.resolve_own_registry_completion_status(repo.root, work_item)
+
+    def test_clean_committed_but_unapproved_mutation_of_other_protected_path_refuses(self):
+        """Items 231/232: the sibling of
+        `test_clean_committed_but_unapproved_mutation_refuses` for a
+        *non-registry* protected path -- committed, not merely dirty,
+        but never covered by a fresh plan-review/approval round."""
+        with ScratchRepo() as repo:
+            self._write_registry(repo)
+            _write(repo, self.OTHER_PROTECTED_PATH, "plan v1\n")
+            _commit_paths(repo, [self.REGISTRY_PATH, self.OTHER_PROTECTED_PATH], "registry + plan")
+            plan_approval = _current_plan_approval_covering(
+                repo, self.REGISTRY_PATH, self.OTHER_PROTECTED_PATH,
+            )
+            _write(repo, self.OTHER_PROTECTED_PATH, "plan v1 -- mutated\n")
+            _commit_paths(repo, [self.OTHER_PROTECTED_PATH], "plan mutated post-approval")
+            work_item = _base_work_item(
+                registry_path=self.REGISTRY_PATH, plan_approval=plan_approval,
+                checkpoints=self._checkpoints(b_complete=False),
+            )
+            with self.assertRaises(ws.StalePlanApprovalRegistryReadError):
+                ws.resolve_own_registry_completion_status(repo.root, work_item)
+
+    def test_all_protected_paths_matching_approved_bytes_succeeds(self):
+        """Positive case: a multi-path manifest where every tracked path,
+        not only the registry, still matches its approved snapshot must
+        not be refused -- widening the check to every manifest path must
+        not produce a false positive on the ordinary, nothing-changed
+        case."""
+        with ScratchRepo() as repo:
+            self._write_registry(repo)
+            _write(repo, self.OTHER_PROTECTED_PATH, "plan v1\n")
+            _commit_paths(repo, [self.REGISTRY_PATH, self.OTHER_PROTECTED_PATH], "registry + plan")
+            plan_approval = _current_plan_approval_covering(
+                repo, self.REGISTRY_PATH, self.OTHER_PROTECTED_PATH,
+            )
+            work_item = _base_work_item(
+                registry_path=self.REGISTRY_PATH, plan_approval=plan_approval,
+                checkpoints=self._checkpoints(b_complete=True),
+            )
+            is_terminal, outstanding = ws.resolve_own_registry_completion_status(repo.root, work_item)
+            self.assertTrue(is_terminal)
+            self.assertIsNone(outstanding)
 
 
 class TestFunctionalChecklistTrailerDiscovery(unittest.TestCase):
