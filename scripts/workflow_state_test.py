@@ -23,9 +23,12 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import subprocess
+import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -5720,6 +5723,153 @@ class TestExplicitTakeover(unittest.TestCase):
             literal = ws.takeover_authorization_literal("wi", evidence, "CP")
             with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
                 ws.take_over_claim(wt2, "wi", "CP", now="t2", user_authorization=literal, evidence=evidence)
+
+
+_TAKEOVER_RACE_WORKER_SOURCE = """
+import json
+import sys
+import time
+from pathlib import Path
+
+import workflow_state as ws
+
+repo_root = Path(sys.argv[1])
+work_item_id = sys.argv[2]
+checkpoint_id = sys.argv[3]
+evidence = json.loads(Path(sys.argv[4]).read_text())
+user_authorization = sys.argv[5]
+now = sys.argv[6]
+barrier_path = Path(sys.argv[7])
+ready_path = Path(sys.argv[8])
+out_path = Path(sys.argv[9])
+
+ready_path.write_text("ready")
+deadline = time.monotonic() + 15
+while not barrier_path.exists():
+    if time.monotonic() > deadline:
+        out_path.write_text(json.dumps({"outcome": "timeout"}))
+        sys.exit(0)
+    time.sleep(0.001)
+
+try:
+    record = ws.take_over_claim(repo_root, work_item_id, checkpoint_id, now=now,
+                                user_authorization=user_authorization, evidence=evidence)
+    out_path.write_text(json.dumps({"outcome": "success", "record": record}))
+except ws.CheckpointClaimTakeoverRefusedError as exc:
+    out_path.write_text(json.dumps({"outcome": "refused", "detail": str(exc)}))
+"""
+
+
+class TestRealProcessConcurrentTakeover(unittest.TestCase):
+    """Item 368(d): two simultaneous authorized takeovers, run as **real,
+    separate OS processes** racing to take over the same claim, are
+    asserted to produce exactly one winner, a complete parseable
+    surviving record, and a loser that refused on evidence or on the
+    guard rather than by force -- never both winning, never a corrupted
+    record. `acquire_guard`'s `guard_mutation_lock` is a process-scoped
+    `fcntl.flock`, and `TestExplicitTakeover`/`TestCheckpointMutationGuard`
+    already prove its *logic* in-process; only genuinely separate OS
+    processes contending on the same on-disk lock file prove that the
+    primitive itself holds under real concurrency, the property a
+    single-process or threaded fixture cannot exercise (threads share one
+    process's file-descriptor table and one `flock` owner, so they can
+    never reproduce two independent holders racing for the same lock)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._scripts_dir = Path(__file__).resolve().parent
+        cls._worker_dir = Path(tempfile.mkdtemp(prefix="wf-race-worker-"))
+        cls._worker = cls._worker_dir / "_takeover_race_worker.py"
+        cls._worker.write_text(_TAKEOVER_RACE_WORKER_SOURCE)
+
+    @classmethod
+    def tearDownClass(cls):
+        import shutil
+        shutil.rmtree(cls._worker_dir, ignore_errors=True)
+
+    def _spawn(self, repo_root: Path, evidence_path: Path, literal: str,
+               barrier: Path, ready: Path, out: Path) -> subprocess.Popen:
+        env = dict(os.environ)
+        env["PYTHONPATH"] = str(self._scripts_dir) + (
+            os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+        return subprocess.Popen(
+            [sys.executable, str(self._worker), str(repo_root), "wi", "CP",
+             str(evidence_path), literal, "t2", str(barrier), str(ready), str(out)],
+            env=env,
+        )
+
+    def _race_once(self, trial: int) -> None:
+        with ScratchRepo() as repo:
+            ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            wt_b = repo.worktree(f"b{trial}")
+            wt_c = repo.worktree(f"c{trial}")
+            # Both racers observe the same pre-takeover evidence -- exactly
+            # what two users independently reviewing the claim at the same
+            # moment, then racing to submit their own authorized takeover,
+            # would each see.
+            evidence_b = ws.takeover_evidence(wt_b, "wi")
+            evidence_c = ws.takeover_evidence(wt_c, "wi")
+            literal_b = ws.takeover_authorization_literal("wi", evidence_b, "CP")
+            literal_c = ws.takeover_authorization_literal("wi", evidence_c, "CP")
+
+            with tempfile.TemporaryDirectory(prefix="wf-race-io-") as scratch:
+                scratch_path = Path(scratch)
+                barrier = scratch_path / "go"
+                ready_b, ready_c = scratch_path / "ready_b", scratch_path / "ready_c"
+                out_b, out_c = scratch_path / "out_b.json", scratch_path / "out_c.json"
+                ev_b_path, ev_c_path = scratch_path / "ev_b.json", scratch_path / "ev_c.json"
+                ev_b_path.write_text(json.dumps(evidence_b))
+                ev_c_path.write_text(json.dumps(evidence_c))
+
+                proc_b = self._spawn(wt_b, ev_b_path, literal_b, barrier, ready_b, out_b)
+                proc_c = self._spawn(wt_c, ev_c_path, literal_c, barrier, ready_c, out_c)
+                try:
+                    deadline = time.monotonic() + 15
+                    while not (ready_b.exists() and ready_c.exists()):
+                        self.assertLess(time.monotonic(), deadline,
+                                        "race workers did not become ready in time")
+                        time.sleep(0.001)
+                    # Both workers are now parked on the barrier -- release
+                    # them together so the race is genuinely concurrent
+                    # rather than one process completing before the other
+                    # even starts.
+                    barrier.write_text("go")
+                    self.assertEqual(proc_b.wait(timeout=15), 0)
+                    self.assertEqual(proc_c.wait(timeout=15), 0)
+                finally:
+                    proc_b.kill()
+                    proc_c.kill()
+
+                result_b = json.loads(out_b.read_text())
+                result_c = json.loads(out_c.read_text())
+
+            outcomes = [result_b["outcome"], result_c["outcome"]]
+            self.assertEqual(outcomes.count("success"), 1, (result_b, result_c))
+            self.assertEqual(outcomes.count("refused"), 1, (result_b, result_c))
+            winner, loser = (
+                (result_b, result_c) if result_b["outcome"] == "success" else (result_c, result_b)
+            )
+            # The loser refused cleanly -- either the guard was already
+            # live (the guard-contention path) or its evidence had gone
+            # stale by the time it re-verified under the guard (the
+            # stale-evidence path) -- never a third, undocumented outcome.
+            self.assertTrue(
+                "refusing to break it" in loser["detail"]
+                or "claim changed" in loser["detail"],
+                loser["detail"],
+            )
+            # The surviving record is complete and parseable, and it is
+            # the *only* mutation that landed: takeover_count is 1, never
+            # 2, proving the loser mutated nothing.
+            final = ws.resolve_claim(repo.root, "wi")
+            self.assertIsNotNone(final)
+            self.assertEqual(final["takeover_count"], 1)
+            self.assertEqual(final["owner_token"], winner["record"]["owner_token"])
+            self.assertEqual(winner["record"]["checkpoint_id"], "CP")
+
+    def test_two_simultaneous_authorized_takeovers_produce_exactly_one_winner(self):
+        for trial in range(5):
+            self._race_once(trial)
 
 
 class TestAbandonedDestructiveGuardRecovery(unittest.TestCase):
