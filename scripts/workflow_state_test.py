@@ -7100,5 +7100,193 @@ class TestIdentityDocumentSerialization(unittest.TestCase):
             self.assertIn("wi", document["expected_dirty_paths_by_work_item"])
 
 
+class TestReconciliationTableParsing(unittest.TestCase):
+    """WF8c (m), part 1: `parse_reconciliation_table` re-derives the plan
+    document's '### Reconciliation table' into `{item: (status, owner)}`
+    -- WFR-68 property (i)'s own item-set source of truth, read from a
+    pinned Git commit rather than the working tree or the artifact's own
+    enumeration."""
+
+    def _commit_plan(self, repo, table_body: str, *, heading: bool = True, header_row: bool = True) -> str:
+        parts = ["# Plan\n\n"]
+        if heading:
+            parts.append(ws.RECONCILIATION_TABLE_HEADING + "\n\n")
+        if header_row:
+            parts.append(ws.RECONCILIATION_TABLE_HEADER_ROW + "\n")
+            parts.append("|---|---|---|---|---|\n")
+        parts.append(table_body)
+        full = repo.root / "docs" / "ai-workflow" / "WORKFLOW_V2_PLAN.md"
+        full.parent.mkdir(parents=True, exist_ok=True)
+        full.write_text("".join(parts))
+        _run(["git", "add", "docs/ai-workflow/WORKFLOW_V2_PLAN.md"], cwd=repo.root)
+        _run(["git", "commit", "-q", "-m", "plan"], cwd=repo.root)
+        return repo.head()
+
+    # -- _split_markdown_table_row --
+
+    def test_split_row_treats_pipe_inside_backticks_as_literal(self):
+        cells = ws._split_markdown_table_row(
+            "| 376 | `review-subject: bundle\\|verdict\\|none` | `ABSENT` | `WF8c` |"
+        )
+        self.assertEqual(cells, ["376", "`review-subject: bundle\\|verdict\\|none`", "`ABSENT`", "`WF8c`"])
+
+    def test_split_row_ordinary_row(self):
+        cells = ws._split_markdown_table_row("| 1-5 | topic | `IMPLEMENTED` | `WF8b` | evidence |")
+        self.assertEqual(cells, ["1-5", "topic", "`IMPLEMENTED`", "`WF8b`", "evidence"])
+
+    # -- _expand_reconciliation_items_cell --
+
+    def test_expand_items_single(self):
+        self.assertEqual(ws._expand_reconciliation_items_cell("272"), [272])
+
+    def test_expand_items_comma_list(self):
+        self.assertEqual(ws._expand_reconciliation_items_cell("231, 232"), [231, 232])
+
+    def test_expand_items_range(self):
+        self.assertEqual(ws._expand_reconciliation_items_cell("167-170"), [167, 168, 169, 170])
+
+    def test_expand_items_mixed_ranges_and_singles(self):
+        self.assertEqual(
+            ws._expand_reconciliation_items_cell("229-230, 233-235"), [229, 230, 233, 234, 235],
+        )
+
+    def test_expand_items_strips_trailing_parenthetical(self):
+        self.assertEqual(
+            ws._expand_reconciliation_items_cell("166 (pre-167, outside the umbrella range)"), [166],
+        )
+
+    # -- _resolve_reconciliation_status --
+
+    def test_resolve_status_plain(self):
+        self.assertEqual(ws._resolve_reconciliation_status("`IMPLEMENTED`"), "IMPLEMENTED")
+
+    def test_resolve_status_bold_with_trailing_prose(self):
+        self.assertEqual(
+            ws._resolve_reconciliation_status("**`SUPERSEDED` — not owed to any checkpoint**"), "SUPERSEDED",
+        )
+
+    def test_resolve_status_with_qualifier(self):
+        self.assertEqual(ws._resolve_reconciliation_status("`PARTIAL` (368(d) only)"), "PARTIAL")
+
+    def test_resolve_status_unrecognized_raises(self):
+        with self.assertRaises(ws.ReconciliationTableParseError):
+            ws._resolve_reconciliation_status("`MAYBE`")
+
+    # -- _resolve_reconciliation_owner --
+
+    def test_resolve_owner_superseded_is_none(self):
+        self.assertEqual(
+            ws._resolve_reconciliation_owner("SUPERSEDED", "none (`SUPERSEDED`, see rationale)"), "none",
+        )
+
+    def test_resolve_owner_partial_compound_cell_takes_remaining_work_owner(self):
+        self.assertEqual(
+            ws._resolve_reconciliation_owner(
+                "PARTIAL", "`WF8b` for the delivered core; `WF8c` for the dependent sub-cases",
+            ),
+            "WF8c",
+        )
+
+    def test_resolve_owner_partial_single_cell(self):
+        self.assertEqual(ws._resolve_reconciliation_owner("PARTIAL", "`WF8c` (267 only)"), "WF8c")
+
+    def test_resolve_owner_partial_without_wf8c_raises(self):
+        with self.assertRaises(ws.ReconciliationTableParseError):
+            ws._resolve_reconciliation_owner("PARTIAL", "`WF8b` only")
+
+    def test_resolve_owner_bare_wf8b(self):
+        self.assertEqual(ws._resolve_reconciliation_owner("IMPLEMENTED", "`WF8b`"), "WF8b")
+
+    def test_resolve_owner_picks_leftmost_occurring_checkpoint_not_a_fixed_preference(self):
+        # Regression: item 376's real row names WF8c first and WF8b only
+        # in later, explanatory prose ("reassigned from WF8b") -- a fixed
+        # WF8b-before-WF8c preference order would misresolve this to WF8b.
+        self.assertEqual(
+            ws._resolve_reconciliation_owner("ABSENT", "`WF8c` (`WFR-67`, reassigned from `WF8b`)"), "WF8c",
+        )
+
+    def test_resolve_owner_unresolvable_raises(self):
+        with self.assertRaises(ws.ReconciliationTableParseError):
+            ws._resolve_reconciliation_owner("ABSENT", "somebody, presumably")
+
+    # -- parse_reconciliation_table end to end --
+
+    def test_parse_end_to_end_resolves_all_four_statuses(self):
+        with ScratchRepo() as repo:
+            table = (
+                "| 1-2 | topic a | `IMPLEMENTED` | `WF8b` | evidence a |\n"
+                "| 3 | topic b | `ABSENT` | `WF8c` | evidence b |\n"
+                "| 4-5 | topic c | `PARTIAL` | `WF8b` for the delivered core; `WF8c` for the rest | evidence c |\n"
+                "| 6 | topic d | **`SUPERSEDED`** — retired | none (see rationale) | evidence d |\n"
+            )
+            commit = self._commit_plan(repo, table)
+            result = ws.parse_reconciliation_table(repo.root, commit)
+            self.assertEqual(
+                result,
+                {
+                    1: {"status": "IMPLEMENTED", "owner": "WF8b", "topic": "topic a"},
+                    2: {"status": "IMPLEMENTED", "owner": "WF8b", "topic": "topic a"},
+                    3: {"status": "ABSENT", "owner": "WF8c", "topic": "topic b"},
+                    4: {"status": "PARTIAL", "owner": "WF8c", "topic": "topic c"},
+                    5: {"status": "PARTIAL", "owner": "WF8c", "topic": "topic c"},
+                    6: {"status": "SUPERSEDED", "owner": "none", "topic": "topic d"},
+                },
+            )
+
+    def test_parse_missing_heading_raises(self):
+        with ScratchRepo() as repo:
+            commit = self._commit_plan(repo, "| 1 | t | `IMPLEMENTED` | `WF8b` | e |\n", heading=False)
+            with self.assertRaises(ws.ReconciliationTableParseError):
+                ws.parse_reconciliation_table(repo.root, commit)
+
+    def test_parse_missing_header_row_raises(self):
+        with ScratchRepo() as repo:
+            commit = self._commit_plan(repo, "| 1 | t | `IMPLEMENTED` | `WF8b` | e |\n", header_row=False)
+            with self.assertRaises(ws.ReconciliationTableParseError):
+                ws.parse_reconciliation_table(repo.root, commit)
+
+    def test_parse_duplicate_item_across_rows_raises(self):
+        with ScratchRepo() as repo:
+            table = (
+                "| 1-3 | topic a | `IMPLEMENTED` | `WF8b` | evidence a |\n"
+                "| 3-5 | topic b | `ABSENT` | `WF8c` | evidence b |\n"
+            )
+            commit = self._commit_plan(repo, table)
+            with self.assertRaises(ws.ReconciliationTableParseError):
+                ws.parse_reconciliation_table(repo.root, commit)
+
+    def test_parse_stops_at_first_non_table_line(self):
+        with ScratchRepo() as repo:
+            table = (
+                "| 1 | topic a | `IMPLEMENTED` | `WF8b` | evidence a |\n"
+                "\n"
+                "Some prose after the table, not itself a row.\n"
+            )
+            commit = self._commit_plan(repo, table)
+            result = ws.parse_reconciliation_table(repo.root, commit)
+            self.assertEqual(set(result.keys()), {1})
+
+    def test_parse_reads_pinned_commit_not_working_tree(self):
+        with ScratchRepo() as repo:
+            commit = self._commit_plan(repo, "| 1 | t | `IMPLEMENTED` | `WF8b` | e |\n")
+            # Overwrite the working tree after the commit -- the parser
+            # must read the pinned commit's content, never the live file.
+            (repo.root / "docs" / "ai-workflow" / "WORKFLOW_V2_PLAN.md").write_text("garbage, no table at all")
+            result = ws.parse_reconciliation_table(repo.root, commit)
+            self.assertEqual(set(result.keys()), {1})
+
+
+class TestLedgerStatusPathForWorkItem(unittest.TestCase):
+    def test_path_shape(self):
+        self.assertEqual(
+            ws.ledger_status_path_for_work_item("workflow-v2-1-core"),
+            Path("docs/ai-workflow/registry/workflow-v2-1-core-ledger-status.json"),
+        )
+
+    def test_rejects_invalid_work_item_id(self):
+        with self.assertRaises(fingerprint.InvalidWorkItemIdError):
+            ws.ledger_status_path_for_work_item("Not Valid!")
+
+
 if __name__ == "__main__":
     unittest.main()

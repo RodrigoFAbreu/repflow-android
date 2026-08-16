@@ -675,5 +675,53 @@ class TestCheckpointOriginationAgainstRealRepository(unittest.TestCase):
         self.assertEqual(result["decision"], "admit")
 
 
+class TestReconciliationTableLedgerStatusAgreement(unittest.TestCase):
+    """WF8c (m), part 1's own "teeth check" against this repository's real
+    content -- mirrors item 72's own registry/view agreement test's role
+    in this file. Confirms `docs/ai-workflow/registry/workflow-v2-1-core-
+    ledger-status.json` (generated via `parse_reconciliation_table`) is
+    still a faithful, total, duplicate-free transcription of the live
+    plan's own '### Reconciliation table' -- not itself WFR-68's own
+    verifier (that binds later), but the same live-repository agreement
+    property, checked here against `HEAD` the way `verify_wfo_ledger_
+    coverage` will check it against a pinned commit once it exists."""
+
+    def test_ledger_status_json_matches_the_live_reconciliation_table_exactly(self):
+        repo_root = _repo_root()
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_root, check=True,
+            capture_output=True, text=True,
+        ).stdout.strip()
+        table = ws.parse_reconciliation_table(repo_root, head)
+
+        expected_universe = {166} | set(range(167, 377))
+        self.assertEqual(set(table.keys()), expected_universe)
+
+        ledger_path = repo_root / ws.ledger_status_path_for_work_item(WORK_ITEM_ID)
+        ledger = json.loads(ledger_path.read_text())
+        entries = ledger["entries"]
+
+        entry_items = [e["item"] for e in entries]
+        self.assertEqual(len(entry_items), len(set(entry_items)), "duplicate item(s) in ledger-status.json")
+        self.assertEqual(set(entry_items), expected_universe)
+
+        for entry in entries:
+            row = table[entry["item"]]
+            self.assertEqual(
+                (entry["status"], entry["owner_checkpoint"]), (row["status"], row["owner"]),
+                f"item {entry['item']} disagrees between the plan table and ledger-status.json",
+            )
+
+    def test_ledger_status_json_not_yet_bound_as_a_completion_obligation_conformance(self):
+        """WF8c (m) is a multi-part item -- this session builds only the
+        parse/artifact half. The full verifier (properties (ii)-(iv), the
+        adversarial arms) is deliberately not bound yet, so `WFO-LEDGER-
+        COVERAGE` must keep resolving `UNKNOWN_OBLIGATION`, exactly the
+        fail-closed interim state WFR-68 itself specifies -- this guards
+        against a future accidental/partial binding being mistaken for
+        the real thing."""
+        self.assertNotIn("WFO-LEDGER-COVERAGE", ws.COMPLETION_OBLIGATION_CONFORMANCE)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -5356,6 +5356,177 @@ _NON_WRITER_VIOLATION_RE = re.compile(
 )
 
 
+# ---------------------------------------------------------------------------
+# WF8c (m), part 1: the reconciliation table's own machine-readable
+# `{item: (status, owner)}` universe -- WFR-68 property (i)'s "re-derives
+# this item set from the reconciliation table itself at the pinned commit,
+# never from the artifact's own enumeration" requirement. `docs/ai-workflow/
+# registry/<work_item_id>-ledger-status.json` (generated from this parse) is
+# WFO-LEDGER-COVERAGE's subject artifact. The obligation's full verifier --
+# property (ii) evidence-for-`IMPLEMENTED`, properties (iii)/(iv)
+# monotonicity/governance-scope, and item 355's own conformance test -- is
+# deliberately not bound in `COMPLETION_OBLIGATION_CONFORMANCE` yet: it
+# stays correctly fail-closed (`UNKNOWN_OBLIGATION`), exactly the interim
+# state WFR-68 itself describes, until a later WF8c session builds the rest.
+# ---------------------------------------------------------------------------
+
+
+class ReconciliationTableParseError(Exception):
+    """The '### Reconciliation table' markdown in `WORKFLOW_V2_PLAN.md`
+    could not be parsed into a well-formed `{item: (status, owner)}`
+    mapping -- fails closed rather than silently resolving a malformed or
+    reformatted table, since this parse is the sole source WFR-68 property
+    (i) trusts."""
+
+
+RECONCILIATION_TABLE_HEADING = "### Reconciliation table"
+RECONCILIATION_TABLE_HEADER_ROW = "| Items | Topic | Status | Owner | Evidence / rationale |"
+_RECONCILIATION_STATUS_TOKENS = ("IMPLEMENTED", "ABSENT", "PARTIAL", "SUPERSEDED")
+_RECONCILIATION_STATUS_RE = re.compile(r"[A-Z]+")
+
+
+def _split_markdown_table_row(line: str) -> list[str]:
+    """Splits one `| a | b | c |` row on unquoted `|` only -- a cell's own
+    inline code span (`` `review-subject: bundle|verdict|none` ``, item
+    376's own row) can legitimately contain a literal `|`, which a naive
+    `str.split('|')` would mistake for an extra cell boundary."""
+    body = line.strip()
+    if body.startswith("|"):
+        body = body[1:]
+    if body.endswith("|"):
+        body = body[:-1]
+    cells: list[str] = []
+    buf: list[str] = []
+    in_code = False
+    for ch in body:
+        if ch == "`":
+            in_code = not in_code
+            buf.append(ch)
+        elif ch == "|" and not in_code:
+            cells.append("".join(buf).strip())
+            buf = []
+        else:
+            buf.append(ch)
+    cells.append("".join(buf).strip())
+    return cells
+
+
+def _expand_reconciliation_items_cell(cell: str) -> list[int]:
+    """`'229-230, 233-241'` / `'231, 232'` / `'166 (pre-167, outside the
+    umbrella range, checked because it recurred)'` -> the sorted individual
+    item numbers a row's `Items` column names; a trailing parenthetical is
+    explanatory prose, never part of the range."""
+    cell = cell.split("(")[0].strip()
+    items: list[int] = []
+    for part in cell.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            lo, hi = part.split("-", 1)
+            items.extend(range(int(lo.strip()), int(hi.strip()) + 1))
+        else:
+            items.append(int(part))
+    return items
+
+
+def _resolve_reconciliation_status(status_cell: str) -> str:
+    """The row's canonical status is its first all-caps token once bold
+    markup (`**`) is stripped -- `IMPLEMENTED`/`ABSENT`/`PARTIAL`/
+    `SUPERSEDED` -- with the remaining prose (parenthetical qualifiers like
+    `'(368(d) only)'`) left as the row's own historical rationale, never
+    further subdivided (the "per-item resolution rule", `WORKFLOW_V2_PLAN.md`
+    revision 82, `OPUS-R102-007`)."""
+    match = _RECONCILIATION_STATUS_RE.search(status_cell.replace("*", ""))
+    if not match or match.group(0) not in _RECONCILIATION_STATUS_TOKENS:
+        raise ReconciliationTableParseError(f"unrecognized reconciliation-table status cell: {status_cell!r}")
+    return match.group(0)
+
+
+def _resolve_reconciliation_owner(status: str, owner_cell: str) -> str:
+    """Per-item resolution rule (revision 82): a `SUPERSEDED` row's items
+    resolve to owner `'none'`; a `PARTIAL` row's items resolve to the
+    checkpoint owing the *remaining* work -- every `PARTIAL` row this table
+    currently carries names `WF8c` for that role, whether alone
+    (`'WF8c (267 only)'`) or second in a compound cell (`'WF8b` for the
+    delivered core; `WF8c` for ...'`); otherwise the row's single stated
+    owner is whichever of `WF8b`/`WF8c` occurs *first* in the cell -- not a
+    fixed preference order, since a cell can legitimately mention the other
+    checkpoint later, in explanatory prose (item 376's own
+    `'WF8c (WFR-67, reassigned from WF8b)'` row, where a fixed WF8b-first
+    check would misresolve)."""
+    if status == "SUPERSEDED":
+        return "none"
+    if status == "PARTIAL":
+        if "WF8c" not in owner_cell:
+            raise ReconciliationTableParseError(
+                f"PARTIAL row's owner cell names no WF8c remaining-work owner: {owner_cell!r}"
+            )
+        return "WF8c"
+    positions = [(owner_cell.index(token), token) for token in ("WF8b", "WF8c") if token in owner_cell]
+    if positions:
+        return min(positions)[1]
+    if owner_cell.strip().lower().startswith("none"):
+        return "none"
+    raise ReconciliationTableParseError(f"cannot resolve owner from reconciliation-table cell: {owner_cell!r}")
+
+
+def parse_reconciliation_table(
+    repo_root: Path, commit: str, *, plan_path: str = "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+) -> dict[int, dict[str, str]]:
+    """Re-derives `WORKFLOW_V2_PLAN.md`'s '### Reconciliation table' at the
+    pinned `commit` into `{item: {"status": ..., "owner": ..., "topic":
+    ...}}` -- WFR-68 property (i)'s own item-set source of truth, read
+    directly from the plan document rather than trusted from
+    `<work_item_id>-ledger-status.json`'s own enumeration (which is exactly
+    what the "omission attack"/"relabel attack" adversarial arms exist to
+    keep from being self-certifying). Raises `ReconciliationTableParseError`
+    on any row this cannot resolve -- the table changes only alongside a
+    fresh approved plan revision, and a parse failure here should stop a
+    technical review rather than silently degrade into a partial item set."""
+    text = _hardened_run(["show", f"{commit}:{plan_path}"], cwd=repo_root)
+    lines = text.splitlines()
+    try:
+        heading_idx = next(i for i, line in enumerate(lines) if line.strip() == RECONCILIATION_TABLE_HEADING)
+    except StopIteration:
+        raise ReconciliationTableParseError(f"no {RECONCILIATION_TABLE_HEADING!r} heading found in {plan_path}")
+    try:
+        header_idx = next(
+            i for i in range(heading_idx, len(lines)) if lines[i].strip() == RECONCILIATION_TABLE_HEADER_ROW
+        )
+    except StopIteration:
+        raise ReconciliationTableParseError("no reconciliation table header row found after the heading")
+
+    result: dict[int, dict[str, str]] = {}
+    for line in lines[header_idx + 2:]:  # skip the header row and the '|---|...' separator row
+        if not line.startswith("|"):
+            break
+        cells = _split_markdown_table_row(line)
+        if len(cells) < 4:
+            raise ReconciliationTableParseError(f"malformed reconciliation table row: {line!r}")
+        items_cell, topic_cell, status_cell, owner_cell = cells[0], cells[1], cells[2], cells[3]
+        status = _resolve_reconciliation_status(status_cell)
+        owner = _resolve_reconciliation_owner(status, owner_cell)
+        for item in _expand_reconciliation_items_cell(items_cell):
+            if item in result:
+                raise ReconciliationTableParseError(
+                    f"item {item} appears in more than one reconciliation table row"
+                )
+            result[item] = {"status": status, "owner": owner, "topic": topic_cell}
+    if not result:
+        raise ReconciliationTableParseError("reconciliation table parsed to zero rows")
+    return result
+
+
+def ledger_status_path_for_work_item(work_item_id: str) -> Path:
+    """`docs/ai-workflow/registry/<work_item_id>-ledger-status.json` --
+    `WFR-68`'s subject artifact, named the same way
+    `fingerprint.artifacts_path_for_work_item` names its own registry
+    artifact."""
+    fingerprint.validate_work_item_id(work_item_id)
+    return Path(f"docs/ai-workflow/registry/{work_item_id}-ledger-status.json")
+
+
 def verify_wfo_state_serialization(repo_root: str | Path, commit: str) -> dict:
     """`WFO-STATE-SERIALIZATION`'s bound conformance (items 354(c), 356,
     357) -- the function `resolve_completion_obligations` materializes
