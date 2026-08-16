@@ -15,6 +15,7 @@ Run: python3 scripts/workflow_state_demo_test.py
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import unittest
 from pathlib import Path
@@ -33,6 +34,78 @@ def _repo_root() -> Path:
             capture_output=True, text=True,
         ).stdout.strip()
     )
+
+
+def _parse_checkpoint_registry_table(repo_root: Path) -> list[dict]:
+    """Parses the '## Checkpoint registry' Markdown table in
+    WORKFLOW_V2_PLAN.md into one dict per row, over exactly the five
+    columns the table carries a value for besides id/Driven-by: name,
+    depends_on_cell (raw, un-mapped), complexity_cell (raw, un-mapped),
+    session_target. Used by item 72's conformance test (WF8c clause (r))
+    and its own teeth-check below."""
+    plan_path = repo_root / "docs" / "ai-workflow" / "WORKFLOW_V2_PLAN.md"
+    lines = plan_path.read_text().splitlines()
+    section_idx = next(
+        (i for i, line in enumerate(lines) if line.startswith("## Checkpoint registry")), None,
+    )
+    assert section_idx is not None, "WORKFLOW_V2_PLAN.md has no '## Checkpoint registry' section"
+    header_idx = next(
+        (i for i in range(section_idx, len(lines)) if lines[i].startswith("| ID |")), None,
+    )
+    assert header_idx is not None, "no '| ID | ...' table header found under 'Checkpoint registry'"
+    separator_idx = header_idx + 1
+    assert lines[separator_idx].startswith("|---"), (
+        f"expected a Markdown table separator row after the header, got: {lines[separator_idx]!r}"
+    )
+    rows = []
+    i = separator_idx + 1
+    while i < len(lines) and lines[i].startswith("|"):
+        cells = lines[i].split("|")
+        assert len(cells) == 8, (
+            f"line {i + 1}: expected the 6-column '| ID | Name | Depends on | "
+            f"Complexity | Session target | Driven by |' shape (7 pipes), got "
+            f"{len(cells) - 1} pipes -- a cell may contain an unescaped '|': {lines[i]!r}"
+        )
+        rows.append({
+            "id": cells[1].strip(),
+            "name": cells[2].strip(),
+            "depends_on_cell": cells[3].strip(),
+            "complexity_cell": cells[4].strip(),
+            "session_target": cells[5].strip(),
+        })
+        i += 1
+    assert rows, "no data rows parsed from the Checkpoint registry table"
+    return rows
+
+
+def _registry_row_mismatches(row: dict, entry: dict) -> list[tuple[str, str, object, object]]:
+    """Compares one parsed table row against its registry JSON checkpoint
+    entry over the five fields WF8c clause (r) names, each under its own
+    stated mapping rule. Returns (checkpoint_id, field, table_value,
+    json_value) for every field that diverges; completion_obligations is
+    deliberately not compared -- the table carries no column for it."""
+    mismatches = []
+
+    if row["name"] != entry["name"]:
+        mismatches.append((row["id"], "name", row["name"], entry["name"]))
+
+    if row["depends_on_cell"] == "none":
+        table_depends_on = []
+    else:
+        table_depends_on = [d.strip() for d in row["depends_on_cell"].split(",")]
+    if table_depends_on != entry["depends_on"]:
+        mismatches.append((row["id"], "depends_on", table_depends_on, entry["depends_on"]))
+
+    complexity_match = re.match(r"^(\d+)", row["complexity_cell"])
+    assert complexity_match, f"{row['id']}: Complexity cell {row['complexity_cell']!r} has no leading integer"
+    table_complexity = int(complexity_match.group(1))
+    if table_complexity != entry["complexity"]:
+        mismatches.append((row["id"], "complexity", table_complexity, entry["complexity"]))
+
+    if row["session_target"] != entry["session_target"]:
+        mismatches.append((row["id"], "session_target", row["session_target"], entry["session_target"]))
+
+    return mismatches
 
 
 class TestAgainstRealRepository(unittest.TestCase):
@@ -80,41 +153,72 @@ class TestAgainstRealRepository(unittest.TestCase):
         """Missing-test item 72 (OPUS-R10-009), D-Selection point 3: the
         'Checkpoint registry' Markdown table in WORKFLOW_V2_PLAN.md is a
         generated, human-readable view of the registry JSON and must
-        never drift from it in row order -- a hand-edit, a regeneration
-        bug, or a readability reordering of the view could otherwise
-        silently break rule 2's determinism guarantee. Parses the real
-        table's first column (the id) and the real registry JSON's
-        checkpoints array, asserting the two id sequences are identical."""
+        never drift from it -- a hand-edit, a regeneration bug, or a
+        readability reordering of the view could otherwise silently break
+        rule 2's determinism guarantee. Parses the real table's rows and
+        the real registry JSON's checkpoints array, asserting id order
+        matches (the original item 72 scope) and, per WF8c clause (r)
+        (OPUS-R113-001/-002, restating GPT-R112-001), extends the check
+        into a full-field comparison over exactly the five columns the
+        table carries: id, name, depends_on, complexity, session_target.
+        completion_obligations is deliberately excluded -- the table has
+        no column for it, so there is nothing on the view side to compare
+        against; it remains registry-only metadata for
+        WFO-LEDGER-COVERAGE/WFR-68's obligation-resolution machinery."""
         repo_root = _repo_root()
-        plan_path = repo_root / "docs" / "ai-workflow" / "WORKFLOW_V2_PLAN.md"
-        lines = plan_path.read_text().splitlines()
-        section_idx = next(
-            (i for i, line in enumerate(lines) if line.startswith("## Checkpoint registry")), None,
-        )
-        self.assertIsNotNone(section_idx, "WORKFLOW_V2_PLAN.md has no '## Checkpoint registry' section")
-        header_idx = next(
-            (i for i in range(section_idx, len(lines)) if lines[i].startswith("| ID |")), None,
-        )
-        self.assertIsNotNone(header_idx, "no '| ID | ...' table header found under 'Checkpoint registry'")
-        separator_idx = header_idx + 1
-        self.assertTrue(
-            lines[separator_idx].startswith("|---"),
-            f"expected a Markdown table separator row after the header, got: {lines[separator_idx]!r}",
-        )
-        row_ids = []
-        i = separator_idx + 1
-        while i < len(lines) and lines[i].startswith("|"):
-            row_ids.append(lines[i].split("|")[1].strip())
-            i += 1
-        self.assertTrue(row_ids, "no data rows parsed from the Checkpoint registry table")
-
+        rows = _parse_checkpoint_registry_table(repo_root)
         registry = json.loads((repo_root / "docs/ai-workflow/registry/workflow-v2-1-core-registry.json").read_text())
-        json_ids = [entry["id"] for entry in registry["checkpoints"]]
+        json_checkpoints = registry["checkpoints"]
+
+        row_ids = [row["id"] for row in rows]
+        json_ids = [entry["id"] for entry in json_checkpoints]
         self.assertEqual(
             row_ids, json_ids,
             "the Checkpoint registry Markdown table's row order has drifted from "
             "the registry JSON's checkpoints array order",
         )
+
+        registry_by_id = {entry["id"]: entry for entry in json_checkpoints}
+        mismatches = []
+        for row in rows:
+            mismatches.extend(_registry_row_mismatches(row, registry_by_id[row["id"]]))
+        self.assertEqual(
+            mismatches, [],
+            f"{len(mismatches)} field(s) diverged between the Checkpoint registry "
+            f"Markdown table and the registry JSON (checkpoint, field, table value, "
+            f"json value): {mismatches}",
+        )
+
+    def test_072_full_field_comparison_catches_a_real_divergence_not_vacuously_true(self):
+        """The positive test above proves nothing if a table/JSON mismatch
+        can never actually be detected. Runs the real
+        _registry_row_mismatches comparison used by the positive test
+        against the real WF0 table row paired with a deliberately
+        tampered copy of the real WF0 registry entry, once per compared
+        field, and confirms each tamper is individually flagged."""
+        repo_root = _repo_root()
+        rows = _parse_checkpoint_registry_table(repo_root)
+        wf0_row = next(row for row in rows if row["id"] == "WF0")
+        registry = json.loads((repo_root / "docs/ai-workflow/registry/workflow-v2-1-core-registry.json").read_text())
+        wf0_entry = next(e for e in registry["checkpoints"] if e["id"] == "WF0")
+
+        self.assertEqual(_registry_row_mismatches(wf0_row, wf0_entry), [])
+
+        tampered = dict(wf0_entry, name=wf0_entry["name"] + " tampered")
+        fields = {m[1] for m in _registry_row_mismatches(wf0_row, tampered)}
+        self.assertEqual(fields, {"name"})
+
+        tampered = dict(wf0_entry, depends_on=["WF4a-i"])
+        fields = {m[1] for m in _registry_row_mismatches(wf0_row, tampered)}
+        self.assertEqual(fields, {"depends_on"})
+
+        tampered = dict(wf0_entry, complexity=wf0_entry["complexity"] + 1)
+        fields = {m[1] for m in _registry_row_mismatches(wf0_row, tampered)}
+        self.assertEqual(fields, {"complexity"})
+
+        tampered = dict(wf0_entry, session_target=wf0_entry["session_target"] + "0")
+        fields = {m[1] for m in _registry_row_mismatches(wf0_row, tampered)}
+        self.assertEqual(fields, {"session_target"})
 
     def test_real_registry_and_mapping_have_full_bidirectional_coverage(self):
         repo_root = _repo_root()
