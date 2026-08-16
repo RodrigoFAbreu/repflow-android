@@ -113,6 +113,36 @@
       "item": 376,
       "evidence": "workflow_state_test.TestReconciliationTableParsing.test_resolve_owner_picks_leftmost_occurring_checkpoint_not_a_fixed_preference",
       "note": "Reconciliation-table owner resolution picks the leftmost-occurring checkpoint"
+    },
+    {
+      "item": 222,
+      "evidence": "workflow_state_test.TestRecordBundleGenerationSameContentOutcome",
+      "note": "record_bundle_generation's same_content outcome leaves reviewed_implementation_head/implementation_revision unchanged (WF8c clause (c), same-content republication part 1)"
+    },
+    {
+      "item": 306,
+      "evidence": "workflow_state_test.TestApprovalBasisResolution.test_pinned_block_refuses_a_stale_bundle_revise_laundering_the_current_pin",
+      "note": "A stale-bundle REVISE round cannot launder a durably pinned current BLOCK into USER_OVERRIDE (WF8c clause (a), positive-membership half)"
+    },
+    {
+      "item": 320,
+      "evidence": "workflow_state_test.TestTechnicalReviewBlockPins",
+      "note": "D2a technical_review_block_pins ledger: durable per-bundle_id recording (WF8c clause (a), pin half)"
+    },
+    {
+      "item": 321,
+      "evidence": "workflow_state_test.TestTechnicalReviewBlockPins",
+      "note": "is_technical_review_block_pinned is scoped per bundle_id -- a stale pin never carries forward onto a distinct bundle (WF8c clause (a), pin half)"
+    },
+    {
+      "item": 322,
+      "evidence": "workflow_state_test.TestTechnicalReviewBlockPins",
+      "note": "record_technical_review_block_pin is idempotent per bundle_id -- a repeat observation records no duplicate entry (WF8c clause (a), pin half)"
+    },
+    {
+      "item": 328,
+      "evidence": "workflow_state_test.TestTechnicalReviewBlockPins",
+      "note": "PinLedgerMonotonicityError: removal/mutation of an existing pin refused, exactly-one-append allowed, duplicate bundle_id refused (WF8c clause (a), pin half)"
     }
   ]
 }
