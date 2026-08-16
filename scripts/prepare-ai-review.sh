@@ -162,6 +162,19 @@ BUNDLE_DIR="$ROOT_DIR/current"
 FILES_DIR="$BUNDLE_DIR/files"
 mkdir -p "$FILES_DIR"
 
+# --- generator-side stage-document binding (WFR-67, WF8c item (h) part 2):
+# plan-stage-only, and must run before any other file under $BUNDLE_DIR is
+# written (the `mkdir -p` above is the sole, harmless exception) --
+# captures a private pinned snapshot of every plan-stage protected path and
+# derives $BUNDLE_DIR/PLAN.md unconditionally from it, so PLAN.md, its
+# files/ copy below, and review_content_id (computed from the same pin at
+# --write-manifest time) can never independently disagree about which
+# bytes they describe (OPUS-R89-001 through OPUS-R92-003).
+if [[ "$STAGE" == "plan" ]]; then
+  python3 "$REPO_ROOT/scripts/workflow_fingerprint.py" "$BASE_SHA" \
+    --work-item-id "$WORK_ITEM_ID" --derive-plan-stage-document
+fi
+
 # --- round-identity preflight (GPT-R42-001, GPT-R43-001, GPT-R43-003): run
 # before any other write below, never after (GPT-R43-003 -- `current/` is
 # "the bundle currently under review" per REVIEW_PROTOCOL.md, not a
@@ -284,8 +297,14 @@ PYEOF
   fi
 fi
 
-# --- author-written files: create empty stubs only if missing, never overwrite ---
-for f in REVIEW_REQUEST.md PLAN.md IMPLEMENTATION_SUMMARY.md TEST_RESULTS.md CONTEXT_FILES.txt; do
+# --- author-written files: create empty stubs only if missing, never
+# overwrite -- PLAN.md leaves this list for the plan stage (WFR-67): it was
+# already derived, unconditionally, above.
+STUB_FILES=(REVIEW_REQUEST.md IMPLEMENTATION_SUMMARY.md TEST_RESULTS.md CONTEXT_FILES.txt)
+if [[ "$STAGE" != "plan" ]]; then
+  STUB_FILES+=(PLAN.md)
+fi
+for f in "${STUB_FILES[@]}"; do
   path="$BUNDLE_DIR/$f"
   if [[ ! -f "$path" ]]; then
     : > "$path"
@@ -357,6 +376,26 @@ while IFS= read -r -d '' status && IFS= read -r -d '' path; do
   fi
 done < <(git diff --name-status -z "$BASE_SHA" -- .)
 
+# --- generator-side stage-document binding, continued (WFR-67): overwrite
+# any protected path's files/ copy just populated above with the pinned
+# bytes captured before this run touched anything -- closing the "four of
+# the five [protected] inputs stayed in [an independently-timed] window"
+# gap (OPUS-R91-001) for the four protected paths PLAN.md's own derivation
+# does not otherwise touch. A protected path absent from files/ (not part
+# of this round's diff) is left absent.
+if [[ "$STAGE" == "plan" ]]; then
+  PYTHONPATH="$REPO_ROOT/scripts:${PYTHONPATH:-}" python3 - "$REPO_ROOT" "$WORK_ITEM_ID" "$BUNDLE_DIR" <<'PYEOF'
+import sys
+from pathlib import Path
+import workflow_fingerprint as fingerprint
+
+repo_root, work_item_id, bundle_dir = Path(sys.argv[1]), sys.argv[2], Path(sys.argv[3])
+metadata = fingerprint.resolve_plan_stage_metadata(repo_root, work_item_id)
+pin_dir = repo_root / ".ai-review" / work_item_id / ".pin"
+fingerprint.refresh_files_copy_from_pin(pin_dir, bundle_dir, metadata)
+PYEOF
+fi
+
 # --- copy explicitly listed context files, if any ---
 CONTEXT_FILES_LIST="$BUNDLE_DIR/CONTEXT_FILES.txt"
 if [[ -s "$CONTEXT_FILES_LIST" ]]; then
@@ -416,53 +455,32 @@ ARCHIVE_TMP="$ARCHIVE.tmp"
 tar -czf "$ARCHIVE_TMP" -C "$ROOT_DIR" current
 mv -f "$ARCHIVE_TMP" "$ARCHIVE"
 
-# --- reproducibility check (D-Fingerprint-Generalization, GPT-R30-001/003):
-# when a manifest was written above, require bundle_id equality across
-# three independent computations -- the value MANIFEST.md itself declares,
-# a fresh recomputation directly over $BUNDLE_DIR, and a fresh
-# recomputation over the archive's own extracted content -- so a stale or
-# non-reproducible archive fails closed here instead of being discovered
-# only by an external reviewer's own independent recomputation.
+# --- closing check (D-Fingerprint-Generalization, GPT-R30-001/003; WFR-67
+# generator-side stage-document binding, parts 3/3b): when a manifest was
+# written above, require bundle_id equality across three independent
+# computations -- the value MANIFEST.md itself declares, a fresh
+# recomputation directly over $BUNDLE_DIR, and a fresh recomputation over
+# the archive's own extracted content -- plus, for the plan stage, the
+# fourth byte-identity assertion (PLAN.md/files/archive vs. the pinned
+# plan_path snapshot) -- so a stale or non-reproducible artifact fails
+# closed here instead of being discovered only by an external reviewer's
+# own independent recomputation. On failure, for a scoped work item, this
+# withdraws the bundle (REJECTED marker, ordered removal, quarantine)
+# rather than leaving a stale-but-self-verifying current/ and archive in
+# place; on success, it clears any pre-existing REJECTED marker.
 if [[ -f "$BUNDLE_DIR/MANIFEST.md" ]]; then
-  REPRO_CHECK=$(
-    PYTHONPATH="$REPO_ROOT/scripts:${PYTHONPATH:-}" python3 - "$BUNDLE_DIR" "$ARCHIVE" <<'PYEOF'
-import sys
-import tarfile
-import tempfile
-from pathlib import Path
-
-import workflow_fingerprint as fingerprint
-
-bundle_dir, archive = Path(sys.argv[1]), Path(sys.argv[2])
-
-recorded = fingerprint.read_manifest_identifiers(bundle_dir / "MANIFEST.md")
-recorded_bundle_id = recorded.get("bundle_id")
-if recorded_bundle_id is None:
-    print("status: error")
-    print("message: MANIFEST.md has no recorded bundle_id")
-    sys.exit(0)
-
-ondisk_bundle_id, _ = fingerprint.compute_bundle_id(bundle_dir)
-
-with tempfile.TemporaryDirectory() as tmp:
-    with tarfile.open(archive) as tf:
-        tf.extractall(tmp)
-    extracted_bundle_id, _ = fingerprint.compute_bundle_id(Path(tmp) / "current")
-
-if recorded_bundle_id == ondisk_bundle_id == extracted_bundle_id:
-    print("status: ok")
-    print(f"bundle_id: {recorded_bundle_id}")
-else:
-    print("status: mismatch")
-    print(f"manifest_bundle_id: {recorded_bundle_id}")
-    print(f"ondisk_bundle_id: {ondisk_bundle_id}")
-    print(f"extracted_bundle_id: {extracted_bundle_id}")
-PYEOF
-  )
-  REPRO_STATUS=$(printf '%s\n' "$REPRO_CHECK" | sed -n 's/^status: //p')
-  if [[ "$REPRO_STATUS" != "ok" ]]; then
-    echo "error: bundle archive is not reproducible -- on-disk, archived, and extracted identifiers must all agree:" >&2
-    printf '%s\n' "$REPRO_CHECK" >&2
+  FINALIZE_ARGS=("$BASE_SHA" --finalize-bundle "$BUNDLE_DIR" "$ARCHIVE" --generation-stage "$STAGE")
+  if [[ -n "$WORK_ITEM_ID" ]]; then
+    FINALIZE_ARGS+=(--work-item-id "$WORK_ITEM_ID")
+  fi
+  set +e
+  FINALIZE_CHECK=$(python3 "$REPO_ROOT/scripts/workflow_fingerprint.py" "${FINALIZE_ARGS[@]}")
+  FINALIZE_EXIT=$?
+  set -e
+  FINALIZE_STATUS=$(printf '%s\n' "$FINALIZE_CHECK" | sed -n 's/^status: //p')
+  if [[ "$FINALIZE_EXIT" -ne 0 || "$FINALIZE_STATUS" != "ok" ]]; then
+    echo "error: bundle generation did not finalize cleanly:" >&2
+    printf '%s\n' "$FINALIZE_CHECK" >&2
     exit 1
   fi
 fi

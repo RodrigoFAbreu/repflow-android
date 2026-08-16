@@ -199,6 +199,9 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
+import uuid
 from pathlib import Path
 from types import MappingProxyType
 from typing import Mapping, NamedTuple
@@ -468,6 +471,23 @@ class BundleRejectedError(Exception):
     determined -- refuses before the caller's own first durable write,
     read, or report, naming the marker path and whatever diagnostic
     content it holds."""
+
+
+class PlanStageDocumentStaleError(Exception):
+    """Raised by `assert_plan_stage_document_matches_pin` (`WFR-67`,
+    generator-side stage-document binding, part 3) when `bundle_dir/PLAN.md`,
+    its `files/` copy, or the archive's own extracted copy is no longer
+    byte-identical to the pinned `plan_path` snapshot the generation
+    derived it from -- the binding that makes `review_content_id`
+    (computed from that same pin) actually describe the document a
+    reviewer reads."""
+
+
+class BundleWithdrawalError(Exception):
+    """Raised by `withdraw_bundle` (`WFR-67`, part 3b) when a withdrawal
+    step cannot complete -- the exception always follows a `REJECTED`
+    marker update naming the failed step and the surviving path, so a
+    partial withdrawal is never silent."""
 
 
 WORK_ITEM_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
@@ -1845,12 +1865,10 @@ def relocate_flat_bundle_to_scoped_layout(repo_root: Path, work_item_id: str) ->
 # sits beside the `current/` every stage shares), so one shared resolver and
 # one shared assertion serve every consumer and every writer alike, exactly
 # as `assert_local_generation_matches` does for worktree/HEAD staleness. The
-# generator-side write of this marker (the ordered, fail-closed quarantine
-# withdrawal `prepare-ai-review.sh` performs on a failed generation) is not
-# yet built -- deferred, separately tracked, WF8c scope remains open on that
-# half. This half is the read-side refusal every consumer and writer call
-# site needs regardless, and is independently correct and testable: a
-# hand-written marker refuses exactly as a generator-written one would.
+# generator-side write of this marker -- the ordered, fail-closed quarantine
+# withdrawal `prepare-ai-review.sh` performs on a failed generation, and the
+# plan-stage pinned-projection binding that makes the withdrawal's trigger
+# meaningful -- is built below (`WF8c` item (h), part 2).
 # ---------------------------------------------------------------------------
 
 
@@ -1909,6 +1927,343 @@ def assert_bundle_not_rejected(repo_root: Path, work_item_id: str) -> None:
         f"required before this work item's bundle is reviewable, "
         f"ingestible, or approvable again"
     )
+
+
+# ---------------------------------------------------------------------------
+# Generator-side stage-document binding (`WFR-67`, `WF8c` item (h), part 2):
+# `bundle_dir/PLAN.md` is *derived*, not authored, from a private pinned
+# snapshot of every plan-stage protected path -- read exactly once, at
+# derivation, so `PLAN.md`, its `files/` copy, and `review_content_id`
+# (computed from that same pin) can never independently disagree about which
+# bytes they describe (`OPUS-R89-001` through `OPUS-R92-003`). A failed
+# closing binding assertion withdraws the bundle rather than leaving a
+# stale-but-self-verifying `current/` and archive behind (part 3b,
+# `OPUS-R90-001`/`OPUS-R91-004`/`OPUS-R93-003`/`OPUS-R94-001`).
+# ---------------------------------------------------------------------------
+
+
+def _pin_dir_for_work_item(repo_root: Path, work_item_id: str) -> Path:
+    """The private pinned-snapshot directory a plan-stage generation
+    captures its protected paths into -- gitignored (`.ai-review/`),
+    scoped per work item, never itself part of any bundle or fingerprint
+    input."""
+    return repo_root / ".ai-review" / work_item_id / ".pin"
+
+
+def capture_plan_stage_pin(
+    repo_root: Path, work_item_id: str, metadata: PlanStageMetadata,
+) -> Path:
+    """Reads every one of `metadata.protected_paths` exactly once, from
+    the live worktree, into a private snapshot directory -- so a
+    plan-stage generation's derived `PLAN.md`, its `files/` copies of any
+    protected path, and its `review_content_id` all source the identical
+    bytes, never three independently-timed worktree reads (`OPUS-R91-001`:
+    pinning `plan_path` alone left four of the five protected inputs in
+    the same window). Fails closed, before writing anything, if a
+    protected path -- most importantly `plan_path` -- is absent, a
+    symlink, or not a regular file (this doubles as the derivation's own
+    fail-closed precondition, part 2). Replaces any prior pin atomically
+    (`os.replace` onto the final name), so an interrupted capture never
+    leaves a partial pin looking current. Returns the pin directory."""
+    pin_dir = _pin_dir_for_work_item(repo_root, work_item_id)
+    tmp_pin_dir = pin_dir.with_name(".pin.tmp")
+    if tmp_pin_dir.exists():
+        shutil.rmtree(tmp_pin_dir)
+    tmp_pin_dir.mkdir(parents=True)
+    for rel_path in sorted(metadata.protected_paths):
+        abs_path = repo_root / rel_path
+        if abs_path.is_symlink() or not abs_path.is_file():
+            shutil.rmtree(tmp_pin_dir, ignore_errors=True)
+            raise AbsentProtectedPathError(rel_path)
+        dest = tmp_pin_dir / rel_path
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(abs_path, dest)
+    if pin_dir.exists():
+        shutil.rmtree(pin_dir)
+    os.replace(tmp_pin_dir, pin_dir)
+    return pin_dir
+
+
+def derive_plan_stage_document(pin_dir: Path, bundle_dir: Path, metadata: PlanStageMetadata) -> None:
+    """Part 1 of the generator-side stage-document binding:
+    `bundle_dir/PLAN.md` is derived unconditionally from the pinned
+    `plan_path` snapshot -- overwritten whether or not a file is already
+    there, leaving the create-if-missing stub list every other
+    author-written plan-stage file remains on. Must run after
+    `capture_plan_stage_pin` for the same generation, and before any
+    other file under `bundle_dir` is written (part 2's fail-closed
+    ordering places this at `prepare-ai-review.sh`'s round-identity
+    preflight position; the pre-existing `mkdir -p` remains the sole
+    exception). Also runs `assert_stage_completeness` immediately after
+    derivation (part 3), giving that check its production call site."""
+    pinned_plan_bytes = (pin_dir / metadata.plan_path).read_bytes()
+    (bundle_dir / "PLAN.md").write_bytes(pinned_plan_bytes)
+    assert_stage_completeness(bundle_dir, "plan", plan_revision=metadata.plan_revision)
+
+
+def refresh_files_copy_from_pin(pin_dir: Path, bundle_dir: Path, metadata: PlanStageMetadata) -> None:
+    """After `prepare-ai-review.sh`'s generic diff-based `files/` copy
+    loop runs, overwrite any protected path's copy under `bundle_dir/files/`
+    with the pinned bytes it was captured with earlier in this same
+    generation -- closing `OPUS-R91-001`'s "four of the five inputs
+    stayed in exactly the window" gap for the four protected paths
+    `PLAN.md`'s own derivation does not otherwise touch. A protected path
+    absent from `files/` (not part of this round's diff) is left absent;
+    this never creates a `files/` entry the diff-based copy did not."""
+    for rel_path in sorted(metadata.protected_paths):
+        files_copy = bundle_dir / "files" / rel_path
+        if files_copy.is_file():
+            files_copy.write_bytes((pin_dir / rel_path).read_bytes())
+
+
+def _snapshot_pin(repo_root: Path, pin_dir: Path, rel_path: str) -> dict:
+    """Like `_snapshot_worktree`, but reads from the private pinned
+    snapshot directory `capture_plan_stage_pin` captured at one earlier
+    moment in this generation run, instead of the live worktree -- the
+    read `compute_review_content_id_plan_stage_from_pin` uses so
+    `review_content_id` is provably computed from the same bytes
+    `PLAN.md` was derived from, not a second, independently-timed read."""
+    abs_path = pin_dir / rel_path
+    if not abs_path.is_file():
+        return {"exists": False, "mode": None, "blob": None}
+    executable = _core_file_mode_enabled(repo_root) and _owner_executable(abs_path.stat().st_mode)
+    mode = "100755" if executable else "100644"
+    data = abs_path.read_bytes()
+    blob = hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+    return {"exists": True, "mode": mode, "blob": blob}
+
+
+def compute_review_content_manifest_plan_stage_from_pin(
+    repo_root: Path, pin_dir: Path, protected: frozenset[str] = PLAN_STAGE_PROTECTED,
+) -> list[dict]:
+    """Pin-sourced counterpart of
+    `compute_review_content_manifest_plan_stage_worktree` -- same
+    fail-closed-on-absence rule, sourced from the pin instead of the live
+    worktree."""
+    manifest = []
+    for path in sorted(protected):
+        entry = _snapshot_pin(repo_root, pin_dir, path)
+        if not entry["exists"]:
+            raise AbsentProtectedPathError(path)
+        manifest.append({"path": path, **entry})
+    return manifest
+
+
+def compute_review_content_id_plan_stage_from_pin(
+    repo_root: Path,
+    pin_dir: Path,
+    base: str,
+    work_item_type: str,
+    work_item_id: str,
+    plan_revision: int,
+    protected: frozenset[str],
+    excluded_paths: Mapping[str, str],
+    excluded_prefixes: Mapping[str, str],
+) -> tuple[str, dict]:
+    """Pin-sourced counterpart of `compute_review_content_id_plan_stage`:
+    identical projection shape, manifest read from the private pinned
+    snapshot a generation captured earlier in the same run instead of a
+    fresh, independently-timed worktree read -- the fix `OPUS-R91-001`
+    requires (all five protected paths read exactly once, at derivation,
+    into a single pinned projection, with `review_content_id` computed
+    from that projection rather than a later independent snapshot).
+    Deliberately skips `assert_all_changed_paths_classified_worktree`:
+    the caller (`write_manifest_with_verified_identifiers`) always
+    follows this with a fresh, live-worktree recompute via
+    `compute_review_content_id_plan_stage` for its own idempotence check,
+    which already performs that classification precondition -- and whose
+    disagreement with this pin-sourced digest is itself the staleness
+    signal part 3's closing re-read exists to catch."""
+    validate_work_item_id(work_item_id)
+    validate_work_item_type(work_item_type)
+    base_full = resolve_base(repo_root, base)
+    manifest = compute_review_content_manifest_plan_stage_from_pin(repo_root, pin_dir, protected)
+    projection = {
+        "stage": "plan",
+        "work_item_type": work_item_type,
+        "work_item_id": work_item_id,
+        "plan_revision": plan_revision,
+        "base_commit": base_full,
+        "reviewed_implementation_head": None,
+        "review_content_manifest": manifest,
+        "protected_paths": sorted(protected),
+        "excluded_paths": sorted(excluded_paths),
+        "excluded_prefixes": sorted(excluded_prefixes),
+    }
+    digest = hashlib.sha256(_canonical_json(projection)).hexdigest()
+    return digest, projection
+
+
+def assert_plan_stage_document_matches_pin(
+    pin_dir: Path, bundle_dir: Path, metadata: PlanStageMetadata, archive_extracted_root: Path,
+) -> None:
+    """Part 3 of the generator-side stage-document binding -- the closing
+    reproducibility check's fourth assertion: `bundle_dir/PLAN.md`,
+    `bundle_dir/files/<plan_path>` (when present -- absence alone is not
+    a failure, since a plan-only round need not touch every protected
+    path), and the archive's own extracted `current/PLAN.md` must each be
+    byte-identical to the pinned `plan_path` snapshot this generation
+    derived `PLAN.md` from. This is the binding itself: without it,
+    `review_content_id` (computed from the pin) and the document a
+    reviewer actually reads (`PLAN.md`) could silently diverge whenever
+    something touches `plan_path` between derivation and this check."""
+    pinned_bytes = (pin_dir / metadata.plan_path).read_bytes()
+    mismatches = []
+
+    plan_md = bundle_dir / "PLAN.md"
+    if not plan_md.is_file() or plan_md.read_bytes() != pinned_bytes:
+        mismatches.append(str(plan_md))
+
+    files_copy = bundle_dir / "files" / metadata.plan_path
+    if files_copy.is_file() and files_copy.read_bytes() != pinned_bytes:
+        mismatches.append(str(files_copy))
+
+    archived_plan_md = archive_extracted_root / "PLAN.md"
+    if not archived_plan_md.is_file() or archived_plan_md.read_bytes() != pinned_bytes:
+        mismatches.append(str(archived_plan_md))
+
+    if mismatches:
+        raise PlanStageDocumentStaleError(
+            f"bundle PLAN.md is not byte-identical to the pinned "
+            f"plan_path ({metadata.plan_path!r}) snapshot this generation "
+            f"derived it from: {mismatches}"
+        )
+
+
+def withdraw_bundle(repo_root: Path, work_item_id: str, reason: str) -> Path:
+    """Part 3b of the generator-side stage-document binding: a failed
+    closing binding assertion must leave no review-ready artifact.
+    Writes the `REJECTED` marker *before* the first removal, naming the
+    withdrawal about to be performed -- unreachable failure handlers
+    (`SIGKILL`, a closed terminal) cannot un-write history, but a marker
+    written first is visible at every instant of the sequence, not only
+    the ones a handler reaches. Removes the archive, then `MANIFEST.md`
+    -- in that order, because the archive is the complete,
+    self-contained, self-verifying artifact that actually leaves the
+    machine, so it is the more dangerous of the two to leave behind if a
+    crash lands between the two removals. Then quarantines `current/` by
+    renaming it to a sibling `current.rejected-<token>/`, never deleting
+    it. On any step that cannot complete, updates the marker naming the
+    failed step and the surviving path, then raises
+    `BundleWithdrawalError` -- a partial withdrawal is never silent. Only
+    a withdrawal that completes every step removes its own marker: once
+    `current/` is renamed away, nothing named `current/` remains for the
+    marker to protect against, and `resolve_bundle_dir` sees an ordinary
+    absent bundle. Returns the quarantine directory."""
+    bundle_dir = repo_root / resolve_bundle_dir(repo_root, work_item_id)
+    root_dir = bundle_dir.parent
+    marker_path = repo_root / resolve_rejected_marker_path(repo_root, work_item_id)
+    archive_path = root_dir / "review-bundle.tar.gz"
+    manifest_path = bundle_dir / MANIFEST_FILENAME
+    quarantine_path = root_dir / f"current.rejected-{uuid.uuid4().hex}"
+
+    def _mark(text: str) -> None:
+        marker_path.write_text(text)
+
+    def _fail(step: str, exc: Exception, surviving: str) -> None:
+        _mark(
+            f"REJECTED: withdrawal FAILED at step {step!r}\n"
+            f"reason: {reason}\nerror: {exc!r}\nsurviving: {surviving}\n"
+        )
+        raise BundleWithdrawalError(f"withdrawal failed at step {step!r}: {exc!r}") from exc
+
+    _mark(f"REJECTED: withdrawal in progress\nreason: {reason}\nstep: starting\n")
+
+    if archive_path.exists():
+        try:
+            archive_path.unlink()
+        except OSError as exc:
+            _fail("remove archive", exc, f"{archive_path}, {manifest_path}, {bundle_dir}")
+
+    _mark(f"REJECTED: withdrawal in progress\nreason: {reason}\nstep: archive removed\n")
+
+    if manifest_path.exists():
+        try:
+            manifest_path.unlink()
+        except OSError as exc:
+            _fail("remove MANIFEST.md", exc, f"{manifest_path}, {bundle_dir}")
+
+    _mark(f"REJECTED: withdrawal in progress\nreason: {reason}\nstep: MANIFEST.md removed\n")
+
+    try:
+        os.rename(bundle_dir, quarantine_path)
+    except OSError as exc:
+        _fail("quarantine current/", exc, str(bundle_dir))
+
+    marker_path.unlink()
+    return quarantine_path
+
+
+def clear_rejected_marker_if_present(repo_root: Path, work_item_id: str) -> None:
+    """Work-item-scoped, not stage-scoped: any generation, at any stage,
+    that has itself completed and verified its own end state supersedes
+    what a pre-existing `REJECTED` marker names, because it has rewritten
+    the `MANIFEST.md` the marked residue's own self-verification depended
+    on. Called only from a generation's own successful end, after its
+    closing checks pass and its own `MANIFEST.md` is written -- never
+    before."""
+    marker_path = repo_root / resolve_rejected_marker_path(repo_root, work_item_id)
+    if marker_path.exists():
+        marker_path.unlink()
+
+
+def finalize_bundle_generation(
+    repo_root: Path, bundle_dir: Path, archive_path: Path, stage: str, work_item_id: str | None,
+) -> dict:
+    """The closing half of one `prepare-ai-review.sh` generation run,
+    factored out into one testable function: the pre-existing three-way
+    `bundle_id` reproducibility check (manifest / on-disk / archived);
+    for the plan stage with a captured pin, additionally the byte-identity
+    binding check (part 3); on any failure, and only when `work_item_id`
+    is given (the marker mechanism has no flat-compatibility-layout
+    counterpart), withdrawal (part 3b) rather than leaving a
+    stale-but-self-verifying artifact in place; on success, clearing any
+    pre-existing `REJECTED` marker for this work item. Returns a dict
+    describing the outcome; never swallows a withdrawal step's own
+    `BundleWithdrawalError`."""
+    recorded = read_manifest_identifiers(bundle_dir / MANIFEST_FILENAME)
+    recorded_bundle_id = recorded.get("bundle_id")
+    if recorded_bundle_id is None:
+        return {"status": "error", "message": "MANIFEST.md has no recorded bundle_id"}
+
+    ondisk_bundle_id, _ = compute_bundle_id(bundle_dir)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        with tarfile.open(archive_path) as tf:
+            tf.extractall(tmp)
+        extracted_root = Path(tmp) / "current"
+        extracted_bundle_id, _ = compute_bundle_id(extracted_root)
+
+        mismatch_detail = None
+        if not (recorded_bundle_id == ondisk_bundle_id == extracted_bundle_id):
+            mismatch_detail = (
+                f"bundle_id mismatch: manifest={recorded_bundle_id} "
+                f"ondisk={ondisk_bundle_id} extracted={extracted_bundle_id}"
+            )
+        elif stage == "plan" and work_item_id is not None:
+            pin_dir = _pin_dir_for_work_item(repo_root, work_item_id)
+            if pin_dir.is_dir():
+                metadata = resolve_plan_stage_metadata(repo_root, work_item_id)
+                try:
+                    assert_plan_stage_document_matches_pin(
+                        pin_dir, bundle_dir, metadata, extracted_root,
+                    )
+                except PlanStageDocumentStaleError as exc:
+                    mismatch_detail = str(exc)
+
+        if mismatch_detail is not None:
+            if work_item_id is not None:
+                quarantine_path = withdraw_bundle(repo_root, work_item_id, mismatch_detail)
+                return {
+                    "status": "withdrawn",
+                    "message": mismatch_detail,
+                    "quarantine": str(quarantine_path),
+                }
+            return {"status": "mismatch", "message": mismatch_detail}
+
+    if work_item_id is not None:
+        clear_rejected_marker_if_present(repo_root, work_item_id)
+    return {"status": "ok", "bundle_id": recorded_bundle_id}
 
 
 # ---------------------------------------------------------------------------
@@ -2508,6 +2863,7 @@ def write_manifest_with_verified_identifiers(
     excluded_prefixes: Mapping[str, str] = PLAN_STAGE_EXCLUDED_PREFIXES,
     *,
     allow_rebind: bool = False,
+    pin_dir: Path | None = None,
 ) -> tuple[str, str]:
     """The **only** code path allowed to write `MANIFEST.md` (`OPUS-R18-002`
     — every other entry point, including the CLI's default invocation, is
@@ -2522,6 +2878,18 @@ def write_manifest_with_verified_identifiers(
     happens** (`OPUS-R18-005`) — checked first, not last, so a stale
     `REVIEW_REQUEST.md` fails closed without leaving `MANIFEST.md`
     partially rewritten.
+
+    **`pin_dir`** (`WFR-67`, generator-side stage-document binding): when
+    given, the *first* `review_content_id` computation below sources its
+    manifest from this pinned snapshot (`compute_review_content_id_plan_stage_from_pin`)
+    instead of a fresh worktree read — the same pin `PLAN.md` was already
+    derived from earlier in this generation run. The recompute-and-assert
+    step below is unchanged: it always re-reads the **live worktree**, so
+    a pin-vs-live disagreement here is exactly the staleness part 3's
+    closing re-read exists to catch, reusing this function's own
+    pre-existing idempotence machinery rather than a second, separate
+    check. `None` (the default) preserves this function's original,
+    always-live-read behavior for every other caller.
 
     **Write sequence is atomic across the idempotence check itself**
     (resolves `OPUS-R20-001`, missing-test item 138): every identifier
@@ -2553,11 +2921,18 @@ def write_manifest_with_verified_identifiers(
     if not allow_rebind:
         _assert_manifest_binding_agrees(manifest_path, work_item_id=work_item_id, base_commit=base_full)
 
-    digest, _projection = compute_review_content_id_plan_stage(
-        repo_root, base_full, work_item_type=work_item_type, work_item_id=work_item_id,
-        plan_revision=plan_revision, protected=protected,
-        excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,
-    )
+    if pin_dir is not None:
+        digest, _projection = compute_review_content_id_plan_stage_from_pin(
+            repo_root, pin_dir, base_full, work_item_type=work_item_type, work_item_id=work_item_id,
+            plan_revision=plan_revision, protected=protected,
+            excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,
+        )
+    else:
+        digest, _projection = compute_review_content_id_plan_stage(
+            repo_root, base_full, work_item_type=work_item_type, work_item_id=work_item_id,
+            plan_revision=plan_revision, protected=protected,
+            excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,
+        )
     assert_review_request_states_review_content_id(bundle_dir, digest)
 
     # Computed once and reused for both renders below, so the placeholder
@@ -2632,7 +3007,14 @@ def write_manifest_with_verified_identifiers_for_work_item(
     22). `base`, if given, overrides the resolved item's own declared
     `base_commit` (used for the one-time migration rebind, where the
     bundle's real base commit is `workflow-v2-1-core`'s own -- never a
-    silent default for any other caller)."""
+    silent default for any other caller).
+
+    **Pin auto-detection** (`WFR-67`): if `capture_plan_stage_pin` already
+    ran for this work item in the same generation (`.ai-review/<work_item_id>/.pin`
+    exists), it is passed through to `write_manifest_with_verified_identifiers`
+    automatically -- no separate flag needed, and no behavior change for
+    any caller that never captured one (the ordinary case for every
+    existing test and for every non-plan-stage caller)."""
     resolved_bundle_dir = repo_root / ".ai-review" / work_item_id / "current"
     missing = sorted(
         f for f in REQUIRED_GENERATION_FILES if not (resolved_bundle_dir / f).is_file()
@@ -2642,12 +3024,14 @@ def write_manifest_with_verified_identifiers_for_work_item(
 
     metadata = resolve_plan_stage_metadata(repo_root, work_item_id)
     base_to_use = base if base is not None else metadata.base_commit
+    pin_dir = _pin_dir_for_work_item(repo_root, work_item_id)
 
     return write_manifest_with_verified_identifiers(
         repo_root, resolved_bundle_dir, base_to_use,
         metadata.work_item_type, metadata.work_item_id, metadata.plan_revision,
         metadata.protected_paths, metadata.excluded_paths, metadata.excluded_prefixes,
         allow_rebind=allow_rebind,
+        pin_dir=pin_dir if pin_dir.is_dir() else None,
     )
 
 
@@ -2921,6 +3305,33 @@ if __name__ == "__main__":
             "current HEAD, recorded as reviewed_implementation_head."
         ),
     )
+    parser.add_argument(
+        "--derive-plan-stage-document", action="store_true",
+        help=(
+            "WFR-67 generator-side stage-document binding, plan-stage-only "
+            "pre-generation step: captures a private pinned snapshot of "
+            "every plan-stage protected path and derives bundle_dir/PLAN.md "
+            "unconditionally from it. Must run before any other file under "
+            "bundle_dir is written; --write-manifest later in the same "
+            "generation run automatically consumes the same pin. Requires "
+            "--work-item-id."
+        ),
+    )
+    parser.add_argument(
+        "--finalize-bundle", nargs=2, metavar=("BUNDLE_DIR", "ARCHIVE_PATH"),
+        help=(
+            "closing half of one generation run (WFR-67): the pre-existing "
+            "three-way bundle_id reproducibility check, the plan-stage "
+            "byte-identity binding check when a pin was captured, REJECTED-"
+            "marker withdrawal on failure, and REJECTED-marker clearing on "
+            "success. --generation-stage/--work-item-id select the mode."
+        ),
+    )
+    parser.add_argument(
+        "--generation-stage", choices=["plan", "implementation", "post-fix", "functional-review"],
+        default="plan",
+        help="the bundle stage being finalized with --finalize-bundle (mirrors prepare-ai-review.sh's own $STAGE)",
+    )
     args = parser.parse_args()
 
     repo_root = Path(
@@ -2929,6 +3340,33 @@ if __name__ == "__main__":
             check=True, capture_output=True, text=True,
         ).stdout.strip()
     )
+
+    if args.derive_plan_stage_document:
+        if not args.work_item_id:
+            raise SystemExit(
+                "error: --work-item-id is required with --derive-plan-stage-document"
+            )
+        bundle_dir = repo_root / ".ai-review" / args.work_item_id / "current"
+        metadata = resolve_plan_stage_metadata(repo_root, args.work_item_id)
+        pin_dir = capture_plan_stage_pin(repo_root, args.work_item_id, metadata)
+        derive_plan_stage_document(pin_dir, bundle_dir, metadata)
+        print("=== derived plan-stage document (WFR-67) ===")
+        print(f"work_item_id: {args.work_item_id}")
+        print(f"pinned snapshot: {pin_dir}")
+        print(f"wrote: {bundle_dir / 'PLAN.md'}")
+        raise SystemExit(0)
+
+    if args.finalize_bundle:
+        bundle_dir_arg, archive_arg = args.finalize_bundle
+        result = finalize_bundle_generation(
+            repo_root, Path(bundle_dir_arg), Path(archive_arg),
+            args.generation_stage, args.work_item_id,
+        )
+        print(f"status: {result['status']}")
+        for key, value in result.items():
+            if key != "status":
+                print(f"{key}: {value}")
+        raise SystemExit(0 if result["status"] == "ok" else 1)
 
     if args.write_manifest:
         if not args.work_item_id:

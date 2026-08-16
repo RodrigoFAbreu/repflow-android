@@ -39,8 +39,10 @@ import os
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 from unittest import mock
 
@@ -2409,6 +2411,480 @@ class TestBinaryAndUnusualPathBundleEntries(unittest.TestCase):
             self.assertIn(f"files/{weird_name}", entries)
             digest_again, _ = wf.compute_bundle_id(bundle_dir)
             self.assertEqual(digest, digest_again)
+
+
+def _metadata_for(repo, plan_revision=7, work_item_id="workflow-v2-1-core"):
+    """A hand-built `PlanStageMetadata` for `ScratchRepo`'s own fixed
+    plan-doc layout -- bypasses `resolve_plan_stage_metadata`'s
+    `WORKFLOW_STATE.json`/artifacts-declaration machinery entirely, which
+    every low-level test in this file already does for
+    `compute_review_content_id_plan_stage` itself."""
+    return wf.PlanStageMetadata(
+        work_item_id=work_item_id,
+        work_item_type="process",
+        plan_path="docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+        registry_path="docs/ai-workflow/registry/workflow-v2-1-core-registry.json",
+        mapping_path="docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json",
+        base_commit=repo.base,
+        plan_revision=plan_revision,
+        protected_paths=wf.PLAN_STAGE_PROTECTED,
+        excluded_paths=wf.PLAN_STAGE_EXCLUDED_PATHS,
+        excluded_prefixes=wf.PLAN_STAGE_EXCLUDED_PREFIXES,
+    )
+
+
+class TestGeneratorSideStageDocumentBinding(unittest.TestCase):
+    """`WFR-67`, `WF8c` item (h) part 2: `capture_plan_stage_pin`,
+    `derive_plan_stage_document`, the pin-sourced identity computation,
+    the closing byte-identity assertion, and the `REJECTED`-marker
+    withdrawal/clearing lifecycle."""
+
+    @staticmethod
+    @contextmanager
+    def _seeded_repo(plan_revision=7, **plan_doc_kwargs):
+        """A `ScratchRepo` with plan docs committed as base, seeded with a
+        `.gitignore` covering `.ai-review/` -- exactly this repository's
+        own real setup (`.gitignore`'s first line), needed because every
+        test below writes a private pin snapshot under `.ai-review/`, and
+        an unignored one would otherwise show up as an unclassified
+        untracked path to the (still-live) plan-stage classifier the
+        pre-existing `write_manifest_with_verified_identifiers`/
+        `compute_review_content_id_plan_stage` recompute step calls.
+        `registry_text` carries a `plan_revision` field matching
+        `plan_text`'s own `(Revision N)` marker, so
+        `resolve_plan_stage_metadata`'s `load_plan_revision`
+        cross-check -- reached by the small number of tests below that
+        exercise the real resolver rather than `_metadata_for`'s
+        hand-built bypass -- succeeds too."""
+        plan_doc_kwargs.setdefault("plan_text", f"plan body (Revision {plan_revision})\n")
+        plan_doc_kwargs.setdefault(
+            "registry_text", json.dumps({
+                "work_item_id": "workflow-v2-1-core", "checkpoints": [], "plan_revision": plan_revision,
+            }) + "\n",
+        )
+        plan_doc_kwargs.setdefault(
+            "mapping_text", json.dumps({
+                "work_item_id": "workflow-v2-1-core", "requirements": {},
+            }) + "\n",
+        )
+        with ScratchRepo() as repo:
+            repo.write_plan_docs(**plan_doc_kwargs)
+            (repo.root / ".gitignore").write_text(".ai-review/\n")
+            repo.commit_plan_docs_as_base()
+            yield repo
+
+    @staticmethod
+    def _seed_workflow_state(repo, metadata):
+        """Seeds the minimal `WORKFLOW_STATE.json`/`<id>-artifacts.json`
+        pair `resolve_plan_stage_metadata` needs -- only for the tests
+        below that exercise it directly (`finalize_bundle_generation`'s
+        plan-stage branch, matching the real `prepare-ai-review.sh`-driven
+        flow, unlike every other test in this class). Both live under
+        plan-stage excluded paths/prefixes, so leaving them untracked is
+        safe -- they never need to be part of the pinned snapshot."""
+        artifacts_dir = repo.root / "docs" / "ai-workflow" / "registry"
+        artifacts_dir.mkdir(parents=True, exist_ok=True)
+        (artifacts_dir / f"{metadata.work_item_id}-artifacts.json").write_text(json.dumps({
+            "schema_version": 2,
+            "work_item_id": metadata.work_item_id,
+            "plan_stage": {
+                "protected_paths": sorted(metadata.protected_paths),
+                "excluded_paths": dict(metadata.excluded_paths),
+                "excluded_prefixes": dict(metadata.excluded_prefixes),
+            },
+        }))
+        (repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json").write_text(json.dumps({
+            "schema_version": 1,
+            "active_work_item_id": metadata.work_item_id,
+            "work_items": {
+                metadata.work_item_id: {
+                    "work_item_id": metadata.work_item_id,
+                    "work_item_type": metadata.work_item_type,
+                    "plan_path": metadata.plan_path,
+                    "registry_path": metadata.registry_path,
+                    "mapping_path": metadata.mapping_path,
+                    "base_commit": metadata.base_commit,
+                    "plan_revision": metadata.plan_revision,
+                },
+            },
+        }))
+
+    def test_capture_pin_copies_exact_bytes_of_every_protected_path(self):
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            pin_dir = wf.capture_plan_stage_pin(repo.root, "workflow-v2-1-core", metadata)
+            for rel_path in wf.PLAN_STAGE_PROTECTED:
+                self.assertEqual(
+                    (pin_dir / rel_path).read_bytes(), (repo.root / rel_path).read_bytes(),
+                )
+
+    def test_capture_pin_fails_closed_on_absent_protected_path(self):
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            (repo.root / metadata.plan_path).unlink()
+            with self.assertRaises(wf.AbsentProtectedPathError):
+                wf.capture_plan_stage_pin(repo.root, "workflow-v2-1-core", metadata)
+
+    def test_capture_pin_fails_closed_on_symlinked_protected_path(self):
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            target = repo.root / metadata.plan_path
+            real = repo.root / "real-plan.md"
+            real.write_text(target.read_text())
+            target.unlink()
+            target.symlink_to(real)
+            with self.assertRaises(wf.AbsentProtectedPathError):
+                wf.capture_plan_stage_pin(repo.root, "workflow-v2-1-core", metadata)
+
+    def test_capture_pin_replaces_a_prior_pin_atomically(self):
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            wf.capture_plan_stage_pin(repo.root, "workflow-v2-1-core", metadata)
+            (repo.root / metadata.plan_path).write_text("plan v2 (Revision 7)\n")
+            pin_dir = wf.capture_plan_stage_pin(repo.root, "workflow-v2-1-core", metadata)
+            self.assertEqual((pin_dir / metadata.plan_path).read_text(), "plan v2 (Revision 7)\n")
+            self.assertFalse((pin_dir.with_name(".pin.tmp")).exists())
+
+    def test_derive_writes_plan_md_from_pin_and_passes_stage_completeness(self):
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo, plan_revision=7)
+            pin_dir = wf.capture_plan_stage_pin(repo.root, "workflow-v2-1-core", metadata)
+            bundle_dir = repo.root / ".ai-review" / "workflow-v2-1-core" / "current"
+            bundle_dir.mkdir(parents=True)
+            wf.derive_plan_stage_document(pin_dir, bundle_dir, metadata)
+            self.assertEqual((bundle_dir / "PLAN.md").read_text(), "plan body (Revision 7)\n")
+
+    def test_derive_overwrites_unconditionally_never_create_if_missing(self):
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            pin_dir = wf.capture_plan_stage_pin(repo.root, "workflow-v2-1-core", metadata)
+            bundle_dir = repo.root / ".ai-review" / "workflow-v2-1-core" / "current"
+            bundle_dir.mkdir(parents=True)
+            (bundle_dir / "PLAN.md").write_text("stale leftover copy\n")
+            wf.derive_plan_stage_document(pin_dir, bundle_dir, metadata)
+            self.assertEqual((bundle_dir / "PLAN.md").read_text(), "plan body (Revision 7)\n")
+
+    def test_derive_fails_closed_when_pinned_plan_revision_is_stale(self):
+        with self._seeded_repo(plan_revision=6) as repo:
+            metadata = _metadata_for(repo, plan_revision=7)
+            pin_dir = wf.capture_plan_stage_pin(repo.root, "workflow-v2-1-core", metadata)
+            bundle_dir = repo.root / ".ai-review" / "workflow-v2-1-core" / "current"
+            bundle_dir.mkdir(parents=True)
+            with self.assertRaises(wf.StageCompletenessError):
+                wf.derive_plan_stage_document(pin_dir, bundle_dir, metadata)
+
+    def test_refresh_files_copy_overwrites_stale_protected_path_copy(self):
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            pin_dir = wf.capture_plan_stage_pin(repo.root, "workflow-v2-1-core", metadata)
+            bundle_dir = repo.root / ".ai-review" / "workflow-v2-1-core" / "current"
+            files_copy = bundle_dir / "files" / metadata.plan_path
+            files_copy.parent.mkdir(parents=True)
+            files_copy.write_text("stale diff-based copy, edited after pin capture\n")
+            wf.refresh_files_copy_from_pin(pin_dir, bundle_dir, metadata)
+            self.assertEqual(files_copy.read_text(), "plan body (Revision 7)\n")
+
+    def test_refresh_files_copy_never_creates_an_absent_entry(self):
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            pin_dir = wf.capture_plan_stage_pin(repo.root, "workflow-v2-1-core", metadata)
+            bundle_dir = repo.root / ".ai-review" / "workflow-v2-1-core" / "current"
+            bundle_dir.mkdir(parents=True)
+            wf.refresh_files_copy_from_pin(pin_dir, bundle_dir, metadata)
+            self.assertFalse((bundle_dir / "files" / metadata.plan_path).exists())
+
+    def test_pin_sourced_digest_matches_live_when_nothing_changed(self):
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            pin_dir = wf.capture_plan_stage_pin(repo.root, "workflow-v2-1-core", metadata)
+            live_digest, _ = repo.compute()
+            pin_digest, _ = wf.compute_review_content_id_plan_stage_from_pin(
+                repo.root, pin_dir, repo.base, work_item_type="process",
+                work_item_id="workflow-v2-1-core", plan_revision=7,
+                protected=wf.PLAN_STAGE_PROTECTED, excluded_paths=wf.PLAN_STAGE_EXCLUDED_PATHS,
+                excluded_prefixes=wf.PLAN_STAGE_EXCLUDED_PREFIXES,
+            )
+            self.assertEqual(live_digest, pin_digest)
+
+    def test_pin_sourced_digest_diverges_from_live_after_a_late_protected_edit(self):
+        """The exact staleness `OPUS-R91-001` requires be caught: a
+        protected path edited after the pin was captured must make the
+        pin-sourced digest disagree with a fresh live recompute -- the
+        comparison `write_manifest_with_verified_identifiers`'s own
+        pin-vs-live idempotence check relies on."""
+        with self._seeded_repo(decisions_text="decisions v1\n") as repo:
+            metadata = _metadata_for(repo)
+            pin_dir = wf.capture_plan_stage_pin(repo.root, "workflow-v2-1-core", metadata)
+            (repo.root / "docs" / "TECHNICAL_DECISIONS.md").write_text("decisions v2, edited after pin\n")
+            live_digest, _ = repo.compute()
+            pin_digest, _ = wf.compute_review_content_id_plan_stage_from_pin(
+                repo.root, pin_dir, repo.base, work_item_type="process",
+                work_item_id="workflow-v2-1-core", plan_revision=7,
+                protected=wf.PLAN_STAGE_PROTECTED, excluded_paths=wf.PLAN_STAGE_EXCLUDED_PATHS,
+                excluded_prefixes=wf.PLAN_STAGE_EXCLUDED_PREFIXES,
+            )
+            self.assertNotEqual(live_digest, pin_digest)
+
+    def test_write_manifest_with_pin_detects_staleness_via_existing_idempotence_check(self):
+        """End-to-end through the real write path: a protected path
+        edited after `capture_plan_stage_pin` but before
+        `write_manifest_with_verified_identifiers` runs must refuse via
+        the pre-existing `ReviewContentIdNotIdempotentError`, never
+        silently write a manifest bound to stale pinned bytes."""
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            pin_dir = wf.capture_plan_stage_pin(repo.root, "workflow-v2-1-core", metadata)
+            bundle_dir = repo.root / ".ai-review" / "workflow-v2-1-core" / "current"
+            bundle_dir.mkdir(parents=True)
+            wf.derive_plan_stage_document(pin_dir, bundle_dir, metadata)
+            _write_review_request_with_content_id(repo, bundle_dir)
+            # Edit a protected path *after* the pin was captured and after
+            # REVIEW_REQUEST.md was stated against the (now-stale) pin.
+            (repo.root / "docs" / "TECHNICAL_DECISIONS.md").write_text("edited after pin\n")
+            with self.assertRaises(wf.ReviewContentIdNotIdempotentError):
+                wf.write_manifest_with_verified_identifiers(
+                    repo.root, bundle_dir, repo.base, "process", "workflow-v2-1-core", 7,
+                    wf.PLAN_STAGE_PROTECTED, wf.PLAN_STAGE_EXCLUDED_PATHS,
+                    wf.PLAN_STAGE_EXCLUDED_PREFIXES, pin_dir=pin_dir,
+                )
+            self.assertFalse((bundle_dir / "MANIFEST.md").exists())
+
+    def _build_valid_pinned_bundle(self, repo, metadata, corrupt_derivation=False):
+        """A complete, self-consistent plan-stage bundle_dir + archive,
+        generated the same way `prepare-ai-review.sh` does: capture pin,
+        derive PLAN.md, populate files/, write REVIEW_REQUEST.md, write
+        MANIFEST.md through the pin. Returns (bundle_dir, archive_path).
+
+        `corrupt_derivation=True` simulates a latent bug in
+        `derive_plan_stage_document`/`refresh_files_copy_from_pin`
+        themselves: `PLAN.md` and its `files/` copy are overwritten with
+        the wrong bytes *before* `MANIFEST.md` is written and the archive
+        is built, so the bundle_id three-way check stays internally
+        self-consistent (manifest/on-disk/archived all agree, since all
+        three are computed from -- or reproduce -- the same, already-
+        corrupted tree) while `review_content_id` (computed from the pin,
+        never from `PLAN.md`) stays correct -- exactly the residual gap
+        only the dedicated byte-identity-vs-pin assertion catches."""
+        pin_dir = wf.capture_plan_stage_pin(repo.root, metadata.work_item_id, metadata)
+        bundle_dir = repo.root / ".ai-review" / metadata.work_item_id / "current"
+        bundle_dir.mkdir(parents=True)
+        wf.derive_plan_stage_document(pin_dir, bundle_dir, metadata)
+        (bundle_dir / "files" / metadata.plan_path).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(pin_dir / metadata.plan_path, bundle_dir / "files" / metadata.plan_path)
+        if corrupt_derivation:
+            for target in (bundle_dir / "PLAN.md", bundle_dir / "files" / metadata.plan_path):
+                target.write_text("consistently wrong everywhere (Revision {})\n".format(metadata.plan_revision))
+        (bundle_dir / "DIFF.patch").write_text("")
+        (bundle_dir / "TEST_RESULTS.md").write_text("stage: plan\n")
+        _write_review_request_with_content_id(
+            repo, bundle_dir, base=repo.base, work_item_type=metadata.work_item_type,
+            work_item_id=metadata.work_item_id, plan_revision=metadata.plan_revision,
+            protected=metadata.protected_paths, excluded_paths=metadata.excluded_paths,
+            excluded_prefixes=metadata.excluded_prefixes,
+        )
+        wf.write_manifest_with_verified_identifiers(
+            repo.root, bundle_dir, repo.base, metadata.work_item_type, metadata.work_item_id,
+            metadata.plan_revision, metadata.protected_paths, metadata.excluded_paths,
+            metadata.excluded_prefixes, pin_dir=pin_dir,
+        )
+        root_dir = bundle_dir.parent
+        archive_path = root_dir / "review-bundle.tar.gz"
+        with tarfile.open(archive_path, "w:gz") as tf:
+            tf.add(bundle_dir, arcname="current")
+        return bundle_dir, archive_path
+
+    def test_assert_document_matches_pin_passes_on_a_consistent_bundle(self):
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            pin_dir = wf.capture_plan_stage_pin(repo.root, metadata.work_item_id, metadata)
+            bundle_dir = repo.root / ".ai-review" / metadata.work_item_id / "current"
+            bundle_dir.mkdir(parents=True)
+            wf.derive_plan_stage_document(pin_dir, bundle_dir, metadata)
+            with tempfile.TemporaryDirectory() as tmp:
+                extracted = Path(tmp)
+                shutil.copy2(bundle_dir / "PLAN.md", extracted / "PLAN.md")
+                wf.assert_plan_stage_document_matches_pin(pin_dir, bundle_dir, metadata, extracted)
+
+    def test_assert_document_matches_pin_absent_files_copy_is_not_a_failure(self):
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            pin_dir = wf.capture_plan_stage_pin(repo.root, metadata.work_item_id, metadata)
+            bundle_dir = repo.root / ".ai-review" / metadata.work_item_id / "current"
+            bundle_dir.mkdir(parents=True)
+            wf.derive_plan_stage_document(pin_dir, bundle_dir, metadata)
+            with tempfile.TemporaryDirectory() as tmp:
+                extracted = Path(tmp)
+                shutil.copy2(bundle_dir / "PLAN.md", extracted / "PLAN.md")
+                wf.assert_plan_stage_document_matches_pin(pin_dir, bundle_dir, metadata, extracted)
+
+    def test_assert_document_matches_pin_fails_on_stale_plan_md(self):
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            pin_dir = wf.capture_plan_stage_pin(repo.root, metadata.work_item_id, metadata)
+            bundle_dir = repo.root / ".ai-review" / metadata.work_item_id / "current"
+            bundle_dir.mkdir(parents=True)
+            wf.derive_plan_stage_document(pin_dir, bundle_dir, metadata)
+            (bundle_dir / "PLAN.md").write_text("mutated after derivation\n")
+            with tempfile.TemporaryDirectory() as tmp:
+                extracted = Path(tmp)
+                shutil.copy2(bundle_dir / "PLAN.md", extracted / "PLAN.md")
+                with self.assertRaises(wf.PlanStageDocumentStaleError):
+                    wf.assert_plan_stage_document_matches_pin(pin_dir, bundle_dir, metadata, extracted)
+
+    def test_assert_document_matches_pin_fails_on_stale_files_copy(self):
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            pin_dir = wf.capture_plan_stage_pin(repo.root, metadata.work_item_id, metadata)
+            bundle_dir = repo.root / ".ai-review" / metadata.work_item_id / "current"
+            bundle_dir.mkdir(parents=True)
+            wf.derive_plan_stage_document(pin_dir, bundle_dir, metadata)
+            files_copy = bundle_dir / "files" / metadata.plan_path
+            files_copy.parent.mkdir(parents=True)
+            files_copy.write_text("stale files/ copy\n")
+            with tempfile.TemporaryDirectory() as tmp:
+                extracted = Path(tmp)
+                shutil.copy2(bundle_dir / "PLAN.md", extracted / "PLAN.md")
+                with self.assertRaises(wf.PlanStageDocumentStaleError):
+                    wf.assert_plan_stage_document_matches_pin(pin_dir, bundle_dir, metadata, extracted)
+
+    def test_assert_document_matches_pin_fails_on_stale_archived_copy(self):
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            pin_dir = wf.capture_plan_stage_pin(repo.root, metadata.work_item_id, metadata)
+            bundle_dir = repo.root / ".ai-review" / metadata.work_item_id / "current"
+            bundle_dir.mkdir(parents=True)
+            wf.derive_plan_stage_document(pin_dir, bundle_dir, metadata)
+            with tempfile.TemporaryDirectory() as tmp:
+                extracted = Path(tmp)
+                extracted.mkdir(exist_ok=True)
+                (extracted / "PLAN.md").write_text("stale extracted archive copy\n")
+                with self.assertRaises(wf.PlanStageDocumentStaleError):
+                    wf.assert_plan_stage_document_matches_pin(pin_dir, bundle_dir, metadata, extracted)
+
+    def test_withdraw_bundle_full_success_writes_and_then_removes_marker(self):
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            bundle_dir, archive_path = self._build_valid_pinned_bundle(repo, metadata)
+            root_dir = bundle_dir.parent
+            quarantine_path = wf.withdraw_bundle(repo.root, metadata.work_item_id, "test withdrawal")
+            self.assertFalse(bundle_dir.exists())
+            self.assertFalse(archive_path.exists())
+            self.assertFalse((quarantine_path / "MANIFEST.md").exists())
+            self.assertTrue((quarantine_path / "PLAN.md").is_file())
+            self.assertRegex(quarantine_path.name, r"^current\.rejected-[0-9a-f]{32}$")
+            marker_path = root_dir / "REJECTED"
+            self.assertFalse(marker_path.exists())
+
+    def test_withdraw_bundle_names_the_failed_step_and_never_deletes_the_marker(self):
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            bundle_dir, archive_path = self._build_valid_pinned_bundle(repo, metadata)
+            root_dir = bundle_dir.parent
+            marker_path = root_dir / "REJECTED"
+            with mock.patch.object(os, "rename", side_effect=OSError("simulated rename failure")):
+                with self.assertRaises(wf.BundleWithdrawalError):
+                    wf.withdraw_bundle(repo.root, metadata.work_item_id, "test withdrawal")
+            self.assertTrue(marker_path.is_file())
+            self.assertIn("quarantine current/", marker_path.read_text())
+            # Archive and MANIFEST.md were already removed (they precede
+            # the failed step); current/ itself was never renamed away.
+            self.assertFalse(archive_path.exists())
+            self.assertFalse((bundle_dir / "MANIFEST.md").exists())
+            self.assertTrue(bundle_dir.is_dir())
+
+    def test_withdraw_bundle_writes_marker_before_first_removal(self):
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            bundle_dir, archive_path = self._build_valid_pinned_bundle(repo, metadata)
+            root_dir = bundle_dir.parent
+            marker_path = root_dir / "REJECTED"
+            real_unlink = Path.unlink
+            seen_marker_before_archive_removed = {"value": False}
+
+            def _spy_unlink(self_path, *a, **kw):
+                if self_path == archive_path:
+                    seen_marker_before_archive_removed["value"] = marker_path.is_file()
+                return real_unlink(self_path, *a, **kw)
+
+            with mock.patch.object(Path, "unlink", _spy_unlink):
+                wf.withdraw_bundle(repo.root, metadata.work_item_id, "test withdrawal")
+            self.assertTrue(seen_marker_before_archive_removed["value"])
+
+    def test_clear_rejected_marker_removes_when_present(self):
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            bundle_dir, _ = self._build_valid_pinned_bundle(repo, metadata)
+            marker_path = bundle_dir.parent / "REJECTED"
+            marker_path.write_text("REJECTED: some prior withdrawal\n")
+            wf.clear_rejected_marker_if_present(repo.root, metadata.work_item_id)
+            self.assertFalse(marker_path.exists())
+
+    def test_clear_rejected_marker_is_a_no_op_when_absent(self):
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            bundle_dir, _ = self._build_valid_pinned_bundle(repo, metadata)
+            wf.clear_rejected_marker_if_present(repo.root, metadata.work_item_id)  # no raise
+
+    def test_finalize_bundle_generation_ok_path_clears_a_stale_marker(self):
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            self._seed_workflow_state(repo, metadata)
+            bundle_dir, archive_path = self._build_valid_pinned_bundle(repo, metadata)
+            marker_path = bundle_dir.parent / "REJECTED"
+            marker_path.write_text("REJECTED: leftover from an earlier round\n")
+            result = wf.finalize_bundle_generation(
+                repo.root, bundle_dir, archive_path, "plan", metadata.work_item_id,
+            )
+            self.assertEqual(result["status"], "ok")
+            self.assertFalse(marker_path.exists())
+
+    def test_finalize_bundle_generation_withdraws_on_bundle_id_mismatch(self):
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            bundle_dir, archive_path = self._build_valid_pinned_bundle(repo, metadata)
+            # Mutate on-disk content after the archive was built, so the
+            # manifest/on-disk/archived three-way check disagrees.
+            (bundle_dir / "TEST_RESULTS.md").write_text("mutated after archiving\n")
+            result = wf.finalize_bundle_generation(
+                repo.root, bundle_dir, archive_path, "plan", metadata.work_item_id,
+            )
+            self.assertEqual(result["status"], "withdrawn")
+            self.assertFalse(bundle_dir.exists())
+            self.assertTrue(Path(result["quarantine"]).is_dir())
+
+    def test_finalize_bundle_generation_flat_layout_reports_mismatch_without_withdrawing(self):
+        """No `work_item_id` (the flat compatibility layout) has no
+        `REJECTED`-marker counterpart -- a mismatch is reported exactly
+        as before this checkpoint, never withdrawn."""
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            bundle_dir, archive_path = self._build_valid_pinned_bundle(repo, metadata)
+            (bundle_dir / "TEST_RESULTS.md").write_text("mutated after archiving\n")
+            result = wf.finalize_bundle_generation(
+                repo.root, bundle_dir, archive_path, "plan", None,
+            )
+            self.assertEqual(result["status"], "mismatch")
+            self.assertTrue(bundle_dir.exists())
+
+    def test_finalize_bundle_generation_withdraws_on_stale_plan_document(self):
+        """The plan-stage byte-identity assertion (part 3) catches a bug
+        the bundle_id three-way check alone cannot: `PLAN.md`/its `files/`
+        copy corrupted *before* `MANIFEST.md` is written and the archive
+        is built, so bundle_id stays internally self-consistent (manifest/
+        on-disk/archived all reflect the same already-corrupted tree)
+        while `review_content_id` -- computed from the pin, never from
+        `PLAN.md` -- remains correct."""
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            self._seed_workflow_state(repo, metadata)
+            bundle_dir, archive_path = self._build_valid_pinned_bundle(
+                repo, metadata, corrupt_derivation=True,
+            )
+            result = wf.finalize_bundle_generation(
+                repo.root, bundle_dir, archive_path, "plan", metadata.work_item_id,
+            )
+            self.assertEqual(result["status"], "withdrawn")
+            self.assertIn("not byte-identical", result["message"])
 
 
 if __name__ == "__main__":
