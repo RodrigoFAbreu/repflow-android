@@ -1742,10 +1742,11 @@ def rollback_plan_approval_write(
 # concurrent *opening*, which is all a single-owner, non-interrupted flow
 # needs; serializing later steps against each other and against a takeover
 # is a distinct concern left to the command-integration follow-up that
-# wires this into `/approve-review` for real), no index-pinned-blob writer
-# for `WORKFLOW_STATE.json` itself or step 8b's materialization (item 351,
-# the "never write the working tree before the commit exists" redesign),
-# and no amend recovery (item 347's 3-way interruption classification).
+# wires this into `/approve-review` for real -- built in part 2, below), no
+# index-pinned-blob writer for `WORKFLOW_STATE.json` itself or step 8b's
+# materialization (the "never write the working tree before the commit
+# exists" redesign), and no amend recovery (item 347's 3-way interruption
+# classification) -- both still deferred past part 2.
 # `rollback_plan_approval_write` above is the OLD model (restores
 # `pre_write_bytes` to the working tree) and stays exactly as it is for
 # its own existing callers -- it is not reused here: this transaction
@@ -1948,6 +1949,14 @@ def read_plan_approval_journal(repo_root: Path, path: Path = PLAN_APPROVAL_JOURN
         missing.append("applicable_paths")
     if not isinstance(journal.get("fifth_member_applies"), bool):
         missing.append("fifth_member_applies")
+    takeover_count = journal.get("takeover_count")
+    if not isinstance(takeover_count, int) or isinstance(takeover_count, bool):
+        missing.append("takeover_count")
+    previous_owner_tokens = journal.get("previous_owner_tokens")
+    if not isinstance(previous_owner_tokens, list) or not all(
+        isinstance(token, str) for token in previous_owner_tokens
+    ):
+        missing.append("previous_owner_tokens")
     if missing:
         raise PlanApprovalJournalUnavailableError(f"{full_path} is missing/malformed fields {missing}")
     return journal
@@ -2083,6 +2092,570 @@ def rollback_plan_approval_transaction(
             f"place, nothing is reported as rolled back"
         )
     close_plan_approval_journal(repo_root, path)
+    _close_plan_approval_owner_progress(repo_root, journal["owner_token"])
+
+
+# ---------------------------------------------------------------------------
+# WF8c (g), part 2: WFR-63's transaction mutation/handoff guard, owner
+# progress record, and explicit-takeover contract (`D-Approval-Commits`'
+# "Owner progress record" / "Transaction mutation/handoff guard" / "Refuse
+# by default; takeover is explicit", revision 57-59). Structurally mirrors
+# `D-Checkpoint-Ownership`'s already-built, already-tested guard/takeover
+# machinery below (`guard_path`/`acquire_guard`/`release_guard`/
+# `take_over_claim`) rather than inventing a second design: the same
+# publish-exclusive / reclaim-on-superseded-epoch / refuse-on-current-epoch
+# shape, adapted to a single fixed guard (only `workflow-v2-1-core` ever
+# opens a plan-approval transaction, so there is one guard, never one per
+# work item) whose "current owner" comes from the plan-approval journal
+# above rather than a checkpoint claim, plus the journal's own owner
+# progress record, which `D-Checkpoint-Ownership` has no equivalent of.
+#
+# Deliberately bounded to this part: no index-pinned-blob writer for
+# `WORKFLOW_STATE.json` or step 8b's materialization, no amend recovery,
+# and no `.claude/commands/approve-review.md` integration -- those remain a
+# follow-up session's scope. This part exercises the guard/takeover
+# machinery directly against the journal part 1 already built. There is
+# deliberately no in-band recovery for an abandoned `"destructive"` guard
+# (`D-Checkpoint-Ownership`'s `recover_abandoned_destructive_guard` has
+# one; this transaction's own guard contract explicitly does not -- "a
+# `"destructive"` guard abandoned in the current epoch has no in-band
+# resolution, and that is deliberate": only an out-of-band manual
+# `os.unlink` once a human has independently established the holding
+# session is gone).
+# ---------------------------------------------------------------------------
+
+
+PLAN_APPROVAL_GUARD_PATH = Path(".ai-review/runtime/PLAN_APPROVAL_MUTATION.lease")
+PLAN_APPROVAL_GUARD_LOCK_PATH = Path(".ai-review/runtime/PLAN_APPROVAL_MUTATION.guardlock")
+
+# Exhaustive by the plan's own standing rule ("no category word may stand
+# in for the list, the same standing rule step 7's verification set
+# already carries"): every step any part of this transaction acquires the
+# guard for must be named in exactly one of these two sets, or
+# `plan_approval_step_class` refuses rather than guess. `step-6.5-commit`,
+# `step-7d-amend-commit`, `step-8b-materialize`, `rollback-index-reset` and
+# `step-8a-close-journal` are declared here as the classification a later
+# part's guarded steps must use; only `rollback-close-journal` -- folded
+# into this part's own `rollback_plan_approval_transaction` -- and
+# `"takeover"` are actually acquired by code that exists yet.
+PLAN_APPROVAL_DESTRUCTIVE_STEPS = frozenset({
+    "step-6.5-commit",
+    "step-7d-amend-commit",
+    "step-8b-materialize",
+    "rollback-index-reset",
+    "rollback-close-journal",
+    "step-8a-close-journal",
+})
+PLAN_APPROVAL_ORDINARY_STEPS = frozenset({
+    "step-5-declaration-pin",
+    "step-6.1b-state-pin",
+    "step-6.2-stage-ordinary",
+    "step-7b-amend-stage",
+    "takeover",
+})
+
+
+class PlanApprovalGuardUnavailableError(Exception):
+    """Raised when the guard file exists but cannot be read/parsed, or a
+    step name is not classified into either step-class set -- fails
+    closed rather than guessing."""
+
+
+class PlanApprovalGuardHeldError(Exception):
+    """Raised when the guard is held by another epoch/session and this
+    acquisition attempt is not authorized to reclaim it."""
+
+
+class PlanApprovalTakeoverRefusedError(Exception):
+    """Raised by `take_over_plan_approval_transaction` when the required
+    authorization is missing, wrong, or stale, or when the observed guard
+    is `"destructive"` -- refuses having mutated nothing."""
+
+
+class PlanApprovalTakeoverInProgressError(Exception):
+    """Raised when another session's takeover of the same transaction
+    epoch is already claiming it (`os.link`'s exclusivity)."""
+
+
+def plan_approval_step_class(step: str) -> str:
+    if step in PLAN_APPROVAL_DESTRUCTIVE_STEPS:
+        return DESTRUCTIVE
+    if step in PLAN_APPROVAL_ORDINARY_STEPS:
+        return ORDINARY
+    raise PlanApprovalGuardUnavailableError(f"unclassified plan-approval mutation step {step!r}")
+
+
+def plan_approval_guard_path(repo_root: Path, path: Path = PLAN_APPROVAL_GUARD_PATH) -> Path:
+    return repo_root / path
+
+
+def read_plan_approval_guard(repo_root: Path, path: Path = PLAN_APPROVAL_GUARD_PATH) -> dict | None:
+    """The guard body, or `None` if the guard is not held. Fails closed on
+    a torn guard exactly as the journal does -- an undecidable guard is
+    never read as an absent one."""
+    full_path = plan_approval_guard_path(repo_root, path)
+    try:
+        raw = full_path.read_bytes()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise PlanApprovalGuardUnavailableError(f"cannot read {full_path} ({exc})") from exc
+    try:
+        data = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise PlanApprovalGuardUnavailableError(
+            f"{full_path} exists but could not be read as JSON ({exc}) -- refusing to mutate "
+            f"behind an undecidable mutation guard"
+        ) from exc
+    if not isinstance(data, dict) or not isinstance(data.get("lease_id"), str):
+        raise PlanApprovalGuardUnavailableError(f"{full_path} is not a well-formed mutation guard")
+    return data
+
+
+def _publish_plan_approval_guard(repo_root: Path, body: dict, path: Path) -> None:
+    full_path = plan_approval_guard_path(repo_root, path)
+    full_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = (json.dumps(body, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(full_path.parent), prefix=".plan-approval-guard-", suffix=".tmp",
+    )
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.link(tmp_name, full_path)
+    finally:
+        Path(tmp_name).unlink(missing_ok=True)
+
+
+@contextlib.contextmanager
+def _plan_approval_guard_lock(repo_root: Path, path: Path = PLAN_APPROVAL_GUARD_LOCK_PATH):
+    """The stable object every guard *mutation* (acquire's reclaim branch)
+    serializes on, mirroring `D-Checkpoint-Ownership`'s
+    `guard_mutation_lock` (`OPUS-R83-001`): a compare-and-remove-then-
+    publish must be one indivisible step, and locking the guard file
+    itself would defeat that, since the guard's whole lifecycle is
+    create-and-remove and two `flock`s on two different inodes that
+    briefly shared one pathname are not serialized at all. Created once
+    and never unlinked; released by the kernel on process death."""
+    full_path = repo_root / path
+    full_path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(full_path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)
+
+
+def acquire_plan_approval_guard(
+    repo_root: Path, *, holder_owner_token: str, step: str, now: str, role: str = "owner",
+    authorized_lease_id: str | None = None, guard_path: Path = PLAN_APPROVAL_GUARD_PATH,
+    journal_path: Path = PLAN_APPROVAL_JOURNAL_PATH,
+) -> dict:
+    """One acquisition attempt -- no retry loop, no timeout, no wall clock
+    beyond the single automatic retry the guard contract itself grants a
+    superseded-epoch or own-leftover reclaim. Mirrors
+    `D-Checkpoint-Ownership.acquire_guard`'s decision table, adapted to
+    the plan-approval journal's single fixed guard:
+
+    - **superseded epoch** (the held guard's `holder_owner_token` is not
+      the journal's current `owner_token`): the guard was provably left by
+      a session whose ownership has already rotated away -- reclaimed with
+      no authorization, then acquisition is retried exactly once.
+    - **`role="owner"`, same token**: this session's own leftover guard
+      from an interrupted earlier step. Reclaimed and retried once; the
+      window's first act is `assert_owner`, so a stale belief about
+      ownership is caught immediately regardless.
+    - **`role="takeover"`, current epoch, `"destructive"`**: refuses
+      unconditionally, by anyone, under any authorization.
+    - **`role="takeover"`, current epoch, `"ordinary"`**: released only
+      when the observed `lease_id` is exactly the one the authorization
+      quoted; any other value proves the owner released and re-acquired,
+      i.e. is live, and refuses.
+    - anything else refuses, naming the held guard."""
+    step_class = plan_approval_step_class(step)
+    body = {
+        "lease_id": secrets.token_hex(16),
+        "holder_owner_token": holder_owner_token,
+        "work_item_id": "workflow-v2-1-core",
+        "stage": "plan",
+        "step": step,
+        "step_class": step_class,
+        "acquired_at": now,
+    }
+    with _plan_approval_guard_lock(repo_root):
+        return _acquire_plan_approval_guard_locked(
+            repo_root, body=body, holder_owner_token=holder_owner_token, role=role,
+            authorized_lease_id=authorized_lease_id, guard_path=guard_path, journal_path=journal_path,
+        )
+
+
+def _acquire_plan_approval_guard_locked(
+    repo_root: Path, *, body: dict, holder_owner_token: str, role: str,
+    authorized_lease_id: str | None, guard_path: Path, journal_path: Path,
+) -> dict:
+    """`acquire_plan_approval_guard`'s decision and publication, run under
+    `_plan_approval_guard_lock` so compare-and-remove-then-publish is one
+    indivisible step rather than two statements a preemption can be
+    scheduled between."""
+    try:
+        _publish_plan_approval_guard(repo_root, body, guard_path)
+        return body
+    except FileExistsError:
+        pass
+
+    held = read_plan_approval_guard(repo_root, guard_path)
+    if held is None:                       # released between the two operations
+        _publish_plan_approval_guard(repo_root, body, guard_path)
+        return body
+
+    current_journal = read_plan_approval_journal(repo_root, journal_path)
+    current_owner_token = current_journal["owner_token"] if current_journal is not None else None
+    reclaim = False
+    if held.get("holder_owner_token") != current_owner_token:
+        reclaim = True                     # superseded epoch
+    elif role == "owner" and held.get("holder_owner_token") == holder_owner_token:
+        reclaim = True                     # this session's own leftover guard
+    elif role == "takeover":
+        if held.get("step_class") == DESTRUCTIVE:
+            raise PlanApprovalTakeoverRefusedError(
+                f"the owner is inside destructive step {held.get('step')!r} (lease "
+                f"{held.get('lease_id')!r}) -- no takeover authorization breaks that window; "
+                f"resume in the owning session, or, if it is genuinely gone, remove "
+                f"{plan_approval_guard_path(repo_root, guard_path)} by hand once that is "
+                f"independently established"
+            )
+        if authorized_lease_id is not None and authorized_lease_id == held.get("lease_id"):
+            reclaim = True                 # the authorized break, exactly as quoted
+        else:
+            raise PlanApprovalTakeoverRefusedError(
+                f"the mutation guard is held (lease {held.get('lease_id')!r}, step "
+                f"{held.get('step')!r}) and does not match the authorized lease "
+                f"{authorized_lease_id!r} -- the owner is live; refusing to break it"
+            )
+    if not reclaim:
+        raise PlanApprovalGuardHeldError(
+            f"the plan-approval mutation guard is held by lease {held.get('lease_id')!r} "
+            f"(step {held.get('step')!r}, class {held.get('step_class')!r}) -- refusing to "
+            f"mutate the transaction concurrently with its owner"
+        )
+
+    _release_plan_approval_guard_locked(repo_root, held.get("lease_id"), guard_path)
+    try:
+        _publish_plan_approval_guard(repo_root, body, guard_path)
+    except FileExistsError as exc:
+        raise PlanApprovalGuardHeldError(
+            "the plan-approval mutation guard was re-acquired by another session during "
+            "reclamation -- refusing, having mutated nothing"
+        ) from exc
+    return body
+
+
+def _release_plan_approval_guard_locked(repo_root: Path, lease_id: str, path: Path) -> None:
+    """Compare-and-delete on `lease_id`: never remove a guard this session
+    does not hold. **Caller must hold `_plan_approval_guard_lock`.** An
+    absent `lease_id` is a refusal, never a wildcard that removes whatever
+    guard is present."""
+    if not isinstance(lease_id, str) or not lease_id:
+        raise PlanApprovalGuardUnavailableError(
+            f"releasing the plan-approval mutation guard requires the exact lease_id being "
+            f"released, got {lease_id!r}"
+        )
+    full_path = plan_approval_guard_path(repo_root, path)
+    try:
+        held = read_plan_approval_guard(repo_root, path)
+    except PlanApprovalGuardUnavailableError:
+        return
+    if held is None or held.get("lease_id") != lease_id:
+        return
+    full_path.unlink(missing_ok=True)
+
+
+def release_plan_approval_guard(
+    repo_root: Path, lease: dict, path: Path = PLAN_APPROVAL_GUARD_PATH,
+) -> None:
+    with _plan_approval_guard_lock(repo_root):
+        _release_plan_approval_guard_locked(repo_root, lease.get("lease_id"), path)
+
+
+def plan_approval_owner_progress_path(repo_root: Path, owner_token: str) -> Path:
+    return repo_root / f".ai-review/runtime/PLAN_APPROVAL_OWNER.{owner_token}.json"
+
+
+def read_plan_approval_owner_progress(repo_root: Path, owner_token: str) -> dict | None:
+    """`{owner_token, step, step_seq, updated_at}`, or `None` if this
+    owner has not yet completed any guarded mutation. Its absence is
+    itself meaningful and legitimate: it means the owner published the
+    journal but never *completed* a mutating step."""
+    full_path = plan_approval_owner_progress_path(repo_root, owner_token)
+    try:
+        raw = full_path.read_bytes()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise PlanApprovalGuardUnavailableError(f"cannot read {full_path} ({exc})") from exc
+    try:
+        data = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise PlanApprovalGuardUnavailableError(
+            f"{full_path} could not be parsed as JSON ({exc})"
+        ) from exc
+    if (not isinstance(data, dict) or data.get("owner_token") != owner_token
+            or not isinstance(data.get("step"), str)
+            or not isinstance(data.get("step_seq"), int) or isinstance(data.get("step_seq"), bool)
+            or not isinstance(data.get("updated_at"), str)):
+        raise PlanApprovalGuardUnavailableError(f"{full_path} is not a well-formed owner progress record")
+    return data
+
+
+def _advance_plan_approval_owner_progress(repo_root: Path, owner_token: str, step: str, now: str) -> dict:
+    """Written **inside** the mutation guard, after that step's own
+    mutation has completed and before the guard is released -- so the
+    record only ever claims a step has *finished*, never merely started.
+    `step_seq` is a monotonically increasing integer starting at `1`,
+    scoped to this one `owner_token` (a takeover's fresh token starts its
+    own progress record fresh, by construction: the path embeds the
+    token). Atomic temp-file write plus `os.replace`, same directory."""
+    full_path = plan_approval_owner_progress_path(repo_root, owner_token)
+    previous = read_plan_approval_owner_progress(repo_root, owner_token)
+    record = {
+        "owner_token": owner_token,
+        "step": step,
+        "step_seq": (previous["step_seq"] + 1) if previous is not None else 1,
+        "updated_at": now,
+    }
+    full_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = (json.dumps(record, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(full_path.parent), prefix=".plan-approval-owner-", suffix=".tmp",
+    )
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_name, full_path)
+    except BaseException:
+        Path(tmp_name).unlink(missing_ok=True)
+        raise
+    return record
+
+
+def _close_plan_approval_owner_progress(repo_root: Path, owner_token: str) -> None:
+    """Deleted alongside the journal at step 8a and by the rollback --
+    idempotent, an already-absent record is success."""
+    plan_approval_owner_progress_path(repo_root, owner_token).unlink(missing_ok=True)
+
+
+@contextlib.contextmanager
+def plan_approval_guarded_mutation(
+    repo_root: Path, *, owner_token: str, step: str, now: str,
+    journal_path: Path = PLAN_APPROVAL_JOURNAL_PATH, guard_path: Path = PLAN_APPROVAL_GUARD_PATH,
+):
+    """The one fixed window shape every guarded step of the transaction
+    runs inside:
+
+        acquire the guard -> assert_owner(T), re-reading the journal
+        *under* the guard -> perform the mutation -> advance the owner
+        progress record -> release the guard
+
+    Every pause, stall, or crash a session can suffer between its
+    assertion and its mutation is therefore inside a window a takeover
+    cannot enter. Windows are strictly non-nested: a session holds at most
+    one guard at a time. If the caller's own mutation (the `yield` body)
+    raises, or `assert_owner` fails, the progress record is left
+    unadvanced and the guard is still released via `finally` -- a takeover
+    then sees either no evidence of this step or the *previous* step's
+    evidence, never a claim that this one finished."""
+    lease = acquire_plan_approval_guard(
+        repo_root, holder_owner_token=owner_token, step=step, now=now, role="owner",
+        guard_path=guard_path, journal_path=journal_path,
+    )
+    try:
+        assert_plan_approval_journal_owner(repo_root, owner_token, journal_path)
+        yield lease
+        _advance_plan_approval_owner_progress(repo_root, owner_token, step, now)
+    finally:
+        release_plan_approval_guard(repo_root, lease, guard_path)
+
+
+def plan_approval_takeover_evidence(
+    repo_root: Path, journal_path: Path = PLAN_APPROVAL_JOURNAL_PATH,
+    guard_path: Path = PLAN_APPROVAL_GUARD_PATH,
+) -> dict:
+    """Everything a human needs to decide a plan-approval takeover,
+    gathered without mutating anything. `journal` is `None` when there is
+    no open transaction, i.e. nothing to take over."""
+    journal = read_plan_approval_journal(repo_root, journal_path)
+    if journal is None:
+        return {"journal": None, "owner_token": None, "progress": None, "guard": None, "outcome": None}
+    owner_token = journal["owner_token"]
+    progress = read_plan_approval_owner_progress(repo_root, owner_token)
+    guard = read_plan_approval_guard(repo_root, guard_path)
+    outcome = classify_plan_approval_outcome(repo_root, journal)
+    return {"journal": journal, "owner_token": owner_token, "progress": progress,
+            "guard": guard, "outcome": outcome}
+
+
+def plan_approval_takeover_authorization_literal(evidence: dict) -> str:
+    """The exact literal a user must produce, derived from the evidence
+    they were shown: names the observed `owner_token` and the observed
+    `step_seq` (or the literal `none`), so it cannot be written from
+    memory or replayed against a later transaction."""
+    progress = evidence.get("progress")
+    step_seq = progress["step_seq"] if progress else "none"
+    return (f"take over workflow-v2-1-core plan-approval transaction "
+            f"owner {evidence.get('owner_token')} step_seq {step_seq}")
+
+
+def plan_approval_guard_release_authorization_literal(guard: dict) -> str:
+    return (f"release plan-approval guard {guard.get('lease_id')} step {guard.get('step')} "
+            f"class {guard.get('step_class')}")
+
+
+def take_over_plan_approval_transaction(
+    repo_root: Path, *, now: str, user_authorization: str | None, evidence: dict | None = None,
+    guard_release_authorization: str | None = None, journal_path: Path = PLAN_APPROVAL_JOURNAL_PATH,
+    guard_path: Path = PLAN_APPROVAL_GUARD_PATH,
+) -> str:
+    """The only ownership transfer this transaction ever performs
+    (`D-Approval-Commits`' "Refuse by default; takeover is explicit").
+    Returns the fresh `owner_token` `T'`.
+
+    1. **Observe** -- `plan_approval_takeover_evidence`.
+    2. **Authorize** -- the literal must be exactly
+       `plan_approval_takeover_authorization_literal(evidence)`. When a
+       guard was observed, a separate guard-release authorization quoting
+       its `lease_id`/`step`/`step_class` is required too, and a
+       `"destructive"` guard is refused outright -- no wording of an
+       authorization changes that.
+    3. **Claim, exclusively** -- `os.link` the journal onto
+       `PLAN_APPROVAL_JOURNAL.claim.<T>`, scoping this attempt to the one
+       observed epoch; a live concurrent takeover of the same epoch
+       refuses here, having mutated nothing. A claim left by a takeover
+       attempt that died before rotating (the journal still carries `T`)
+       is provably dead and is cleared, once, before retrying.
+    3a. **Acquire the mutation guard** -- the same primitive every
+        mutating step acquires, `step="takeover"`, `step_class="ordinary"`.
+    4. **Re-verify under the guard** -- the journal's `owner_token` and
+       the progress record's `step_seq`/`updated_at` must be exactly the
+       values the authorization quoted; either having advanced proves the
+       owner is live: refuse, mutate nothing.
+    5. **Rotate, still under the guard** -- every journal field carried
+       over byte-identically except `owner_token` (fresh), `takeover_count`
+       (incremented), `previous_owner_tokens` (`T` appended).
+    5a. **Release the guard.**"""
+    if evidence is None:
+        evidence = plan_approval_takeover_evidence(repo_root, journal_path, guard_path)
+    if evidence.get("journal") is None:
+        raise NoPlanApprovalTransactionError(
+            "no plan-approval transaction is open -- nothing to take over"
+        )
+    expected = plan_approval_takeover_authorization_literal(evidence)
+    if user_authorization != expected:
+        raise PlanApprovalTakeoverRefusedError(
+            f"explicit takeover requires the literal authorization {expected!r} derived from "
+            f"the evidence just presented -- refusing to take over a transaction on an "
+            f"inference or a remembered literal"
+        )
+    guard = evidence.get("guard")
+    if guard is not None:
+        if guard.get("step_class") == DESTRUCTIVE:
+            raise PlanApprovalTakeoverRefusedError(
+                f"the owner is inside destructive step {guard.get('step')!r} -- no takeover "
+                f"authorization breaks that window; resume in the owning session, or, if it is "
+                f"genuinely gone, remove {plan_approval_guard_path(repo_root, guard_path)} by "
+                f"hand once that is independently established"
+            )
+        expected_guard_release = plan_approval_guard_release_authorization_literal(guard)
+        if guard_release_authorization != expected_guard_release:
+            raise PlanApprovalTakeoverRefusedError(
+                f"a mutation guard was observed; takeover additionally requires the literal "
+                f"{expected_guard_release!r}"
+            )
+
+    T = evidence["owner_token"]
+    full_journal_path = plan_approval_journal_path(repo_root, journal_path)
+    claim_path = full_journal_path.parent / f"PLAN_APPROVAL_JOURNAL.claim.{T}"
+    try:
+        os.link(full_journal_path, claim_path)
+    except FileExistsError:
+        current = read_plan_approval_journal(repo_root, journal_path)
+        if current is not None and current.get("owner_token") == T:
+            # A prior takeover attempt of this same epoch died before
+            # rotating -- it provably mutated nothing (rotation is the
+            # single atomic replace at step 5), so this fresh attempt,
+            # with its own fresh authorization, may clear the dead claim
+            # and retry exactly once.
+            claim_path.unlink(missing_ok=True)
+            try:
+                os.link(full_journal_path, claim_path)
+            except FileExistsError as exc:
+                raise PlanApprovalTakeoverInProgressError(
+                    "another session is already taking over this same plan-approval "
+                    "transaction epoch"
+                ) from exc
+        else:
+            raise PlanApprovalTakeoverInProgressError(
+                "another session is already taking over this same plan-approval transaction "
+                "epoch, or the transaction has already moved on"
+            )
+
+    lease = acquire_plan_approval_guard(
+        repo_root, holder_owner_token=T, step="takeover", now=now, role="takeover",
+        authorized_lease_id=guard.get("lease_id") if guard else None,
+        guard_path=guard_path, journal_path=journal_path,
+    )
+    try:
+        current_journal = read_plan_approval_journal(repo_root, journal_path)
+        current_progress = read_plan_approval_owner_progress(repo_root, T)
+        observed_progress = evidence.get("progress")
+        if (current_journal is None or current_journal.get("owner_token") != T
+                or (current_progress or {}).get("step_seq") != (observed_progress or {}).get("step_seq")
+                or (current_progress or {}).get("updated_at") != (observed_progress or {}).get("updated_at")):
+            raise PlanApprovalTakeoverRefusedError(
+                "the transaction changed between the evidence the user authorized and this "
+                "takeover -- refusing, having mutated nothing; present fresh evidence and "
+                "obtain a fresh authorization"
+            )
+        new_token = secrets.token_hex(16)
+        rotated = dict(current_journal)
+        rotated["owner_token"] = new_token
+        rotated["takeover_count"] = current_journal["takeover_count"] + 1
+        rotated["previous_owner_tokens"] = list(current_journal["previous_owner_tokens"]) + [T]
+        _replace_plan_approval_journal(repo_root, rotated, journal_path)
+        return new_token
+    finally:
+        release_plan_approval_guard(repo_root, lease, guard_path)
+
+
+def _replace_plan_approval_journal(
+    repo_root: Path, journal: dict, path: Path = PLAN_APPROVAL_JOURNAL_PATH,
+) -> None:
+    """`os.replace` is correct here, and only here: the takeover's own
+    claim (step 3) has already serialized every contender for this epoch,
+    and the mutation guard (step 3a) excludes every concurrent mutation,
+    so there is no remaining window for `os.replace` to race."""
+    full_path = plan_approval_journal_path(repo_root, path)
+    payload = (json.dumps(journal, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(full_path.parent), prefix=".plan-approval-journal-", suffix=".tmp",
+    )
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_name, full_path)
+        dir_fd = os.open(str(full_path.parent), os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+    finally:
+        Path(tmp_name).unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------------------

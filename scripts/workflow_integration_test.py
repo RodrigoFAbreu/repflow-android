@@ -50,6 +50,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
 import re
 import subprocess
 import unittest
@@ -2079,6 +2080,417 @@ class TestPlanApprovalFailureAtomicityTransaction(unittest.TestCase):
                 ws.rollback_plan_approval_transaction(repo.root, owner_token=journal["owner_token"])
             # journal is left in place, not closed
             self.assertIsNotNone(ws.read_plan_approval_journal(repo.root))
+
+    def test_rollback_also_closes_the_owner_progress_record(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=journal["owner_token"], step="step-5-declaration-pin", now="t2",
+            ):
+                pass
+            self.assertIsNotNone(ws.read_plan_approval_owner_progress(repo.root, journal["owner_token"]))
+
+            ws.rollback_plan_approval_transaction(repo.root, owner_token=journal["owner_token"])
+
+            self.assertIsNone(ws.read_plan_approval_owner_progress(repo.root, journal["owner_token"]))
+
+    def test_journal_read_rejects_malformed_takeover_count_and_previous_owner_tokens(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+            path = ws.plan_approval_journal_path(repo.root)
+
+            bad = dict(journal)
+            bad["takeover_count"] = "0"  # a string, not an int
+            path.write_text(json.dumps(bad))
+            with self.assertRaises(ws.PlanApprovalJournalUnavailableError):
+                ws.read_plan_approval_journal(repo.root)
+
+            bad = dict(journal)
+            bad["previous_owner_tokens"] = "none"  # not a list
+            path.write_text(json.dumps(bad))
+            with self.assertRaises(ws.PlanApprovalJournalUnavailableError):
+                ws.read_plan_approval_journal(repo.root)
+
+
+class TestPlanApprovalMutationGuardAndTakeover(unittest.TestCase):
+    """WF8c (g), part 2 (`D-Approval-Commits`' "Owner progress record" /
+    "Transaction mutation/handoff guard" / "Refuse by default; takeover is
+    explicit", revision 57-59): the fixed-shape guarded-mutation window,
+    the owner progress record, and the explicit-takeover contract,
+    exercised directly against part 1's journal against real `ScratchRepo`
+    git history. Mirrors `D-Checkpoint-Ownership`'s own already-tested
+    guard/takeover test shapes (see the class above this one's peers in
+    `workflow_state_test.py`) rather than inventing new coverage
+    technique."""
+
+    def _setup(self, repo: h.ScratchRepo, wi: str = "wi"):
+        return TestPlanApprovalFailureAtomicityTransaction._setup(self, repo, wi)
+
+    def _open_journal(self, repo: h.ScratchRepo, wi: str, *args):
+        return TestPlanApprovalFailureAtomicityTransaction._open_journal(self, repo, wi, *args)
+
+    def _open(self, repo: h.ScratchRepo, wi: str = "wi") -> dict:
+        pre_state, record, review_content_id, plan = self._setup(repo, wi)
+        return self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+
+    # -- step classification ---------------------------------------------
+
+    def test_step_classification_is_exhaustive_and_refuses_an_unknown_step(self):
+        for step in ws.PLAN_APPROVAL_DESTRUCTIVE_STEPS:
+            self.assertEqual(ws.plan_approval_step_class(step), ws.DESTRUCTIVE)
+        for step in ws.PLAN_APPROVAL_ORDINARY_STEPS:
+            self.assertEqual(ws.plan_approval_step_class(step), ws.ORDINARY)
+        self.assertTrue(ws.PLAN_APPROVAL_DESTRUCTIVE_STEPS.isdisjoint(ws.PLAN_APPROVAL_ORDINARY_STEPS))
+        with self.assertRaises(ws.PlanApprovalGuardUnavailableError):
+            ws.plan_approval_step_class("step-does-not-exist")
+
+    # -- guard publish/read/release ---------------------------------------
+
+    def test_guard_publish_read_release_round_trip(self):
+        with h.ScratchRepo() as repo:
+            journal = self._open(repo)
+            self.assertIsNone(ws.read_plan_approval_guard(repo.root))
+
+            lease = ws.acquire_plan_approval_guard(
+                repo.root, holder_owner_token=journal["owner_token"],
+                step="step-5-declaration-pin", now="t2",
+            )
+            self.assertRegex(lease["lease_id"], r"^[0-9a-f]{32}$")
+            self.assertEqual(lease["holder_owner_token"], journal["owner_token"])
+            self.assertEqual(lease["step"], "step-5-declaration-pin")
+            self.assertEqual(lease["step_class"], ws.ORDINARY)
+            self.assertEqual(ws.read_plan_approval_guard(repo.root), lease)
+
+            ws.release_plan_approval_guard(repo.root, lease)
+            self.assertIsNone(ws.read_plan_approval_guard(repo.root))
+            ws.release_plan_approval_guard(repo.root, lease)  # idempotent
+
+    def test_guard_is_gitignored_and_invisible_to_git_status(self):
+        with h.ScratchRepo() as repo:
+            journal = self._open(repo)
+            (repo.root / ".gitignore").write_text(".ai-review/\n")
+            _run(["git", "add", ".gitignore"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "gitignore"], cwd=repo.root)
+            status_before = _run(["git", "status", "--porcelain"], cwd=repo.root)
+
+            lease = ws.acquire_plan_approval_guard(
+                repo.root, holder_owner_token=journal["owner_token"],
+                step="step-5-declaration-pin", now="t2",
+            )
+            self.assertEqual(_run(["git", "status", "--porcelain"], cwd=repo.root), status_before)
+            ws.release_plan_approval_guard(repo.root, lease)
+
+    def test_owner_reclaims_its_own_leftover_guard_and_retries_once(self):
+        with h.ScratchRepo() as repo:
+            journal = self._open(repo)
+            stale = ws.acquire_plan_approval_guard(
+                repo.root, holder_owner_token=journal["owner_token"],
+                step="step-5-declaration-pin", now="t2",
+            )
+            # Simulate an interrupted earlier step: the guard is left
+            # behind, never released.
+            fresh = ws.acquire_plan_approval_guard(
+                repo.root, holder_owner_token=journal["owner_token"],
+                step="step-6.2-stage-ordinary", now="t3",
+            )
+            self.assertNotEqual(fresh["lease_id"], stale["lease_id"])
+            self.assertEqual(ws.read_plan_approval_guard(repo.root), fresh)
+
+    def test_acquire_guard_refuses_when_held_under_the_current_epoch_by_a_different_token(self):
+        """Defense in depth for `role="owner"`: a live guard whose
+        `holder_owner_token` equals the journal's own current epoch but
+        does *not* equal the token this call presents is never this
+        session's own leftover -- refuse rather than reclaim."""
+        with h.ScratchRepo() as repo:
+            journal = self._open(repo)
+            live = ws.acquire_plan_approval_guard(
+                repo.root, holder_owner_token=journal["owner_token"],
+                step="step-5-declaration-pin", now="t2",
+            )
+            with self.assertRaises(ws.PlanApprovalGuardHeldError):
+                ws.acquire_plan_approval_guard(
+                    repo.root, holder_owner_token="0" * 32,
+                    step="step-6.2-stage-ordinary", now="t3",
+                )
+            self.assertEqual(ws.read_plan_approval_guard(repo.root), live)
+
+    # -- guarded_mutation fixed window -------------------------------------
+
+    def test_guarded_mutation_happy_path_mutates_advances_progress_and_releases(self):
+        with h.ScratchRepo() as repo:
+            journal = self._open(repo)
+            calls = []
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=journal["owner_token"], step="step-5-declaration-pin", now="t2",
+            ) as lease:
+                calls.append(lease["step"])
+                self.assertEqual(ws.read_plan_approval_guard(repo.root)["lease_id"], lease["lease_id"])
+
+            self.assertEqual(calls, ["step-5-declaration-pin"])
+            self.assertIsNone(ws.read_plan_approval_guard(repo.root))
+            progress = ws.read_plan_approval_owner_progress(repo.root, journal["owner_token"])
+            self.assertEqual(progress["step"], "step-5-declaration-pin")
+            self.assertEqual(progress["step_seq"], 1)
+            self.assertEqual(progress["updated_at"], "t2")
+
+    def test_guarded_mutation_releases_guard_without_advancing_progress_when_body_raises(self):
+        with h.ScratchRepo() as repo:
+            journal = self._open(repo)
+
+            class _Boom(Exception):
+                pass
+
+            with self.assertRaises(_Boom):
+                with ws.plan_approval_guarded_mutation(
+                    repo.root, owner_token=journal["owner_token"], step="step-5-declaration-pin", now="t2",
+                ):
+                    raise _Boom()
+
+            self.assertIsNone(ws.read_plan_approval_guard(repo.root))
+            self.assertIsNone(ws.read_plan_approval_owner_progress(repo.root, journal["owner_token"]))
+
+    def test_guarded_mutation_releases_guard_without_advancing_progress_when_owner_assertion_fails(self):
+        """A displaced owner still holding its old token: guard
+        acquisition succeeds trivially (no guard is held), but
+        `assert_owner` inside the window fails because a takeover already
+        rotated the journal -- the guard must still be released and no
+        progress record written under the stale token."""
+        with h.ScratchRepo() as repo:
+            journal = self._open(repo)
+            old_token = journal["owner_token"]
+            evidence = ws.plan_approval_takeover_evidence(repo.root)
+            new_token = ws.take_over_plan_approval_transaction(
+                repo.root, now="t2", evidence=evidence,
+                user_authorization=ws.plan_approval_takeover_authorization_literal(evidence),
+            )
+            self.assertNotEqual(new_token, old_token)
+
+            with self.assertRaises(ws.PlanApprovalOwnershipError):
+                with ws.plan_approval_guarded_mutation(
+                    repo.root, owner_token=old_token, step="step-5-declaration-pin", now="t3",
+                ):
+                    self.fail("must not reach the mutation body under a rotated-away token")
+
+            self.assertIsNone(ws.read_plan_approval_guard(repo.root))
+            self.assertIsNone(ws.read_plan_approval_owner_progress(repo.root, old_token))
+
+    def test_owner_progress_step_seq_is_monotonic_across_multiple_guarded_mutations(self):
+        with h.ScratchRepo() as repo:
+            journal = self._open(repo)
+            owner_token = journal["owner_token"]
+            for i, step in enumerate(
+                ("step-5-declaration-pin", "step-6.1b-state-pin", "step-6.2-stage-ordinary"), start=1,
+            ):
+                with ws.plan_approval_guarded_mutation(
+                    repo.root, owner_token=owner_token, step=step, now=f"t{i}",
+                ):
+                    pass
+                progress = ws.read_plan_approval_owner_progress(repo.root, owner_token)
+                self.assertEqual(progress["step_seq"], i)
+                self.assertEqual(progress["step"], step)
+
+    # -- takeover -----------------------------------------------------------
+
+    def test_takeover_refuses_when_no_transaction_open(self):
+        with h.ScratchRepo() as repo:
+            with self.assertRaises(ws.NoPlanApprovalTransactionError):
+                ws.take_over_plan_approval_transaction(
+                    repo.root, now="t1", user_authorization="whatever",
+                )
+
+    def test_takeover_requires_the_exact_authorization_literal(self):
+        with h.ScratchRepo() as repo:
+            self._open(repo)
+            with self.assertRaises(ws.PlanApprovalTakeoverRefusedError):
+                ws.take_over_plan_approval_transaction(
+                    repo.root, now="t2", user_authorization="not the right literal",
+                )
+            # nothing mutated -- the journal's owner_token is unchanged
+            self.assertIsNotNone(ws.read_plan_approval_journal(repo.root))
+
+    def test_takeover_happy_path_rotates_token_and_records_history(self):
+        with h.ScratchRepo() as repo:
+            journal = self._open(repo)
+            old_token = journal["owner_token"]
+            evidence = ws.plan_approval_takeover_evidence(repo.root)
+            self.assertEqual(evidence["owner_token"], old_token)
+            self.assertIsNone(evidence["progress"])
+            self.assertIsNone(evidence["guard"])
+            literal = ws.plan_approval_takeover_authorization_literal(evidence)
+            self.assertIn(old_token, literal)
+            self.assertIn("step_seq none", literal)
+
+            new_token = ws.take_over_plan_approval_transaction(
+                repo.root, now="t2", evidence=evidence, user_authorization=literal,
+            )
+
+            reread = ws.read_plan_approval_journal(repo.root)
+            self.assertEqual(reread["owner_token"], new_token)
+            self.assertEqual(reread["takeover_count"], 1)
+            self.assertEqual(reread["previous_owner_tokens"], [old_token])
+            # every other field carried over byte-identically
+            for key in reread:
+                if key in ("owner_token", "takeover_count", "previous_owner_tokens"):
+                    continue
+                self.assertEqual(reread[key], journal[key], key)
+            self.assertIsNone(ws.read_plan_approval_guard(repo.root))  # released at 5a
+
+    def test_displaced_owners_next_assertion_fails_after_takeover(self):
+        with h.ScratchRepo() as repo:
+            journal = self._open(repo)
+            old_token = journal["owner_token"]
+            evidence = ws.plan_approval_takeover_evidence(repo.root)
+            ws.take_over_plan_approval_transaction(
+                repo.root, now="t2", evidence=evidence,
+                user_authorization=ws.plan_approval_takeover_authorization_literal(evidence),
+            )
+            with self.assertRaises(ws.PlanApprovalOwnershipError):
+                ws.assert_plan_approval_journal_owner(repo.root, old_token)
+
+    def test_takeover_refuses_when_progress_advanced_between_observe_and_claim(self):
+        with h.ScratchRepo() as repo:
+            journal = self._open(repo)
+            owner_token = journal["owner_token"]
+            evidence = ws.plan_approval_takeover_evidence(repo.root)  # observes: no progress yet
+            literal = ws.plan_approval_takeover_authorization_literal(evidence)
+
+            # The "owner" makes real progress before the takeover claims.
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=owner_token, step="step-5-declaration-pin", now="t2",
+            ):
+                pass
+
+            with self.assertRaises(ws.PlanApprovalTakeoverRefusedError):
+                ws.take_over_plan_approval_transaction(
+                    repo.root, now="t3", evidence=evidence, user_authorization=literal,
+                )
+            # nothing mutated -- still the original owner
+            self.assertEqual(ws.read_plan_approval_journal(repo.root)["owner_token"], owner_token)
+
+    def test_takeover_refuses_when_guard_is_destructive(self):
+        with h.ScratchRepo() as repo:
+            journal = self._open(repo)
+            owner_token = journal["owner_token"]
+            ws.acquire_plan_approval_guard(
+                repo.root, holder_owner_token=owner_token, step="step-6.5-commit", now="t2",
+            )
+            evidence = ws.plan_approval_takeover_evidence(repo.root)
+            self.assertEqual(evidence["guard"]["step_class"], ws.DESTRUCTIVE)
+            literal = ws.plan_approval_takeover_authorization_literal(evidence)
+
+            with self.assertRaises(ws.PlanApprovalTakeoverRefusedError):
+                ws.take_over_plan_approval_transaction(
+                    repo.root, now="t3", evidence=evidence, user_authorization=literal,
+                    guard_release_authorization=ws.plan_approval_guard_release_authorization_literal(
+                        evidence["guard"],
+                    ),
+                )
+            # the destructive guard survives untouched
+            self.assertEqual(
+                ws.read_plan_approval_guard(repo.root)["step"], "step-6.5-commit",
+            )
+            self.assertEqual(ws.read_plan_approval_journal(repo.root)["owner_token"], owner_token)
+
+    def test_takeover_authorized_break_of_an_ordinary_abandoned_guard(self):
+        with h.ScratchRepo() as repo:
+            journal = self._open(repo)
+            owner_token = journal["owner_token"]
+            abandoned = ws.acquire_plan_approval_guard(
+                repo.root, holder_owner_token=owner_token, step="step-5-declaration-pin", now="t2",
+            )
+            evidence = ws.plan_approval_takeover_evidence(repo.root)
+            self.assertEqual(evidence["guard"], abandoned)
+            literal = ws.plan_approval_takeover_authorization_literal(evidence)
+            guard_release = ws.plan_approval_guard_release_authorization_literal(abandoned)
+
+            new_token = ws.take_over_plan_approval_transaction(
+                repo.root, now="t3", evidence=evidence, user_authorization=literal,
+                guard_release_authorization=guard_release,
+            )
+
+            self.assertEqual(ws.read_plan_approval_journal(repo.root)["owner_token"], new_token)
+            self.assertIsNone(ws.read_plan_approval_guard(repo.root))  # released at 5a
+
+    def test_takeover_refuses_ordinary_guard_release_when_lease_id_does_not_match(self):
+        """A changed `lease_id` proves the owner released and re-acquired
+        between observation and takeover -- i.e. is demonstrably live."""
+        with h.ScratchRepo() as repo:
+            journal = self._open(repo)
+            owner_token = journal["owner_token"]
+            first = ws.acquire_plan_approval_guard(
+                repo.root, holder_owner_token=owner_token, step="step-5-declaration-pin", now="t2",
+            )
+            evidence = ws.plan_approval_takeover_evidence(repo.root)
+            literal = ws.plan_approval_takeover_authorization_literal(evidence)
+            guard_release = ws.plan_approval_guard_release_authorization_literal(first)
+
+            ws.release_plan_approval_guard(repo.root, first)
+            second = ws.acquire_plan_approval_guard(
+                repo.root, holder_owner_token=owner_token, step="step-6.2-stage-ordinary", now="t3",
+            )
+            self.assertNotEqual(second["lease_id"], first["lease_id"])
+
+            with self.assertRaises(ws.PlanApprovalTakeoverRefusedError):
+                ws.take_over_plan_approval_transaction(
+                    repo.root, now="t4", evidence=evidence, user_authorization=literal,
+                    guard_release_authorization=guard_release,
+                )
+            self.assertEqual(ws.read_plan_approval_guard(repo.root), second)
+
+    def test_a_stale_takeover_against_an_already_superseded_epoch_refuses(self):
+        """Two takeover attempts built from the same (now-stale)
+        evidence: the first succeeds and rotates the token; the second,
+        replaying the same authorization for the epoch it superseded,
+        must refuse rather than silently rotating again or double-
+        counting `takeover_count`."""
+        with h.ScratchRepo() as repo:
+            journal = self._open(repo)
+            evidence = ws.plan_approval_takeover_evidence(repo.root)
+            literal = ws.plan_approval_takeover_authorization_literal(evidence)
+
+            first_new_token = ws.take_over_plan_approval_transaction(
+                repo.root, now="t2", evidence=evidence, user_authorization=literal,
+            )
+            with self.assertRaises(ws.PlanApprovalTakeoverInProgressError):
+                ws.take_over_plan_approval_transaction(
+                    repo.root, now="t3", evidence=evidence, user_authorization=literal,
+                )
+            self.assertEqual(ws.read_plan_approval_journal(repo.root)["owner_token"], first_new_token)
+            self.assertEqual(ws.read_plan_approval_journal(repo.root)["takeover_count"], 1)
+
+    def test_a_dead_claim_from_a_crashed_same_epoch_takeover_is_cleared_and_retried(self):
+        """A takeover attempt that died between step 3 (claim) and step 5
+        (rotate) leaves a claim link behind while the journal still
+        carries the same token -- provably having mutated nothing. A
+        fresh takeover of that same epoch clears it and proceeds rather
+        than refusing forever."""
+        with h.ScratchRepo() as repo:
+            journal = self._open(repo)
+            owner_token = journal["owner_token"]
+            full_journal_path = ws.plan_approval_journal_path(repo.root)
+            dead_claim = full_journal_path.parent / f"PLAN_APPROVAL_JOURNAL.claim.{owner_token}"
+            os.link(full_journal_path, dead_claim)
+            self.assertTrue(dead_claim.exists())
+
+            evidence = ws.plan_approval_takeover_evidence(repo.root)
+            new_token = ws.take_over_plan_approval_transaction(
+                repo.root, now="t2", evidence=evidence,
+                user_authorization=ws.plan_approval_takeover_authorization_literal(evidence),
+            )
+            self.assertEqual(ws.read_plan_approval_journal(repo.root)["owner_token"], new_token)
+
+    def test_takeover_evidence_reports_absent_transaction(self):
+        with h.ScratchRepo() as repo:
+            evidence = ws.plan_approval_takeover_evidence(repo.root)
+            self.assertIsNone(evidence["journal"])
+            self.assertIsNone(evidence["owner_token"])
+            self.assertIsNone(evidence["progress"])
+            self.assertIsNone(evidence["guard"])
+            self.assertIsNone(evidence["outcome"])
 
 
 if __name__ == "__main__":
