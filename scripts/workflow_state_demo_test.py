@@ -723,5 +723,21 @@ class TestReconciliationTableLedgerStatusAgreement(unittest.TestCase):
         self.assertNotIn("WFO-LEDGER-COVERAGE", ws.COMPLETION_OBLIGATION_CONFORMANCE)
 
 
+class TestCheckpointReachabilityConformanceLive(unittest.TestCase):
+    """Item 355's own conformance test (WF8c clause (m), part 2), run
+    against this repository's real, live content -- the "run against the
+    live state and registry" claim item 355's own corrected-rule text
+    makes for clauses (a)-(d) is exercised here, not merely asserted."""
+
+    def test_holds_against_the_live_repository(self):
+        repo_root = _repo_root()
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_root, check=True,
+            capture_output=True, text=True,
+        ).stdout.strip()
+        result = ws.verify_checkpoint_reachability_conformance(repo_root, head, WORK_ITEM_ID)
+        self.assertEqual(result["status"], "PASS", result["detail"])
+
+
 if __name__ == "__main__":
     unittest.main()

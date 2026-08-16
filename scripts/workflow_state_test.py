@@ -7288,5 +7288,212 @@ class TestLedgerStatusPathForWorkItem(unittest.TestCase):
             ws.ledger_status_path_for_work_item("Not Valid!")
 
 
+class TestCheckpointReachabilityConformance(unittest.TestCase):
+    """WF8c (m), part 2: `verify_checkpoint_reachability_conformance` --
+    item 355's own conformance test, re-derived at a pinned commit against
+    the reconciliation table, the live registry/state, the 'Missing
+    tests' list, and `WFR-63`'s `checkpoint_ids` (the plan's own worked
+    example for clause (d), unchanged since revision 59)."""
+
+    def _commit_fixture(
+        self, repo, *,
+        table_rows: str,
+        missing_test_max: int = 6,
+        registry_checkpoints: list[dict],
+        state_checkpoints: dict,
+        current_checkpoint_id: str | None = None,
+        wfr63_checkpoint_ids: list[str] | None = ("WF8b", "WF8c"),
+        include_mapping: bool = True,
+    ) -> str:
+        plan_lines = [
+            "# Plan\n\n",
+            ws.RECONCILIATION_TABLE_HEADING + "\n\n",
+            ws.RECONCILIATION_TABLE_HEADER_ROW + "\n",
+            "|---|---|---|---|---|\n",
+            table_rows,
+            "\n" + ws.CHECKPOINT_REACHABILITY_MISSING_TESTS_HEADING + " (fixture)\n\n",
+        ]
+        for n in range(1, missing_test_max + 1):
+            plan_lines.append(f"{n}. fixture missing-test item {n}\n")
+        plan_lines.append("\n## Next section\n\nnothing here\n")
+        plan_dir = repo.root / "docs" / "ai-workflow"
+        plan_dir.mkdir(parents=True, exist_ok=True)
+        (plan_dir / "WORKFLOW_V2_PLAN.md").write_text("".join(plan_lines))
+
+        registry = {
+            "schema_version": 1, "work_item_id": "wi", "plan_revision": 1,
+            "checkpoints": registry_checkpoints,
+        }
+        (repo.root / "registry.json").write_text(json.dumps(registry))
+
+        work_item = {
+            "registry_path": "registry.json",
+            "checkpoints": state_checkpoints,
+            "current_checkpoint_id": current_checkpoint_id,
+        }
+        if include_mapping:
+            work_item["mapping_path"] = "mapping.json"
+            requirements = {}
+            if wfr63_checkpoint_ids is not None:
+                requirements["WFR-63"] = {
+                    "description": "fixture", "checkpoint_ids": list(wfr63_checkpoint_ids),
+                }
+            mapping = {"schema_version": 1, "work_item_id": "wi", "requirements": requirements}
+            (repo.root / "mapping.json").write_text(json.dumps(mapping))
+        state = {"work_items": {"wi": work_item}}
+        (plan_dir / "WORKFLOW_STATE.json").write_text(json.dumps(state))
+
+        _run(["git", "add", "-A"], cwd=repo.root)
+        _run(["git", "commit", "-q", "-m", "fixture"], cwd=repo.root)
+        return repo.head()
+
+    _LINEAR_TWO_CHECKPOINT_REGISTRY = [
+        {"id": "WF8b", "depends_on": []},
+        {"id": "WF8c", "depends_on": ["WF8b"]},
+    ]
+    _CLEAN_TABLE_ROWS = (
+        "| 1-3 | topic a | `IMPLEMENTED` | `WF8b` | evidence a |\n"
+        "| 4-6 | topic b | `ABSENT` | `WF8c` | evidence b |\n"
+    )
+
+    def test_passes_on_a_healthy_fixture(self):
+        with ScratchRepo() as repo:
+            commit = self._commit_fixture(
+                repo,
+                table_rows=self._CLEAN_TABLE_ROWS,
+                missing_test_max=6,
+                registry_checkpoints=self._LINEAR_TWO_CHECKPOINT_REGISTRY,
+                state_checkpoints={"WF8b": {"status": "COMPLETE"}},
+            )
+            result = ws.verify_checkpoint_reachability_conformance(repo.root, commit, "wi")
+            self.assertEqual(result["status"], "PASS", result["detail"])
+            self.assertEqual(result["failing_assertions"], [])
+
+    def test_flags_item_naming_an_already_complete_checkpoint(self):
+        # WF8c itself has since completed but the table still assigns
+        # items 4-6 to it -- clauses (a) and (b1) both fire.
+        with ScratchRepo() as repo:
+            commit = self._commit_fixture(
+                repo,
+                table_rows=self._CLEAN_TABLE_ROWS,
+                missing_test_max=6,
+                registry_checkpoints=self._LINEAR_TWO_CHECKPOINT_REGISTRY,
+                state_checkpoints={"WF8b": {"status": "COMPLETE"}, "WF8c": {"status": "COMPLETE"}},
+            )
+            result = ws.verify_checkpoint_reachability_conformance(repo.root, commit, "wi")
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(any("clause (a)" in a for a in result["failing_assertions"]))
+            self.assertTrue(any("clause (b1)" in a for a in result["failing_assertions"]))
+
+    def test_flags_owner_absent_from_the_registry(self):
+        # The registry never grew a WF8c entry at all, but the table
+        # still names it -- clause (b2)'s "not a real registry entry" arm.
+        with ScratchRepo() as repo:
+            commit = self._commit_fixture(
+                repo,
+                table_rows=self._CLEAN_TABLE_ROWS,
+                missing_test_max=6,
+                registry_checkpoints=[{"id": "WF8b", "depends_on": []}],
+                state_checkpoints={"WF8b": {"status": "COMPLETE"}},
+                include_mapping=False,
+            )
+            result = ws.verify_checkpoint_reachability_conformance(repo.root, commit, "wi")
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(any("clause (b2)" in a for a in result["failing_assertions"]))
+
+    def test_flags_table_upper_bound_ahead_of_missing_tests_list(self):
+        with ScratchRepo() as repo:
+            commit = self._commit_fixture(
+                repo,
+                table_rows=self._CLEAN_TABLE_ROWS,  # highest item 6
+                missing_test_max=5,  # list stops one short
+                registry_checkpoints=self._LINEAR_TWO_CHECKPOINT_REGISTRY,
+                state_checkpoints={"WF8b": {"status": "COMPLETE"}},
+            )
+            result = ws.verify_checkpoint_reachability_conformance(repo.root, commit, "wi")
+            self.assertEqual(result["status"], "FAIL")
+            self.assertEqual(len(result["failing_assertions"]), 1)
+            self.assertIn("clause (c)", result["failing_assertions"][0])
+
+    def test_flags_missing_tests_list_ahead_of_table_upper_bound(self):
+        with ScratchRepo() as repo:
+            commit = self._commit_fixture(
+                repo,
+                table_rows=self._CLEAN_TABLE_ROWS,  # highest item 6
+                missing_test_max=7,  # list runs one past the table
+                registry_checkpoints=self._LINEAR_TWO_CHECKPOINT_REGISTRY,
+                state_checkpoints={"WF8b": {"status": "COMPLETE"}},
+            )
+            result = ws.verify_checkpoint_reachability_conformance(repo.root, commit, "wi")
+            self.assertEqual(result["status"], "FAIL")
+            self.assertEqual(len(result["failing_assertions"]), 1)
+            self.assertIn("clause (c)", result["failing_assertions"][0])
+
+    def test_flags_wfr63_checkpoint_ids_missing_the_live_owner(self):
+        # The plan's own clause (d) worked example: WFR-63's checkpoint_ids
+        # names only its historical, already-COMPLETE checkpoint, so its
+        # still-open half would be silently read as inherited.
+        with ScratchRepo() as repo:
+            commit = self._commit_fixture(
+                repo,
+                table_rows=self._CLEAN_TABLE_ROWS,
+                missing_test_max=6,
+                registry_checkpoints=self._LINEAR_TWO_CHECKPOINT_REGISTRY,
+                state_checkpoints={"WF8b": {"status": "COMPLETE"}},
+                wfr63_checkpoint_ids=["WF8b"],
+            )
+            result = ws.verify_checkpoint_reachability_conformance(repo.root, commit, "wi")
+            self.assertEqual(result["status"], "FAIL")
+            self.assertEqual(len(result["failing_assertions"]), 1)
+            self.assertIn("clause (d)", result["failing_assertions"][0])
+
+    def test_passes_when_mapping_path_is_absent(self):
+        # Clause (d) is a WFR-63-specific worked example, not a universal
+        # requirement -- a work item carrying no mapping_path at all (or
+        # no WFR-63 row) must not fail on that account alone.
+        with ScratchRepo() as repo:
+            commit = self._commit_fixture(
+                repo,
+                table_rows=self._CLEAN_TABLE_ROWS,
+                missing_test_max=6,
+                registry_checkpoints=self._LINEAR_TWO_CHECKPOINT_REGISTRY,
+                state_checkpoints={"WF8b": {"status": "COMPLETE"}},
+                include_mapping=False,
+            )
+            result = ws.verify_checkpoint_reachability_conformance(repo.root, commit, "wi")
+            self.assertEqual(result["status"], "PASS", result["detail"])
+
+    def test_fails_closed_on_unknown_work_item(self):
+        with ScratchRepo() as repo:
+            commit = self._commit_fixture(
+                repo,
+                table_rows=self._CLEAN_TABLE_ROWS,
+                missing_test_max=6,
+                registry_checkpoints=self._LINEAR_TWO_CHECKPOINT_REGISTRY,
+                state_checkpoints={"WF8b": {"status": "COMPLETE"}},
+            )
+            result = ws.verify_checkpoint_reachability_conformance(repo.root, commit, "does-not-exist")
+            self.assertEqual(result["status"], "FAIL")
+            self.assertIn("does-not-exist", result["detail"])
+
+    def test_reads_pinned_commit_not_working_tree(self):
+        with ScratchRepo() as repo:
+            commit = self._commit_fixture(
+                repo,
+                table_rows=self._CLEAN_TABLE_ROWS,
+                missing_test_max=6,
+                registry_checkpoints=self._LINEAR_TWO_CHECKPOINT_REGISTRY,
+                state_checkpoints={"WF8b": {"status": "COMPLETE"}},
+            )
+            # Corrupt every working-tree copy after the commit -- the
+            # function must read the pinned commit's blobs, never these.
+            (repo.root / "registry.json").write_text("garbage")
+            (repo.root / "mapping.json").write_text("garbage")
+            (repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json").write_text("garbage")
+            (repo.root / "docs" / "ai-workflow" / "WORKFLOW_V2_PLAN.md").write_text("garbage")
+            result = ws.verify_checkpoint_reachability_conformance(repo.root, commit, "wi")
+            self.assertEqual(result["status"], "PASS", result["detail"])
+
+
 if __name__ == "__main__":
     unittest.main()

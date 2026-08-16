@@ -5527,6 +5527,163 @@ def ledger_status_path_for_work_item(work_item_id: str) -> Path:
     return Path(f"docs/ai-workflow/registry/{work_item_id}-ledger-status.json")
 
 
+CHECKPOINT_REACHABILITY_MISSING_TESTS_HEADING = "## Missing tests"
+_MISSING_TEST_ITEM_RE = re.compile(r"^(\d+)\. ")
+
+
+def _highest_missing_test_item(
+    repo_root: Path, commit: str, *, plan_path: str = "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+) -> int:
+    """The highest-numbered top-level list item under `WORKFLOW_V2_PLAN.md`'s
+    own '## Missing tests' section, at the pinned `commit` -- item 355
+    clause (c)'s comparison value. Scoped to that one section (the heading
+    itself through the next '## ' heading) because plain `N. ` numbered
+    lists recur throughout the document for unrelated finding-disposition
+    prose, at numbers that reset and would otherwise be mistaken for
+    missing-test items."""
+    text = _hardened_run(["show", f"{commit}:{plan_path}"], cwd=repo_root)
+    lines = text.splitlines()
+    try:
+        start = next(
+            i for i, line in enumerate(lines) if line.startswith(CHECKPOINT_REACHABILITY_MISSING_TESTS_HEADING)
+        )
+    except StopIteration:
+        raise ReconciliationTableParseError(
+            f"no {CHECKPOINT_REACHABILITY_MISSING_TESTS_HEADING!r} heading found in {plan_path}"
+        )
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
+    numbers = [int(m.group(1)) for line in lines[start:end] if (m := _MISSING_TEST_ITEM_RE.match(line))]
+    if not numbers:
+        raise ReconciliationTableParseError(
+            f"{CHECKPOINT_REACHABILITY_MISSING_TESTS_HEADING!r} section parsed to zero numbered items"
+        )
+    return max(numbers)
+
+
+def verify_checkpoint_reachability_conformance(
+    repo_root: str | Path, commit: str, work_item_id: str,
+) -> dict:
+    """Item 355's own checkpoint-reachability conformance (`WF8c` clause
+    (m), part 2) -- re-derives, at the pinned `commit`, whether the
+    reconciliation table's per-item resolved `(status, owner)` pairs
+    (`parse_reconciliation_table`, which already applies the per-item
+    resolution rule) still satisfy item 355's own clauses:
+
+    (a) every open (non-`IMPLEMENTED`) item's resolved owner is the *live*
+        umbrella checkpoint `select_next_checkpoint` actually returns
+        today -- never a hardcoded id that silently goes stale the moment
+        that checkpoint completes (`OPUS-R101-002`'s own defect class, one
+        level up from what this conformance protects against here);
+    (b1) no open item names an already-`COMPLETE` checkpoint as its owner;
+    (b2) every open item names a real, reachable, non-`COMPLETE` registry
+         owner, unless its status is `SUPERSEDED` (owner `none` -- whether
+         the design section it tests is genuinely superseded is a plan-text
+         judgment call this mechanism does not re-litigate);
+    (c) the reconciliation table's own upper bound tracks the 'Missing
+        tests' list's highest item, so adding an item without extending
+        the table's range fails closed rather than silently orphaning it;
+    (d) `WFR-63`'s own `checkpoint_ids` -- the plan's worked example for
+        this clause, unchanged since revision 59 -- still names the live
+        umbrella owner alongside its historical `WF4a-iii` entry, so its
+        still-open obligations are never silently read as inherited from a
+        checkpoint that already completed and never delivered them.
+
+    Mirrors `verify_wfo_state_serialization`'s `{"status", "detail",
+    "failing_assertions"}` return shape."""
+    repo_root = Path(repo_root)
+    failing: list[str] = []
+
+    state = _read_json_at_commit_or_empty(repo_root, commit, "docs/ai-workflow/WORKFLOW_STATE.json")
+    work_item = state.get("work_items", {}).get(work_item_id)
+    if work_item is None:
+        detail = f"no work_items[{work_item_id!r}] in WORKFLOW_STATE.json at {commit}"
+        return {"status": "FAIL", "detail": detail, "failing_assertions": [detail]}
+
+    registry_path = work_item.get("registry_path")
+    if not registry_path:
+        detail = f"work_items[{work_item_id!r}] carries no registry_path at {commit}"
+        return {"status": "FAIL", "detail": detail, "failing_assertions": [detail]}
+    registry = _read_json_at_commit_or_empty(repo_root, commit, registry_path)
+    if not registry.get("checkpoints"):
+        detail = f"no registry checkpoints at {registry_path!r} at {commit}"
+        return {"status": "FAIL", "detail": detail, "failing_assertions": [detail]}
+
+    registry_ids = {entry["id"] for entry in registry["checkpoints"]}
+    complete_ids = {
+        cid for cid, entry in work_item.get("checkpoints", {}).items() if entry.get("status") == "COMPLETE"
+    }
+
+    try:
+        current_owner = select_next_checkpoint(work_item, registry)
+    except NoCheckpointReadyError as exc:
+        failing.append(f"clause (a): select_next_checkpoint(...) is blocked: {exc}")
+        current_owner = None
+
+    table = parse_reconciliation_table(repo_root, commit)
+
+    open_owners = {
+        row["owner"] for row in table.values() if row["status"] != "IMPLEMENTED" and row["owner"] != "none"
+    }
+    if current_owner is None:
+        if open_owners:
+            failing.append(
+                f"clause (a): select_next_checkpoint(...) returned None (every registry "
+                f"checkpoint COMPLETE) but the table still assigns open work to {sorted(open_owners)}"
+            )
+    else:
+        stale = open_owners - {current_owner}
+        if stale:
+            failing.append(
+                f"clause (a): table assigns open work to {sorted(stale)}, but the live "
+                f"umbrella owner select_next_checkpoint(...) resolves to today is {current_owner!r}"
+            )
+
+    b1_violations = sorted(
+        item for item, row in table.items()
+        if row["status"] != "IMPLEMENTED" and row["owner"] in complete_ids
+    )
+    if b1_violations:
+        failing.append(f"clause (b1): items {b1_violations} resolve to an already-COMPLETE owner")
+
+    b2_violations = sorted(
+        item for item, row in table.items()
+        if row["status"] not in ("IMPLEMENTED", "SUPERSEDED")
+        and (row["owner"] == "none" or row["owner"] not in registry_ids or row["owner"] in complete_ids)
+    )
+    if b2_violations:
+        failing.append(f"clause (b2): items {b2_violations} name no real, reachable, non-COMPLETE owner")
+
+    non_166 = [item for item in table if item != 166]
+    table_upper_bound = max(non_166) if non_166 else 166
+    try:
+        missing_tests_upper_bound = _highest_missing_test_item(repo_root, commit)
+    except ReconciliationTableParseError as exc:
+        failing.append(f"clause (c): {exc}")
+    else:
+        if table_upper_bound != missing_tests_upper_bound:
+            failing.append(
+                f"clause (c): reconciliation table's own upper bound is {table_upper_bound}, but "
+                f"the 'Missing tests' list's highest item is {missing_tests_upper_bound}"
+            )
+
+    mapping_path = work_item.get("mapping_path")
+    if mapping_path and current_owner is not None:
+        mapping = _read_json_at_commit_or_empty(repo_root, commit, mapping_path)
+        wfr63 = mapping.get("requirements", {}).get("WFR-63", {})
+        wfr63_checkpoint_ids = wfr63.get("checkpoint_ids", [])
+        if wfr63_checkpoint_ids and all(cid in complete_ids for cid in wfr63_checkpoint_ids):
+            failing.append(
+                f"clause (d): WFR-63's checkpoint_ids {wfr63_checkpoint_ids} names only "
+                f"already-COMPLETE checkpoints -- its still-open obligations (owed to "
+                f"{current_owner!r} per the reconciliation table) would be silently read as "
+                f"inherited from a checkpoint that never delivered them"
+            )
+
+    if failing:
+        return {"status": "FAIL", "detail": "; ".join(failing), "failing_assertions": failing}
+    return {"status": "PASS", "detail": "checkpoint-reachability conformance holds", "failing_assertions": []}
+
+
 def verify_wfo_state_serialization(repo_root: str | Path, commit: str) -> dict:
     """`WFO-STATE-SERIALIZATION`'s bound conformance (items 354(c), 356,
     357) -- the function `resolve_completion_obligations` materializes
