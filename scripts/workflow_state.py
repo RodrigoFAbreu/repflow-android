@@ -6539,12 +6539,46 @@ def _work_item_field_diff(repo_root: Path, commit: str, work_item_id: str) -> se
     return {k for k in keys if before_item.get(k) != after_item.get(k)}
 
 
+def _forbidden_state_mutation(repo_root: Path, commit: str, work_item_id: str) -> str | None:
+    """Item 267's cross-work-item/top-level forbidden-mutation case:
+    `_work_item_field_diff` only ever inspects `work_items[work_item_id]`,
+    so a commit that *also* changes a top-level routing field (e.g.
+    `active_work_item_id`) or a *different* work item's own entry in the
+    same commit would pass that check unnoticed -- it is invisible to a
+    diff scoped to one work item's own fields. Returns a description of
+    the first such change found, or `None` if the commit's own
+    `WORKFLOW_STATE.json` diff is contained entirely within
+    `work_items[work_item_id]`."""
+    parent = _run(["git", "rev-parse", f"{commit}^"], cwd=repo_root).strip()
+    state_rel = DEFAULT_STATE_PATH.as_posix()
+    before = _read_json_at_commit_or_empty(repo_root, parent, state_rel)
+    after = _read_json_at_commit_or_empty(repo_root, commit, state_rel)
+    before_top = {k: v for k, v in before.items() if k != "work_items"}
+    after_top = {k: v for k, v in after.items() if k != "work_items"}
+    changed_top = sorted(
+        k for k in set(before_top) | set(after_top) if before_top.get(k) != after_top.get(k)
+    )
+    if changed_top:
+        return f"top-level field(s) {changed_top}"
+    before_items = before.get("work_items", {})
+    after_items = after.get("work_items", {})
+    other_ids = (set(before_items) | set(after_items)) - {work_item_id}
+    changed_others = sorted(
+        wid for wid in other_ids if before_items.get(wid) != after_items.get(wid)
+    )
+    if changed_others:
+        return f"other work item(s) {changed_others}"
+    return None
+
+
 def validate_bundle_generation_record_commit(repo_root: Path, commit: str, work_item_id: str) -> None:
     """Validates a discovered `Workflow-Bundle-Generation-Record` commit
     against its ordinary-role contract (D-Approval-Commits/D-Commit-
     Provenance condition 4, revision 28 onward): touches only
-    `WORKFLOW_STATE.json`; its own `work_items[work_item_id]` field
-    changes are a non-empty subset of
+    `WORKFLOW_STATE.json`; changes nothing outside
+    `work_items[work_item_id]` -- no top-level routing field and no
+    *other* work item's own entry (item 267, `WF8c`) -- its own
+    `work_items[work_item_id]` field changes are a non-empty subset of
     `ORDINARY_BUNDLE_GENERATION_RECORD_FIELDS`; and it carries exactly
     the two-trailer ordinary set, no other. Raises
     `MalformedBundleGenerationRecordCommitError` naming the concrete
@@ -6555,6 +6589,14 @@ def validate_bundle_generation_record_commit(repo_root: Path, commit: str, work_
         raise MalformedBundleGenerationRecordCommitError(
             f"{commit} carries a Workflow-Bundle-Generation-Record trailer but "
             f"touches {sorted(changed_paths)}, not exactly {{{state_rel!r}}}"
+        )
+    outside_diff = _forbidden_state_mutation(repo_root, commit, work_item_id)
+    if outside_diff is not None:
+        raise MalformedBundleGenerationRecordCommitError(
+            f"{commit} carries a Workflow-Bundle-Generation-Record trailer for "
+            f"{work_item_id!r} but also changed {outside_diff} -- an ordinary "
+            f"generation-record commit may only ever touch its own work item's "
+            f"fields (item 267)"
         )
     field_diff = _work_item_field_diff(repo_root, commit, work_item_id)
     if not field_diff or not field_diff <= ORDINARY_BUNDLE_GENERATION_RECORD_FIELDS:

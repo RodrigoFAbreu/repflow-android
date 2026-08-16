@@ -4129,6 +4129,115 @@ class TestImplementationProvenanceInterval(unittest.TestCase):
                 ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base), t,
             )
 
+    def test_forbidden_mutation_alongside_generation_record_refuses(self):
+        """Item 267 (`WF8c`): an otherwise well-formed ordinary `T` that
+        additionally changes, in the same commit, one representative
+        forbidden field in each class -- `technical_approval`,
+        `plan_approval`, a `checkpoints` entry, `functional_acceptance_status`,
+        the top-level `active_work_item_id`, and another work item's own
+        state -- refuses the terminal-commit classification in every case,
+        even though the commit still nominally "touches only
+        `WORKFLOW_STATE.json`". The first four are already caught by
+        `_work_item_field_diff`'s existing subset check (same work item,
+        non-ordinary field); the last two are the real code gap
+        `_forbidden_state_mutation` closes -- invisible to a diff scoped to
+        one work item's own fields."""
+        same_item_mutations = {
+            "technical_approval": {
+                "technical_approval": {"status": "CURRENT", "approved_review_content_id": "a" * 64},
+            },
+            "plan_approval": {
+                "plan_approval": {"status": "CURRENT", "approved_review_content_id": "b" * 64},
+            },
+            "checkpoints_entry": {
+                "checkpoints": {"WF0": {"status": "COMPLETE"}},
+            },
+            "functional_acceptance_status": {
+                "functional_acceptance_status": "ACCEPTED",
+            },
+        }
+        for label, extra_fields in same_item_mutations.items():
+            with self.subTest(label):
+                with ScratchRepo() as repo:
+                    _write_test_artifacts_declaration(repo, self.WI)
+                    _seed_base_provenance_state(repo, self.WI)
+                    p = repo.commit("protected fix", filename="src/Foo.kt")
+                    state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+                    content = json.dumps({"schema_version": 1, "work_items": {self.WI: state | extra_fields}})
+                    _commit_state_with_trailers(repo, content, _record_trailers(self.WI, 1), message="record gen")
+                    work_item = state | {"work_item_id": self.WI}
+                    with self.assertRaises(ws.MalformedBundleGenerationRecordCommitError):
+                        ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base)
+
+        with self.subTest("active_work_item_id"):
+            with ScratchRepo() as repo:
+                _write_test_artifacts_declaration(repo, self.WI)
+                _seed_base_provenance_state(repo, self.WI)
+                p = repo.commit("protected fix", filename="src/Foo.kt")
+                state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+                content = json.dumps({
+                    "schema_version": 1,
+                    "active_work_item_id": self.WI,
+                    "work_items": {self.WI: state},
+                })
+                _commit_state_with_trailers(repo, content, _record_trailers(self.WI, 1), message="record gen")
+                work_item = state | {"work_item_id": self.WI}
+                with self.assertRaises(ws.MalformedBundleGenerationRecordCommitError):
+                    ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base)
+
+        with self.subTest("another_work_item_own_state"):
+            with ScratchRepo() as repo:
+                _write_test_artifacts_declaration(repo, self.WI)
+                _seed_base_provenance_state(repo, self.WI)
+                p = repo.commit("protected fix", filename="src/Foo.kt")
+                state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+                content = json.dumps({
+                    "schema_version": 1,
+                    "work_items": {
+                        self.WI: state,
+                        "other-wi": {"work_item_id": "other-wi", "phase": "IMPLEMENTING"},
+                    },
+                })
+                _commit_state_with_trailers(repo, content, _record_trailers(self.WI, 1), message="record gen")
+                work_item = state | {"work_item_id": self.WI}
+                with self.assertRaises(ws.MalformedBundleGenerationRecordCommitError):
+                    ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base)
+
+    def test_unrelated_other_work_item_unchanged_is_still_reachable(self):
+        """Negative control for item 267: another work item's entry
+        merely *existing*, byte-identical across parent and `T`, is not a
+        forbidden mutation -- only a genuine change to it is."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            other = {"work_item_id": "other-wi", "phase": "IMPLEMENTING"}
+            _commit_state_with_trailers(
+                repo,
+                json.dumps({
+                    "schema_version": 1,
+                    "work_items": {
+                        self.WI: {
+                            "work_item_id": self.WI, "reviewed_implementation_head": None,
+                            "implementation_revision": 0, "phase": "IMPLEMENTING",
+                            "state_revision": 0, "last_transition": "t0",
+                        },
+                        "other-wi": other,
+                    },
+                }),
+                {}, message="seed base state",
+            )
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            t = _commit_state_with_trailers(
+                repo,
+                json.dumps({
+                    "schema_version": 1,
+                    "work_items": {self.WI: state, "other-wi": other},
+                }),
+                _record_trailers(self.WI, 1), message="record gen",
+            )
+            work_item = state | {"work_item_id": self.WI}
+            self.assertEqual(ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base), t)
+
 
 class TestRemediationChildWorkItem(unittest.TestCase):
     def test_creates_child_with_derived_id_and_parent_link(self):
