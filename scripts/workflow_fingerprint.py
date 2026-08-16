@@ -324,14 +324,14 @@ class ReviewContentIdMismatchError(Exception):
 
 
 class WorktreeOrHeadMismatchError(Exception):
-    """Raised by a **repository-local** consumer (`/approve-review`) when
-    the current worktree root or HEAD SHA differs from what `MANIFEST.md`
-    recorded at bundle-generation time — the actual first-party Milestone-8
-    incident (a stale bundle read from a different worktree) this check
-    exists to catch (`D-Bundle-Manifest`, resolves `OPUS-R6-016`). Never
-    raised for an external reviewer consuming a portable extracted
-    archive — that consumer treats the recorded values as diagnostic
-    metadata only (`GPT-R9-015`)."""
+    """Raised by a **repository-local** consumer (`/approve-review`,
+    `/review-plan`) when the current worktree root or HEAD SHA differs
+    from what `MANIFEST.md` recorded at bundle-generation time — the
+    actual first-party Milestone-8 incident (a stale bundle read from a
+    different worktree) this check exists to catch (`D-Bundle-Manifest`,
+    resolves `OPUS-R6-016`). Never raised for an external reviewer
+    consuming a portable extracted archive — that consumer treats the
+    recorded values as diagnostic metadata only (`GPT-R9-015`)."""
 
 
 class StageCompletenessError(Exception):
@@ -1844,6 +1844,18 @@ def relocate_flat_bundle_to_scoped_layout(repo_root: Path, work_item_id: str) ->
 _WORKTREE_ROOT_LINE_RE = re.compile(r"^worktree_root: (.+)$", re.MULTILINE)
 _GENERATION_HEAD_LINE_RE = re.compile(r"^generation_head: ([0-9a-f]{40})$", re.MULTILINE)
 
+# Strict local-generation metadata mode (`GPT-R62-001`, `WF8c` item (k)):
+# occurrence-counting siblings of the two well-formed regexes above -- these
+# match a field's line regardless of whether its value is well-formed, so a
+# duplicate line (one well-formed, one malformed) is counted as two
+# occurrences rather than hidden behind the well-formed one alone. The
+# `worktree_root` grammar itself (absolute path) is a separate regex;
+# `generation_head`'s existing `_GENERATION_HEAD_LINE_RE` already is its own
+# grammar check, reused directly for that purpose.
+_WORKTREE_ROOT_ANY_LINE_RE = re.compile(r"^worktree_root:.*$", re.MULTILINE)
+_GENERATION_HEAD_ANY_LINE_RE = re.compile(r"^generation_head:.*$", re.MULTILINE)
+_WORKTREE_ROOT_WELLFORMED_RE = re.compile(r"^worktree_root: (/.+)$", re.MULTILINE)
+
 
 def current_worktree_root_and_head(repo_root: Path) -> tuple[str, str]:
     """The absolute worktree root and current HEAD SHA, as recorded into a
@@ -1870,12 +1882,60 @@ def read_manifest_generation_metadata(manifest_path: Path) -> dict[str, str]:
     return fields
 
 
-def assert_local_generation_matches(repo_root: Path, manifest_path: Path) -> None:
-    """**Repository-local commands only** (`/approve-review`): stop if the
-    current worktree root or HEAD SHA differs from what `MANIFEST.md`
-    recorded at generation time, naming both. Never call this from a path
-    that also serves external reviewers -- see `WorktreeOrHeadMismatchError`
-    and `WFR-17`."""
+def _assert_strict_metadata_field(
+    manifest_path: Path, content: str, field_name: str,
+    any_line_re: "re.Pattern[str]", wellformed_re: "re.Pattern[str]",
+) -> None:
+    """One field's occurrence-then-grammar sub-check for
+    `assert_local_generation_matches`'s `require_metadata=True` mode
+    (`GPT-R62-001`). Occurrence is checked first and independently of
+    grammar, so a duplicate line -- one well-formed, one not -- is caught
+    by the count rather than passed because *a* well-formed line exists."""
+    occurrences = any_line_re.findall(content)
+    if len(occurrences) != 1:
+        raise WorktreeOrHeadMismatchError(
+            f"{manifest_path} must record exactly one {field_name}: line "
+            f"under strict local-generation metadata mode; found {len(occurrences)}"
+        )
+    if not wellformed_re.search(content):
+        raise WorktreeOrHeadMismatchError(
+            f"{manifest_path}'s {field_name}: line is not well-formed "
+            f"under strict local-generation metadata mode"
+        )
+
+
+def assert_local_generation_matches(
+    repo_root: Path, manifest_path: Path, *, require_metadata: bool = False,
+) -> None:
+    """**Repository-local commands only** (`/approve-review`,
+    `/review-plan`): stop if the current worktree root or HEAD SHA differs
+    from what `MANIFEST.md` recorded at generation time, naming both. Never
+    call this from a path that also serves external reviewers -- see
+    `WorktreeOrHeadMismatchError` and `WFR-17`.
+
+    `require_metadata=False` (the default -- both callers above use it,
+    unchanged): a `MANIFEST.md` missing either field's line entirely
+    records nothing to compare for that field, so the pre-metadata legacy
+    shape passes with no comparison performed. `require_metadata=True`
+    (`GPT-R62-001`, strict local-generation metadata mode -- no live
+    caller of this mode exists in this repository; the one caller this
+    mode was designed for, `D-Approval-Commits`' atomic-bundle-publication
+    current-round binding check, was superseded, revision 82,
+    `OPUS-R102-001`, before being built): exactly one well-formed
+    `worktree_root:` line and exactly one well-formed `generation_head:`
+    line must be present -- zero, more than one, or a malformed line for
+    either field is itself a mismatch, checked by two independent
+    per-field sub-checks (occurrence, then grammar)."""
+    if require_metadata:
+        content = manifest_path.read_text() if manifest_path.is_file() else ""
+        _assert_strict_metadata_field(
+            manifest_path, content, "worktree_root",
+            _WORKTREE_ROOT_ANY_LINE_RE, _WORKTREE_ROOT_WELLFORMED_RE,
+        )
+        _assert_strict_metadata_field(
+            manifest_path, content, "generation_head",
+            _GENERATION_HEAD_ANY_LINE_RE, _GENERATION_HEAD_LINE_RE,
+        )
     recorded = read_manifest_generation_metadata(manifest_path)
     current_root, current_head = current_worktree_root_and_head(repo_root)
     if "worktree_root" in recorded and recorded["worktree_root"] != current_root:

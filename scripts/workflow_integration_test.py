@@ -521,6 +521,97 @@ class TestGoldenCommandFileHashes(unittest.TestCase):
                 )
 
 
+class TestAssertLocalGenerationMatchesCallSiteConformance(unittest.TestCase):
+    """Item 342 (`GPT-R63-001`; narrowed, revision 82, `OPUS-R102-001` --
+    `WF8c` scope clause (k)): `assert_local_generation_matches` has
+    exactly two live call sites in this repository today --
+    `/approve-review`'s and `/review-plan`'s own repository-local
+    staleness checks, both at the permissive `require_metadata=False`
+    default. Item 342's own original text (revision 47) expected a third,
+    `require_metadata=True` caller -- `D-Approval-Commits`' current-round
+    bundle-publication binding check -- but the atomic/staged
+    bundle-publication redesign that caller belonged to was superseded,
+    revision 82, before ever being built; `require_metadata=True`'s own
+    correctness is exercised directly instead
+    (`workflow_fingerprint_test.py`'s `TestGenerationDiagnosticMetadata`
+    strict-mode tests), not through a caller that does not exist. This
+    assertion fails if a future change adds a call site not in
+    `EXPECTED_CALL_SITES`, so that change cannot land without a human
+    deciding whether `WFR-17`/`D-Bundle-Manifest` need updating too."""
+
+    EXPECTED_CALL_SITES = frozenset({
+        Path(".claude/commands/approve-review.md"),
+        Path(".claude/commands/review-plan.md"),
+    })
+
+    _CALL_RE = re.compile(r"assert_local_generation_matches\(")
+
+    def test_exactly_the_two_live_permissive_callers_exist(self):
+        repo_root = _repo_root()
+        found: set[Path] = set()
+        for path in sorted((repo_root / ".claude" / "commands").glob("*.md")):
+            if self._CALL_RE.search(path.read_text()):
+                found.add(path.relative_to(repo_root))
+        for path in sorted((repo_root / "scripts").glob("*.py")):
+            # Excludes workflow_fingerprint.py itself (the function's own
+            # definition, not a caller) and every *_test.py/*_demo_test.py
+            # (exercises, not production call sites) -- suffix-matched, so
+            # workflow_test_harness.py (production code whose name merely
+            # contains "test") is not wrongly excluded from the scan.
+            if path.name == "workflow_fingerprint.py" or path.stem.endswith("_test"):
+                continue
+            if self._CALL_RE.search(path.read_text()):
+                found.add(path.relative_to(repo_root))
+        self.assertEqual(found, set(self.EXPECTED_CALL_SITES))
+
+    def test_no_external_review_or_archive_consumption_path_calls_it(self):
+        """`prepare-ai-review.sh` generates bundles consumed by both a
+        local approval command and an external reviewer's extracted
+        archive -- it must never call the repository-local-only check
+        itself (`WFR-17`)."""
+        repo_root = _repo_root()
+        script_text = (repo_root / "scripts" / "prepare-ai-review.sh").read_text()
+        self.assertNotIn("assert_local_generation_matches", script_text)
+
+
+class TestGenerationDiagnosticMetadataCallerWordingConformance(unittest.TestCase):
+    """Item 343 (`GPT-R64-002`, `WF8c` scope clause (k)): active
+    caller-facing documentation must agree with the two-live-caller
+    reality item 342 proves, using non-exclusive wording rather than
+    naming `/approve-review` as the sole repository-local consumer."""
+
+    def test_review_protocol_names_both_live_callers(self):
+        repo_root = _repo_root()
+        text = (repo_root / "docs" / "ai-workflow" / "REVIEW_PROTOCOL.md").read_text()
+        match = re.search(
+            r"### Generation diagnostic metadata.*?(?=\n### )", text, re.DOTALL,
+        )
+        self.assertIsNotNone(match, "expected a 'Generation diagnostic metadata' section")
+        section = match.group(0)
+        self.assertIn("/approve-review", section)
+        self.assertIn("/review-plan", section)
+
+    def test_worktree_or_head_mismatch_docstring_is_non_exclusive(self):
+        repo_root = _repo_root()
+        text = (repo_root / "scripts" / "workflow_fingerprint.py").read_text()
+        match = re.search(r"class WorktreeOrHeadMismatchError.*?\"\"\"(.*?)\"\"\"", text, re.DOTALL)
+        self.assertIsNotNone(match)
+        docstring = match.group(1)
+        self.assertIn("/approve-review", docstring)
+        self.assertIn("/review-plan", docstring)
+
+    def test_assert_local_generation_matches_docstring_is_non_exclusive(self):
+        repo_root = _repo_root()
+        text = (repo_root / "scripts" / "workflow_fingerprint.py").read_text()
+        match = re.search(
+            r"def assert_local_generation_matches\(.*?\"\"\"(.*?)\"\"\"", text, re.DOTALL,
+        )
+        self.assertIsNotNone(match)
+        docstring = match.group(1)
+        self.assertIn("/approve-review", docstring)
+        self.assertIn("/review-plan", docstring)
+
+
 def _extract_numbered_steps(text: str) -> dict[str, str]:
     """Splits a command file's body into `{step number: full block text}`,
     where a block runs from a line starting `N. ` up to (not including)

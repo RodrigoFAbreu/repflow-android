@@ -420,6 +420,41 @@ class TestImplementationStageAgainstRealRepository(unittest.TestCase):
         for entry in manifest:
             print(f"[demonstration] {entry['path']}: {entry['blob']}")
 
+    def test_review_protocol_md_is_a_real_protected_path_not_excluded(self):
+        """Item 344 (`GPT-R65-001`, `WF8c` scope clause (k)):
+        `docs/ai-workflow/REVIEW_PROTOCOL.md` is this work item's own real,
+        currently-declared implementation-stage `protected_paths` entry
+        (`workflow-v2-1-core-artifacts.json`), never `excluded_paths` --
+        confirmed against the actual on-disk declaration, not a synthetic
+        fixture, alongside an unrelated real `excluded_paths` control
+        (`docs/ai-workflow/PLAN_REVIEW_WORKFLOW.md`) and a real protected
+        `scripts/` prefix control (`scripts/workflow_state.py`)."""
+        repo_root = _repo_root()
+        protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
+            wf.load_implementation_stage_classification(repo_root)
+        )
+        self.assertEqual(
+            wf.classify_path_implementation_stage(
+                "docs/ai-workflow/REVIEW_PROTOCOL.md",
+                protected_paths, protected_prefixes, excluded_paths, excluded_prefixes,
+            ),
+            "protected",
+        )
+        self.assertEqual(
+            wf.classify_path_implementation_stage(
+                "docs/ai-workflow/PLAN_REVIEW_WORKFLOW.md",
+                protected_paths, protected_prefixes, excluded_paths, excluded_prefixes,
+            ),
+            "excluded",
+        )
+        self.assertEqual(
+            wf.classify_path_implementation_stage(
+                "scripts/workflow_state.py",
+                protected_paths, protected_prefixes, excluded_paths, excluded_prefixes,
+            ),
+            "protected",
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -102,13 +102,18 @@ was generated from, as plain diagnostic lines — never hashed into
 `review_content_id`, and not part of any identity-bearing field contract.
 This is **portability vs. local staleness, split by consumer**:
 
-- A **repository-local command** (`/approve-review`) runs inside a real,
-  current worktree and can meaningfully ask "is this the same worktree and
-  HEAD I'm sitting in right now" — it calls
+- A **repository-local command** — today `/approve-review` and
+  `/review-plan`, both calling this at its default, permissive
+  `require_metadata=False` — runs inside a real, current worktree and can
+  meaningfully ask "is this the same worktree and HEAD I'm sitting in
+  right now": it calls
   `workflow_fingerprint.assert_local_generation_matches(...)` and stops,
   naming both values, on a mismatch. This is the actual first-party
   Milestone-8 incident (a stale bundle read from a different worktree) the
-  mechanism exists to catch.
+  mechanism exists to catch. A third, stricter `require_metadata=True`
+  mode also exists on the same function (`GPT-R62-001`) for a caller that
+  cannot tolerate a metadata-less legacy bundle at all, but no such caller
+  is live in this repository today.
 - An **external reviewer** receiving the bundle via the archive is, by
   design, outside the generating worktree — that is not staleness, it is
   the archive doing its job. External review validates the exact

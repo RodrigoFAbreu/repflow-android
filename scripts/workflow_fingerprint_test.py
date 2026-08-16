@@ -2002,6 +2002,170 @@ class TestGenerationDiagnosticMetadata(unittest.TestCase):
             (bundle_dir / "MANIFEST.md").write_text("# Bundle Manifest\n\nreview_content_id: " + "a" * 64 + "\n")
             wf.assert_local_generation_matches(repo.root, bundle_dir / "MANIFEST.md")
 
+    def test_current_worktree_root_and_head_ignores_worktree_identity_json(self):
+        """`GPT-R62-002` (item 340): `current_worktree_root_and_head` --
+        the sole function both manifest generation and every
+        `assert_local_generation_matches` call site read -- derives both
+        values from live Git directly, never from
+        `.ai-review/runtime/WORKTREE_IDENTITY.json` (that file's role is
+        dirty-`IN_PROGRESS`-checkpoint resume safety only, `D3`).
+        Confirmed by planting an identity document naming a different,
+        wrong `worktree_root` and confirming it is ignored in favor of
+        independently-recomputed `git rev-parse` output."""
+        with ScratchRepo() as repo:
+            real_root = subprocess.run(
+                ["git", "rev-parse", "--show-toplevel"], cwd=repo.root, check=True,
+                capture_output=True, text=True,
+            ).stdout.strip()
+            real_head = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=repo.root, check=True,
+                capture_output=True, text=True,
+            ).stdout.strip()
+            identity_path = repo.root / ".ai-review" / "runtime" / "WORKTREE_IDENTITY.json"
+            identity_path.parent.mkdir(parents=True, exist_ok=True)
+            identity_path.write_text(json.dumps({
+                "workflow-v2-1-core": {
+                    "worktree_root": "/some/stale/pre-relocation/path",
+                    "git_common_dir": "/nowhere/.git",
+                }
+            }))
+            root, head = wf.current_worktree_root_and_head(repo.root)
+            self.assertEqual(root, real_root)
+            self.assertEqual(head, real_head)
+            self.assertNotEqual(root, "/some/stale/pre-relocation/path")
+
+    # --- Strict local-generation metadata mode (`GPT-R62-001`, item (k)
+    # of `WF8c`'s scope -- `require_metadata=True`) -----------------------
+
+    def _manifest_with(self, repo, transforms):
+        """Writes a real manifest, then applies each `content -> content`
+        callable in `transforms` in sequence and rewrites the file."""
+        bundle_dir = self._bundle_dir(repo)
+        _write_review_request_with_content_id(repo, bundle_dir)
+        wf.write_manifest_with_verified_identifiers(
+            repo.root, bundle_dir, repo.base,
+            work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=7,
+        )
+        manifest_path = bundle_dir / "MANIFEST.md"
+        content = manifest_path.read_text()
+        for transform in transforms:
+            content = transform(content)
+        manifest_path.write_text(content)
+        return manifest_path
+
+    def test_strict_mode_passes_with_both_fields_well_formed_and_matching(self):
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            repo.commit_plan_docs_as_base()
+            manifest_path = self._manifest_with(repo, [])
+            wf.assert_local_generation_matches(repo.root, manifest_path, require_metadata=True)
+
+    def test_strict_mode_rejects_missing_worktree_root_only(self):
+        """Item 335(h)'s scenario, exercised directly against the function
+        (`WF8c`'s owed half of the item; the current-round binding check
+        caller item 335 itself describes never got built -- superseded,
+        revision 82, `OPUS-R102-001`)."""
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            repo.commit_plan_docs_as_base()
+            manifest_path = self._manifest_with(
+                repo, [lambda c: wf._WORKTREE_ROOT_ANY_LINE_RE.sub("", c)]
+            )
+            with self.assertRaises(wf.WorktreeOrHeadMismatchError):
+                wf.assert_local_generation_matches(repo.root, manifest_path, require_metadata=True)
+            # The permissive default is entirely unaffected by the same file.
+            wf.assert_local_generation_matches(repo.root, manifest_path)
+
+    def test_strict_mode_rejects_missing_generation_head_only(self):
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            repo.commit_plan_docs_as_base()
+            manifest_path = self._manifest_with(
+                repo, [lambda c: wf._GENERATION_HEAD_ANY_LINE_RE.sub("", c)]
+            )
+            with self.assertRaises(wf.WorktreeOrHeadMismatchError):
+                wf.assert_local_generation_matches(repo.root, manifest_path, require_metadata=True)
+            wf.assert_local_generation_matches(repo.root, manifest_path)
+
+    def test_strict_mode_rejects_both_fields_missing(self):
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            repo.commit_plan_docs_as_base()
+            manifest_path = self._manifest_with(repo, [
+                lambda c: wf._WORKTREE_ROOT_ANY_LINE_RE.sub("", c),
+                lambda c: wf._GENERATION_HEAD_ANY_LINE_RE.sub("", c),
+            ])
+            with self.assertRaises(wf.WorktreeOrHeadMismatchError):
+                wf.assert_local_generation_matches(repo.root, manifest_path, require_metadata=True)
+            wf.assert_local_generation_matches(repo.root, manifest_path)
+
+    def test_strict_mode_rejects_duplicate_worktree_root_lines(self):
+        """Item 335(m)'s scenario: one well-formed, matching line plus one
+        additional malformed line -- the occurrence sub-check counts two
+        lines regardless of either line's grammar, so this is never
+        wrongly accepted by a well-formed-regex-count implementation."""
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            repo.commit_plan_docs_as_base()
+            manifest_path = self._manifest_with(repo, [
+                lambda c: c + "\nworktree_root: relative/not-absolute\n",
+            ])
+            with self.assertRaises(wf.WorktreeOrHeadMismatchError):
+                wf.assert_local_generation_matches(repo.root, manifest_path, require_metadata=True)
+
+    def test_strict_mode_rejects_duplicate_generation_head_lines(self):
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            repo.commit_plan_docs_as_base()
+            manifest_path = self._manifest_with(repo, [
+                lambda c: c + "\ngeneration_head: " + "b" * 39 + "\n",
+            ])
+            with self.assertRaises(wf.WorktreeOrHeadMismatchError):
+                wf.assert_local_generation_matches(repo.root, manifest_path, require_metadata=True)
+
+    def test_strict_mode_rejects_malformed_worktree_root_not_absolute(self):
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            repo.commit_plan_docs_as_base()
+            manifest_path = self._manifest_with(repo, [
+                lambda c: wf._WORKTREE_ROOT_LINE_RE.sub("worktree_root: relative/not-absolute", c),
+            ])
+            with self.assertRaises(wf.WorktreeOrHeadMismatchError):
+                wf.assert_local_generation_matches(repo.root, manifest_path, require_metadata=True)
+
+    def test_strict_mode_rejects_malformed_generation_head_wrong_length(self):
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            repo.commit_plan_docs_as_base()
+            manifest_path = self._manifest_with(repo, [
+                lambda c: wf._GENERATION_HEAD_LINE_RE.sub("generation_head: " + "c" * 39, c),
+            ])
+            with self.assertRaises(wf.WorktreeOrHeadMismatchError):
+                wf.assert_local_generation_matches(repo.root, manifest_path, require_metadata=True)
+
+    def test_strict_mode_still_detects_value_mismatch_once_presence_checks_pass(self):
+        """Presence/grammar clearing is not itself sufficient -- the
+        existing value-equality comparison still runs afterward."""
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            repo.commit_plan_docs_as_base()
+            manifest_path = self._manifest_with(repo, [
+                lambda c: wf._WORKTREE_ROOT_LINE_RE.sub("worktree_root: /some/other/worktree", c),
+            ])
+            with self.assertRaises(wf.WorktreeOrHeadMismatchError):
+                wf.assert_local_generation_matches(repo.root, manifest_path, require_metadata=True)
+
+    def test_require_metadata_default_false_matches_pre_existing_behavior(self):
+        """Item 339: `require_metadata`'s default is `False`, and passing
+        it explicitly changes nothing relative to omitting it -- the two
+        already-live permissive callers (`/approve-review`, `/review-plan`)
+        are unaffected by strict mode's existence."""
+        with ScratchRepo() as repo:
+            bundle_dir = self._bundle_dir(repo)
+            (bundle_dir / "MANIFEST.md").write_text("# Bundle Manifest\n\nreview_content_id: " + "a" * 64 + "\n")
+            wf.assert_local_generation_matches(repo.root, bundle_dir / "MANIFEST.md")
+            wf.assert_local_generation_matches(repo.root, bundle_dir / "MANIFEST.md", require_metadata=False)
+
 
 class TestStageCompletenessCheck(unittest.TestCase):
     """`assert_stage_completeness`: a bundle's own author-written stage
