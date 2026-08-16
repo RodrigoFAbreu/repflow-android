@@ -153,13 +153,18 @@ dirty-resume rule, `WF2`):
     checkpoint_id=checkpoint_id, step="1f-commit",
     step_class=workflow_state.DESTRUCTIVE, now=<now>)`:
     - call `workflow_state.complete_checkpoint(state, work_item_id,
-      checkpoint_id, registry, now=<now>)` and persist the returned state
-      to `docs/ai-workflow/WORKFLOW_STATE.json` -- checkpoint-complete-vs-
-      all-complete semantics: `phase` stays `IMPLEMENTING` unless every
-      registry checkpoint is now `COMPLETE`, in which case it becomes
-      `SELF_REVIEWING_IMPLEMENTATION` as part of this same write. The
-      state file is the sole writable record of checkpoint status from
-      this point on; the trailer below is verification evidence, never a
+      checkpoint_id, registry, now=<now>, repo_root=repo_root)` and persist
+      the returned state to `docs/ai-workflow/WORKFLOW_STATE.json` --
+      checkpoint-complete-vs-all-complete semantics: `phase` stays
+      `IMPLEMENTING` unless every registry checkpoint is now `COMPLETE`, in
+      which case it becomes `SELF_REVIEWING_IMPLEMENTATION` as part of this
+      same write. `repo_root` also drives `WFR-69`'s own non-approval-gated
+      pre-flight for any checkpoint whose registry entry declares
+      `completion_obligations` -- vacuous for a checkpoint that declares
+      none, which is every checkpoint besides `workflow-v2-1-core`'s own
+      `WF8b`/`WF8c`. The state file is the sole writable record of
+      checkpoint status from this point on; the trailer below is
+      verification evidence, never a
       second source of truth;
     - then create one commit for this checkpoint's changes, carrying
       `Workflow-Checkpoint: <id>` + `Workflow-Work-Item: <work_item_id>`

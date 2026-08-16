@@ -3645,7 +3645,7 @@ class TestCheckpointStateTransitions(unittest.TestCase):
             phase="IMPLEMENTING", state_revision=1,
         )
         state = _base_state(wi=wi)
-        new_state = ws.complete_checkpoint(state, "wi", "A", _REGISTRY, now="t2")
+        new_state = ws.complete_checkpoint(state, "wi", "A", _REGISTRY, now="t2", repo_root=Path("."))
         item = new_state["work_items"]["wi"]
         self.assertEqual(item["checkpoints"]["A"]["status"], "COMPLETE")
         self.assertIsNone(item["current_checkpoint_id"])
@@ -3659,9 +3659,161 @@ class TestCheckpointStateTransitions(unittest.TestCase):
             phase="IMPLEMENTING", state_revision=1,
         )
         state = _base_state(wi=wi)
-        new_state = ws.complete_checkpoint(state, "wi", "A", registry, now="t2")
+        new_state = ws.complete_checkpoint(state, "wi", "A", registry, now="t2", repo_root=Path("."))
         item = new_state["work_items"]["wi"]
         self.assertEqual(item["phase"], "SELF_REVIEWING_IMPLEMENTATION")
+
+
+_RECONCILIATION_TABLE_FIXTURE = """### Reconciliation table
+
+| Items | Topic | Status | Owner | Evidence / rationale |
+|---|---|---|---|---|
+| 1 | thing one | IMPLEMENTED | WF8b | already delivered |
+| 2 | thing two | ABSENT | WF8c | still missing |
+| 3 | thing three | SUPERSEDED | none (superseded) | design superseded |
+"""
+
+_EVIDENCE_TEST_MODULE = """import unittest
+
+class OkCase(unittest.TestCase):
+    def test_pass(self):
+        self.assertTrue(True)
+
+class BrokenCase(unittest.TestCase):
+    def test_fail(self):
+        self.assertTrue(False)
+"""
+
+
+class TestCompleteCheckpointWfr69PreFlight(unittest.TestCase):
+    """`WFR-69` (`WF8c` item (o)): `complete_checkpoint`'s own
+    non-approval-gated pre-flight for a checkpoint whose registry entry
+    declares `completion_obligations`, re-derived directly against a
+    real filesystem fixture standing in for the live working tree -- no
+    Git repository is needed since the pre-flight never shells out to
+    Git at all."""
+
+    def _write_fixture(self, root: Path, *, table: str = _RECONCILIATION_TABLE_FIXTURE) -> None:
+        plan_dir = root / "docs" / "ai-workflow"
+        plan_dir.mkdir(parents=True, exist_ok=True)
+        (plan_dir / "WORKFLOW_V2_PLAN.md").write_text(table)
+        (root / "docs" / "ai-workflow" / "registry").mkdir(parents=True, exist_ok=True)
+        scripts_dir = root / "scripts"
+        scripts_dir.mkdir(parents=True, exist_ok=True)
+        (scripts_dir / "fixture_evidence_test.py").write_text(_EVIDENCE_TEST_MODULE)
+
+    def _registry(self) -> dict:
+        return {"checkpoints": [
+            {"id": "A", "depends_on": [], "completion_obligations": ["WFO-LEDGER-COVERAGE"]},
+        ]}
+
+    def _state(self) -> dict:
+        wi = _base_work_item(
+            current_checkpoint_id="A", checkpoints={"A": {"status": "IN_PROGRESS", "start_commit": "x"}},
+            phase="IMPLEMENTING", state_revision=1,
+        )
+        return _base_state(wi=wi)
+
+    def test_refuses_when_no_evidence_is_recorded_for_any_item(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_fixture(root)
+            with self.assertRaises(ws.UnsatisfiedCompletionObligationError) as ctx:
+                ws.complete_checkpoint(self._state(), "wi", "A", self._registry(), now="t2", repo_root=root)
+            message = str(ctx.exception)
+            self.assertIn("1", message)
+            self.assertIn("2", message)
+            # Item 3 resolves SUPERSEDED/none -- satisfied without evidence.
+            self.assertNotIn("[1, 2, 3]", message)
+            self.assertIn("[1, 2]", message)
+
+    def test_passes_when_every_open_item_has_passing_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_fixture(root)
+            ledger = {
+                "entries": [
+                    {"item": 1, "status": "IMPLEMENTED", "owner_checkpoint": "WF8b",
+                     "evidence": "fixture_evidence_test.OkCase.test_pass"},
+                    {"item": 3, "status": "SUPERSEDED", "owner_checkpoint": "none", "evidence": None},
+                ]
+            }
+            (root / ws.ledger_status_path_for_work_item("wi")).write_text(json.dumps(ledger))
+            companion = {"entries": [
+                {"item": 2, "evidence": "fixture_evidence_test.OkCase.test_pass"},
+            ]}
+            (root / ws.wf8c_evidence_path_for_work_item("wi")).write_text(json.dumps(companion))
+
+            new_state = ws.complete_checkpoint(self._state(), "wi", "A", self._registry(), now="t2", repo_root=root)
+            self.assertEqual(new_state["work_items"]["wi"]["checkpoints"]["A"]["status"], "COMPLETE")
+
+    def test_flags_item_whose_evidence_test_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_fixture(root)
+            ledger = {"entries": [
+                {"item": 1, "status": "IMPLEMENTED", "owner_checkpoint": "WF8b",
+                 "evidence": "fixture_evidence_test.BrokenCase.test_fail"},
+                {"item": 2, "status": "ABSENT", "owner_checkpoint": "WF8c",
+                 "evidence": "fixture_evidence_test.OkCase.test_pass"},
+            ]}
+            (root / ws.ledger_status_path_for_work_item("wi")).write_text(json.dumps(ledger))
+
+            with self.assertRaises(ws.UnsatisfiedCompletionObligationError) as ctx:
+                ws.complete_checkpoint(self._state(), "wi", "A", self._registry(), now="t2", repo_root=root)
+            message = str(ctx.exception)
+            self.assertIn("[1]", message)
+
+    def test_flags_item_whose_evidence_reference_is_unresolvable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_fixture(root)
+            ledger = {"entries": [
+                {"item": 1, "status": "IMPLEMENTED", "owner_checkpoint": "WF8b",
+                 "evidence": "fixture_evidence_test.NoSuchCase.test_nope"},
+                {"item": 2, "status": "ABSENT", "owner_checkpoint": "WF8c",
+                 "evidence": "fixture_evidence_test.OkCase.test_pass"},
+            ]}
+            (root / ws.ledger_status_path_for_work_item("wi")).write_text(json.dumps(ledger))
+
+            with self.assertRaises(ws.UnsatisfiedCompletionObligationError) as ctx:
+                ws.complete_checkpoint(self._state(), "wi", "A", self._registry(), now="t2", repo_root=root)
+            self.assertIn("[1]", str(ctx.exception))
+
+    def test_obligation_with_no_bound_pre_flight_fails_closed(self):
+        registry = {"checkpoints": [
+            {"id": "A", "depends_on": [], "completion_obligations": ["SOME-UNBOUND-OBLIGATION"]},
+        ]}
+        with self.assertRaises(ws.UnsatisfiedCompletionObligationError) as ctx:
+            ws.complete_checkpoint(self._state(), "wi", "A", registry, now="t2", repo_root=Path("/nonexistent"))
+        self.assertIn("SOME-UNBOUND-OBLIGATION", str(ctx.exception))
+        self.assertIn("no WFR-69 pre-flight bound", str(ctx.exception))
+
+    def test_checkpoint_declaring_no_obligations_is_unaffected_by_missing_fixture(self):
+        """A checkpoint that declares no `completion_obligations` at all
+        never even looks at `repo_root` -- the pre-flight is vacuously
+        satisfied for it, matching every registry row besides `WF8c`."""
+        registry = {"checkpoints": [{"id": "A", "depends_on": []}]}
+        new_state = ws.complete_checkpoint(
+            self._state(), "wi", "A", registry, now="t2", repo_root=Path("/definitely/does/not/exist"),
+        )
+        self.assertEqual(new_state["work_items"]["wi"]["checkpoints"]["A"]["status"], "COMPLETE")
+
+
+class TestReconciliationTableWorkingTreeParse(unittest.TestCase):
+    def test_parses_live_working_tree_file_directly(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plan_dir = root / "docs" / "ai-workflow"
+            plan_dir.mkdir(parents=True)
+            (plan_dir / "WORKFLOW_V2_PLAN.md").write_text(_RECONCILIATION_TABLE_FIXTURE)
+            table = ws._parse_reconciliation_table_working_tree(root)
+        self.assertEqual(table[1]["status"], "IMPLEMENTED")
+        self.assertEqual(table[1]["owner"], "WF8b")
+        self.assertEqual(table[2]["status"], "ABSENT")
+        self.assertEqual(table[2]["owner"], "WF8c")
+        self.assertEqual(table[3]["status"], "SUPERSEDED")
+        self.assertEqual(table[3]["owner"], "none")
 
 
 class TestWorktreeIdentityWriteAndResume(unittest.TestCase):

@@ -145,7 +145,7 @@ class TestFullPassAuthorizedCommitKinds(unittest.TestCase):
 
             # 2. Checkpoint A.
             state = ws.transition_checkpoint_in_progress(state, "wi", "A", plan_commit, now="t1")
-            state = ws.complete_checkpoint(state, "wi", "A", registry, now="t2")
+            state = ws.complete_checkpoint(state, "wi", "A", registry, now="t2", repo_root=repo.root)
             ck_a_commit = repo.commit_files(
                 "checkpoint A", {state_path: json.dumps(state), "src/a.txt": "a\n"},
                 trailers={"Workflow-Checkpoint": "A", "Workflow-Work-Item": "wi"},
@@ -154,7 +154,7 @@ class TestFullPassAuthorizedCommitKinds(unittest.TestCase):
             # 3. Checkpoint B -- the last one, so this also flips phase to
             # SELF_REVIEWING_IMPLEMENTATION as part of the same write.
             state = ws.transition_checkpoint_in_progress(state, "wi", "B", ck_a_commit, now="t3")
-            state = ws.complete_checkpoint(state, "wi", "B", registry, now="t4")
+            state = ws.complete_checkpoint(state, "wi", "B", registry, now="t4", repo_root=repo.root)
             ck_b_commit = repo.commit_files(
                 "checkpoint B", {state_path: json.dumps(state), "src/b.txt": "b\n"},
                 trailers={"Workflow-Checkpoint": "B", "Workflow-Work-Item": "wi"},
@@ -472,7 +472,7 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # `workflow_state.state_transaction`/`state_lock` -- an intentional
     # content change, not a regression.
     "milestone-plan.md": "72f8f5af38ee5b546f85f0e36b2a5034f7b87094b38cbd728658754f56572bf9",
-    "milestone-implement.md": "eae3dbf2a8f91899bf9020335c4a2209af271b72bca7c74d988a3fa735e5f206",
+    "milestone-implement.md": "be2d6f3f7e55fa610aa10fa01cc4cf2835f40e6c7f8f41623253396a1d66451d",
     # approve-review.md (WF8c item (c), same-content bundle-generation
     # republication idempotency; further updated WF8c item (b): the
     # trailing caveat naming the dedicated /recover-implementation-provenance

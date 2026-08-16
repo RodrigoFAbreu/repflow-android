@@ -1815,7 +1815,7 @@ def transition_checkpoint_in_progress(
 
 
 def complete_checkpoint(
-    state: dict, work_item_id: str, checkpoint_id: str, registry: dict, now: str,
+    state: dict, work_item_id: str, checkpoint_id: str, registry: dict, now: str, *, repo_root: Path,
 ) -> dict:
     """D3's checkpoint-complete-vs-all-complete semantics: marks
     `checkpoint_id` `COMPLETE`, resets `current_checkpoint_id` to `null`
@@ -1824,7 +1824,50 @@ def complete_checkpoint(
     checkpoint named in the registry is now `COMPLETE` -- the two
     conditions are deliberately distinct: completing one checkpoint is
     never itself evidence the whole work item is done. Returns a new
-    state dict."""
+    state dict.
+
+    `WFR-69` (`WF8c` item (o)): before any write, a checkpoint whose own
+    registry entry declares `completion_obligations` must first pass a
+    second, non-approval-gated pre-flight per obligation -- re-derived
+    directly against the **live working tree** at the moment of
+    completion, deliberately never a call into
+    `resolve_completion_obligations`/the approval-bound verifier-authority
+    chain `WFO-LEDGER-COVERAGE`'s own eventual `technical_approval` owns,
+    since that approval cannot exist yet the first time a checkpoint
+    reaches `COMPLETE` (implementation always precedes
+    `SELF_REVIEWING_IMPLEMENTATION`/technical approval, never the other
+    way around). An obligation id with no pre-flight bound to it fails
+    closed -- it blocks completion rather than passing vacuously, the same
+    fail-closed default `UNKNOWN_OBLIGATION` applies elsewhere in this
+    module. Raises `UnsatisfiedCompletionObligationError`, naming the
+    checkpoint and every unresolved obligation/item, before
+    `checkpoint_id`'s status is written and before `current_checkpoint_id`
+    resets -- so a refused completion leaves the checkpoint selectable and
+    the registry non-terminal (`select_next_checkpoint` keeps returning
+    it). This pre-flight is deliberately weaker than, and never a
+    substitute for, `WFO-LEDGER-COVERAGE`'s own approval-bound verdict:
+    passing it is necessary but never sufficient for `MILESTONE_COMPLETE`,
+    which still independently requires `complete_work_item`'s own
+    `resolve_completion_obligations` call to derive `PASS`."""
+    entry_spec = next((c for c in registry.get("checkpoints", []) if c["id"] == checkpoint_id), None)
+    obligation_ids = (entry_spec or {}).get("completion_obligations", [])
+    if obligation_ids:
+        repo_root = Path(repo_root)
+        outstanding: dict[str, list] = {}
+        for obligation_id in obligation_ids:
+            pre_flight = _PRE_CHECKPOINT_COMPLETION_PRE_FLIGHT.get(obligation_id)
+            if pre_flight is None:
+                outstanding[obligation_id] = ["<no WFR-69 pre-flight bound to this obligation id>"]
+                continue
+            unresolved_items = pre_flight(repo_root, work_item_id)
+            if unresolved_items:
+                outstanding[obligation_id] = unresolved_items
+        if outstanding:
+            raise UnsatisfiedCompletionObligationError(
+                f"{checkpoint_id!r} cannot reach checkpoint-COMPLETE -- WFR-69 pre-flight "
+                f"found undischarged reconciliation-table item(s) per obligation: {outstanding}"
+            )
+
     new_state = copy.deepcopy(state)
     work_item = new_state["work_items"][work_item_id]
     entry = work_item["checkpoints"].setdefault(checkpoint_id, {})
@@ -5471,25 +5514,16 @@ def _resolve_reconciliation_owner(status: str, owner_cell: str) -> str:
     raise ReconciliationTableParseError(f"cannot resolve owner from reconciliation-table cell: {owner_cell!r}")
 
 
-def parse_reconciliation_table(
-    repo_root: Path, commit: str, *, plan_path: str = "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
-) -> dict[int, dict[str, str]]:
-    """Re-derives `WORKFLOW_V2_PLAN.md`'s '### Reconciliation table' at the
-    pinned `commit` into `{item: {"status": ..., "owner": ..., "topic":
-    ...}}` -- WFR-68 property (i)'s own item-set source of truth, read
-    directly from the plan document rather than trusted from
-    `<work_item_id>-ledger-status.json`'s own enumeration (which is exactly
-    what the "omission attack"/"relabel attack" adversarial arms exist to
-    keep from being self-certifying). Raises `ReconciliationTableParseError`
-    on any row this cannot resolve -- the table changes only alongside a
-    fresh approved plan revision, and a parse failure here should stop a
-    technical review rather than silently degrade into a partial item set."""
-    text = _hardened_run(["show", f"{commit}:{plan_path}"], cwd=repo_root)
+def _parse_reconciliation_table_text(text: str) -> dict[int, dict[str, str]]:
+    """The shared parse core `parse_reconciliation_table` (pinned-commit)
+    and `_parse_reconciliation_table_working_tree` (`WFR-69`'s own
+    live-working-tree pre-flight) both call -- identical row/status/owner
+    resolution either way, differing only in where `text` came from."""
     lines = text.splitlines()
     try:
         heading_idx = next(i for i, line in enumerate(lines) if line.strip() == RECONCILIATION_TABLE_HEADING)
     except StopIteration:
-        raise ReconciliationTableParseError(f"no {RECONCILIATION_TABLE_HEADING!r} heading found in {plan_path}")
+        raise ReconciliationTableParseError(f"no {RECONCILIATION_TABLE_HEADING!r} heading found")
     try:
         header_idx = next(
             i for i in range(heading_idx, len(lines)) if lines[i].strip() == RECONCILIATION_TABLE_HEADER_ROW
@@ -5518,6 +5552,36 @@ def parse_reconciliation_table(
     return result
 
 
+def parse_reconciliation_table(
+    repo_root: Path, commit: str, *, plan_path: str = "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+) -> dict[int, dict[str, str]]:
+    """Re-derives `WORKFLOW_V2_PLAN.md`'s '### Reconciliation table' at the
+    pinned `commit` into `{item: {"status": ..., "owner": ..., "topic":
+    ...}}` -- WFR-68 property (i)'s own item-set source of truth, read
+    directly from the plan document rather than trusted from
+    `<work_item_id>-ledger-status.json`'s own enumeration (which is exactly
+    what the "omission attack"/"relabel attack" adversarial arms exist to
+    keep from being self-certifying). Raises `ReconciliationTableParseError`
+    on any row this cannot resolve -- the table changes only alongside a
+    fresh approved plan revision, and a parse failure here should stop a
+    technical review rather than silently degrade into a partial item set."""
+    text = _hardened_run(["show", f"{commit}:{plan_path}"], cwd=repo_root)
+    return _parse_reconciliation_table_text(text)
+
+
+def _parse_reconciliation_table_working_tree(
+    repo_root: Path, *, plan_path: str = "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+) -> dict[int, dict[str, str]]:
+    """Same parse as `parse_reconciliation_table`, read directly off the
+    **live working tree** rather than a pinned commit -- `WFR-69`'s own
+    pre-flight runs at the moment `complete_checkpoint` is called, which is
+    typically *before* the checkpoint's own plan/registry edits are
+    committed at all (`bootstrap-workflow-v2.md` step 6 calls this, then
+    commits, in that order)."""
+    text = (Path(repo_root) / plan_path).read_text()
+    return _parse_reconciliation_table_text(text)
+
+
 def ledger_status_path_for_work_item(work_item_id: str) -> Path:
     """`docs/ai-workflow/registry/<work_item_id>-ledger-status.json` --
     `WFR-68`'s subject artifact, named the same way
@@ -5525,6 +5589,152 @@ def ledger_status_path_for_work_item(work_item_id: str) -> Path:
     artifact."""
     fingerprint.validate_work_item_id(work_item_id)
     return Path(f"docs/ai-workflow/registry/{work_item_id}-ledger-status.json")
+
+
+def wf8c_evidence_path_for_work_item(work_item_id: str) -> Path:
+    """`docs/ai-workflow/registry/<work_item_id>-wf8c-evidence.json` --
+    `WFR-68`'s companion artifact, populated only as `WF8c` is actually
+    implemented, binding each `WF8c`-owned reconciliation-table item to
+    the exact test/function that discharges it. Named the same way
+    `ledger_status_path_for_work_item` names its own sibling artifact; the
+    literal `wf8c` segment is deliberate (the plan's own name for this
+    file), not a `work_item_id`-derived token."""
+    fingerprint.validate_work_item_id(work_item_id)
+    return Path(f"docs/ai-workflow/registry/{work_item_id}-wf8c-evidence.json")
+
+
+def _read_json_from_working_tree(repo_root: Path, rel_path: Path | str) -> dict:
+    """Reads and parses a JSON file directly off the **live working tree**
+    (never a pinned commit). A missing or malformed file resolves to `{}`
+    -- an absent/garbled evidence artifact is exactly "no evidence
+    recorded" for every caller of this helper, not a hard error."""
+    full = Path(repo_root) / rel_path
+    if not full.is_file():
+        return {}
+    try:
+        return json.loads(full.read_text())
+    except json.JSONDecodeError:
+        return {}
+
+
+def _reconciliation_evidence_by_item(repo_root: Path, work_item_id: str) -> dict[int, str]:
+    """Combines `<work_item_id>-ledger-status.json`'s own per-entry
+    `evidence` field with the companion `<work_item_id>-wf8c-evidence.json`
+    (`WFR-68`'s two-artifact split) into one `{item: evidence_test_id}`
+    map, read live off the working tree. A ledger-status.json entry's own
+    `evidence`, when present, wins; the companion file only ever fills in
+    an item the ledger has not itself recorded evidence for. Each
+    evidence value is a dotted unittest test id (`module.Case.method`, the
+    same form `python3 -m unittest <id>` accepts) -- the "resolvable,
+    executable" reference `WFR-68`/`WFR-69` both require."""
+    evidence: dict[int, str] = {}
+    ledger = _read_json_from_working_tree(repo_root, ledger_status_path_for_work_item(work_item_id))
+    for record in ledger.get("entries", []):
+        item = record.get("item")
+        ev = record.get("evidence")
+        if isinstance(item, int) and isinstance(ev, str) and ev:
+            evidence[item] = ev
+    companion = _read_json_from_working_tree(repo_root, wf8c_evidence_path_for_work_item(work_item_id))
+    for record in companion.get("entries", []):
+        item = record.get("item")
+        ev = record.get("evidence")
+        if isinstance(item, int) and isinstance(ev, str) and ev and item not in evidence:
+            evidence[item] = ev
+    return evidence
+
+
+def _load_and_run_named_test(repo_root: Path, test_id: str) -> tuple[bool, str]:
+    """`WFR-69`'s own "resolvable, executable ... re-executes and derives
+    green" requirement for a single ledger-evidence reference. `test_id`
+    is a dotted unittest test id (`module.TestCase.test_method`), resolved
+    and run against the **live working tree's** `scripts/` directory in a
+    fresh, isolated interpreter (`-I -B -S`, mirroring
+    `_run_verifier_driver`'s own isolation so an already-imported module in
+    *this* process can never mask a real import failure) -- never against a
+    pinned commit, since this pre-flight is deliberately not the
+    approval-bound chain `WFO-LEDGER-COVERAGE`'s own verifier owns.
+    Returns `(passed, detail)`; any resolution or execution failure is
+    `(False, <reason>)`, never an exception -- an unresolvable or erroring
+    evidence reference is exactly the case this pre-flight exists to
+    catch, not propagate."""
+    scripts_dir = Path(repo_root) / "scripts"
+    driver_dir = Path(tempfile.mkdtemp(prefix="wfr69-evidence-driver-"))
+    try:
+        driver_path = driver_dir / "run_evidence.py"
+        driver_path.write_text(
+            "import json, sys, unittest\n"
+            f"sys.path.insert(0, {str(scripts_dir)!r})\n"
+            "try:\n"
+            f"    _suite = unittest.TestLoader().loadTestsFromName({test_id!r})\n"
+            "except Exception as _exc:\n"
+            "    print(json.dumps({'ok': False, 'detail': 'unresolvable: ' + repr(_exc)}))\n"
+            "    sys.exit(0)\n"
+            "if _suite.countTestCases() == 0:\n"
+            "    print(json.dumps({'ok': False, 'detail': 'resolved to zero test cases'}))\n"
+            "    sys.exit(0)\n"
+            "_result = unittest.TestResult()\n"
+            "_suite.run(_result)\n"
+            "_ok = _result.wasSuccessful()\n"
+            "_detail = '' if _ok else str(_result.failures + _result.errors)\n"
+            "print(json.dumps({'ok': _ok, 'detail': _detail}))\n"
+        )
+        env = {"PATH": os.environ.get("PATH", "")}
+        proc = subprocess.run(
+            [sys.executable, "-I", "-B", "-S", str(driver_path)],
+            capture_output=True, text=True, env=env, timeout=120, cwd=str(scripts_dir),
+        )
+    finally:
+        shutil.rmtree(driver_dir, ignore_errors=True)
+
+    stdout = proc.stdout.strip()
+    if not stdout:
+        return False, f"isolated evidence process produced no output: rc={proc.returncode} stderr={proc.stderr!r}"
+    try:
+        payload = json.loads(stdout.splitlines()[-1])
+    except json.JSONDecodeError:
+        return False, f"isolated evidence process produced non-JSON output: {stdout!r}"
+    return bool(payload.get("ok")), payload.get("detail", "")
+
+
+def _pre_flight_wfo_ledger_coverage(repo_root: Path, work_item_id: str) -> list[int]:
+    """`WFR-69`'s own non-approval-gated pre-flight for the
+    `WFO-LEDGER-COVERAGE` obligation: re-derives, directly against the
+    live working tree, whether every item the reconciliation table names
+    already satisfies the disposition the table's own per-item resolution
+    rule assigns it -- status-conditional (revision 88, `OPUS-R110-001`):
+    a `SUPERSEDED`/`none` item needs no evidence at all (the table's own
+    recorded supersession already satisfies it, exactly as item 355 clause
+    (b2) and `WFR-68` property (iv) already treat that disposition);
+    every other item -- `IMPLEMENTED` or a `WF8c`-owned `ABSENT`/`PARTIAL`
+    -- needs a resolvable, executable evidence entry that re-executes
+    green. Returns the sorted list of item numbers still undischarged
+    (empty means every item is satisfied) -- deliberately never raises
+    itself, so the caller can report every unresolved item in one refusal
+    rather than stopping at the first."""
+    table = _parse_reconciliation_table_working_tree(repo_root)
+    evidence = _reconciliation_evidence_by_item(repo_root, work_item_id)
+    unresolved: list[int] = []
+    for item, row in sorted(table.items()):
+        if row["status"] == "SUPERSEDED" and row["owner"] == "none":
+            continue
+        test_id = evidence.get(item)
+        if not test_id:
+            unresolved.append(item)
+            continue
+        ok, _detail = _load_and_run_named_test(repo_root, test_id)
+        if not ok:
+            unresolved.append(item)
+    return unresolved
+
+
+# Dispatch table for `complete_checkpoint`'s own `WFR-69` pre-flight, keyed
+# by completion-obligation id -- deliberately separate from
+# `COMPLETION_OBLIGATION_CONFORMANCE` (that one is approval-bound, this one
+# is not). An obligation id with no entry here fails closed inside
+# `complete_checkpoint` itself, never by a KeyError escaping this dict.
+_PRE_CHECKPOINT_COMPLETION_PRE_FLIGHT = {
+    "WFO-LEDGER-COVERAGE": _pre_flight_wfo_ledger_coverage,
+}
 
 
 CHECKPOINT_REACHABILITY_MISSING_TESTS_HEADING = "## Missing tests"
