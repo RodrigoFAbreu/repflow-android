@@ -173,6 +173,116 @@
       "item": 246,
       "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_exact_reviewed_head_zero_gap_is_reachable",
       "note": "An ordinary (non-recovered) round's interval -- exactly one commit, T = S -- continues to be accepted, the generalized interval definition's regression guard"
+    },
+    {
+      "item": 167,
+      "evidence": "workflow_state_test.TestRegistryCompletionStatusAndGates.test_milestone_complete_gate_reachable_truth_table",
+      "note": "milestone_complete_gate_reachable(phase=AWAITING_FUNCTIONAL_REVIEW, is_terminal=True) succeeds unchanged -- the regression guard proving the new scoped-remediation guard does not disturb the one path that must never break"
+    },
+    {
+      "item": 168,
+      "evidence": "workflow_state_test.TestRegistryCompletionStatusAndGates.test_non_terminal_names_next_selectable_checkpoint",
+      "note": "registry_completion_status names the actual next selectable (non-terminal, not blocked) checkpoint -- this finding's own reproduction shape"
+    },
+    {
+      "item": 169,
+      "evidence": "workflow_state_test.TestRegistryCompletionStatusAndGates.test_non_terminal_names_blocked_checkpoint_via_structured_attribute",
+      "note": "registry_completion_status names the blocked (dependency-missing) checkpoint identically to the selectable case, never a selectable one"
+    },
+    {
+      "item": 170,
+      "evidence": "workflow_state_test.TestCompleteWorkItemOwnRegistryGuard.test_raises_incomplete_own_checkpoints_when_own_registry_non_terminal",
+      "note": "complete_work_item itself (not only the command layer) raises IncompleteOwnCheckpointsError directly on a non-terminal on-disk registry -- direct unit test, defense-in-depth from the command-level guard"
+    },
+    {
+      "item": 171,
+      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd.test_first_scoped_acceptance_mirrors_wf8b_shape",
+      "note": "/accept-scoped-remediation happy path: appends exactly one scoped_remediation_acceptance entry, sets phase to IMPLEMENTING, worktree clean after success"
+    },
+    {
+      "item": 191,
+      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd.test_first_scoped_acceptance_mirrors_wf8b_shape",
+      "note": "End to end: the checklist-evidence-commit flow followed by scoped acceptance reaches scoped acceptance from a clean tree, with no manual out-of-contract commit (same test as item 171, which asserts the resulting record shape; this item's own claim is the clean-worktree/no-manual-commit property the same test also asserts)"
+    },
+    {
+      "item": 173,
+      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd.test_terminal_registry_refuses_scoped_gate",
+      "note": "/accept-scoped-remediation refuses when the registry is actually terminal, naming /accept-milestone as the correct command instead -- scoped_remediation_gate_reachable is False, milestone_complete_gate_reachable is True, and complete_work_item succeeds directly"
+    },
+    {
+      "item": 176,
+      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd.test_exact_replay_on_second_invocation",
+      "note": "A second invocation naming the identical round is recognized as an exact-round replay (via resolve_scoped_remediation_round's load-and-compare) and idempotently reports the existing acceptance commit"
+    },
+    {
+      "item": 186,
+      "evidence": "workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_cross_invocation_reviewed_implementation_head_changed",
+      "note": "/accept-scoped-remediation refuses when the live reviewed_implementation_head disagrees with the value about to be recorded (one of the item's two OR'd conditions; the sibling test_cross_invocation_checklist_blob_changed covers the checklist-digest half, not separately bound here)"
+    },
+    {
+      "item": 187,
+      "evidence": "workflow_state_test.TestCompleteWorkItemOwnRegistryGuard.test_registry_coverage_cannot_be_satisfied_by_a_fabricated_caller_dict",
+      "note": "complete_work_item's signature carries no registry parameter at all -- asserted directly via inspect.signature, closing the fabricated-in-memory-dict bypass class"
+    },
+    {
+      "item": 190,
+      "evidence": "workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_dirty_checklist_path_refused",
+      "note": "/accept-scoped-remediation refuses outright, before computing or recording any blob, when the functional-review checklist path has an uncommitted working-tree change"
+    },
+    {
+      "item": 192,
+      "evidence": "workflow_state_test.TestResolveScopedRemediationRound",
+      "note": "resolve_scoped_remediation_round reports ExactReplay only after loading and comparing recorded fields (test_exact_replay) -- a matching trailer whose recorded fields disagree is refused as ConflictingDuplicate instead (the test_conflicting_duplicate_* methods in the same class), never silently treated as a replay"
+    },
+    {
+      "item": 194,
+      "evidence": "workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_missing_evidence",
+      "note": "/accept-scoped-remediation refuses outright, naming the missing round key, when no Workflow-Functional-Checklist evidence commit is discoverable for the exact live round (MissingFunctionalChecklistEvidenceError)"
+    },
+    {
+      "item": 197,
+      "evidence": "workflow_state_test.TestFunctionalChecklistTrailerDiscovery.test_ambiguous_functional_checklist_trailer_raises",
+      "note": "Two first-parent-reachable Workflow-Functional-Checklist commits sharing byte-identical checklist content are refused as ambiguous, never silently picked between"
+    },
+    {
+      "item": 198,
+      "evidence": "workflow_state_test.TestFunctionalChecklistTrailerDiscovery.test_corrected_checklist_produces_new_current_evidence_ahead_of_earlier",
+      "note": "Two evidence commits with genuinely distinct checklist content coexist without ambiguity; discover_current_functional_checklist_evidence reports the newer as the round's current evidence"
+    },
+    {
+      "item": 201,
+      "evidence": "workflow_state_test.TestResolveScopedRemediationRound.test_conflicting_duplicate_wrong_active_pointer",
+      "note": "resolve_scoped_remediation_round refuses as ConflictingDuplicate when the recorded active_work_item_id_at_acceptance disagrees with the live global active_work_item_id -- the changed-active-pointer case"
+    },
+    {
+      "item": 202,
+      "evidence": "workflow_state_test.TestResolveScopedRemediationRound.test_conflicting_duplicate_wrong_checklist_path",
+      "note": "resolve_scoped_remediation_round refuses as ConflictingDuplicate when the recorded functional_checklist_path disagrees with the live fixed constant -- the wrong-checklist-path case"
+    },
+    {
+      "item": 205,
+      "evidence": "workflow_state_test.TestResolveScopedRemediationRound.test_exact_replay",
+      "note": "An exact replay with every one of the eight canonically compared fields matching the live values is still reported ExactReplay -- regression guard proving the widened comparison does not turn a genuine replay into a false ConflictingDuplicate refusal"
+    },
+    {
+      "item": 210,
+      "evidence": "workflow_state_test.TestScopedRemediationConfirmationParsing",
+      "note": "parse_scoped_remediation_confirmation_binding_fields refuses a confirmation missing either required field, or carrying a malformed (non-40-hex) value for either, naming which field failed (docstring-confirmed: UserConfirmationRejectedError, naming which field is missing or malformed)"
+    },
+    {
+      "item": 211,
+      "evidence": "workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_malformed_evidence_trailer_blob_disagrees_with_actual_commit",
+      "note": "The pre-commit evidence guard refuses when a confirmation names a discoverable commit whose actual committed content disagrees with both the confirmed blob and the trailer's own embedded blob component -- the hand-crafted-trailer case (MalformedFunctionalChecklistEvidenceError)"
+    },
+    {
+      "item": 212,
+      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd.test_wrong_work_item_confirmation_never_finds_evidence",
+      "note": "The pre-commit evidence guard refuses when a confirmation names an evidence commit that does not belong to the exact live round (wrong work_item_id sub-case), refused identically to the missing-evidence case (MissingFunctionalChecklistEvidenceError)"
+    },
+    {
+      "item": 213,
+      "evidence": "workflow_state_test.TestResolveScopedRemediationRound.test_conflicting_duplicate_wrong_evidence_commit",
+      "note": "resolve_scoped_remediation_round's exact-replay comparison validates functional_checklist_evidence_commit as one of the eight canonical fields -- a disagreement here is refused as ConflictingDuplicate, not reported ExactReplay"
     }
   ]
 }
