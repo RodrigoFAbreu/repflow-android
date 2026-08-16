@@ -491,7 +491,12 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     "apply-implementation-review.md": "bc1402c4b66b1e57acf043d98e9b534feca011b6e00dad142d378da7c97f5bb6",
     "review-plan.md": "2df001613d95be37253ec4969b522a123a0705b9be1ad57c59ef74c0c35d00f2",
     "record-manual-plan-review.md": "1382be84791ea61d210bec7f13b0043dfc3e841f7e8eed0bef697aa719414f75",
-    "bootstrap-workflow-v2.md": "c15f55482bd55a466bef0e594eda54bde26ea29fc95e6de90446a80eb9e2c036",
+    # bootstrap-workflow-v2.md (WF8c scope clauses (l)/(p)/(q), GPT-R108-002/
+    # OPUS-R109-004): the driver-range text made checkpoint-agnostic
+    # (OPUS-R102-009), a NO_CHECKPOINT terminal-wrap-up branch added to step
+    # 3, and step 6 bound explicitly to complete_checkpoint(...) -- WF8c's
+    # own first invocation, intentional content change.
+    "bootstrap-workflow-v2.md": "5eb35715f8a282caf8b7664c7f34d52287bb256e66998197bd56490305b739d7",
 }
 
 

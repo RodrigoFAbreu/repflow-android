@@ -8,7 +8,11 @@ state_writer: true
 Bootstrap-only driver for the `workflow-v2-1-core` work item (Workflow
 v2.1 core — a process/tooling milestone, not a product one). This command
 is the **sole** driver for this one work item's checkpoints, from WF0
-through WF8b (`D-Bootstrap`, revised per `OPUS-R10-002`/`-003`). It never
+through the registry's terminal checkpoint, whatever it currently is
+(`D-Bootstrap`, revised per `OPUS-R10-002`/`-003`/`OPUS-R102-009`) — never
+a literal checkpoint id, since a rule that hardcodes today's terminal
+checkpoint as tomorrow's is the "convention with no owner" class this
+plan exists to reject. It never
 hands off to `/milestone-implement`, and `/milestone-implement` is never
 invoked for this work item at any point. It never reads
 `docs/ACTIVE_MILESTONE.md` or `docs/ROADMAP.md`; its target work item is
@@ -78,6 +82,55 @@ until `docs/ai-workflow/WORKFLOW_STATE.json` exists to read it from
    `checkpoints` array in dependency order and select the first entry not
    yet `COMPLETE`. Report which checkpoint this is, and which one
    completed last (if any) — every invocation states both.
+
+   **`NO_CHECKPOINT` terminal-wrap-up branch** (`WF8c` scope clause `(p)`,
+   `GPT-R108-002`): if every registry checkpoint is already `COMPLETE` —
+   reachable only once `WF8c`'s own commit lands — there is no next
+   checkpoint to select. Skip step 4 through step 7 and instead perform
+   the same tracked self-review -> verification -> bundle-generation
+   sequence `/milestone-implement`'s own steps 2-4 perform for every other
+   work item, never a hand-off to that command:
+   - enter `SELF_REVIEWING_IMPLEMENTATION`: review the full work item
+     diff (since `base_commit`) for correctness, layer-boundary
+     violations, missing tests, and maintainability; fix all blocking and
+     important findings;
+   - run this work item's own applicable verification suite, with
+     `scripts/` as the working directory: `python3 -m unittest
+     workflow_integration_test workflow_state_test
+     workflow_state_completion_obligations_test workflow_fingerprint_test
+     workflow_test_harness_test workflow_fingerprint_generalization_test`
+     (`OPUS-R110-M01`) — never `/milestone-implement`'s Android-specific
+     `./gradlew spotlessCheck detekt lintDebug testDebugUnitTest` literal,
+     which does not apply to this process/tooling work item. Report
+     exactly what ran and its real result — never claim a check passed
+     that did not run;
+   - enter `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`: **first**, before
+     writing any bundle file, call `workflow_state.record_bundle_generation(
+     state, "workflow-v2-1-core", stage="implementation", head=<current
+     HEAD SHA>, now=<now>)` (`WF4c`, D-Approval-Commits' sole writer of
+     `reviewed_implementation_head`), persist the returned state, and
+     commit it **alone** — stage exactly that one path (never a broader
+     `git add`) and create one commit carrying
+     `Workflow-Bundle-Generation-Record:
+     workflow-v2-1-core/<implementation_revision>` +
+     `Workflow-Work-Item: workflow-v2-1-core` trailers, no other trailer.
+     This durability commit must land *before* generation, never after
+     (`WF8B-003`): a durability commit made after generation is by
+     definition one commit ahead of the value it just wrote;
+   - write `<bundle_dir>/IMPLEMENTATION_SUMMARY.md` (what was built, per
+     checkpoint, and why), `<bundle_dir>/TEST_RESULTS.md` (the exact
+     command above and its real result, `OPUS-R109-M01`),
+     `<bundle_dir>/CONTEXT_FILES.txt` (only the unchanged docs a reviewer
+     needs), and `<bundle_dir>/REVIEW_REQUEST.md` per
+     `docs/ai-workflow/REVIEW_PROTOCOL.md` (stage: `implementation`);
+   - run `./scripts/prepare-ai-review.sh <base_commit> implementation
+     workflow-v2-1-core` (`<bundle_dir>` resolves per
+     `workflow_fingerprint.resolve_bundle_dir`); bundle files themselves
+     are never committed (gitignored, disposable, regeneratable) — only
+     the generation-record commit above is real Git history;
+   - report the bundle location and **stop**. This is a hard gate — do
+     not mark the work item accepted, do not start a next checkpoint
+     (there is none).
 4. **Implement exactly that one checkpoint**, per its registry entry and
    the plan's own decision sections, following
    `CLAUDE.md`/`AGENTS.md`/`.github/copilot-instructions.md` for layer
@@ -88,11 +141,16 @@ until `docs/ai-workflow/WORKFLOW_STATE.json` exists to read it from
    identity subsystem or its wiring.
 6. Commit the checkpoint's changes, carrying an exact
    `Workflow-Checkpoint: <id>` + `Workflow-Work-Item: workflow-v2-1-core`
-   trailer. Once `docs/ai-workflow/WORKFLOW_STATE.json` exists, also
-   update `checkpoints[id].status = COMPLETE` (with the real commit SHA)
-   in that same commit — the state file becomes the sole writable record
-   of checkpoint status from that point on; the trailer remains
-   verification evidence, never a second source of truth.
+   trailer. Once `docs/ai-workflow/WORKFLOW_STATE.json` exists, also call
+   `workflow_state.complete_checkpoint(state, "workflow-v2-1-core",
+   checkpoint_id, registry, now, repo_root=repo_root)` and persist the
+   returned state in that same commit (`WFR-69`, `OPUS-R109-004`) — the
+   state file becomes the sole writable record of checkpoint status from
+   that point on; the trailer remains verification evidence, never a
+   second source of truth. The named transition function is the sole
+   call site for this write, never a direct `checkpoints[id].status =
+   COMPLETE` assignment, so `WFR-69`'s own pre-completion obligation
+   pre-flight cannot be bypassed by a compliant-looking direct write.
 7. **Stop immediately** — never loop, never continue to the next
    checkpoint in the same invocation, unlike `/milestone-implement`.
    Report the checkpoint just completed and its commit SHA. Continuing
