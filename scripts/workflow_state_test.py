@@ -3042,6 +3042,125 @@ class TestImplementationStageApprovalSecondItem(unittest.TestCase):
                 )
 
 
+class TestWf8cItemNLedgerArtifactsSelfProtection(unittest.TestCase):
+    """WF8c item (n) (revision 85, `GPT-R106-002`): `workflow-v2-1-core-
+    ledger-status.json` and its companion `workflow-v2-1-core-wf8c-
+    evidence.json` are added to `workflow-v2-1-core-artifacts.json`'s own
+    `implementation_stage.protected_paths` -- the same self-referential
+    carve-out the artifacts file already applies to its own path -- so a
+    post-approval edit to either stales `technical_approval` instead of
+    silently letting `WFO-LEDGER-COVERAGE`'s evidence pointers be swapped
+    for an unrelated already-green test while the prior approval remains
+    usable. Both halves are exercised: the fixed classification (edit
+    stales approval) and, as a **negative control proving the finding was
+    real and not vacuous**, the pre-fix classification (same edit, same
+    file, `docs/ai-workflow/registry/` left as a bare `excluded_prefixes`
+    entry with no carve-out) leaves approval untouched."""
+
+    _LEDGER_REL = "docs/ai-workflow/registry/workflow-v2-1-core-ledger-status.json"
+    _EVIDENCE_REL = "docs/ai-workflow/registry/workflow-v2-1-core-wf8c-evidence.json"
+    _ARTIFACTS_REL = "docs/ai-workflow/registry/workflow-v2-1-core-artifacts.json"
+
+    def _seed(self, repo, *, carve_out: bool):
+        """Writes a minimal but faithful implementation-stage declaration
+        for `workflow-v2-1-core`: `docs/ai-workflow/registry/` excluded by
+        prefix (matching the real file), with the ledger/evidence carve-out
+        present or absent per `carve_out`. Returns the approved commit and
+        a `technical_approval`-bearing work-item dict."""
+        protected_paths = {self._ARTIFACTS_REL: "self-referential declarations file"}
+        if carve_out:
+            protected_paths[self._LEDGER_REL] = "WFO-LEDGER-COVERAGE subject artifact"
+            protected_paths[self._EVIDENCE_REL] = "WFO-LEDGER-COVERAGE companion evidence file"
+        full = repo.root / self._ARTIFACTS_REL
+        full.parent.mkdir(parents=True, exist_ok=True)
+        full.write_text(json.dumps({
+            "schema_version": 2,
+            "work_item_id": "workflow-v2-1-core",
+            "implementation_stage": {
+                "protected_paths": protected_paths,
+                "protected_prefixes": {},
+                "excluded_paths": {},
+                "excluded_prefixes": {
+                    "docs/ai-workflow/registry/": "plan-stage-governed registry/artifact-declaration "
+                                                   "files -- not an implementation deliverable in their "
+                                                   "own right",
+                },
+            },
+        }))
+        _run(["git", "add", self._ARTIFACTS_REL], cwd=repo.root)
+
+        ledger_full = repo.root / self._LEDGER_REL
+        ledger_full.write_text(json.dumps({"entries": [{"item": 1, "status": "IMPLEMENTED"}]}))
+        _run(["git", "add", self._LEDGER_REL], cwd=repo.root)
+        _run(["git", "commit", "-q", "-m", "seed workflow-v2-1-core ledger artifacts"], cwd=repo.root)
+        commit = repo.head()
+
+        digest = ws.approval_review_content_id(
+            repo.root, stage="implementation", base_commit=repo.base,
+            work_item_type="process", work_item_id="workflow-v2-1-core", head=commit,
+            artifacts_path=fingerprint.artifacts_path_for_work_item("workflow-v2-1-core"),
+        )
+        work_item = {
+            "work_item_id": "workflow-v2-1-core", "work_item_type": "process",
+            "technical_approval": {"status": "CURRENT", "approved_review_content_id": digest},
+        }
+        return commit, work_item
+
+    def _edit_ledger_and_commit(self, repo) -> str:
+        ledger_full = repo.root / self._LEDGER_REL
+        ledger_full.write_text(json.dumps({"entries": [{"item": 1, "status": "SUPERSEDED"}]}))
+        _run(["git", "add", self._LEDGER_REL], cwd=repo.root)
+        _run(["git", "commit", "-q", "-m", "relabel a ledger entry post-approval"], cwd=repo.root)
+        return repo.head()
+
+    def _edit_evidence_and_commit(self, repo) -> str:
+        evidence_full = repo.root / self._EVIDENCE_REL
+        evidence_full.write_text(json.dumps({1: "workflow_state_test.SomeUnrelatedAlreadyGreenTest"}))
+        _run(["git", "add", self._EVIDENCE_REL], cwd=repo.root)
+        _run(["git", "commit", "-q", "-m", "swap in an unrelated evidence pointer post-approval"], cwd=repo.root)
+        return repo.head()
+
+    def test_post_approval_ledger_edit_stales_approval_when_protected(self):
+        with ScratchRepo() as repo:
+            _, work_item = self._seed(repo, carve_out=True)
+            new_head = self._edit_ledger_and_commit(repo)
+            self.assertFalse(
+                ws.approval_is_current(
+                    repo.root, work_item, stage="implementation", base_commit=repo.base, head=new_head,
+                ),
+                "a post-approval ledger-status.json edit must stale technical_approval once protected",
+            )
+
+    def test_post_approval_evidence_file_creation_stales_approval_when_protected(self):
+        with ScratchRepo() as repo:
+            _, work_item = self._seed(repo, carve_out=True)
+            new_head = self._edit_evidence_and_commit(repo)
+            self.assertFalse(
+                ws.approval_is_current(
+                    repo.root, work_item, stage="implementation", base_commit=repo.base, head=new_head,
+                ),
+                "a post-approval wf8c-evidence.json creation/edit must stale technical_approval once protected",
+            )
+
+    def test_post_approval_ledger_edit_is_invisible_without_the_carve_out(self):
+        """Negative control: reproduces the pre-item-(n) vulnerability
+        `GPT-R106-002` found -- with no carve-out, ledger-status.json falls
+        under the bare `docs/ai-workflow/registry/` `excluded_prefixes`
+        entry, so the identical relabel above leaves a stale `technical_
+        approval` looking current, letting `WFO-LEDGER-COVERAGE` be
+        satisfied from unreviewed content."""
+        with ScratchRepo() as repo:
+            _, work_item = self._seed(repo, carve_out=False)
+            new_head = self._edit_ledger_and_commit(repo)
+            self.assertTrue(
+                ws.approval_is_current(
+                    repo.root, work_item, stage="implementation", base_commit=repo.base, head=new_head,
+                ),
+                "without the carve-out this edit is invisible to technical_approval -- proves the finding "
+                "was real, not a vacuous test",
+            )
+
+
 class TestImplementingEntryReachableSecondItem(unittest.TestCase):
     """Missing-test item 150's third caller (`GPT-R31-002`):
     `implementing_entry_reachable` -- as opposed to `approval_is_current`,
