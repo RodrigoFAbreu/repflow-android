@@ -3974,6 +3974,28 @@ def _record_trailers(work_item_id: str, implementation_revision: int) -> dict[st
     }
 
 
+def _recovered_trailers(work_item_id: str, implementation_revision: int, supersedes: str) -> dict[str, str]:
+    """WF8c (c)/(b): the recovered-role three-trailer set -- the unchanged
+    `Workflow-Bundle-Generation-Record` value plus `Workflow-Supersedes`
+    naming the commit this one replaces as the chain's current tip."""
+    return _record_trailers(work_item_id, implementation_revision) | {
+        "Workflow-Supersedes": supersedes,
+    }
+
+
+def _write_and_commit(repo: "ScratchRepo", filename: str, content: str, message: str) -> str:
+    """Like `repo.commit`, but with caller-controlled exact file content --
+    needed to construct a byte-identical protected-edit-then-revert
+    scenario (WF8c (c)'s own worked failure case), where `repo.commit`'s
+    own subject-derived content would never coincidentally repeat."""
+    full = repo.root / filename
+    full.parent.mkdir(parents=True, exist_ok=True)
+    full.write_text(content)
+    _run(["git", "add", filename], cwd=repo.root)
+    _run(["git", "commit", "-q", "-m", message], cwd=repo.root)
+    return repo.head()
+
+
 class TestImplementationProvenanceInterval(unittest.TestCase):
     """WF8B-003 remediation (WF8b): `verify_implementation_provenance_interval`
     replaces a bare `reviewed_implementation_head == HEAD` comparison with
@@ -4237,6 +4259,402 @@ class TestImplementationProvenanceInterval(unittest.TestCase):
             )
             work_item = state | {"work_item_id": self.WI}
             self.assertEqual(ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base), t)
+
+
+class TestRecordBundleGenerationSameContentOutcome(unittest.TestCase):
+    """WF8c (c): `record_bundle_generation`'s `outcome` parameter -- the
+    pure state-mutation half of D-Commit-Provenance's "Same-content
+    post-fix republication". `resolve_bundle_generation_outcome` (the
+    Git-inspecting half) is exercised separately by
+    `TestResolveBundleGenerationOutcome`/`TestSameContentRepublicationEndToEnd`
+    below."""
+
+    def test_default_outcome_is_ordinary_backward_compatible(self):
+        state = _base_state(wi=_base_work_item(phase="SELF_REVIEWING_IMPLEMENTATION"))
+        new_state = ws.record_bundle_generation(state, "wi", stage="implementation", head="abc123", now="t1")
+        wi = new_state["work_items"]["wi"]
+        self.assertEqual(wi["reviewed_implementation_head"], "abc123")
+        self.assertEqual(wi["implementation_revision"], 1)
+
+    def test_same_content_outcome_leaves_head_and_revision_unchanged(self):
+        state = _base_state(wi=_base_work_item(
+            phase="APPLYING_REVIEW_FEEDBACK",
+            reviewed_implementation_head="abc123", implementation_revision=3,
+        ))
+        new_state = ws.record_bundle_generation(
+            state, "wi", stage="post-fix", head="def456", now="t2", outcome="same_content",
+        )
+        wi = new_state["work_items"]["wi"]
+        self.assertEqual(wi["reviewed_implementation_head"], "abc123")
+        self.assertEqual(wi["implementation_revision"], 3)
+
+    def test_same_content_outcome_still_transitions_phase(self):
+        state = _base_state(wi=_base_work_item(
+            phase="APPLYING_REVIEW_FEEDBACK",
+            reviewed_implementation_head="abc123", implementation_revision=3,
+        ))
+        new_state = ws.record_bundle_generation(
+            state, "wi", stage="post-fix", head="def456", now="t2", outcome="same_content",
+        )
+        self.assertEqual(
+            new_state["work_items"]["wi"]["phase"], "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+        )
+
+    def test_same_content_outcome_from_self_reviewing_implementation_also_transitions(self):
+        """D-Commit-Provenance's widened (revision 38) authority: legal
+        from either of the two source phases, not `APPLYING_REVIEW_FEEDBACK`
+        alone."""
+        state = _base_state(wi=_base_work_item(
+            phase="SELF_REVIEWING_IMPLEMENTATION",
+            reviewed_implementation_head="abc123", implementation_revision=1,
+        ))
+        new_state = ws.record_bundle_generation(
+            state, "wi", stage="implementation", head="def456", now="t2", outcome="same_content",
+        )
+        wi = new_state["work_items"]["wi"]
+        self.assertEqual(wi["reviewed_implementation_head"], "abc123")
+        self.assertEqual(wi["implementation_revision"], 1)
+        self.assertEqual(wi["phase"], "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW")
+
+    def test_same_content_outcome_still_bumps_state_revision_and_last_transition(self):
+        state = _base_state(wi=_base_work_item(
+            phase="APPLYING_REVIEW_FEEDBACK", state_revision=5,
+            reviewed_implementation_head="abc123", implementation_revision=1,
+        ))
+        new_state = ws.record_bundle_generation(
+            state, "wi", stage="post-fix", head="def456", now="t9", outcome="same_content",
+        )
+        wi = new_state["work_items"]["wi"]
+        self.assertEqual(wi["state_revision"], 6)
+        self.assertEqual(wi["last_transition"], "t9")
+
+    def test_unknown_outcome_rejected(self):
+        state = _base_state(wi=_base_work_item(phase="SELF_REVIEWING_IMPLEMENTATION"))
+        with self.assertRaises(ws.InvalidBundleGenerationOutcomeError):
+            ws.record_bundle_generation(
+                state, "wi", stage="implementation", head="abc123", now="t1", outcome="bogus",
+            )
+
+    def test_illegal_source_phase_refused_even_for_same_content_outcome(self):
+        state = _base_state(wi=_base_work_item(
+            phase="IMPLEMENTING", reviewed_implementation_head="abc", implementation_revision=1,
+        ))
+        with self.assertRaises(ws.IllegalBundleGenerationSourcePhaseError):
+            ws.record_bundle_generation(
+                state, "wi", stage="post-fix", head="def456", now="t1", outcome="same_content",
+            )
+
+    def test_original_state_untouched_for_same_content_outcome(self):
+        state = _base_state(wi=_base_work_item(
+            phase="APPLYING_REVIEW_FEEDBACK",
+            reviewed_implementation_head="abc123", implementation_revision=1,
+        ))
+        ws.record_bundle_generation(
+            state, "wi", stage="post-fix", head="def456", now="t2", outcome="same_content",
+        )
+        self.assertEqual(state["work_items"]["wi"]["phase"], "APPLYING_REVIEW_FEEDBACK")
+
+
+class TestResolveBundleGenerationOutcome(unittest.TestCase):
+    """WF8c (c), D-Commit-Provenance "Same-content post-fix republication":
+    the read-only, Git-inspecting decision `record_bundle_generation`'s
+    caller makes before choosing which `outcome` to pass it and which
+    commit-trailer set to write."""
+
+    WI = "wi"
+
+    def test_no_prior_round_resolves_ordinary(self):
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            work_item = {
+                "work_item_id": self.WI, "work_item_type": "process",
+                "reviewed_implementation_head": None, "implementation_revision": None,
+            }
+            outcome = ws.resolve_bundle_generation_outcome(
+                repo.root, work_item, base_commit=repo.base, head=repo.head(),
+            )
+            self.assertEqual(outcome, ("ordinary", None))
+
+    def test_content_differs_resolves_ordinary(self):
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected v1", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            head = repo.commit("protected v2", filename="src/Foo.kt")
+            work_item = state | {"work_item_id": self.WI, "work_item_type": "process"}
+            outcome = ws.resolve_bundle_generation_outcome(
+                repo.root, work_item, base_commit=repo.base, head=head,
+            )
+            self.assertEqual(outcome, ("ordinary", None))
+
+    def test_identical_content_with_clean_excluded_interval_resolves_same_content(self):
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            t = _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            head = repo.commit("resolved via excluded content", filename="docs/notes.md")
+            work_item = state | {"work_item_id": self.WI, "work_item_type": "process"}
+            outcome = ws.resolve_bundle_generation_outcome(
+                repo.root, work_item, base_commit=repo.base, head=head,
+            )
+            self.assertEqual(outcome, ("same_content", t))
+
+    def test_multiple_excluded_commits_between_t_and_head_still_resolves_same_content(self):
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            t = _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            repo.commit("finding rejected with evidence", filename="docs/notes-a.md")
+            head = repo.commit("second finding rejected too", filename="docs/notes-b.md")
+            work_item = state | {"work_item_id": self.WI, "work_item_type": "process"}
+            outcome = ws.resolve_bundle_generation_outcome(
+                repo.root, work_item, base_commit=repo.base, head=head,
+            )
+            self.assertEqual(outcome, ("same_content", t))
+
+    def test_protected_edit_then_byte_identical_revert_between_t_and_head_refuses(self):
+        """D-Commit-Provenance's own worked failure scenario (`GPT-R46-002`):
+        endpoint content nets out identical, but the interval itself
+        contains a genuinely protected commit -- "a protected edit
+        followed by a byte-identical revert ... can leave endpoint content
+        identical while the interval contains a commit the operation must
+        refuse." The fail-closed backstop must fire, never silently
+        classify this as same-content."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = _write_and_commit(repo, "src/Foo.kt", "v1\n", "protected v1")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            _write_and_commit(repo, "src/Foo.kt", "v2\n", "protected edit")
+            head = _write_and_commit(repo, "src/Foo.kt", "v1\n", "protected revert")
+            work_item = state | {"work_item_id": self.WI, "work_item_type": "process"}
+            with self.assertRaises(ws.ProtectedPathInProvenanceIntervalError):
+                ws.resolve_bundle_generation_outcome(
+                    repo.root, work_item, base_commit=repo.base, head=head,
+                )
+
+    def test_no_discoverable_generation_record_commit_refuses(self):
+        """Content identical (trivially: `p` itself as the candidate head,
+        the zero-commit-interval case) but no `T` was ever recorded --
+        the fail-closed backstop, not silently treated as ordinary."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            work_item = {
+                "work_item_id": self.WI, "work_item_type": "process",
+                "reviewed_implementation_head": p, "implementation_revision": 1,
+            }
+            with self.assertRaises(ws.BundleGenerationRecordNotFoundError):
+                ws.resolve_bundle_generation_outcome(
+                    repo.root, work_item, base_commit=repo.base, head=p,
+                )
+
+
+class TestSameContentRepublicationEndToEnd(unittest.TestCase):
+    """WF8c (c): the full round trip -- `resolve_bundle_generation_outcome`
+    sanctions a republication, `record_bundle_generation`'s `same_content`
+    outcome produces the state to commit, the caller commits it as a
+    recovered-role `Workflow-Supersedes` commit, and
+    `verify_implementation_provenance_interval` (the approval gate's own
+    check) validates the resulting multi-commit chain end to end --
+    exactly the round trip `/approve-review implementation` depends on."""
+
+    WI = "wi"
+    WORK_ITEM_TYPE = "process"
+
+    def _seed_base_state(self, repo: "ScratchRepo") -> None:
+        """Like `_seed_base_provenance_state`, plus `work_item_type` baked
+        in from this work item's very first committed state --
+        `resolve_bundle_generation_outcome` needs `work_item_type`
+        present, but it must be present *identically* across every commit
+        in the chain (never introduced partway through, as plain
+        `_seed_base_provenance_state` would leave it) or it would itself
+        register as a spurious field change against
+        `validate_bundle_generation_record_commit`'s exact-subset check --
+        including for the ordinary `T` this class's own tests still walk
+        as a non-terminal chain member."""
+        _commit_state_only(repo, self.WI, {
+            "work_item_id": self.WI, "work_item_type": self.WORK_ITEM_TYPE,
+            "reviewed_implementation_head": None, "implementation_revision": 0,
+            "phase": "IMPLEMENTING", "state_revision": 0, "last_transition": "t0",
+        }, "seed base state")
+
+    def _ordinary_state(self, repo: "ScratchRepo", p: str) -> dict:
+        return _provenance_state(
+            self.WI, reviewed_implementation_head=p, implementation_revision=1,
+        ) | {"work_item_type": self.WORK_ITEM_TYPE}
+
+    def _enter_applying_review_feedback(
+        self, repo: "ScratchRepo", prior_state: dict, *, state_revision: int,
+    ) -> dict:
+        feedback_state = prior_state | {"phase": "APPLYING_REVIEW_FEEDBACK", "state_revision": state_revision}
+        _commit_state_only(repo, self.WI, feedback_state, "enter applying review feedback")
+        return feedback_state
+
+    def test_single_republication_then_full_interval_validates(self):
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            self._seed_base_state(repo)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            ordinary_state = self._ordinary_state(repo, p)
+            t = _commit_state_only(repo, self.WI, ordinary_state, "record gen", trailers=_record_trailers(self.WI, 1))
+            feedback_state = self._enter_applying_review_feedback(repo, ordinary_state, state_revision=2)
+            head = repo.commit("resolved via excluded content", filename="docs/notes.md")
+
+            work_item = feedback_state | {"work_item_id": self.WI}
+            outcome, resolved_t = ws.resolve_bundle_generation_outcome(
+                repo.root, work_item, base_commit=repo.base, head=head,
+            )
+            self.assertEqual((outcome, resolved_t), ("same_content", t))
+
+            new_state = ws.record_bundle_generation(
+                _base_state(**{self.WI: work_item}), self.WI, stage="post-fix",
+                head=head, now="t3", outcome=outcome,
+            )
+            s2_work_item = new_state["work_items"][self.WI]
+            self.assertEqual(s2_work_item["reviewed_implementation_head"], p)
+            self.assertEqual(s2_work_item["implementation_revision"], 1)
+
+            s2 = _commit_state_only(
+                repo, self.WI, s2_work_item, "republish (same content)",
+                trailers=_recovered_trailers(self.WI, 1, resolved_t),
+            )
+            final_work_item = s2_work_item | {"work_item_id": self.WI}
+            result = ws.verify_implementation_provenance_interval(repo.root, final_work_item, repo.base)
+            self.assertEqual(result, s2)
+            self.assertTrue(
+                ws.implementation_provenance_interval_reachable(repo.root, final_work_item, repo.base),
+            )
+            # Discovery resolves s2, not t, as the current tip: t alone
+            # would fail HeadPastBundleGenerationRecordError (live HEAD is
+            # s2, past t) -- the assertions above already prove this.
+
+    def test_second_sequential_republication_chain_validates(self):
+        """D-Commit-Provenance "Multiple sequential recoveries /
+        supersession chain": a second same-content republication, from
+        S2's own tip, produces `P -> T -> U1 -> S2 -> U2 -> S3`, and the
+        approval gate validates the *entire* chain, not a shortcut from
+        `P` directly to `S3`."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            self._seed_base_state(repo)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            ordinary_state = self._ordinary_state(repo, p)
+            t = _commit_state_only(repo, self.WI, ordinary_state, "record gen", trailers=_record_trailers(self.WI, 1))
+            feedback_state = self._enter_applying_review_feedback(repo, ordinary_state, state_revision=2)
+            head1 = repo.commit("first finding rejected", filename="docs/notes-a.md")
+
+            work_item_1 = feedback_state | {"work_item_id": self.WI}
+            outcome_1, resolved_t_1 = ws.resolve_bundle_generation_outcome(
+                repo.root, work_item_1, base_commit=repo.base, head=head1,
+            )
+            self.assertEqual((outcome_1, resolved_t_1), ("same_content", t))
+            s2_work_item = ws.record_bundle_generation(
+                _base_state(**{self.WI: work_item_1}), self.WI, stage="post-fix",
+                head=head1, now="t3", outcome=outcome_1,
+            )["work_items"][self.WI]
+            s2 = _commit_state_only(
+                repo, self.WI, s2_work_item, "republish (same content) 1",
+                trailers=_recovered_trailers(self.WI, 1, resolved_t_1),
+            )
+
+            feedback_state_2 = self._enter_applying_review_feedback(repo, s2_work_item, state_revision=4)
+            head2 = repo.commit("second finding rejected", filename="docs/notes-b.md")
+
+            work_item_2 = feedback_state_2 | {"work_item_id": self.WI}
+            outcome_2, resolved_t_2 = ws.resolve_bundle_generation_outcome(
+                repo.root, work_item_2, base_commit=repo.base, head=head2,
+            )
+            self.assertEqual((outcome_2, resolved_t_2), ("same_content", s2))
+            s3_work_item = ws.record_bundle_generation(
+                _base_state(**{self.WI: work_item_2}), self.WI, stage="post-fix",
+                head=head2, now="t5", outcome=outcome_2,
+            )["work_items"][self.WI]
+            s3 = _commit_state_only(
+                repo, self.WI, s3_work_item, "republish (same content) 2",
+                trailers=_recovered_trailers(self.WI, 1, resolved_t_2),
+            )
+
+            final_work_item = s3_work_item | {"work_item_id": self.WI}
+            result = ws.verify_implementation_provenance_interval(repo.root, final_work_item, repo.base)
+            self.assertEqual(result, s3)
+
+    def test_orphan_recovered_role_commit_with_no_predecessor_refuses(self):
+        """A recovered-role commit standing as the pair's *only*
+        `Workflow-Bundle-Generation-Record` commit -- discoverable with no
+        tie-break needed at all, so this reaches
+        `_assert_generation_record_terminal_chain_continuity` rather than
+        being caught by discovery's own fork/ambiguity detection -- must
+        still refuse: chain continuity requires an actual, immediately
+        preceding generation-record commit, never merely *some*
+        `Workflow-Supersedes` trailer with a plausible-looking target
+        (here: `P` itself, which is never a generation-record commit)."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            self._seed_base_state(repo)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            seed_feedback_state = {
+                "work_item_id": self.WI, "work_item_type": self.WORK_ITEM_TYPE,
+                "reviewed_implementation_head": p, "implementation_revision": 1,
+                "phase": "APPLYING_REVIEW_FEEDBACK", "state_revision": 1, "last_transition": "t1",
+            }
+            _commit_state_only(repo, self.WI, seed_feedback_state, "enter applying review feedback")
+            repo.commit("resolved via excluded content", filename="docs/notes.md")
+
+            orphan_state = seed_feedback_state | {
+                "phase": "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW", "state_revision": 2,
+            }
+            s2 = _commit_state_only(
+                repo, self.WI, orphan_state, "republish (no actual predecessor)",
+                trailers=_recovered_trailers(self.WI, 1, p),  # names P, never a generation-record commit
+            )
+            final_work_item = orphan_state | {"work_item_id": self.WI}
+            with self.assertRaises(ws.MalformedProvenanceSupersessionChainError):
+                ws.verify_implementation_provenance_interval(repo.root, final_work_item, repo.base)
+            self.assertNotEqual(s2, "")  # s2 is created; just never a valid interval terminus
+
+    def test_malformed_field_diff_recovered_commit_refuses(self):
+        """A "recovered-role"-trailered commit that also changes
+        `reviewed_implementation_head` (never legal for that role) is
+        rejected outright, not silently accepted because its trailer set
+        looks right."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            self._seed_base_state(repo)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            ordinary_state = self._ordinary_state(repo, p)
+            t = _commit_state_only(repo, self.WI, ordinary_state, "record gen", trailers=_record_trailers(self.WI, 1))
+            feedback_state = self._enter_applying_review_feedback(repo, ordinary_state, state_revision=2)
+            repo.commit("resolved via excluded content", filename="docs/notes.md")
+
+            tampered_state = feedback_state | {
+                "phase": "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW", "state_revision": 3,
+                "reviewed_implementation_head": "0" * 40,  # illegally changed
+            }
+            s2 = _commit_state_only(
+                repo, self.WI, tampered_state, "republish (tampered head)",
+                trailers=_recovered_trailers(self.WI, 1, t),
+            )
+            # The work item's own tracked reviewed_implementation_head is
+            # still the real p -- nothing legitimate ever changed it; the
+            # corruption lives only in the rogue commit under test.
+            final_work_item = ordinary_state | {"work_item_id": self.WI}
+            with self.assertRaises(ws.MalformedBundleGenerationRecordCommitError) as ctx:
+                ws.verify_implementation_provenance_interval(repo.root, final_work_item, repo.base)
+            # Pins down *which* commit and *why* -- guards against a
+            # different, unrelated field-diff bug (e.g. an inconsistent
+            # static field across the fixture's own commits) silently
+            # satisfying this assertion for the wrong reason.
+            self.assertIn(s2, str(ctx.exception))
+            self.assertIn("reviewed_implementation_head", str(ctx.exception))
 
 
 class TestRemediationChildWorkItem(unittest.TestCase):

@@ -742,6 +742,13 @@ class InvalidBundleGenerationStageError(Exception):
     other (D-Approval-Commits, WF4c)."""
 
 
+class InvalidBundleGenerationOutcomeError(Exception):
+    """Raised when `record_bundle_generation` is called with an `outcome`
+    other than `"ordinary"`/`"same_content"` (WF8c (c), D-Commit-Provenance
+    "Same-content post-fix republication" -- the function's own two, and
+    only two, legal outcomes)."""
+
+
 BUNDLE_GENERATION_LEGAL_SOURCE_PHASES = frozenset({
     "SELF_REVIEWING_IMPLEMENTATION", "APPLYING_REVIEW_FEEDBACK",
 })
@@ -813,16 +820,41 @@ class ProtectedPathInProvenanceIntervalError(Exception):
 
 
 class MalformedBundleGenerationRecordCommitError(Exception):
-    """Raised when the discovered terminal commit `T` fails its own
-    ordinary-role commit contract (D-Commit-Provenance condition 4): it
-    must touch only `WORKFLOW_STATE.json`, its own `work_items[work_item_id]`
-    field changes must be a non-empty subset of `{phase,
+    """Raised when a discovered `Workflow-Bundle-Generation-Record` commit
+    fails its own role-specific contract (D-Commit-Provenance condition 4,
+    both roles): an **ordinary**-role commit must touch only
+    `WORKFLOW_STATE.json`, its own `work_items[work_item_id]` field
+    changes must be a non-empty subset of `{phase,
     reviewed_implementation_head, implementation_revision, state_revision,
-    last_transition}`, and it must carry exactly the two-trailer ordinary
-    set (`Workflow-Bundle-Generation-Record`, `Workflow-Work-Item`). The
-    recovered/superseded (`Workflow-Supersedes`) role is not implemented
-    -- a commit that isn't a clean ordinary-role match is rejected rather
-    than silently treated as recovered."""
+    last_transition}` including `phase`, and it must carry exactly the
+    two-trailer ordinary set (`Workflow-Bundle-Generation-Record`,
+    `Workflow-Work-Item`). A **recovered**-role commit (WF8c (c)/(b)) must
+    touch only `WORKFLOW_STATE.json`, its own field changes must be a
+    non-empty subset of `{phase, state_revision, last_transition}` --
+    `reviewed_implementation_head`/`implementation_revision` must be
+    byte-identical to its parent -- its committed `phase` must equal
+    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` and its parent's committed
+    `phase` must be one of the three legal recovered-role source phases,
+    and it must carry exactly the three-trailer recovered set
+    (`Workflow-Bundle-Generation-Record`, `Workflow-Work-Item`,
+    `Workflow-Supersedes`). A commit whose trailer set matches neither
+    role's exact shape is rejected outright, naming the offending trailer
+    set, never silently coerced into either role."""
+
+
+class MalformedProvenanceSupersessionChainError(Exception):
+    """Raised when a provenance interval contains more than one
+    `Workflow-Bundle-Generation-Record` commit for the same
+    `(work_item_id, implementation_revision)` pair whose roles/
+    `Workflow-Supersedes` edges don't form a clean chronological chain
+    (D-Commit-Provenance "Multiple sequential recoveries / supersession
+    chain"): an **ordinary**-role member must be the chain's earliest
+    (chronologically first) generation-record commit; every later member
+    must be **recovered**-role and its `Workflow-Supersedes` trailer must
+    name exactly the immediately preceding generation-record commit found
+    earlier in the same walk -- never an arbitrary earlier link, never a
+    second ordinary-role member, never a missing/mismatched supersession
+    edge. Names the offending commit and what was expected."""
 
 
 class RemediationChildAlreadyExistsError(Exception):
@@ -1215,26 +1247,34 @@ def _first_parent_commits_ordered(repo_root: Path, head: str = "HEAD") -> list[s
 def _discover_trailer_commits(
     repo_root: Path, trailer_key: str, work_item_id: str, base_commit: str,
     head: str, *, ambiguous_error_cls: type[Exception],
-    verify: Callable[[Path, str, str], bool] | None = None,
+    verify: Callable[[Path, str, str, list[str]], bool] | None = None,
 ) -> dict[str, str]:
-    """Generic D-Commit-Provenance search shared by checkpoint- and
-    approval-trailer discovery (WF4a-iii generalizes the WF1a checkpoint-
-    only search): every commit reachable in `base_commit..head` carrying
-    an exact `trailer_key: <value>` + `Workflow-Work-Item: <work_item_id>`
-    trailer pair, requiring exactly one match per trailer value after two
-    filters applied in order: (1) prefer a first-parent ancestor of `head`;
-    (2) if more than one first-parent-ancestor candidate still remains, an
-    optional caller-supplied `verify(repo_root, commit, value) -> bool`
+    """Generic D-Commit-Provenance search shared by checkpoint-, approval-,
+    and bundle-generation-record-trailer discovery (WF4a-iii generalizes
+    the WF1a checkpoint-only search): every commit reachable in
+    `base_commit..head` carrying an exact `trailer_key: <value>` +
+    `Workflow-Work-Item: <work_item_id>` trailer pair, requiring exactly
+    one match per trailer value after two filters applied in order: (1)
+    prefer a first-parent ancestor of `head`; (2) if more than one
+    first-parent-ancestor candidate still remains, an optional
+    caller-supplied `verify(repo_root, commit, value, candidates) -> bool`
     role-specific predicate narrows further -- exactly one verified
     survivor resolves, zero or more than one is still genuine ambiguity.
-    This helper stays role-neutral by design: `verify` is `None` for every
-    call site except `discover_checkpoint_commits`, which alone knows what
-    "this candidate is the real one" means for a checkpoint trailer
-    (item 39). Returns `{trailer_value: commit_sha}`. Genuine ambiguity
-    (more than one candidate survives both filters, or filter (1) alone
-    already leaves more than one with no `verify` to break the tie)
-    raises `ambiguous_error_cls` rather than silently picking (resolves
-    OPUS-R6-022; missing-test items 39, 50, 62, 64)."""
+    `candidates` is the full first-parent-ancestor candidate list for this
+    `value` (itself, included), letting a predicate reason about sibling
+    candidates together, not just the one commit being tested --
+    `_bundle_generation_record_chain_tip` (WF8c (c)/(b)) needs this to
+    resolve a supersession chain's tip; `_checkpoint_commit_claims_complete`
+    ignores it, evaluating each candidate independently. This helper stays
+    role-neutral by design: `verify` is `None` for every call site except
+    `discover_checkpoint_commits` and `discover_bundle_generation_record_commits`,
+    which alone know what "this candidate is the real one" means for their
+    own trailer (item 39; WF8c (c)/(b)). Returns `{trailer_value:
+    commit_sha}`. Genuine ambiguity (more than one candidate survives both
+    filters, or filter (1) alone already leaves more than one with no
+    `verify` to break the tie) raises `ambiguous_error_cls` rather than
+    silently picking (resolves OPUS-R6-022; missing-test items 39, 50, 62,
+    64)."""
     out = _run(["git", "log", "--format=%H", f"{base_commit}..{head}"], cwd=repo_root)
     commits = [line for line in out.splitlines() if line]
 
@@ -1259,7 +1299,7 @@ def _discover_trailer_commits(
             resolved[value] = tie_broken[0]
             continue
         if len(tie_broken) > 1 and verify is not None:
-            verified = [c for c in tie_broken if verify(repo_root, c, value)]
+            verified = [c for c in tie_broken if verify(repo_root, c, value, tie_broken)]
             if len(verified) == 1:
                 resolved[value] = verified[0]
                 continue
@@ -1315,7 +1355,7 @@ def discover_checkpoint_commits(
     return _discover_trailer_commits(
         repo_root, "Workflow-Checkpoint", work_item_id, base_commit, head,
         ambiguous_error_cls=AmbiguousCheckpointTrailerError,
-        verify=lambda root, commit, checkpoint_id: _checkpoint_commit_claims_complete(
+        verify=lambda root, commit, checkpoint_id, _candidates: _checkpoint_commit_claims_complete(
             root, commit, checkpoint_id, work_item_id,
         ),
     )
@@ -6394,27 +6434,56 @@ def mark_technical_approval_stale(state: dict, work_item_id: str, now: str) -> d
     return new_state
 
 
-def record_bundle_generation(state: dict, work_item_id: str, *, stage: str, head: str, now: str) -> dict:
+def record_bundle_generation(
+    state: dict, work_item_id: str, *, stage: str, head: str, now: str, outcome: str = "ordinary",
+) -> dict:
     """`reviewed_implementation_head`'s sole writer (D-Approval-Commits),
     called by the bundle generator at exactly the `"implementation"` (first
     round) or `"post-fix"` (every remediation round after, whether driven
     by an implementation-review finding or a functional-review bounded
-    fix) stage -- never any other. Records live `head` as the new
-    `reviewed_implementation_head` and bumps `implementation_revision`
-    (`None` -> `1` on the first call, incrementing on every call after --
-    `implementation_revision` itself is never part of either fingerprint
-    projection, so this bump alone never stales `technical_approval`,
-    `approval_is_current`'s own missing-test item 11). Also `phase`'s sole
-    writer for this transition (OPUS-R101-001): refuses outright, naming
-    the actual phase and both legal ones, unless called from
-    `SELF_REVIEWING_IMPLEMENTATION` or `APPLYING_REVIEW_FEEDBACK`, and
-    always sets the durable target `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`
-    -- the "Ordinary bundle-publication phase transition" contract,
-    `WFR-61`'s five-field mutation."""
+    fix) stage -- never any other. Also `phase`'s sole writer for this
+    transition (OPUS-R101-001): refuses outright, naming the actual phase
+    and both legal ones, unless called from `SELF_REVIEWING_IMPLEMENTATION`
+    or `APPLYING_REVIEW_FEEDBACK`, and always sets the durable target
+    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` -- the "Ordinary
+    bundle-publication phase transition" contract, `WFR-61`'s five-field
+    mutation.
+
+    `outcome` (WF8c (c), D-Commit-Provenance "Same-content post-fix
+    republication") selects which of this function's two legal outcomes
+    applies -- a decision the *caller* makes by calling
+    `resolve_bundle_generation_outcome` first (a read-only Git-inspecting
+    query this function itself deliberately stays free of, so it remains
+    a pure `state -> state` mutator callable as a `state_transaction`
+    mutator): `"ordinary"` (default, backward-compatible) records live
+    `head` as the new `reviewed_implementation_head` and bumps
+    `implementation_revision` (`None` -> `1` on the first call,
+    incrementing on every call after -- `implementation_revision` itself
+    is never part of either fingerprint projection, so this bump alone
+    never stales `technical_approval`, `approval_is_current`'s own
+    missing-test item 11). `"same_content"` leaves
+    `reviewed_implementation_head`/`implementation_revision`
+    byte-identical -- only `phase`/`state_revision`/`last_transition`
+    change, exactly the recovered-role commit's own allowed field set --
+    since the caller has already established (via
+    `resolve_bundle_generation_outcome`) that the protected content at
+    `head` is identical to the currently-reviewed round and the
+    intervening commits are all legitimately excluded-only; `head` itself
+    is otherwise unused in this branch, kept only for call-shape symmetry.
+    Both outcomes always perform a real `phase` transition into
+    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` from whichever of the two
+    legal source phases was current -- never value-wise unchanged, since
+    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` itself is never one of this
+    function's own legal source phases."""
     if stage not in ("implementation", "post-fix"):
         raise InvalidBundleGenerationStageError(
             f"reviewed_implementation_head is written only at the "
             f"\"implementation\"/\"post-fix\" bundle-generation stage, got {stage!r}"
+        )
+    if outcome not in ("ordinary", "same_content"):
+        raise InvalidBundleGenerationOutcomeError(
+            f"record_bundle_generation's outcome must be 'ordinary' or "
+            f"'same_content' (D-Commit-Provenance's own two outcomes), got {outcome!r}"
         )
     new_state = copy.deepcopy(state)
     work_item = new_state["work_items"][work_item_id]
@@ -6426,8 +6495,9 @@ def record_bundle_generation(state: dict, work_item_id: str, *, stage: str, head
             f"{sorted(BUNDLE_GENERATION_LEGAL_SOURCE_PHASES)}"
         )
     work_item["phase"] = "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW"
-    work_item["reviewed_implementation_head"] = head
-    work_item["implementation_revision"] = (work_item.get("implementation_revision") or 0) + 1
+    if outcome == "ordinary":
+        work_item["reviewed_implementation_head"] = head
+        work_item["implementation_revision"] = (work_item.get("implementation_revision") or 0) + 1
     work_item["state_revision"] = work_item.get("state_revision", 1) + 1
     work_item["last_transition"] = now
     return new_state
@@ -6467,9 +6537,11 @@ def enter_applying_review_feedback(state: dict, work_item_id: str, now: str) -> 
 # carrying the trailers below) *before* generating the bundle, so no
 # later commit can ever land between the write and the commit that makes
 # it durable (D-Approval-Commits, WF8B-003's own worked contradiction).
-# Only the "ordinary" role is implemented here -- the recovered/
-# superseded (`Workflow-Supersedes`) role is out of scope for this
-# remediation slice; see `MalformedBundleGenerationRecordCommitError`.
+# Both the "ordinary" role and the recovered/superseded
+# (`Workflow-Supersedes`) role are implemented here (WF8c (c)/(b) partial
+# -- the dedicated `/recover-implementation-provenance` command itself
+# remains WF8c (b), not yet built; only `record_bundle_generation`'s own
+# same-content-republication writer of a recovered-role commit is).
 # ---------------------------------------------------------------------------
 
 
@@ -6477,6 +6549,52 @@ ORDINARY_BUNDLE_GENERATION_RECORD_FIELDS = frozenset({
     "phase", "reviewed_implementation_head", "implementation_revision",
     "state_revision", "last_transition",
 })
+
+RECOVERED_BUNDLE_GENERATION_RECORD_FIELDS = frozenset({
+    "phase", "state_revision", "last_transition",
+})
+
+RECOVERED_BUNDLE_GENERATION_RECORD_LEGAL_SOURCE_PHASES = (
+    BUNDLE_GENERATION_LEGAL_SOURCE_PHASES | {"AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW"}
+)
+
+
+def _bundle_generation_record_role(trailers: dict[str, str]) -> str | None:
+    """Classifies a commit's own trailer set as the `"ordinary"` two-trailer
+    role, the `"recovered"` three-trailer role (WF8c (c)/(b), adds
+    `Workflow-Supersedes`), or `None` for any other shape -- a commit whose
+    trailer set matches neither exactly is never coerced into one."""
+    keys = set(trailers)
+    if keys == {"Workflow-Bundle-Generation-Record", "Workflow-Work-Item"}:
+        return "ordinary"
+    if keys == {"Workflow-Bundle-Generation-Record", "Workflow-Work-Item", "Workflow-Supersedes"}:
+        return "recovered"
+    return None
+
+
+def _bundle_generation_record_chain_tip(
+    repo_root: Path, commit: str, value: str, candidates: list[str],
+) -> bool:
+    """WF8c (c)/(b) supersession-chain tie-break predicate for
+    `_discover_trailer_commits`'s `verify` callback: true iff no *other*
+    candidate sharing this exact `Workflow-Bundle-Generation-Record` value
+    carries a `Workflow-Supersedes: <commit>` trailer -- i.e. `commit` is
+    the chain's current, non-superseded tip among `candidates` (D-Commit-
+    Provenance "the current record ... is the unique commit ... that is
+    not itself named by any other such commit's Workflow-Supersedes
+    trailer"). A fork (two candidates each unsuperseded) or a cycle (zero
+    candidates unsuperseded) both naturally leave `_discover_trailer_commits`
+    with other-than-exactly-one verified survivor, refused as genuine
+    ambiguity by its own existing machinery -- no separate fork/cycle
+    detection needed here. Strict role/field validity of the edge itself
+    is `validate_bundle_generation_record_commit`'s job, not this
+    tie-break's: this predicate only resolves *which* commit is current."""
+    for other in candidates:
+        if other == commit:
+            continue
+        if _commit_trailers(repo_root, other).get("Workflow-Supersedes") == commit:
+            return False
+    return True
 
 
 def discover_bundle_generation_record_commits(
@@ -6486,11 +6604,19 @@ def discover_bundle_generation_record_commits(
     `Workflow-Bundle-Generation-Record: <work_item_id>/<implementation_revision>`
     + `Workflow-Work-Item: <work_item_id>` trailer pair, requiring exactly
     one match per `<work_item_id>/<implementation_revision>` value after
-    the shared first-parent-ancestor tie-break. Returns
+    the shared first-parent-ancestor tie-break, generalized (WF8c (c)/(b))
+    with `_bundle_generation_record_chain_tip` as the role-specific
+    verification predicate: once a same-content-republication or recovery
+    commit lands, more than one commit legitimately shares the same
+    trailer value (a `Workflow-Bundle-Generation-Record`-stable
+    supersession chain), and this predicate resolves the chain's current
+    tip exactly as `discover_checkpoint_commits` resolves its own
+    role-specific "claims complete" tie-break. Returns
     `{"<work_item_id>/<implementation_revision>": commit_sha}`."""
     return _discover_trailer_commits(
         repo_root, "Workflow-Bundle-Generation-Record", work_item_id, base_commit, head,
         ambiguous_error_cls=AmbiguousBundleGenerationRecordTrailerError,
+        verify=_bundle_generation_record_chain_tip,
     )
 
 
@@ -6573,16 +6699,18 @@ def _forbidden_state_mutation(repo_root: Path, commit: str, work_item_id: str) -
 
 def validate_bundle_generation_record_commit(repo_root: Path, commit: str, work_item_id: str) -> None:
     """Validates a discovered `Workflow-Bundle-Generation-Record` commit
-    against its ordinary-role contract (D-Approval-Commits/D-Commit-
-    Provenance condition 4, revision 28 onward): touches only
+    against its own role-specific contract (D-Approval-Commits/D-Commit-
+    Provenance condition 4, revision 28 onward for the ordinary role;
+    WF8c (c)/(b) for the recovered role, `MalformedBundleGenerationRecordCommitError`'s
+    own docstring has the full per-role field/phase rules): touches only
     `WORKFLOW_STATE.json`; changes nothing outside
     `work_items[work_item_id]` -- no top-level routing field and no
-    *other* work item's own entry (item 267, `WF8c`) -- its own
-    `work_items[work_item_id]` field changes are a non-empty subset of
-    `ORDINARY_BUNDLE_GENERATION_RECORD_FIELDS`; and it carries exactly
-    the two-trailer ordinary set, no other. Raises
-    `MalformedBundleGenerationRecordCommitError` naming the concrete
-    mismatch otherwise."""
+    *other* work item's own entry (item 267, `WF8c`); carries exactly one
+    of the two legal trailer sets (`_bundle_generation_record_role`); and
+    its own field changes / phase transition satisfy that role's exact
+    contract. Raises `MalformedBundleGenerationRecordCommitError` naming
+    the concrete mismatch otherwise -- a commit matching neither role's
+    trailer set is rejected immediately, never coerced into one."""
     changed_paths = _commit_own_changed_paths(repo_root, commit)
     state_rel = DEFAULT_STATE_PATH.as_posix()
     if changed_paths != {state_rel}:
@@ -6594,34 +6722,199 @@ def validate_bundle_generation_record_commit(repo_root: Path, commit: str, work_
     if outside_diff is not None:
         raise MalformedBundleGenerationRecordCommitError(
             f"{commit} carries a Workflow-Bundle-Generation-Record trailer for "
-            f"{work_item_id!r} but also changed {outside_diff} -- an ordinary "
+            f"{work_item_id!r} but also changed {outside_diff} -- a "
             f"generation-record commit may only ever touch its own work item's "
             f"fields (item 267)"
         )
+    trailers = _commit_trailers(repo_root, commit)
+    role = _bundle_generation_record_role(trailers)
+    if role is None:
+        raise MalformedBundleGenerationRecordCommitError(
+            f"{commit} carries trailer set {sorted(trailers)}, not exactly the "
+            f"ordinary {{'Workflow-Bundle-Generation-Record', 'Workflow-Work-Item'}} "
+            f"set or the recovered {{'Workflow-Bundle-Generation-Record', "
+            f"'Workflow-Work-Item', 'Workflow-Supersedes'}} set"
+        )
     field_diff = _work_item_field_diff(repo_root, commit, work_item_id)
-    if not field_diff or not field_diff <= ORDINARY_BUNDLE_GENERATION_RECORD_FIELDS:
-        raise MalformedBundleGenerationRecordCommitError(
-            f"{commit}'s own {work_item_id!r} field changes are {sorted(field_diff)}, "
-            f"not a non-empty subset of {sorted(ORDINARY_BUNDLE_GENERATION_RECORD_FIELDS)}"
-        )
-    if "phase" not in field_diff:
-        raise MalformedBundleGenerationRecordCommitError(
-            f"{commit}'s own {work_item_id!r} field changes {sorted(field_diff)} do not "
-            f"include 'phase' -- an ordinary bundle-generation-record commit must always "
-            f"transition phase (OPUS-R101-001)"
-        )
     after = _read_json_at_commit_or_empty(repo_root, commit, state_rel)
     committed_phase = after.get("work_items", {}).get(work_item_id, {}).get("phase")
+    if role == "ordinary":
+        if not field_diff or not field_diff <= ORDINARY_BUNDLE_GENERATION_RECORD_FIELDS:
+            raise MalformedBundleGenerationRecordCommitError(
+                f"{commit}'s own {work_item_id!r} field changes are {sorted(field_diff)}, "
+                f"not a non-empty subset of {sorted(ORDINARY_BUNDLE_GENERATION_RECORD_FIELDS)} "
+                f"(ordinary role)"
+            )
+        if "phase" not in field_diff:
+            raise MalformedBundleGenerationRecordCommitError(
+                f"{commit}'s own {work_item_id!r} field changes {sorted(field_diff)} do not "
+                f"include 'phase' -- an ordinary bundle-generation-record commit must always "
+                f"transition phase (OPUS-R101-001)"
+            )
+        if committed_phase != "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW":
+            raise MalformedBundleGenerationRecordCommitError(
+                f"{commit} sets {work_item_id!r}'s phase to {committed_phase!r}, not the "
+                f"required target 'AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW'"
+            )
+        return
+    # role == "recovered" (WF8c (c)/(b), D-Commit-Provenance condition 4's
+    # recovered-role clause): reviewed_implementation_head/implementation_revision
+    # must never appear in field_diff -- excluding them from
+    # RECOVERED_BUNDLE_GENERATION_RECORD_FIELDS enforces that directly.
+    if not field_diff or not field_diff <= RECOVERED_BUNDLE_GENERATION_RECORD_FIELDS:
+        raise MalformedBundleGenerationRecordCommitError(
+            f"{commit}'s own {work_item_id!r} field changes are {sorted(field_diff)}, "
+            f"not a non-empty subset of {sorted(RECOVERED_BUNDLE_GENERATION_RECORD_FIELDS)} "
+            f"(recovered role) -- reviewed_implementation_head/implementation_revision "
+            f"must never change in a recovered-role commit"
+        )
     if committed_phase != "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW":
         raise MalformedBundleGenerationRecordCommitError(
             f"{commit} sets {work_item_id!r}'s phase to {committed_phase!r}, not the "
             f"required target 'AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW'"
         )
-    trailers = _commit_trailers(repo_root, commit)
-    if set(trailers) != {"Workflow-Bundle-Generation-Record", "Workflow-Work-Item"}:
+    parent = _run(["git", "rev-parse", f"{commit}^"], cwd=repo_root).strip()
+    parent_phase = _read_json_at_commit_or_empty(repo_root, parent, state_rel).get(
+        "work_items", {},
+    ).get(work_item_id, {}).get("phase")
+    if parent_phase not in RECOVERED_BUNDLE_GENERATION_RECORD_LEGAL_SOURCE_PHASES:
         raise MalformedBundleGenerationRecordCommitError(
-            f"{commit} carries trailer set {sorted(trailers)}, not exactly the "
-            f"ordinary {{'Workflow-Bundle-Generation-Record', 'Workflow-Work-Item'}} set"
+            f"{commit}'s parent {parent} has {work_item_id!r}'s phase as {parent_phase!r}, "
+            f"not one of the three legal recovered-role source phases "
+            f"{sorted(RECOVERED_BUNDLE_GENERATION_RECORD_LEGAL_SOURCE_PHASES)}"
+        )
+
+
+def _generation_record_interval_first_parent_members(repo_root: Path, older: str, newer: str) -> list[str]:
+    """The strict `older..newer` first-parent interval, newest-first,
+    excluding `older` and including `newer` -- shared by
+    `verify_implementation_provenance_interval` (`reviewed_implementation_head..T`)
+    and same-content republication's own precondition
+    (WF8c (c), `T..HEAD`; `resolve_bundle_generation_outcome`). Raises
+    `ReviewedImplementationHeadNotAncestorError` if `older` is not
+    reachable from `newer` at all, `NonFirstParentProvenanceIntervalError`
+    if reachable only off `newer`'s first-parent chain."""
+    if not _is_ancestor(repo_root, older, newer):
+        raise ReviewedImplementationHeadNotAncestorError(
+            f"{older} is not an ancestor of {newer}"
+        )
+    first_parent_chain = _first_parent_commits_ordered(repo_root, newer)
+    if older not in first_parent_chain:
+        raise NonFirstParentProvenanceIntervalError(
+            f"{older} is reachable from {newer} but not via {newer}'s first-parent "
+            f"chain -- the interval crosses a merge or a non-first-parent path"
+        )
+    older_index = first_parent_chain.index(older)
+    return first_parent_chain[:older_index]  # newest-first: [newer, ..., commit-right-after-older]
+
+
+def _classify_generation_record_interval(
+    repo_root: Path, work_item_id: str, implementation_revision: int,
+    chronological_commits: list[str],
+    impl_classification: tuple[Mapping[str, str], Mapping[str, str], Mapping[str, str], Mapping[str, str]],
+) -> str | None:
+    """D-Commit-Provenance condition 3, generalized by role (WF8c (c)/(b)):
+    validates every commit in `chronological_commits` (oldest first) --
+    shared by `verify_implementation_provenance_interval`'s own
+    non-terminal `P..T` walk and same-content republication's own
+    precondition-2 `T..HEAD` walk (D-Commit-Provenance "run the exact same
+    two-part precondition ... over the interval T..HEAD in place of
+    reviewed_implementation_head..HEAD"). A commit carrying a
+    `Workflow-Bundle-Generation-Record` trailer for this exact
+    `(work_item_id, implementation_revision)` pair must satisfy its own
+    role-specific commit contract (`validate_bundle_generation_record_commit`)
+    *and* chain-continuity (D-Commit-Provenance "Multiple sequential
+    recoveries / supersession chain"): the chain's earliest member must be
+    ordinary-role, every later member must be recovered-role with its
+    `Workflow-Supersedes` trailer naming exactly the immediately preceding
+    generation-record commit found earlier in this same walk
+    (`MalformedProvenanceSupersessionChainError` otherwise -- no fork, no
+    cycle, no skipped link). Every other commit must classify
+    implementation-stage excluded-only (`ProtectedPathInProvenanceIntervalError`),
+    and every commit must have exactly one parent
+    (`NonFirstParentProvenanceIntervalError` on a merge). Returns the last
+    generation-record commit found in the walk (or `None` if none was),
+    for the caller to chain-continuity-check its own terminal commit
+    against (see `_assert_generation_record_terminal_chain_continuity`)."""
+    impl_protected_paths, impl_protected_prefixes, impl_excluded_paths, impl_excluded_prefixes = (
+        impl_classification
+    )
+    pair_value = f"{work_item_id}/{implementation_revision}"
+    last_generation_record_commit: str | None = None
+    for commit in chronological_commits:
+        parents = _run(["git", "rev-parse", f"{commit}^@"], cwd=repo_root).split()
+        if len(parents) != 1:
+            raise NonFirstParentProvenanceIntervalError(
+                f"{commit} in the provenance interval is a merge commit "
+                f"({len(parents)} parents) -- the interval must be a plain first-parent chain"
+            )
+        trailers = _commit_trailers(repo_root, commit)
+        if (
+            trailers.get("Workflow-Work-Item") == work_item_id
+            and trailers.get("Workflow-Bundle-Generation-Record") == pair_value
+        ):
+            validate_bundle_generation_record_commit(repo_root, commit, work_item_id)
+            role = _bundle_generation_record_role(trailers)
+            if role == "ordinary":
+                if last_generation_record_commit is not None:
+                    raise MalformedProvenanceSupersessionChainError(
+                        f"{commit} is an ordinary-role Workflow-Bundle-Generation-Record "
+                        f"commit for {pair_value!r}, but {last_generation_record_commit} "
+                        f"already precedes it in this provenance interval -- only the "
+                        f"chain's earliest member may be ordinary-role"
+                    )
+            else:  # "recovered"
+                supersedes = trailers.get("Workflow-Supersedes")
+                if last_generation_record_commit is None or supersedes != last_generation_record_commit:
+                    raise MalformedProvenanceSupersessionChainError(
+                        f"{commit}'s Workflow-Supersedes trailer names {supersedes!r}, but "
+                        f"the immediately preceding generation-record commit in this "
+                        f"provenance interval is {last_generation_record_commit!r}"
+                    )
+            last_generation_record_commit = commit
+            continue
+        for path in sorted(_commit_own_changed_paths(repo_root, commit)):
+            classification = fingerprint.classify_path_implementation_stage(
+                path, impl_protected_paths, impl_protected_prefixes,
+                impl_excluded_paths, impl_excluded_prefixes,
+            )
+            if classification != "excluded":
+                raise ProtectedPathInProvenanceIntervalError(
+                    f"{commit} in the provenance interval touches {path!r}, classified "
+                    f"{classification!r}, not excluded"
+                )
+    return last_generation_record_commit
+
+
+def _assert_generation_record_terminal_chain_continuity(
+    repo_root: Path, work_item_id: str, terminal_commit: str, last_generation_record_commit: str | None,
+) -> None:
+    """Extends `_classify_generation_record_interval`'s chain-continuity
+    rule to a walk's own terminal member -- `verify_implementation_provenance_interval`'s
+    `T`, always itself a generation-record commit, unlike an ordinary
+    `T..HEAD` same-content-republication walk's own terminal member
+    (`HEAD`, not yet a generation-record commit, so this check does not
+    apply there). Assumes
+    `validate_bundle_generation_record_commit(repo_root, terminal_commit, work_item_id)`
+    already succeeded, so `_bundle_generation_record_role` cannot return
+    `None` here."""
+    trailers = _commit_trailers(repo_root, terminal_commit)
+    role = _bundle_generation_record_role(trailers)
+    if role == "ordinary":
+        if last_generation_record_commit is not None:
+            raise MalformedProvenanceSupersessionChainError(
+                f"{terminal_commit} is an ordinary-role terminal "
+                f"Workflow-Bundle-Generation-Record commit, but "
+                f"{last_generation_record_commit} already precedes it in the provenance "
+                f"interval -- only the chain's earliest member may be ordinary-role"
+            )
+        return
+    supersedes = trailers.get("Workflow-Supersedes")
+    if last_generation_record_commit is None or supersedes != last_generation_record_commit:
+        raise MalformedProvenanceSupersessionChainError(
+            f"{terminal_commit}'s Workflow-Supersedes trailer names {supersedes!r}, but "
+            f"the immediately preceding generation-record commit in the provenance "
+            f"interval is {last_generation_record_commit!r}"
         )
 
 
@@ -6651,10 +6944,19 @@ def verify_implementation_provenance_interval(
        must itself have exactly one parent
        (`NonFirstParentProvenanceIntervalError` on a merge).
     3. Every non-terminal commit in the interval (strictly between `P`
-       and `T`) must classify implementation-stage excluded-only, in its
-       own right -- never merely net-unchanged across the whole interval
-       (`ProtectedPathInProvenanceIntervalError`).
+       and `T`) either classifies implementation-stage excluded-only, in
+       its own right -- never merely net-unchanged across the whole
+       interval (`ProtectedPathInProvenanceIntervalError`) -- or, if it is
+       itself a historical `Workflow-Bundle-Generation-Record` commit for
+       this exact pair (a prior same-content-republication/recovery link,
+       WF8c (c)/(b)), satisfies its own role-specific contract and
+       chain-continuity instead (`_classify_generation_record_interval`).
     4. `T` itself must pass `validate_bundle_generation_record_commit`.
+    5. If `T` is itself recovered-role, its `Workflow-Supersedes` trailer
+       must name exactly the immediately preceding generation-record
+       commit found by condition 3's walk -- the chain's own linked-list
+       property, checked at the terminus
+       (`_assert_generation_record_terminal_chain_continuity`).
 
     Returns `T` on success. Raises `BundleGenerationRecordNotFoundError`
     if `reviewed_implementation_head`/`implementation_revision` is not
@@ -6682,46 +6984,20 @@ def verify_implementation_provenance_interval(
             f"{work_item_id}/{implementation_revision} -- a further commit landed "
             f"after it carrying no provenance record of its own"
         )
-    if not _is_ancestor(repo_root, p, t):
-        raise ReviewedImplementationHeadNotAncestorError(
-            f"reviewed_implementation_head {p} is not an ancestor of the discovered "
-            f"Workflow-Bundle-Generation-Record commit {t}"
-        )
-    first_parent_chain = _first_parent_commits_ordered(repo_root, t)
-    if p not in first_parent_chain:
-        raise NonFirstParentProvenanceIntervalError(
-            f"reviewed_implementation_head {p} is reachable from {t} but not via "
-            f"{t}'s first-parent chain -- the provenance interval crosses a merge "
-            f"or a non-first-parent path"
-        )
-    p_index = first_parent_chain.index(p)
-    interval = first_parent_chain[:p_index]  # newest-first: [t, ..., commit-right-after-p]
+    interval = _generation_record_interval_first_parent_members(repo_root, p, t)
     non_terminal = interval[1:]  # excludes t itself
-    impl_protected_paths, impl_protected_prefixes, impl_excluded_paths, impl_excluded_prefixes = (
-        fingerprint.load_implementation_stage_classification(
-            repo_root, fingerprint.artifacts_path_for_work_item(work_item_id),
-        )
+    impl_classification = fingerprint.load_implementation_stage_classification(
+        repo_root, fingerprint.artifacts_path_for_work_item(work_item_id),
     )
-    for commit in non_terminal:
-        parents = _run(["git", "rev-parse", f"{commit}^@"], cwd=repo_root).split()
-        if len(parents) != 1:
-            raise NonFirstParentProvenanceIntervalError(
-                f"{commit} in the provenance interval {p}..{t} is a merge commit "
-                f"({len(parents)} parents) -- the interval must be a plain first-parent chain"
-            )
-        for path in sorted(_commit_own_changed_paths(repo_root, commit)):
-            classification = fingerprint.classify_path_implementation_stage(
-                path, impl_protected_paths, impl_protected_prefixes,
-                impl_excluded_paths, impl_excluded_prefixes,
-            )
-            if classification != "excluded":
-                raise ProtectedPathInProvenanceIntervalError(
-                    f"{commit} in the provenance interval {p}..{t} touches "
-                    f"{path!r}, classified {classification!r}, not excluded -- only "
-                    f"the terminal Workflow-Bundle-Generation-Record commit itself "
-                    f"may exist between reviewed_implementation_head and live HEAD"
-                )
+    last_generation_record_commit = _classify_generation_record_interval(
+        repo_root, work_item_id, implementation_revision,
+        list(reversed(non_terminal)),  # chronological: oldest (right after p) first
+        impl_classification,
+    )
     validate_bundle_generation_record_commit(repo_root, t, work_item_id)
+    _assert_generation_record_terminal_chain_continuity(
+        repo_root, work_item_id, t, last_generation_record_commit,
+    )
     return t
 
 
@@ -6745,9 +7021,96 @@ def implementation_provenance_interval_reachable(
         NonFirstParentProvenanceIntervalError,
         ProtectedPathInProvenanceIntervalError,
         MalformedBundleGenerationRecordCommitError,
+        MalformedProvenanceSupersessionChainError,
         AmbiguousBundleGenerationRecordTrailerError,
     ):
         return False
+
+
+def resolve_bundle_generation_outcome(
+    repo_root: Path, work_item: dict, *, base_commit: str, head: str,
+) -> tuple[str, str | None]:
+    """D-Commit-Provenance's "Same-content post-fix republication" (WF8c
+    (c)): determines which of `record_bundle_generation`'s two legal
+    outcomes a candidate `head` produces for this work item, *before* the
+    caller decides which commit-trailer set to write and which `outcome`
+    to pass `record_bundle_generation`. Deliberately kept separate from
+    `record_bundle_generation` itself (a pure `state -> state` mutator,
+    never reaching into Git) -- this function is the read-only,
+    Git-inspecting half of the same decision.
+
+    Recomputes the protected implementation-stage `review_content_id` at
+    candidate `head` and compares it to the value recomputed from the
+    commit `reviewed_implementation_head` currently names (`P`):
+
+    - No prior round yet (`reviewed_implementation_head`/
+      `implementation_revision` unset) or the two digests genuinely
+      differ -> `("ordinary", None)`: this is a new round (or the very
+      first), handled entirely by the existing single-commit path.
+    - The two digests are byte-identical -> discovers the work item's
+      current `Workflow-Bundle-Generation-Record` commit `T` and runs the
+      *same* role-aware interval classification
+      `verify_implementation_provenance_interval` itself uses
+      (`_classify_generation_record_interval`, "the same precondition ...
+      over the interval T..HEAD in place of reviewed_implementation_head..HEAD"),
+      never a separately maintained duplicate rule. If the whole `T..HEAD`
+      interval classifies cleanly, returns `("same_content", t)` -- `t`
+      the commit the caller's new recovered-role commit must supersede.
+      If it does not, this function raises outright (naming the offending
+      commit via whichever of `NonFirstParentProvenanceIntervalError`/
+      `ProtectedPathInProvenanceIntervalError`/
+      `MalformedBundleGenerationRecordCommitError`/
+      `MalformedProvenanceSupersessionChainError` the classification
+      itself raises) -- "a fail-closed backstop that should not be
+      reachable through any documented `/apply-implementation-review`
+      disposition path, not an expected outcome" (plan text), never a
+      silent fall-back to `"ordinary"`.
+
+    Raises `BundleGenerationRecordNotFoundError` if the digests match but
+    no current `Workflow-Bundle-Generation-Record` commit is discoverable
+    at all for this work item's `implementation_revision` -- genuinely
+    unreachable in practice (identical protected content implies a prior
+    round already ran and recorded one), kept as a fail-closed backstop
+    rather than silently treated as `"ordinary"`."""
+    work_item_id = work_item["work_item_id"]
+    p = work_item.get("reviewed_implementation_head")
+    implementation_revision = work_item.get("implementation_revision")
+    if not p or not implementation_revision:
+        return "ordinary", None
+    artifacts_path = fingerprint.artifacts_path_for_work_item(work_item_id)
+    work_item_type = work_item["work_item_type"]
+    head_digest = approval_review_content_id(
+        repo_root, stage="implementation", base_commit=base_commit,
+        work_item_type=work_item_type, work_item_id=work_item_id,
+        head=head, artifacts_path=artifacts_path,
+    )
+    p_digest = approval_review_content_id(
+        repo_root, stage="implementation", base_commit=base_commit,
+        work_item_type=work_item_type, work_item_id=work_item_id,
+        head=p, artifacts_path=artifacts_path,
+    )
+    if head_digest != p_digest:
+        return "ordinary", None
+    t = discover_current_bundle_generation_record_commit(
+        repo_root, work_item_id, base_commit, head, implementation_revision,
+    )
+    if t is None:
+        raise BundleGenerationRecordNotFoundError(
+            f"{work_item_id!r}'s candidate head {head} has protected implementation-stage "
+            f"content identical to reviewed_implementation_head {p}, but no current "
+            f"Workflow-Bundle-Generation-Record commit is discoverable for "
+            f"{work_item_id}/{implementation_revision} in {base_commit}..{head} to supersede"
+        )
+    interval = _generation_record_interval_first_parent_members(repo_root, t, head)
+    impl_classification = fingerprint.load_implementation_stage_classification(
+        repo_root, artifacts_path,
+    )
+    _classify_generation_record_interval(
+        repo_root, work_item_id, implementation_revision,
+        list(reversed(interval)),  # chronological: oldest (right after t) first
+        impl_classification,
+    )
+    return "same_content", t
 
 
 # ---------------------------------------------------------------------------

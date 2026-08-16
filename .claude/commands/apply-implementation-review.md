@@ -69,22 +69,35 @@ no `docs/ai-workflow/WORKFLOW_STATE.json` entry.
    catch-all commit).
 7. Regenerate the bundle at the `post-fix` stage. If this work item has a
    `docs/ai-workflow/WORKFLOW_STATE.json` entry: **first**, before writing
-   any bundle file, call `workflow_state.record_bundle_generation(state,
-   work_item_id, stage="post-fix", head=<current HEAD SHA>, now=<now>)`
-   (`WF4c`, D-Approval-Commits' sole writer of `reviewed_implementation_head`),
-   persist the returned state to `WORKFLOW_STATE.json`, and commit it
-   **alone** — stage exactly that one path (never a broader `git add`) and
-   create one commit carrying `Workflow-Bundle-Generation-Record:
+   any bundle file, call `workflow_state.resolve_bundle_generation_outcome(
+   repo_root, work_item, base_commit=<base-sha>, head=<current HEAD SHA>)`
+   (WF8c (c), D-Commit-Provenance "Same-content post-fix republication") to
+   learn which of the two legal outcomes applies — `("ordinary", None)` when
+   the protected implementation-stage content genuinely changed this round,
+   `("same_content", t)` when every finding was resolved via rejection-with-
+   evidence or excluded-only content and the protected content nets out
+   byte-identical to the currently-reviewed round. Then call
+   `workflow_state.record_bundle_generation(state, work_item_id,
+   stage="post-fix", head=<current HEAD SHA>, now=<now>, outcome=<the
+   resolved outcome>)` (`WF4c`, D-Approval-Commits' sole writer of
+   `reviewed_implementation_head`), persist the returned state to
+   `WORKFLOW_STATE.json`, and commit it **alone** — stage exactly that one
+   path (never a broader `git add`) and create one commit carrying, for
+   `"ordinary"`, `Workflow-Bundle-Generation-Record:
    <work_item_id>/<implementation_revision>` +
-   `Workflow-Work-Item: <work_item_id>` trailers, no other trailer. This
-   durability commit must land *before* generation, never after
-   (`WF8B-003`, resolved `D-Approval-Commits` revision 28) — a durability
-   commit made after generation is by definition one commit ahead of the
-   value it just wrote, permanently re-breaking
-   `/approve-review implementation`'s provenance-interval check on every
-   round; skip this whole step for a work item with no state entry. Then
-   run `./scripts/prepare-ai-review.sh <base-sha> post-fix [work_item_id]`
-   — required before `AWAITING_TECHNICAL_APPROVAL` can be reachable again.
+   `Workflow-Work-Item: <work_item_id>` trailers, no other trailer; for
+   `"same_content"`, that same `Workflow-Bundle-Generation-Record` value
+   (unchanged, never bumped) + `Workflow-Work-Item: <work_item_id>` +
+   `Workflow-Supersedes: <t>` (`t` the commit `resolve_bundle_generation_outcome`
+   returned), no other trailer. This durability commit must land *before*
+   generation, never after (`WF8B-003`, resolved `D-Approval-Commits`
+   revision 28) — a durability commit made after generation is by
+   definition one commit ahead of the value it just wrote, permanently
+   re-breaking `/approve-review implementation`'s provenance-interval check
+   on every round; skip this whole step for a work item with no state
+   entry. Then run `./scripts/prepare-ai-review.sh <base-sha> post-fix
+   [work_item_id]` — required before `AWAITING_TECHNICAL_APPROVAL` can be
+   reachable again.
 8. If any Blocking finding remains unresolved, or the fix was structurally
    significant, stay in `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` and stop
    for another review round. Otherwise report readiness and that
