@@ -4852,6 +4852,98 @@ class TestImplementationProvenanceInterval(unittest.TestCase):
             with self.assertRaises(ws.BundleGenerationRecordNotFoundError):
                 ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base)
 
+    def test_own_work_item_generation_record_is_discoverable_by_its_own_lookup_only(self):
+        """Item 264 (`WF8c`): a well-formed `S` for `other-wi` (both
+        trailers self-consistently naming `other-wi`) is discovered by
+        `other-wi`'s own lookup, confirming the trailer genuinely scopes a
+        real, positive match -- not merely that some *other* work item's
+        lookup happens to miss a decorative mismatch
+        (`test_generation_record_trailer_naming_different_work_item_is_not_discovered`
+        above already covers the negative half for `self.WI`'s own
+        lookup); `self.WI`'s own lookup for its own `implementation_revision`
+        finds nothing at all, since no commit anywhere names `self.WI`."""
+        with ScratchRepo() as repo:
+            other_wi = "other-wi"
+            _write_test_artifacts_declaration(repo, other_wi)
+            _seed_base_provenance_state(repo, other_wi)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            other_state = _provenance_state(other_wi, reviewed_implementation_head=p, implementation_revision=1)
+            s = _commit_state_only(
+                repo, other_wi, other_state, "record gen", trailers=_record_trailers(other_wi, 1),
+            )
+            other_work_item = other_state | {"work_item_id": other_wi}
+            self.assertEqual(
+                ws.verify_implementation_provenance_interval(repo.root, other_work_item, repo.base), s,
+            )
+            missing_work_item = other_state | {"work_item_id": self.WI, "reviewed_implementation_head": p}
+            with self.assertRaises(ws.BundleGenerationRecordNotFoundError):
+                ws.verify_implementation_provenance_interval(repo.root, missing_work_item, repo.base)
+
+    def test_missing_work_item_trailer_entirely_is_not_discovered(self):
+        """Item 263 (`WF8c`): an otherwise well-formed `S` missing the
+        `Workflow-Work-Item` trailer entirely (not merely carrying a wrong
+        value) is not discovered by the scoped lookup at all -- refuses
+        exactly as if no provenance commit existed, never falling back to
+        an unscoped match on the `Workflow-Bundle-Generation-Record` value
+        alone."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            _commit_state_only(repo, self.WI, state, "record gen, no Workflow-Work-Item trailer", trailers={
+                "Workflow-Bundle-Generation-Record": f"{self.WI}/1",
+            })
+            work_item = state | {"work_item_id": self.WI}
+            with self.assertRaises(ws.BundleGenerationRecordNotFoundError):
+                ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base)
+
+    def test_recovered_s2_missing_work_item_trailer_is_not_discovered(self):
+        """Item 265 (`WF8c`): a recovered generation-record commit `S2`
+        carrying exactly the canonical three-trailer set
+        (`Workflow-Bundle-Generation-Record`, `Workflow-Supersedes`,
+        `Workflow-Work-Item`) is discovered and validates as the terminal
+        member of its multi-commit interval; the same `S2` missing
+        `Workflow-Work-Item` is not discovered at all."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            s = _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            repo.commit("excluded-only doc fix", filename="docs/notes.md")
+            s2_state = state | {"state_revision": 3}
+            s2 = _commit_state_only(
+                repo, self.WI, s2_state, "recover stale generation_head",
+                trailers=_recovered_trailers(self.WI, 1, s),
+            )
+            full_work_item = s2_state | {"work_item_id": self.WI}
+            self.assertEqual(
+                ws.verify_implementation_provenance_interval(repo.root, full_work_item, repo.base), s2,
+            )
+
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            s = _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            repo.commit("excluded-only doc fix", filename="docs/notes.md")
+            s2_state = state | {"state_revision": 3}
+            _commit_state_only(
+                repo, self.WI, s2_state, "recover, no Workflow-Work-Item trailer", trailers={
+                    "Workflow-Bundle-Generation-Record": f"{self.WI}/1",
+                    "Workflow-Supersedes": s,
+                },
+            )
+            full_work_item = s2_state | {"work_item_id": self.WI}
+            # S2 (missing its own Workflow-Work-Item trailer) is not
+            # discovered as a generation-record commit at all -- S remains
+            # the last one found, and live HEAD has moved past it with no
+            # further discovered record, refused as such.
+            with self.assertRaises(ws.HeadPastBundleGenerationRecordError):
+                ws.verify_implementation_provenance_interval(repo.root, full_work_item, repo.base)
+
     def test_wrong_implementation_revision_names_both_expected_and_found(self):
         """Item 220 (`WF8c`): a `Workflow-Bundle-Generation-Record`
         trailer naming the wrong `implementation_revision` (here, the
@@ -4872,6 +4964,36 @@ class TestImplementationProvenanceInterval(unittest.TestCase):
                 ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base)
             self.assertIn(f"{self.WI}/2", str(ctx.exception))
             self.assertIn(f"{self.WI}/1", str(ctx.exception))
+
+    def test_terminal_commit_touching_an_extra_unclassified_path_refuses(self):
+        """Item 253 (`WF8c`): a terminal `T` carrying the correct
+        `Workflow-Bundle-Generation-Record` trailer, touching no protected
+        path, but *also* touching an unclassified path outside the
+        implementation artifact declaration, refuses -- naming the
+        unclassified path found in `T` itself. `validate_bundle_generation_
+        record_commit`'s own first check (`changed_paths != {state_rel}`)
+        already refuses on *any* extra path regardless of its
+        classification, so this is a strict superset of the "extra
+        protected path" case, never merely the "no protected path" half
+        revision 30 originally left ambiguous."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            full = repo.root / STATE_REL_PATH
+            full.parent.mkdir(parents=True, exist_ok=True)
+            full.write_bytes(ws._serialize_state({"schema_version": 1, "work_items": {self.WI: state}}))
+            (repo.root / "other").mkdir(exist_ok=True)
+            (repo.root / "other" / "extra.txt").write_text("extra\n")
+            _run(["git", "add", STATE_REL_PATH, "other/extra.txt"], cwd=repo.root)
+            body = "record gen\n\n" + "\n".join(f"{k}: {v}" for k, v in _record_trailers(self.WI, 1).items())
+            _run(["git", "commit", "-q", "-m", body], cwd=repo.root)
+            t = repo.head()
+            with self.assertRaises(ws.MalformedBundleGenerationRecordCommitError) as ctx:
+                ws.validate_bundle_generation_record_commit(repo.root, t, self.WI)
+            self.assertIn(t, str(ctx.exception))
+            self.assertIn("other/extra.txt", str(ctx.exception))
 
 
 class TestRecordBundleGenerationSameContentOutcome(unittest.TestCase):
@@ -5455,6 +5577,35 @@ class TestVerifyImplementationProvenanceRecovery(unittest.TestCase):
             )
             self.assertEqual(result, t)
 
+    def test_unclassified_path_added_then_removed_in_interval_refuses_naming_the_commit(self):
+        """Item 248 (`WF8c`): an unclassified path added by one commit and
+        removed by a later one leaves the interval's endpoint content
+        identical, but the recovery precondition still refuses, naming the
+        offending commit -- `classify_path_implementation_stage` itself
+        fails closed by *raising* `UnclassifiedPathError(path)` rather than
+        returning an "unclassified" classification, so
+        `_classify_generation_record_interval` must catch it and re-raise
+        with commit context, exactly as it already does for a `protected`
+        classification (`test_protected_commit_in_interval_propagates_underlying_error`
+        above)."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            added = _write_and_commit(repo, "other/mystery.txt", "???\n", "add unclassified")
+            _run(["git", "rm", "-q", "other/mystery.txt"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "remove unclassified"], cwd=repo.root)
+            head = repo.head()
+            work_item = state | {"work_item_id": self.WI, "work_item_type": "process"}
+            with self.assertRaises(ws.ProtectedPathInProvenanceIntervalError) as ctx:
+                ws.verify_implementation_provenance_recovery(
+                    repo.root, work_item, base_commit=repo.base, head=head,
+                )
+            self.assertIn(added, str(ctx.exception))
+            self.assertIn("other/mystery.txt", str(ctx.exception))
+
 
 class TestImplementationProvenanceRecoveryEndToEnd(unittest.TestCase):
     """`WF8c` (b), `WFR-62`: the full round trip from
@@ -5523,6 +5674,20 @@ class TestImplementationProvenanceRecoveryEndToEnd(unittest.TestCase):
                 ws.implementation_provenance_interval_reachable(repo.root, final_work_item, repo.base),
             )
 
+            # Item 244 (`WF8c`): retrying the recovery operation once `S2`
+            # is already the current tip is idempotent -- no second
+            # superseding commit, refused as nothing-to-recover rather than
+            # silently producing a duplicate -- and repeated discovery
+            # still resolves to the same `S2`, never a phantom or a
+            # different commit.
+            with self.assertRaises(ws.ImplementationProvenanceRecoveryNotApplicableError):
+                ws.verify_implementation_provenance_recovery(
+                    repo.root, final_work_item, base_commit=repo.base, head=s2,
+                )
+            self.assertEqual(
+                ws.verify_implementation_provenance_interval(repo.root, final_work_item, repo.base), s2,
+            )
+
     def test_second_sequential_recovery_chain_validates(self):
         """D-Commit-Provenance "Multiple sequential recoveries /
         supersession chain", exercised via the standalone recovery command
@@ -5572,6 +5737,70 @@ class TestImplementationProvenanceRecoveryEndToEnd(unittest.TestCase):
             final_work_item = s3_work_item | {"work_item_id": self.WI}
             result = ws.verify_implementation_provenance_interval(repo.root, final_work_item, repo.base)
             self.assertEqual(result, s3)
+
+    def test_malformed_ordinary_s_refuses_whole_interval_even_with_valid_recovery_after(self):
+        """Item 278 (`WF8c`, `GPT-R50-002` scenario A): a malformed ordinary
+        `S` (carrying an extra forbidden `technical_approval` mutation
+        alongside its legitimate round fields), followed by an otherwise-
+        valid recovery (`U`, then `S2`), refuses the whole interval at
+        `verify_implementation_provenance_interval`, naming `S` as the
+        offending historical commit -- even though `S2` itself is
+        well-formed and current. `_classify_generation_record_interval`
+        walks oldest-first and validates every generation-record commit it
+        encounters, so a malformed `S` is caught before `S2` is ever
+        reached, regardless of how well-formed the chain becomes later."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            self._seed_base_state(repo)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(
+                self.WI, reviewed_implementation_head=p, implementation_revision=1,
+            ) | {"work_item_type": self.WORK_ITEM_TYPE}
+            malformed_extra = {"technical_approval": {"status": "CURRENT", "approved_review_content_id": "a" * 64}}
+            content = json.dumps({"schema_version": 1, "work_items": {self.WI: state | malformed_extra}})
+            s = _commit_state_with_trailers(repo, content, _record_trailers(self.WI, 1), message="record gen")
+            repo.commit("excluded-only doc fix", filename="docs/notes.md")
+            s2_content = json.dumps({"schema_version": 1, "work_items": {self.WI: state | {"state_revision": 2}}})
+            _commit_state_with_trailers(
+                repo, s2_content, _recovered_trailers(self.WI, 1, s), message="recover stale generation_head",
+            )
+            final_work_item = state | {"work_item_id": self.WI}
+            with self.assertRaises(ws.MalformedBundleGenerationRecordCommitError) as ctx:
+                ws.verify_implementation_provenance_interval(repo.root, final_work_item, repo.base)
+            self.assertIn(s, str(ctx.exception))
+
+    def test_malformed_recovered_s2_refuses_whole_interval_even_with_valid_recovery_after(self):
+        """Item 279 (`WF8c`, `GPT-R50-002` scenario B): a valid ordinary
+        `S`, followed by a malformed recovered `S2` (mutating a
+        `WORKFLOW_STATE.json` field outside `phase`/`state_revision`/
+        `last_transition`), followed by an otherwise-valid second recovery
+        (`U`, then `S3`), refuses the whole interval, naming `S2` as the
+        offending historical commit, even though `S3` itself is
+        well-formed and current."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            self._seed_base_state(repo)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(
+                self.WI, reviewed_implementation_head=p, implementation_revision=1,
+            ) | {"work_item_type": self.WORK_ITEM_TYPE}
+            s = _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            repo.commit("first excluded-only doc fix", filename="docs/notes-a.md")
+            malformed_s2_state = state | {"state_revision": 2, "reviewed_implementation_head": "0" * 40}
+            s2 = _commit_state_only(
+                repo, self.WI, malformed_s2_state, "recover (illegally changes reviewed_implementation_head)",
+                trailers=_recovered_trailers(self.WI, 1, s),
+            )
+            repo.commit("second excluded-only doc fix", filename="docs/notes-b.md")
+            s3_state = state | {"state_revision": 3}
+            _commit_state_only(
+                repo, self.WI, s3_state, "recover stale generation_head 2",
+                trailers=_recovered_trailers(self.WI, 1, s2),
+            )
+            final_work_item = state | {"work_item_id": self.WI}
+            with self.assertRaises(ws.MalformedBundleGenerationRecordCommitError) as ctx:
+                ws.verify_implementation_provenance_interval(repo.root, final_work_item, repo.base)
+            self.assertIn(s2, str(ctx.exception))
 
 
 class TestRemediationChildWorkItem(unittest.TestCase):

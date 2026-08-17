@@ -588,6 +588,66 @@
       "item": 220,
       "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_wrong_implementation_revision_names_both_expected_and_found",
       "note": "New this round (batch 15): production fix -- verify_implementation_provenance_interval's BundleGenerationRecordNotFoundError previously named only the expected work_item_id/implementation_revision pair; added _other_revision_found_suffix() to also name any other revision's Workflow-Bundle-Generation-Record commit(s) actually discovered for this work item (e.g. a stale previous round), so the message now names both the expected and the found revision as the item requires"
+    },
+    {
+      "item": 248,
+      "evidence": "workflow_state_test.TestVerifyImplementationProvenanceRecovery.test_unclassified_path_added_then_removed_in_interval_refuses_naming_the_commit",
+      "note": "New this round (batch 16): production fix -- classify_path_implementation_stage fails closed by raising UnclassifiedPathError(path) rather than returning an 'unclassified' classification, so _classify_generation_record_interval's own if-classification!=excluded branch was unreachable for a genuinely unclassified path and never named the offending commit the way it already does for a protected one. Now catches UnclassifiedPathError and re-raises ProtectedPathInProvenanceIntervalError with the same commit+path context"
+    },
+    {
+      "item": 244,
+      "evidence": "workflow_state_test.TestImplementationProvenanceRecoveryEndToEnd.test_single_recovery_then_full_interval_validates",
+      "note": "New this round (batch 16): retrying verify_implementation_provenance_recovery once S2 is already the current tip raises ImplementationProvenanceRecoveryNotApplicableError (nothing to recover) rather than creating a second superseding commit, and repeated discovery via verify_implementation_provenance_interval still resolves to the same S2"
+    },
+    {
+      "item": 260,
+      "evidence": "workflow_state_test.TestImplementationProvenanceRecoveryEndToEnd.test_single_recovery_then_full_interval_validates",
+      "note": "New this round (batch 16): same assertion as item 244 -- the ImplementationProvenanceRecoveryNotApplicableError('already the current Workflow-Bundle-Generation-Record commit') branch only fires because resolve_bundle_generation_outcome correctly re-discovers the already-current S2 as t, proving exact idempotent replay with no commit and no working-tree write"
+    },
+    {
+      "item": 249,
+      "evidence": "workflow_state_test.TestResolveBundleGenerationOutcome.test_multiple_excluded_commits_between_t_and_head_still_resolves_same_content",
+      "note": "New this round (batch 16): several genuinely excluded-only commits between T and candidate head (not just one) are each individually classified and the interval still resolves same_content -- the shared _classify_generation_record_interval walk verify_implementation_provenance_recovery itself reuses (WF8c (b)'s own docstring: 'never a second, separately maintained copy')"
+    },
+    {
+      "item": 253,
+      "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_terminal_commit_touching_an_extra_unclassified_path_refuses",
+      "note": "New this round (batch 16): a terminal T carrying the correct trailer but also touching an extra unclassified path refuses via validate_bundle_generation_record_commit's own changed_paths != {state_rel} check -- a strict superset of the extra-protected-path case, naming the commit and the extra path"
+    },
+    {
+      "item": 261,
+      "evidence": "workflow_state_test.TestSameContentRepublicationEndToEnd.test_malformed_field_diff_recovered_commit_refuses",
+      "note": "New this round (batch 16): a discovered Workflow-Supersedes-trailered commit whose own committed WORKFLOW_STATE.json content violates the recovered role's required field set (here, illegally changing reviewed_implementation_head) is refused as malformed via MalformedBundleGenerationRecordCommitError, naming the offending commit -- never silently accepted as a valid replay"
+    },
+    {
+      "item": 263,
+      "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_missing_work_item_trailer_entirely_is_not_discovered",
+      "note": "New this round (batch 16): an otherwise well-formed S missing the Workflow-Work-Item trailer entirely (not merely a wrong value) is not discovered by the scoped lookup at all"
+    },
+    {
+      "item": 264,
+      "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_own_work_item_generation_record_is_discoverable_by_its_own_lookup_only",
+      "note": "New this round (batch 16): a well-formed S for other-wi (both trailers self-consistently naming other-wi) is discovered by other-wi's own lookup, and self.WI's own lookup for the same implementation_revision finds nothing -- the trailer genuinely scopes to a positive match, not merely a decorative mismatch (item 219's own negative-half test)"
+    },
+    {
+      "item": 265,
+      "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_recovered_s2_missing_work_item_trailer_is_not_discovered",
+      "note": "New this round (batch 16): a recovered S2 carrying exactly the canonical three-trailer set is discovered and validates as the terminal member of its interval; the same S2 missing Workflow-Work-Item is not discovered at all, and live HEAD past the last genuinely discovered record refuses via HeadPastBundleGenerationRecordError"
+    },
+    {
+      "item": 278,
+      "evidence": "workflow_state_test.TestImplementationProvenanceRecoveryEndToEnd.test_malformed_ordinary_s_refuses_whole_interval_even_with_valid_recovery_after",
+      "note": "New this round (batch 16): a malformed ordinary S (extra forbidden technical_approval mutation) followed by an otherwise-valid recovery (U, then S2) refuses the whole interval at verify_implementation_provenance_interval, naming S -- the oldest-first walk validates every generation-record commit it encounters and cannot be healed by a later well-formed one (GPT-R50-002 scenario A)"
+    },
+    {
+      "item": 279,
+      "evidence": "workflow_state_test.TestImplementationProvenanceRecoveryEndToEnd.test_malformed_recovered_s2_refuses_whole_interval_even_with_valid_recovery_after",
+      "note": "New this round (batch 16): a valid ordinary S followed by a malformed recovered S2 (illegal reviewed_implementation_head mutation), followed by an otherwise-valid second recovery (U, then S3), refuses the whole interval naming S2, even though S3 itself is well-formed (GPT-R50-002 scenario B)"
+    },
+    {
+      "item": 281,
+      "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_one_excluded_commit_between_p_and_t_is_reachable",
+      "note": "New this round (batch 16): an unrelated excluded-only commit carrying no Workflow-Bundle-Generation-Record trailer at all remains permitted between provenance records under the generic excluded-only rule alone -- the role-based check in _classify_generation_record_interval only ever fires for a commit matching the trailer scope, confirming an ordinary unrelated commit is never held to role-specific field/trailer requirements"
     }
   ]
 }

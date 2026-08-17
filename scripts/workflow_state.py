@@ -8903,10 +8903,20 @@ def _classify_generation_record_interval(
             last_generation_record_commit = commit
             continue
         for path in sorted(_commit_own_changed_paths(repo_root, commit)):
-            classification = fingerprint.classify_path_implementation_stage(
-                path, impl_protected_paths, impl_protected_prefixes,
-                impl_excluded_paths, impl_excluded_prefixes,
-            )
+            try:
+                classification = fingerprint.classify_path_implementation_stage(
+                    path, impl_protected_paths, impl_protected_prefixes,
+                    impl_excluded_paths, impl_excluded_prefixes,
+                )
+            except fingerprint.UnclassifiedPathError:
+                # Item 248 (WF8c): `classify_path_implementation_stage` fails
+                # closed by raising rather than returning "unclassified", so
+                # without this branch an unclassified path's own commit was
+                # never named in the refusal the way a protected path's is.
+                raise ProtectedPathInProvenanceIntervalError(
+                    f"{commit} in the provenance interval touches {path!r}, classified "
+                    f"'unclassified', not excluded"
+                ) from None
             if classification != "excluded":
                 raise ProtectedPathInProvenanceIntervalError(
                     f"{commit} in the provenance interval touches {path!r}, classified "
