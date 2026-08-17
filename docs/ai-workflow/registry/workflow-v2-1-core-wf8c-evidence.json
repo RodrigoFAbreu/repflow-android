@@ -803,6 +803,41 @@
       "item": 303,
       "evidence": "workflow_state_test.TestRecordBundleGenerationSameContentOutcome.test_illegal_source_phase_refused_even_for_same_content_outcome",
       "note": "New this round (batch 24): item 303 claims that invoking record_bundle_generation with live HEAD already at the round's content-verified tip T is unreachable from either legal source phase by construction, and that a hand-constructed harness forcing the call anyway is refused by the ordinary legal-source-phase check. The cited test is exactly that hand-constructed harness: phase=IMPLEMENTING (a phase that, by construction, is never live-current while HEAD sits at T for either legal writer shape) still reaches record_bundle_generation directly and is refused by IllegalBundleGenerationSourcePhaseError -- the same ordinary check, never a special-cased HEAD==T branch."
+    },
+    {
+      "item": 287,
+      "evidence": "workflow_state_test.TestSameContentRepublicationEndToEnd.test_single_republication_then_full_interval_validates",
+      "note": "New this round (batch 25): pre-existing test, previously bound only to item 224's narrower 'resolves same_content, creates exactly one non-revision-advancing commit' claim. Item 287 restates the same scenario with the full compound claim: post-fix stage, resolve_bundle_generation_outcome resolving same_content against T, record_bundle_generation producing S2 with the three-trailer recovered shape (Workflow-Bundle-Generation-Record unchanged + Workflow-Work-Item + Workflow-Supersedes), reviewed_implementation_head/implementation_revision byte-identical before and after, and the real APPLYING_REVIEW_FEEDBACK -> AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW phase transition -- the last of which the test proves indirectly but conclusively: verify_implementation_provenance_interval (called via validate_bundle_generation_record_commit's own committed_phase == 'AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW' check for the recovered role) succeeds against s2_work_item exactly as committed, which is only possible if the committed phase is that exact value."
+    },
+    {
+      "item": 289,
+      "evidence": "workflow_state_test.TestSameContentRepublicationEndToEnd.test_republication_then_recovery_chain_validates",
+      "note": "New this round (batch 25): two new tests added to TestSameContentRepublicationEndToEnd, exercising a mixed supersession chain containing one record_bundle_generation same-content-republication link (source phase APPLYING_REVIEW_FEEDBACK) and one standalone /recover-implementation-provenance link (source phase AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW). test_republication_then_recovery_chain_validates builds P -> T -> [republication S2] -> [recovery S3]; the sibling test_recovery_then_republication_chain_validates builds the opposite order, P -> T -> [recovery S2] -> [republication S3]. Both independently validate at verify_implementation_provenance_interval, confirming the chain mechanics never distinguish which of the two legal writers produced a given link."
+    },
+    {
+      "item": 295,
+      "evidence": "workflow_state_test.TestSameContentRepublicationEndToEnd.test_second_sequential_republication_chain_validates",
+      "note": "New this round (batch 25): pre-existing test, not previously bound. Item 295's regression-guard claim -- a matching content-verified generation-record commit reachable from live HEAD but not itself the current tip (a historical, already-superseded S/S2) must not be mistaken for idempotent success -- is exactly what this test's second resolve_bundle_generation_outcome call proves: after S2 supersedes T, a further excluded-only commit resolves outcome ('same_content', s2), never ('same_content', t) or an idempotent no-op against the older, still-reachable-but-superseded T."
+    },
+    {
+      "item": 296,
+      "evidence": "workflow_state_test.TestApprovalGateReachability.test_technical_gate_reachable_for_first_pass_approve_round",
+      "note": "New this round (batch 25): new test added to TestApprovalGateReachability, the APPROVE-round symmetric case to the pre-existing test_technical_gate_reachable_when_clean_and_matching's REVISE case. technical_approval_gate_reachable's own signature carries no phase-history parameter, so this and the REVISE case together confirm the gate's result depends only on the three/four directly-checkable predicates passed in, never on whether APPLYING_REVIEW_FEEDBACK ever occurred."
+    },
+    {
+      "item": 310,
+      "evidence": "workflow_state_test.TestRecordBundleGeneration.test_self_reviewing_implementation_with_changed_content_uses_ordinary_path",
+      "note": "New this round (batch 25): new test added to TestRecordBundleGeneration. Confirms record_bundle_generation's ordinary-outcome path (reviewed_implementation_head set to the new head, implementation_revision advanced by exactly one) is unchanged when invoked from SELF_REVIEWING_IMPLEMENTATION against a prior round's genuinely different content -- revision 38's widening of same-content legality to this source phase does not disturb the pre-existing ordinary case."
+    },
+    {
+      "item": 311,
+      "evidence": "workflow_state_test.TestSameContentRepublicationFromSelfReviewingImplementation.test_republication_from_self_reviewing_implementation_then_full_interval_validates",
+      "note": "New this round (batch 25): new test class TestSameContentRepublicationFromSelfReviewingImplementation, mirroring TestSameContentRepublicationEndToEnd's own APPLYING_REVIEW_FEEDBACK-sourced end-to-end pattern but re-entering SELF_REVIEWING_IMPLEMENTATION for a later checkpoint's own self-review round instead. Proves resolve_bundle_generation_outcome resolves same_content, record_bundle_generation produces a well-formed recovered-role S2 with a real SELF_REVIEWING_IMPLEMENTATION -> AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW transition and reviewed_implementation_head/implementation_revision unchanged, and the resulting chain validates end to end via verify_implementation_provenance_interval/implementation_provenance_interval_reachable -- the exact case revision 35-37 left with no legal outcome (a no-op implementation pass, a plan-only correction, or a fix reverted before publication)."
+    },
+    {
+      "item": 312,
+      "evidence": "workflow_state_test.TestSameContentRepublicationFromSelfReviewingImplementation.test_both_source_phases_independently_satisfy_the_role_contract",
+      "note": "New this round (batch 25): new test in the same new class, building one short same-content-republication chain from each of the two source phases (APPLYING_REVIEW_FEEDBACK/post-fix and SELF_REVIEWING_IMPLEMENTATION/implementation) from a common T, and validating each resulting terminal commit directly via validate_bundle_generation_record_commit -- confirming both independently satisfy condition 4's now-three-combination recovered-role contract, distinguished only by which real phase transition each records."
     }
   ]
 }
