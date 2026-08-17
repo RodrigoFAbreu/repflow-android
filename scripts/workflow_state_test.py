@@ -8563,6 +8563,120 @@ class TestExplicitTakeover(unittest.TestCase):
             identity = json.loads((wt2 / ws.WORKTREE_IDENTITY_PATH).read_text())
             self.assertIn("wi", identity["expected_dirty_paths_by_work_item"])
 
+    def test_takeover_authorization_binds_to_the_target_checkpoint(self):
+        """Item 369(a): the literal names both the observed record and
+        the checkpoint the takeover would establish -- an authorization
+        naming checkpoint X while the installed claim holds Y is refused,
+        even one correctly formed (for a *different* target checkpoint)
+        from the exact same evidence. The pre-`GPT-R81-002` (revision 63)
+        literal shape, which carried no target-checkpoint binding at all,
+        is the control arm: it is refused too, proving the binding is
+        load-bearing rather than decorative."""
+        with ScratchRepo() as repo:
+            ws.claim_checkpoint(repo.root, "wi", "CP1", now="t1")
+            wt2 = repo.worktree("b")
+            evidence = ws.takeover_evidence(wt2, "wi")
+            self.assertEqual(evidence["observed_checkpoint_id"], "CP1")
+
+            # Correctly formed for a different target checkpoint than the
+            # one this call actually tries to establish.
+            literal_for_other_checkpoint = ws.takeover_authorization_literal("wi", evidence, "CP2")
+            with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
+                ws.take_over_claim(wt2, "wi", "CP1", now="t2",
+                                   user_authorization=literal_for_other_checkpoint, evidence=evidence)
+
+            # Control arm: the revision-63 shape named the observation and
+            # the displaced checkpoint but never the checkpoint being
+            # established.
+            legacy_literal = f"take over wi claim {evidence['claim_observation_id']} holding CP1"
+            with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
+                ws.take_over_claim(wt2, "wi", "CP1", now="t2",
+                                   user_authorization=legacy_literal, evidence=evidence)
+
+            # The correctly bound literal succeeds.
+            literal = ws.takeover_authorization_literal("wi", evidence, "CP1")
+            record = ws.take_over_claim(wt2, "wi", "CP1", now="t2",
+                                        user_authorization=literal, evidence=evidence)
+            self.assertEqual(record["checkpoint_id"], "CP1")
+
+    def test_takeover_authorization_not_replayable_against_its_own_rotation(self):
+        """Item 369(c): the same authorization is not replayable against
+        the claim its own rotation produced. Distinct from the
+        third-party staleness race in `test_takeover_refuses_on_stale_
+        evidence` below -- here the exact evidence/literal pair that just
+        won is resubmitted unchanged, as an attacker who captured it
+        would resubmit it, and must refuse because the record it names no
+        longer exists."""
+        with ScratchRepo() as repo:
+            ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            wt2 = repo.worktree("b")
+            evidence = ws.takeover_evidence(wt2, "wi")
+            literal = ws.takeover_authorization_literal("wi", evidence, "CP")
+            first = ws.take_over_claim(wt2, "wi", "CP", now="t2",
+                                       user_authorization=literal, evidence=evidence)
+            self.assertEqual(first["takeover_count"], 1)
+
+            wt3 = repo.worktree("c")
+            with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
+                ws.take_over_claim(wt3, "wi", "CP", now="t3",
+                                   user_authorization=literal, evidence=evidence)
+            # Nothing mutated by the replay: still exactly one takeover.
+            final = ws.resolve_claim(repo.root, "wi")
+            self.assertEqual(final["takeover_count"], 1)
+            self.assertEqual(final["owner_token"], first["owner_token"])
+
+    def test_takeover_of_corrupt_claim_record_requires_binding_to_that_exact_record(self):
+        """Item 369(e): the unreadable/corrupt-record recovery path
+        carries the same explicit observation binding as an ordinary
+        takeover, never a reusable generic authorization. A generic
+        literal is refused; an authorization bound to one corrupt record
+        does not carry over to a *different* corrupt record; the
+        correctly bound literal recovers it and records the recovery."""
+        with ScratchRepo() as repo:
+            claims = ws.claims_dir(repo.root)
+            claims.mkdir(parents=True, exist_ok=True)
+            target = claims / "elsewhere.json"
+            target.write_text(json.dumps({"schema_version": ws.CLAIM_SCHEMA_VERSION}))
+            path = ws.claim_path(repo.root, "wi")
+            path.symlink_to(target)
+
+            wt2 = repo.worktree("b")
+            evidence = ws.takeover_evidence(wt2, "wi")
+            self.assertEqual(evidence["claim_unreadable"]["kind"], "symlink")
+            self.assertTrue(evidence["claim_replaceable"])
+
+            # A generic, observation-unbound literal is refused.
+            with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
+                ws.take_over_claim(wt2, "wi", "CP", now="t2",
+                                   user_authorization="take over the corrupt claim", evidence=evidence)
+
+            # A literal correctly bound to a *different* corrupt record
+            # (a symlink to different bytes -- a different observation id)
+            # does not carry over to this one.
+            other_target = claims / "elsewhere2.json"
+            other_target.write_text(json.dumps({"schema_version": ws.CLAIM_SCHEMA_VERSION}))
+            path.unlink()
+            path.symlink_to(other_target)
+            wt3 = repo.worktree("c")
+            other_evidence = ws.takeover_evidence(wt3, "wi")
+            self.assertNotEqual(other_evidence["claim_observation_id"], evidence["claim_observation_id"])
+            other_literal = ws.takeover_authorization_literal("wi", other_evidence, "CP")
+            path.unlink()
+            path.symlink_to(target)  # restore the original corrupt record
+            with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
+                ws.take_over_claim(wt2, "wi", "CP", now="t2",
+                                   user_authorization=other_literal, evidence=evidence)
+
+            # The correctly bound literal recovers it and records the
+            # recovery.
+            literal = ws.takeover_authorization_literal("wi", evidence, "CP")
+            record = ws.take_over_claim(wt2, "wi", "CP", now="t2",
+                                        user_authorization=literal, evidence=evidence)
+            self.assertTrue(record["taken_over_from"]["unreadable_record"])
+            self.assertEqual(record["taken_over_from"]["claim_observation_id"],
+                             evidence["claim_observation_id"])
+            self.assertEqual(ws.resolve_claim(repo.root, "wi"), record)
+
     def test_taken_over_from_describes_the_atomically_displaced_record(self):
         """Item 369(d) (new, revision 64, `GPT-R81-002`): `taken_over_from`
         describes the record atomically displaced -- its own
@@ -8635,6 +8749,11 @@ class TestExplicitTakeover(unittest.TestCase):
                 ws.take_over_claim(wt2, "wi", "CP", now="t3", user_authorization=literal, evidence=evidence)
 
     def test_takeover_refuses_on_stale_evidence(self):
+        """Item 369(b): a claim that changes between the evidence
+        presentation and the takeover produces a stale-evidence refusal
+        with zero mutation -- the surviving claim is byte-compared
+        before/after the refused attempt, not merely inferred unchanged
+        from the exception alone."""
         with ScratchRepo() as repo:
             ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
             wt2 = repo.worktree("b")
@@ -8647,9 +8766,12 @@ class TestExplicitTakeover(unittest.TestCase):
             ws.take_over_claim(wt3, "wi", "CP", now="t2",
                                user_authorization=ws.takeover_authorization_literal("wi", fresh_evidence, "CP"),
                                evidence=fresh_evidence)
+            before = ws.claim_path(repo.root, "wi").read_bytes()
             with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
                 ws.take_over_claim(wt2, "wi", "CP", now="t3",
                                    user_authorization=literal, evidence=stale_evidence)
+            after = ws.claim_path(repo.root, "wi").read_bytes()
+            self.assertEqual(before, after)
 
     def test_takeover_refuses_when_claim_path_is_a_directory(self):
         with ScratchRepo() as repo:
