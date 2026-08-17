@@ -11,8 +11,8 @@
       "registry_path": "docs/ai-workflow/registry/workflow-v2-1-core-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json",
       "governing_workflow_version": "1",
-      "phase": "IMPLEMENTING",
-      "plan_revision": 90,
+      "phase": "AWAITING_EXTERNAL_PLAN_REVIEW",
+      "plan_revision": 91,
       "implementation_revision": 10,
       "functional_review_round": null,
       "base_commit": "162154d3e5e10eb65e109833acae4b4fb01fc5d6",
@@ -268,10 +268,21 @@
             "WF8c implementation",
             "a second technical_approval-driven completion attempt"
           ]
+        },
+        {
+          "id": "WF8C-S372H-001",
+          "recorded_at": "2026-08-17T22:57:30+01:00",
+          "title": "The complete global partial order omitted a live seventh lock-shaped primitive, PLAN_APPROVAL_MUTATION.guardlock -- reconciled by revision 91 via a bounded ordering-section addition and a code-derived rebuild of item 372(h)'s completeness arm",
+          "summary": "WF8C-S372H-001 (self-discovered, docs/ai-workflow/dry-run/WF8C_FINDING_plan_approval_guardlock_undocumented.md, found while designing item 372(h)'s own completeness-arm conformance test, before any test code was written): \"The complete global partial order, in one place\" claimed six lock-shaped primitives (settled text, no revision marker later than 76), while scripts/workflow_state.py:2147-2148 has defined a seventh -- PLAN_APPROVAL_GUARD_LOCK_PATH (.ai-review/runtime/PLAN_APPROVAL_MUTATION.guardlock) -- since commit eab14ec, a genuine fcntl.flock(LOCK_EX) exercised by both acquire_plan_approval_guard and release_plan_approval_guard and already covered by workflow_state_test.py. It was never named anywhere in the plan. Item 372(h)'s completeness arm enumerated its candidate set from the plan's own prose rather than from the code, so a primitive the document never named could never become a candidate -- the same class of defect OPUS-R92-004 and OPUS-R93-002 each caught once already (revisions 75/76), recurring a third time in a form the prose-derived mechanism structurally could not detect. No remediation was attempted in the implementation session that found it: editing WORKFLOW_V2_PLAN.md is protected, approved plan content and item 372(h) was not implemented against the defective spec. Reconciled by revision 91 (docs/ai-workflow/WORKFLOW_V2_PLAN.md, \"Revision 91 -- self-discovered: WF8C-S372H-001\"): adds primitive (7) and edge (1)->(7) to the ordering section, both derived from reading acquire_plan_approval_guard/release_plan_approval_guard's actual bodies (mirroring (6)/(5) exactly, per the introducing commit's own message) rather than invented; rebuilds item 372(h)'s completeness arm to derive its primitive universe from the live code (every pathname feeding an fcntl.flock acquisition or an os.link-based guard's fixed target path in scripts/workflow_state.py) compared bidirectionally against the plan's declared list; preserves the existing graph arm's mechanism, the direction arm, and both existing live control arms verbatim in substance, extending only for the one new primitive/edge; corrects in passing one stale \"Two per-primitive properties\" count (three bullets since revision 76, now four). No WFR requirement row added/removed/renumbered; no checkpoint's depends_on/complexity/session_target/completion_obligations changed; the Checkpoint registry table and its per-checkpoint registry-JSON fields are untouched (only the registry's top-level plan_revision changes, 90 -> 91); item 372(h) itself remains unimplemented -- this revision only makes it implementable against a correct spec. registry now plan_revision 91, phase AWAITING_EXTERNAL_PLAN_REVIEW. Not yet resolved: awaiting external plan review of this revision.",
+          "disposition": "Routed to plan design -- see \"Revision 91 -- self-discovered: WF8C-S372H-001\" in docs/ai-workflow/WORKFLOW_V2_PLAN.md (Revision 91, phase AWAITING_EXTERNAL_PLAN_REVIEW, awaiting external plan review). WF8c is not reopened or implemented against item 372(h) by this revision -- that remains WF8c's own future scope, now against a corrected spec.",
+          "blocks": [
+            "372(h) implementation",
+            "WF8c completion"
+          ]
         }
       ],
-      "state_revision": 104,
-      "last_transition": "2026-08-16T03:36:57+01:00"
+      "state_revision": 105,
+      "last_transition": "2026-08-17T22:57:30+01:00"
     },
     "milestone-8": {
       "work_item_type": "product",
