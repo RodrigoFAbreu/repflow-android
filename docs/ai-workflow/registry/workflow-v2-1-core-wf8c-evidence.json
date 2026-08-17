@@ -733,6 +733,16 @@
       "item": 370,
       "evidence": "workflow_state_test.TestResolveCheckpointOwnership",
       "note": "New this round (batch 19): the real crash window -- a self-owned claim on a checkpoint whose completion is already durable at HEAD is released by the next invocation, returning FRESH with the concrete next checkpoint id when one remains (370(b)) or NO_CHECKPOINT with a null id when the registry is exhausted (370(a)/(c)); no mutation branch is ever reached with a None checkpoint id"
+    },
+    {
+      "item": 233,
+      "evidence": "workflow_state_test.TestApprovalFreshnessAndEntry.test_forged_manifest_entry_with_no_durable_commit_is_never_reachable",
+      "note": "New this round (batch 20): the forged-manifest-entry case -- approved_review_content_id set directly in state to match a rewritten registry's freshly recomputed digest, with no Workflow-Plan-Approval commit ever carrying it; approval_is_current alone is fooled by the forged digest, but implementing_entry_reachable also requires discover_plan_approval_commit to find a real trailer commit and correctly refuses"
+    },
+    {
+      "item": 234,
+      "evidence": "workflow_state_test.TestApprovalFreshnessAndEntry.test_durable_commit_unreachable_from_head_is_never_reachable",
+      "note": "New this round (batch 20): the durable Workflow-Plan-Approval commit exists but is unreachable from live HEAD, isolated from item 233's missing-commit case and from an ordinary content mismatch by reproducing the approved content byte-identically on head -- approval_is_current is satisfied by content alone, but discover_plan_approval_commit still finds no reachable trailer commit and implementing_entry_reachable correctly refuses"
     }
   ]
 }

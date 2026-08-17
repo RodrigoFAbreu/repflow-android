@@ -2903,6 +2903,73 @@ class TestApprovalFreshnessAndEntry(unittest.TestCase):
             work_item["plan_approval"]["status"] = "STALE"
             self.assertFalse(ws.implementing_entry_reachable(repo.root, work_item, repo.base))
 
+    def test_forged_manifest_entry_with_no_durable_commit_is_never_reachable(self):
+        """Item 233: `plan_approval.approved_review_content_id` edited
+        directly in `WORKFLOW_STATE.json` to agree with a rewritten
+        registry file, with no durable `Workflow-Plan-Approval` commit
+        ever covering that rewritten content. `approval_is_current` alone
+        is fooled -- it only recomputes and compares digests, it never
+        checks for a commit -- but `implementing_entry_reachable` also
+        requires `discover_plan_approval_commit` to find a real trailer
+        commit, which a forged state-file edit can never produce."""
+        with ScratchRepo() as repo:
+            _, review_content_id, work_item = self._approve_plan(repo)
+            registry_full = repo.root / self.REGISTRY_PATH
+            registry_full.write_text(json.dumps({
+                "work_item_id": "wi", "plan_revision": 2, "checkpoints": ["forged"],
+            }))
+            _run(["git", "add", self.REGISTRY_PATH], cwd=repo.root)
+            plan_full = repo.root / self.PLAN_DOC
+            plan_full.write_text(self._plan_doc_content(2, "plan v2 -- rewritten registry scenario"))
+            _run(["git", "add", self.PLAN_DOC], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "rewrite registry, no approval trailer"], cwd=repo.root)
+            forged_head = repo.head()
+            forged_id, _ = fingerprint.compute_review_content_id_plan_stage_at_commit_for_work_item(
+                repo.root, "wi", forged_head, base=repo.base,
+            )
+            self.assertNotEqual(forged_id, review_content_id)
+            work_item["plan_approval"]["approved_review_content_id"] = forged_id
+            self.assertTrue(
+                ws.approval_is_current(
+                    repo.root, work_item, stage="plan", base_commit=repo.base, head=forged_head,
+                ),
+                "content-only freshness check is fooled by the forged digest",
+            )
+            self.assertIsNone(
+                ws.discover_plan_approval_commit(repo.root, "wi", forged_id, repo.base, head=forged_head)
+            )
+            self.assertFalse(
+                ws.implementing_entry_reachable(repo.root, work_item, repo.base, head=forged_head)
+            )
+
+    def test_durable_commit_unreachable_from_head_is_never_reachable(self):
+        """Item 234: the durable `Workflow-Plan-Approval` provenance
+        commit for `plan_approval.approved_review_content_id` exists
+        somewhere in history but is not reachable from live HEAD --
+        distinct from item 233's missing-commit case, and distinct from
+        an ordinary content mismatch: the approved content is reproduced
+        byte-identically on `head`, isolating the commit-reachability
+        check alone."""
+        with ScratchRepo() as repo:
+            _run(["git", "checkout", "-q", "-b", "side"], cwd=repo.root)
+            _, review_content_id, work_item = self._approve_plan(repo)
+            _run(["git", "checkout", "-q", "-"], cwd=repo.root)
+            _run(["git", "checkout", "-q", "side", "--", "."], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "same approved content, no approval trailer"], cwd=repo.root)
+            main_head = repo.head()
+            self.assertTrue(
+                ws.approval_is_current(
+                    repo.root, work_item, stage="plan", base_commit=repo.base, head=main_head,
+                ),
+                "content alone matches -- isolates the commit-reachability gap",
+            )
+            self.assertIsNone(
+                ws.discover_plan_approval_commit(repo.root, "wi", review_content_id, repo.base, head=main_head)
+            )
+            self.assertFalse(
+                ws.implementing_entry_reachable(repo.root, work_item, repo.base, head=main_head)
+            )
+
     def test_post_approval_manifest_match_succeeds_for_the_real_approval_commit(self):
         with ScratchRepo() as repo:
             approval_sha, _, work_item = self._approve_plan(repo)
