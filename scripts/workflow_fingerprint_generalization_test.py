@@ -1158,6 +1158,153 @@ class TestPrepareAiReviewShImplementationStageHeadGuard(unittest.TestCase):
             manifest_text = (bundle_dir / "MANIFEST.md").read_text()
             self.assertIn(f"reviewed_implementation_head: {impl_head}", manifest_text)
 
+    def test_interrupted_after_durability_commit_resumes_without_a_second_commit(self):
+        """Item 227 (`WF8c`): a simulated interruption after the
+        durability commit `S` lands but before the bundle's files are
+        written is safe to resume -- a fresh session, via the
+        caller-level bundle-publication-resume contract alone (never a
+        second invocation of `record_bundle_generation`), discovers `S`
+        as the current tip, confirms live HEAD == S with unchanged
+        content, and writes the bundle's files directly: reusing the
+        same `generation_head`/`reviewed_implementation_head`, producing
+        no second durability commit, no `implementation_revision`
+        change, no `phase` rewrite, and reaching the same round
+        identity. Unlike this class's other fixtures (which write
+        `WORKFLOW_STATE.json` to the working tree only, uncommitted, via
+        `repo.write_workflow_state`), this test commits it for real,
+        carrying the same trailer shape `record_bundle_generation`'s own
+        durability commit carries, and never pre-writes any bundle file
+        -- proving the positive scenario item 227 actually describes
+        (files genuinely absent, `S` genuinely durable), not merely a
+        stale-manifest variant of it. `prepare-ai-review.sh` never calls
+        `git commit` or writes `WORKFLOW_STATE.json` (confirmed by
+        inspection: zero occurrences of either in the script, declared
+        in its own `state_writer: false` header comment), so the
+        no-second-commit/no-phase-rewrite guarantees are structural; what
+        this test proves is the positive resume path itself actually
+        completes and reaches the same round identity."""
+        with h.ScratchRepo() as repo:
+            work_item_id = "wi"
+            base_entry = ws.default_work_item(
+                work_item_id=work_item_id, work_item_type="process", work_item_kind="process",
+                plan_path="docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+                registry_path=f"docs/ai-workflow/registry/{work_item_id}-registry.json",
+                mapping_path=f"docs/ai-workflow/requirements/{work_item_id}-mapping.json",
+                base_commit="0" * 40, governing_workflow_version="1",
+                plan_revision=1, last_transition="t0",
+            )
+            # A baseline WORKFLOW_STATE.json commit, landed *before*
+            # impl_head so it sits outside the reviewed_implementation_
+            # head..HEAD provenance interval S's own role-validation
+            # examines -- without it, S would be this repo's first-ever
+            # WORKFLOW_STATE.json commit, making every static top-level
+            # field (schema_version, active_work_item_id) look "changed"
+            # to the role validator, which forbids exactly that (item
+            # 267). Mirrors _seed_base_provenance_state's own rationale
+            # in workflow_state_test.py.
+            repo.commit_files(
+                "seed base state",
+                {"docs/ai-workflow/WORKFLOW_STATE.json": json.dumps({
+                    "schema_version": 1, "active_work_item_id": work_item_id,
+                    "work_items": {work_item_id: base_entry},
+                })},
+            )
+
+            # Inlined variant of _seed_and_implement that additionally
+            # excludes WORKFLOW_STATE.json at the implementation stage
+            # (mirroring this real repository's own workflow-v2-1-core-
+            # artifacts.json) -- the shared helper's own default
+            # declaration leaves it unclassified, which is fine for
+            # every other test in this class (none of which puts a real
+            # WORKFLOW_STATE.json commit inside the diffed base..HEAD
+            # range), but this test's own durability commit S is exactly
+            # such a commit.
+            (repo.root / ".gitignore").write_text(".ai-review/\n")
+            repo.write_plan_docs(work_item_id=work_item_id, plan_revision=1)
+            declarations = ws.generate_artifacts_declarations(
+                work_item_id, "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+                f"docs/ai-workflow/registry/{work_item_id}-registry.json",
+                f"docs/ai-workflow/requirements/{work_item_id}-mapping.json",
+            )
+            declarations["implementation_stage"]["protected_paths"]["impl.txt"] = "test fixture content"
+            declarations["implementation_stage"]["excluded_paths"]["docs/ai-workflow/WORKFLOW_STATE.json"] = (
+                "runtime-mutable per-work-item state -- excluded so the durability commit itself "
+                "never needs to be classified as protected/implementation content"
+            )
+            artifacts_path = repo.root / "docs" / "ai-workflow" / "registry" / f"{work_item_id}-artifacts.json"
+            artifacts_path.write_text(json.dumps(declarations) + "\n")
+            repo.commit_plan_docs_as_base()
+            impl_head = repo.commit("implement thing", filename="impl.txt")
+
+            entry = dict(base_entry)
+            entry["reviewed_implementation_head"] = impl_head
+            entry["implementation_revision"] = 1
+            entry["phase"] = "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW"
+            state_content = json.dumps({
+                "schema_version": 1, "active_work_item_id": work_item_id,
+                "work_items": {work_item_id: entry},
+            })
+            s_sha = repo.commit_files(
+                "record gen (durability commit S)",
+                {"docs/ai-workflow/WORKFLOW_STATE.json": state_content},
+                trailers={
+                    "Workflow-Bundle-Generation-Record": f"{work_item_id}/1",
+                    "Workflow-Work-Item": work_item_id,
+                },
+            )
+            self.assertEqual(repo.head(), s_sha)
+
+            # REVIEW_REQUEST.md is the human/agent-authored input the
+            # script reads (not one of "the bundle's files" item 227
+            # describes as unwritten -- those are MANIFEST.md and the
+            # archive, this script's own output); writing it here mirrors
+            # a real session that prepared the review request, then ran
+            # record_bundle_generation (the commit above), then was
+            # interrupted before ever invoking this script.
+            bundle_dir = self._write_review_request(repo, work_item_id, repo.base, impl_head)
+            self.assertFalse((bundle_dir / "MANIFEST.md").exists())  # the script's own output, genuinely never written
+            self.assertFalse((repo.root / ".ai-review" / work_item_id / "review-bundle.tar.gz").exists())
+
+            script_path = self._install_scripts(repo)
+            result = subprocess.run(
+                ["bash", str(script_path), repo.base, "post-fix", work_item_id],
+                cwd=repo.root, capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            # No second durability commit: live HEAD is byte-identical to S.
+            self.assertEqual(repo.head(), s_sha)
+
+            # The manifest's own reviewed_implementation_head/generation_head
+            # fields both name S itself, not the earlier content commit
+            # impl_head -- write_manifest_...for_work_item's `head`
+            # defaults to (and this script never overrides it away from)
+            # live git HEAD, which is S once S is committed; item 227's
+            # own "reusing the same generation_head and reviewed_
+            # implementation_head" is this identity, not a copy of
+            # WORKFLOW_STATE.json's field of the same name. review_content_id
+            # is unaffected either way -- S touches only the excluded
+            # WORKFLOW_STATE.json path, contributing nothing to the diffed
+            # content between impl_head and S -- confirmed by this same
+            # assertion succeeding: REVIEW_REQUEST.md's review_content_id
+            # (computed against base..impl_head by _write_review_request)
+            # was independently reproduced by the script computing at
+            # base..S, or assert_review_request_states_review_content_id
+            # above would itself have refused.
+            manifest_text = (bundle_dir / "MANIFEST.md").read_text()
+            self.assertIn(f"reviewed_implementation_head: {s_sha}", manifest_text)
+            self.assertIn(f"generation_head: {s_sha}", manifest_text)
+            self.assertIn("implementation_revision: 1", manifest_text)
+
+            # No phase rewrite, no implementation_revision change: the
+            # durable WORKFLOW_STATE.json at S is exactly what this
+            # resume read and left untouched.
+            durable = json.loads((repo.root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
+            self.assertEqual(
+                durable["work_items"][work_item_id]["phase"], "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+            )
+            self.assertEqual(durable["work_items"][work_item_id]["implementation_revision"], 1)
+
     def test_valid_provenance_interval_with_excluded_only_commit_succeeds(self):
         """WF8B-003 remediation: `reviewed_implementation_head` need not
         equal `head_sha` exactly any more -- a bounded interval of
