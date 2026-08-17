@@ -4109,8 +4109,16 @@ def _acquire_guard_locked(repo_root: Path, work_item_id: str, *, body: dict,
 
     current, decidable = _current_owner_token(repo_root, work_item_id)
     reclaim = False
-    if decidable and held.get("holder_owner_token") != current:
-        reclaim = True                     # superseded epoch
+    if decidable and (current is None or held.get("holder_owner_token") != current):
+        # superseded epoch -- `current is None` (no claim at all) is
+        # unconditional: a guard with no backing claim has no possible
+        # legitimate holder regardless of what token it names, including
+        # the degenerate case where it names none at all (`item 372(a)`,
+        # a guard "planted by a session holding no current token" must
+        # never become a permanent false lock rather than superseding by
+        # construction only when its token happens to differ from
+        # `current`, which is vacuously false when both are `None`).
+        reclaim = True
     elif (role == "owner" and held.get("holder_owner_token") == holder_owner_token
           and held.get("holder_worktree_git_dir") == _worktree_git_dir(repo_root)):
         reclaim = True                     # this worktree's own leftover guard
@@ -4206,37 +4214,65 @@ def guard_clearance_authorization_literal(evidence: dict) -> str:
             f"observation {evidence.get('guard_observation_id')}")
 
 
+def _guard_observation_id(path: Path) -> str:
+    """`observation_id` over a guard file's raw bytes, extended to the
+    unreadable case the same way `observe_claim` extends it for claims
+    (`OPUS-R83-002`, `item 372(b)`/`(c)`): a symlinked or otherwise
+    unreadable guard gets a domain-tagged observation over what `lstat`
+    alone can say, rather than letting `_read_claim_bytes`'s raise
+    propagate uncontrolled out of `clear_malformed_guard` -- the one
+    caller here exists specifically to act on an undecidable guard, so
+    it must be able to observe one, not only a well-formed one."""
+    try:
+        raw = _read_claim_bytes(path)
+    except CheckpointOwnershipUnavailableError:
+        descriptor = describe_unreadable_record(path)
+        if descriptor is None:
+            raise
+        return unreadable_observation_id(descriptor)
+    return observation_id(raw)
+
+
 def clear_malformed_guard(repo_root: Path, work_item_id: str, *, user_authorization: str | None) -> None:
     """The defined recovery for a guard this implementation cannot have
-    written -- torn, wrong shape, or otherwise undecidable. Publication
-    is a same-directory temp file plus `os.link`, so a partially written
-    guard is not producible here; a guard that *is* undecidable was
-    corrupted by something else, and it fails closed for every session
-    including the legitimate owner. Left there, that is a permanent
-    lockout.
+    written -- torn, wrong shape, symlinked, or otherwise undecidable.
+    Publication is a same-directory temp file plus `os.link`, so a
+    partially written guard is not producible here; a guard that *is*
+    undecidable was corrupted by something else, and it fails closed for
+    every session including the legitimate owner. Left there, that is a
+    permanent lockout.
 
     The escape is explicit, user-authorized and observation-bound, never
     automatic and never time-based: the literal must quote the exact
     `guard_observation_id` the evidence reported, and the bytes must
-    still hash to it at the moment of removal."""
+    still hash to it at the moment of removal. A guard kind this design
+    never removes on its own -- a directory, matching `resolve_claim`'s
+    own `REPLACEABLE_UNREADABLE_KINDS` philosophy -- is refused rather
+    than unlinked."""
     path = guard_path(repo_root, work_item_id)
-    raw = _read_claim_bytes(path)
-    evidence = {"work_item_id": work_item_id, "guard_observation_id": observation_id(raw)}
+    evidence = {"work_item_id": work_item_id, "guard_observation_id": _guard_observation_id(path)}
     if user_authorization != guard_clearance_authorization_literal(evidence):
         raise CheckpointClaimTakeoverRefusedError(
             f"clearing a malformed mutation guard requires the literal authorization "
             f"{guard_clearance_authorization_literal(evidence)!r} -- refusing to remove a "
             f"guard on an inference")
     with guard_mutation_lock(repo_root, work_item_id):
-        current = _read_claim_bytes(path)
-        if observation_id(current) != evidence["guard_observation_id"]:
+        current_oid = _guard_observation_id(path)
+        if current_oid != evidence["guard_observation_id"]:
             raise CheckpointClaimTakeoverRefusedError(
                 f"{work_item_id!r}'s mutation guard changed between the evidence the user "
                 f"authorized ({evidence['guard_observation_id']}) and this clearance "
-                f"({observation_id(current)}) -- refusing, having removed nothing")
+                f"({current_oid}) -- refusing, having removed nothing")
         try:
             read_guard(repo_root, work_item_id)
         except CheckpointOwnershipUnavailableError:
+            descriptor = describe_unreadable_record(path)
+            if descriptor is not None and descriptor.get("kind") not in REPLACEABLE_UNREADABLE_KINDS:
+                raise CheckpointClaimTakeoverRefusedError(
+                    f"{work_item_id!r}'s mutation guard at {path} is a "
+                    f"{descriptor.get('kind')!r} -- this operation never removes that kind "
+                    f"of object; clear it by hand once that is independently established"
+                ) from None
             path.unlink(missing_ok=True)
             return
     raise CheckpointClaimTakeoverRefusedError(

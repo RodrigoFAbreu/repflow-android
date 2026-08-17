@@ -8540,6 +8540,432 @@ class TestCheckpointMutationGuard(unittest.TestCase):
                                  checkpoint_id="CP", step="1d", step_class="bogus", now="t2")
 
 
+class TestGuardFailureSurfaceItem372(unittest.TestCase):
+    """Item 372: the mutation guard's own failure surface, asserted since
+    the guard is itself a new shared object. Parts (a)-(e) and (g) below;
+    (f) (same-worktree concurrency, which needs real, separate OS
+    processes) is `TestSameWorktreeConcurrencyRealProcesses`; part (h)
+    (the global lock order conformance obligation) is a separate, larger
+    undertaking and is not attempted in this round."""
+
+    def test_a_guard_with_no_backing_claim_is_superseded_by_construction(self):
+        """Item 372(a): a guard planted by a session holding no current
+        token -- one that names `holder_owner_token=None` while no claim
+        exists at all -- is superseded by construction and never becomes
+        a permanent false lock. Before the fix below, `current is None`
+        (no claim) and `held["holder_owner_token"] is None` compared
+        equal, so the superseded-epoch branch never fired and no other
+        branch reclaimed it either -- reproduced here as the control
+        arm's shape, not merely asserted."""
+        with ScratchRepo() as repo:
+            self.assertIsNone(ws.resolve_claim(repo.root, "wi"))
+            ws._publish_guard(repo.root, "wi", {
+                "lease_id": "orphan-lease", "holder_owner_token": None,
+                "holder_worktree_git_dir": "/nowhere", "work_item_id": "wi",
+                "checkpoint_id": "CP", "step": "old-step", "step_class": ws.ORDINARY,
+                "acquired_at": "t0",
+            })
+            lease = ws.acquire_guard(repo.root, "wi", holder_owner_token="new-real-token",
+                                     checkpoint_id="CP", step="1d", step_class=ws.ORDINARY, now="t2")
+            self.assertNotEqual(lease["lease_id"], "orphan-lease")
+            ws.release_guard(repo.root, "wi", lease)
+
+    def test_b_undecidable_guard_fails_closed_for_every_session_including_the_owner(self):
+        """Item 372(b): a torn/unparseable guard fails closed for every
+        session, including one presenting the exact, currently valid
+        owner token -- `read_guard` raises before any token comparison
+        happens, so there is no privileged reader."""
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            ws.guard_path(repo.root, "wi").parent.mkdir(parents=True, exist_ok=True)
+            ws.guard_path(repo.root, "wi").write_text("{not json")
+            with self.assertRaises(ws.CheckpointOwnershipUnavailableError):
+                ws.read_guard(repo.root, "wi")
+            with self.assertRaises(ws.CheckpointOwnershipUnavailableError):
+                ws.acquire_guard(repo.root, "wi", holder_owner_token=claim["owner_token"],
+                                 checkpoint_id="CP", step="1d", step_class=ws.ORDINARY, now="t2")
+
+    def test_b_undecidable_guard_never_silently_deleted_by_a_release_path(self):
+        """Item 372(b): a release path that finds an undecidable guard
+        leaves it in place rather than deleting it -- the one place
+        fail-closed would quietly become fail-open otherwise. Exercised
+        directly against `_release_guard_path`, the primitive
+        `release_guard`/`owner_mutation`'s own `finally` calls."""
+        with ScratchRepo() as repo:
+            ws.guard_path(repo.root, "wi").parent.mkdir(parents=True, exist_ok=True)
+            ws.guard_path(repo.root, "wi").write_text("{not json")
+            ws._release_guard_path(repo.root, "wi", "whatever-lease-id")
+            self.assertTrue(ws.guard_path(repo.root, "wi").exists())
+            with self.assertRaises(ws.CheckpointOwnershipUnavailableError):
+                ws.read_guard(repo.root, "wi")
+
+    def test_b_clearance_refuses_generic_authorization_and_recovers_on_the_exact_one(self):
+        """Item 372(b): `clear_malformed_guard` refuses a generic
+        authorization and recovers only on the literal bound to the
+        guard's own observation id."""
+        with ScratchRepo() as repo:
+            ws.guard_path(repo.root, "wi").parent.mkdir(parents=True, exist_ok=True)
+            ws.guard_path(repo.root, "wi").write_text("{not json")
+            with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
+                ws.clear_malformed_guard(repo.root, "wi", user_authorization="clear it")
+            self.assertTrue(ws.guard_path(repo.root, "wi").exists())
+
+            evidence = {"work_item_id": "wi",
+                       "guard_observation_id": ws._guard_observation_id(ws.guard_path(repo.root, "wi"))}
+            literal = ws.guard_clearance_authorization_literal(evidence)
+            ws.clear_malformed_guard(repo.root, "wi", user_authorization=literal)
+            self.assertFalse(ws.guard_path(repo.root, "wi").exists())
+
+    def test_b_clearance_refuses_outright_on_a_well_formed_guard(self):
+        """Item 372(b): clearance only ever removes an undecidable
+        record -- presented against a well-formed guard, even with a
+        correctly-computed literal for its (decidable) observation, it
+        refuses and removes nothing."""
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            lease = ws.acquire_guard(repo.root, "wi", holder_owner_token=claim["owner_token"],
+                                     checkpoint_id="CP", step="1d", step_class=ws.ORDINARY, now="t2")
+            evidence = {"work_item_id": "wi",
+                       "guard_observation_id": ws._guard_observation_id(ws.guard_path(repo.root, "wi"))}
+            literal = ws.guard_clearance_authorization_literal(evidence)
+            with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
+                ws.clear_malformed_guard(repo.root, "wi", user_authorization=literal)
+            self.assertEqual(ws.read_guard(repo.root, "wi"), lease)
+            ws.release_guard(repo.root, "wi", lease)
+
+    def test_b_clearance_is_compare_and_delete_a_different_undecidable_guard_is_not_removed(self):
+        """Item 372(b): clearance's removal is a compare-and-delete on
+        the observed bytes, not merely a re-check that the record is
+        still undecidable -- an undecidable guard replaced by a
+        *different* undecidable guard between the authorization and the
+        unlink is not removed, since it is not the record the user
+        authorized clearing."""
+        with ScratchRepo() as repo:
+            path = ws.guard_path(repo.root, "wi")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("{not json, version A")
+            evidence = {"work_item_id": "wi", "guard_observation_id": ws._guard_observation_id(path)}
+            literal = ws.guard_clearance_authorization_literal(evidence)
+
+            # The guard changes to a *different* undecidable record before
+            # the authorized clearance runs.
+            path.unlink()
+            path.write_text("{not json, version B -- a different undecidable record")
+            with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
+                ws.clear_malformed_guard(repo.root, "wi", user_authorization=literal)
+            self.assertEqual(path.read_text(), "{not json, version B -- a different undecidable record")
+
+    def test_c_symlinked_guard_path_fails_closed_on_read_and_publish_target_untouched(self):
+        """Item 372(c): a symlinked guard path fails closed on both a
+        read and an attempted acquisition (publication), and the
+        off-tree symlink target is never opened or written through."""
+        with ScratchRepo() as repo:
+            claims = ws.claims_dir(repo.root)
+            claims.mkdir(parents=True, exist_ok=True)
+            off_tree_dir = Path(tempfile.mkdtemp(prefix="wf-guard-off-tree-"))
+            off_tree = off_tree_dir / "elsewhere.json"
+            off_tree.write_text("not a guard, untouched")
+            ws.guard_path(repo.root, "wi").symlink_to(off_tree)
+            try:
+                with self.assertRaises(ws.CheckpointOwnershipUnavailableError):
+                    ws.read_guard(repo.root, "wi")
+                with self.assertRaises(ws.CheckpointOwnershipUnavailableError):
+                    ws.acquire_guard(repo.root, "wi", holder_owner_token="tok",
+                                     checkpoint_id="CP", step="1d", step_class=ws.ORDINARY, now="t1")
+                self.assertEqual(off_tree.read_text(), "not a guard, untouched")
+            finally:
+                import shutil
+                shutil.rmtree(off_tree_dir, ignore_errors=True)
+
+    def test_c_clear_malformed_guard_recovers_a_symlinked_guard_target_untouched(self):
+        """Item 372(b)/(c) intersection: `clear_malformed_guard` -- the
+        documented recovery for an undecidable guard -- must itself be
+        able to observe and clear a *symlinked* guard, not only a torn
+        one, since `_read_claim_bytes` raises before ever returning bytes
+        for a symlink and a naive caller of it would propagate that raise
+        uncontrolled rather than the polished evidence-bound refusal."""
+        with ScratchRepo() as repo:
+            claims = ws.claims_dir(repo.root)
+            claims.mkdir(parents=True, exist_ok=True)
+            off_tree_dir = Path(tempfile.mkdtemp(prefix="wf-guard-off-tree-"))
+            off_tree = off_tree_dir / "elsewhere.json"
+            off_tree.write_text("not a guard, untouched")
+            path = ws.guard_path(repo.root, "wi")
+            path.symlink_to(off_tree)
+            try:
+                with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
+                    ws.clear_malformed_guard(repo.root, "wi", user_authorization="clear it")
+                self.assertTrue(path.is_symlink())
+
+                evidence = {"work_item_id": "wi", "guard_observation_id": ws._guard_observation_id(path)}
+                literal = ws.guard_clearance_authorization_literal(evidence)
+                ws.clear_malformed_guard(repo.root, "wi", user_authorization=literal)
+                self.assertFalse(path.exists())
+                self.assertFalse(path.is_symlink())
+                self.assertEqual(off_tree.read_text(), "not a guard, untouched")
+            finally:
+                import shutil
+                shutil.rmtree(off_tree_dir, ignore_errors=True)
+
+    def test_c_clear_malformed_guard_refuses_a_directory_guard_never_removes_it(self):
+        """Item 372(c) hardening: a directory at the guard path is
+        undecidable (`read_guard` raises `EISDIR`) but is not a kind this
+        design ever removes on its own -- matching `resolve_claim`'s own
+        `REPLACEABLE_UNREADABLE_KINDS` philosophy for the claim path --
+        so clearance refuses rather than raising `IsADirectoryError` out
+        of an `unlink()` it should never have attempted."""
+        with ScratchRepo() as repo:
+            path = ws.guard_path(repo.root, "wi")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.mkdir()
+            evidence = {"work_item_id": "wi", "guard_observation_id": ws._guard_observation_id(path)}
+            literal = ws.guard_clearance_authorization_literal(evidence)
+            with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
+                ws.clear_malformed_guard(repo.root, "wi", user_authorization=literal)
+            self.assertTrue(path.is_dir())
+
+    def test_d_guard_released_when_the_mutation_raises(self):
+        """Item 372(d): the guard is released on every exit path,
+        including a mutation that raises -- no residue left behind for
+        the next session to trip over."""
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            with self.assertRaises(RuntimeError):
+                with ws.owner_mutation(repo.root, "wi", claim["owner_token"], checkpoint_id="CP",
+                                       step="1d", step_class=ws.ORDINARY, now="t2"):
+                    raise RuntimeError("boom")
+            self.assertIsNone(ws.read_guard(repo.root, "wi"))
+
+    def test_d_release_is_compare_and_delete_a_different_current_guard_is_left_in_place(self):
+        """Item 372(d): release removes exactly the guard it compared
+        against (by `lease_id`) and no other -- releasing a stale lease
+        id the caller no longer actually holds must leave whatever guard
+        is currently published untouched, never delete it by pathname
+        alone."""
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            current = ws.acquire_guard(repo.root, "wi", holder_owner_token=claim["owner_token"],
+                                       checkpoint_id="CP", step="1d", step_class=ws.ORDINARY, now="t2")
+            ws._release_guard_path(repo.root, "wi", "a-stale-lease-id-not-held")
+            self.assertEqual(ws.read_guard(repo.root, "wi"), current)
+            ws.release_guard(repo.root, "wi", current)
+
+    def test_d_release_refuses_absent_lease_id_every_flavour(self):
+        """Item 372(d), extended (`OPUS-R84`/`OPUS-R85`): an absent
+        `lease_id` is a refusal, never a wildcard that removes whatever
+        guard is present -- both `None` and the empty string."""
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            lease = ws.acquire_guard(repo.root, "wi", holder_owner_token=claim["owner_token"],
+                                     checkpoint_id="CP", step="1d", step_class=ws.ORDINARY, now="t2")
+            for bogus in (None, ""):
+                with self.assertRaises(ws.CheckpointOwnershipUnavailableError):
+                    ws._release_guard_path(repo.root, "wi", bogus)
+            self.assertEqual(ws.read_guard(repo.root, "wi"), lease)
+            ws.release_guard(repo.root, "wi", lease)
+
+    def test_d_publish_exclusivity_holds_independent_of_the_mutation_lock(self):
+        """Item 372(d): `os.link`'s `EEXIST` exclusivity is retained
+        underneath `guard_mutation_lock` as defense in depth, not
+        replaced by it -- even a caller that bypasses the lock and calls
+        `_publish_guard` directly cannot silently overwrite an existing
+        guard."""
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            lease = ws.acquire_guard(repo.root, "wi", holder_owner_token=claim["owner_token"],
+                                     checkpoint_id="CP", step="1d", step_class=ws.ORDINARY, now="t2")
+            with self.assertRaises(FileExistsError):
+                ws._publish_guard(repo.root, "wi", {**lease, "lease_id": "bypassed"})
+            self.assertEqual(ws.read_guard(repo.root, "wi"), lease)
+            ws.release_guard(repo.root, "wi", lease)
+
+    def test_e_authorized_break_of_ordinary_guard_still_fences_the_broken_session(self):
+        """Item 372(e): an authorized break of an "ordinary" guard still
+        fences the session it broke -- its own compare-and-delete
+        release, presenting the lease it used to hold, cannot remove the
+        new owner's guard."""
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            broken = ws.acquire_guard(repo.root, "wi", holder_owner_token=claim["owner_token"],
+                                      checkpoint_id="CP", step="1d", step_class=ws.ORDINARY, now="t2")
+            new_owner = ws.acquire_guard(repo.root, "wi", holder_owner_token="a-different-token",
+                                         checkpoint_id="CP", step="1d", step_class=ws.ORDINARY, now="t3",
+                                         role="takeover", authorized_lease_id=broken["lease_id"])
+            self.assertNotEqual(new_owner["lease_id"], broken["lease_id"])
+            ws.release_guard(repo.root, "wi", broken)
+            self.assertEqual(ws.read_guard(repo.root, "wi"), new_owner)
+            ws.release_guard(repo.root, "wi", new_owner)
+
+    def test_e_takeover_refuses_when_lease_id_changed_since_the_authorization(self):
+        """Item 372(e): a guard whose `lease_id` changed since the
+        authorization proves the owner live (released and re-acquired,
+        or was reclaimed by someone else in the meantime) and refuses
+        the now-stale authorization."""
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            first = ws.acquire_guard(repo.root, "wi", holder_owner_token=claim["owner_token"],
+                                     checkpoint_id="CP", step="1d", step_class=ws.ORDINARY, now="t2")
+            ws.release_guard(repo.root, "wi", first)
+            second = ws.acquire_guard(repo.root, "wi", holder_owner_token=claim["owner_token"],
+                                      checkpoint_id="CP", step="1d", step_class=ws.ORDINARY, now="t3")
+            self.assertNotEqual(second["lease_id"], first["lease_id"])
+            with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
+                ws.acquire_guard(repo.root, "wi", holder_owner_token="another-token",
+                                 checkpoint_id="CP", step="1d", step_class=ws.ORDINARY, now="t4",
+                                 role="takeover", authorized_lease_id=first["lease_id"])
+            self.assertEqual(ws.read_guard(repo.root, "wi"), second)
+            ws.release_guard(repo.root, "wi", second)
+
+    def test_f_a_foreign_token_is_refused_by_assert_claim_owner(self):
+        """Item 372(f), second clause: a session presenting a token the
+        claim does not carry is refused. Acquiring the guard itself never
+        checks claim membership -- that is `assert_claim_owner`'s job,
+        inside the same window -- so a foreign token is admitted by
+        `acquire_guard` and only then refused by `owner_mutation`'s own
+        `assert_claim_owner` call; the guard is still released (the
+        `finally`) even though the refusal happens inside the window."""
+        with ScratchRepo() as repo:
+            ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            with self.assertRaises(ws.CheckpointOwnershipStateMismatchError):
+                with ws.owner_mutation(repo.root, "wi", "a-foreign-token", checkpoint_id="CP",
+                                       step="1d", step_class=ws.ORDINARY, now="t2"):
+                    pass
+            self.assertIsNone(ws.read_guard(repo.root, "wi"))
+
+    def test_g_s14_foreign_worktree_refusal_leaves_no_guard_residue(self):
+        """Item 372(g): the S14 refusal path (resume attempted from a
+        mismatched worktree, `docs/ai-workflow/dry-run/WF8B_SCENARIOS.md`)
+        still mutates nothing, creates no guard residue, and leaves the
+        claim record untouched now that the mutation guard exists
+        alongside the claim -- the S14->S15 path unchanged end to end."""
+        with ScratchRepo() as repo:
+            wt_holder = repo.worktree("holder")
+            ws.claim_checkpoint(wt_holder, "wi", "CP", now="t1")
+            before = ws.claim_path(repo.root, "wi").read_bytes()
+            wi = _base_work_item(current_checkpoint_id="CP",
+                                 checkpoints={"CP": {"status": "IN_PROGRESS"}})
+            with self.assertRaises(ws.WorktreeIdentityMissingError):
+                ws.resolve_checkpoint_ownership(repo.root, wi, "wi", "CP", now="t2")
+            after = ws.claim_path(repo.root, "wi").read_bytes()
+            self.assertEqual(before, after)
+            self.assertIsNone(ws.read_guard(repo.root, "wi"))
+
+
+_GUARD_WORKER_SOURCE = """
+import json
+import sys
+import time
+from pathlib import Path
+
+import workflow_state as ws
+
+mode = sys.argv[1]
+repo_root = Path(sys.argv[2])
+work_item_id = sys.argv[3]
+checkpoint_id = sys.argv[4]
+holder_owner_token = sys.argv[5]
+step_class = sys.argv[6]
+now = sys.argv[7]
+out_path = Path(sys.argv[8])
+
+if mode == "hold":
+    ready_path = Path(sys.argv[9])
+    release_path = Path(sys.argv[10])
+    lease = ws.acquire_guard(repo_root, work_item_id, holder_owner_token=holder_owner_token,
+                             checkpoint_id=checkpoint_id, step="1f-commit", step_class=step_class,
+                             now=now)
+    ready_path.write_text(json.dumps(lease))
+    deadline = time.monotonic() + 15
+    while not release_path.exists():
+        if time.monotonic() > deadline:
+            out_path.write_text(json.dumps({"outcome": "timeout"}))
+            sys.exit(0)
+        time.sleep(0.001)
+    out_path.write_text(json.dumps({"outcome": "held_to_completion", "lease_id": lease["lease_id"]}))
+elif mode == "reclaim":
+    try:
+        lease = ws.acquire_guard(repo_root, work_item_id, holder_owner_token=holder_owner_token,
+                                 checkpoint_id=checkpoint_id, step="1d", step_class=step_class,
+                                 now=now)
+        ws.release_guard(repo_root, work_item_id, lease)
+        out_path.write_text(json.dumps({"outcome": "success", "lease_id": lease["lease_id"]}))
+    except ws.CheckpointOwnershipUnavailableError as exc:
+        out_path.write_text(json.dumps({"outcome": "refused", "detail": str(exc)}))
+"""
+
+
+class TestSameWorktreeConcurrencyRealProcesses(unittest.TestCase):
+    """Item 372(f): same-worktree concurrency is honestly out of scope,
+    not falsely fenced, and the assertion is the one the specified
+    mechanism can satisfy -- proven with real, separate OS processes,
+    since a single process/thread fixture cannot reproduce two
+    independent holders (mirroring `TestRealProcessConcurrentTakeover`'s
+    own reasoning, applied to the guard rather than the claim). The
+    corresponding cross-worktree half is item 373(f), not this item."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._scripts_dir = Path(__file__).resolve().parent
+        cls._worker_dir = Path(tempfile.mkdtemp(prefix="wf-guard-worker-"))
+        cls._worker = cls._worker_dir / "_guard_worker.py"
+        cls._worker.write_text(_GUARD_WORKER_SOURCE)
+
+    @classmethod
+    def tearDownClass(cls):
+        import shutil
+        shutil.rmtree(cls._worker_dir, ignore_errors=True)
+
+    def _spawn(self, *args) -> subprocess.Popen:
+        env = dict(os.environ)
+        env["PYTHONPATH"] = str(self._scripts_dir) + (
+            os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+        return subprocess.Popen([sys.executable, str(self._worker), *[str(a) for a in args]], env=env)
+
+    def test_second_process_reclaims_first_process_destructive_guard_windows_open_simultaneously(self):
+        with ScratchRepo() as repo:
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            token = claim["owner_token"]
+            with tempfile.TemporaryDirectory(prefix="wf-guard-io-") as scratch:
+                scratch_path = Path(scratch)
+                ready = scratch_path / "ready"
+                release = scratch_path / "release"
+                out_hold = scratch_path / "out_hold.json"
+                out_reclaim = scratch_path / "out_reclaim.json"
+
+                holder = self._spawn("hold", repo.root, "wi", "CP", token, ws.DESTRUCTIVE, "t2",
+                                     out_hold, ready, release)
+                try:
+                    deadline = time.monotonic() + 15
+                    while not ready.exists():
+                        self.assertLess(time.monotonic(), deadline,
+                                        "holder did not become ready in time")
+                        time.sleep(0.001)
+                    first_lease = json.loads(ready.read_text())
+                    self.assertEqual(first_lease["step_class"], ws.DESTRUCTIVE)
+
+                    reclaimer = self._spawn("reclaim", repo.root, "wi", "CP", token, ws.ORDINARY,
+                                            "t3", out_reclaim)
+                    self.assertEqual(reclaimer.wait(timeout=15), 0)
+                    result = json.loads(out_reclaim.read_text())
+                    self.assertEqual(result["outcome"], "success", result)
+                    self.assertNotEqual(result["lease_id"], first_lease["lease_id"])
+
+                    # Both windows open simultaneously: the reclaim above
+                    # returned without waiting for the holder, which is
+                    # still parked right now -- the "they serialize"
+                    # control arm the item text names must fail, and does.
+                    self.assertIsNone(
+                        holder.poll(),
+                        "the holder process already exited -- the reclaim must not wait for "
+                        "it, but something serialized them")
+                finally:
+                    release.write_text("go")
+                    holder.wait(timeout=15)
+
+                held_result = json.loads(out_hold.read_text())
+                self.assertEqual(held_result["outcome"], "held_to_completion")
+
+
 class TestExplicitTakeover(unittest.TestCase):
     def test_takeover_requires_exact_literal(self):
         with ScratchRepo() as repo:
