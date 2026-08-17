@@ -713,6 +713,16 @@
       "item": 375,
       "evidence": "workflow_state_test.TestCheckpointOriginationReference",
       "note": "New this round (batch 17): the origination reference's own measured-strength limits, asserted rather than asserted away"
+    },
+    {
+      "item": 224,
+      "evidence": "workflow_state_test.TestSameContentRepublicationEndToEnd.test_single_republication_then_full_interval_validates",
+      "note": "New this round (batch 18): live HEAD moved past T through a legitimate excluded-only commit resolves same_content and record_bundle_generation's same-content outcome creates exactly one new, non-revision-advancing commit S2 -- verified end to end through the approval gate itself"
+    },
+    {
+      "item": 228,
+      "evidence": "workflow_fingerprint_generalization_test.TestPrepareAiReviewShImplementationStageHeadGuard.test_repeat_generation_of_same_round_is_idempotent",
+      "note": "New this round (batch 18): real prepare-ai-review.sh execution -- regenerating the bundle a second time for the exact same durable round (unchanged head/revision) succeeds without any additional revision bump or WORKFLOW_STATE.json write"
     }
   ]
 }
