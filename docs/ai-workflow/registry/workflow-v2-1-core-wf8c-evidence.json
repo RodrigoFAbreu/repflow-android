@@ -538,6 +538,16 @@
       "item": 226,
       "evidence": "workflow_state_test.TestRecordBundleGeneration.test_interrupted_before_durability_commit_resumes_deterministically",
       "note": "New test (no prior coverage existed): record_bundle_generation is a pure state -> state mutator that never touches its input in place, so an interrupted first call (never persisted or committed) leaves the state a fresh session reads unchanged, and re-attempting the identical call from that same starting state is deterministic -- implementation_revision lands on exactly 1, never doubly advanced by the discarded first attempt"
+    },
+    {
+      "item": 270,
+      "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_forked_supersedes_trailer_is_genuine_ambiguity_refuses",
+      "note": "New test (no prior coverage existed): a forked Workflow-Supersedes trailer -- two distinct commits each claiming to recover the same prior generation-record commit T, rather than one recovering the other -- is refused as AmbiguousBundleGenerationRecordTrailerError by _bundle_generation_record_chain_tip's own tie-break, exactly as its docstring predicts for a fork (two candidates each unsuperseded); the only prior fork test (test_second_unexpected_descendant_with_same_trailer_value_refuses) forks the plain ordinary two-trailer role, never the three-trailer recovered one item 270 specifically describes"
+    },
+    {
+      "item": 269,
+      "evidence": "workflow_state_test.TestImplementationProvenanceRecoveryEndToEnd.test_second_sequential_recovery_chain_validates",
+      "note": "Pre-existing test: builds the exact P -> S -> U_1 -> S2 -> U_2 -> S3 chain item 269 describes (two sequential recoveries) and confirms verify_implementation_provenance_interval validates the full interval end to end -- S and S2 each satisfying their own generation-record role contract, U_1 and U_2 classified excluded-only -- rather than accepting a shortcut interval computed directly from P to S3; the refusal-side half of the item (any single non-terminal commit instead protected/unclassified/role-invalid) is covered generically by sibling tests in the same class and TestImplementationProvenanceInterval"
     }
   ]
 }

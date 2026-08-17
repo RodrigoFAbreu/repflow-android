@@ -4557,6 +4557,39 @@ class TestImplementationProvenanceInterval(unittest.TestCase):
             with self.assertRaises(ws.AmbiguousBundleGenerationRecordTrailerError):
                 ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base)
 
+    def test_forked_supersedes_trailer_is_genuine_ambiguity_refuses(self):
+        """Item 270 (`WF8c`): two distinct commits each carrying
+        `Workflow-Supersedes: <T-sha>` -- both claiming to recover the
+        *same* prior generation-record commit `T`, rather than one
+        recovering the other -- is refused as genuine, unresolved
+        ambiguity, never auto-resolved by recency or commit order.
+        `_bundle_generation_record_chain_tip`'s own docstring predicts
+        this exact outcome (a fork leaves more-than-one verified tip
+        survivor), but no prior test actually constructed a forked
+        `Workflow-Supersedes` edge -- `test_second_unexpected_descendant_
+        with_same_trailer_value_refuses` above only forks the plain
+        two-trailer ordinary role, never the three-trailer recovered one."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            t = _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            repo.commit("unrelated excluded commit", filename="docs/notes.md")
+            recovered_state = state | {"state_revision": state["state_revision"] + 1}
+            _commit_state_only(
+                repo, self.WI, recovered_state, "recover a",
+                trailers=_recovered_trailers(self.WI, 1, t),
+            )
+            recovered_state_b = recovered_state | {"last_transition": "t1-recover-b"}
+            _commit_state_only(
+                repo, self.WI, recovered_state_b, "recover b (also claims to supersede T, not A)",
+                trailers=_recovered_trailers(self.WI, 1, t),
+            )
+            work_item = state | {"work_item_id": self.WI}
+            with self.assertRaises(ws.AmbiguousBundleGenerationRecordTrailerError):
+                ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base)
+
     def test_side_branch_merge_topology_refuses(self):
         """`reviewed_implementation_head` is genuinely reachable from T,
         but only through a merge's non-first-parent side -- T's own
