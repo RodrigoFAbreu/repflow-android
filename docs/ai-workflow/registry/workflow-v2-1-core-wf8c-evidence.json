@@ -548,6 +548,21 @@
       "item": 269,
       "evidence": "workflow_state_test.TestImplementationProvenanceRecoveryEndToEnd.test_second_sequential_recovery_chain_validates",
       "note": "Pre-existing test: builds the exact P -> S -> U_1 -> S2 -> U_2 -> S3 chain item 269 describes (two sequential recoveries) and confirms verify_implementation_provenance_interval validates the full interval end to end -- S and S2 each satisfying their own generation-record role contract, U_1 and U_2 classified excluded-only -- rather than accepting a shortcut interval computed directly from P to S3; the refusal-side half of the item (any single non-terminal commit instead protected/unclassified/role-invalid) is covered generically by sibling tests in the same class and TestImplementationProvenanceInterval"
+    },
+    {
+      "item": 181,
+      "evidence": "workflow_state_test.TestApplyScopedRemediationAcceptance.test_is_pure_no_side_effects_until_caller_persists_and_commits",
+      "note": "New this round (batch 12): the same interrupted-acceptance atomicity property item 180 is already bound to, read from item 181's own resume-side framing -- apply_scoped_remediation_acceptance never mutates its input and produces no commit by itself, so a crash between the state write and the caller's own commit step leaves nothing persisted; a fresh session's checkpoint selection, which discovers acceptance only via a committed Workflow-Scoped-Remediation-Acceptance trailer, therefore treats the interrupted attempt exactly as if it never happened"
+    },
+    {
+      "item": 240,
+      "evidence": "workflow_state_test.TestResolveBundleGenerationOutcome.test_deleted_or_corrupted_manifest_does_not_affect_outcome",
+      "note": "New this round (batch 12): item 240 states outright that its own guarantee is 'consistent with existing item 225's own guarantee' -- same test, same underlying fact (resolve_bundle_generation_outcome never reads .ai-review/<work_item_id>/current/MANIFEST.md, so implementation_revision advancement never depends on it, deleted/corrupted or not)"
+    },
+    {
+      "item": 266,
+      "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_exact_reviewed_head_zero_gap_is_reachable",
+      "note": "New this round (batch 12): the same positive case item 262 is already bound to -- an ordinary S carrying exactly the canonical two-trailer set, discovered by the scoped lookup, is validated by verify_implementation_provenance_interval's own terminal-commit role-specific check, which item 266's revision-34 text restates over the corrected five-field set (phase/reviewed_implementation_head/implementation_revision/state_revision/last_transition); the test's t == result assertion is exactly that check succeeding"
     }
   ]
 }
