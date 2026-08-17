@@ -4456,6 +4456,44 @@ class TestImplementationProvenanceInterval(unittest.TestCase):
             self.assertEqual(result, t)
             self.assertTrue(ws.implementation_provenance_interval_reachable(repo.root, work_item, repo.base))
 
+    def test_full_sequence_reaches_awaiting_functional_review_via_technical_approval(self):
+        """Item 215 (`WF8c`): the whole `/approve-review implementation`
+        sequence -- a protected commit `P`, `record_bundle_generation`'s
+        own durability commit `S`, the gate's own
+        `verify_implementation_provenance_interval` check
+        (`approve-review.md` step, before any approval is applied), and
+        finally `apply_technical_approval` -- composed end to end reaches
+        `AWAITING_FUNCTIONAL_REVIEW` with `technical_approval.status ==
+        CURRENT`, exercising `D-Approval-Commits`' revised ordering as one
+        real sequence rather than each half in isolation (the gate check
+        and the state write are each already covered separately by this
+        class and by `TestApprovalStateWrites`)."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            provenance_state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            t = _commit_state_only(
+                repo, self.WI, provenance_state, "record gen", trailers=_record_trailers(self.WI, 1),
+            )
+            work_item = provenance_state | {"work_item_id": self.WI}
+
+            # The gate itself: must find a valid interval, naming S, before
+            # any approval is even attempted.
+            self.assertEqual(ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base), t)
+
+            state = _base_state(**{self.WI: provenance_state})
+            record = ws.build_approval_record(
+                basis="USER_OVERRIDE", stage="implementation", user_confirmation="approve wi implementation",
+                now="t2", reviewed_bundle_id="bundle-1", approved_review_content_id="content-1",
+                review_content_manifest=[], reviewed_content_commit=t,
+            )
+            new_state = ws.apply_technical_approval(state, self.WI, record, now="t2")
+            new_work_item = new_state["work_items"][self.WI]
+            self.assertEqual(new_work_item["phase"], "AWAITING_FUNCTIONAL_REVIEW")
+            self.assertEqual(new_work_item["technical_approval"]["status"], "CURRENT")
+            self.assertEqual(new_work_item["technical_approval"]["reviewed_content_commit"], t)
+
     def test_one_excluded_commit_between_p_and_t_is_reachable(self):
         """A single excluded-only commit (mirroring a docs/outcome-record
         commit) lands between P and T -- still a valid interval, since it
@@ -4470,6 +4508,49 @@ class TestImplementationProvenanceInterval(unittest.TestCase):
             work_item = state | {"work_item_id": self.WI}
             result = ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base)
             self.assertEqual(result, t)
+
+    def test_protected_commit_refused_at_both_preflight_and_gate_independently(self):
+        """Item 217 (`WF8c`): a genuine protected-implementation-path
+        commit landing between `reviewed_implementation_head` and the
+        attempted generation/approval point is refused independently at
+        both call sites sharing `_classify_generation_record_interval` --
+        `verify_implementation_provenance_interval` (`/approve-review
+        implementation`'s own gate, its `P..T` walk) and
+        `resolve_bundle_generation_outcome` (bundle-generation preflight,
+        its own `T..head` walk) -- each naming the offending commit in
+        its own raised exception, never silently treating the interval as
+        authorized."""
+        # Gate side: an unreviewed protected commit lands strictly between
+        # P and the generation-record commit T itself.
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            intruder = repo.commit("unreviewed protected edit", filename="src/Bar.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            work_item = state | {"work_item_id": self.WI}
+            with self.assertRaises(ws.ProtectedPathInProvenanceIntervalError) as gate_ctx:
+                ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base)
+            self.assertIn(intruder, str(gate_ctx.exception))
+
+        # Preflight side: an edit-then-byte-identical-revert nets out
+        # content-identical at head, but the interval itself still
+        # contains the offending, never-reviewed commit.
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = _write_and_commit(repo, "src/Foo.kt", "v1\n", "protected v1")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            intruder = _write_and_commit(repo, "src/Foo.kt", "v2\n", "unreviewed protected edit")
+            head = _write_and_commit(repo, "src/Foo.kt", "v1\n", "protected revert")
+            work_item = state | {"work_item_id": self.WI, "work_item_type": "process"}
+            with self.assertRaises(ws.ProtectedPathInProvenanceIntervalError) as preflight_ctx:
+                ws.resolve_bundle_generation_outcome(
+                    repo.root, work_item, base_commit=repo.base, head=head,
+                )
+            self.assertIn(intruder, str(preflight_ctx.exception))
 
     def test_unrelated_descendant_commit_after_t_refuses(self):
         """Live HEAD is one commit past the discovered T -- the exact

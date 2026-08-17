@@ -563,6 +563,16 @@
       "item": 266,
       "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_exact_reviewed_head_zero_gap_is_reachable",
       "note": "New this round (batch 12): the same positive case item 262 is already bound to -- an ordinary S carrying exactly the canonical two-trailer set, discovered by the scoped lookup, is validated by verify_implementation_provenance_interval's own terminal-commit role-specific check, which item 266's revision-34 text restates over the corrected five-field set (phase/reviewed_implementation_head/implementation_revision/state_revision/last_transition); the test's t == result assertion is exactly that check succeeding"
+    },
+    {
+      "item": 215,
+      "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_full_sequence_reaches_awaiting_functional_review_via_technical_approval",
+      "note": "New this round (batch 13): composes the two already-separately-tested halves (the gate's own P..T interval check and apply_technical_approval's state write) into one real sequence -- P, record_bundle_generation's durability commit S, verify_implementation_provenance_interval confirming S, then apply_technical_approval -- reaching AWAITING_FUNCTIONAL_REVIEW with technical_approval.status == CURRENT, D-Approval-Commits' revised ordering exercised end to end rather than each half in isolation"
+    },
+    {
+      "item": 217,
+      "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_protected_commit_refused_at_both_preflight_and_gate_independently",
+      "note": "New this round (batch 13): a genuine protected commit landing between reviewed_implementation_head and the attempted generation/approval point is refused independently at both call sites sharing _classify_generation_record_interval -- verify_implementation_provenance_interval (the P..T gate, previously untested for this exact refusal shape in this class) and resolve_bundle_generation_outcome (the T..head preflight) -- each assertion checking the offending commit's own SHA appears in the raised exception message, the item's own 'naming the offending commit' requirement"
     }
   ]
 }
