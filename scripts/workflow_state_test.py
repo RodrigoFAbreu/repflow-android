@@ -4561,6 +4561,87 @@ class TestImplementationProvenanceInterval(unittest.TestCase):
             self.assertEqual(new_work_item["technical_approval"]["status"], "CURRENT")
             self.assertEqual(new_work_item["technical_approval"]["reviewed_content_commit"], t)
 
+    def test_ordinary_approve_path_never_durably_reads_awaiting_technical_approval(self):
+        """Item 282 (`WF8c`, `GPT-R51-001`): the real ordinary `APPROVE`
+        path, end to end -- `P -> S`; external feedback `APPROVE` binds
+        exactly to `S`'s own bundle_id; `resolve_approval_basis` resolves
+        `EXTERNAL_APPROVE` (never prompting for override text, missing-test
+        item 13); the resulting single `apply_technical_approval` write
+        lands on `AWAITING_FUNCTIONAL_REVIEW`. The work item's `phase`
+        field is never, at any point in this sequence, the literal string
+        `'AWAITING_TECHNICAL_APPROVAL'` -- that name is exclusively
+        `technical_approval_gate_reachable`'s own computed gate (`D-States`),
+        never a value this repository's `WORKFLOW_STATE.json` durably
+        records, exactly as items 282/283's own text states."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            provenance_state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            t = _commit_state_only(
+                repo, self.WI, provenance_state, "record gen", trailers=_record_trailers(self.WI, 1),
+            )
+            work_item = provenance_state | {"work_item_id": self.WI}
+            self.assertEqual(ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base), t)
+            self.assertNotEqual(work_item["phase"], "AWAITING_TECHNICAL_APPROVAL")
+
+            current_bundle_id = "bundle-B1"
+            basis = ws.resolve_approval_basis(
+                latest_round_status="APPROVE", feedback_bundle_id=current_bundle_id,
+                current_bundle_id=current_bundle_id, user_confirmation="approve wi implementation",
+                work_item_id=self.WI, stage="implementation",
+            )
+            self.assertEqual(basis, "EXTERNAL_APPROVE")
+
+            state = _base_state(**{self.WI: provenance_state})
+            record = ws.build_approval_record(
+                basis=basis, stage="implementation", user_confirmation="approve wi implementation",
+                now="t2", reviewed_bundle_id=current_bundle_id, approved_review_content_id="content-1",
+                review_content_manifest=[], reviewed_content_commit=t,
+            )
+            new_state = ws.apply_technical_approval(state, self.WI, record, now="t2")
+            new_work_item = new_state["work_items"][self.WI]
+            self.assertEqual(new_work_item["phase"], "AWAITING_FUNCTIONAL_REVIEW")
+            self.assertNotEqual(new_work_item["phase"], "AWAITING_TECHNICAL_APPROVAL")
+            self.assertEqual(new_work_item["technical_approval"]["status"], "CURRENT")
+            self.assertEqual(new_work_item["technical_approval"]["basis"], "EXTERNAL_APPROVE")
+
+    def test_fresh_session_restart_before_approval_leaves_gate_reachable_from_durable_state_alone(self):
+        """Item 283 (`WF8c`, `GPT-R51-001`): a fresh-session restart
+        between `B1` receiving `APPROVE` and the user invoking
+        `/approve-review implementation` -- re-reading `S`'s own committed
+        content directly (`_read_json_at_commit_or_empty`, never any
+        in-memory carryover from the session that generated the bundle)
+        shows `phase` durably `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`
+        with no `technical_approval` record, and
+        `technical_approval_gate_reachable` -- fed only values re-derived
+        from that fresh read plus a fresh
+        `verify_implementation_provenance_interval` HEAD-match check, no
+        session-local state of any kind -- still reachable."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            provenance_state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            t = _commit_state_only(
+                repo, self.WI, provenance_state, "record gen", trailers=_record_trailers(self.WI, 1),
+            )
+
+            # Fresh session: re-read S's own committed content directly,
+            # never anything carried over from the generating session.
+            fresh_committed = ws._read_json_at_commit_or_empty(repo.root, t, STATE_REL_PATH)
+            fresh_work_item = fresh_committed["work_items"][self.WI] | {"work_item_id": self.WI}
+            self.assertEqual(fresh_work_item["phase"], "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW")
+            self.assertNotIn("technical_approval", fresh_work_item)
+
+            resolved_t = ws.verify_implementation_provenance_interval(repo.root, fresh_work_item, repo.base)
+            head_matches = resolved_t == repo.head()
+            self.assertTrue(head_matches)
+            self.assertTrue(ws.technical_approval_gate_reachable(
+                latest_round_status="APPROVE", protected_path_dirty=False,
+                head_matches_reviewed_implementation_head=head_matches,
+            ))
+
     def test_one_excluded_commit_between_p_and_t_is_reachable(self):
         """A single excluded-only commit (mirroring a docs/outcome-record
         commit) lands between P and T -- still a valid interval, since it
