@@ -838,8 +838,101 @@
       "item": 312,
       "evidence": "workflow_state_test.TestSameContentRepublicationFromSelfReviewingImplementation.test_both_source_phases_independently_satisfy_the_role_contract",
       "note": "New this round (batch 25): new test in the same new class, building one short same-content-republication chain from each of the two source phases (APPLYING_REVIEW_FEEDBACK/post-fix and SELF_REVIEWING_IMPLEMENTATION/implementation) from a common T, and validating each resulting terminal commit directly via validate_bundle_generation_record_commit -- confirming both independently satisfy condition 4's now-three-combination recovered-role contract, distinguished only by which real phase transition each records."
+    },
+    {
+      "item": 250,
+      "evidence": "workflow_state_test.TestVerifyImplementationProvenanceRecovery.test_illegal_source_phase_refused",
+      "note": "Phase-gate refusal, naming the actual phase and the (now single, per GPT-R51-001/revision 34, D-Commit-Provenance recovery topology) legal phase. Item 250's own text still carries its pre-revision-34 two-phase wording (revision 34's fix log promised an in-place correction to this item that was never mechanically applied to the item text) -- the installed IllegalImplementationProvenanceRecoverySourcePhaseError/verify_implementation_provenance_recovery genuinely enforce the corrected single-legal-phase design, and the cited test's assertion message names both the actual phase and the legal one, discharging the item's operative requirement."
+    },
+    {
+      "item": 251,
+      "evidence": "workflow_state_test.TestValidateImplementationProvenanceRecoveryConfirmation.test_exact_work_item_and_commit_accepted",
+      "note": "New this round: /recover-implementation-provenance previously had only a prose \"wait for go-ahead\" gate with no literal-text-matching guard at all. Added workflow_state.validate_implementation_provenance_recovery_confirmation (sibling to validate_user_confirmation, since recovery is not an APPROVAL_STAGES member) requiring the confirmation text to literally name both the exact work_item_id and the exact superseded commit SHA, and wired it into recover-implementation-provenance.md step 4. TestValidateImplementationProvenanceRecoveryConfirmation (5 tests) covers empty text, generic go-ahead with no SHA, missing work_item_id, wrong commit, and the accepting case."
+    },
+    {
+      "item": 255,
+      "evidence": "workflow_state_test.TestImplementationProvenanceRecoveryEndToEnd.test_single_recovery_then_full_interval_validates",
+      "note": "Recovered-role S2 half of the strengthened terminal-check regression guard (a well-formed recovered round passes). The ordinary-S half is already covered by items 245-246 (IMPLEMENTED/WF8b, TestImplementationProvenanceInterval's own regression coverage), so this test discharges the item's only genuinely WF8c-owed half."
+    },
+    {
+      "item": 256,
+      "evidence": "workflow_state_test.TestImplementationProvenanceRecoveryEndToEnd.test_single_recovery_then_full_interval_validates",
+      "note": "A bundle staled by a concurrent excluded-only commit while still AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW (before any technical-approval attempt) is recovered via /recover-implementation-provenance -- exactly this test's whole scenario, which never leaves that phase."
+    },
+    {
+      "item": 257,
+      "evidence": "workflow_state_test.TestApplyImplementationProvenanceRecovery.test_bumps_state_revision_and_last_transition_only",
+      "note": "Post-recovery phase reads AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW, never AWAITING_TECHNICAL_APPROVAL -- directly asserted. \"Regardless of which of the two legal source phases\" is vacuous under the corrected single-legal-phase design (see item 250's note); the invariant the item actually cares about (uniform post-recovery target) is what this test proves."
+    },
+    {
+      "item": 258,
+      "evidence": "workflow_state_test.TestImplementationProvenanceRecoveryApprovalGateInteraction.test_full_round_trip_approve_recover_stale_refused_fresh_approve",
+      "note": "New this round: new test class tying together the pre-existing, generic resolve_approval_basis exact-bundle_id-match rule (D2/WFR-03) with a real recovery chain, proving B1's pre-recovery APPROVE is refused against B2 (the post-recovery bundle) with no new staleness mechanism -- the existing exact-match rule alone suffices."
+    },
+    {
+      "item": 259,
+      "evidence": "workflow_state_test.TestImplementationProvenanceRecoveryApprovalGateInteraction.test_full_round_trip_approve_recover_stale_refused_fresh_approve",
+      "note": "New this round: same test's full round trip -- B1 APPROVE, excluded-only commit, recovery to B2, B1's stale feedback refused against B2, fresh B2 APPROVE succeeds via EXTERNAL_APPROVE -- with implementation_revision/reviewed_implementation_head asserted unchanged throughout."
+    },
+    {
+      "item": 288,
+      "evidence": "workflow_state_test.TestVerifyImplementationProvenanceRecovery.test_protected_commit_in_interval_propagates_underlying_error",
+      "note": "record_bundle_generation's same-content-republication branch and /recover-implementation-provenance both resolve their outcome via the identical, single resolve_bundle_generation_outcome/_classify_generation_record_interval function (WF8c (c)'s own \"never a second, separately maintained copy\" design) -- so the fail-closed backstop this test proves for a protected-path interval commit applies identically to both callers by construction, not by a second, separately-tested branch. The unclassified-path and role-invalid-historical-commit variants are the same function's test_unclassified_path_added_then_removed_in_interval_refuses_naming_the_commit and test_malformed_ordinary_s_refuses_whole_interval_even_with_valid_recovery_after respectively."
+    },
+    {
+      "item": 290,
+      "evidence": "workflow_state_test.TestResolveBundleGenerationOutcome.test_item_290_genuine_content_diff_resolves_ordinary_even_after_excluded_commits",
+      "note": "New this round: new test proving a genuine protected-content diff resolves (\"ordinary\", None) even when preceded by multiple legitimate excluded-only commits, never routed to the same-content-republication branch."
+    },
+    {
+      "item": 291,
+      "evidence": "workflow_state_test.TestImplementationProvenanceRecoveryEndToEnd.test_single_recovery_then_full_interval_validates",
+      "note": "The compound claim -- both post-fix outcomes independently reproducible after a fresh-session restart, plus the caller-level no-op resume outcome independently reproducible -- is discharged by composition: every TestResolveBundleGenerationOutcome test (test_content_differs_resolves_ordinary for the ordinary outcome, test_identical_content_with_clean_excluded_interval_resolves_same_content for same-content) is itself a fresh ScratchRepo plus one direct Git-derived call, i.e. a fresh-session read by construction; and this test's own lines proving a retry once S2 is already the current tip raises ImplementationProvenanceRecoveryNotApplicableError (idempotent no-op, no second superseding commit, re-resolves to the same S2) is exactly the caller-level resume contract's no-op outcome, reproduced from a fresh read each time."
+    },
+    {
+      "item": 292,
+      "evidence": "workflow_state_test.TestRecoveredRoleThreeCombinationValidation.test_item_292_both_recovery_and_republication_parent_phases_independently_validate",
+      "note": "New this round: new test class TestRecoveredRoleThreeCombinationValidation, calling validate_bundle_generation_record_commit directly against hand-built recovered-role commits for both the recovery-shaped (parent phase AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW) and republication-shaped (parent phase APPLYING_REVIEW_FEEDBACK) combinations, both independently validating."
+    },
+    {
+      "item": 293,
+      "evidence": "workflow_state_test.TestRecoveredRoleThreeCombinationValidation.test_item_293_awaiting_technical_approval_parent_phase_refused",
+      "note": "New this round: a recovered-role commit whose parent phase is the now-durably-unreachable AWAITING_TECHNICAL_APPROVAL is refused as malformed, naming the phase, even though its trailer/field set is otherwise well-formed."
+    },
+    {
+      "item": 294,
+      "evidence": "workflow_state_test.TestRecoveredRoleThreeCombinationValidation.test_item_294_wrong_committed_phase_refused_despite_legal_parent",
+      "note": "New this round: a recovered-role commit with a legal republication parent phase (APPLYING_REVIEW_FEEDBACK) but a value-unchanged committed phase (the recovery shape, not the required real transition) is refused -- confirming the committed-phase requirement is unconditional and the validator has no notion of \"which command produced this,\" only committed parent/child state."
+    },
+    {
+      "item": 313,
+      "evidence": "workflow_state_test.TestRecoveredRoleThreeCombinationValidation.test_item_313_self_reviewing_parent_wrong_committed_phase_and_illegal_parent_both_refused",
+      "note": "New this round: the symmetric SELF_REVIEWING_IMPLEMENTATION-parent mismatch (committed phase left value-unchanged instead of performing the real transition), plus a wholly illegal parent phase (IMPLEMENTING, outside all three combinations) -- both refused, the three-combination analogue of item 294."
+    },
+    {
+      "item": 284,
+      "evidence": "workflow_state_test.TestApprovalGateReachability.test_technical_gate_reachable_when_clean_and_matching",
+      "note": "Item 284's own text cites revision 35 (GPT-R51-002), which narrowed AWAITING_TECHNICAL_APPROVAL to APPROVE-only. That narrowing was itself walked back by revision 38 (GPT-R54-001, see D-States' own revision-history header): the entry condition is a positive-membership test admitting either REVISE or APPROVE (never BLOCK), unchanged through revision 90. Item 284's text was never mechanically updated to reflect the revision-38 reversal (the same class of drift as item 250's stale wording). The installed technical_approval_gate_reachable and this pre-existing test correctly implement the CURRENT design: a current, clean, matching REVISE round does reach the gate -- confirmed correct, not a gap."
+    },
+    {
+      "item": 285,
+      "evidence": "workflow_state_test.TestValidateTechnicalApprovalCommit.test_each_representative_forbidden_field_class_refused",
+      "note": "New this round: added workflow_state.validate_technical_approval_commit + MalformedTechnicalApprovalCommitError + TECHNICAL_APPROVAL_COMMIT_FIELDS, mirroring validate_bundle_generation_record_commit's exhaustive-field-set discipline for the technical-approval commit (apply_technical_approval's own exact {technical_approval, phase, state_revision, last_transition} set). The cited test exercises all seven representative forbidden fields item 285 names (plan_approval, active_work_item_id, a checkpoints entry, functional_acceptance_status, reviewed_implementation_head, implementation_revision, another work item's own state), each independently refused. Not yet wired into a live discovery-time caller (no analogue of verify_implementation_provenance_interval exists yet for technical-approval commits) -- a natural follow-up, deliberately left out of this round's scope to avoid touching the live WFO obligation-verification call graph without dedicated review."
+    },
+    {
+      "item": 341,
+      "evidence": "workflow_fingerprint_generalization_test.TestPrepareAiReviewShImplementationStageHeadGuard.test_item_341_archive_command_never_interpolates_a_variable_positional_argument",
+      "note": "New this round: the 339-344 reconciliation row's own rationale already states \"the token-grammar half of these items retires with it [the 314-338 supersession]... WF8c owes the assert_local_generation_matches three-caller/require_metadata half only\" -- but that retirement never got its own SUPERSEDED/none row (unlike item 318, which the same supersession split out explicitly), so the mechanical per-item resolution rule still requires evidence for item 341 specifically. The live flat current/ design has no token and no symlink, so item 341's literal concern cannot occur; verified directly (not assumed) that scripts/prepare-ai-review.sh's sole tar invocation passes the bare literal \"current\" as its positional argument, never a variable -- a real regression guard against this vulnerability class reappearing in a new form, standing in for the item's own inapplicable token-grammar check."
+    },
+    {
+      "item": 351,
+      "evidence": "workflow_integration_test.TestPlanStageApprovalCommitMembership.test_committed_path_set_mismatch_from_a_hook_editing_after_staging_is_caught",
+      "note": "New this round (linking a pre-existing, already-passing test): item 351's exact scenario -- a pre-commit hook that stages an additional path after stage_plan_approval_commit_paths already verified the index, so the resulting commit's changed-path set is wider than what was verified -- is exactly this test's own reproduction, proving assert_committed_path_set_matches (the load-bearing check positioned to catch it, since the pre-commit index checks structurally cannot see a post-staging hook edit) raises CommittedPathSetMismatchError."
+    },
+    {
+      "item": 353,
+      "evidence": "workflow_state_test.TestCanonicalStateSerialization.test_live_workflow_state_bytes_equal_canonical_serialization_of_its_own_parsed_content",
+      "note": "New this round: found and fixed a genuine bug -- _serialize_state used ensure_ascii=True (its own docstring self-contradictorily called this \"not the json.dumps default-by-accident it replaces\" while setting the exact value that default already is), while docs/ai-workflow/WORKFLOW_V2_PLAN.md states ensure_ascii=False as canonical consistently from revision 56 (GPT-R73-002) through revision 90, with no later reversal (three independent citations: line 1984, 10916-10919, and a literal ensure_ascii=False Python snippet at line 21544). Fixed _serialize_state; re-published the live WORKFLOW_STATE.json through state_transaction with an identity mutator to re-encode its own pre-existing escaped \\u2192/\\u2014 sequences into literal UTF-8 bytes (parsed content byte-for-byte unchanged, confirmed before/after; only the encoding changed). Since state_transaction is item 354's single required entry point for all twelve production writers, this one fix establishes the \"every writer\" property item 353 requires by construction. TestCanonicalStateSerialization extended with the two explicit \"obvious neighbour\" negative checks (ensure_ascii=True, sort_keys=True) item 353's own text names, plus a regression guard against the live file ever containing escaped sequences again."
     }
   ]
 }
-
-

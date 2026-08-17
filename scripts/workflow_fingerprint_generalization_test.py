@@ -1634,6 +1634,40 @@ class TestPrepareAiReviewShImplementationStageHeadGuard(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(before_archive, archive.read_bytes())
 
+    def test_item_341_archive_command_never_interpolates_a_variable_positional_argument(self):
+        """Item 341 (`WF8c`): its own token-grammar concern -- a malformed
+        `staging/<token>/`-derived directory name reaching `tar` as a
+        leading-dash/flag-shaped positional argument -- is a property of
+        the `staging/<token>/` -> `bundles/<token>/` -> `current` symlink
+        design the reconciliation table's own `314-338` row (`SUPERSEDED`)
+        retires: "the token-grammar half of these items retires with it...
+        `WF8c` owes the `assert_local_generation_matches` three-caller/
+        `require_metadata` half only" (`339-344` row rationale). The live,
+        non-superseded design (`REVIEW_PROTOCOL.md`'s flat `current/`
+        directory) has no token and no symlink at all, so there is nothing
+        for a token-grammar check to validate -- confirmed here directly
+        against the installed script's own source rather than assumed: the
+        archive step's `tar` invocation passes the bare string literal
+        `current` as its positional directory argument, never a shell
+        variable interpolation of `work_item_id`, a generated token, or
+        any other caller-influenced value, so no value this repository's
+        callers control ever reaches that argument position the way the
+        superseded design's token would have. A regression guard: if a
+        future change reintroduces a variable positional argument here,
+        this assertion catches it before item 341's retired vulnerability
+        class could reappear in a new form."""
+        with h.ScratchRepo() as repo:
+            script_path = self._install_scripts(repo)
+            script_text = script_path.read_text()
+            tar_lines = [line for line in script_text.splitlines() if line.strip().startswith("tar ")]
+            self.assertEqual(len(tar_lines), 1, f"expected exactly one tar invocation, found {tar_lines!r}")
+            tar_line = tar_lines[0].strip()
+            self.assertTrue(
+                tar_line.endswith(" current"),
+                f"tar invocation must end with the bare literal 'current', got: {tar_line!r}",
+            )
+            self.assertNotIn("$", tar_line.rsplit(" ", 1)[-1])
+
 
 class TestBundleRelocation(unittest.TestCase):
     """Missing-test item 165's relocation/migration sub-cases

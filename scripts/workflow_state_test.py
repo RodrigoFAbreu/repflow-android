@@ -5382,6 +5382,29 @@ class TestResolveBundleGenerationOutcome(unittest.TestCase):
                     repo.root, work_item, base_commit=repo.base, head=head,
                 )
 
+    def test_item_290_genuine_content_diff_resolves_ordinary_even_after_excluded_commits(self):
+        """Item 290 (`WF8c`): a genuine protected-content fix, preceded by
+        one or more legitimate excluded-only commits, still resolves
+        `("ordinary", None)` -- never `same_content` -- regardless of how
+        many excluded-only commits came before it. Distinguishes this from
+        `test_multiple_excluded_commits_between_t_and_head_still_resolves_
+        same_content`, whose interval's endpoint content is genuinely
+        identical throughout; here the endpoint itself differs."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected v1", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            repo.commit("legitimate excluded doc fix", filename="docs/notes-a.md")
+            repo.commit("second legitimate excluded doc fix", filename="docs/notes-b.md")
+            head = repo.commit("protected v2", filename="src/Foo.kt")
+            work_item = state | {"work_item_id": self.WI, "work_item_type": "process"}
+            outcome = ws.resolve_bundle_generation_outcome(
+                repo.root, work_item, base_commit=repo.base, head=head,
+            )
+            self.assertEqual(outcome, ("ordinary", None))
+
     def test_no_discoverable_generation_record_commit_refuses(self):
         """Content identical (trivially: `p` itself as the candidate head,
         the zero-commit-interval case) but no `T` was ever recorded --
@@ -5885,6 +5908,130 @@ class TestSameContentRepublicationFromSelfReviewingImplementation(unittest.TestC
                     ws.validate_bundle_generation_record_commit(repo.root, s2, self.WI)  # must not raise
 
 
+class TestValidateTechnicalApprovalCommit(unittest.TestCase):
+    """`WF8c`, missing-test item 285: `validate_technical_approval_commit`'s
+    own exhaustive field-mutation check, mirroring items 267/254's
+    generation-record coverage for the technical-approval commit
+    (`apply_technical_approval`'s own `{"technical_approval", "phase",
+    "state_revision", "last_transition"}` exact field set)."""
+
+    WI = "wi"
+
+    def _parent_state(self) -> dict:
+        return {
+            "work_item_id": self.WI, "work_item_type": "process",
+            "phase": "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+            "technical_approval": None, "state_revision": 5, "last_transition": "t5",
+        }
+
+    def test_well_formed_commit_passes(self):
+        with ScratchRepo() as repo:
+            _seed_base_provenance_state(repo, self.WI)
+            parent_state = self._parent_state()
+            _commit_state_only(repo, self.WI, parent_state, "parent")
+            child_state = parent_state | {
+                "technical_approval": {"status": "CURRENT"},
+                "phase": "AWAITING_FUNCTIONAL_REVIEW", "state_revision": 6, "last_transition": "t6",
+            }
+            commit = _commit_state_only(repo, self.WI, child_state, "technical approval")
+            ws.validate_technical_approval_commit(repo.root, commit, self.WI)  # must not raise
+
+    def test_each_representative_forbidden_field_class_refused(self):
+        """Item 285: one representative forbidden field from each class --
+        `plan_approval`, `active_work_item_id` (top-level), a `checkpoints`
+        entry, `functional_acceptance_status`, `reviewed_implementation_head`,
+        `implementation_revision`, and another work item's own state --
+        each independently fails the exhaustive check even though the
+        commit still nominally 'touches only WORKFLOW_STATE.json'."""
+        with ScratchRepo() as repo:
+            _seed_base_provenance_state(repo, self.WI)
+            parent_state = self._parent_state() | {
+                "plan_approval": {"status": "CURRENT"}, "checkpoints": {"WF1": {"status": "COMPLETE"}},
+                "functional_acceptance_status": None,
+                "reviewed_implementation_head": "a" * 40, "implementation_revision": 1,
+            }
+            _commit_state_only(repo, self.WI, parent_state, "parent")
+            base_child = parent_state | {
+                "technical_approval": {"status": "CURRENT"},
+                "phase": "AWAITING_FUNCTIONAL_REVIEW", "state_revision": 6, "last_transition": "t6",
+            }
+
+            variants = {
+                "plan_approval": base_child | {"plan_approval": {"status": "STALE"}},
+                "functional_acceptance_status": base_child | {"functional_acceptance_status": "PENDING"},
+                "reviewed_implementation_head": base_child | {"reviewed_implementation_head": "b" * 40},
+                "implementation_revision": base_child | {"implementation_revision": 2},
+            }
+            for label, variant_state in variants.items():
+                with self.subTest(field=label):
+                    with ScratchRepo() as vrepo:
+                        _seed_base_provenance_state(vrepo, self.WI)
+                        _commit_state_only(vrepo, self.WI, parent_state, "parent")
+                        commit = _commit_state_only(vrepo, self.WI, variant_state, "technical approval")
+                        with self.assertRaises(ws.MalformedTechnicalApprovalCommitError):
+                            ws.validate_technical_approval_commit(vrepo.root, commit, self.WI)
+
+            # checkpoints entry change -- same class, exercised via the
+            # full work-items diff since checkpoints lives inside it too.
+            with ScratchRepo() as vrepo:
+                _seed_base_provenance_state(vrepo, self.WI)
+                _commit_state_only(vrepo, self.WI, parent_state, "parent")
+                variant_state = base_child | {"checkpoints": {"WF1": {"status": "COMPLETE"}, "WF2": {"status": "COMPLETE"}}}
+                commit = _commit_state_only(vrepo, self.WI, variant_state, "technical approval")
+                with self.assertRaises(ws.MalformedTechnicalApprovalCommitError):
+                    ws.validate_technical_approval_commit(vrepo.root, commit, self.WI)
+
+            # top-level active_work_item_id -- caught by _forbidden_state_mutation.
+            with ScratchRepo() as vrepo:
+                full = vrepo.root / STATE_REL_PATH
+                full.parent.mkdir(parents=True, exist_ok=True)
+                full.write_bytes(ws._serialize_state({
+                    "schema_version": 1, "active_work_item_id": "wi", "work_items": {self.WI: parent_state},
+                }))
+                _run(["git", "add", STATE_REL_PATH], cwd=vrepo.root)
+                _run(["git", "commit", "-q", "-m", "parent"], cwd=vrepo.root)
+                full.write_bytes(ws._serialize_state({
+                    "schema_version": 1, "active_work_item_id": "other-item", "work_items": {self.WI: base_child},
+                }))
+                _run(["git", "add", STATE_REL_PATH], cwd=vrepo.root)
+                _run(["git", "commit", "-q", "-m", "technical approval"], cwd=vrepo.root)
+                with self.assertRaises(ws.MalformedTechnicalApprovalCommitError):
+                    ws.validate_technical_approval_commit(vrepo.root, vrepo.head(), self.WI)
+
+            # another work item's own state changing in the same commit.
+            with ScratchRepo() as vrepo:
+                full = vrepo.root / STATE_REL_PATH
+                full.parent.mkdir(parents=True, exist_ok=True)
+                full.write_bytes(ws._serialize_state({
+                    "schema_version": 1,
+                    "work_items": {self.WI: parent_state, "other-wi": {"state_revision": 1}},
+                }))
+                _run(["git", "add", STATE_REL_PATH], cwd=vrepo.root)
+                _run(["git", "commit", "-q", "-m", "parent"], cwd=vrepo.root)
+                full.write_bytes(ws._serialize_state({
+                    "schema_version": 1,
+                    "work_items": {self.WI: base_child, "other-wi": {"state_revision": 2}},
+                }))
+                _run(["git", "add", STATE_REL_PATH], cwd=vrepo.root)
+                _run(["git", "commit", "-q", "-m", "technical approval"], cwd=vrepo.root)
+                with self.assertRaises(ws.MalformedTechnicalApprovalCommitError):
+                    ws.validate_technical_approval_commit(vrepo.root, vrepo.head(), self.WI)
+
+    def test_missing_technical_approval_or_phase_refused(self):
+        """A commit that sets `phase` without `technical_approval` (or vice
+        versa) is not a real technical-approval transition."""
+        with ScratchRepo() as repo:
+            _seed_base_provenance_state(repo, self.WI)
+            parent_state = self._parent_state()
+            _commit_state_only(repo, self.WI, parent_state, "parent")
+            phase_only = parent_state | {
+                "phase": "AWAITING_FUNCTIONAL_REVIEW", "state_revision": 6, "last_transition": "t6",
+            }
+            commit = _commit_state_only(repo, self.WI, phase_only, "phase only")
+            with self.assertRaises(ws.MalformedTechnicalApprovalCommitError):
+                ws.validate_technical_approval_commit(repo.root, commit, self.WI)
+
+
 class TestApplyImplementationProvenanceRecovery(unittest.TestCase):
     """`WF8c` (b), `WFR-62`: `apply_implementation_provenance_recovery`'s
     own state-half contract -- the recovered-role field set, minus `phase`
@@ -6035,6 +6182,129 @@ class TestVerifyImplementationProvenanceRecovery(unittest.TestCase):
                 )
             self.assertIn(added, str(ctx.exception))
             self.assertIn("other/mystery.txt", str(ctx.exception))
+
+
+class TestValidateImplementationProvenanceRecoveryConfirmation(unittest.TestCase):
+    """`WF8c` (b), missing-test item 251: `/recover-implementation-provenance`'s
+    own user-confirmation guard -- "identical in spirit to `/approve-review`'s
+    own `validate_user_confirmation` guard", but bound to the exact
+    superseded commit SHA `t` rather than an approval stage name, since
+    recovery is not a member of `APPROVAL_STAGES`."""
+
+    def test_empty_text_refused(self):
+        with self.assertRaises(ws.UserConfirmationRejectedError):
+            ws.validate_implementation_provenance_recovery_confirmation(
+                "", work_item_id="wi", superseded_commit="c" * 40,
+            )
+
+    def test_generic_go_ahead_with_no_sha_refused(self):
+        with self.assertRaises(ws.UserConfirmationRejectedError):
+            ws.validate_implementation_provenance_recovery_confirmation(
+                "yes, go ahead and recover wi", work_item_id="wi", superseded_commit="c" * 40,
+            )
+
+    def test_missing_work_item_id_refused(self):
+        with self.assertRaises(ws.UserConfirmationRejectedError):
+            ws.validate_implementation_provenance_recovery_confirmation(
+                f"recover {'c' * 40}", work_item_id="wi", superseded_commit="c" * 40,
+            )
+
+    def test_wrong_commit_refused(self):
+        with self.assertRaises(ws.UserConfirmationRejectedError):
+            ws.validate_implementation_provenance_recovery_confirmation(
+                f"recover wi past {'d' * 40}", work_item_id="wi", superseded_commit="c" * 40,
+            )
+
+    def test_exact_work_item_and_commit_accepted(self):
+        ws.validate_implementation_provenance_recovery_confirmation(
+            f"recover wi past commit {'c' * 40}", work_item_id="wi", superseded_commit="c" * 40,
+        )  # no raise
+
+
+class TestRecoveredRoleThreeCombinationValidation(unittest.TestCase):
+    """`WF8c` (b)/(c), items 292/293/294/313: direct, isolated coverage of
+    `validate_bundle_generation_record_commit`'s recovered-role branch
+    against each of its three legal parent-phase combinations and the
+    illegal ones around them -- distinguished entirely by committed parent
+    state (`RECOVERED_BUNDLE_GENERATION_RECORD_LEGAL_SOURCE_PHASES`) and the
+    single required committed-phase target, never by which command
+    (`/recover-implementation-provenance` vs `record_bundle_generation`'s
+    same-content branch) happened to produce the commit -- no such signal
+    exists anywhere in a commit's own trailers or fields for the validator
+    to consult, which is exactly item 294's claim."""
+
+    WI = "wi"
+
+    def _seed_and_parent(self, repo: "ScratchRepo", parent_phase: str) -> tuple[str, str]:
+        _write_test_artifacts_declaration(repo, self.WI)
+        _seed_base_provenance_state(repo, self.WI)
+        p = repo.commit("protected fix", filename="src/Foo.kt")
+        parent_state = {
+            "work_item_id": self.WI, "work_item_type": "process",
+            "reviewed_implementation_head": p, "implementation_revision": 1,
+            "phase": parent_phase, "state_revision": 5, "last_transition": "t5",
+        }
+        parent = _commit_state_only(repo, self.WI, parent_state, "parent")
+        return p, parent
+
+    def _child(self, repo: "ScratchRepo", p: str, committed_phase: str, supersedes: str) -> str:
+        child_state = {
+            "work_item_id": self.WI, "work_item_type": "process",
+            "reviewed_implementation_head": p, "implementation_revision": 1,
+            "phase": committed_phase, "state_revision": 6, "last_transition": "t6",
+        }
+        return _commit_state_only(
+            repo, self.WI, child_state, "recovered-role commit",
+            trailers=_recovered_trailers(self.WI, 1, supersedes),
+        )
+
+    def test_item_292_both_recovery_and_republication_parent_phases_independently_validate(self):
+        with ScratchRepo() as repo:
+            p, parent = self._seed_and_parent(repo, "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW")
+            child = self._child(repo, p, "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW", parent)
+            ws.validate_bundle_generation_record_commit(repo.root, child, self.WI)  # must not raise
+
+        with ScratchRepo() as repo:
+            p, parent = self._seed_and_parent(repo, "APPLYING_REVIEW_FEEDBACK")
+            child = self._child(repo, p, "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW", parent)
+            ws.validate_bundle_generation_record_commit(repo.root, child, self.WI)  # must not raise
+
+    def test_item_293_awaiting_technical_approval_parent_phase_refused(self):
+        with ScratchRepo() as repo:
+            p, parent = self._seed_and_parent(repo, "AWAITING_TECHNICAL_APPROVAL")
+            child = self._child(repo, p, "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW", parent)
+            with self.assertRaises(ws.MalformedBundleGenerationRecordCommitError) as ctx:
+                ws.validate_bundle_generation_record_commit(repo.root, child, self.WI)
+            self.assertIn("AWAITING_TECHNICAL_APPROVAL", str(ctx.exception))
+
+    def test_item_294_wrong_committed_phase_refused_despite_legal_parent(self):
+        """A commit whose parent phase is the legal `APPLYING_REVIEW_FEEDBACK`
+        republication source, but whose own committed phase was left
+        value-wise unchanged (`/recover-implementation-provenance`'s own
+        shape) instead of performing the real transition
+        `record_bundle_generation`'s republication path always performs, is
+        refused -- the committed-phase requirement is unconditional,
+        regardless of which parent phase produced it."""
+        with ScratchRepo() as repo:
+            p, parent = self._seed_and_parent(repo, "APPLYING_REVIEW_FEEDBACK")
+            child = self._child(repo, p, "APPLYING_REVIEW_FEEDBACK", parent)
+            with self.assertRaises(ws.MalformedBundleGenerationRecordCommitError) as ctx:
+                ws.validate_bundle_generation_record_commit(repo.root, child, self.WI)
+            self.assertIn("AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW", str(ctx.exception))
+
+    def test_item_313_self_reviewing_parent_wrong_committed_phase_and_illegal_parent_both_refused(self):
+        with ScratchRepo() as repo:
+            p, parent = self._seed_and_parent(repo, "SELF_REVIEWING_IMPLEMENTATION")
+            child = self._child(repo, p, "SELF_REVIEWING_IMPLEMENTATION", parent)
+            with self.assertRaises(ws.MalformedBundleGenerationRecordCommitError):
+                ws.validate_bundle_generation_record_commit(repo.root, child, self.WI)
+
+        with ScratchRepo() as repo:
+            p, parent = self._seed_and_parent(repo, "IMPLEMENTING")
+            child = self._child(repo, p, "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW", parent)
+            with self.assertRaises(ws.MalformedBundleGenerationRecordCommitError) as ctx:
+                ws.validate_bundle_generation_record_commit(repo.root, child, self.WI)
+            self.assertIn("IMPLEMENTING", str(ctx.exception))
 
 
 class TestImplementationProvenanceRecoveryEndToEnd(unittest.TestCase):
@@ -6231,6 +6501,81 @@ class TestImplementationProvenanceRecoveryEndToEnd(unittest.TestCase):
             with self.assertRaises(ws.MalformedBundleGenerationRecordCommitError) as ctx:
                 ws.verify_implementation_provenance_interval(repo.root, final_work_item, repo.base)
             self.assertIn(s2, str(ctx.exception))
+
+
+class TestImplementationProvenanceRecoveryApprovalGateInteraction(unittest.TestCase):
+    """`WF8c` (b), items 258/259: recovery's effect on
+    `/approve-review implementation`'s own `WFR-03`/`D2` exact-`bundle_id`-
+    match rule -- no new staleness mechanism is required (item 258), since
+    `resolve_approval_basis`'s existing exact-match check already refuses a
+    pre-recovery bundle's feedback the moment `current_bundle_id` differs,
+    and recovery necessarily changes `current_bundle_id` (a new
+    `generation_head`, `T` -> `S2`). `bundle_id` values below are opaque
+    stand-ins tied to the real commit each represents -- `resolve_approval_basis`
+    itself never inspects a `bundle_id`'s internal shape (see
+    `TestApprovalBasisResolution`), only exact string equality, so a
+    real commit-derived label documents the interaction precisely without
+    depending on `workflow_fingerprint.compute_bundle_id`'s own,
+    separately-tested, file-content mechanics."""
+
+    WI = "wi"
+
+    def test_full_round_trip_approve_recover_stale_refused_fresh_approve(self):
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            t = _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            b1 = f"bundle-for-{t}"
+
+            # Item 259: a genuine external APPROVE against B1 (bundle at T)
+            # succeeds before recovery ever happens.
+            basis = ws.resolve_approval_basis(
+                latest_round_status="APPROVE", feedback_bundle_id=b1, current_bundle_id=b1,
+                user_confirmation="approve wi implementation", work_item_id=self.WI, stage="implementation",
+            )
+            self.assertEqual(basis, "EXTERNAL_APPROVE")
+
+            # A legitimate excluded-only commit lands after T, staling the
+            # bundle's generation_head without changing protected content.
+            head = repo.commit("legitimate excluded-only doc fix", filename="docs/notes.md")
+            work_item = state | {"work_item_id": self.WI, "work_item_type": "process"}
+            resolved_t = ws.verify_implementation_provenance_recovery(
+                repo.root, work_item, base_commit=repo.base, head=head,
+            )
+            self.assertEqual(resolved_t, t)
+            s2_work_item = ws.apply_implementation_provenance_recovery(
+                _base_state(**{self.WI: work_item}), self.WI, now="t9",
+            )["work_items"][self.WI]
+            s2 = _commit_state_only(
+                repo, self.WI, s2_work_item, "recover stale generation_head",
+                trailers=_recovered_trailers(self.WI, 1, resolved_t),
+            )
+            b2 = f"bundle-for-{s2}"
+            self.assertNotEqual(b1, b2)
+
+            # Item 258: B1's prior APPROVE, still naming its own (now stale)
+            # bundle_id, is refused as EXTERNAL_APPROVE against the new
+            # current bundle B2 -- no override text supplied, so it raises,
+            # under the pre-existing exact-match rule alone.
+            with self.assertRaises(ws.UserConfirmationRejectedError):
+                ws.resolve_approval_basis(
+                    latest_round_status="APPROVE", feedback_bundle_id=b1, current_bundle_id=b2,
+                    user_confirmation="", work_item_id=self.WI, stage="implementation",
+                )
+
+            # Item 259: a fresh external review of B2 returns APPROVE, and
+            # /approve-review implementation now succeeds via EXTERNAL_APPROVE
+            # bound to B2 -- implementation_revision/reviewed_implementation_head
+            # unchanged throughout the whole round trip.
+            basis = ws.resolve_approval_basis(
+                latest_round_status="APPROVE", feedback_bundle_id=b2, current_bundle_id=b2,
+                user_confirmation="approve wi implementation", work_item_id=self.WI, stage="implementation",
+            )
+            self.assertEqual(basis, "EXTERNAL_APPROVE")
+            self.assertEqual(s2_work_item["reviewed_implementation_head"], p)
+            self.assertEqual(s2_work_item["implementation_revision"], 1)
 
 
 class TestRemediationChildWorkItem(unittest.TestCase):
@@ -8218,6 +8563,55 @@ class TestExplicitTakeover(unittest.TestCase):
             identity = json.loads((wt2 / ws.WORKTREE_IDENTITY_PATH).read_text())
             self.assertIn("wi", identity["expected_dirty_paths_by_work_item"])
 
+    def test_taken_over_from_describes_the_atomically_displaced_record(self):
+        """Item 369(d) (new, revision 64, `GPT-R81-002`): `taken_over_from`
+        describes the record atomically displaced -- its own
+        `claim_observation_id` equal to the digest of the bytes present at
+        rotation (re-read under the guard, `current_oid`), never the
+        evidence's own earlier-read `observed_oid` -- together with the
+        displaced `owner_token`/`checkpoint_id` and the
+        `takeover_count`/`previous_owner_tokens` chain."""
+        with ScratchRepo() as repo:
+            original = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
+            wt2 = repo.worktree("b")
+            evidence = ws.takeover_evidence(wt2, "wi")
+            observed_oid = evidence["claim_observation_id"]
+            literal = ws.takeover_authorization_literal("wi", evidence, "CP")
+            new_claim = ws.take_over_claim(wt2, "wi", "CP", now="t2",
+                                           user_authorization=literal, evidence=evidence)
+            taken_over_from = new_claim["taken_over_from"]
+            self.assertEqual(taken_over_from["owner_token"], original["owner_token"])
+            self.assertEqual(taken_over_from["checkpoint_id"], "CP")
+            # Re-read at rotation time (current_oid), which for an
+            # unmodified claim equals the evidence's own observed_oid --
+            # the interesting property (unequal to an *earlier*, now-stale
+            # read) is exercised by test_takeover_refuses_on_stale_evidence
+            # above, which proves the mismatched case refuses outright
+            # rather than silently rotating against stale bytes.
+            self.assertEqual(taken_over_from["claim_observation_id"], observed_oid)
+            self.assertEqual(new_claim["takeover_count"], 1)
+            self.assertEqual(new_claim["previous_owner_tokens"], [original["owner_token"]])
+
+    def test_takeover_of_absent_claim_refuses_once_someone_publishes_one_in_the_meantime(self):
+        """Item 369(f): the `"absent"` observation is an observation like
+        any other -- authorizing a takeover of "no claim" does not survive
+        somebody publishing a real claim in the meantime. Distinct from
+        `test_takeover_refuses_on_stale_evidence` above, which exercises a
+        claim-to-claim staleness race; here the race is absent-to-present,
+        the specific case item 369(f) names."""
+        with ScratchRepo() as repo:
+            wt2 = repo.worktree("b")
+            absent_evidence = ws.takeover_evidence(wt2, "wi")
+            self.assertEqual(absent_evidence["claim_observation_id"], ws.ABSENT_OBSERVATION)
+            literal = ws.takeover_authorization_literal("wi", absent_evidence, "CP")
+
+            # Someone else genuinely publishes a claim in the meantime.
+            ws.claim_checkpoint(repo.root, "wi", "CP", now="t2")
+
+            with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
+                ws.take_over_claim(wt2, "wi", "CP", now="t3",
+                                   user_authorization=literal, evidence=absent_evidence)
+
     def test_takeover_of_absent_claim_uses_absent_observation(self):
         with ScratchRepo() as repo:
             wt2 = repo.worktree("b")
@@ -8465,10 +8859,18 @@ class TestAbandonedDestructiveGuardRecovery(unittest.TestCase):
 
 
 class TestCanonicalStateSerialization(unittest.TestCase):
-    """OPUS-R101-005: `_serialize_state` is the single source of truth for
-    `WORKFLOW_STATE.json` bytes, deliberately `ensure_ascii=True`, shared by
-    production publication and by this suite's own direct-write fixture
-    (`_commit_state_only`) so the two can never disagree."""
+    """`WFR-63` item 353 (`GPT-R73-002`): `_serialize_state` is the single
+    source of truth for `WORKFLOW_STATE.json` bytes, `ensure_ascii=False`,
+    shared by production publication and by this suite's own direct-write
+    fixture (`_commit_state_only`) so the two can never disagree. Item 353's
+    own text names `ensure_ascii=True` and `sort_keys=True` as the two
+    "obvious neighbours" that must each independently fail to round-trip --
+    exercised directly below, not merely by construction. Corrected this
+    round from a prior, confirmed-wrong `ensure_ascii=True` (`OPUS-R101-005`'s
+    own docstring called that "not the json.dumps default-by-accident it
+    replaces" while setting the exact value that default already is; the
+    plan's own `ensure_ascii=False` requirement, stated identically since
+    revision 56, was never actually implemented)."""
 
     def test_round_trip_is_byte_stable_for_non_ascii_content(self):
         state = {
@@ -8484,11 +8886,44 @@ class TestCanonicalStateSerialization(unittest.TestCase):
         second = ws._serialize_state(json.loads(first.decode("utf-8")))
         self.assertEqual(first, second)
 
-    def test_serialization_is_pure_ascii_bytes(self):
+    def test_serialization_preserves_non_ascii_as_literal_utf8_bytes(self):
+        """Item 353: canonical bytes contain the literal UTF-8 encoding of
+        non-ASCII content, never escaped `\\uXXXX` sequences -- the
+        property that makes `ensure_ascii=True` a failing "obvious
+        neighbour" rather than an equally valid alternative."""
         state = {"schema_version": 1, "work_items": {"wi": {"note": "→—"}}}
         payload = ws._serialize_state(state)
-        self.assertTrue(all(b < 128 for b in payload))
+        self.assertIn("→—".encode("utf-8"), payload)
+        self.assertNotIn(b"\\u2192", payload)
         self.assertTrue(payload.endswith(b"\n"))
+
+    def test_ensure_ascii_true_neighbour_does_not_round_trip(self):
+        """Item 353: the `ensure_ascii=True` neighbour, applied to the same
+        content, produces different bytes than the canonical form -- proof
+        the choice is load-bearing, not cosmetic."""
+        state = {"schema_version": 1, "work_items": {"wi": {"note": "→—"}}}
+        canonical = ws._serialize_state(state)
+        wrong_neighbour = (json.dumps(state, indent=2, ensure_ascii=True) + "\n").encode("utf-8")
+        self.assertNotEqual(canonical, wrong_neighbour)
+
+    def test_sort_keys_true_neighbour_does_not_round_trip(self):
+        """Item 353: the `sort_keys=True` neighbour reorders `work_items`,
+        producing different bytes than the canonical insertion-order form."""
+        state = {"schema_version": 1, "work_items": {"zeta-wi": {}, "alpha-wi": {}}}
+        canonical = ws._serialize_state(state)
+        wrong_neighbour = (json.dumps(state, indent=2, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
+        self.assertNotEqual(canonical, wrong_neighbour)
+
+    def test_live_workflow_state_has_no_escaped_unicode_sequences(self):
+        """The live repository's own `WORKFLOW_STATE.json` must already be
+        free of `ensure_ascii=True`-style escaped sequences -- the
+        historical-bug regression guard: had the prior, wrong
+        `ensure_ascii=True` ever actually round-tripped non-ASCII content
+        through a real write, this would catch it."""
+        live_path = Path(__file__).resolve().parent.parent / "docs/ai-workflow/WORKFLOW_STATE.json"
+        text = live_path.read_text(encoding="utf-8")
+        self.assertNotIn("\\u00", text)
+        self.assertNotIn("\\u20", text)
 
     def test_publish_state_file_uses_the_canonical_serialization(self):
         with ScratchRepo() as repo:

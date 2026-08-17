@@ -68,15 +68,23 @@ review-feedback cycle just to fix a provenance pointer.
    never fall back to treating this as an ordinary bundle-regeneration
    round. On success this returns `t`, the commit the new recovery commit
    must supersede.
-4. **User-confirmation gate**: this command creates a new, durable Git
-   commit and is not something to run silently. Before creating anything,
-   show the user: the work item id, `t` (the commit being superseded), the
-   number and subjects of the excluded-only commits found between `t` and
-   live HEAD, and that `reviewed_implementation_head`/
-   `implementation_revision` will be left completely unchanged. Wait for
-   the user's explicit go-ahead in this turn before proceeding to step 5 —
-   do not treat silence, a prior unrelated approval, or an earlier turn's
-   confirmation as sufficient.
+4. **User-confirmation gate** (`WFR-62`, missing-test item 251 -- "identical
+   in spirit to `/approve-review`'s own `validate_user_confirmation` guard"):
+   this command creates a new, durable Git commit and is not something to
+   run silently. Before creating anything, show the user: the work item
+   id, `t` (the commit being superseded), the number and subjects of the
+   excluded-only commits found between `t` and live HEAD, and that
+   `reviewed_implementation_head`/`implementation_revision` will be left
+   completely unchanged. Then call
+   `workflow_state.validate_implementation_provenance_recovery_confirmation(
+   <this turn's literal message text>, work_item_id=<work_item_id>,
+   superseded_commit=t)` — this requires the user's current-turn message to
+   literally name both the exact `work_item_id` and the exact superseded
+   commit SHA `t`; a `UserConfirmationRejectedError` stops the command and
+   reports the concrete reason. Never treat silence, a prior unrelated
+   approval, an earlier turn's confirmation, or a generic go-ahead with no
+   literal SHA as sufficient — ask again, naming both values, and wait for
+   this turn's reply before proceeding to step 5.
 5. **Write the recovery commit**: call `workflow_state.state_transaction(
    repo_root, lambda state:
    workflow_state.apply_implementation_provenance_recovery(state,

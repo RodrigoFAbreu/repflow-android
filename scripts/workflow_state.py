@@ -1105,17 +1105,35 @@ def state_lock(repo_root: Path, *, lock_path: Path = STATE_LOCK_PATH):
 
 
 def _serialize_state(state: dict) -> bytes:
-    """The one canonical `WORKFLOW_STATE.json` serialization (OPUS-R101-005):
-    2-space indent, insertion key order, `ensure_ascii=True` (deliberately
-    chosen, not the `json.dumps` default-by-accident it replaces -- this
-    repository's live file already carries prose with non-ASCII characters,
-    e.g. `→`/`—`, and this is the form it is already in), and a
-    trailing newline. The single source of truth for both production
+    """The one canonical `WORKFLOW_STATE.json` serialization (`WFR-63`
+    item 353, `GPT-R73-002`; corrected in place this round -- see below):
+    2-space indent, insertion key order, `ensure_ascii=False` (deliberately
+    chosen, not the `json.dumps` default it replaces -- this repository's
+    live file already carries prose with non-ASCII characters, e.g.
+    `→`/`—`, as literal UTF-8 bytes, never escaped `\\uXXXX` sequences),
+    and a trailing newline. The single source of truth for both production
     publication (`_publish_state_file`) and the hermetic test fixture that
     writes `WORKFLOW_STATE.json` directly (`_commit_state_only`), so the two
     can never disagree -- unlike `WORKTREE_IDENTITY.json`, this file is not
-    `sort_keys=True`."""
-    return (json.dumps(state, indent=2, ensure_ascii=True) + "\n").encode("utf-8")
+    `sort_keys=True`. `state_transaction` (item 354) is the single required
+    entry point for every one of the twelve production writers `D1` names,
+    and it always publishes through this function, so this is the one
+    place the canonical form needs stating for the "every writer" property
+    item 353 requires -- never twelve separately-audited call sites.
+
+    Previously `ensure_ascii=True` (own docstring self-contradictorily
+    called this "not the json.dumps default-by-accident it replaces" while
+    setting the exact value that default already is) -- confirmed a
+    genuine bug, not a deliberate choice: `docs/ai-workflow/WORKFLOW_V2_PLAN.md`
+    states `ensure_ascii=False` as canonical consistently across every
+    revision from `GPT-R73-002` (revision 56) through revision 90 (its own
+    "Bootstrap plan-approval procedure" pseudocode, `D1`'s state-writer
+    discipline paragraph, and item 353 itself all agree), with no later
+    revision ever reversing it. Harmless today only because the live file
+    currently carries zero non-ASCII bytes (both forms produce identical
+    output on pure-ASCII content) -- fixed here before any future non-ASCII
+    write would have silently diverged from the plan's own canonical form."""
+    return (json.dumps(state, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
 
 
 def _publish_state_file(full_path: Path, state: dict) -> None:
@@ -8726,6 +8744,62 @@ def _forbidden_state_mutation(repo_root: Path, commit: str, work_item_id: str) -
     return None
 
 
+TECHNICAL_APPROVAL_COMMIT_FIELDS = frozenset({
+    "technical_approval", "phase", "state_revision", "last_transition",
+})
+
+
+class MalformedTechnicalApprovalCommitError(Exception):
+    """Raised by `validate_technical_approval_commit` (`WF8c`, missing-test
+    item 285) when a discovered `/approve-review implementation` commit's
+    own `WORKFLOW_STATE.json` diff exceeds `apply_technical_approval`'s
+    exhaustive field set -- mirroring items 267/254's exact-field-set
+    discipline for generation-record commits, applied here to the
+    technical-approval commit `D-States`'s own "Exit" bullet already names
+    exhaustively (`GPT-R51-001`): exactly `technical_approval`, `phase`
+    (`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` ->
+    `AWAITING_FUNCTIONAL_REVIEW`), `state_revision`, `last_transition` --
+    no other field, and never another work item's own entry or a
+    top-level routing field in the same commit."""
+
+
+def validate_technical_approval_commit(repo_root: Path, commit: str, work_item_id: str) -> None:
+    """`WF8c`, missing-test item 285: the technical-approval commit's own
+    exhaustive field-mutation check, the sibling
+    `validate_bundle_generation_record_commit` already provides for
+    generation-record commits. Refuses via
+    `MalformedTechnicalApprovalCommitError` when the commit's own
+    `work_items[work_item_id]` diff is not a non-empty subset of
+    `TECHNICAL_APPROVAL_COMMIT_FIELDS`, when a forbidden field named by
+    that set is entirely absent from the diff (`technical_approval`/`phase`
+    must both actually change -- a commit that sets one without the other
+    is not a real technical-approval transition), or when the commit
+    additionally touches a top-level routing field or a *different* work
+    item's own entry (`_forbidden_state_mutation`, item 267's exact check,
+    reused rather than duplicated)."""
+    outside_diff = _forbidden_state_mutation(repo_root, commit, work_item_id)
+    if outside_diff is not None:
+        raise MalformedTechnicalApprovalCommitError(
+            f"{commit} is a technical-approval commit for {work_item_id!r} but also "
+            f"changed {outside_diff} -- a technical-approval commit may only ever "
+            f"touch its own work item's fields (item 267)"
+        )
+    field_diff = _work_item_field_diff(repo_root, commit, work_item_id)
+    if not field_diff or not field_diff <= TECHNICAL_APPROVAL_COMMIT_FIELDS:
+        raise MalformedTechnicalApprovalCommitError(
+            f"{commit}'s own {work_item_id!r} field changes are {sorted(field_diff)}, "
+            f"not a non-empty subset of {sorted(TECHNICAL_APPROVAL_COMMIT_FIELDS)}"
+        )
+    if {"technical_approval", "phase"} - field_diff:
+        raise MalformedTechnicalApprovalCommitError(
+            f"{commit}'s own {work_item_id!r} field changes {sorted(field_diff)} do not "
+            f"include both 'technical_approval' and 'phase' -- a technical-approval "
+            f"commit must always record the approval and transition phase in the same "
+            f"commit (mirrors OPUS-R101-001's identical requirement for generation-"
+            f"record commits)"
+        )
+
+
 def validate_bundle_generation_record_commit(repo_root: Path, commit: str, work_item_id: str) -> None:
     """Validates a discovered `Workflow-Bundle-Generation-Record` commit
     against its own role-specific contract (D-Approval-Commits/D-Commit-
@@ -9257,6 +9331,35 @@ def verify_implementation_provenance_recovery(
             f"Workflow-Bundle-Generation-Record commit -- nothing to recover"
         )
     return t
+
+
+def validate_implementation_provenance_recovery_confirmation(
+    text: str, *, work_item_id: str, superseded_commit: str,
+) -> None:
+    """`/recover-implementation-provenance`'s own user-confirmation guard
+    (`WF8c` (b), missing-test item 251): "identical in spirit to
+    `/approve-review`'s own `validate_user_confirmation` guard" -- the text
+    must be non-empty and must literally name both the exact `work_item_id`
+    and the exact superseded commit SHA `t` (`verify_implementation_provenance_recovery`'s
+    own return value), never merely a generic go-ahead. Recovery is not an
+    approval stage (`validate_user_confirmation`'s own `stage` parameter
+    requires membership in `APPROVAL_STAGES`, which this operation is not
+    a member of), so this is a dedicated sibling rather than a call to that
+    function with a stage name shoehorned in."""
+    if not text or not text.strip():
+        raise UserConfirmationRejectedError(
+            f"user_confirmation is empty -- must name work_item_id {work_item_id!r} "
+            f"and the exact superseded commit {superseded_commit!r} explicitly"
+        )
+    if work_item_id not in text:
+        raise UserConfirmationRejectedError(
+            f"user_confirmation does not name work_item_id {work_item_id!r}: {text!r}"
+        )
+    if superseded_commit not in text:
+        raise UserConfirmationRejectedError(
+            f"user_confirmation does not name the exact superseded commit "
+            f"{superseded_commit!r}: {text!r}"
+        )
 
 
 def apply_implementation_provenance_recovery(state: dict, work_item_id: str, now: str) -> dict:
