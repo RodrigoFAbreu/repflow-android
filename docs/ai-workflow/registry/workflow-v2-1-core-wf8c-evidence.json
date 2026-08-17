@@ -723,6 +723,16 @@
       "item": 228,
       "evidence": "workflow_fingerprint_generalization_test.TestPrepareAiReviewShImplementationStageHeadGuard.test_repeat_generation_of_same_round_is_idempotent",
       "note": "New this round (batch 18): real prepare-ai-review.sh execution -- regenerating the bundle a second time for the exact same durable round (unchanged head/revision) succeeds without any additional revision bump or WORKFLOW_STATE.json write"
+    },
+    {
+      "item": 218,
+      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd",
+      "note": "New this round (batch 19): full /accept-scoped-remediation orchestration exercised end to end -- confirmation parsing, functional-checklist evidence binding against the live snapshot, registry-derived non-terminal resolution, and the resulting provenance commit"
+    },
+    {
+      "item": 370,
+      "evidence": "workflow_state_test.TestResolveCheckpointOwnership",
+      "note": "New this round (batch 19): the real crash window -- a self-owned claim on a checkpoint whose completion is already durable at HEAD is released by the next invocation, returning FRESH with the concrete next checkpoint id when one remains (370(b)) or NO_CHECKPOINT with a null id when the registry is exhausted (370(a)/(c)); no mutation branch is ever reached with a None checkpoint id"
     }
   ]
 }
