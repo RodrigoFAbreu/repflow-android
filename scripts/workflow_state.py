@@ -8947,6 +8947,25 @@ def _assert_generation_record_terminal_chain_continuity(
         )
 
 
+def _other_revision_found_suffix(
+    repo_root: Path, work_item_id: str, base_commit: str, head: str, implementation_revision: int,
+) -> str:
+    """Item 220 (`WF8c`): when no `Workflow-Bundle-Generation-Record`
+    commit matches the *current* `implementation_revision`, but this work
+    item's trailer discovery still turned up commit(s) for some *other*
+    revision (the previous round's, or a skipped-ahead value), name them
+    too -- the caller should see what was actually found, not only what
+    was expected, to tell "the previous round's stale trailer, never
+    superseded" apart from "genuinely nothing recorded yet"."""
+    other_values = sorted(
+        v for v in discover_bundle_generation_record_commits(repo_root, work_item_id, base_commit, head)
+        if v != f"{work_item_id}/{implementation_revision}"
+    )
+    if not other_values:
+        return ""
+    return f" (found instead: {', '.join(other_values)})"
+
+
 def verify_implementation_provenance_interval(
     repo_root: Path, work_item: dict, base_commit: str, head: str = "HEAD",
 ) -> str:
@@ -9004,6 +9023,7 @@ def verify_implementation_provenance_interval(
         raise BundleGenerationRecordNotFoundError(
             f"no Workflow-Bundle-Generation-Record commit found for "
             f"{work_item_id}/{implementation_revision} in {base_commit}..{head}"
+            f"{_other_revision_found_suffix(repo_root, work_item_id, base_commit, head, implementation_revision)}"
         )
     live_head = _run(["git", "rev-parse", head], cwd=repo_root).strip()
     if live_head != t:

@@ -4832,6 +4832,47 @@ class TestImplementationProvenanceInterval(unittest.TestCase):
             work_item = state | {"work_item_id": self.WI}
             self.assertEqual(ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base), t)
 
+    def test_generation_record_trailer_naming_different_work_item_is_not_discovered(self):
+        """Item 219 (`WF8c`): a well-formed `Workflow-Bundle-Generation-
+        Record: wi/1` value on a commit whose `Workflow-Work-Item` trailer
+        names a *different* work item is not discovered by this work
+        item's scoped lookup at all -- the gate refuses exactly as if no
+        provenance commit existed, never falling back to an unscoped
+        match on the generation-record value alone."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            _commit_state_only(repo, self.WI, state, "record gen for a different work item", trailers={
+                "Workflow-Bundle-Generation-Record": f"{self.WI}/1",
+                "Workflow-Work-Item": "a-different-work-item",
+            })
+            work_item = state | {"work_item_id": self.WI}
+            with self.assertRaises(ws.BundleGenerationRecordNotFoundError):
+                ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base)
+
+    def test_wrong_implementation_revision_names_both_expected_and_found(self):
+        """Item 220 (`WF8c`): a `Workflow-Bundle-Generation-Record`
+        trailer naming the wrong `implementation_revision` (here, the
+        previous round's) fails the exactly-one-match lookup for the
+        *current* revision and refuses, naming both the expected and the
+        found revision in the raised error -- not only what was
+        expected."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p1 = repo.commit("protected fix, round 1", filename="src/Foo.kt")
+            state1 = _provenance_state(self.WI, reviewed_implementation_head=p1, implementation_revision=1)
+            _commit_state_only(repo, self.WI, state1, "record gen round 1", trailers=_record_trailers(self.WI, 1))
+            p2 = repo.commit("protected fix, round 2", filename="src/Foo.kt")
+            state2 = _provenance_state(self.WI, reviewed_implementation_head=p2, implementation_revision=2)
+            work_item = state2 | {"work_item_id": self.WI}
+            with self.assertRaises(ws.BundleGenerationRecordNotFoundError) as ctx:
+                ws.verify_implementation_provenance_interval(repo.root, work_item, repo.base)
+            self.assertIn(f"{self.WI}/2", str(ctx.exception))
+            self.assertIn(f"{self.WI}/1", str(ctx.exception))
+
 
 class TestRecordBundleGenerationSameContentOutcome(unittest.TestCase):
     """WF8c (c): `record_bundle_generation`'s `outcome` parameter -- the
