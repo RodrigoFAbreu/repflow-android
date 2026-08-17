@@ -523,6 +523,21 @@
       "item": 241,
       "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_bare_head_equality_with_no_generation_record_refuses",
       "note": "New test (no prior coverage existed): live HEAD exactly equal to reviewed_implementation_head (bare equality genuinely holds), with zero commits made afterward and so no discoverable Workflow-Bundle-Generation-Record commit at all -- the pre-WF8B-003 bare-equality branch is confirmed gone even in the one shape where the old rule would have silently accepted"
+    },
+    {
+      "item": 223,
+      "evidence": "workflow_state_test.TestRecordBundleGeneration.test_post_fix_call_advances_head_and_increments_revision",
+      "note": "record_bundle_generation's implementation_revision write is a pure +1 on the prior value, independent of any Git history it is called against, so a genuinely new protected-content round always advances by exactly one, never more, regardless of how many metadata-only commits intervened first; combined with test_content_differs_resolves_ordinary (TestResolveBundleGenerationOutcome), which proves an intervening record-gen commit does not stop a later protected commit from classifying as a new ordinary round in the first place"
+    },
+    {
+      "item": 225,
+      "evidence": "workflow_state_test.TestResolveBundleGenerationOutcome.test_deleted_or_corrupted_manifest_does_not_affect_outcome",
+      "note": "New test (no prior coverage existed): resolve_bundle_generation_outcome never reads .ai-review/<work_item_id>/current/MANIFEST.md at all (confirmed by reading the function -- it derives its decision from approval_review_content_id and Git trailer discovery alone), so deleting it, replacing it with unparseable garbage, or deleting it again all leave the resolved (same_content, t) outcome byte-for-byte identical"
+    },
+    {
+      "item": 226,
+      "evidence": "workflow_state_test.TestRecordBundleGeneration.test_interrupted_before_durability_commit_resumes_deterministically",
+      "note": "New test (no prior coverage existed): record_bundle_generation is a pure state -> state mutator that never touches its input in place, so an interrupted first call (never persisted or committed) leaves the state a fresh session reads unchanged, and re-attempting the identical call from that same starting state is deterministic -- implementation_revision lands on exactly 1, never doubly advanced by the discarded first attempt"
     }
   ]
 }

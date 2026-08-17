@@ -4279,6 +4279,28 @@ class TestRecordBundleGeneration(unittest.TestCase):
             )
             ws.validate_bundle_generation_record_commit(repo.root, s2, "wi")  # must not raise
 
+    def test_interrupted_before_durability_commit_resumes_deterministically(self):
+        """Item 226 (`WF8c`): a simulated interruption after
+        `record_bundle_generation`'s state write but before the durability
+        commit `S` lands leaves the prior round's state authoritative --
+        nothing durable ever changed, so a fresh session still reads the
+        same starting state and re-attempting from it is deterministic,
+        never doubly advancing `implementation_revision` on top of an
+        attempt that was never persisted."""
+        state = _base_state(wi=_base_work_item(
+            phase="SELF_REVIEWING_IMPLEMENTATION",
+            reviewed_implementation_head=None, implementation_revision=None,
+        ))
+        interrupted = ws.record_bundle_generation(state, "wi", stage="implementation", head="abc123", now="t1")
+        # The interrupted attempt's write was never persisted or committed
+        # -- record_bundle_generation is a pure state -> state mutator, so
+        # the original `state` a fresh session would still be holding is
+        # untouched by it.
+        self.assertIsNone(state["work_items"]["wi"]["implementation_revision"])
+        resumed = ws.record_bundle_generation(state, "wi", stage="implementation", head="abc123", now="t1")
+        self.assertEqual(interrupted, resumed)
+        self.assertEqual(resumed["work_items"]["wi"]["implementation_revision"], 1)
+
 
 class TestEnterApplyingReviewFeedback(unittest.TestCase):
     def test_sets_phase_from_legal_source(self):
@@ -4892,6 +4914,48 @@ class TestResolveBundleGenerationOutcome(unittest.TestCase):
                 ws.resolve_bundle_generation_outcome(
                     repo.root, work_item, base_commit=repo.base, head=p,
                 )
+
+    def test_deleted_or_corrupted_manifest_does_not_affect_outcome(self):
+        """Item 225 (`WF8c`): `.ai-review/<work_item_id>/current/MANIFEST.md`
+        is disposable review-bundle content, never a value this Git- and
+        `WORKFLOW_STATE.json`-only decision reads. Deleting it, or leaving
+        unparseable garbage in its place, must not change the resolved
+        outcome from the identical round `test_identical_content_with_
+        clean_excluded_interval_resolves_same_content` already proves."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            state = _provenance_state(self.WI, reviewed_implementation_head=p, implementation_revision=1)
+            t = _commit_state_only(repo, self.WI, state, "record gen", trailers=_record_trailers(self.WI, 1))
+            head = repo.commit("resolved via excluded content", filename="docs/notes.md")
+            work_item = state | {"work_item_id": self.WI, "work_item_type": "process"}
+
+            manifest = repo.root / ".ai-review" / self.WI / "current" / "MANIFEST.md"
+
+            # Absent entirely (never written for this scratch repo).
+            self.assertFalse(manifest.exists())
+            outcome_absent = ws.resolve_bundle_generation_outcome(
+                repo.root, work_item, base_commit=repo.base, head=head,
+            )
+            self.assertEqual(outcome_absent, ("same_content", t))
+
+            # Present but corrupted (unparseable garbage, no MANIFEST.md
+            # structure at all) -- untracked, so it never affects Git-object
+            # content identity either.
+            manifest.parent.mkdir(parents=True, exist_ok=True)
+            manifest.write_text("not a real manifest\x00\xff garbage")
+            outcome_corrupted = ws.resolve_bundle_generation_outcome(
+                repo.root, work_item, base_commit=repo.base, head=head,
+            )
+            self.assertEqual(outcome_corrupted, ("same_content", t))
+
+            # Deleted again after having existed.
+            manifest.unlink()
+            outcome_deleted_again = ws.resolve_bundle_generation_outcome(
+                repo.root, work_item, base_commit=repo.base, head=head,
+            )
+            self.assertEqual(outcome_deleted_again, ("same_content", t))
 
 
 class TestSameContentRepublicationEndToEnd(unittest.TestCase):
