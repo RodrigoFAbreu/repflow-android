@@ -136,7 +136,15 @@ This is **portability vs. local staleness, split by consumer**:
   (`WORKFLOW_STATE.json`'s `implementation_revision`) — same
   stage-completeness discipline as `PLAN.md`'s revision marker.
 - **TEST_RESULTS.md** — exact commands run and their real outcome. Never
-  state a check passed unless it actually ran in this session.
+  state a check passed unless it actually ran in this session. **At the
+  `plan` stage**, must additionally open with a `stage: plan (revision N)`
+  line (`N` matching the plan document's current revision) and a
+  `head: <sha>` line (matching this generation's own HEAD) — a bundle
+  whose `TEST_RESULTS.md` is missing, empty, names a different round, a
+  different HEAD, or carries forward a previous implementation round's
+  evidence unexamined fails the closing consistency check (item 272,
+  `assert_test_results_consistent_with_plan_review_request`,
+  `finalize_bundle_generation`) and is withdrawn rather than published.
 - **CONTEXT_FILES.txt** — one repo-relative path per line, no comments. Only
   the files a reviewer genuinely needs beyond the diff itself (e.g. the ADR
   a decision follows, the domain glossary entry a rule depends on). The

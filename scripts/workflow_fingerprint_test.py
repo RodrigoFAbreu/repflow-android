@@ -2341,6 +2341,74 @@ class TestStageCompletenessCheck(unittest.TestCase):
                 wf.assert_stage_completeness(bundle_dir, "not-a-real-stage")
 
 
+class TestTestResultsConsistencyCheck(unittest.TestCase):
+    """`assert_test_results_consistent_with_plan_review_request` (item
+    272): a plan-stage bundle's `TEST_RESULTS.md` must state this
+    round's own stage/revision/HEAD, the same discipline
+    `assert_stage_completeness` already applies to `PLAN.md`/
+    `IMPLEMENTATION_SUMMARY.md`."""
+
+    _HEAD = "a" * 40
+    _OTHER_HEAD = "b" * 40
+
+    def test_passes_when_stage_revision_and_head_all_match(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle_dir = Path(tmp)
+            (bundle_dir / "TEST_RESULTS.md").write_text(
+                f"# Test Results\n\nstage: plan (revision 7)\nhead: {self._HEAD}\n\nmore prose\n"
+            )
+            wf.assert_test_results_consistent_with_plan_review_request(bundle_dir, 7, self._HEAD)
+
+    def test_fails_when_file_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle_dir = Path(tmp)
+            with self.assertRaises(wf.TestResultsStaleError):
+                wf.assert_test_results_consistent_with_plan_review_request(bundle_dir, 7, self._HEAD)
+
+    def test_fails_when_file_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle_dir = Path(tmp)
+            (bundle_dir / "TEST_RESULTS.md").write_text("")
+            with self.assertRaises(wf.TestResultsStaleError):
+                wf.assert_test_results_consistent_with_plan_review_request(bundle_dir, 7, self._HEAD)
+
+    def test_fails_on_stale_revision(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle_dir = Path(tmp)
+            (bundle_dir / "TEST_RESULTS.md").write_text(f"stage: plan (revision 6)\nhead: {self._HEAD}\n")
+            with self.assertRaises(wf.TestResultsStaleError):
+                wf.assert_test_results_consistent_with_plan_review_request(bundle_dir, 7, self._HEAD)
+
+    def test_fails_on_carried_forward_implementation_stage_content(self):
+        """Leftover evidence from a previous implementation round never
+        matches the required literal `stage: plan (revision N)` -- caught
+        by the same single check as a stale revision, never silently
+        accepted as this round's plan-stage evidence."""
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle_dir = Path(tmp)
+            (bundle_dir / "TEST_RESULTS.md").write_text(
+                f"stage: implementation (revision 3)\nhead: {self._HEAD}\n\nfull suite green\n"
+            )
+            with self.assertRaises(wf.TestResultsStaleError):
+                wf.assert_test_results_consistent_with_plan_review_request(bundle_dir, 7, self._HEAD)
+
+    def test_fails_when_head_line_absent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle_dir = Path(tmp)
+            (bundle_dir / "TEST_RESULTS.md").write_text("stage: plan (revision 7)\n")
+            with self.assertRaises(wf.TestResultsStaleError):
+                wf.assert_test_results_consistent_with_plan_review_request(bundle_dir, 7, self._HEAD)
+
+    def test_fails_on_stale_head(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle_dir = Path(tmp)
+            (bundle_dir / "TEST_RESULTS.md").write_text(
+                f"stage: plan (revision 7)\nhead: {self._OTHER_HEAD}\n"
+            )
+            with self.assertRaises(wf.TestResultsStaleError):
+                wf.assert_test_results_consistent_with_plan_review_request(bundle_dir, 7, self._HEAD)
+
+
 class TestFeedbackBindingFields(unittest.TestCase):
     """`WFR-03`: external feedback is matched against `bundle_id` exactly;
     stale/missing feedback is rejected naming both values."""
@@ -2694,7 +2762,9 @@ class TestGeneratorSideStageDocumentBinding(unittest.TestCase):
                 )
             self.assertFalse((bundle_dir / "MANIFEST.md").exists())
 
-    def _build_valid_pinned_bundle(self, repo, metadata, corrupt_derivation=False):
+    def _build_valid_pinned_bundle(
+        self, repo, metadata, corrupt_derivation=False, test_results_text=None,
+    ):
         """A complete, self-consistent plan-stage bundle_dir + archive,
         generated the same way `prepare-ai-review.sh` does: capture pin,
         derive PLAN.md, populate files/, write REVIEW_REQUEST.md, write
@@ -2709,7 +2779,15 @@ class TestGeneratorSideStageDocumentBinding(unittest.TestCase):
         three are computed from -- or reproduce -- the same, already-
         corrupted tree) while `review_content_id` (computed from the pin,
         never from `PLAN.md`) stays correct -- exactly the residual gap
-        only the dedicated byte-identity-vs-pin assertion catches."""
+        only the dedicated byte-identity-vs-pin assertion catches.
+
+        `test_results_text`, when given, replaces the default compliant
+        `TEST_RESULTS.md` content *before* `MANIFEST.md` is written and
+        the archive is built -- the item-272 analogue of
+        `corrupt_derivation`: keeps the bundle_id three-way check
+        internally self-consistent so a bad `TEST_RESULTS.md` is caught
+        by the dedicated consistency assertion, not masked behind (or
+        confused with) the bundle_id mismatch path."""
         pin_dir = wf.capture_plan_stage_pin(repo.root, metadata.work_item_id, metadata)
         bundle_dir = repo.root / ".ai-review" / metadata.work_item_id / "current"
         bundle_dir.mkdir(parents=True)
@@ -2720,7 +2798,10 @@ class TestGeneratorSideStageDocumentBinding(unittest.TestCase):
             for target in (bundle_dir / "PLAN.md", bundle_dir / "files" / metadata.plan_path):
                 target.write_text("consistently wrong everywhere (Revision {})\n".format(metadata.plan_revision))
         (bundle_dir / "DIFF.patch").write_text("")
-        (bundle_dir / "TEST_RESULTS.md").write_text("stage: plan\n")
+        if test_results_text is None:
+            _, current_head = wf.current_worktree_root_and_head(repo.root)
+            test_results_text = f"stage: plan (revision {metadata.plan_revision})\nhead: {current_head}\n"
+        (bundle_dir / "TEST_RESULTS.md").write_text(test_results_text)
         _write_review_request_with_content_id(
             repo, bundle_dir, base=repo.base, work_item_type=metadata.work_item_type,
             work_item_id=metadata.work_item_id, plan_revision=metadata.plan_revision,
@@ -2930,6 +3011,41 @@ class TestGeneratorSideStageDocumentBinding(unittest.TestCase):
             )
             self.assertEqual(result["status"], "withdrawn")
             self.assertIn("not byte-identical", result["message"])
+
+    def test_finalize_bundle_generation_withdraws_on_empty_test_results(self):
+        """Item 272: the historical bug this checkpoint fixes --
+        `prepare-ai-review.sh`'s own "create if missing" stub leaves
+        `TEST_RESULTS.md` empty, and nothing previously caught that
+        before the bundle was archived and offered for review."""
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            self._seed_workflow_state(repo, metadata)
+            bundle_dir, archive_path = self._build_valid_pinned_bundle(
+                repo, metadata, test_results_text="",
+            )
+            result = wf.finalize_bundle_generation(
+                repo.root, bundle_dir, archive_path, "plan", metadata.work_item_id,
+            )
+            self.assertEqual(result["status"], "withdrawn")
+            self.assertIn("item 272", result["message"])
+            self.assertFalse(bundle_dir.exists())
+
+    def test_finalize_bundle_generation_withdraws_on_carried_forward_test_results(self):
+        """A `TEST_RESULTS.md` left over from a previous round -- here,
+        naming a stale plan revision -- is withdrawn rather than
+        published as though it were this round's own evidence."""
+        with self._seeded_repo() as repo:
+            metadata = _metadata_for(repo)
+            self._seed_workflow_state(repo, metadata)
+            bundle_dir, archive_path = self._build_valid_pinned_bundle(
+                repo, metadata,
+                test_results_text=f"stage: plan (revision {metadata.plan_revision - 1})\nhead: {'a' * 40}\n",
+            )
+            result = wf.finalize_bundle_generation(
+                repo.root, bundle_dir, archive_path, "plan", metadata.work_item_id,
+            )
+            self.assertEqual(result["status"], "withdrawn")
+            self.assertIn("authoritative plan document currently declares", result["message"])
 
 
 if __name__ == "__main__":

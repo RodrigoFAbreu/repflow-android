@@ -786,6 +786,8 @@ class TestRouteWorkItemResumeBranchDeclarationFacts(unittest.TestCase):
             bundle_dir = repo.root / ".ai-review" / work_item_id / "current"
             bundle_dir.mkdir(parents=True)
             (bundle_dir / "REVIEW_REQUEST.md").write_text(f"stage: plan\nreview_content_id: {digest}\n")
+            _, current_head = fingerprint.current_worktree_root_and_head(repo.root)
+            (bundle_dir / "TEST_RESULTS.md").write_text(f"stage: plan (revision 1)\nhead: {current_head}\n")
 
             scripts_dir = repo.root / "scripts"
             scripts_dir.mkdir(parents=True, exist_ok=True)
@@ -986,6 +988,8 @@ class TestPrepareAiReviewShPlanStageRequiredArgument(unittest.TestCase):
             bundle_dir = repo.root / ".ai-review" / "second-item" / "current"
             bundle_dir.mkdir(parents=True)
             (bundle_dir / "REVIEW_REQUEST.md").write_text(f"stage: plan\nreview_content_id: {digest}\n")
+            _, current_head = fingerprint.current_worktree_root_and_head(repo.root)
+            (bundle_dir / "TEST_RESULTS.md").write_text(f"stage: plan (revision 1)\nhead: {current_head}\n")
             result = subprocess.run(
                 ["bash", str(script_path), repo.base, "plan", "second-item"],
                 cwd=repo.root, capture_output=True, text=True,
@@ -1017,6 +1021,8 @@ class TestPrepareAiReviewShPlanStageRequiredArgument(unittest.TestCase):
             bundle_dir = repo.root / ".ai-review" / "second-item" / "current"
             bundle_dir.mkdir(parents=True)
             (bundle_dir / "REVIEW_REQUEST.md").write_text(f"stage: plan\nreview_content_id: {digest}\n")
+            _, current_head = fingerprint.current_worktree_root_and_head(repo.root)
+            (bundle_dir / "TEST_RESULTS.md").write_text(f"stage: plan (revision 1)\nhead: {current_head}\n")
             result = subprocess.run(
                 ["bash", str(script_path), repo.base, "plan", "second-item"],
                 cwd=repo.root, capture_output=True, text=True,

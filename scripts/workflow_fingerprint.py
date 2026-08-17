@@ -346,6 +346,16 @@ class StageCompletenessError(Exception):
     to catch."""
 
 
+class TestResultsStaleError(Exception):
+    """Raised when a plan-stage bundle's `TEST_RESULTS.md` does not state
+    this round's own stage/revision/HEAD (item 272): an empty stub, a
+    copy left over from a previous plan-review round, or stale
+    implementation-stage evidence carried forward into a plan-only
+    round, must never publish silently — `GPT-R42-001`'s consistency-
+    guard precedent, extended to the one author-written file that
+    previously carried no machine-checked marker at all."""
+
+
 class MissingFeedbackBindingFieldError(Exception):
     """Raised when `REVIEW_FEEDBACK.md` is missing one of its three
     required binding fields (`Reviewed bundle ID:`, `Reviewed base
@@ -2213,14 +2223,16 @@ def finalize_bundle_generation(
     """The closing half of one `prepare-ai-review.sh` generation run,
     factored out into one testable function: the pre-existing three-way
     `bundle_id` reproducibility check (manifest / on-disk / archived);
-    for the plan stage with a captured pin, additionally the byte-identity
-    binding check (part 3); on any failure, and only when `work_item_id`
-    is given (the marker mechanism has no flat-compatibility-layout
-    counterpart), withdrawal (part 3b) rather than leaving a
-    stale-but-self-verifying artifact in place; on success, clearing any
-    pre-existing `REJECTED` marker for this work item. Returns a dict
-    describing the outcome; never swallows a withdrawal step's own
-    `BundleWithdrawalError`."""
+    for the plan stage, additionally the byte-identity binding check
+    (part 3, when a pin was captured) and the `TEST_RESULTS.md`/
+    `REVIEW_REQUEST.md` consistency check (item 272, unconditional --
+    does not depend on a pin); on any failure, and only when
+    `work_item_id` is given (the marker mechanism has no flat-
+    compatibility-layout counterpart), withdrawal (part 3b) rather than
+    leaving a stale-but-self-verifying artifact in place; on success,
+    clearing any pre-existing `REJECTED` marker for this work item.
+    Returns a dict describing the outcome; never swallows a withdrawal
+    step's own `BundleWithdrawalError`."""
     recorded = read_manifest_identifiers(bundle_dir / MANIFEST_FILENAME)
     recorded_bundle_id = recorded.get("bundle_id")
     if recorded_bundle_id is None:
@@ -2241,14 +2253,22 @@ def finalize_bundle_generation(
                 f"ondisk={ondisk_bundle_id} extracted={extracted_bundle_id}"
             )
         elif stage == "plan" and work_item_id is not None:
+            metadata = resolve_plan_stage_metadata(repo_root, work_item_id)
             pin_dir = _pin_dir_for_work_item(repo_root, work_item_id)
             if pin_dir.is_dir():
-                metadata = resolve_plan_stage_metadata(repo_root, work_item_id)
                 try:
                     assert_plan_stage_document_matches_pin(
                         pin_dir, bundle_dir, metadata, extracted_root,
                     )
                 except PlanStageDocumentStaleError as exc:
+                    mismatch_detail = str(exc)
+            if mismatch_detail is None:
+                _, current_head = current_worktree_root_and_head(repo_root)
+                try:
+                    assert_test_results_consistent_with_plan_review_request(
+                        bundle_dir, metadata.plan_revision, current_head,
+                    )
+                except TestResultsStaleError as exc:
                     mismatch_detail = str(exc)
 
         if mismatch_detail is not None:
@@ -2446,6 +2466,71 @@ def assert_stage_completeness(
         return
     else:
         raise StageCompletenessError(f"unknown stage: {stage!r}")
+
+
+# ---------------------------------------------------------------------------
+# Plan-stage TEST_RESULTS.md/REVIEW_REQUEST.md consistency (item 272):
+# unlike PLAN.md and IMPLEMENTATION_SUMMARY.md, TEST_RESULTS.md previously
+# carried no machine-checked marker at all, so an empty stub (created by
+# prepare-ai-review.sh's own "create if missing" fallback) or a copy left
+# over from an earlier round -- including a previous implementation
+# round's evidence carried forward unexamined -- published silently.
+# ---------------------------------------------------------------------------
+
+_TEST_RESULTS_STAGE_LINE_RE = re.compile(r"^stage: plan \(revision (\d+)\)$", re.MULTILINE)
+_TEST_RESULTS_HEAD_LINE_RE = re.compile(r"^head: ([0-9a-f]{40})$", re.MULTILINE)
+
+
+def assert_test_results_consistent_with_plan_review_request(
+    bundle_dir: Path, plan_revision: int, generation_head: str,
+) -> None:
+    """Item 272: a plan-stage bundle's `TEST_RESULTS.md` must be
+    regenerated fresh for every plan-review round, never an empty stub
+    or a copy carried forward from a different round. Requires two
+    labelled lines, the same discipline `PLAN.md`'s own `(Revision N)`
+    marker and `IMPLEMENTATION_SUMMARY.md`'s own `implementation_revision:`
+    line already apply:
+
+    - `stage: plan (revision N)`, `N` equal to this round's
+      `plan_revision` -- a missing/empty file, a different round, and
+      implementation-stage evidence carried forward (which would state a
+      different `stage:` value entirely, never literally `plan`) are all
+      caught by this one line-and-value match;
+    - `head: <40-hex>`, equal to this generation's own HEAD -- so a
+      bundle regenerated at an unchanged `plan_revision` but a new HEAD
+      (ordinary commits landing between two rounds at the same revision)
+      cannot silently carry forward a previous generation's evidence.
+
+    Called from `finalize_bundle_generation`'s closing checks, alongside
+    the pin-sourced `PLAN.md` byte-identity assertion -- a failure here
+    triggers the same `withdraw_bundle` quarantine, never a silently
+    published bundle."""
+    test_results_path = bundle_dir / "TEST_RESULTS.md"
+    content = test_results_path.read_text() if test_results_path.is_file() else ""
+    stage_match = _TEST_RESULTS_STAGE_LINE_RE.search(content)
+    if stage_match is None:
+        raise TestResultsStaleError(
+            f"{test_results_path} states no 'stage: plan (revision N)' line -- "
+            f"expected revision {plan_revision}. A missing/empty file, or content "
+            f"describing a different stage (e.g. carried-forward implementation-"
+            f"stage evidence), is exactly what this check exists to catch (item 272)"
+        )
+    if int(stage_match.group(1)) != plan_revision:
+        raise TestResultsStaleError(
+            f"{test_results_path} states 'stage: plan (revision {stage_match.group(1)})', "
+            f"the authoritative plan document currently declares revision {plan_revision}"
+        )
+    head_match = _TEST_RESULTS_HEAD_LINE_RE.search(content)
+    if head_match is None:
+        raise TestResultsStaleError(
+            f"{test_results_path} states no 'head: <sha>' line -- expected "
+            f"{generation_head}"
+        )
+    if head_match.group(1) != generation_head:
+        raise TestResultsStaleError(
+            f"{test_results_path} states 'head: {head_match.group(1)}', this "
+            f"generation's own HEAD is {generation_head}"
+        )
 
 
 # ---------------------------------------------------------------------------
