@@ -573,6 +573,11 @@
       "item": 217,
       "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_protected_commit_refused_at_both_preflight_and_gate_independently",
       "note": "New this round (batch 13): a genuine protected commit landing between reviewed_implementation_head and the attempted generation/approval point is refused independently at both call sites sharing _classify_generation_record_interval -- verify_implementation_provenance_interval (the P..T gate, previously untested for this exact refusal shape in this class) and resolve_bundle_generation_outcome (the T..head preflight) -- each assertion checking the offending commit's own SHA appears in the raised exception message, the item's own 'naming the offending commit' requirement"
+    },
+    {
+      "item": 174,
+      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd.test_stale_technical_approval_is_the_sole_remaining_blocker",
+      "note": "New this round (batch 14): item 174's own refusal condition (technical_approval.status != \"CURRENT\") is checked only in accept-scoped-remediation.md's own step 6 prose, never through a named production function, so there is no call site to assert raises. The new test proves the condition is not vacuous: a fixture with every dedicated Python-level gate green (non-terminal registry, scoped_remediation_gate_reachable true, resolve_scoped_remediation_round == NoExistingRound) still has technical_approval.status == \"STALE\", confirming this prose condition is the sole remaining blocker in an otherwise fully-green state -- the superseded-implementation-revision case the item describes"
     }
   ]
 }

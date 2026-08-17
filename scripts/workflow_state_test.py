@@ -6882,6 +6882,47 @@ class TestScopedRemediationEndToEnd(unittest.TestCase):
             new_state = ws.complete_work_item(state, self.WI, now="t", repo_root=repo.root)
             self.assertEqual(new_state["work_items"][self.WI]["phase"], "MILESTONE_COMPLETE")
 
+    def test_stale_technical_approval_is_the_sole_remaining_blocker(self):
+        """Item 174 (`WF8c`): a bounded-fix round landing after technical
+        approval but before `/accept-scoped-remediation` runs leaves
+        `technical_approval.status != "CURRENT"` -- the superseded-
+        implementation-revision case. Unlike every other scoped-
+        remediation gate (registry non-terminality, `scoped_remediation_
+        gate_reachable`, replay classification), this one is checked
+        directly against `work_item["technical_approval"]["status"]` in
+        the command doc's own step 6 prose
+        (`.claude/commands/accept-scoped-remediation.md`), never through a
+        named production function -- so there is nothing to call and
+        assert raises. What is provable in Python is that this condition
+        is the *only* thing separating an otherwise fully green fixture
+        (non-terminal registry, reachable gate, `NoExistingRound`) from
+        acceptance: every dedicated gate this command checks before it is
+        proven to pass, and the STALE status is proven live, confirming
+        the prose condition does real, non-vacuous work rather than being
+        unreachable dead code."""
+        with ScratchRepo() as repo:
+            state, evidence_sha, blob = self._seed(repo)
+            state["work_items"][self.WI]["technical_approval"]["status"] = "STALE"
+            work_item = state["work_items"][self.WI]
+            is_terminal, outstanding = ws.resolve_own_registry_completion_status(repo.root, work_item)
+            self.assertFalse(is_terminal)
+            self.assertEqual(outstanding, "B")
+            self.assertTrue(
+                ws.scoped_remediation_gate_reachable(phase=work_item["phase"], is_terminal=is_terminal)
+            )
+            live_fields = ws.build_scoped_remediation_live_fields(
+                state, self.WI, outstanding_checkpoint_id=outstanding,
+                functional_checklist_evidence_commit=evidence_sha, functional_checklist_blob=blob,
+            )
+            resolution = ws.resolve_scoped_remediation_round(
+                repo.root, self.WI, work_item["base_commit"], "HEAD", outstanding,
+                work_item["implementation_revision"], live_fields,
+            )
+            self.assertEqual(resolution, ws.NoExistingRound())
+            # Every gate up to this point is green; step 6's remaining,
+            # prose-only condition is the sole blocker left.
+            self.assertNotEqual(work_item["technical_approval"]["status"], "CURRENT")
+
     def test_confirmation_validated_before_replay_classification_runs(self):
         """Item 196: current-turn user confirmation for stage=
         "scoped_remediation" is validated before resolve_scoped_
