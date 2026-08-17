@@ -6797,6 +6797,24 @@ class TestResolveScopedRemediationRound(unittest.TestCase):
             self.assertIsInstance(result, ws.ConflictingDuplicate)
             self.assertIn("functional_checklist_path", result.differing_fields)
 
+    def test_conflicting_duplicate_entry_implementation_revision_disagrees_with_live(self):
+        """Item 204 (`WF8c`): the hand-edited-entry-vs-trailer-key mismatch
+        case -- the discovered entry's own recorded `outstanding_checkpoint_id`/
+        `implementation_revision` fields match the `B/1` round key exactly
+        (that is how it was found at all), but *live* state's own current
+        `implementation_revision` has since diverged to `2` -- e.g. a
+        caller re-invoking round `B/1`'s lookup against `live_fields`
+        already reflecting a newer round. `resolve_scoped_remediation_round`
+        refuses as `ConflictingDuplicate`, naming `implementation_revision`,
+        rather than treating the entry as a valid replay of a round that
+        live state has already moved past."""
+        with ScratchRepo() as repo:
+            self._commit_round(repo, self._entry(), round_key="B/1")
+            live = self._live_fields(implementation_revision=2)
+            result = ws.resolve_scoped_remediation_round(repo.root, self.WI, repo.base, "HEAD", "B", 1, live)
+            self.assertIsInstance(result, ws.ConflictingDuplicate)
+            self.assertIn("implementation_revision", result.differing_fields)
+
     def test_malformed_unsupported_schema_version(self):
         with ScratchRepo() as repo:
             self._commit_round(repo, self._entry(acceptance_record_version=1))

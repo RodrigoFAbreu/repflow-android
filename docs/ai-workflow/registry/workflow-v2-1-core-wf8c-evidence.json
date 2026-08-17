@@ -648,6 +648,71 @@
       "item": 281,
       "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_one_excluded_commit_between_p_and_t_is_reachable",
       "note": "New this round (batch 16): an unrelated excluded-only commit carrying no Workflow-Bundle-Generation-Record trailer at all remains permitted between provenance records under the generic excluded-only rule alone -- the role-based check in _classify_generation_record_interval only ever fires for a commit matching the trailer scope, confirming an ordinary unrelated commit is never held to role-specific field/trailer requirements"
+    },
+    {
+      "item": 204,
+      "evidence": "workflow_state_test.TestResolveScopedRemediationRound.test_conflicting_duplicate_entry_implementation_revision_disagrees_with_live",
+      "note": "New this round (batch 17): the hand-edited-entry-vs-round-key mismatch case -- an entry matching round key B/1 exactly, but live_fields' own current implementation_revision has since diverged, refuses as ConflictingDuplicate naming implementation_revision, rather than being accepted as a valid replay of a round live state has already moved past"
+    },
+    {
+      "item": 230,
+      "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_protected_commit_refused_at_both_preflight_and_gate_independently",
+      "note": "New this round (batch 17): a technical approval's own provenance gate refuses on a genuine protected-path commit inside the permitted metadata interval independently of content -- proving the interval itself, not merely content matching, is what the gate verifies, exactly item 230's 'cannot be reproduced by content matching alone if the metadata interval itself was wrong' claim"
+    },
+    {
+      "item": 239,
+      "evidence": "workflow_state_test.TestRecordBundleGeneration.test_post_fix_call_advances_head_and_increments_revision",
+      "note": "New this round (batch 17): implementation_revision advancement exercised against a previous round entered via APPLYING_REVIEW_FEEDBACK (a REVISE round with no technical_approval ever recorded for it) correctly recomputes from that round's own reviewed_implementation_head/implementation_revision (1 -> 2)"
+    },
+    {
+      "item": 277,
+      "evidence": "workflow_state_test.TestRecordBundleGenerationSameContentOutcome",
+      "note": "New this round (batch 17): the same-content outcome's own differentiated behavior -- creates exactly one new commit, transitions/reasserts phase, leaves head and revision unchanged -- as opposed to the caller-level bundle-publication-resume contract's separate no-commit-at-all sub-case when live HEAD already equals the current tip T"
+    },
+    {
+      "item": 362,
+      "evidence": "workflow_state_test.TestResolveCheckpointOwnership",
+      "note": "New this round (batch 17): the D-Checkpoint-Ownership standing regression -- a foreign worktree's step-1 procedure refuses rather than fresh-starting a checkpoint another worktree holds IN_PROGRESS, exercised uncontended/contended/adoption across the class's dedicated methods"
+    },
+    {
+      "item": 363,
+      "evidence": "workflow_state_test.TestCheckpointClaimRecord",
+      "note": "New this round (batch 17): claim/release acquisition and ordering -- claim publication and resolution, idempotent same-checkpoint re-claim, cross-worktree refusal, and release as compare-and-delete"
+    },
+    {
+      "item": 364,
+      "evidence": "workflow_state_test.TestCheckpointClaimRecord",
+      "note": "New this round (batch 17): the same claim/release primitives item 363 cites, exercising the crash-window-adjacent atomic operations (compare-and-swap claim, compare-and-delete release) whose defined outcomes are what item 364's crash-window guarantee rests on"
+    },
+    {
+      "item": 365,
+      "evidence": "workflow_state_test.TestCheckpointClaimRecord.test_claim_across_worktrees_raises_owned_by_other",
+      "note": "New this round (batch 17): the record's integrity property -- two claim attempts for the same work item produce exactly one winner and CheckpointOwnedByOtherWorktreeError for the other, via the atomic claim primitive's own compare-and-swap semantics (real concurrent-OS-process timing specifically is item 368(d)'s own separate, still-open gap, not this item's claim)"
+    },
+    {
+      "item": 366,
+      "evidence": "workflow_state_test.TestExplicitTakeover",
+      "note": "New this round (batch 17): no claim is released on an assumption -- a deleted holder worktree's claim is not automatically released, and explicit takeover is the sole sanctioned exception"
+    },
+    {
+      "item": 367,
+      "evidence": "workflow_state_test.TestResolveCheckpointOwnership.test_adoption_then_resume_when_origination_reference_is_silent",
+      "note": "New this round (batch 17): adoption, the migration path for a checkpoint left IN_PROGRESS before the ownership mechanism landed, resumes safely rather than being stolen or refused outright"
+    },
+    {
+      "item": 373,
+      "evidence": "workflow_state_test.TestAbandonedDestructiveGuardRecovery",
+      "note": "New this round (batch 17): the abandoned-window state (a 'destructive' guard's owner never releases it and its worktree is deleted) has exactly one documented, tested exit"
+    },
+    {
+      "item": 374,
+      "evidence": "workflow_state_test.TestWorktreeIdentityWriteAndResume",
+      "note": "New this round (batch 17): the local identity record's lifecycle -- write, resume, and the ownership key's own stability properties -- is asserted rather than assumed"
+    },
+    {
+      "item": 375,
+      "evidence": "workflow_state_test.TestCheckpointOriginationReference",
+      "note": "New this round (batch 17): the origination reference's own measured-strength limits, asserted rather than asserted away"
     }
   ]
 }
