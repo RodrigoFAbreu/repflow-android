@@ -763,6 +763,48 @@
       "item": 283,
       "evidence": "workflow_state_test.TestImplementationProvenanceInterval.test_fresh_session_restart_before_approval_leaves_gate_reachable_from_durable_state_alone",
       "note": "New this round (batch 23): re-reads S's own committed WORKFLOW_STATE.json content directly via _read_json_at_commit_or_empty (never in-memory carryover), confirms phase durably AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW with no technical_approval record, and confirms technical_approval_gate_reachable is still reachable when fed only freshly re-derived values -- proving the gate depends on durable state alone."
+    },
+    {
+      "item": 286,
+      "evidence": "workflow_fingerprint_generalization_test.TestPrepareAiReviewShImplementationStageHeadGuard.test_matching_reviewed_implementation_head_succeeds",
+      "note": "New this round (batch 24): item 286 (amended revision 37) is the T-exactly-equals-HEAD crash-recovery case, distinct from item 227/301's T-lags-HEAD-by-one-legitimate-commit case. The cited test sets reviewed_implementation_head to exactly the live implementation HEAD and runs prepare-ai-review.sh, which succeeds and publishes the bundle -- structurally never invoking record_bundle_generation or git commit (prepare-ai-review.sh's own state_writer: false header, already relied on by item 227's evidence note), proving the 'publishes successfully, performing no commit and never invoking record_bundle_generation' claim."
+    },
+    {
+      "item": 297,
+      "evidence": "workflow_state_test.TestApprovalGateReachability.test_technical_gate_missing_or_block_feedback_never_reaches_regardless_of_other_conditions",
+      "note": "New this round (batch 24): new test added to TestApprovalGateReachability. test_technical_gate_reachable_when_clean_and_matching (pre-existing) already proves the REVISE-reaches-True half; the new test proves the complementary half item 297 itself adds -- latest_round_status=None (missing/stale/unparseable feedback, the same None convention item 305 uses) and latest_round_status='BLOCK' each still return False through technical_approval_gate_reachable even with protected_path_dirty=False/head_matches=True, i.e. every other predicate at its own reachable value."
+    },
+    {
+      "item": 298,
+      "evidence": "workflow_state_test.TestApprovalBasisResolution.test_revise_round_requires_override_text",
+      "note": "New this round (batch 24): item 298 restates item 308's own claim (current REVISE feedback + literal override text supplied -> resolve_approval_basis returns USER_OVERRIDE) at the composite /approve-review-implementation level; the same test already recorded as item 308's evidence discharges it directly -- resolve_approval_basis is the exact function apply_technical_approval's caller in .claude/commands/approve-review.md invokes to decide the basis it then writes into technical_approval.user_confirmation."
+    },
+    {
+      "item": 299,
+      "evidence": "workflow_state_test.TestApprovalBasisResolution.test_matching_approve_feedback_yields_external_approve",
+      "note": "New this round (batch 24): item 299's own text states it is a regression guard confirming items 13/296's already-covered unambiguous-APPROVE path is undisturbed by the REVISE-widened gate -- the cited pre-existing test (current, bundle-matching APPROVE -> EXTERNAL_APPROVE, no override text supplied) is exactly item 13's own claim and is stage-parametrized (resolve_approval_basis takes stage as a plain string with no APPROVE-path branching on its value), so it discharges item 299's identical claim at the implementation stage without needing a second, textually-duplicate test."
+    },
+    {
+      "item": 300,
+      "evidence": "workflow_state_test.TestApprovalBasisResolution.test_revise_round_with_no_override_text_refuses_to_write",
+      "note": "New this round (batch 24): item 300 restates item 307's own claim (current REVISE feedback, gate reachable, no override text supplied -> refuses to write, UserConfirmationRejectedError) framed as 'GPT-R51-002's no-automatic-progression invariant survives the gate's widened reachability' -- the same test already recorded as item 307's evidence discharges it directly."
+    },
+    {
+      "item": 301,
+      "evidence": "workflow_fingerprint_generalization_test.TestPrepareAiReviewShImplementationStageHeadGuard.test_interrupted_after_durability_commit_resumes_without_a_second_commit",
+      "note": "New this round (batch 24): item 301 restates item 227's own claim naming the specific source phase (SELF_REVIEWING_IMPLEMENTATION -> S committed -> crash -> fresh session) -- the same test already recorded as item 227's evidence commits S for real via the ordinary (non-recovered-role) Workflow-Bundle-Generation-Record trailer pair, i.e. the SELF_REVIEWING_IMPLEMENTATION-originated writer shape, and proves the fresh session resumes via the caller-level bundle-publication-resume contract alone with no second commit, no implementation_revision change and no phase rewrite."
+    },
+    {
+      "item": 302,
+      "evidence": "workflow_state_test.TestSameContentRepublicationEndToEnd.test_single_republication_then_full_interval_validates",
+      "note": "New this round (batch 24): item 302 requires the same crash-boundary resume safety exercised from APPLYING_REVIEW_FEEDBACK after a same-content republication (S2 committed, then crash), confirming the resume path is uniform across both of record_bundle_generation's writer shapes. The cited test commits S2 via the recovered-role Workflow-Supersedes trailer (record_bundle_generation's same_content outcome) and then confirms, via implementation_provenance_interval_reachable/verify_implementation_provenance_interval fed only durably-committed state, that S2 is discovered as the current tip and the whole P->T->S2 chain validates -- exactly the fresh-session discovery a crash-then-resume would perform, for the second writer shape item 227/301's own test exercises for the first."
+    },
+    {
+      "item": 303,
+      "evidence": "workflow_state_test.TestRecordBundleGenerationSameContentOutcome.test_illegal_source_phase_refused_even_for_same_content_outcome",
+      "note": "New this round (batch 24): item 303 claims that invoking record_bundle_generation with live HEAD already at the round's content-verified tip T is unreachable from either legal source phase by construction, and that a hand-constructed harness forcing the call anyway is refused by the ordinary legal-source-phase check. The cited test is exactly that hand-constructed harness: phase=IMPLEMENTING (a phase that, by construction, is never live-current while HEAD sits at T for either legal writer shape) still reaches record_bundle_generation directly and is refused by IllegalBundleGenerationSourcePhaseError -- the same ordinary check, never a special-cased HEAD==T branch."
     }
   ]
 }
+
+

@@ -2208,6 +2208,26 @@ class TestApprovalGateReachability(unittest.TestCase):
             head_matches_reviewed_implementation_head=True,
         ))
 
+    def test_technical_gate_missing_or_block_feedback_never_reaches_regardless_of_other_conditions(self):
+        """Item 297 (`WF8c`): `test_technical_gate_reachable_when_clean_
+        and_matching` above already proves a current `REVISE` reaches this
+        gate exactly like `APPROVE` -- that is not a general relaxation.
+        Feedback that is missing entirely, bound to a stale/non-current
+        bundle, or unparseable all collapse to no discoverable
+        `latest_round_status` (`None`, the same convention item 305's
+        `approval_gate_reachable(None)` case uses), and a current `BLOCK`
+        is its own distinct status -- both must still return `False` here
+        even when every other predicate is at its own "reachable" value,
+        confirming only current `REVISE`/`APPROVE` ever reach this gate."""
+        self.assertFalse(ws.technical_approval_gate_reachable(
+            latest_round_status=None, protected_path_dirty=False,
+            head_matches_reviewed_implementation_head=True,
+        ))
+        self.assertFalse(ws.technical_approval_gate_reachable(
+            latest_round_status="BLOCK", protected_path_dirty=False,
+            head_matches_reviewed_implementation_head=True,
+        ))
+
     def test_v1_plan_gate_ignores_plan_review_stages(self):
         self.assertTrue(ws.plan_approval_gate_reachable(
             latest_round_status="APPROVE", governing_workflow_version="1",
