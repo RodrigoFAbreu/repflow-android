@@ -184,29 +184,64 @@ class TestAgainstRealRepository(unittest.TestCase):
         working tree and registry-declared plan_revision. This is exactly
         the acceptance criterion round 18 found violated -- the round-17
         bundle's manifest stated a review_content_id that no revision
-        number reproduced."""
+        number reproduced.
+
+        Stage-aware (`OPUS-R130-M01`): this test previously always
+        recomputed via the *plan*-stage projection, making it permanently
+        red and detective-inert from the first implementation-stage bundle
+        onward (`current/`'s own MANIFEST.md has stated `stage:
+        implementation` since round 18's own successor rounds) -- the red
+        result was stale-test logic, never evidence the bundle's own
+        identity was wrong. `MANIFEST.md`'s own `stage:`/`base_commit:`
+        fields (which it already states unconditionally) now select which
+        of the two projections this test recomputes against, so it stays
+        a live detective regression for whichever stage `current/` is
+        actually holding."""
         repo_root = _repo_root()
         bundle_dir = repo_root / ".ai-review" / "workflow-v2-1-core" / "current"
         manifest_path = bundle_dir / "MANIFEST.md"
         if not manifest_path.is_file():
             self.skipTest("no MANIFEST.md present in this checkout's bundle")
+        manifest_text = manifest_path.read_text()
         existing = wf.read_manifest_identifiers(manifest_path)
         reported = existing.get("review_content_id")
         self.assertIsNotNone(reported, "MANIFEST.md must report review_content_id in the contract spelling")
-        plan_revision = wf.load_plan_revision(repo_root, wf.DEFAULT_REGISTRY_PATH, wf.DEFAULT_PLAN_PATH)
-        recomputed, _ = wf.compute_review_content_id_plan_stage(
-            repo_root, BASE_COMMIT,
-            work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=plan_revision,
-            protected=wf.PLAN_STAGE_PROTECTED, excluded_paths=wf.PLAN_STAGE_EXCLUDED_PATHS,
-            excluded_prefixes=wf.PLAN_STAGE_EXCLUDED_PREFIXES,
-        )
+
+        stage_match = re.search(r"^stage: (\w+)$", manifest_text, re.MULTILINE)
+        self.assertIsNotNone(stage_match, "MANIFEST.md must state its own stage")
+        stage = stage_match.group(1)
+        base_commit_match = re.search(r"^base_commit: ([0-9a-f]{40})$", manifest_text, re.MULTILINE)
+        self.assertIsNotNone(base_commit_match, "MANIFEST.md must state its own base_commit")
+        base_commit = base_commit_match.group(1)
+
+        if stage == "plan":
+            plan_revision = wf.load_plan_revision(repo_root, wf.DEFAULT_REGISTRY_PATH, wf.DEFAULT_PLAN_PATH)
+            recomputed, _ = wf.compute_review_content_id_plan_stage(
+                repo_root, base_commit,
+                work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=plan_revision,
+                protected=wf.PLAN_STAGE_PROTECTED, excluded_paths=wf.PLAN_STAGE_EXCLUDED_PATHS,
+                excluded_prefixes=wf.PLAN_STAGE_EXCLUDED_PREFIXES,
+            )
+        elif stage == "implementation":
+            protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
+                wf.load_implementation_stage_classification(repo_root)
+            )
+            recomputed, _ = wf.compute_review_content_id_implementation_stage(
+                repo_root, base_commit,
+                work_item_type="process", work_item_id="workflow-v2-1-core",
+                protected_paths=protected_paths, protected_prefixes=protected_prefixes,
+                excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,
+            )
+        else:
+            self.fail(f"MANIFEST.md states an unrecognized stage: {stage!r}")
+
         self.assertEqual(
             reported, recomputed,
-            "the review_content_id reported inside the submitted bundle must recompute "
-            "unchanged from the current working tree and registry plan_revision",
+            f"the review_content_id reported inside the submitted {stage}-stage bundle must "
+            f"recompute unchanged from the current working tree",
         )
-        print(f"\n[demonstration] MANIFEST.md-reported review_content_id: {reported}")
-        print(f"[demonstration] recomputed review_content_id:            {recomputed}")
+        print(f"\n[demonstration] MANIFEST.md-reported review_content_id ({stage}): {reported}")
+        print(f"[demonstration] recomputed review_content_id:                    {recomputed}")
 
     def test_plan_title_revision_matches_declared_plan_revision(self):
         """Missing-test item 109 (OPUS-R14-004): a concrete regression
