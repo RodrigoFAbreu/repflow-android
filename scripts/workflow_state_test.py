@@ -10046,7 +10046,12 @@ class TestCheckpointReachabilityConformance(unittest.TestCase):
             result = ws.verify_checkpoint_reachability_conformance(repo.root, commit, "wi")
             self.assertEqual(result["status"], "FAIL")
             for assertion in result["failing_assertions"]:
-                self.assertNotIn("4", assertion.split(":")[0])
+                # OPUS-R130-M03: the item list lives after the clause
+                # label's own colon (e.g. "clause (b1): items [5, 6] ...");
+                # checking only `split(":")[0]` inspected the label text
+                # and could never fail regardless of which items were
+                # actually reported, so it never proved item 4 absent.
+                self.assertNotIn("4", assertion.split(":", 1)[1])
             self.assertTrue(any("5" in a and "6" in a for a in result["failing_assertions"]))
 
     def test_flags_owner_absent_from_the_registry(self):
