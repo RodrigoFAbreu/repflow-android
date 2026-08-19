@@ -178,7 +178,13 @@ until `docs/ai-workflow/WORKFLOW_STATE.json` exists to read it from
    identity subsystem or its wiring.
 6. Commit the checkpoint's changes, carrying an exact
    `Workflow-Checkpoint: <id>` + `Workflow-Work-Item: workflow-v2-1-core`
-   trailer. Once `docs/ai-workflow/WORKFLOW_STATE.json` exists, also call
+   trailer. **These two lines must be the commit message's final
+   paragraph** — after any `Co-Authored-By:`/`Claude-Session:` lines, never
+   before them (`OPUS-R129-001`): Git's `git interpret-trailers --parse`,
+   the exact mechanism `discover_checkpoint_commits` uses, treats only the
+   message's last paragraph as trailers, so a blank line after these two
+   lines (e.g. one followed by `Co-Authored-By:`) silently discards both
+   and makes the checkpoint undiscoverable. Once `docs/ai-workflow/WORKFLOW_STATE.json` exists, also call
    `workflow_state.complete_checkpoint(state, "workflow-v2-1-core",
    checkpoint_id, registry, now, repo_root=repo_root)` and persist the
    returned state in that same commit (`WFR-69`, `OPUS-R109-004`) — the

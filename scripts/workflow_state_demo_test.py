@@ -108,7 +108,178 @@ def _registry_row_mismatches(row: dict, entry: dict) -> list[tuple[str, str, obj
     return mismatches
 
 
+_WORKFLOW_TRAILER_LOOKALIKE_RE = re.compile(r"^(Workflow-[A-Za-z-]+):\s*(.*)$")
+_TRAILER_SHAPED_LINE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*:\s*\S")
+
+
+def _message_paragraphs(body: str) -> list[list[str]]:
+    """Splits a commit message into blank-line-delimited paragraphs, each a
+    list of its non-empty lines -- the same block-shaped grouping Git's own
+    trailer machinery reasons about, needed so the mechanical guard below
+    can tell an actual trailer-block-shaped paragraph (every line `key:
+    value`) from ordinary hard-wrapped prose that merely happens to start a
+    line with something matching `Workflow-[A-Za-z-]+:` (e.g. a sentence
+    discussing trailer names)."""
+    paragraphs: list[list[str]] = []
+    current: list[str] = []
+    for line in body.splitlines():
+        if line.strip() == "":
+            if current:
+                paragraphs.append(current)
+                current = []
+        else:
+            current.append(line)
+    if current:
+        paragraphs.append(current)
+    return paragraphs
+
+
+# OPUS-R129-001: the exact, independently-verified set of commits in
+# `162154d3..HEAD` that write a `Workflow-[A-Za-z-]+:` line, inside an
+# otherwise trailer-block-shaped paragraph, that Git's own
+# `interpret-trailers --parse` does not recognize as a trailer (a blank
+# line before further prose -- typically `Co-Authored-By:`/`Claude-Session:`
+# -- pushes the Workflow-* paragraph out of the message's own last
+# paragraph, which is all `interpret-trailers` ever reads). History
+# rewriting is not available here (several of these SHAs are pinned into
+# `WORKFLOW_STATE.json`/approved bundles as ordinary commit references),
+# so these are permanently, individually grandfathered -- explicitly named,
+# not silently ignored -- while `.claude/commands/bootstrap-workflow-v2.md`
+# step 6 and `.claude/commands/milestone-implement.md` step 1f now both
+# state the final-paragraph requirement so no *new* commit joins this set.
+# Recomputed and pinned at the OPUS-R129-001 remediation round; the set
+# below is exactly what `_workflow_trailer_lookalike_violations` finds at
+# `162154d3..4a769fd` (the last pre-fix commit in this work item's own
+# history).
+_GRANDFATHERED_WORKFLOW_TRAILER_LOOKALIKE_VIOLATIONS = frozenset({
+    "0104100afca8dc4a6464f89c85dfc80b14c740c2",
+    "0b3745465b45059a1540b5e8b717044cda515682",
+    "11796086602f4443163dc581453bb2b49f431e6f",
+    "28952ebfad5b8a6633c21b7aab843170b9d3d303",
+    "2cc89da38eac15109642f3288fe4c3dc0f893e2b",
+    "31a00a6dedbc21047bd579e91b1f1f22b75c4624",
+    "3887e1e99e6e18618c970ec1ef2b2739e648981f",
+    "3ef33f01c34129f137344115eb5ab673f01af079",
+    "4a769fdfbff8824bafbed034549e6971f33aab17",
+    "5d447ee040e3098eac6664654b10adefcc654b00",
+    "6228d9d1fbcf654ff30d2d6de650d6004f30270e",
+    "6348c22baf230a0bde76d3f32a28ff4104202397",
+    "6af29f3404b714c7a1cb8ea79fff91973dcb8094",
+    "78f1e808e1792046d328ba9b87765607fd10a716",
+    "7acbd0a40f028d112aa655a1fa67713292ee325e",
+    "81e5b15213969d118061a03d143899572fb47175",
+    "900b655e5d43c4756f61d664887b43f318633daf",
+    "98d423fc899fc5b63a43ac1d98cbf8013bf46e05",
+    "a2949bfb1a0e1d242bb3897206339376d5492cf4",
+    "a70bf9353ae47c0647fb5f1b451362211c1a3fab",
+    "a8af94020687ad5a4320663b7b456f6ce27f4212",
+    "ac6d1522dbbadebd51b66261087a5c6814daddd8",
+    "bb28744c232ede2f2ebd64eeef69e32a996e3608",
+    "be4636a25ce215dc03c80d5953f8f211b8b42f89",
+    "be99257a9b0a7d4f38b16618e24f8721b94a023e",
+    "c132185f79fc31ba299033a0f4c6136fa9fb9123",
+    "c6fb46c55916d2c8134dc3b2c6101c6fbd02b1c0",
+    "c75215f9e11d1e6a258eff0b3942ee98091f2024",
+    "cd473410a6d5a3dee45478737a74f37dfdbd9417",
+    "d18d939d59752063aedea17b94694cc1dac2fd16",
+    "d70d500d71a2644eb02736a355ebe1e34b5472b0",
+    "decd2752e665f5af5660975cb2f3e3d26c058890",
+    "e321f1d961e0c99e1ca59b90ceb45141f375d8d8",
+    "e3be7321a7ca06a8cda55f9fa667551dc1001a0f",
+    "e5bed2324b2a13bf6fd37c0108249e5602e4b0b2",
+    "ef9bc012099b0302a24c6367eae891ae5e66f142",
+    "f2f47f2298c071a53370f5edcbd74455320c92eb",
+    "fac2bac3a6daee56a8393c50b1bcc6cfc64fced9",
+    "fb7cc3eafebcc232b79644abd021fe17b48e161f",
+    "fd0eb73e5d1895a24e018b44526f7e7dbf400e5f",
+})
+
+
+def _workflow_trailer_lookalike_violations(repo_root: Path, commits: list[str]) -> dict[str, list[str]]:
+    """For each commit, the `Workflow-*: value` lines that appear inside an
+    otherwise trailer-block-shaped paragraph (every non-empty line in that
+    paragraph matches `key: value`) but do not come out of `git
+    interpret-trailers --parse` -- `_commit_trailers`'s exact mechanism.
+    Returns `{commit: [description, ...]}` for violating commits only."""
+    violations: dict[str, list[str]] = {}
+    for commit in commits:
+        body = subprocess.run(
+            ["git", "log", "-1", "--format=%B", commit],
+            cwd=repo_root, check=True, capture_output=True, text=True,
+        ).stdout
+        lookalikes = [
+            m.groups()
+            for paragraph in _message_paragraphs(body)
+            if all(_TRAILER_SHAPED_LINE_RE.match(line) for line in paragraph)
+            for line in paragraph
+            if (m := _WORKFLOW_TRAILER_LOOKALIKE_RE.match(line))
+        ]
+        if not lookalikes:
+            continue
+        parsed = ws._commit_trailers(repo_root, commit)
+        bad = [
+            f"{key}: {value!r} does not parse as a trailer (parsed: {parsed})"
+            for key, value in lookalikes if parsed.get(key) != value
+        ]
+        if bad:
+            violations[commit] = bad
+    return violations
+
+
 class TestAgainstRealRepository(unittest.TestCase):
+    def test_no_new_workflow_trailer_lookalike_violations_beyond_the_grandfathered_set(self):
+        """OPUS-R129-001's own mechanical guard, required acceptance
+        criterion 2: every commit in `base..HEAD` whose message text
+        contains a `Workflow-[A-Za-z-]+:` line inside a trailer-block-
+        shaped paragraph must have that line actually parse as a Git
+        trailer via `git interpret-trailers --parse` -- the exact
+        mechanism `_commit_trailers`/`discover_checkpoint_commits` use. A
+        line that looks like a trailer but isn't (because a blank line and
+        further prose -- typically `Co-Authored-By:`/`Claude-Session:` --
+        follows it, so Git treats only the message's actual last paragraph
+        as trailers) is exactly `4a769fd`'s own defect class: the
+        checkpoint- or approval-completing commit becomes permanently
+        undiscoverable by the scoped trailer search, with no signal at
+        commit time.
+
+        History rewriting is not available (several of the already-
+        violating SHAs are pinned into `WORKFLOW_STATE.json`/approved
+        bundles), so this cannot assert zero violations outright -- the
+        pre-fix violations are individually grandfathered by exact SHA
+        above, not silently excluded by a blanket rule. What this test
+        actually guards is *recurrence*: no commit outside that fixed,
+        named set may violate this property, now that
+        `.claude/commands/bootstrap-workflow-v2.md` step 6 and
+        `.claude/commands/milestone-implement.md` step 1f both state the
+        final-paragraph requirement explicitly. The equality assertion
+        (not merely subset) also catches the opposite drift: a
+        grandfathered SHA silently ceasing to reproduce would mean this
+        constant itself has gone stale."""
+        repo_root = _repo_root()
+        commits = [
+            line for line in subprocess.run(
+                ["git", "log", "--format=%H", f"{BASE_COMMIT}..HEAD"],
+                cwd=repo_root, check=True, capture_output=True, text=True,
+            ).stdout.splitlines() if line
+        ]
+        self.assertTrue(commits, f"expected at least one commit in {BASE_COMMIT}..HEAD")
+        violations = _workflow_trailer_lookalike_violations(repo_root, commits)
+        observed = set(violations)
+        new_violations = observed - _GRANDFATHERED_WORKFLOW_TRAILER_LOOKALIKE_VIOLATIONS
+        self.assertEqual(
+            new_violations, set(),
+            f"{len(new_violations)} commit(s) beyond the grandfathered pre-fix set write a "
+            f"Workflow-*: line Git does not parse as a trailer -- it must be the message's "
+            f"own final paragraph: {[(c, violations[c]) for c in sorted(new_violations)]}",
+        )
+        healed = _GRANDFATHERED_WORKFLOW_TRAILER_LOOKALIKE_VIOLATIONS - observed
+        self.assertEqual(
+            healed, set(),
+            f"{len(healed)} grandfathered SHA(s) no longer reproduce a violation -- "
+            f"history is immutable, so this means the constant itself is stale (a rebase, "
+            f"or a base-commit change): {sorted(healed)}",
+        )
+
     def test_wf0_and_wf1a_are_discovered_via_real_trailer_search(self):
         repo_root = _repo_root()
         discovered = ws.discover_checkpoint_commits(repo_root, WORK_ITEM_ID, BASE_COMMIT)
@@ -304,24 +475,23 @@ class TestAgainstRealRepository(unittest.TestCase):
                 "does not match plan_approval.review_content_manifest",
             )
 
-    def test_reviewed_implementation_head_matches_live_head_right_now(self):
-        """GPT-R31-001: `record_bundle_generation`'s own state write must
-        not itself be a separate git commit -- that would move live HEAD
-        past the very commit it records, making `/approve-review`'s exact
-        `work_item["reviewed_implementation_head"] == <live HEAD SHA>`
-        freshness check (`approve-review.md` step 1) permanently
-        unsatisfiable without a further, unrelated commit. Left
-        uncommitted (an ordinary, allowed dirty state --
-        `WORKFLOW_STATE.json` dirtiness never blocks
-        `technical_approval_gate_reachable`, by construction of the
-        implementation-stage classification), the two must agree the
-        moment this state was written, proven here directly against the
-        real repository rather than asserted in prose. This is a
-        point-in-time proof, not a permanent invariant: it will correctly
-        stop holding once `/approve-review implementation` commits its
-        own approval trailer on top -- at that point `reviewed_implementation_head`
-        is a fixed historical record and live HEAD has moved past it by
-        design (`WFR-22`)."""
+    def test_reviewed_implementation_head_equals_the_generation_records_own_first_parent(self):
+        """OPUS-R129-002: retires this test's own pre-`WF8B-003` claim
+        (`GPT-R31-001`: `record_bundle_generation`'s own state write must
+        not itself be a separate git commit). `D-Approval-Commits`
+        revision 28 inverted that rule: the durability commit is now
+        mandatory and must land *before* generation, so by the time a
+        bundle is actually generated, `reviewed_implementation_head` is
+        already durable inside a dedicated `Workflow-Bundle-Generation-
+        Record: <work_item_id>/<implementation_revision>` commit -- which
+        is itself the *child* of the commit it records, never equal to
+        live HEAD. The old assertion (`reviewed_implementation_head ==
+        live HEAD`) is therefore false on every round under the current
+        contract and would stay red forever. The current, real invariant,
+        proven directly against this repository: the generation-record
+        commit for this work item's current `implementation_revision` is
+        exactly live HEAD, and its own recorded `reviewed_implementation_head`
+        equals that same commit's own first parent -- never itself."""
         repo_root = _repo_root()
         state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
         item = state["work_items"][WORK_ITEM_ID]
@@ -332,10 +502,23 @@ class TestAgainstRealRepository(unittest.TestCase):
             item["reviewed_implementation_head"],
             "no bundle has ever been generated for this work item yet",
         )
+        record_commit = ws.discover_current_bundle_generation_record_commit(
+            repo_root, WORK_ITEM_ID, item["base_commit"], live_head, item["implementation_revision"],
+        )
         self.assertEqual(
-            item["reviewed_implementation_head"], live_head,
-            "reviewed_implementation_head must equal live HEAD while the "
-            "state write recording it remains uncommitted",
+            record_commit, live_head,
+            "the current implementation_revision's own Workflow-Bundle-Generation-Record "
+            "commit must be exactly live HEAD -- the durability commit lands before "
+            "generation and nothing should commit on top of it before the next round",
+        )
+        first_parent = subprocess.run(
+            ["git", "rev-parse", f"{live_head}^"], cwd=repo_root, check=True, capture_output=True, text=True,
+        ).stdout.strip()
+        self.assertEqual(
+            item["reviewed_implementation_head"], first_parent,
+            "reviewed_implementation_head must equal the generation-record commit's own "
+            "first parent -- the commit that was actually reviewed, never the durability "
+            "commit recording it",
         )
 
     def test_historical_wf0_plan_approval_remains_independently_discoverable(self):

@@ -172,7 +172,14 @@ dirty-resume rule, `WF2`):
       trailers (D-Commit-Provenance's exact trailer shape -- this command
       only writes the trailer, it never needs to search for one itself;
       the exact scoped lookup later checks use is
-      `workflow_state.discover_checkpoint_commits`, `WF4a-iii`).
+      `workflow_state.discover_checkpoint_commits`, `WF4a-iii`). **These
+      two lines must be the commit message's final paragraph** -- after
+      any `Co-Authored-By:`/`Claude-Session:` lines, never before them
+      (`OPUS-R129-001`): Git's `git interpret-trailers --parse`, the exact
+      mechanism `discover_checkpoint_commits` uses, treats only the
+      message's last paragraph as trailers, so a blank line after these
+      two lines (e.g. one followed by `Co-Authored-By:`) silently discards
+      both and makes the checkpoint undiscoverable.
 
     Both acts happen inside the same `"destructive"` guard window so a
     takeover landing between them cannot leave two worktrees each
