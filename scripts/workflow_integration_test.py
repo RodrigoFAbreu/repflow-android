@@ -481,7 +481,13 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # at the points `WFR-67`'s own text names -- intentional content
     # change, not a regression.
     "milestone-plan.md": "310271edac2f76351e8bcd93d540a955050b15b1291de3f008bd61b4678617ad",
-    "milestone-implement.md": "fdcbb5fc7ff15c0e5607d3e7144db50a2e5ee26c8db346c72ea8cda05f542197",
+    # milestone-implement.md further updated, OPUS-R129-001: step 1f's
+    # checkpoint-completion commit instruction now states explicitly that
+    # the Workflow-Checkpoint/Workflow-Work-Item trailer must be the
+    # commit message's own final paragraph, after any Co-Authored-By:/
+    # Claude-Session: lines, never before them -- intentional content
+    # change (the mechanical fix for 4a769fd's own defect class).
+    "milestone-implement.md": "83385a3203826b8fb7f5191af0ee6369c7d8154d9818135ced482ae0ec38a1f5",
     # approve-review.md (WF8c item (c), same-content bundle-generation
     # republication idempotency; further updated WF8c item (b): the
     # trailing caveat naming the dedicated /recover-implementation-provenance
@@ -520,7 +526,14 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # and step 2's durability guard rebound from the bare
     # plan_approval.approved_review_content_id equality to
     # implementing_entry_reachable -- intentional content change.
-    "bootstrap-workflow-v2.md": "ac5c32fe7d5dbb552b758cbee7cc168de769c6f27a272e8a7ec546719957d400",
+    #
+    # bootstrap-workflow-v2.md further updated, OPUS-R129-001: step 6's
+    # checkpoint-completion commit instruction now states explicitly that
+    # the Workflow-Checkpoint/Workflow-Work-Item trailer must be the
+    # commit message's own final paragraph, after any Co-Authored-By:/
+    # Claude-Session: lines, never before them -- intentional content
+    # change (the mechanical fix for 4a769fd's own defect class).
+    "bootstrap-workflow-v2.md": "6cd29d3d6382ba1e246ecf1779aee9f649cc15a8b3489abbcbdecb04b1be578f",
 }
 
 
