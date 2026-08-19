@@ -9862,6 +9862,8 @@ class TestCheckpointReachabilityConformance(unittest.TestCase):
         current_checkpoint_id: str | None = None,
         wfr63_checkpoint_ids: list[str] | None = ("WF8b", "WF8c"),
         include_mapping: bool = True,
+        ledger_entries: list[dict] | None = None,
+        wf8c_evidence_entries: list[dict] | None = None,
     ) -> str:
         plan_lines = [
             "# Plan\n\n",
@@ -9900,6 +9902,15 @@ class TestCheckpointReachabilityConformance(unittest.TestCase):
             (repo.root / "mapping.json").write_text(json.dumps(mapping))
         state = {"work_items": {"wi": work_item}}
         (plan_dir / "WORKFLOW_STATE.json").write_text(json.dumps(state))
+
+        if ledger_entries is not None:
+            ledger_path = repo.root / ws.ledger_status_path_for_work_item("wi")
+            ledger_path.parent.mkdir(parents=True, exist_ok=True)
+            ledger_path.write_text(json.dumps({"entries": ledger_entries}))
+        if wf8c_evidence_entries is not None:
+            evidence_path = repo.root / ws.wf8c_evidence_path_for_work_item("wi")
+            evidence_path.parent.mkdir(parents=True, exist_ok=True)
+            evidence_path.write_text(json.dumps({"entries": wf8c_evidence_entries}))
 
         _run(["git", "add", "-A"], cwd=repo.root)
         _run(["git", "commit", "-q", "-m", "fixture"], cwd=repo.root)
@@ -9942,6 +9953,59 @@ class TestCheckpointReachabilityConformance(unittest.TestCase):
             self.assertEqual(result["status"], "FAIL")
             self.assertTrue(any("clause (a)" in a for a in result["failing_assertions"]))
             self.assertTrue(any("clause (b1)" in a for a in result["failing_assertions"]))
+
+    def test_discharged_items_pass_once_the_owner_completes(self):
+        """OPUS-R129-003: the counterpart to the undischarged case above,
+        pinning clause (a)'s `current_owner is None` (post-terminal)
+        branch explicitly rather than exercising it only by accident.
+        Same terminal fixture (both registry checkpoints `COMPLETE`,
+        items 4-6 still `ABSENT`/`WF8c`), but items 4-6 now carry a
+        recorded evidence reference in the companion
+        `wi-wf8c-evidence.json` -- `WF8c`'s own resolution rule (revision
+        88, `OPUS-R110-001`) closes such an item by evidence, never by
+        flipping the table's frozen status to `IMPLEMENTED`. Discharged
+        items must not count as open work once their owner completes."""
+        with ScratchRepo() as repo:
+            commit = self._commit_fixture(
+                repo,
+                table_rows=self._CLEAN_TABLE_ROWS,
+                missing_test_max=6,
+                registry_checkpoints=self._LINEAR_TWO_CHECKPOINT_REGISTRY,
+                state_checkpoints={"WF8b": {"status": "COMPLETE"}, "WF8c": {"status": "COMPLETE"}},
+                wf8c_evidence_entries=[
+                    {"item": 4, "evidence": "fixture.Case.test_ok"},
+                    {"item": 5, "evidence": "fixture.Case.test_ok"},
+                    {"item": 6, "evidence": "fixture.Case.test_ok"},
+                ],
+            )
+            result = ws.verify_checkpoint_reachability_conformance(repo.root, commit, "wi")
+            self.assertEqual(result["status"], "PASS", result["detail"])
+            self.assertEqual(result["failing_assertions"], [])
+
+    def test_partially_discharged_items_still_flag_the_undischarged_remainder(self):
+        """A mix within the same owner: item 4 discharged (evidence
+        recorded, via the ledger's own `evidence` field this time -- the
+        `ledger-wins` half of the merge, not only the companion-file-fills-
+        gaps half the test above exercises), items 5-6 not. Only 5 and 6
+        may still be flagged -- discharge is per-item, not a blanket
+        exemption once any evidence exists for the owning checkpoint."""
+        with ScratchRepo() as repo:
+            commit = self._commit_fixture(
+                repo,
+                table_rows=self._CLEAN_TABLE_ROWS,
+                missing_test_max=6,
+                registry_checkpoints=self._LINEAR_TWO_CHECKPOINT_REGISTRY,
+                state_checkpoints={"WF8b": {"status": "COMPLETE"}, "WF8c": {"status": "COMPLETE"}},
+                ledger_entries=[
+                    {"item": 4, "status": "ABSENT", "owner_checkpoint": "WF8c",
+                     "evidence": "fixture.Case.test_ok"},
+                ],
+            )
+            result = ws.verify_checkpoint_reachability_conformance(repo.root, commit, "wi")
+            self.assertEqual(result["status"], "FAIL")
+            for assertion in result["failing_assertions"]:
+                self.assertNotIn("4", assertion.split(":")[0])
+            self.assertTrue(any("5" in a and "6" in a for a in result["failing_assertions"]))
 
     def test_flags_owner_absent_from_the_registry(self):
         # The registry never grew a WF8c entry at all, but the table

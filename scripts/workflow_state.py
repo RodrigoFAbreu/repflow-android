@@ -7155,16 +7155,37 @@ def verify_checkpoint_reachability_conformance(
     (`parse_reconciliation_table`, which already applies the per-item
     resolution rule) still satisfy item 355's own clauses:
 
-    (a) every open (non-`IMPLEMENTED`) item's resolved owner is the *live*
-        umbrella checkpoint `select_next_checkpoint` actually returns
-        today -- never a hardcoded id that silently goes stale the moment
-        that checkpoint completes (`OPUS-R101-002`'s own defect class, one
-        level up from what this conformance protects against here);
-    (b1) no open item names an already-`COMPLETE` checkpoint as its owner;
-    (b2) every open item names a real, reachable, non-`COMPLETE` registry
-         owner, unless its status is `SUPERSEDED` (owner `none` -- whether
-         the design section it tests is genuinely superseded is a plan-text
-         judgment call this mechanism does not re-litigate);
+    (a) every open (non-`IMPLEMENTED`), *undischarged* item's resolved
+        owner is the *live* umbrella checkpoint `select_next_checkpoint`
+        actually returns today -- never a hardcoded id that silently goes
+        stale the moment that checkpoint completes (`OPUS-R101-002`'s own
+        defect class, one level up from what this conformance protects
+        against here);
+    (b1) no open, undischarged item names an already-`COMPLETE` checkpoint
+         as its owner;
+    (b2) every open, undischarged item names a real, reachable,
+         non-`COMPLETE` registry owner, unless its status is `SUPERSEDED`
+         (owner `none` -- whether the design section it tests is genuinely
+         superseded is a plan-text judgment call this mechanism does not
+         re-litigate);
+
+    "Discharged" (`OPUS-R129-003`): an item the reconciliation table
+    itself still marks `ABSENT`/`PARTIAL` forever -- `WF8c`'s own
+    resolution rule (revision 88, `OPUS-R110-001`) closes such an item by
+    a recorded, re-executable evidence reference, never by flipping the
+    table's frozen text to `IMPLEMENTED` -- so once its owning checkpoint
+    finishes, the item is legitimately no longer *live* open work, even
+    though the table's status column never changes (a fresh plan revision
+    is the only thing that ever could). A discharged item is excluded from
+    all three clauses here. Discharge means only "an evidence reference is
+    recorded" (`_reconciliation_evidence_ids_at_commit`); it does not
+    re-execute it -- re-execution green-ness is `WFO-LEDGER-COVERAGE`'s
+    own separately-verified, non-duplicated property (ii)
+    (`verify_wfo_ledger_coverage`/`_pre_flight_wfo_ledger_coverage`, which
+    already gate checkpoint completion and technical approval on it). An
+    item with no recorded evidence is never discharged and still fails
+    (a)/(b1)/(b2) exactly as before once its owner completes -- the real
+    staleness/omission bug these clauses exist to catch.
     (c) the reconciliation table's own upper bound tracks the 'Missing
         tests' list's highest item, so adding an item without extending
         the table's range fails closed rather than silently orphaning it;
@@ -7206,9 +7227,11 @@ def verify_checkpoint_reachability_conformance(
         current_owner = None
 
     table = parse_reconciliation_table(repo_root, commit)
+    evidence_ids = _reconciliation_evidence_ids_at_commit(repo_root, commit, work_item_id)
 
     open_owners = {
-        row["owner"] for row in table.values() if row["status"] != "IMPLEMENTED" and row["owner"] != "none"
+        row["owner"] for item, row in table.items()
+        if row["status"] != "IMPLEMENTED" and row["owner"] != "none" and item not in evidence_ids
     }
     if current_owner is None:
         if open_owners:
@@ -7226,7 +7249,7 @@ def verify_checkpoint_reachability_conformance(
 
     b1_violations = sorted(
         item for item, row in table.items()
-        if row["status"] != "IMPLEMENTED" and row["owner"] in complete_ids
+        if row["status"] != "IMPLEMENTED" and row["owner"] in complete_ids and item not in evidence_ids
     )
     if b1_violations:
         failing.append(f"clause (b1): items {b1_violations} resolve to an already-COMPLETE owner")
@@ -7235,6 +7258,7 @@ def verify_checkpoint_reachability_conformance(
         item for item, row in table.items()
         if row["status"] not in ("IMPLEMENTED", "SUPERSEDED")
         and (row["owner"] == "none" or row["owner"] not in registry_ids or row["owner"] in complete_ids)
+        and item not in evidence_ids
     )
     if b2_violations:
         failing.append(f"clause (b2): items {b2_violations} name no real, reachable, non-COMPLETE owner")
@@ -7383,6 +7407,40 @@ def _git_show_json_at_commit(repo_root: Path, commit: str, rel_path: Path | str)
     except subprocess.CalledProcessError:
         return None
     return json.loads(text)
+
+
+def _reconciliation_evidence_ids_at_commit(
+    repo_root: Path, commit: str, work_item_id: str,
+) -> dict[int, str]:
+    """Commit-pinned analog of `_reconciliation_evidence_by_item` (which
+    reads the live working tree): the same `<work_item_id>-ledger-
+    status.json` entry-`evidence`-wins, `<work_item_id>-wf8c-evidence.json`
+    companion-fills-gaps merge, read instead via `_git_show_json_at_commit`
+    at the pinned `commit`. Presence here means only "an evidence reference
+    is recorded" -- it deliberately does not re-execute it. Re-execution
+    green-ness is `WFO-LEDGER-COVERAGE`'s own separately-verified property
+    (ii) (`verify_wfo_ledger_coverage`/`_pre_flight_wfo_ledger_coverage`);
+    duplicating that here would make this function recurse into every
+    other item's evidence test on every call, which is not this clause's
+    concern (ownership/reachability consistency, not evidence validity)."""
+    evidence: dict[int, str] = {}
+    ledger = _git_show_json_at_commit(repo_root, commit, ledger_status_path_for_work_item(work_item_id))
+    if isinstance(ledger, dict):
+        for record in ledger.get("entries", []):
+            if not isinstance(record, dict):
+                continue
+            item, ev = record.get("item"), record.get("evidence")
+            if isinstance(item, int) and isinstance(ev, str) and ev:
+                evidence[item] = ev
+    companion = _git_show_json_at_commit(repo_root, commit, wf8c_evidence_path_for_work_item(work_item_id))
+    if isinstance(companion, dict):
+        for record in companion.get("entries", []):
+            if not isinstance(record, dict):
+                continue
+            item, ev = record.get("item"), record.get("evidence")
+            if isinstance(item, int) and isinstance(ev, str) and ev and item not in evidence:
+                evidence[item] = ev
+    return evidence
 
 
 def _materialize_scripts_tree_at_commit(repo_root: Path, commit: str) -> Path:
