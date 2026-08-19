@@ -4019,6 +4019,48 @@ class TestCompleteCheckpointWfr69PreFlight(unittest.TestCase):
             new_state = ws.complete_checkpoint(self._state(), "wi", "A", self._registry(), now="t2", repo_root=root)
             self.assertEqual(new_state["work_items"]["wi"]["checkpoints"]["A"]["status"], "COMPLETE")
 
+    def test_relative_repo_root_produces_the_same_result_as_absolute(self):
+        """OPUS-R129-M01: `_load_and_run_named_test` builds `scripts_dir =
+        Path(repo_root) / "scripts"` and uses that *same relative* value
+        two ways: as the evidence subprocess's own `cwd` (resolved once,
+        correctly, against the calling process's cwd), and as the literal
+        string written into the driver's `sys.path.insert(0, ...)` line,
+        which Python then resolves a *second* time -- against the child's
+        own cwd, which `cwd=` already moved inside `scripts_dir`. Passing
+        `repo_root=Path(".")` while the caller's own cwd is the fixture
+        root reproduces this exactly: the relative `"scripts"` segment
+        gets applied twice, landing on a nonexistent `<root>/scripts/scripts`
+        and failing every evidence lookup closed -- not because anything
+        is genuinely missing, but purely from the double-relative
+        resolution. `complete_checkpoint` now resolves `repo_root` once,
+        before any pre-flight runs, closing this regardless of the
+        caller's own cwd or how `repo_root` was spelled."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_fixture(root)
+            ledger = {
+                "entries": [
+                    {"item": 1, "status": "IMPLEMENTED", "owner_checkpoint": "WF8b",
+                     "evidence": "fixture_evidence_test.OkCase.test_pass"},
+                    {"item": 3, "status": "SUPERSEDED", "owner_checkpoint": "none", "evidence": None},
+                ]
+            }
+            (root / ws.ledger_status_path_for_work_item("wi")).write_text(json.dumps(ledger))
+            companion = {"entries": [
+                {"item": 2, "evidence": "fixture_evidence_test.OkCase.test_pass"},
+            ]}
+            (root / ws.wf8c_evidence_path_for_work_item("wi")).write_text(json.dumps(companion))
+
+            original_cwd = os.getcwd()
+            os.chdir(root)
+            try:
+                new_state = ws.complete_checkpoint(
+                    self._state(), "wi", "A", self._registry(), now="t2", repo_root=Path("."),
+                )
+            finally:
+                os.chdir(original_cwd)
+            self.assertEqual(new_state["work_items"]["wi"]["checkpoints"]["A"]["status"], "COMPLETE")
+
     def test_flags_item_whose_evidence_test_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

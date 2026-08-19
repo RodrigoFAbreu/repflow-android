@@ -1263,6 +1263,32 @@ def _first_parent_commits_ordered(repo_root: Path, head: str = "HEAD") -> list[s
     return [line for line in out.splitlines() if line]
 
 
+def _ambiguous_trailer_recovery_hint(trailer_key: str) -> str:
+    """OPUS-R129-M02: the ambiguity errors previously advertised "a
+    Workflow-Supersedes trailer or an explicit WORKFLOW_STATE.json
+    annotation" for every trailer family alike. Neither is actually
+    implemented for `Workflow-Checkpoint`/`Workflow-Plan-Approval`/
+    `Workflow-Technical-Approval`: `Workflow-Supersedes` is honoured only
+    inside `discover_bundle_generation_record_commits`'s own
+    `_bundle_generation_record_chain_tip` verification, and no
+    `WORKFLOW_STATE.json` annotation reader exists anywhere in this
+    module for any family. Naming a recovery mechanism that does not
+    exist sends an operator hitting the error to a dead end -- this
+    returns an accurate hint per family instead."""
+    if trailer_key == "Workflow-Bundle-Generation-Record":
+        return (
+            "needs a Workflow-Supersedes trailer (the only recovery mechanism this "
+            "trailer family honors -- see _bundle_generation_record_chain_tip / "
+            "/recover-implementation-provenance)"
+        )
+    return (
+        "has no automated recovery mechanism for this trailer family -- resolve manually "
+        "with a corrective forward commit that produces exactly one verified survivor "
+        "(history rewriting is not available; OPUS-R129-001's own remediation is a worked "
+        "example)"
+    )
+
+
 def _discover_trailer_commits(
     repo_root: Path, trailer_key: str, work_item_id: str, base_commit: str,
     head: str, *, ambiguous_error_cls: type[Exception],
@@ -1293,7 +1319,23 @@ def _discover_trailer_commits(
     filters, or filter (1) alone already leaves more than one with no
     `verify` to break the tie) raises `ambiguous_error_cls` rather than
     silently picking (resolves OPUS-R6-022; missing-test items 39, 50, 62,
-    64)."""
+    64).
+
+    `verify` is a **tie-break only, never a precondition on the resolved
+    commit** (`OPUS-R129-M03`): both short-circuits above (`len(candidates)
+    == 1` and `len(tie_broken) == 1`) resolve before `verify` is ever
+    consulted, so a single-candidate value resolves even when its own
+    committed state does not record whatever `verify` would have checked.
+    `WF0` is the live instance this is true and expected for (its
+    completion commit predates `WORKFLOW_STATE.json`'s own existence, so
+    no committed state could ever record it `COMPLETE`) -- `WF0` still
+    resolves at 1 candidate / 0 verified, correctly. The property is
+    general, not `WF0`-specific, and deliberately not tightened into a
+    post-resolution assertion here: doing so would need an explicit
+    legacy exemption for `WF0` (and any future single-commit, pre-state
+    checkpoint), which is a real design decision belonging to whichever
+    change actually needs `verify` to be more than a tie-break, not a
+    silent side effect of this docstring."""
     out = _run(["git", "log", "--format=%H", f"{base_commit}..{head}"], cwd=repo_root)
     commits = [line for line in out.splitlines() if line]
 
@@ -1327,15 +1369,13 @@ def _discover_trailer_commits(
                 f"{len(candidates)} trailer matches in {base_commit}..{head}, "
                 f"{len(tie_broken)} first-parent-ancestor candidates, and "
                 f"{len(verified)} that pass role-specific verification "
-                f"(candidates: {candidates}); needs a Workflow-Supersedes "
-                f"trailer or an explicit WORKFLOW_STATE.json annotation"
+                f"(candidates: {candidates}); {_ambiguous_trailer_recovery_hint(trailer_key)}"
             )
         raise ambiguous_error_cls(
             f"{trailer_key} {value!r} for work item {work_item_id!r} has "
             f"{len(candidates)} trailer matches in {base_commit}..{head}, and "
             f"{len(tie_broken)} remain after the first-parent-ancestor "
-            f"tie-break (candidates: {candidates}); needs a Workflow-Supersedes "
-            f"trailer or an explicit WORKFLOW_STATE.json annotation"
+            f"tie-break (candidates: {candidates}); {_ambiguous_trailer_recovery_hint(trailer_key)}"
         )
     return resolved
 
@@ -2522,10 +2562,17 @@ def plan_approval_takeover_authorization_literal(evidence: dict) -> str:
     """The exact literal a user must produce, derived from the evidence
     they were shown: names the observed `owner_token` and the observed
     `step_seq` (or the literal `none`), so it cannot be written from
-    memory or replayed against a later transaction."""
+    memory or replayed against a later transaction. `evidence["journal"]`
+    is always present by the time this is called (`take_over_plan_
+    approval_transaction` already refuses on `journal is None` first) --
+    its own `work_item_id` is the permanent, work-item-general source for
+    the literal's named subject (`OPUS-R129-M04`; this primitive is not
+    `workflow-v2-1-core`-specific the way a hardcoded literal would
+    imply, the same hardcoded-default class `OPUS-R28-011` retired
+    elsewhere in this module)."""
     progress = evidence.get("progress")
     step_seq = progress["step_seq"] if progress else "none"
-    return (f"take over workflow-v2-1-core plan-approval transaction "
+    return (f"take over {evidence['journal']['work_item_id']} plan-approval transaction "
             f"owner {evidence.get('owner_token')} step_seq {step_seq}")
 
 
@@ -3095,7 +3142,15 @@ def complete_checkpoint(
     entry_spec = next((c for c in registry.get("checkpoints", []) if c["id"] == checkpoint_id), None)
     obligation_ids = (entry_spec or {}).get("completion_obligations", [])
     if obligation_ids:
-        repo_root = Path(repo_root)
+        # OPUS-R129-M01: a relative repo_root reaches _load_and_run_named_test,
+        # which runs its evidence-test subprocess with cwd=<repo_root>/scripts
+        # -- against a relative repo_root, the child resolves that relative
+        # path against its own (already scripts/-rooted) cwd and silently
+        # imports nothing, failing every evidence lookup closed but with a
+        # maximally alarming, spurious "almost everything unresolved" report.
+        # Resolving here, once, before any pre-flight runs, fixes every
+        # caller regardless of how repo_root was spelled.
+        repo_root = Path(repo_root).resolve()
         outstanding: dict[str, list] = {}
         for obligation_id in obligation_ids:
             pre_flight = _PRE_CHECKPOINT_COMPLETION_PRE_FLIGHT.get(obligation_id)
