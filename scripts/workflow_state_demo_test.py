@@ -288,7 +288,7 @@ class TestAgainstRealRepository(unittest.TestCase):
         # WF1a's own commit is what this test suite is committed inside of.
         self.assertIn("WF1a", discovered)
 
-    def test_all_seventeen_checkpoints_resolve_with_wf8b_canonical(self):
+    def test_all_eighteen_checkpoints_resolve_with_wf8b_canonical(self):
         """Item 39's real-repository proof: `WF8b` carries the
         `Workflow-Checkpoint: WF8b` trailer on sixteen distinct commits
         (this work item's own continued-scope WF8b round left many
@@ -297,15 +297,19 @@ class TestAgainstRealRepository(unittest.TestCase):
         verification tie-break (`_checkpoint_commit_claims_complete`) can,
         by finding the one commit whose own committed
         `WORKFLOW_STATE.json` records `WF8b` as `COMPLETE` for
-        `workflow-v2-1-core`. All seventeen registered checkpoints resolve
-        to exactly one commit each, and `WF8b` resolves to `f37c4e0`, the
-        real completion commit (`feat(wf8b): S17 -- restore active
-        pointer, remove dry-run entries, complete WF8b`)."""
+        `workflow-v2-1-core`. All registered checkpoints resolve to
+        exactly one commit each (eighteen since `WF8c` joined the
+        registry; OPUS-R129-001's fix is what lets `WF8c` itself resolve
+        here too, previously masked by `AmbiguousCheckpointTrailerError`
+        raising before this test's own assertions were ever reached), and
+        `WF8b` resolves to `f37c4e0`, the real completion commit
+        (`feat(wf8b): S17 -- restore active pointer, remove dry-run
+        entries, complete WF8b`)."""
         repo_root = _repo_root()
         discovered = ws.discover_checkpoint_commits(repo_root, WORK_ITEM_ID, BASE_COMMIT)
         registry = json.loads((repo_root / "docs/ai-workflow/registry/workflow-v2-1-core-registry.json").read_text())
         registered_ids = [entry["id"] for entry in registry["checkpoints"]]
-        self.assertEqual(len(registered_ids), 17)
+        self.assertEqual(len(registered_ids), 18)
         for checkpoint_id in registered_ids:
             self.assertIn(checkpoint_id, discovered, f"{checkpoint_id} did not resolve")
         self.assertEqual(discovered["WF8b"], "f37c4e04f2358c8d1d5dec333b43538e2f087d15")
@@ -487,11 +491,19 @@ class TestAgainstRealRepository(unittest.TestCase):
         is itself the *child* of the commit it records, never equal to
         live HEAD. The old assertion (`reviewed_implementation_head ==
         live HEAD`) is therefore false on every round under the current
-        contract and would stay red forever. The current, real invariant,
-        proven directly against this repository: the generation-record
-        commit for this work item's current `implementation_revision` is
-        exactly live HEAD, and its own recorded `reviewed_implementation_head`
-        equals that same commit's own first parent -- never itself."""
+        contract and would stay red forever.
+
+        The real invariant does not require the generation-record commit
+        to *be* live HEAD -- ordinary remediation commits legitimately
+        land on top of it during `APPLYING_REVIEW_FEEDBACK`, before the
+        next bundle is generated, and this test must not go stale again
+        the same way the retired one did the moment that happens. What
+        must hold, permanently, once a generation-record commit for this
+        `implementation_revision` exists anywhere in `base..HEAD`: that
+        commit is discoverable, and its own recorded
+        `reviewed_implementation_head` equals that same commit's own
+        first parent -- the commit that was actually reviewed, never the
+        durability commit recording it."""
         repo_root = _repo_root()
         state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
         item = state["work_items"][WORK_ITEM_ID]
@@ -505,14 +517,13 @@ class TestAgainstRealRepository(unittest.TestCase):
         record_commit = ws.discover_current_bundle_generation_record_commit(
             repo_root, WORK_ITEM_ID, item["base_commit"], live_head, item["implementation_revision"],
         )
-        self.assertEqual(
-            record_commit, live_head,
-            "the current implementation_revision's own Workflow-Bundle-Generation-Record "
-            "commit must be exactly live HEAD -- the durability commit lands before "
-            "generation and nothing should commit on top of it before the next round",
+        self.assertIsNotNone(
+            record_commit,
+            f"no Workflow-Bundle-Generation-Record commit found for "
+            f"{WORK_ITEM_ID}/{item['implementation_revision']} in base..HEAD",
         )
         first_parent = subprocess.run(
-            ["git", "rev-parse", f"{live_head}^"], cwd=repo_root, check=True, capture_output=True, text=True,
+            ["git", "rev-parse", f"{record_commit}^"], cwd=repo_root, check=True, capture_output=True, text=True,
         ).stdout.strip()
         self.assertEqual(
             item["reviewed_implementation_head"], first_parent,
