@@ -397,13 +397,30 @@ class TestImplementationStageAgainstRealRepository(unittest.TestCase):
         )
         manifest = projection["review_content_manifest"]
         self.assertTrue(manifest, "expected a non-empty implementation-stage manifest against this milestone's own real diff")
+        # OPUS-R129-004: kept current with implementation_stage.protected_paths'
+        # own individually-carved-out exact entries (each with its own
+        # recorded self-referential-carve-out rationale in the declaration
+        # file itself) -- this assertion's job is catching an *unintended*
+        # new category slipping into the manifest, not re-litigating each
+        # already-declared carve-out's own justification.
+        allowed_prefixes = (".claude/commands/", "scripts/")
+        allowed_exact_paths = {
+            ".github/workflows/ci.yml",
+            "docs/ai-workflow/MILESTONE_WORKFLOW.md",
+            "docs/ai-workflow/REVIEW_PROTOCOL.md",
+            "docs/ai-workflow/registry/workflow-v2-1-core-artifacts.json",
+            "docs/ai-workflow/registry/workflow-v2-1-core-ledger-status.json",
+            "docs/ai-workflow/registry/workflow-v2-1-core-wf8c-evidence.json",
+            "docs/ai-workflow/dry-run/verify_372h_lock_primitive_predicate.py",
+            "docs/ai-workflow/dry-run/verify_372h_raw_edge_derivation.py",
+        }
         for entry in manifest:
-            self.assertTrue(
-                entry["path"].startswith(".claude/commands/")
-                or entry["path"].startswith("scripts/")
-                or entry["path"] == ".github/workflows/ci.yml",
-                f"unexpected protected entry outside this milestone's own tooling: {entry['path']}",
-            )
+            with self.subTest(path=entry["path"]):
+                self.assertTrue(
+                    entry["path"].startswith(allowed_prefixes) or entry["path"] in allowed_exact_paths,
+                    f"unexpected protected entry outside this milestone's own known tooling/declaration "
+                    f"categories: {entry['path']}",
+                )
             self.assertTrue(entry["exists"])
             real_sha = wf._hash_object(repo_root, entry["path"])
             self.assertEqual(entry["blob"], real_sha)
@@ -454,6 +471,66 @@ class TestImplementationStageAgainstRealRepository(unittest.TestCase):
             ),
             "protected",
         )
+
+    def test_372h_dry_run_verifiers_and_ledger_artifacts_are_real_protected_paths(self):
+        """OPUS-R129-004: `docs/ai-workflow/dry-run/verify_372h_lock_primitive_
+        predicate.py`/`verify_372h_raw_edge_derivation.py` are the actual
+        substance of item 372(h)'s conformance obligation -- the protected
+        `scripts/workflow_state_test.py::TestGlobalLockOrderItem372h` loads
+        and executes them verbatim -- not `WF8b`'s throwaway dry-run
+        scenario evidence the surrounding `docs/ai-workflow/dry-run/`
+        prefix is otherwise excluded for. Confirmed here as real,
+        currently-declared implementation-stage `protected_paths` entries
+        (never left to the surrounding excluded prefix), same pattern this
+        test already confirms for `workflow-v2-1-core-ledger-status.json`/
+        `workflow-v2-1-core-wf8c-evidence.json` (`WF8c` item (n),
+        `GPT-R106-002`) -- previously only a manual `TEST_RESULTS.md` note,
+        never an automated regression. A path this test confirms
+        `protected` here is, by `classify_path_implementation_stage`'s own
+        construction, a path whose future edit changes the implementation-
+        stage `review_content_manifest` and therefore stales
+        `technical_approval` -- there is no separate mechanism to prove
+        that with, since `approval_is_current` recomputes exactly this
+        classification."""
+        repo_root = _repo_root()
+        protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
+            wf.load_implementation_stage_classification(repo_root)
+        )
+        for path in (
+            "docs/ai-workflow/dry-run/verify_372h_lock_primitive_predicate.py",
+            "docs/ai-workflow/dry-run/verify_372h_raw_edge_derivation.py",
+            "docs/ai-workflow/registry/workflow-v2-1-core-ledger-status.json",
+            "docs/ai-workflow/registry/workflow-v2-1-core-wf8c-evidence.json",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(
+                    wf.classify_path_implementation_stage(
+                        path, protected_paths, protected_prefixes, excluded_paths, excluded_prefixes,
+                    ),
+                    "protected",
+                )
+        # Control: an ordinary docs/ai-workflow/dry-run/ file with no
+        # individual carve-out still falls through to the surrounding
+        # excluded prefix -- the carve-out is scoped to these exact paths,
+        # not a reclassification of the whole prefix.
+        self.assertEqual(
+            wf.classify_path_implementation_stage(
+                "docs/ai-workflow/dry-run/v2-1-dry-run-plan.md",
+                protected_paths, protected_prefixes, excluded_paths, excluded_prefixes,
+            ),
+            "excluded",
+        )
+        # Control: app/, config/, gradle/ (OPUS-R129-005) are excluded, not
+        # protected, at the implementation stage -- the opposite classification
+        # from before this round.
+        for path in ("app/build.gradle.kts", "config/detekt/detekt.yml", "gradle/libs.versions.toml"):
+            with self.subTest(path=path):
+                self.assertEqual(
+                    wf.classify_path_implementation_stage(
+                        path, protected_paths, protected_prefixes, excluded_paths, excluded_prefixes,
+                    ),
+                    "excluded",
+                )
 
 
 if __name__ == "__main__":
