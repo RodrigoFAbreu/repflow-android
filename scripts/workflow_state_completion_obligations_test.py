@@ -1264,7 +1264,15 @@ class BrokenCase(unittest.TestCase):
 _DEFAULT_CONSISTENT_LEDGER_ENTRIES = [
     {"item": 1, "status": "IMPLEMENTED", "owner_checkpoint": "WF8b",
      "evidence": "fixture_ledger_evidence_test.OkCase.test_pass"},
-    {"item": 2, "status": "ABSENT", "owner_checkpoint": "WF8c"},
+    # item 2 (ABSENT/WF8c) carries its own evidence -- GPT-R131-002:
+    # this "consistent, all-green" baseline previously left item 2
+    # unevidenced and still expected PASS, which is exactly the hole
+    # the finding named (an ABSENT/WF8c item's evidence was never
+    # checked at all). A WF8c-owned non-SUPERSEDED item now requires
+    # evidence identically to IMPLEMENTED, so the baseline must supply
+    # it to remain a genuinely consistent, fully-evidenced fixture.
+    {"item": 2, "status": "ABSENT", "owner_checkpoint": "WF8c",
+     "evidence": "fixture_ledger_evidence_test.OkCase.test_pass"},
     {"item": 3, "status": "SUPERSEDED", "owner_checkpoint": "none"},
     {"item": 4, "status": "IMPLEMENTED", "owner_checkpoint": "WF8c",
      "evidence": "fixture_ledger_evidence_test.OkCase.test_pass"},
@@ -1384,6 +1392,76 @@ class TestVerifyWfoLedgerCoverage(unittest.TestCase):
             result = ws.verify_wfo_ledger_coverage(repo.root, commit)
             self.assertEqual(result["status"], "FAIL")
             self.assertTrue(any("item 4" in a for a in result["failing_assertions"]))
+
+    def test_fails_when_absent_wf8c_item_loses_its_evidence(self):
+        """GPT-R131-002's own required regression (1): deleting evidence
+        from an ABSENT/WF8c item is a FAIL, not a silent pass -- the exact
+        omission the pre-fix verifier let through by never checking
+        evidence at all for any non-IMPLEMENTED entry."""
+        with ScratchRepo() as repo:
+            entries = [dict(e) for e in _DEFAULT_CONSISTENT_LEDGER_ENTRIES]
+            for e in entries:
+                if e["item"] == 2:
+                    e.pop("evidence", None)
+            commit = _seed_ledger_coverage_fixture(repo, ledger_entries=entries)
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(any("item 2" in a and "evidence" in a for a in result["failing_assertions"]))
+
+    def test_fails_when_absent_wf8c_item_has_red_evidence(self):
+        """GPT-R131-002's own required regression (2): red evidence on an
+        ABSENT/WF8c item is a FAIL, not a silent pass."""
+        with ScratchRepo() as repo:
+            entries = [dict(e) for e in _DEFAULT_CONSISTENT_LEDGER_ENTRIES]
+            for e in entries:
+                if e["item"] == 2:
+                    e["evidence"] = "fixture_ledger_evidence_test.BrokenCase.test_fail"
+            commit = _seed_ledger_coverage_fixture(repo, ledger_entries=entries)
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(any("item 2" in a for a in result["failing_assertions"]))
+
+    def test_fails_when_partial_wf8c_item_loses_or_has_red_evidence(self):
+        """GPT-R131-002's own required regression (3): a PARTIAL/WF8c item
+        (the table's own item 4 row, left as PARTIAL rather than upgraded
+        to IMPLEMENTED) with deleted or red evidence is a FAIL in both
+        sub-cases -- the same disposition as ABSENT/WF8c, since WFR-69's
+        own status-conditional rule treats every WF8c-owned open item
+        (ABSENT or PARTIAL) identically."""
+        with ScratchRepo() as repo:
+            deleted = [dict(e) for e in _DEFAULT_CONSISTENT_LEDGER_ENTRIES]
+            for e in deleted:
+                if e["item"] == 4:
+                    e["status"] = "PARTIAL"
+                    e.pop("evidence", None)
+            commit = _seed_ledger_coverage_fixture(repo, ledger_entries=deleted)
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(any("item 4" in a and "evidence" in a for a in result["failing_assertions"]))
+
+        with ScratchRepo() as repo:
+            red = [dict(e) for e in _DEFAULT_CONSISTENT_LEDGER_ENTRIES]
+            for e in red:
+                if e["item"] == 4:
+                    e["status"] = "PARTIAL"
+                    e["evidence"] = "fixture_ledger_evidence_test.BrokenCase.test_fail"
+            commit = _seed_ledger_coverage_fixture(repo, ledger_entries=red)
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(any("item 4" in a for a in result["failing_assertions"]))
+
+    def test_superseded_none_item_remains_pass_without_evidence(self):
+        """GPT-R131-002's own required regression (4): SUPERSEDED/none
+        (item 3) stays PASS carrying no evidence key at all -- the one
+        disposition no evidence source can ever discharge, satisfied by
+        the table's own recorded supersession alone."""
+        with ScratchRepo() as repo:
+            entries = [dict(e) for e in _DEFAULT_CONSISTENT_LEDGER_ENTRIES]
+            superseded = next(e for e in entries if e["item"] == 3)
+            self.assertNotIn("evidence", superseded)
+            commit = _seed_ledger_coverage_fixture(repo, ledger_entries=entries)
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "PASS", result.get("detail"))
 
     def test_fails_on_downward_relabel_attack_arm_d(self):
         """GPT-R106-001's own adversarial arm (d): moving a still-open

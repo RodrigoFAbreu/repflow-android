@@ -7498,38 +7498,66 @@ def _reconciliation_evidence_ids_at_commit(
     return evidence
 
 
-def _materialize_scripts_tree_at_commit(repo_root: Path, commit: str) -> Path:
-    """Every tracked file under `scripts/` at `commit`, written into a
-    fresh scratch directory preserving relative paths -- broader than a
-    single verifier's own static import closure (`_materialize_census`),
-    since an evidence test id named in `<work_item_id>-ledger-status.json`
-    /`<work_item_id>-wf8c-evidence.json` can be any test module under
-    `scripts/`, not only `VERIFIER_ENTRY`'s own dependency closure.
-    Caller owns cleanup."""
-    scratch_dir = Path(tempfile.mkdtemp(prefix="wfo-ledger-evidence-scratch-"))
-    for entry in _ls_tree_at_commit(repo_root, commit, "scripts/"):
-        rel = entry["path"][len("scripts/"):]
-        dest = scratch_dir / rel
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(_hardened_run_bytes(["cat-file", "blob", entry["blob"]], cwd=repo_root))
+def _materialize_pinned_worktree_at_commit(repo_root: Path, commit: str) -> Path:
+    """A real, detached Git worktree checked out at `commit` -- a
+    faithful, read-only repository context for evidence ids that are
+    themselves repository-history-dependent (`git rev-parse`, `git diff`
+    against another commit, reads of tracked files outside `scripts/`),
+    not only the tracked `scripts/` tree a single verifier's own static
+    import closure needs (`_materialize_census`). The prior scripts/-only
+    scratch tree (`GPT-R131-001`) left every such evidence id structurally
+    unable to execute at all -- reproduced live against item 359's own
+    bound evidence, whose `_repo_root()` helper calls `git rev-parse
+    --show-toplevel` and found no `.git` there. `git worktree add
+    --detach` gives a pristine checkout of `commit` with no untracked or
+    uncommitted content of its own, so it can never expose this process's
+    own mutable live-worktree state -- only what `commit` itself recorded
+    -- while still being a real, independent repository `git` commands
+    resolve `commit`'s own history against exactly as they would in any
+    other checkout (item 358(c)'s isolation rationale: never trust the
+    live working tree; a pinned, detached worktree is not that). Caller
+    owns cleanup via `_remove_pinned_worktree`."""
+    scratch_dir = Path(tempfile.mkdtemp(prefix="wfo-ledger-evidence-worktree-"))
+    _run(["git", "worktree", "add", "--detach", "--quiet", str(scratch_dir), commit], cwd=repo_root)
     return scratch_dir
+
+
+def _remove_pinned_worktree(repo_root: Path, scratch_dir: Path) -> None:
+    """Undoes `_materialize_pinned_worktree_at_commit` -- removes both the
+    checked-out directory and Git's own worktree registration, so a
+    completed evidence run never leaves a stale entry behind for `git
+    worktree list`-based tooling (this repository's own cross-worktree
+    ownership contract, `D-Checkpoint-Ownership`) to trip over. Falls back
+    to a bare directory removal plus `git worktree prune` if the
+    registered removal itself fails -- cleanup must never raise past a
+    completed or failed evidence run."""
+    result = subprocess.run(
+        ["git", "worktree", "remove", "--force", str(scratch_dir)],
+        cwd=repo_root, capture_output=True, text=True, timeout=60,
+    )
+    if result.returncode != 0:
+        shutil.rmtree(scratch_dir, ignore_errors=True)
+        subprocess.run(["git", "worktree", "prune"], cwd=repo_root, capture_output=True, text=True, timeout=60)
 
 
 def _run_named_test_in_scratch(scratch_dir: Path, test_id: str) -> tuple[bool, str]:
     """Same "resolvable, executable, re-executes green" requirement
     `_load_and_run_named_test` enforces for `WFR-69`'s live-working-tree
     pre-flight, run instead against an already-materialized pinned-commit
-    scratch tree -- `WFO-LEDGER-COVERAGE` property (ii)'s own
-    approval-bound evidence re-execution, which must never trust the live
-    working tree (item 358(c)'s isolation rationale applies identically
-    here). A fresh, isolated interpreter per test id, exactly as
-    `_load_and_run_named_test` uses."""
+    worktree (`_materialize_pinned_worktree_at_commit`) -- `WFO-LEDGER-
+    COVERAGE` property (ii)'s own approval-bound evidence re-execution,
+    which must never trust the live working tree (item 358(c)'s isolation
+    rationale applies identically here). A fresh, isolated interpreter per
+    test id, exactly as `_load_and_run_named_test` uses; `cwd` is the
+    worktree root (not `scratch_dir / "scripts"`) so a `_repo_root()`-style
+    evidence test's own `git rev-parse --show-toplevel` resolves the
+    pinned worktree, not this process's live one."""
     driver_dir = Path(tempfile.mkdtemp(prefix="wfo-ledger-evidence-driver-"))
     try:
         driver_path = driver_dir / "run_evidence.py"
         driver_path.write_text(
             "import json, sys, unittest\n"
-            f"sys.path.insert(0, {str(scratch_dir)!r})\n"
+            f"sys.path.insert(0, {str(scratch_dir / 'scripts')!r})\n"
             "try:\n"
             f"    _suite = unittest.TestLoader().loadTestsFromName({test_id!r})\n"
             "except Exception as _exc:\n"
@@ -7577,13 +7605,22 @@ def verify_wfo_ledger_coverage(repo_root: str | Path, commit: str) -> dict:
     table item, or two ledger entries for the same item (the duplication
     attack, `OPUS-R103-003`) are each a named `FAIL`.
 
-    (ii) **Evidence for `IMPLEMENTED`**: an entry whose ledger `status` is
-    `IMPLEMENTED` must name a test id -- its own `evidence` field, or
-    (only when that is absent) the companion `<work_item_id>-wf8c-
-    evidence.json`'s entry for the same item -- that resolves and
-    re-executes green against the pinned commit's own `scripts/` tree, in
-    a fresh isolated interpreter; an unevidenced or failing `IMPLEMENTED`
-    is `FAIL`, never a pass (the relabel attack).
+    (ii) **Evidence for every non-`SUPERSEDED`/`none` item** (widened,
+    `GPT-R131-002`, to match `WFR-68` property (ii)'s own text -- an
+    `IMPLEMENTED` entry must be evidenced "exactly as a `WF8c`-owned entry
+    must"): an entry whose ledger `status` is `IMPLEMENTED`, `ABSENT`, or
+    `PARTIAL` must name a test id -- its own `evidence` field, or (only
+    when that is absent) the companion `<work_item_id>-wf8c-evidence.json`'s
+    entry for the same item -- that resolves and re-executes green against
+    a real, pinned, detached Git worktree checked out at the commit being
+    verified, in a fresh isolated interpreter; an unevidenced or failing
+    entry is `FAIL`, never a pass (the relabel attack, and -- previously
+    unchecked here at all -- the same silent-omission attack against the
+    96 real `WF8c`-owned `ABSENT`/`PARTIAL` items this property now also
+    covers). Only `SUPERSEDED` with owner `none` is exempt, satisfied by
+    the approved reconciliation table's own recorded supersession alone
+    (the identical disposition `WFR-69`'s own pre-flight already treats
+    this way).
 
     (iii)/(iv) **Monotonicity and governance scope**: for every item
     whose ledger `status` differs from the table's own recorded status,
@@ -7685,25 +7722,31 @@ def verify_wfo_ledger_coverage(repo_root: str | Path, commit: str) -> dict:
                 )
                 continue
 
-            # (ii) evidence for IMPLEMENTED -- unconditional: an entry whose
-            # status is IMPLEMENTED must be evidenced whether the table
-            # already said IMPLEMENTED (a historically-delivered item) or
-            # this is a fresh upgrade from an open status.
-            if entry_status != "IMPLEMENTED":
+            # (ii) evidence for every non-SUPERSEDED/none item (widened,
+            # GPT-R131-002, to match WFR-69's own status-conditional rule
+            # and WFR-68 property (ii)'s own text -- an IMPLEMENTED entry
+            # must be evidenced "exactly as a WF8c-owned entry must"):
+            # SUPERSEDED/none is the only disposition no evidence source
+            # can ever discharge, satisfied by the table's own recorded
+            # supersession alone; every other status -- IMPLEMENTED or a
+            # WF8c-owned ABSENT/PARTIAL -- must be evidenced whether the
+            # table already said so (historically-delivered/frozen-baseline)
+            # or this is a fresh upgrade from an open status.
+            if entry_status == "SUPERSEDED" and entry_owner == "none":
                 continue
             entry_evidence = entry.get("evidence")
             evidence = entry_evidence if isinstance(entry_evidence, str) and entry_evidence else companion_evidence.get(item)
             if not isinstance(evidence, str) or not evidence:
-                failing.append(f"item {item}: IMPLEMENTED with no evidence entry")
+                failing.append(f"item {item}: {entry_status} with no evidence entry")
                 continue
             if scratch_dir is None:
-                scratch_dir = _materialize_scripts_tree_at_commit(repo_root, commit)
+                scratch_dir = _materialize_pinned_worktree_at_commit(repo_root, commit)
             ok, detail = _run_named_test_in_scratch(scratch_dir, evidence)
             if not ok:
                 failing.append(f"item {item}: evidence {evidence!r} does not re-execute green: {detail}")
     finally:
         if scratch_dir is not None:
-            shutil.rmtree(scratch_dir, ignore_errors=True)
+            _remove_pinned_worktree(repo_root, scratch_dir)
 
     if failing:
         return {"status": "FAIL", "detail": "; ".join(failing), "failing_assertions": failing}

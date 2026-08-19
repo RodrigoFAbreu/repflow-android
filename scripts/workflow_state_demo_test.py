@@ -1031,25 +1031,76 @@ class TestReconciliationTableLedgerStatusAgreement(unittest.TestCase):
             ws.COMPLETION_OBLIGATION_CONFORMANCE.get("WFO-LEDGER-COVERAGE"), "verify_wfo_ledger_coverage",
         )
 
-    def test_real_ledger_status_json_does_not_yet_pass_the_bound_verifier(self):
-        """Binding the verifier this session does not itself populate real
-        evidence for any of the 211 reconciliation-table items -- every
-        `IMPLEMENTED` entry in the real `workflow-v2-1-core-ledger-
-        status.json` still carries `evidence: null` (property (ii)), so
-        `verify_wfo_ledger_coverage` against live HEAD correctly still
-        derives `FAIL`, naming those items -- confirming the newly-bound
-        verifier has real teeth against this repository's own actual
-        content, not only against synthetic fixtures. `WFR-69`'s own
-        pre-flight above keeps refusing `WF8c`'s checkpoint completion for
-        the identical underlying reason."""
+    def test_real_ledger_status_json_now_passes_the_bound_verifier_at_head(self):
+        """`GPT-R131-001`/`-002` closed the two remaining gaps between
+        this repository's real 211-item ledger and `verify_wfo_ledger_
+        coverage`'s pinned-commit re-execution: every real evidence id the
+        verifier requires now resolves and executes under a real, pinned,
+        detached worktree (`_materialize_pinned_worktree_at_commit`, not
+        the prior `scripts/`-only scratch tree `_repo_root()`-style
+        evidence could never run under), and the verifier no longer skips
+        evidence validation for the 96 real `ABSENT`/`PARTIAL` `WF8c`-owned
+        entries. `verify_wfo_ledger_coverage` against live `HEAD` therefore
+        now derives `PASS` -- this replaces the prior round's own
+        `test_real_ledger_status_json_does_not_yet_pass_the_bound_verifier`,
+        which asserted the pre-fix `FAIL` as this obligation's "real teeth"
+        proof; the assertion below is the same proof at the corrected
+        outcome. `WFR-69`'s own pre-flight above already required this."""
         repo_root = _repo_root()
         head = subprocess.run(
             ["git", "rev-parse", "HEAD"], cwd=repo_root, check=True,
             capture_output=True, text=True,
         ).stdout.strip()
         result = ws.verify_wfo_ledger_coverage(repo_root, head)
-        self.assertEqual(result["status"], "FAIL")
-        self.assertTrue(any("evidence" in a for a in result["failing_assertions"]))
+        self.assertEqual(result["status"], "PASS", result.get("detail"))
+
+    def test_every_real_evidence_id_the_final_wfo_gate_would_execute_resolves_under_the_pinned_runner(self):
+        """`GPT-R131-001`'s own required regression: enumerates every
+        evidence id the real 211-item ledger (`ledger-status.json`'s own
+        `evidence` field, falling back to the companion `wf8c-evidence.
+        json` entry for the same item, for every item that is not
+        `SUPERSEDED`/`none` -- the identical resolution `verify_wfo_
+        ledger_coverage` itself uses) and proves each is resolvable and
+        executes green under the *actual pinned runner*
+        (`_materialize_pinned_worktree_at_commit` /
+        `_run_named_test_in_scratch`), not merely under `WFR-69`'s
+        live-worktree pre-flight (`_load_and_run_named_test`) -- the two
+        execution models this round found could disagree."""
+        repo_root = _repo_root()
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_root, check=True,
+            capture_output=True, text=True,
+        ).stdout.strip()
+        ledger = json.loads(
+            (repo_root / ws.ledger_status_path_for_work_item(WORK_ITEM_ID)).read_text()
+        )
+        companion = json.loads(
+            (repo_root / ws.wf8c_evidence_path_for_work_item(WORK_ITEM_ID)).read_text()
+        )
+        companion_evidence = {
+            e["item"]: e["evidence"] for e in companion["entries"] if e.get("evidence")
+        }
+        required_evidence: dict[str, list[int]] = {}
+        for entry in ledger["entries"]:
+            if entry["status"] == "SUPERSEDED" and entry["owner_checkpoint"] == "none":
+                continue
+            evidence = entry.get("evidence") or companion_evidence.get(entry["item"])
+            self.assertTrue(evidence, f"item {entry['item']} has no evidence id to enumerate")
+            required_evidence.setdefault(evidence, []).append(entry["item"])
+        self.assertTrue(required_evidence, "expected at least one evidence id to enumerate")
+
+        scratch_dir = ws._materialize_pinned_worktree_at_commit(repo_root, head)
+        try:
+            for evidence_id, items in sorted(required_evidence.items()):
+                with self.subTest(evidence=evidence_id, items=items):
+                    ok, detail = ws._run_named_test_in_scratch(scratch_dir, evidence_id)
+                    self.assertTrue(
+                        ok,
+                        f"evidence {evidence_id!r} (items {items}) did not resolve/execute "
+                        f"green under the pinned runner: {detail}",
+                    )
+        finally:
+            ws._remove_pinned_worktree(repo_root, scratch_dir)
 
 
 class TestCheckpointReachabilityConformanceLive(unittest.TestCase):
