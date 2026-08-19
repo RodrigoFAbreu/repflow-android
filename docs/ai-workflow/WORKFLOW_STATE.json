@@ -11,12 +11,12 @@
       "registry_path": "docs/ai-workflow/registry/workflow-v2-1-core-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json",
       "governing_workflow_version": "1",
-      "phase": "APPLYING_REVIEW_FEEDBACK",
+      "phase": "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
       "plan_revision": 99,
-      "implementation_revision": 11,
+      "implementation_revision": 12,
       "functional_review_round": null,
       "base_commit": "162154d3e5e10eb65e109833acae4b4fb01fc5d6",
-      "reviewed_implementation_head": "4a769fdfbff8824bafbed034549e6971f33aab17",
+      "reviewed_implementation_head": "e6dc8ff9afe7db3037a81a1f0ca1842ce3db9ced",
       "current_checkpoint_id": null,
       "last_completed_checkpoint_id": "WF8c",
       "checkpoints": {
@@ -284,8 +284,8 @@
           ]
         }
       ],
-      "state_revision": 118,
-      "last_transition": "2026-08-19T21:16:55+01:00"
+      "state_revision": 119,
+      "last_transition": "2026-08-19T21:22:08+01:00"
     },
     "milestone-8": {
       "work_item_type": "product",
