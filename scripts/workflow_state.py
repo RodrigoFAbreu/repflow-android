@@ -2888,6 +2888,88 @@ def materialize_plan_approval_state(
         )
 
 
+class PlanApprovalMaterializeDivergentEntryError(Exception):
+    """Raised by `classify_plan_approval_materialize_target` when this
+    work item's own `work_items[work_item_id]` entry in the *current*
+    working-tree state neither matches the journal's pre-transaction
+    entry nor its already-materialized post-transaction entry --
+    something else wrote to this exact work item's own entry between
+    journal-open and materialization (a second concurrent approval
+    attempt, a manual edit, or a genuine bug elsewhere). The caller must
+    refuse to write: the durable approval commit already exists and is
+    not at risk, only the working-tree copy is stale and ambiguous to
+    reconcile automatically."""
+
+
+PLAN_APPROVAL_MATERIALIZE_NOOP = "NOOP"
+PLAN_APPROVAL_MATERIALIZE_WRITE = "WRITE"
+
+
+def classify_plan_approval_materialize_target(
+    repo_root: Path, work_item_id: str, pre_state: dict, post_state: dict,
+    *, state_path: Path = DEFAULT_STATE_PATH,
+) -> str:
+    """`/approve-review plan`'s permanent-site step 8b (`WF8c` item
+    348(hh)'s target-scoped three-way classification, the mechanism that
+    makes materialization safe against *other* work items' legitimate
+    concurrent state writes): compares only `work_items[work_item_id]`
+    -- never the whole file -- across the *current* working-tree state,
+    the journal's `pre_state`, and its `post_state`, so a concurrent
+    write to a *different* work item's own entry never factors into
+    this work item's own classification. A whole-file classification
+    ("write only if the file equals the pre-state, no-op only if it
+    equals the post-state") is confirmed independently to refuse
+    permanently the moment any other work item's own entry has ever
+    moved on since this transaction's `pre_state` snapshot -- there is
+    then no byte-identical whole-file state left to recognise as either
+    branch, so the journal could never close without discarding that
+    other work item's write.
+
+    Returns `PLAN_APPROVAL_MATERIALIZE_NOOP` when this work item's own
+    entry already equals `post_state`'s (already materialized, or
+    reconciled by hand -- idempotent under repeated interruption) or
+    `PLAN_APPROVAL_MATERIALIZE_WRITE` when it still equals `pre_state`'s
+    (the ordinary case, safe to *attempt* -- the caller must still run
+    `plan_approval_state_matches_pre_transaction`'s own fresh, whole-file
+    compare-and-swap immediately before the actual write, since that is
+    what actually detects and refuses on a different work item's own
+    concurrent update; this function only ever inspects one work item's
+    own entry, by design). Raises
+    `PlanApprovalMaterializeDivergentEntryError` when neither matches --
+    this work item's own entry was touched by something else entirely,
+    a case no automatic reconciliation is safe to attempt."""
+    current_state = _load_json(repo_root / state_path) or {}
+    current_entry = (current_state.get("work_items") or {}).get(work_item_id)
+    pre_entry = (pre_state.get("work_items") or {}).get(work_item_id)
+    post_entry = (post_state.get("work_items") or {}).get(work_item_id)
+    if current_entry == post_entry:
+        return PLAN_APPROVAL_MATERIALIZE_NOOP
+    if current_entry == pre_entry:
+        return PLAN_APPROVAL_MATERIALIZE_WRITE
+    raise PlanApprovalMaterializeDivergentEntryError(
+        f"{work_item_id}'s own work_items entry in the current working tree matches "
+        f"neither the journal's pre-transaction entry nor its post-transaction entry -- "
+        f"something else wrote to this work item's own state between journal-open and "
+        f"materialization; refusing to guess which value is correct"
+    )
+
+
+def plan_approval_state_matches_pre_transaction(
+    repo_root: Path, expected_pre_procedure_state_sha256: str, *, state_path: Path = DEFAULT_STATE_PATH,
+) -> bool:
+    """The whole-file freshness re-check `WF8c` item 348(mm) requires
+    immediately before step 8b's actual materialize write (and,
+    analogously, item 348(gg)'s sub-step 6.1a immediately before the
+    pre-commit state-blob pin): a fresh, whole-file byte comparison
+    against the journal's own `pre_procedure_state_sha256`, narrowing
+    the race window between "decided it is safe" and "actually wrote"
+    to as small as the single re-read this function performs, rather
+    than trusting an earlier read taken further back in the procedure."""
+    return hashlib.sha256(
+        (repo_root / state_path).read_bytes()
+    ).hexdigest() == expected_pre_procedure_state_sha256
+
+
 # ---------------------------------------------------------------------------
 # WF2: D-Selection's deterministic four-rule checkpoint-selection algorithm,
 # the IN_PROGRESS/COMPLETE state writers, and D3's worktree-scoped dirty-

@@ -487,7 +487,15 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # trailing caveat naming the dedicated /recover-implementation-provenance
     # command as "not yet built" is corrected now that it exists) --
     # intentional content change.
-    "approve-review.md": "67909403ccc4268889648e6c40068efeafd129188119b3f0103ba2691cdd8cca",
+    #
+    # approve-review.md further updated, WF8c items 347/348/352: the
+    # plan-stage steps 4a-6b replaced with the full failure-atomicity
+    # transaction (journal, guard, index-pinned state write, target-scoped
+    # materialize, amend recovery), the "interim scope guard" refusing
+    # workflow-v2-1-core's own plan-stage approvals until the Bootstrap
+    # plan-approval procedure is withdrawn, and new steps 4b/4c/6c/6d --
+    # intentional content change.
+    "approve-review.md": "cdc3582076a9c357e18774622ec65e7b722252fd3148197909559d34012a1e32",
     "accept-milestone.md": "3822aa4adb7838dfc76a8a41fe102d32d0435ce2ed740939662bb37035a07f70",
     "prepare-functional-review.md": "1b4a08cc0a28c09e0031f73e6003f23fd96fdc6c3fe22553e9f2408c1798f8cd",
     # apply-plan-review.md/bootstrap-workflow-v2.md (D-Plan-Revision-Publication,
@@ -2773,6 +2781,422 @@ class TestPlanApprovalStateBlobPinAndMaterialize(unittest.TestCase):
                 capture_output=True, check=True,
             ).stdout
             self.assertEqual((repo.root / _STATE_PATH).read_bytes(), committed)
+
+
+class TestPlanApprovalMaterializeTargetScopedClassification(unittest.TestCase):
+    """`WF8c` item 348(hh)/(mm): the target-scoped three-way
+    classification and the whole-file freshness re-check together are
+    what make step 8b safe against a *different* work item's own
+    legitimate concurrent state write -- the property that makes
+    `materialize_plan_approval_state`'s existing whole-file overwrite
+    (part 3, already tested for the single-work-item case) safe to call
+    from the permanent `/approve-review` command, where other work
+    items' uncommitted writes between journal-open and materialization
+    are the ordinary case, not an edge case."""
+
+    def _two_item_setup(self, repo: h.ScratchRepo, wi: str, other_wi: str):
+        """Seeds a `WORKFLOW_STATE.json` declaring *two* work items and
+        commits it, then opens a plan-approval journal for `wi` alone --
+        `other_wi`'s own entry is never touched by anything this class
+        exercises, only read back to confirm it survives."""
+        repo.write_plan_docs(work_item_id=wi)
+        repo.commit_plan_docs_as_base()
+        work_item = h.base_work_item(
+            work_item_id=wi, governing_workflow_version="1", phase="AWAITING_PLAN_APPROVAL",
+            plan_path="docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+            registry_path=f"docs/ai-workflow/registry/{wi}-registry.json",
+            mapping_path=f"docs/ai-workflow/requirements/{wi}-mapping.json",
+            base_commit=repo.base,
+        )
+        other_work_item = h.base_work_item(
+            work_item_id=other_wi, governing_workflow_version="1", phase="IMPLEMENTING",
+            plan_path=f"docs/ai-workflow/{other_wi}-plan.md",
+            registry_path=f"docs/ai-workflow/registry/{other_wi}-registry.json",
+            mapping_path=f"docs/ai-workflow/requirements/{other_wi}-mapping.json",
+            base_commit=repo.base,
+        )
+        repo.write_workflow_state(**{wi: work_item, other_wi: other_work_item})
+        # write_workflow_state's own fixture serialization is compact
+        # JSON, not the canonical form `_publish_state_file` always uses
+        # in production (item 353) -- re-canonicalize on disk so this
+        # fixture's real bytes actually match what
+        # plan_approval_state_matches_pre_transaction's sha256 re-read
+        # will observe, exactly as a real, already-committed
+        # WORKFLOW_STATE.json always is.
+        pre_state = json.loads((repo.root / _STATE_PATH).read_text())
+        (repo.root / _STATE_PATH).write_bytes(ws._serialize_state(pre_state))
+        _run(["git", "add", str(_STATE_PATH)], cwd=repo.root)
+        _run(["git", "commit", "-q", "-m", "seed workflow state"], cwd=repo.root)
+
+        plan = fingerprint.resolve_plan_stage_approval_commit_paths(repo.root, wi, _STATE_PATH)
+        protected = h.plan_stage_protected_paths(wi)
+        review_content_id, _ = fingerprint.compute_review_content_id_plan_stage(
+            repo.root, repo.base, work_item_type="process", work_item_id=wi,
+            plan_revision=1, protected=protected,
+            excluded_paths=h.plan_stage_excluded_paths(),
+            excluded_prefixes=h.plan_stage_excluded_prefixes(),
+        )
+        record = ws.build_approval_record(
+            basis="EXTERNAL_APPROVE", stage="plan",
+            user_confirmation=f"I confirm plan approval for {wi}, plan stage.", now="t1",
+            reviewed_bundle_id="b1", approved_review_content_id=review_content_id,
+            review_content_manifest=[{"path": "x", "exists": True, "mode": "100644", "blob": "y"}],
+        )
+        journal = ws.open_plan_approval_journal(
+            repo.root, work_item_id=wi, base_commit=repo.base, pre_state=pre_state,
+            record=record, approval_now="t1", expected_bundle_id="b1",
+            expected_review_content_id=review_content_id, applicable_paths=plan.paths,
+            fifth_member_applies=plan.artifacts_declaration_path is not None,
+            fifth_member_sha256=plan.artifacts_declaration_sha256,
+            user_confirmation=f"I confirm plan approval for {wi}, plan stage.",
+            quiescence_authorization="not required: see plan_approval_state_matches_pre_transaction",
+        )
+        post_state = ws.apply_plan_approval(pre_state, wi, record, "t1")
+        return pre_state, post_state, journal, other_work_item
+
+    def test_classify_write_when_current_still_matches_pre_state(self):
+        with h.ScratchRepo() as repo:
+            pre_state, post_state, journal, _ = self._two_item_setup(repo, "wi", "other-wi")
+            self.assertEqual(
+                ws.classify_plan_approval_materialize_target(repo.root, "wi", pre_state, post_state),
+                ws.PLAN_APPROVAL_MATERIALIZE_WRITE,
+            )
+            self.assertTrue(
+                ws.plan_approval_state_matches_pre_transaction(
+                    repo.root, journal["pre_procedure_state_sha256"],
+                ),
+            )
+
+    def test_classify_noop_when_already_materialized(self):
+        with h.ScratchRepo() as repo:
+            pre_state, post_state, journal, _ = self._two_item_setup(repo, "wi", "other-wi")
+            (repo.root / _STATE_PATH).write_text(json.dumps(post_state))
+            self.assertEqual(
+                ws.classify_plan_approval_materialize_target(repo.root, "wi", pre_state, post_state),
+                ws.PLAN_APPROVAL_MATERIALIZE_NOOP,
+            )
+
+    def test_classify_raises_when_this_work_items_own_entry_diverges(self):
+        with h.ScratchRepo() as repo:
+            pre_state, post_state, journal, _ = self._two_item_setup(repo, "wi", "other-wi")
+            tampered = json.loads((repo.root / _STATE_PATH).read_text())
+            tampered["work_items"]["wi"]["phase"] = "SOMETHING_ELSE_ENTIRELY"
+            (repo.root / _STATE_PATH).write_text(json.dumps(tampered))
+            with self.assertRaises(ws.PlanApprovalMaterializeDivergentEntryError):
+                ws.classify_plan_approval_materialize_target(repo.root, "wi", pre_state, post_state)
+
+    def test_a_different_work_items_concurrent_write_is_never_discarded(self):
+        """The decisive case item 348(hh)/(mm) exist for: `other-wi`'s
+        own entry is legitimately updated (a real concurrent
+        `state_transaction`-style write, uncommitted) after journal-open
+        but before materialization. `wi`'s own target-scoped
+        classification is unaffected (still `WRITE`, since `wi`'s own
+        entry never changed) -- but the whole-file freshness re-check
+        correctly detects the change and refuses, so the caller never
+        reaches `materialize_plan_approval_state`'s own unconditional
+        whole-file overwrite, which would otherwise silently revert
+        `other-wi` back to its pre-transaction value."""
+        with h.ScratchRepo() as repo:
+            pre_state, post_state, journal, other_work_item = self._two_item_setup(
+                repo, "wi", "other-wi",
+            )
+            current = json.loads((repo.root / _STATE_PATH).read_text())
+            current["work_items"]["other-wi"]["phase"] = "AWAITING_FUNCTIONAL_REVIEW"
+            current["work_items"]["other-wi"]["state_revision"] = (
+                other_work_item.get("state_revision", 1) + 1
+            )
+            (repo.root / _STATE_PATH).write_text(json.dumps(current))
+
+            # wi's own classification is unaffected by other-wi's write.
+            self.assertEqual(
+                ws.classify_plan_approval_materialize_target(repo.root, "wi", pre_state, post_state),
+                ws.PLAN_APPROVAL_MATERIALIZE_WRITE,
+            )
+            # But the whole-file freshness re-check catches it and the
+            # caller must refuse rather than call materialize_plan_approval_state.
+            self.assertFalse(
+                ws.plan_approval_state_matches_pre_transaction(
+                    repo.root, journal["pre_procedure_state_sha256"],
+                ),
+            )
+            # Confirming what an unconditional overwrite *would* have
+            # discarded, had the freshness check not been run first.
+            self.assertNotEqual(
+                json.loads((repo.root / _STATE_PATH).read_text())["work_items"]["other-wi"]["phase"],
+                post_state["work_items"].get("other-wi", {}).get("phase"),
+            )
+
+
+class TestPlanApprovalPermanentSiteEndToEnd(unittest.TestCase):
+    """`WF8c` items 347/348: `.claude/commands/approve-review.md`'s own
+    new plan-stage steps 4b-6d, composed and executed exactly in the
+    order that file's own prose describes -- proof the whole failure-
+    atomicity transaction is actually implementable end to end at the
+    permanent site, not merely that each of its primitives works in
+    isolation (parts 1-3's own tests, item 348's own predecessor). Serves
+    as item 348's own evidence: the "Bootstrap plan-approval procedure"
+    was, by its own design, never automated code to test directly (`WF8c`
+    item 348's own docstring) -- this class is that same live checklist,
+    exercised as a real, composed procedure against real `ScratchRepo`
+    git history instead."""
+
+    def _setup(self, repo: h.ScratchRepo, wi: str):
+        """Mirrors `TestPlanApprovalStateBlobPinAndMaterialize._setup`
+        (`WORKFLOW_STATE.json` committed before the journal opens, since
+        this part's own primitives read the file's mode *at* `HEAD`) but
+        additionally re-canonicalizes the fixture's bytes first --
+        `write_workflow_state`'s own compact-JSON form is not what a
+        real, already-committed `WORKFLOW_STATE.json` ever looks like
+        (item 353 requires the canonical form from every production
+        writer), and `plan_approval_state_matches_pre_transaction`'s
+        fresh, whole-file byte comparison is the first primitive in this
+        whole transaction to actually depend on that being true on disk,
+        not only in `_serialize_state`'s own re-derivation."""
+        pre_state, record, review_content_id, plan = TestPlanApprovalFailureAtomicityTransaction._setup(
+            self, repo, wi,
+        )
+        (repo.root / _STATE_PATH).write_bytes(ws._serialize_state(pre_state))
+        (repo.root / ".gitignore").write_text(".ai-review/\n")
+        _run(["git", "add", str(_STATE_PATH), ".gitignore"], cwd=repo.root)
+        _run(["git", "commit", "-q", "-m", "seed workflow state"], cwd=repo.root)
+        return pre_state, record, review_content_id, plan
+
+    def _open_journal(self, repo: h.ScratchRepo, wi: str, *args):
+        return TestPlanApprovalFailureAtomicityTransaction._open_journal(self, repo, wi, *args)
+
+    def test_end_to_end_happy_path_matches_the_new_permanent_site_procedure(self):
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+            owner_token = journal["owner_token"]
+            post_state = ws.apply_plan_approval(pre_state, wi, record, "t1")
+
+            # Step 5: no fifth member in this fixture -- no-op (confirms
+            # the simple four-member case this class exercises).
+            self.assertIsNone(plan.artifacts_declaration_path)
+
+            # Step 6.1: stage the ordinary members.
+            ordinary_paths = tuple(p for p in plan.paths if p != str(_STATE_PATH))
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=owner_token, step="step-6.2-stage-ordinary", now="t2",
+            ):
+                ws.stage_plan_approval_commit_paths(repo.root, ordinary_paths)
+
+            # Step 6.2: 6.1a compare-and-swap, then pin the state blob.
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=owner_token, step="step-6.1b-state-pin", now="t3",
+            ):
+                self.assertTrue(
+                    ws.plan_approval_state_matches_pre_transaction(
+                        repo.root, journal["pre_procedure_state_sha256"],
+                    ),
+                )
+                ws.pin_plan_approval_state_blob(
+                    repo.root, base64.b64decode(journal["expected_post_state_b64"]),
+                )
+                ws.verify_staged_plan_approval_state_blob(
+                    repo.root, journal["expected_post_state_sha256"],
+                )
+
+            # Step 6.3: staged-set assertion.
+            staged = _run(["git", "diff", "--name-only", "--cached", "HEAD"], cwd=repo.root)
+            staged_paths = {line for line in staged.splitlines() if line}
+            self.assertTrue(staged_paths.issubset(set(journal["applicable_paths"])))
+
+            # Step 6.4: the commit.
+            body = f"plan approval\n\nWorkflow-Plan-Approval: {review_content_id}\nWorkflow-Work-Item: {wi}"
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=owner_token, step="step-6.5-commit", now="t4",
+            ):
+                _run(["git", "commit", "-q", "-m", body], cwd=repo.root)
+            commit = repo.head()
+
+            # Step 6a: classify -> COMMITTED; the post-commit verification set.
+            self.assertEqual(
+                ws.classify_plan_approval_outcome(repo.root, journal),
+                ws.PLAN_APPROVAL_OUTCOME_COMMITTED,
+            )
+            ws.verify_post_approval_manifest_match(
+                repo.root, post_state["work_items"][wi], stage="plan",
+                base_commit=repo.base, commit=commit,
+            )
+            ws.assert_committed_path_set_matches(repo.root, commit, journal["applicable_paths"])
+            ws.verify_committed_plan_approval_state_blob(
+                repo.root, commit, journal["expected_post_state_sha256"],
+            )
+
+            # Step 6c: materialize.
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=owner_token, step="step-8b-materialize", now="t5",
+            ):
+                target = ws.classify_plan_approval_materialize_target(repo.root, wi, pre_state, post_state)
+                self.assertEqual(target, ws.PLAN_APPROVAL_MATERIALIZE_WRITE)
+                self.assertTrue(
+                    ws.plan_approval_state_matches_pre_transaction(
+                        repo.root, journal["pre_procedure_state_sha256"],
+                    ),
+                )
+                ws.materialize_plan_approval_state(repo.root, commit, journal["expected_post_state_sha256"])
+
+            # Step 6d: close the journal.
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=owner_token, step="step-8a-close-journal", now="t6",
+            ):
+                ws.close_plan_approval_journal(repo.root)
+
+            self.assertIsNone(ws.read_plan_approval_journal(repo.root))
+            self.assertIsNone(ws.read_plan_approval_guard(repo.root))
+            final = json.loads((repo.root / _STATE_PATH).read_text())
+            self.assertEqual(final, post_state)
+            self.assertEqual(_run(["git", "status", "--porcelain"], cwd=repo.root), "")
+
+    def test_not_committed_outcome_runs_the_step_6b_rollback_pattern(self):
+        """Nothing staged, nothing committed -- classify must find
+        `NOT_COMMITTED`, and step 6b's own guard-wrapped (not
+        `plan_approval_guarded_mutation`) rollback call must leave no
+        journal, no guard, and no owner-progress orphan behind."""
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+            owner_token = journal["owner_token"]
+
+            self.assertEqual(
+                ws.classify_plan_approval_outcome(repo.root, journal),
+                ws.PLAN_APPROVAL_OUTCOME_NOT_COMMITTED,
+            )
+            lease = ws.acquire_plan_approval_guard(
+                repo.root, holder_owner_token=owner_token, step="rollback-index-reset", now="t2",
+            )
+            try:
+                ws.rollback_plan_approval_transaction(repo.root, owner_token=owner_token)
+            finally:
+                ws.release_plan_approval_guard(repo.root, lease)
+
+            self.assertIsNone(ws.read_plan_approval_journal(repo.root))
+            self.assertIsNone(ws.read_plan_approval_guard(repo.root))
+            self.assertIsNone(ws.read_plan_approval_owner_progress(repo.root, owner_token))
+            self.assertEqual(repo.head(), journal["pre_procedure_head"])
+            self.assertEqual(_run(["git", "status", "--porcelain"], cwd=repo.root), "")
+
+    def test_step_6_2_compare_and_swap_catches_staleness_before_any_commit(self):
+        """A legitimate concurrent write lands on
+        `docs/ai-workflow/WORKFLOW_STATE.json` between journal-open and
+        step 6.2 -- the 6.1a compare-and-swap must detect it and refuse
+        *before* pinning a post-state derived from superseded bytes;
+        step 6b's rollback then leaves the concurrent write's own bytes
+        completely untouched (rollback never writes the working tree)."""
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+            owner_token = journal["owner_token"]
+
+            # A concurrent, legitimate state_transaction-shaped write.
+            concurrent = json.loads((repo.root / _STATE_PATH).read_text())
+            concurrent["work_items"][wi]["some_unrelated_field"] = "touched by another writer"
+            (repo.root / _STATE_PATH).write_bytes(ws._serialize_state(concurrent))
+
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=owner_token, step="step-6.2-stage-ordinary", now="t2",
+            ):
+                ordinary_paths = tuple(p for p in plan.paths if p != str(_STATE_PATH))
+                ws.stage_plan_approval_commit_paths(repo.root, ordinary_paths)
+
+            fresh = ws.plan_approval_state_matches_pre_transaction(
+                repo.root, journal["pre_procedure_state_sha256"],
+            )
+            self.assertFalse(fresh)
+
+            lease = ws.acquire_plan_approval_guard(
+                repo.root, holder_owner_token=owner_token, step="rollback-index-reset", now="t3",
+            )
+            try:
+                ws.rollback_plan_approval_transaction(repo.root, owner_token=owner_token)
+            finally:
+                ws.release_plan_approval_guard(repo.root, lease)
+
+            self.assertIsNone(ws.read_plan_approval_journal(repo.root))
+            # The concurrent write survives untouched -- rollback resets
+            # only the index, never the working tree.
+            self.assertEqual(json.loads((repo.root / _STATE_PATH).read_text()), concurrent)
+
+    def test_step_6c_refuses_rather_than_discard_a_different_work_items_write(self):
+        """Full-stack version of
+        `TestPlanApprovalMaterializeTargetScopedClassification`'s own
+        decisive case: after this work item's commit lands, a different
+        work item's own entry is legitimately updated before step 6c
+        runs. The caller (this test, standing in for the command's own
+        step 6c prose) must observe `WRITE` from the target-scoped
+        classifier but `False` from the freshness re-check, and must
+        therefore never call `materialize_plan_approval_state` at all --
+        proving the two checks compose correctly to prevent exactly the
+        silent-discard failure mode item 348(hh)/(mm) exist to close."""
+        with h.ScratchRepo() as repo:
+            wi, other_wi = "wi", "other-wi"
+            pre_state, post_state, journal, other_work_item = (
+                TestPlanApprovalMaterializeTargetScopedClassification._two_item_setup(
+                    self, repo, wi, other_wi,
+                )
+            )
+            owner_token = journal["owner_token"]
+
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=owner_token, step="step-6.2-stage-ordinary", now="t2",
+            ):
+                ordinary_paths = tuple(
+                    p for p in journal["applicable_paths"] if p != str(_STATE_PATH)
+                )
+                ws.stage_plan_approval_commit_paths(repo.root, ordinary_paths)
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=owner_token, step="step-6.1b-state-pin", now="t3",
+            ):
+                ws.pin_plan_approval_state_blob(
+                    repo.root, base64.b64decode(journal["expected_post_state_b64"]),
+                )
+            body = f"plan approval\n\nWorkflow-Plan-Approval: {journal['expected_review_content_id']}\nWorkflow-Work-Item: {wi}"
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=owner_token, step="step-6.5-commit", now="t4",
+            ):
+                _run(["git", "commit", "-q", "-m", body], cwd=repo.root)
+            commit = _run(["git", "rev-parse", "HEAD"], cwd=repo.root).strip()
+            self.assertEqual(
+                ws.classify_plan_approval_outcome(repo.root, journal),
+                ws.PLAN_APPROVAL_OUTCOME_COMMITTED,
+            )
+
+            # A different work item's own entry is legitimately updated
+            # in the working tree before step 6c runs.
+            current = json.loads((repo.root / _STATE_PATH).read_text())
+            current["work_items"][other_wi]["phase"] = "AWAITING_FUNCTIONAL_REVIEW"
+            (repo.root / _STATE_PATH).write_bytes(ws._serialize_state(current))
+
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=owner_token, step="step-8b-materialize", now="t5",
+            ):
+                target = ws.classify_plan_approval_materialize_target(repo.root, wi, pre_state, post_state)
+                self.assertEqual(target, ws.PLAN_APPROVAL_MATERIALIZE_WRITE)
+                fresh = ws.plan_approval_state_matches_pre_transaction(
+                    repo.root, journal["pre_procedure_state_sha256"],
+                )
+                self.assertFalse(fresh)
+                # The command's own prose stops here without writing --
+                # confirm what materialize_plan_approval_state *would*
+                # have discarded, had it been called anyway.
+                would_be_written = json.loads(base64.b64decode(journal["expected_post_state_b64"]))
+                self.assertNotEqual(
+                    would_be_written["work_items"][other_wi]["phase"],
+                    current["work_items"][other_wi]["phase"],
+                )
+
+            # The journal is still open (6c refused, 6d never ran) and
+            # the durable commit is untouched -- both survive for a
+            # later reconciliation + re-run.
+            self.assertIsNotNone(ws.read_plan_approval_journal(repo.root))
+            self.assertEqual(
+                _run(["git", "rev-parse", "HEAD"], cwd=repo.root).strip(), commit,
+            )
 
 
 if __name__ == "__main__":

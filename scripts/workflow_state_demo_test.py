@@ -694,6 +694,64 @@ class TestCheckpointOriginationAgainstRealRepository(unittest.TestCase):
         # absent journal, the ordinary case) to observe, not just prose.
         self.assertIsNone(ws.read_plan_approval_journal(repo_root))
 
+    def test_approve_review_permanent_site_carries_the_full_failure_atomicity_transaction(self):
+        """`WF8c` item 347: the installed `.claude/commands/approve-review.md`
+        must state the unconditional (non-bootstrap) form of the failure-
+        atomicity transaction -- verbatim-equivalent to `D-Approval-Commits`'
+        own corrected text -- for every `"process"` work item, closing the
+        bootstrap gap item 347 was tracking. Checked structurally: the old
+        "does not carry the complete failure-atomicity transaction" scope
+        note (present at every revision before this one) is gone, and the
+        installed text names every one of the transaction's real primitives
+        at the points its own steps 4b-6d describe them. Behavioral proof
+        that the composed sequence these primitives describe actually works
+        end to end lives in
+        `workflow_integration_test.TestPlanApprovalPermanentSiteEndToEnd`,
+        bound as this item's own evidence."""
+        repo_root = _repo_root()
+        command_text = (repo_root / ".claude/commands/approve-review.md").read_text()
+        self.assertNotIn("does not carry the complete failure-atomicity transaction", command_text)
+        self.assertNotIn("narrows, but does not close, item 347 itself", command_text)
+        for name in (
+            "plan_approval_takeover_evidence",
+            "open_plan_approval_journal",
+            "plan_approval_guarded_mutation",
+            "plan_approval_state_matches_pre_transaction",
+            "pin_plan_approval_state_blob",
+            "classify_plan_approval_outcome",
+            "rollback_plan_approval_transaction",
+            "classify_plan_approval_materialize_target",
+            "materialize_plan_approval_state",
+            "close_plan_approval_journal",
+        ):
+            self.assertIn(name, command_text, f"{name} must be named in the installed procedure")
+
+    def test_approve_review_refuses_workflow_v2_1_cores_own_plan_approval_until_retirement(self):
+        """`WF8c` items 347/352's own retirement condition: until
+        `docs/ai-workflow/WORKFLOW_V2_PLAN.md`'s "Bootstrap plan-approval
+        procedure" section is withdrawn (gated on a technical approval
+        covering this exact work item's content, per the reconciliation
+        table's `347-353` row), `workflow-v2-1-core`'s own plan-stage
+        approvals must keep going through `/bootstrap-workflow-v2`'s own
+        checklist, never this command -- every *other* work item is
+        unaffected. Checked structurally against the installed text; and,
+        since this repository's own live plan document still carries that
+        section today, confirms the gate's own condition is presently
+        true, not merely well-worded prose that never fires."""
+        repo_root = _repo_root()
+        command_text = (repo_root / ".claude/commands/approve-review.md").read_text()
+        guard_idx = command_text.index("**Interim scope guard, `workflow-v2-1-core` only**")
+        resolve_idx = command_text.index("Call `plan =")
+        self.assertLess(guard_idx, resolve_idx, "the guard must run before member resolution")
+        guard_text = " ".join(command_text[guard_idx:resolve_idx].split())
+        self.assertIn('work_item_id == "workflow-v2-1-core"', guard_text)
+        self.assertIn('stage == "plan"', guard_text)
+        self.assertIn("Bootstrap plan-approval procedure", guard_text)
+        self.assertIn("Every other work item", guard_text)
+
+        plan_text = (repo_root / "docs/ai-workflow/WORKFLOW_V2_PLAN.md").read_text()
+        self.assertIn("Bootstrap plan-approval procedure", plan_text)
+
     def test_identity_reference_admits_refuses_this_repositorys_own_reused_work_item_id(self):
         """WFR-66's identity-query enforcement against real history: the
         plan's own "one concrete instance" fact -- `workflow-v2-1-core`
