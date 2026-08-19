@@ -28,6 +28,26 @@ Work item: `workflow-v2-1-core` (hardcoded, never an argument).
 until `docs/ai-workflow/WORKFLOW_STATE.json` exists to read it from
 (after WF1a lands).
 
+0. **Plan-approval transaction precondition** (`WF8c` item 352,
+   ownership-aware and guard-aware — the cross-command obligation
+   `WFR-63`'s plan-approval journal creates): before step 1, call
+   `evidence = workflow_state.plan_approval_takeover_evidence(repo_root)`
+   — the same bundled `{journal, owner_token, progress, guard, outcome}`
+   read `/approve-review plan`'s own takeover path observes from. A
+   non-`None` `evidence["journal"]` means a plan-approval transaction is
+   open for `workflow-v2-1-core`; this invocation never holds its
+   `owner_token` (a fresh command invocation cannot), so it may not
+   resolve, replace, or delete the journal itself. Report
+   `evidence["owner_token"]`, `evidence["outcome"]`
+   (`classify_plan_approval_outcome`'s `COMMITTED`/`NOT_COMMITTED`/
+   `AMBIGUOUS`), `evidence["progress"]`'s last completed step (or that
+   none is recorded), and `evidence["guard"]`'s state (held or not, and
+   by which step/epoch) — then **stop**. Recovery is `/approve-review
+   plan`'s own explicit-takeover path only
+   (`workflow_state.take_over_plan_approval_transaction`); this command
+   never takes one over, forward-completes one, or rolls one back. A
+   `None` `evidence["journal"]` means no transaction is open — proceed to
+   step 1.
 1. **State-sync** — only once `docs/ai-workflow/WORKFLOW_STATE.json`
    exists (dormant before WF1a; skip this step entirely until then): read
    `work_items["workflow-v2-1-core"]` if present, or initialize it with
@@ -63,14 +83,30 @@ until `docs/ai-workflow/WORKFLOW_STATE.json` exists to read it from
    checkpoint work resumes; do not proceed to step 2 or step 3 in the same
    invocation. If the registry's `plan_revision` is not ahead of the
    mirror, this obligation is a no-op and step 2 proceeds normally.
-2. **Durability guard**: before selecting the next checkpoint, recompute
-   the plan-stage `review_content_id`
-   (`python3 scripts/workflow_fingerprint.py <base_commit>`) and compare
-   it against the `Workflow-Plan-Approval` trailer value discovered in
-   step 3 (or, once step 1 has run, against
-   `plan_approval.approved_review_content_id`). A mismatch — someone
-   edited the authoritative plan documents between two invocations —
-   stops immediately, naming both values. Do not proceed past this check.
+2. **Durability guard** (rebound, `WF8c` item 352, to a discovered
+   durable commit rather than the mutable state record alone — the
+   pre-fix defect: a working-tree-only `WORKFLOW_STATE.json` write with
+   no approval commit behind it recomputes a `review_content_id` that
+   trivially equals its own just-written `approved_review_content_id`,
+   so the bare-equality form always passes whether or not any commit
+   exists): once step 1 has run, call
+   `workflow_state.implementing_entry_reachable(repo_root, work_item,
+   base_commit)` — `True` only when live `HEAD` is exactly the
+   discovered `Workflow-Plan-Approval` commit
+   (`workflow_state.discover_plan_approval_commit`) or a
+   checkpoint-commit descendant of it, `plan_approval.status ==
+   CURRENT`, and a freshly recomputed plan-stage `review_content_id`
+   matches `plan_approval.approved_review_content_id`. `False` stops
+   immediately: separately recompute the plan-stage `review_content_id`
+   (`python3 scripts/workflow_fingerprint.py <base_commit>`) and report
+   it against `plan_approval.approved_review_content_id`, naming both,
+   and report whether `discover_plan_approval_commit` found a durable
+   commit at all — do not proceed past this check. Before step 1 has
+   ever run (state file dormant, pre-`WF1a`), this guard is instead the
+   plan-stage `review_content_id` recomputed against the
+   `Workflow-Plan-Approval` trailer value discovered in step 3, exactly
+   as before `WF8c` — `implementing_entry_reachable` requires the
+   `work_item` dict only step 1 produces.
 3. **Select the next checkpoint**: search `git log` in
    `<base_commit>..HEAD` for commits carrying an exact
    `Workflow-Checkpoint: <id>` trailer scoped to `Workflow-Work-Item:

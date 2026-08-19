@@ -505,7 +505,14 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # (OPUS-R102-009), a NO_CHECKPOINT terminal-wrap-up branch added to step
     # 3, and step 6 bound explicitly to complete_checkpoint(...) -- WF8c's
     # own first invocation, intentional content change.
-    "bootstrap-workflow-v2.md": "00825ef6f60224e4f7d7a33bf9a392079aa282caaf4801c98e8a330ff25fdf22",
+    #
+    # bootstrap-workflow-v2.md further updated, WF8c item 352: a new step 0
+    # (ownership-aware and guard-aware plan-approval transaction
+    # precondition, reading plan_approval_takeover_evidence before step 1)
+    # and step 2's durability guard rebound from the bare
+    # plan_approval.approved_review_content_id equality to
+    # implementing_entry_reachable -- intentional content change.
+    "bootstrap-workflow-v2.md": "ac5c32fe7d5dbb552b758cbee7cc168de769c6f27a272e8a7ec546719957d400",
 }
 
 
@@ -2491,6 +2498,64 @@ class TestPlanApprovalMutationGuardAndTakeover(unittest.TestCase):
             self.assertIsNone(evidence["progress"])
             self.assertIsNone(evidence["guard"])
             self.assertIsNone(evidence["outcome"])
+
+    # -- WF8c item 352: /bootstrap-workflow-v2's own step-0 precondition ---
+
+    def test_takeover_evidence_reports_a_fresh_unstarted_transaction_for_step_0(self):
+        """`/bootstrap-workflow-v2`'s own step 0 (`WF8c` item 352) reads
+        exactly `plan_approval_takeover_evidence` before ever calling
+        `state-sync`; a transaction just opened, before any guarded
+        mutation has run, must report a real `owner_token`,
+        `outcome == NOT_COMMITTED` (nothing committed, HEAD unmoved),
+        `progress is None` (no step completed yet), and `guard is None`
+        (not currently held) -- exactly the four values step 0's own text
+        names. Read-only: confirmed via an explicit before/after
+        `git status --short` comparison, since step 0 must never mutate
+        anything itself, only observe and (when a journal exists) stop."""
+        with h.ScratchRepo() as repo:
+            journal = self._open(repo)
+            before = _run(["git", "status", "--short"], cwd=repo.root)
+
+            evidence = ws.plan_approval_takeover_evidence(repo.root)
+
+            after = _run(["git", "status", "--short"], cwd=repo.root)
+            self.assertEqual(before, after)
+            self.assertIsNotNone(evidence["journal"])
+            self.assertEqual(evidence["owner_token"], journal["owner_token"])
+            self.assertEqual(evidence["outcome"], ws.PLAN_APPROVAL_OUTCOME_NOT_COMMITTED)
+            self.assertIsNone(evidence["progress"])
+            self.assertIsNone(evidence["guard"])
+
+    def test_takeover_evidence_reports_last_completed_step_and_held_guard_for_step_0(self):
+        """A transaction interrupted mid-flight -- one guarded mutation
+        already completed, a second one's guard left held (simulating a
+        crash inside that step's own mutation body) -- is exactly what a
+        real abandoned transaction looks like to a fresh session's step 0.
+        `plan_approval_takeover_evidence` must surface both facts: the
+        last-*completed* step (never a step merely started), and the
+        currently-held guard's own step/class, so step 0's report names
+        both without step 0 itself acquiring or releasing anything."""
+        with h.ScratchRepo() as repo:
+            journal = self._open(repo)
+            owner_token = journal["owner_token"]
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=owner_token, step="step-5-declaration-pin", now="t2",
+            ):
+                pass
+            # A second guarded step starts but never completes (crash
+            # inside the mutation body, left holding the guard).
+            ws.acquire_plan_approval_guard(
+                repo.root, holder_owner_token=owner_token,
+                step="step-6.1b-state-pin", now="t3",
+            )
+
+            evidence = ws.plan_approval_takeover_evidence(repo.root)
+
+            self.assertEqual(evidence["owner_token"], owner_token)
+            self.assertEqual(evidence["outcome"], ws.PLAN_APPROVAL_OUTCOME_NOT_COMMITTED)
+            self.assertEqual(evidence["progress"]["step"], "step-5-declaration-pin")
+            self.assertEqual(evidence["guard"]["step"], "step-6.1b-state-pin")
+            self.assertEqual(evidence["guard"]["step_class"], ws.ORDINARY)
 
 
 _STATE_PATH = Path("docs/ai-workflow/WORKFLOW_STATE.json")

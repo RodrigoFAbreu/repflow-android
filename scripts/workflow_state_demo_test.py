@@ -637,6 +637,63 @@ class TestCheckpointOriginationAgainstRealRepository(unittest.TestCase):
         with self.assertRaises(ws.CheckpointOriginationUnprovableError):
             ws.checkpoint_origination_provable(repo_root, "workflow-v2-1-core", "WF8b")
 
+    def test_bootstrap_durability_guard_is_rebound_to_a_discovered_durable_commit(self):
+        """`WF8c` item 352: `/bootstrap-workflow-v2`'s own step-2
+        durability guard must no longer compare a freshly recomputed
+        `review_content_id` against `plan_approval.approved_review_content_id`
+        alone -- that bare form always agrees with itself regardless of
+        whether any `Workflow-Plan-Approval` commit exists at all, since a
+        working-tree-only state write and its own just-written record are
+        definitionally equal. The installed command file's live text must
+        call the same durable-commit-anchored check
+        (`implementing_entry_reachable`, which additionally requires
+        `discover_plan_approval_commit` to find a real commit and confirms
+        it (or a checkpoint-commit descendant) is live `HEAD`) before it
+        may treat the state record's word alone as sufficient -- and this
+        repository's own real work item, at real `HEAD`, must actually
+        satisfy that stronger check, not merely reference it in prose."""
+        repo_root = _repo_root()
+        command_text = (repo_root / ".claude/commands/bootstrap-workflow-v2.md").read_text()
+        self.assertIn("implementing_entry_reachable", command_text)
+        self.assertIn("discover_plan_approval_commit", command_text)
+
+        state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
+        work_item = state["work_items"][WORK_ITEM_ID]
+        self.assertTrue(
+            ws.implementing_entry_reachable(repo_root, work_item, work_item["base_commit"]),
+        )
+
+    def test_bootstrap_step_0_journal_precondition_is_installed_and_ownership_guard_aware(self):
+        """`WF8c` item 352's "cross-command obligation the journal
+        creates": the installed command file must check for an open
+        plan-approval transaction *before* step 1 runs, must never treat
+        itself as authorized to resolve/replace/delete a journal it does
+        not own (ownership-aware), and must also report a held mutation
+        guard rather than treating an unheld journal token as the whole
+        ownership picture (guard-aware, revision 58). Checked structurally
+        against the installed text; the underlying read/classify/observe
+        behavior itself is exercised against real `ScratchRepo` history by
+        `workflow_integration_test.TestPlanApprovalMutationGuardAndTakeover
+        .test_takeover_evidence_reports_a_fresh_unstarted_transaction_for_step_0`
+        and its sibling held-guard test, both bound as this item's own
+        evidence."""
+        repo_root = _repo_root()
+        command_text = (repo_root / ".claude/commands/bootstrap-workflow-v2.md").read_text()
+        step_0_idx = command_text.index("0. **Plan-approval transaction precondition**")
+        step_1_idx = command_text.index("1. **State-sync**")
+        self.assertLess(step_0_idx, step_1_idx, "step 0 must precede step 1 in the installed text")
+        step_0_text = " ".join(command_text[step_0_idx:step_1_idx].split())
+        self.assertIn("plan_approval_takeover_evidence", step_0_text)
+        self.assertIn("this invocation never holds its `owner_token`", step_0_text)
+        self.assertIn("may not resolve, replace, or delete the journal itself", step_0_text)
+        self.assertIn("evidence[\"guard\"]", step_0_text)
+        self.assertIn("take_over_plan_approval_transaction", step_0_text)
+
+        # This repository's own real transaction slot is not currently
+        # open -- confirms step 0's own check has something real (an
+        # absent journal, the ordinary case) to observe, not just prose.
+        self.assertIsNone(ws.read_plan_approval_journal(repo_root))
+
     def test_identity_reference_admits_refuses_this_repositorys_own_reused_work_item_id(self):
         """WFR-66's identity-query enforcement against real history: the
         plan's own "one concrete instance" fact -- `workflow-v2-1-core`
