@@ -8545,8 +8545,8 @@ class TestGuardFailureSurfaceItem372(unittest.TestCase):
     the guard is itself a new shared object. Parts (a)-(e) and (g) below;
     (f) (same-worktree concurrency, which needs real, separate OS
     processes) is `TestSameWorktreeConcurrencyRealProcesses`; part (h)
-    (the global lock order conformance obligation) is a separate, larger
-    undertaking and is not attempted in this round."""
+    (the global lock order conformance obligation) is
+    `TestGlobalLockOrderItem372h`, below."""
 
     def test_a_guard_with_no_backing_claim_is_superseded_by_construction(self):
         """Item 372(a): a guard planted by a session holding no current
@@ -8849,6 +8849,94 @@ class TestGuardFailureSurfaceItem372(unittest.TestCase):
             after = ws.claim_path(repo.root, "wi").read_bytes()
             self.assertEqual(before, after)
             self.assertIsNone(ws.read_guard(repo.root, "wi"))
+
+
+class TestGlobalLockOrderItem372h(unittest.TestCase):
+    """Item 372(h): the global lock order is a conformance obligation with
+    an owner, not a convention. `WF8c`'s own eventual conformance test the
+    plan's "Three arms" text (a completeness arm, a graph arm) explicitly
+    deferred past `docs/ai-workflow/dry-run/verify_372h_lock_primitive_
+    predicate.py`/`verify_372h_raw_edge_derivation.py`'s own real-repository
+    dry-run reproductions (revisions 91-96, five external review rounds).
+    Loads those two scripts, unmodified, from their real on-disk location --
+    the mechanical AST discovery/resolution/`releasable`-predicate/edge-
+    derivation logic they implement is not duplicated here a third time --
+    and asserts the same zero-failures property their own `main()` reports
+    when run standalone, wired into the standing suite instead of a manual
+    `python3 docs/ai-workflow/dry-run/verify_372h_*.py` invocation. Reads
+    the live `scripts/workflow_state.py` and `WORKFLOW_V2_PLAN.md`, exactly
+    as both scripts always have -- a real-repository check, not a
+    `ScratchRepo` one, mirroring the established `Path(ws.__file__).
+    read_text()` + `ast` pattern already used elsewhere in this file
+    (`test_bundle_generation_target_and_recovery_phase_pair_are_both_
+    reachable`)."""
+
+    @staticmethod
+    def _load(path, module_name):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(module_name, path)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+        return module
+
+    @classmethod
+    def setUpClass(cls):
+        dry_run_dir = Path(__file__).resolve().parent.parent / "docs" / "ai-workflow" / "dry-run"
+        # Load order matters: the graph-arm script imports
+        # PathResolver/canon/DECLARED_PRIMITIVES from the completeness-arm
+        # module by bare name (it inserts its own directory onto sys.path
+        # itself); pre-registering that name in sys.modules first means the
+        # graph-arm load resolves to this single already-executed instance
+        # rather than a second, independent execution.
+        cls._completeness = cls._load(
+            dry_run_dir / "verify_372h_lock_primitive_predicate.py",
+            "verify_372h_lock_primitive_predicate",
+        )
+        cls._graph = cls._load(
+            dry_run_dir / "verify_372h_raw_edge_derivation.py",
+            "verify_372h_raw_edge_derivation",
+        )
+
+    def test_completeness_arm_discovery_resolution_and_predicate_are_correct(self):
+        """The eight-primitive forward-direction comparison (discovery +
+        pathname resolution + the mechanically-decided `releasable`
+        conjunct), plus both required non-vacuousness regressions
+        (`release_checkpoint` made an unconditional release,
+        `close_plan_approval_journal` made a genuine compare-and-delete) --
+        `verify_372h_lock_primitive_predicate.main()`'s own checks, as
+        assertions rather than a `sys.exit` code."""
+        m = self._completeness
+        src = Path(ws.__file__).read_text()
+        tree = m.parse_module(src)
+        candidates, failures = m.run_pass(tree, verbose=False)
+        failures = list(failures)
+        failures += m.compare_to_declared(candidates, verbose=False)
+        failures += m.run_regression_checks(src)
+        self.assertEqual(failures, [], "\n".join(failures))
+
+    def test_graph_arm_edges_acyclicity_and_single_attempt_discriminator(self):
+        """The six code-derivable raw edges rediscovered exactly and
+        bidirectionally (shared `os.link` statement attributed
+        caller-aware), the four command-orchestrated edges checked against
+        the plan's own independently-parsed ten-edge table, the blocking
+        sub-order's acyclicity, the call-chain-aware single-attempt
+        discriminator, and all required non-vacuousness regressions --
+        `verify_372h_raw_edge_derivation.main()`'s own checks, as
+        assertions rather than a `sys.exit` code."""
+        import ast
+        m = self._graph
+        src = Path(ws.__file__).read_text()
+        tree = m.parse_module(src)
+        functions = {fn.name: fn for fn in ast.walk(tree)
+                     if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        discovered, failures = m.run_pass(tree, verbose=False)
+        failures = list(failures)
+        plan_declared_edges = m.parse_declared_raw_edges_from_plan(m.PLAN_PATH.read_text())
+        failures += m.compare_to_declared(discovered, plan_declared_edges, verbose=False)
+        failures += m.check_single_attempt_discriminator(tree, functions)
+        failures += m.run_regression_checks(src, plan_declared_edges)
+        self.assertEqual(failures, [], "\n".join(failures))
 
 
 _GUARD_WORKER_SOURCE = """
