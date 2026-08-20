@@ -11,7 +11,7 @@
       "registry_path": "docs/ai-workflow/registry/workflow-v2-1-core-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json",
       "governing_workflow_version": "1",
-      "phase": "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+      "phase": "AWAITING_FUNCTIONAL_REVIEW",
       "plan_revision": 99,
       "implementation_revision": 17,
       "functional_review_round": null,
@@ -137,28 +137,94 @@
         "recorded_at": "2026-08-19T16:29:51+01:00"
       },
       "technical_approval": {
-        "status": "STALE",
+        "status": "CURRENT",
         "basis": "EXTERNAL_APPROVE",
-        "reviewed_bundle_id": "71c91d9b14815f8279aad5c3a1144c3ebe79fcc696306871de4e380fe56588ad",
-        "approved_review_content_id": "8f9ea8cc60192bbbecfb7ed092c1dc79739047c7616ea4e2cddd8b68ecd0c9ed",
+        "reviewed_bundle_id": "4e964375211a5e60d0ffa0e6a1e384d24ce18e70fab698cd311736b5134974f5",
+        "approved_review_content_id": "a44d912afd81fa757d2b9893e77a0d8990bce05ed78ad487352d3e849efe9143",
         "review_content_manifest": [
+          {
+            "path": ".claude/commands/accept-milestone.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8656365cafacfc835f2e6b145889f44398115cd7"
+          },
+          {
+            "path": ".claude/commands/accept-scoped-remediation.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "4d5749c3d602349424a9ac822294431d17a5e1d1"
+          },
+          {
+            "path": ".claude/commands/apply-functional-review.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8468f8528bb024db0d09641392c9463e8b83496e"
+          },
+          {
+            "path": ".claude/commands/apply-implementation-review.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3cb01d82e4c53bc4b8bd2c0a7fb2f4f1b1af5404"
+          },
           {
             "path": ".claude/commands/apply-plan-review.md",
             "exists": true,
             "mode": "100644",
-            "blob": "12c56c40434d756f00df1db4829e7a30ff853455"
+            "blob": "2bc1b75a2969334e58c34964a54461bbc6d03d5d"
+          },
+          {
+            "path": ".claude/commands/approve-review.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "12682cbc8aa53caf42f59387c34f726945c68f53"
+          },
+          {
+            "path": ".claude/commands/bootstrap-workflow-v2.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "c906dda3882b70440d2b5a8320ad628f8ad23021"
+          },
+          {
+            "path": ".claude/commands/milestone-implement.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "15be49b9ed7a4a969d5e4adbb8ee2dea10f8102b"
           },
           {
             "path": ".claude/commands/milestone-plan.md",
             "exists": true,
             "mode": "100644",
-            "blob": "047e404477044b3996bff71c1570fcca7e7b916f"
+            "blob": "28ccf82ed82c1987ee8b45467ee66283f13ad43b"
+          },
+          {
+            "path": ".claude/commands/prepare-functional-review.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "fac23d7e7a4858dc4794b55e1589b2b16c596fad"
           },
           {
             "path": ".claude/commands/prepare-review.md",
             "exists": true,
             "mode": "100644",
-            "blob": "fa5f8a5b1386d2b20114fe83e74fb085430428ef"
+            "blob": "31a789dc9484affce55a510249f2de4b87258200"
+          },
+          {
+            "path": ".claude/commands/record-manual-plan-review.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b3e318675177ab894c317c9661861348bae61182"
+          },
+          {
+            "path": ".claude/commands/recover-implementation-provenance.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "971cfb9dcaf0085f0f124299a6329177d021f543"
+          },
+          {
+            "path": ".claude/commands/review-plan.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "16519e46b2a06e2b1316b775c835f7fd6c6c067a"
           },
           {
             "path": ".github/workflows/ci.yml",
@@ -167,70 +233,112 @@
             "blob": "955d3f1c8420482899e1ece5f0263a9e0264513e"
           },
           {
+            "path": "docs/ai-workflow/MILESTONE_WORKFLOW.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8784529700572cedd42a8cb56b945a7383171804"
+          },
+          {
+            "path": "docs/ai-workflow/REVIEW_PROTOCOL.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "699afe93d2ca8cd42d62d23d76b33e9f28c1fb8f"
+          },
+          {
+            "path": "docs/ai-workflow/dry-run/verify_372h_lock_primitive_predicate.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "209fb3f7977df34ce4586b4210670b22ffaab24e"
+          },
+          {
+            "path": "docs/ai-workflow/dry-run/verify_372h_raw_edge_derivation.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f715e800a174123842c58865d361277a18a7bafa"
+          },
+          {
             "path": "docs/ai-workflow/registry/workflow-v2-1-core-artifacts.json",
             "exists": true,
             "mode": "100644",
-            "blob": "acf3c418b24e214fd2c9ac946a85e826827fd4cc"
+            "blob": "82af58e9211ef1693d92d4a64dd92ee112625aaf"
+          },
+          {
+            "path": "docs/ai-workflow/registry/workflow-v2-1-core-ledger-status.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "1a2c7f6302137ba63363f993057fbadbdad7ede5"
+          },
+          {
+            "path": "docs/ai-workflow/registry/workflow-v2-1-core-wf8c-evidence.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "4b9512acc9d0d67d8b76a40956dd85a1b099fcaf"
           },
           {
             "path": "scripts/prepare-ai-review.sh",
             "exists": true,
             "mode": "100755",
-            "blob": "e8d5cb775f3798c6efabfdd0a57a5de1cd645fa7"
+            "blob": "7f97e6ffb55c7268164b77635fb922505437cc83"
           },
           {
             "path": "scripts/workflow_fingerprint.py",
             "exists": true,
             "mode": "100755",
-            "blob": "5ac15afb54f7d4c60c1f1f55bccb93d4e3d92e11"
+            "blob": "bfbd268a6ee3a6093cedd24d93068f6ee041a24e"
           },
           {
             "path": "scripts/workflow_fingerprint_demo_test.py",
             "exists": true,
             "mode": "100644",
-            "blob": "7c9985c76f271f39fc43a63e50c11547527d001f"
+            "blob": "f7d817344a66b36a3cf3345d2dc6df5949fbd697"
           },
           {
             "path": "scripts/workflow_fingerprint_generalization_test.py",
             "exists": true,
             "mode": "100644",
-            "blob": "5c80369b6e5e9937ba4e7d20dc83865b343030f8"
+            "blob": "75a6dc83dd23b3868c5730c2e79269c9a1244d14"
           },
           {
             "path": "scripts/workflow_fingerprint_test.py",
             "exists": true,
             "mode": "100644",
-            "blob": "eb8726e2f853c8d84af5be3f44eacf19b31a9476"
+            "blob": "533ce8e88e04f9733cf786b508d9a417dc4fd752"
           },
           {
             "path": "scripts/workflow_integration_test.py",
             "exists": true,
             "mode": "100644",
-            "blob": "66a3470accf8637ec95f24995e975cd20d8158c7"
+            "blob": "e781bf8506872d0c6abe8d79751e4d53e6bb6ed8"
           },
           {
             "path": "scripts/workflow_state.py",
             "exists": true,
             "mode": "100644",
-            "blob": "7643da59b1393a7a7ef949df7e5ac95517a2f974"
+            "blob": "bbf7bc9d975db6ab021d1eac05ec568e575566ca"
+          },
+          {
+            "path": "scripts/workflow_state_completion_obligations_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "dea4e516264cbc9875581e1d17641764d722e812"
           },
           {
             "path": "scripts/workflow_state_demo_test.py",
             "exists": true,
             "mode": "100644",
-            "blob": "e55705157820b5c61ea8086dc5e5fa164cb90f38"
+            "blob": "58bb6ac4a5d4fed768efeab55b95bf6d983a9124"
           },
           {
             "path": "scripts/workflow_state_test.py",
             "exists": true,
             "mode": "100644",
-            "blob": "c5795d646e3d309fe30df0ad6a437e493aef0d96"
+            "blob": "25cbaa3148da08feeef8d2a3db7d08f986fc8eb0"
           },
           {
             "path": "scripts/workflow_test_harness.py",
             "exists": true,
             "mode": "100644",
-            "blob": "4a522d83b99ee8d431004f7878bcd631e3638e89"
+            "blob": "1642cc7a0f8603ed55405db7780b03100c071ceb"
           },
           {
             "path": "scripts/workflow_test_harness_test.py",
@@ -239,11 +347,11 @@
             "blob": "6f934d45e55d94c1f9472f6e08bd2531dac72683"
           }
         ],
-        "reviewed_content_commit": "7bef596dd95c7f35f1dcc0eedd9a91d98d592ab8",
+        "reviewed_content_commit": "73fe50d010151c3d3cef6ab60bfe3dddab0141e2",
         "legacy_evidence": null,
-        "user_confirmation": "I explicitly approve the implementation stage for work item workflow-v2-1-core.",
+        "user_confirmation": "I confirm approval of the workflow-v2-1-core implementation stage.",
         "waived_guarantees": [],
-        "recorded_at": "2026-08-03T15:35:42+01:00"
+        "recorded_at": "2026-08-20T23:42:20+01:00"
       },
       "plan_review_stages": null,
       "functional_acceptance_status": null,
@@ -284,8 +392,8 @@
           ]
         }
       ],
-      "state_revision": 129,
-      "last_transition": "2026-08-20T22:08:15+01:00"
+      "state_revision": 130,
+      "last_transition": "2026-08-20T23:42:20+01:00"
     },
     "milestone-8": {
       "work_item_type": "product",
