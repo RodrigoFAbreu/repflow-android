@@ -7499,30 +7499,78 @@ def _reconciliation_evidence_ids_at_commit(
 
 
 class PinnedEvidenceWorktreeIntegrityError(Exception):
-    """`GPT-R132-001`/`-002`'s shared fail-closed signal: raised whenever
-    a pinned evidence checkout cannot be proven clean and pinned to its
-    expected commit, whether at initial materialization or before a
-    later evidence execution reuses the same checkout. Left uncaught by
-    `verify_wfo_ledger_coverage`, this propagates out of the isolated
+    """`GPT-R132-001`/`-002`/`OPUS-R133`'s shared fail-closed signal:
+    raised whenever a freshly materialized pinned evidence checkout
+    cannot be proven byte-identical to its expected commit. Left uncaught
+    by `verify_wfo_ledger_coverage`, this propagates out of the isolated
     verifier driver (`_run_verifier_driver`'s own `except Exception`
     wrapping) as `VERIFIER_UNRESOLVABLE`, never `PASS` -- the same
     fail-closed path `VerifierExecutionError` already uses, so a
-    materialization or restoration failure can never be silently
-    swallowed into a false positive."""
+    materialization failure can never be silently swallowed into a false
+    positive."""
+
+
+def _git_blob_sha1(data: bytes) -> str:
+    """Git's own blob identity (`sha1(b"blob <len>\0" + content)`),
+    computed in pure Python -- never by invoking `git hash-object` or any
+    other Git command against the bytes, so no smudge/clean filter can
+    run and no result can depend on one (`OPUS-R133-M01`)."""
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+
+def _git_ls_tree_blobs(scratch_dir: Path, commit: str) -> dict[str, tuple[str, str]]:
+    """Every blob `commit` provides in `scratch_dir`'s own object
+    database, keyed by POSIX-relative path to `(mode, blob_sha1)`.
+    `git ls-tree` reads tree objects directly out of the object database;
+    it never touches the working tree, so -- unlike `git status` or
+    `git diff` -- it applies no smudge/clean filter and fires no hook,
+    whatever `scratch_dir`'s own `.git/config`, `.git/info/attributes` or
+    `.git/hooks/` currently claim. `core.hooksPath` is still pinned to the
+    checkout's own emptied `hooks/` directory here anyway, purely for
+    defense in depth: every Git invocation this module issues against a
+    pinned clone pins it, with no case-by-case exceptions to reason
+    about."""
+    hooks_dir = scratch_dir / ".git" / "hooks"
+    output = _run(
+        ["git", "-c", f"core.hooksPath={hooks_dir}", "ls-tree", "-r", "-z", "--full-tree", commit],
+        cwd=scratch_dir,
+    )
+    entries: dict[str, tuple[str, str]] = {}
+    for record in output.split("\0"):
+        if not record:
+            continue
+        meta, _, path = record.partition("\t")
+        mode, _obj_type, blob = meta.split(" ")
+        entries[path] = (mode, blob)
+    return entries
 
 
 def _verify_pinned_worktree_clean(scratch_dir: Path, commit: str) -> None:
-    """Fails closed unless `scratch_dir` is both byte-clean (`git status
-    --porcelain` empty) and detached exactly at `commit` -- resolved
-    against `scratch_dir`'s own object database, never the live
-    `repo_root`, so this assertion depends on nothing but the pinned
-    checkout itself. Called immediately after materialization (closes
-    `GPT-R132-001`: a mutable `post-checkout` hook that rewrote tracked
-    bytes during checkout leaves the checkout dirty, which this catches
-    before any evidence executes) and immediately after every restore
-    between evidence ids (closes `GPT-R132-002`: an evidence test that
-    mutated tracked files leaves the checkout dirty, which this catches
-    before the *next* evidence id can observe it)."""
+    """Fails closed unless `scratch_dir` is byte-identical to `commit`'s
+    own tree -- resolved against `scratch_dir`'s own object database,
+    never the live `repo_root` -- and detached exactly at `commit`.
+
+    `OPUS-R133-001`/`-002` found the previous `git status --porcelain`-
+    based version of this check trusted the checkout's own `.git/` state:
+    a clone-local `core.hooksPath`, or a matched clean/smudge filter pair
+    registered via `.git/info/attributes`, could make `git status` report
+    a tampered tree as clean, or could make the act of checking itself
+    execute the attacker's hook. Neither is reachable here: the expected
+    side of the comparison comes only from `_git_ls_tree_blobs` (a pure
+    object-database read, immune to every filter/hook/attribute a working
+    directory can carry) and the actual side comes only from a plain
+    filesystem walk hashed in pure Python (`_git_blob_sha1`, no Git
+    process touches the on-disk bytes at all) -- there is no git
+    invocation left in this function whose output a clone-local
+    config/filter/attribute/hook could influence.
+
+    Called immediately after every materialization (closes
+    `GPT-R132-001`: a hook that rewrote tracked bytes during checkout
+    leaves the checkout's blobs mismatched, caught before any evidence
+    executes). `verify_wfo_ledger_coverage` materializes an independent
+    checkout per evidence id and never reuses one (`OPUS-R133-001`), so
+    this is the only point in that checkout's lifetime this assertion
+    needs to run."""
     resolved = _run(["git", "rev-parse", commit], cwd=scratch_dir).strip()
     head = _run(["git", "rev-parse", "HEAD"], cwd=scratch_dir).strip()
     if head != resolved:
@@ -7530,11 +7578,43 @@ def _verify_pinned_worktree_clean(scratch_dir: Path, commit: str) -> None:
             f"pinned evidence checkout at {scratch_dir} has HEAD {head!r}, "
             f"expected {resolved!r} (commit {commit!r})"
         )
-    status = _run(["git", "status", "--porcelain"], cwd=scratch_dir)
-    if status.strip():
+
+    expected = _git_ls_tree_blobs(scratch_dir, commit)
+    seen: set[str] = set()
+    for dirpath, dirnames, filenames in os.walk(scratch_dir):
+        dirnames[:] = [d for d in dirnames if d != ".git"]
+        for filename in filenames:
+            full_path = Path(dirpath) / filename
+            rel_path = full_path.relative_to(scratch_dir).as_posix()
+            seen.add(rel_path)
+            if rel_path not in expected:
+                raise PinnedEvidenceWorktreeIntegrityError(
+                    f"pinned evidence checkout at {scratch_dir} has untracked path "
+                    f"{rel_path!r} not present in commit {commit!r}'s tree"
+                )
+            expected_mode, expected_blob = expected[rel_path]
+            if full_path.is_symlink() or expected_mode not in ("100644", "100755"):
+                raise PinnedEvidenceWorktreeIntegrityError(
+                    f"pinned evidence checkout at {scratch_dir} path {rel_path!r} is not "
+                    f"a plain regular file at commit {commit!r} (mode {expected_mode!r})"
+                )
+            actual_mode = "100755" if full_path.stat().st_mode & 0o111 else "100644"
+            if actual_mode != expected_mode:
+                raise PinnedEvidenceWorktreeIntegrityError(
+                    f"pinned evidence checkout at {scratch_dir} path {rel_path!r} has mode "
+                    f"{actual_mode!r}, commit {commit!r} declares {expected_mode!r}"
+                )
+            actual_blob = _git_blob_sha1(full_path.read_bytes())
+            if actual_blob != expected_blob:
+                raise PinnedEvidenceWorktreeIntegrityError(
+                    f"pinned evidence checkout at {scratch_dir} path {rel_path!r} does not "
+                    f"match commit {commit!r}'s own blob (expected {expected_blob}, found {actual_blob})"
+                )
+    missing = set(expected) - seen
+    if missing:
         raise PinnedEvidenceWorktreeIntegrityError(
-            f"pinned evidence checkout at {scratch_dir} is not clean at "
-            f"commit {commit!r}: {status!r}"
+            f"pinned evidence checkout at {scratch_dir} is missing tracked path(s) from "
+            f"commit {commit!r}: {sorted(missing)!r}"
         )
 
 
@@ -7558,13 +7638,27 @@ def _materialize_pinned_worktree_at_commit(repo_root: Path, commit: str) -> Path
     source repository's own hook scripts (only inert `*.sample`
     templates), so the clone starts with no hooks that could execute at
     all; the `hooks/` directory is then deleted and recreated empty
-    regardless, and every Git invocation against the clone explicitly
-    pins `core.hooksPath` to that now-guaranteed-empty directory, so
-    nothing -- not a template, not inherited global/system config --
-    can reintroduce a live hook path. The checkout is verified clean and
-    pinned (`_verify_pinned_worktree_clean`) before this function
-    returns, so a still-successful hook injection anywhere in this
-    pipeline fails closed here rather than silently producing evidence
+    regardless, and the checkout pins `core.hooksPath` to that
+    now-guaranteed-empty directory, so nothing -- not a template, not
+    inherited global/system config -- can reintroduce a live hook path.
+
+    `OPUS-R133-001` found that reusing one such clone across every
+    evidence id (resetting and cleaning it between ids) left the reused
+    checkout's own `.git/config`/`.git/info/attributes`/`.git/hooks/`
+    under the control of whichever evidence id ran previously -- a
+    channel `git reset --hard`/`git clean -fdx` never touch, since they
+    operate on the work tree, not on `.git/` itself. `verify_wfo_ledger_
+    coverage` therefore calls this function once per evidence id and
+    tears the result down immediately after
+    (`_remove_pinned_worktree`) instead of resetting and reusing it:
+    every evidence id gets a brand-new clone that no prior evidence
+    process has ever had the chance to touch, so there is no persisted
+    state left for a later id to inherit, by any mechanism.
+
+    The checkout is verified byte-identical to `commit`
+    (`_verify_pinned_worktree_clean`) before this function returns, so a
+    still-successful hook injection during this specific clone's own
+    checkout fails closed here rather than silently producing evidence
     from unreviewed bytes. Caller owns cleanup via
     `_remove_pinned_worktree`."""
     scratch_dir = Path(tempfile.mkdtemp(prefix="wfo-ledger-evidence-worktree-"))
@@ -7578,24 +7672,6 @@ def _materialize_pinned_worktree_at_commit(repo_root: Path, commit: str) -> Path
     )
     _verify_pinned_worktree_clean(scratch_dir, commit)
     return scratch_dir
-
-
-def _restore_pinned_worktree_to_commit(scratch_dir: Path, commit: str) -> None:
-    """`GPT-R132-002`'s fix: reused between successive evidence ids in
-    the same materialized checkout so one evidence test can never
-    contaminate the next. Hard-resets tracked content and removes every
-    untracked/ignored byte an evidence test may have left behind (`git
-    clean -fdx`, e.g. `__pycache__/`), with `core.hooksPath` pinned to
-    the checkout's own already-emptied `hooks/` directory exactly as
-    materialization does, then re-verifies clean and pinned
-    (`_verify_pinned_worktree_clean`) before returning -- a restore that
-    cannot actually reach the pinned state (a locked file, a stray
-    submodule) fails closed here rather than letting the next evidence
-    id execute against undefined content."""
-    hooks_dir = scratch_dir / ".git" / "hooks"
-    _run(["git", "-c", f"core.hooksPath={hooks_dir}", "reset", "--hard", "--quiet", commit], cwd=scratch_dir)
-    _run(["git", "clean", "-fdx", "--quiet"], cwd=scratch_dir)
-    _verify_pinned_worktree_clean(scratch_dir, commit)
 
 
 def _remove_pinned_worktree(repo_root: Path, scratch_dir: Path) -> None:
@@ -7760,69 +7836,69 @@ def verify_wfo_ledger_coverage(repo_root: str | Path, commit: str) -> dict:
     for item in sorted(ledger_items - table_items):
         failing.append(f"item {item}: ledger entry names no real reconciliation-table item")
 
-    scratch_dir: Path | None = None
-    try:
-        for item, table_row in sorted(table.items()):
-            if occurrences.get(item) != 1:
-                continue  # already flagged above (duplicate or missing)
-            entry = by_item[item]
-            entry_status, entry_owner = entry.get("status"), entry.get("owner_checkpoint")
-            table_status, table_owner = table_row["status"], table_row["owner"]
+    for item, table_row in sorted(table.items()):
+        if occurrences.get(item) != 1:
+            continue  # already flagged above (duplicate or missing)
+        entry = by_item[item]
+        entry_status, entry_owner = entry.get("status"), entry.get("owner_checkpoint")
+        table_status, table_owner = table_row["status"], table_row["owner"]
 
-            # (iii)/(iv) governance scope: the ledger's status must equal the
-            # table's own, or be an evidenced upgrade to IMPLEMENTED -- no
-            # other divergence is ever permitted, regardless of whether the
-            # table itself already says IMPLEMENTED (a historically-delivered
-            # item) or something still open.
-            if entry_status != table_status and entry_status != "IMPLEMENTED":
-                failing.append(
-                    f"item {item}: ledger status {entry_status!r} diverges from the reconciliation "
-                    f"table's {table_status!r} -- the only permitted divergence is an evidenced move "
-                    f"to IMPLEMENTED"
-                )
-                continue
+        # (iii)/(iv) governance scope: the ledger's status must equal the
+        # table's own, or be an evidenced upgrade to IMPLEMENTED -- no
+        # other divergence is ever permitted, regardless of whether the
+        # table itself already says IMPLEMENTED (a historically-delivered
+        # item) or something still open.
+        if entry_status != table_status and entry_status != "IMPLEMENTED":
+            failing.append(
+                f"item {item}: ledger status {entry_status!r} diverges from the reconciliation "
+                f"table's {table_status!r} -- the only permitted divergence is an evidenced move "
+                f"to IMPLEMENTED"
+            )
+            continue
 
-            # (iv) owner_checkpoint must always equal the table's own
-            # resolved owner -- only a fresh approved plan revision may
-            # change it, whatever the entry's status.
-            if entry_owner != table_owner:
-                failing.append(
-                    f"item {item}: ledger owner_checkpoint {entry_owner!r} disagrees with the "
-                    f"reconciliation table's {table_owner!r}"
-                )
-                continue
+        # (iv) owner_checkpoint must always equal the table's own
+        # resolved owner -- only a fresh approved plan revision may
+        # change it, whatever the entry's status.
+        if entry_owner != table_owner:
+            failing.append(
+                f"item {item}: ledger owner_checkpoint {entry_owner!r} disagrees with the "
+                f"reconciliation table's {table_owner!r}"
+            )
+            continue
 
-            # (ii) evidence for every non-SUPERSEDED/none item (widened,
-            # GPT-R131-002, to match WFR-69's own status-conditional rule
-            # and WFR-68 property (ii)'s own text -- an IMPLEMENTED entry
-            # must be evidenced "exactly as a WF8c-owned entry must"):
-            # SUPERSEDED/none is the only disposition no evidence source
-            # can ever discharge, satisfied by the table's own recorded
-            # supersession alone; every other status -- IMPLEMENTED or a
-            # WF8c-owned ABSENT/PARTIAL -- must be evidenced whether the
-            # table already said so (historically-delivered/frozen-baseline)
-            # or this is a fresh upgrade from an open status.
-            if entry_status == "SUPERSEDED" and entry_owner == "none":
-                continue
-            entry_evidence = entry.get("evidence")
-            evidence = entry_evidence if isinstance(entry_evidence, str) and entry_evidence else companion_evidence.get(item)
-            if not isinstance(evidence, str) or not evidence:
-                failing.append(f"item {item}: {entry_status} with no evidence entry")
-                continue
-            if scratch_dir is None:
-                scratch_dir = _materialize_pinned_worktree_at_commit(repo_root, commit)
-            else:
-                # GPT-R132-002: restore-and-verify before every evidence id
-                # after the first -- a prior evidence execution in this same
-                # reused checkout must never be able to hand the next one
-                # anything but the pinned commit's own bytes.
-                _restore_pinned_worktree_to_commit(scratch_dir, commit)
+        # (ii) evidence for every non-SUPERSEDED/none item (widened,
+        # GPT-R131-002, to match WFR-69's own status-conditional rule
+        # and WFR-68 property (ii)'s own text -- an IMPLEMENTED entry
+        # must be evidenced "exactly as a WF8c-owned entry must"):
+        # SUPERSEDED/none is the only disposition no evidence source
+        # can ever discharge, satisfied by the table's own recorded
+        # supersession alone; every other status -- IMPLEMENTED or a
+        # WF8c-owned ABSENT/PARTIAL -- must be evidenced whether the
+        # table already said so (historically-delivered/frozen-baseline)
+        # or this is a fresh upgrade from an open status.
+        if entry_status == "SUPERSEDED" and entry_owner == "none":
+            continue
+        entry_evidence = entry.get("evidence")
+        evidence = entry_evidence if isinstance(entry_evidence, str) and entry_evidence else companion_evidence.get(item)
+        if not isinstance(evidence, str) or not evidence:
+            failing.append(f"item {item}: {entry_status} with no evidence entry")
+            continue
+
+        # OPUS-R133-001: a fresh, independent clone per evidence id,
+        # materialized and torn down within this one iteration -- never
+        # reused across evidence ids. There is no "restore between ids"
+        # step left to bypass: no evidence id's own execution (a tracked-
+        # file rewrite, a clone-local Git config/filter/attribute/hook)
+        # can leave anything behind for a later evidence id to inherit,
+        # because the checkout it ran in no longer exists by the time the
+        # next one is materialized.
+        scratch_dir = _materialize_pinned_worktree_at_commit(repo_root, commit)
+        try:
             ok, detail = _run_named_test_in_scratch(scratch_dir, evidence)
-            if not ok:
-                failing.append(f"item {item}: evidence {evidence!r} does not re-execute green: {detail}")
-    finally:
-        if scratch_dir is not None:
+        finally:
             _remove_pinned_worktree(repo_root, scratch_dir)
+        if not ok:
+            failing.append(f"item {item}: evidence {evidence!r} does not re-execute green: {detail}")
 
     if failing:
         return {"status": "FAIL", "detail": "; ".join(failing), "failing_assertions": failing}

@@ -1289,6 +1289,112 @@ class Target(unittest.TestCase):
         self.fail("COMMITTED TARGET MUST FAIL")
 """
 
+# OPUS-R133-001 pipeline-level regression fixtures: HooksPathAttack (run
+# first, item 2 below) plants a clone-local `core.hooksPath` pointing at a
+# `post-index-change` hook that rewrites the *separate* victim module's own
+# committed always-failing Victim.test_victim to always pass. The attack and
+# the victim live in different files (mirroring the reviewer's own
+# reproduction) so the victim's own committed source can be targeted without
+# the attack module's own text -- which must literally spell out what it
+# targets -- colliding with it. Only materializing a genuinely fresh,
+# independent checkout per evidence id -- never reusing (and resetting) the
+# checkout HooksPathAttack ran in -- prevents the planted config from ever
+# being consulted while Victim (run second, item 4 below) executes.
+_HOOKS_PATH_CONTAMINATION_EVIDENCE_MODULE = """import subprocess
+import unittest
+from pathlib import Path
+
+class OkCase(unittest.TestCase):
+    def test_pass(self):
+        self.assertTrue(True)
+
+class HooksPathAttack(unittest.TestCase):
+    def test_plant(self):
+        scratch = Path(__file__).resolve().parent.parent
+        evil_hooks = scratch / ".git" / "evilhooks"
+        evil_hooks.mkdir(parents=True, exist_ok=True)
+        hook = evil_hooks / "post-index-change"
+        hook.write_text(
+            "#!/bin/sh\\n"
+            "cat > scripts/fixture_victim_test.py <<'PYEOF'\\n"
+            "import unittest\\n\\n\\n"
+            "class Victim(unittest.TestCase):\\n"
+            "    def test_victim(self):\\n"
+            "        pass\\n"
+            "PYEOF\\n"
+        )
+        hook.chmod(0o755)
+        subprocess.run(
+            ["git", "config", "--local", "core.hooksPath", str(evil_hooks)],
+            cwd=scratch, check=True,
+        )
+        self.assertTrue(True)
+"""
+
+_HOOKS_PATH_CONTAMINATION_VICTIM_MODULE = """import unittest
+
+class Victim(unittest.TestCase):
+    def test_victim(self):
+        self.fail("COMMITTED VICTIM MUST FAIL")
+"""
+
+# OPUS-R133-001 pipeline-level regression fixtures: FilterAttack (run first,
+# item 2 below) registers a clone-local matched clean/smudge filter pair via
+# `.git/info/attributes`, targeting the *separate* victim module's own
+# committed Victim.test_victim body, then dirties that file so the next
+# checkout must re-materialize it through the attacker's smudge filter.
+# `git status` would report the tree clean throughout, because the clean
+# filter is a correct involution -- only a fresh, independent checkout for
+# Victim (run second, item 4 below) that never had FilterAttack's config
+# registered in the first place closes this. The attack and victim live in
+# separate files: the smudge/clean commands must literally spell out the
+# marker text they search for, and `.gitattributes` filters the whole
+# targeted file, so a self-targeting attack module would also rewrite --
+# and, in the clean direction, fail to reverse -- its own source.
+_FILTER_ATTRIBUTES_CONTAMINATION_EVIDENCE_MODULE = """import subprocess
+import unittest
+from pathlib import Path
+
+class OkCase(unittest.TestCase):
+    def test_pass(self):
+        self.assertTrue(True)
+
+class FilterAttack(unittest.TestCase):
+    def test_plant(self):
+        scratch = Path(__file__).resolve().parent.parent
+        smudge_cmd = (
+            "python3 -c \\"import sys; sys.stdout.write(sys.stdin.read()."
+            "replace('FILTER_MARKER_FAIL', 'pass'))\\""
+        )
+        clean_cmd = (
+            "python3 -c \\"import sys; sys.stdout.write(sys.stdin.read()."
+            "replace('        pass', '        FILTER_MARKER_FAIL'))\\""
+        )
+        subprocess.run(
+            ["git", "config", "--local", "filter.evil.smudge", smudge_cmd],
+            cwd=scratch, check=True,
+        )
+        subprocess.run(
+            ["git", "config", "--local", "filter.evil.clean", clean_cmd],
+            cwd=scratch, check=True,
+        )
+        info = scratch / ".git" / "info"
+        info.mkdir(parents=True, exist_ok=True)
+        (info / "attributes").write_text(
+            "scripts/fixture_victim_test.py filter=evil\\n"
+        )
+        victim = scratch / "scripts" / "fixture_victim_test.py"
+        victim.write_text(victim.read_text() + "# dirty\\n")
+        self.assertTrue(True)
+"""
+
+_FILTER_ATTRIBUTES_CONTAMINATION_VICTIM_MODULE = """import unittest
+
+class Victim(unittest.TestCase):
+    def test_victim(self):
+        FILTER_MARKER_FAIL
+"""
+
 # GPT-R132-001 pipeline-level regression fixture: a live post-checkout hook
 # that rewrites the committed always-failing BrokenCase.test_fail to always
 # pass.
@@ -1324,11 +1430,18 @@ _DEFAULT_CONSISTENT_LEDGER_ENTRIES = [
 ]
 
 
-def _seed_ledger_coverage_fixture(repo, *, ledger_entries, companion_entries=None, evidence_module=_LEDGER_COVERAGE_EVIDENCE_MODULE):
+def _seed_ledger_coverage_fixture(
+    repo, *, ledger_entries, companion_entries=None,
+    evidence_module=_LEDGER_COVERAGE_EVIDENCE_MODULE, extra_files=None,
+):
     ledger_path = str(ws.ledger_status_path_for_work_item(ws.LEDGER_COVERAGE_WORK_ITEM_ID))
     _write(repo, "docs/ai-workflow/WORKFLOW_V2_PLAN.md", _LEDGER_COVERAGE_TABLE_FIXTURE)
     _write(repo, ledger_path, json.dumps({"entries": ledger_entries}))
     paths = ["docs/ai-workflow/WORKFLOW_V2_PLAN.md", ledger_path]
+    if extra_files:
+        for rel_path, content in extra_files.items():
+            _write(repo, rel_path, content)
+            paths.append(rel_path)
     if companion_entries is not None:
         companion_path = str(ws.wf8c_evidence_path_for_work_item(ws.LEDGER_COVERAGE_WORK_ITEM_ID))
         _write(repo, companion_path, json.dumps({"entries": companion_entries}))
@@ -1340,13 +1453,13 @@ def _seed_ledger_coverage_fixture(repo, *, ledger_entries, companion_entries=Non
 
 
 class TestPinnedEvidenceWorktreeIsolation(unittest.TestCase):
-    """`GPT-R132-001`/`-002`'s own required regressions, exercised
-    directly against `_materialize_pinned_worktree_at_commit`/
-    `_restore_pinned_worktree_to_commit`/`_run_named_test_in_scratch` --
-    the same three functions `verify_wfo_ledger_coverage` itself calls --
-    mirroring the review's own reproduction steps rather than going
-    through the full ledger-coverage pipeline. `TestVerifyWfoLedgerCoverage`
-    below adds the pipeline-level counterparts."""
+    """`GPT-R132-001`/`-002`/`OPUS-R133`'s own required regressions,
+    exercised directly against `_materialize_pinned_worktree_at_commit`/
+    `_verify_pinned_worktree_clean`/`_run_named_test_in_scratch` -- the
+    same functions `verify_wfo_ledger_coverage` itself calls -- mirroring
+    the review's own reproduction steps rather than going through the
+    full ledger-coverage pipeline. `TestVerifyWfoLedgerCoverage` below
+    adds the pipeline-level counterparts."""
 
     def test_malicious_post_checkout_hook_never_runs_against_the_pinned_checkout(self):
         """GPT-R132-001: install a live `post-checkout` hook in the
@@ -1388,60 +1501,123 @@ class TestPinnedEvidenceWorktreeIsolation(unittest.TestCase):
             finally:
                 ws._remove_pinned_worktree(repo.root, scratch_dir)
 
-    def test_one_evidence_id_cannot_contaminate_a_later_one_in_the_same_checkout(self):
-        """GPT-R132-002: an earlier evidence id that rewrites a later
-        evidence id's own tracked source must not change the later
-        evidence id's verdict once `_restore_pinned_worktree_to_commit`
-        runs between the two -- the reset/clean/verify step
-        `verify_wfo_ledger_coverage`'s own loop now performs before
-        every evidence id after the first."""
+    def test_two_independently_materialized_checkouts_share_no_state(self):
+        """`OPUS-R133-001`: `_materialize_pinned_worktree_at_commit`
+        clones a brand-new, independent repository on every call --
+        `verify_wfo_ledger_coverage` now calls it once per evidence id
+        and tears the result down immediately after, rather than
+        resetting and reusing one checkout across ids. Arming a
+        clone-local `core.hooksPath` and a hostile hook in one
+        materialized checkout, then discarding it, must have no effect
+        whatsoever on a second, separately materialized checkout of the
+        same commit: there is no shared state left for an evidence id
+        running in the first to poison the second through."""
         with ScratchRepo() as repo:
-            _write(repo, "scripts/mutator_test.py", (
-                "import unittest\n"
-                "from pathlib import Path\n\n"
-                "class Case(unittest.TestCase):\n"
-                "    def test_mutate(self):\n"
-                "        target = Path(__file__).parent / 'target_test.py'\n"
-                "        target.write_text(\n"
-                "            'import unittest\\n\\n'\n"
-                "            'class Case(unittest.TestCase):\\n'\n"
-                "            '    def test_target(self):\\n'\n"
-                "            '        pass\\n'\n"
-                "        )\n"
-                "        self.assertTrue(True)\n"
-            ))
             _write(repo, "scripts/target_test.py", (
                 "import unittest\n\n"
                 "class Case(unittest.TestCase):\n"
                 "    def test_target(self):\n"
                 "        self.fail('COMMITTED TARGET TEST MUST FAIL')\n"
             ))
-            commit = _commit_paths(
-                repo, ["scripts/mutator_test.py", "scripts/target_test.py"],
-                "commit mutator + target evidence tests",
-            )
+            commit = _commit_paths(repo, ["scripts/target_test.py"], "commit target evidence test")
+
+            first = ws._materialize_pinned_worktree_at_commit(repo.root, commit)
+            try:
+                evil_hooks = first / ".git" / "evilhooks"
+                evil_hooks.mkdir()
+                hook = evil_hooks / "post-index-change"
+                hook.write_text(
+                    "#!/bin/sh\n"
+                    "cat > scripts/target_test.py <<'PYEOF'\n"
+                    "import unittest\n\n"
+                    "class Case(unittest.TestCase):\n"
+                    "    def test_target(self):\n"
+                    "        pass\n"
+                    "PYEOF\n"
+                )
+                hook.chmod(0o755)
+                _run(["git", "config", "--local", "core.hooksPath", str(evil_hooks)], cwd=first)
+            finally:
+                ws._remove_pinned_worktree(repo.root, first)
+
+            second = ws._materialize_pinned_worktree_at_commit(repo.root, commit)
+            try:
+                ok, detail = ws._run_named_test_in_scratch(second, "target_test.Case.test_target")
+                self.assertFalse(ok, detail)
+            finally:
+                ws._remove_pinned_worktree(repo.root, second)
+
+    def test_verify_pinned_worktree_clean_ignores_clone_local_hooks_and_filters(self):
+        """`OPUS-R133-002`/`-M01`: the previous `git status --porcelain`-
+        based cleanliness check could itself be fooled -- a clone-local
+        `core.hooksPath` made the *check itself* execute the attacker's
+        hook, and a matched clean/smudge filter pair made `git status`
+        report a rewritten tree as clean. The blob-hash-based replacement
+        asks Git to read tree objects (`git ls-tree`, which touches no
+        working-tree content and triggers no filter or hook) and compares
+        them against on-disk bytes hashed in pure Python -- so arming the
+        same clone-local hooksPath and filter/attributes configuration,
+        without anything actually having fired them, must not cause a
+        false failure; and a real content divergence (whatever produced
+        it) must still be caught even though the armed filter pair would
+        have made `git status` itself report clean."""
+        with ScratchRepo() as repo:
+            _write(repo, "scripts/victim_test.py", (
+                "import unittest\n\n"
+                "class Victim(unittest.TestCase):\n"
+                "    def test_victim(self):\n"
+                "        FILTER_MARKER_FAIL\n"
+            ))
+            commit = _commit_paths(repo, ["scripts/victim_test.py"], "commit victim evidence test")
 
             scratch_dir = ws._materialize_pinned_worktree_at_commit(repo.root, commit)
             try:
-                ok1, detail1 = ws._run_named_test_in_scratch(scratch_dir, "mutator_test.Case.test_mutate")
-                self.assertTrue(ok1, detail1)
+                evil_hooks = scratch_dir / ".git" / "evilhooks"
+                evil_hooks.mkdir()
+                hook = evil_hooks / "post-index-change"
+                hook.write_text("#!/bin/sh\ntouch " + str(scratch_dir / "HOOK_FIRED") + "\n")
+                hook.chmod(0o755)
+                _run(["git", "config", "--local", "core.hooksPath", str(evil_hooks)], cwd=scratch_dir)
 
-                ws._restore_pinned_worktree_to_commit(scratch_dir, commit)
+                smudge_cmd = (
+                    "python3 -c \"import sys; sys.stdout.write(sys.stdin.read()."
+                    "replace('FILTER_MARKER_FAIL', 'pass'))\""
+                )
+                clean_cmd = (
+                    "python3 -c \"import sys; sys.stdout.write(sys.stdin.read()."
+                    "replace('        pass', '        FILTER_MARKER_FAIL'))\""
+                )
+                _run(["git", "config", "--local", "filter.evil.smudge", smudge_cmd], cwd=scratch_dir)
+                _run(["git", "config", "--local", "filter.evil.clean", clean_cmd], cwd=scratch_dir)
+                info_dir = scratch_dir / ".git" / "info"
+                info_dir.mkdir(parents=True, exist_ok=True)
+                (info_dir / "attributes").write_text("scripts/victim_test.py filter=evil\n")
 
-                ok2, detail2 = ws._run_named_test_in_scratch(scratch_dir, "target_test.Case.test_target")
-                self.assertFalse(ok2, detail2)
+                # Armed but never triggered (no checkout/reset/status ran
+                # since materialization): the checkout is still genuinely
+                # byte-identical to commit, so this must not raise.
+                ws._verify_pinned_worktree_clean(scratch_dir, commit)
+                self.assertFalse((scratch_dir / "HOOK_FIRED").exists())
+
+                # Now the on-disk content genuinely diverges from the
+                # pinned blob (exactly what a fired smudge filter would
+                # have produced) -- must be caught even though the
+                # matched clean filter above would make `git status`
+                # itself report the tree clean.
+                victim = scratch_dir / "scripts" / "victim_test.py"
+                victim.write_text(victim.read_text().replace("FILTER_MARKER_FAIL", "pass"))
+                with self.assertRaises(ws.PinnedEvidenceWorktreeIntegrityError):
+                    ws._verify_pinned_worktree_clean(scratch_dir, commit)
             finally:
                 ws._remove_pinned_worktree(repo.root, scratch_dir)
 
     def test_verification_fails_closed_on_wrong_head_or_dirty_tree(self):
-        """`_verify_pinned_worktree_clean` (and therefore both
-        `_materialize_pinned_worktree_at_commit` and
-        `_restore_pinned_worktree_to_commit`) raises rather than
-        returning a falsy/ok-shaped result, both when the checkout is
-        pinned to the wrong (but real, resolvable) commit and when it is
-        dirty -- proving the fail-closed path `verify_wfo_ledger_
-        coverage` relies on actually exists, not just that it happens
-        not to trigger in the two scenarios above."""
+        """`_verify_pinned_worktree_clean` raises rather than returning a
+        falsy/ok-shaped result, both when the checkout is pinned to the
+        wrong (but real, resolvable) commit and when it is dirty --
+        proving the fail-closed path `verify_wfo_ledger_coverage` relies
+        on actually exists, not just that it happens not to trigger in
+        the scenarios above."""
         with ScratchRepo() as repo:
             _write(repo, "other.txt", "second commit\n")
             other_commit = _commit_paths(repo, ["other.txt"], "second commit")
@@ -1745,6 +1921,55 @@ class TestVerifyWfoLedgerCoverage(unittest.TestCase):
                     e["evidence"] = "fixture_ledger_evidence_test.Target.test_target"
             commit = _seed_ledger_coverage_fixture(
                 repo, ledger_entries=entries, evidence_module=_CONTAMINATION_EVIDENCE_MODULE,
+            )
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL", result.get("detail"))
+            self.assertTrue(any("item 4" in a for a in result["failing_assertions"]))
+
+    def test_clone_local_hooks_path_cannot_produce_a_false_pass(self):
+        """`OPUS-R133-001`'s own required regression, at the obligation-
+        verifier level: an evidence id that plants a clone-local
+        `core.hooksPath` pointing at a hook armed to rewrite a later
+        evidence id's own committed source must not change `verify_wfo_
+        ledger_coverage`'s own verdict for that later item. Confirmed to
+        fail (report `PASS`) against the pre-`OPUS-R133` implementation,
+        which reused one materialized checkout across evidence ids and
+        verified cleanliness with `git status --porcelain` -- a check the
+        planted hook could itself trigger."""
+        with ScratchRepo() as repo:
+            entries = [dict(e) for e in _DEFAULT_CONSISTENT_LEDGER_ENTRIES]
+            for e in entries:
+                if e["item"] == 2:
+                    e["evidence"] = "fixture_ledger_evidence_test.HooksPathAttack.test_plant"
+                if e["item"] == 4:
+                    e["evidence"] = "fixture_victim_test.Victim.test_victim"
+            commit = _seed_ledger_coverage_fixture(
+                repo, ledger_entries=entries, evidence_module=_HOOKS_PATH_CONTAMINATION_EVIDENCE_MODULE,
+                extra_files={"scripts/fixture_victim_test.py": _HOOKS_PATH_CONTAMINATION_VICTIM_MODULE},
+            )
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL", result.get("detail"))
+            self.assertTrue(any("item 4" in a for a in result["failing_assertions"]))
+
+    def test_clone_local_filter_and_attributes_cannot_produce_a_false_pass(self):
+        """`OPUS-R133-001`'s own required regression, at the obligation-
+        verifier level: an evidence id that registers a clone-local
+        matched clean/smudge filter pair, targeting a later evidence id's
+        own committed source, must not change `verify_wfo_ledger_
+        coverage`'s own verdict for that later item -- even though the
+        matched filter pair would make `git status` itself report the
+        tree clean. Confirmed to fail (report `PASS`) against the
+        pre-`OPUS-R133` implementation."""
+        with ScratchRepo() as repo:
+            entries = [dict(e) for e in _DEFAULT_CONSISTENT_LEDGER_ENTRIES]
+            for e in entries:
+                if e["item"] == 2:
+                    e["evidence"] = "fixture_ledger_evidence_test.FilterAttack.test_plant"
+                if e["item"] == 4:
+                    e["evidence"] = "fixture_victim_test.Victim.test_victim"
+            commit = _seed_ledger_coverage_fixture(
+                repo, ledger_entries=entries, evidence_module=_FILTER_ATTRIBUTES_CONTAMINATION_EVIDENCE_MODULE,
+                extra_files={"scripts/fixture_victim_test.py": _FILTER_ATTRIBUTES_CONTAMINATION_VICTIM_MODULE},
             )
             result = ws.verify_wfo_ledger_coverage(repo.root, commit)
             self.assertEqual(result["status"], "FAIL", result.get("detail"))
