@@ -1261,6 +1261,51 @@ class BrokenCase(unittest.TestCase):
         self.assertTrue(False)
 """
 
+# GPT-R132-002 pipeline-level regression fixture: Mutator rewrites this same
+# module (the file its own evidence id resolves against) to redefine Target
+# as an always-passing test; Target's own committed source always fails.
+# Only a genuine cross-evidence-id restore between the two prevents Mutator
+# (run first, item 2 below) from changing Target's (run second, item 4
+# below) verdict.
+_CONTAMINATION_EVIDENCE_MODULE = """import unittest
+from pathlib import Path
+
+class Mutator(unittest.TestCase):
+    def test_mutate(self):
+        target = Path(__file__)
+        target.write_text(
+            "import unittest\\n\\n"
+            "class Mutator(unittest.TestCase):\\n"
+            "    def test_mutate(self):\\n"
+            "        pass\\n\\n"
+            "class Target(unittest.TestCase):\\n"
+            "    def test_target(self):\\n"
+            "        pass\\n"
+        )
+        self.assertTrue(True)
+
+class Target(unittest.TestCase):
+    def test_target(self):
+        self.fail("COMMITTED TARGET MUST FAIL")
+"""
+
+# GPT-R132-001 pipeline-level regression fixture: a live post-checkout hook
+# that rewrites the committed always-failing BrokenCase.test_fail to always
+# pass.
+_POST_CHECKOUT_ATTACK_HOOK = """#!/bin/sh
+cat > scripts/fixture_ledger_evidence_test.py <<'PYEOF'
+import unittest
+
+class OkCase(unittest.TestCase):
+    def test_pass(self):
+        self.assertTrue(True)
+
+class BrokenCase(unittest.TestCase):
+    def test_fail(self):
+        pass
+PYEOF
+"""
+
 _DEFAULT_CONSISTENT_LEDGER_ENTRIES = [
     {"item": 1, "status": "IMPLEMENTED", "owner_checkpoint": "WF8b",
      "evidence": "fixture_ledger_evidence_test.OkCase.test_pass"},
@@ -1292,6 +1337,124 @@ def _seed_ledger_coverage_fixture(repo, *, ledger_entries, companion_entries=Non
         _write(repo, "scripts/fixture_ledger_evidence_test.py", evidence_module)
         paths.append("scripts/fixture_ledger_evidence_test.py")
     return _commit_paths(repo, paths, "seed ledger coverage fixture")
+
+
+class TestPinnedEvidenceWorktreeIsolation(unittest.TestCase):
+    """`GPT-R132-001`/`-002`'s own required regressions, exercised
+    directly against `_materialize_pinned_worktree_at_commit`/
+    `_restore_pinned_worktree_to_commit`/`_run_named_test_in_scratch` --
+    the same three functions `verify_wfo_ledger_coverage` itself calls --
+    mirroring the review's own reproduction steps rather than going
+    through the full ledger-coverage pipeline. `TestVerifyWfoLedgerCoverage`
+    below adds the pipeline-level counterparts."""
+
+    def test_malicious_post_checkout_hook_never_runs_against_the_pinned_checkout(self):
+        """GPT-R132-001: install a live `post-checkout` hook in the
+        *source* repository that rewrites a committed always-failing
+        evidence test to always pass. `_materialize_pinned_worktree_at_
+        commit` now clones into an independent repository rather than
+        linking a worktree, so the source repository's hook is never
+        even consulted -- the pinned checkout must still hold the
+        committed (failing) bytes and re-execute red."""
+        with ScratchRepo() as repo:
+            _write(repo, "scripts/fixture_evidence_test.py", (
+                "import unittest\n\n"
+                "class Case(unittest.TestCase):\n"
+                "    def test_evidence(self):\n"
+                "        self.fail('COMMITTED TEST MUST FAIL')\n"
+            ))
+            commit = _commit_paths(repo, ["scripts/fixture_evidence_test.py"], "commit failing evidence test")
+
+            hooks_dir = repo.root / ".git" / "hooks"
+            hooks_dir.mkdir(parents=True, exist_ok=True)
+            hook_path = hooks_dir / "post-checkout"
+            hook_path.write_text(
+                "#!/bin/sh\n"
+                "cat > scripts/fixture_evidence_test.py <<'PYEOF'\n"
+                "import unittest\n\n"
+                "class Case(unittest.TestCase):\n"
+                "    def test_evidence(self):\n"
+                "        pass\n"
+                "PYEOF\n"
+            )
+            hook_path.chmod(0o755)
+
+            scratch_dir = ws._materialize_pinned_worktree_at_commit(repo.root, commit)
+            try:
+                content = (scratch_dir / "scripts" / "fixture_evidence_test.py").read_text()
+                self.assertIn("COMMITTED TEST MUST FAIL", content)
+                ok, detail = ws._run_named_test_in_scratch(scratch_dir, "fixture_evidence_test.Case.test_evidence")
+                self.assertFalse(ok, detail)
+            finally:
+                ws._remove_pinned_worktree(repo.root, scratch_dir)
+
+    def test_one_evidence_id_cannot_contaminate_a_later_one_in_the_same_checkout(self):
+        """GPT-R132-002: an earlier evidence id that rewrites a later
+        evidence id's own tracked source must not change the later
+        evidence id's verdict once `_restore_pinned_worktree_to_commit`
+        runs between the two -- the reset/clean/verify step
+        `verify_wfo_ledger_coverage`'s own loop now performs before
+        every evidence id after the first."""
+        with ScratchRepo() as repo:
+            _write(repo, "scripts/mutator_test.py", (
+                "import unittest\n"
+                "from pathlib import Path\n\n"
+                "class Case(unittest.TestCase):\n"
+                "    def test_mutate(self):\n"
+                "        target = Path(__file__).parent / 'target_test.py'\n"
+                "        target.write_text(\n"
+                "            'import unittest\\n\\n'\n"
+                "            'class Case(unittest.TestCase):\\n'\n"
+                "            '    def test_target(self):\\n'\n"
+                "            '        pass\\n'\n"
+                "        )\n"
+                "        self.assertTrue(True)\n"
+            ))
+            _write(repo, "scripts/target_test.py", (
+                "import unittest\n\n"
+                "class Case(unittest.TestCase):\n"
+                "    def test_target(self):\n"
+                "        self.fail('COMMITTED TARGET TEST MUST FAIL')\n"
+            ))
+            commit = _commit_paths(
+                repo, ["scripts/mutator_test.py", "scripts/target_test.py"],
+                "commit mutator + target evidence tests",
+            )
+
+            scratch_dir = ws._materialize_pinned_worktree_at_commit(repo.root, commit)
+            try:
+                ok1, detail1 = ws._run_named_test_in_scratch(scratch_dir, "mutator_test.Case.test_mutate")
+                self.assertTrue(ok1, detail1)
+
+                ws._restore_pinned_worktree_to_commit(scratch_dir, commit)
+
+                ok2, detail2 = ws._run_named_test_in_scratch(scratch_dir, "target_test.Case.test_target")
+                self.assertFalse(ok2, detail2)
+            finally:
+                ws._remove_pinned_worktree(repo.root, scratch_dir)
+
+    def test_verification_fails_closed_on_wrong_head_or_dirty_tree(self):
+        """`_verify_pinned_worktree_clean` (and therefore both
+        `_materialize_pinned_worktree_at_commit` and
+        `_restore_pinned_worktree_to_commit`) raises rather than
+        returning a falsy/ok-shaped result, both when the checkout is
+        pinned to the wrong (but real, resolvable) commit and when it is
+        dirty -- proving the fail-closed path `verify_wfo_ledger_
+        coverage` relies on actually exists, not just that it happens
+        not to trigger in the two scenarios above."""
+        with ScratchRepo() as repo:
+            _write(repo, "other.txt", "second commit\n")
+            other_commit = _commit_paths(repo, ["other.txt"], "second commit")
+            scratch_dir = ws._materialize_pinned_worktree_at_commit(repo.root, repo.base)
+            try:
+                with self.assertRaises(ws.PinnedEvidenceWorktreeIntegrityError):
+                    ws._verify_pinned_worktree_clean(scratch_dir, other_commit)
+
+                (scratch_dir / "README.md").write_text("dirtied\n")
+                with self.assertRaises(ws.PinnedEvidenceWorktreeIntegrityError):
+                    ws._verify_pinned_worktree_clean(scratch_dir, repo.base)
+            finally:
+                ws._remove_pinned_worktree(repo.root, scratch_dir)
 
 
 class TestVerifyWfoLedgerCoverage(unittest.TestCase):
@@ -1544,6 +1707,48 @@ class TestVerifyWfoLedgerCoverage(unittest.TestCase):
             ledger_path.write_text("garbage, not json, not even close")
             result = ws.verify_wfo_ledger_coverage(repo.root, commit)
             self.assertEqual(result["status"], "PASS", result.get("detail"))
+
+    def test_malicious_post_checkout_hook_cannot_produce_a_false_pass(self):
+        """GPT-R132-001's own required regression, at the obligation-
+        verifier level: a malicious `post-checkout` hook installed in the
+        live repository, targeting a committed always-failing evidence
+        test, must never turn `verify_wfo_ledger_coverage` itself green
+        for that item."""
+        with ScratchRepo() as repo:
+            entries = [dict(e) for e in _DEFAULT_CONSISTENT_LEDGER_ENTRIES]
+            for e in entries:
+                if e["item"] == 4:
+                    e["evidence"] = "fixture_ledger_evidence_test.BrokenCase.test_fail"
+            commit = _seed_ledger_coverage_fixture(repo, ledger_entries=entries)
+
+            hooks_dir = repo.root / ".git" / "hooks"
+            hooks_dir.mkdir(parents=True, exist_ok=True)
+            hook_path = hooks_dir / "post-checkout"
+            hook_path.write_text(_POST_CHECKOUT_ATTACK_HOOK)
+            hook_path.chmod(0o755)
+
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL", result.get("detail"))
+            self.assertTrue(any("item 4" in a for a in result["failing_assertions"]))
+
+    def test_earlier_evidence_id_cannot_contaminate_a_later_ones_verdict(self):
+        """GPT-R132-002's own required regression, at the obligation-
+        verifier level: an evidence id that rewrites a later evidence
+        id's own tracked source must not change `verify_wfo_ledger_
+        coverage`'s own verdict for the later item."""
+        with ScratchRepo() as repo:
+            entries = [dict(e) for e in _DEFAULT_CONSISTENT_LEDGER_ENTRIES]
+            for e in entries:
+                if e["item"] == 2:
+                    e["evidence"] = "fixture_ledger_evidence_test.Mutator.test_mutate"
+                if e["item"] == 4:
+                    e["evidence"] = "fixture_ledger_evidence_test.Target.test_target"
+            commit = _seed_ledger_coverage_fixture(
+                repo, ledger_entries=entries, evidence_module=_CONTAMINATION_EVIDENCE_MODULE,
+            )
+            result = ws.verify_wfo_ledger_coverage(repo.root, commit)
+            self.assertEqual(result["status"], "FAIL", result.get("detail"))
+            self.assertTrue(any("item 4" in a for a in result["failing_assertions"]))
 
     def test_bound_in_completion_obligation_conformance(self):
         self.assertEqual(

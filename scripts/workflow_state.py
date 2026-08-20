@@ -7498,46 +7498,116 @@ def _reconciliation_evidence_ids_at_commit(
     return evidence
 
 
+class PinnedEvidenceWorktreeIntegrityError(Exception):
+    """`GPT-R132-001`/`-002`'s shared fail-closed signal: raised whenever
+    a pinned evidence checkout cannot be proven clean and pinned to its
+    expected commit, whether at initial materialization or before a
+    later evidence execution reuses the same checkout. Left uncaught by
+    `verify_wfo_ledger_coverage`, this propagates out of the isolated
+    verifier driver (`_run_verifier_driver`'s own `except Exception`
+    wrapping) as `VERIFIER_UNRESOLVABLE`, never `PASS` -- the same
+    fail-closed path `VerifierExecutionError` already uses, so a
+    materialization or restoration failure can never be silently
+    swallowed into a false positive."""
+
+
+def _verify_pinned_worktree_clean(scratch_dir: Path, commit: str) -> None:
+    """Fails closed unless `scratch_dir` is both byte-clean (`git status
+    --porcelain` empty) and detached exactly at `commit` -- resolved
+    against `scratch_dir`'s own object database, never the live
+    `repo_root`, so this assertion depends on nothing but the pinned
+    checkout itself. Called immediately after materialization (closes
+    `GPT-R132-001`: a mutable `post-checkout` hook that rewrote tracked
+    bytes during checkout leaves the checkout dirty, which this catches
+    before any evidence executes) and immediately after every restore
+    between evidence ids (closes `GPT-R132-002`: an evidence test that
+    mutated tracked files leaves the checkout dirty, which this catches
+    before the *next* evidence id can observe it)."""
+    resolved = _run(["git", "rev-parse", commit], cwd=scratch_dir).strip()
+    head = _run(["git", "rev-parse", "HEAD"], cwd=scratch_dir).strip()
+    if head != resolved:
+        raise PinnedEvidenceWorktreeIntegrityError(
+            f"pinned evidence checkout at {scratch_dir} has HEAD {head!r}, "
+            f"expected {resolved!r} (commit {commit!r})"
+        )
+    status = _run(["git", "status", "--porcelain"], cwd=scratch_dir)
+    if status.strip():
+        raise PinnedEvidenceWorktreeIntegrityError(
+            f"pinned evidence checkout at {scratch_dir} is not clean at "
+            f"commit {commit!r}: {status!r}"
+        )
+
+
 def _materialize_pinned_worktree_at_commit(repo_root: Path, commit: str) -> Path:
-    """A real, detached Git worktree checked out at `commit` -- a
-    faithful, read-only repository context for evidence ids that are
-    themselves repository-history-dependent (`git rev-parse`, `git diff`
-    against another commit, reads of tracked files outside `scripts/`),
-    not only the tracked `scripts/` tree a single verifier's own static
-    import closure needs (`_materialize_census`). The prior scripts/-only
+    """A real, detached, hook-sanitized Git checkout of `commit` -- a
+    faithful repository context for evidence ids that are themselves
+    repository-history-dependent (`git rev-parse`, `git diff` against
+    another commit, reads of tracked files outside `scripts/`), not only
+    the tracked `scripts/` tree a single verifier's own static import
+    closure needs (`_materialize_census`). The prior scripts/-only
     scratch tree (`GPT-R131-001`) left every such evidence id structurally
-    unable to execute at all -- reproduced live against item 359's own
-    bound evidence, whose `_repo_root()` helper calls `git rev-parse
-    --show-toplevel` and found no `.git` there. `git worktree add
-    --detach` gives a pristine checkout of `commit` with no untracked or
-    uncommitted content of its own, so it can never expose this process's
-    own mutable live-worktree state -- only what `commit` itself recorded
-    -- while still being a real, independent repository `git` commands
-    resolve `commit`'s own history against exactly as they would in any
-    other checkout (item 358(c)'s isolation rationale: never trust the
-    live working tree; a pinned, detached worktree is not that). Caller
-    owns cleanup via `_remove_pinned_worktree`."""
+    unable to execute at all.
+
+    `GPT-R132-001` found the previous `git worktree add --detach`
+    implementation still trusted mutable live-repository state: a linked
+    worktree shares its common Git directory -- including `.git/hooks`
+    -- with `repo_root`, so a `post-checkout` hook installed there after
+    technical approval could rewrite tracked evidence bytes during
+    materialization, undetected. This now clones into an independent
+    repository instead of linking a worktree: `git clone` never copies a
+    source repository's own hook scripts (only inert `*.sample`
+    templates), so the clone starts with no hooks that could execute at
+    all; the `hooks/` directory is then deleted and recreated empty
+    regardless, and every Git invocation against the clone explicitly
+    pins `core.hooksPath` to that now-guaranteed-empty directory, so
+    nothing -- not a template, not inherited global/system config --
+    can reintroduce a live hook path. The checkout is verified clean and
+    pinned (`_verify_pinned_worktree_clean`) before this function
+    returns, so a still-successful hook injection anywhere in this
+    pipeline fails closed here rather than silently producing evidence
+    from unreviewed bytes. Caller owns cleanup via
+    `_remove_pinned_worktree`."""
     scratch_dir = Path(tempfile.mkdtemp(prefix="wfo-ledger-evidence-worktree-"))
-    _run(["git", "worktree", "add", "--detach", "--quiet", str(scratch_dir), commit], cwd=repo_root)
+    hooks_dir = scratch_dir / ".git" / "hooks"
+    _run(["git", "clone", "--quiet", "--no-checkout", str(repo_root), str(scratch_dir)], cwd=repo_root)
+    shutil.rmtree(hooks_dir, ignore_errors=True)
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+    _run(
+        ["git", "-c", f"core.hooksPath={hooks_dir}", "checkout", "--quiet", "--detach", commit],
+        cwd=scratch_dir,
+    )
+    _verify_pinned_worktree_clean(scratch_dir, commit)
     return scratch_dir
 
 
+def _restore_pinned_worktree_to_commit(scratch_dir: Path, commit: str) -> None:
+    """`GPT-R132-002`'s fix: reused between successive evidence ids in
+    the same materialized checkout so one evidence test can never
+    contaminate the next. Hard-resets tracked content and removes every
+    untracked/ignored byte an evidence test may have left behind (`git
+    clean -fdx`, e.g. `__pycache__/`), with `core.hooksPath` pinned to
+    the checkout's own already-emptied `hooks/` directory exactly as
+    materialization does, then re-verifies clean and pinned
+    (`_verify_pinned_worktree_clean`) before returning -- a restore that
+    cannot actually reach the pinned state (a locked file, a stray
+    submodule) fails closed here rather than letting the next evidence
+    id execute against undefined content."""
+    hooks_dir = scratch_dir / ".git" / "hooks"
+    _run(["git", "-c", f"core.hooksPath={hooks_dir}", "reset", "--hard", "--quiet", commit], cwd=scratch_dir)
+    _run(["git", "clean", "-fdx", "--quiet"], cwd=scratch_dir)
+    _verify_pinned_worktree_clean(scratch_dir, commit)
+
+
 def _remove_pinned_worktree(repo_root: Path, scratch_dir: Path) -> None:
-    """Undoes `_materialize_pinned_worktree_at_commit` -- removes both the
-    checked-out directory and Git's own worktree registration, so a
-    completed evidence run never leaves a stale entry behind for `git
-    worktree list`-based tooling (this repository's own cross-worktree
-    ownership contract, `D-Checkpoint-Ownership`) to trip over. Falls back
-    to a bare directory removal plus `git worktree prune` if the
-    registered removal itself fails -- cleanup must never raise past a
-    completed or failed evidence run."""
-    result = subprocess.run(
-        ["git", "worktree", "remove", "--force", str(scratch_dir)],
-        cwd=repo_root, capture_output=True, text=True, timeout=60,
-    )
-    if result.returncode != 0:
-        shutil.rmtree(scratch_dir, ignore_errors=True)
-        subprocess.run(["git", "worktree", "prune"], cwd=repo_root, capture_output=True, text=True, timeout=60)
+    """Undoes `_materialize_pinned_worktree_at_commit`. `scratch_dir` is
+    now an independent clone, not a worktree linked to `repo_root`'s own
+    common Git directory (`GPT-R132-001`), so cleanup is a plain
+    recursive removal -- there is no `git worktree` registration against
+    `repo_root` left to unregister. `repo_root` is kept as a parameter
+    for call-site stability even though this implementation no longer
+    uses it."""
+    del repo_root
+    shutil.rmtree(scratch_dir, ignore_errors=True)
 
 
 def _run_named_test_in_scratch(scratch_dir: Path, test_id: str) -> tuple[bool, str]:
@@ -7741,6 +7811,12 @@ def verify_wfo_ledger_coverage(repo_root: str | Path, commit: str) -> dict:
                 continue
             if scratch_dir is None:
                 scratch_dir = _materialize_pinned_worktree_at_commit(repo_root, commit)
+            else:
+                # GPT-R132-002: restore-and-verify before every evidence id
+                # after the first -- a prior evidence execution in this same
+                # reused checkout must never be able to hand the next one
+                # anything but the pinned commit's own bytes.
+                _restore_pinned_worktree_to_commit(scratch_dir, commit)
             ok, detail = _run_named_test_in_scratch(scratch_dir, evidence)
             if not ok:
                 failing.append(f"item {item}: evidence {evidence!r} does not re-execute green: {detail}")
