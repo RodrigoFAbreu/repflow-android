@@ -216,6 +216,171 @@ Findings go in `.ai-review/workflow-v2-1-core/feedback/FUNCTIONAL_REVIEW.md`.
 
 ---
 
+## `workflow-v2-1-core` — functional review checklist (implementation revision 17)
+
+This section is unrelated to the roadmap/Milestone 8 content above. It is
+the same process work item as the revision-4 checklist above, re-entering
+`AWAITING_FUNCTIONAL_REVIEW` for the first time since then.
+
+**Context**: between revision 4 and now, this item stayed under `WF8b`
+(later `WF8c`) as continued implementation scope through 13 further
+implementation rounds — the item never left `IMPLEMENTING`/
+`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`/`APPLYING_REVIEW_FEEDBACK` in
+that span, so no intermediate functional-review checkpoint exists to
+report on. `WF8c` (the item's own last registry checkpoint) is now
+`COMPLETE` — all 18 registry checkpoints are `COMPLETE`
+(`docs/ai-workflow/registry/workflow-v2-1-core-registry.json`) — and
+`technical_approval` was just recorded for implementation revision 17
+(commit `838a523`, `Workflow-Technical-Approval:
+a44d912afd81fa757d2b9893e77a0d8990bce05ed78ad487352d3e849efe9143`, basis
+`EXTERNAL_APPROVE`, round GPT-R137).
+
+Re-walking all 18 checkpoints' behavior in one manual pass is not
+practical, so this checklist targets two things instead: (1) the exact
+commands this same session already exercised for real, end to end
+(the most direct functional test available for process tooling — there
+is no separate UI to click through), and (2) the specific behavioral
+fixes revision 17 itself introduced (`GPT-R136-001`,
+`OPUS-R136-M01`/`-M03`/`-M04`), since those are what round GPT-R137
+actually reviewed and approved this round.
+
+### Setup
+
+No Android app / Gradle changes are involved — this is process tooling
+only (`scripts/*.py`, `.claude/commands/*.md`, `docs/ai-workflow/*`). No
+build/install step is needed; everything below runs with `python3` from
+the repo root (`scripts/` for the checks that `cd` there).
+
+### Automated verification (re-confirmed this session, current)
+
+Re-run independently right before this checklist was written (only
+`docs/ai-workflow/WORKFLOW_STATE.json` — implementation-stage excluded —
+has changed since the last full run at `894dd94`):
+
+```
+python3 -m unittest workflow_integration_test workflow_state_test \
+  workflow_state_completion_obligations_test workflow_fingerprint_test \
+  workflow_test_harness_test workflow_fingerprint_generalization_test
+```
+
+| Suite | Tests |
+|---|---|
+| `scripts/workflow_fingerprint_test.py` | part of 1097 |
+| `scripts/workflow_fingerprint_generalization_test.py` | part of 1097 |
+| `scripts/workflow_state_test.py` | part of 1097 |
+| `scripts/workflow_state_completion_obligations_test.py` | part of 1097 |
+| `scripts/workflow_integration_test.py` | part of 1097 |
+| `scripts/workflow_test_harness_test.py` | part of 1097 |
+
+Total: **1097/1097**, zero failures/errors/skips (matches
+`TEST_RESULTS.md`'s recorded result exactly). Includes six new regression
+tests added this round for the four fixes below; all six were also
+independently confirmed to fail against revision 16's pre-fix code and
+pass against revision 17 (`TEST_RESULTS.md`'s own "Confirmed non-vacuous"
+section).
+
+### Test data
+
+None to seed — every check below reads this repository's own real,
+already-committed state.
+
+### Flows to exercise manually
+
+1. **Re-run the automated suite yourself** (command above, from
+   `scripts/`) and confirm 1097/1097 independently, rather than trusting
+   this document's claim alone.
+2. **`GPT-R136-001` — evidence clone no longer shares donor objects.**
+   The pinned-evidence materializer (`workflow_state._materialize_pinned_
+   worktree_at_commit`) now clones with `--dissociate` whenever the
+   source repository itself borrows objects through an alternate.
+   `TEST_RESULTS.md`'s "Additional checks run this session" section
+   documents a hand reproduction (donor/source fixture, materialize,
+   delete the donor, confirm the resulting clone still reads clean); the
+   corresponding automated case is
+   `test_evidence_clone_has_no_alternates_when_source_repository_borrows_objects`
+   in `scripts/workflow_state_completion_obligations_test.py`. Run it in
+   isolation to confirm it passes on its own:
+   ```
+   python3 -m unittest workflow_state_completion_obligations_test.TestPinnedEvidenceWorktreeIsolation.test_evidence_clone_has_no_alternates_when_source_repository_borrows_objects
+   ```
+3. **`OPUS-R136-M01` — an inherited global `core.hooksPath` no longer
+   fires during evidence materialization.** Same test class, run:
+   ```
+   python3 -m unittest workflow_state_completion_obligations_test.TestPinnedEvidenceWorktreeIsolation.test_materialization_clone_step_ignores_an_inherited_global_hooks_path
+   ```
+4. **`OPUS-R136-M03` — the cleanliness walk now catches a nested `.git`
+   payload and an untracked empty directory.** Same test class, run:
+   ```
+   python3 -m unittest workflow_state_completion_obligations_test.TestPinnedEvidenceWorktreeIsolation.test_verify_pinned_worktree_clean_catches_nested_dot_git_and_untracked_empty_directory
+   ```
+5. **`OPUS-R136-M04` — an omitted `--work-item-id` no longer silently
+   accepts a stale `IMPLEMENTATION_SUMMARY.md` revision.** Run:
+   ```
+   python3 -m unittest workflow_fingerprint_test.TestGeneratorSideStageDocumentBinding.test_finalize_bundle_generation_omitted_work_item_id_reports_mismatch_on_stale_revision
+   ```
+6. **The actual `/approve-review implementation` flow, exercised for
+   real this session** (not simulated): gate-reachability check,
+   fresh `bundle_id`/`review_content_id` recomputation, `resolve_approval_
+   basis` → `EXTERNAL_APPROVE`, `state_transaction`-guarded write of
+   `technical_approval`, and a metadata-only commit (`838a523`) carrying
+   the `Workflow-Technical-Approval`/`Workflow-Work-Item` trailers.
+   Confirm independently:
+   ```
+   git show --stat 838a523
+   git log -1 --format=%B 838a523
+   ```
+   Expected: exactly one file changed
+   (`docs/ai-workflow/WORKFLOW_STATE.json`), and the trailers read
+   `Workflow-Technical-Approval:
+   a44d912afd81fa757d2b9893e77a0d8990bce05ed78ad487352d3e849efe9143` /
+   `Workflow-Work-Item: workflow-v2-1-core`.
+7. **Ledger coverage still holds end to end.** The broadest single
+   "everything is still wired together" signal this item has:
+   ```
+   python3 -c "
+   import sys; sys.path.insert(0, 'scripts')
+   import workflow_state as ws
+   print(ws.verify_wfo_ledger_coverage('.', 'HEAD'))
+   "
+   ```
+   (run from the repo root — `repo_root` must be the real repository path,
+   not a relative `..` from inside `scripts/`, or the internal evidence-
+   clone step fails closed with a `git clone` error). Expected:
+   `{'status': 'PASS', ...}`, all 211 reconciliation-table items accounted
+   for — matches `TEST_RESULTS.md`'s own re-run of this check (~52.5s).
+
+### Expected result
+
+All seven checks above pass exactly as described. Checks 1-5 and 7 are
+read-only (safe to repeat freely); check 6 inspects a commit that already
+exists in history rather than creating one.
+
+### Known limitations / out of scope for this review
+
+- This is **not** a re-walk of all 18 checkpoints' own original
+  functional behavior — revision 4's checklist above already covered
+  `WF4a-i`'s fix in detail, and no separate functional checkpoint exists
+  for the 13 rounds between revision 4 and 17 (see "Context" above). A
+  reviewer wanting deeper coverage of a specific checkpoint should read
+  `IMPLEMENTATION_SUMMARY.md`'s per-checkpoint sections and re-run that
+  checkpoint's own named test classes directly.
+- Three further Optional-severity findings from round GPT-R137 remain
+  open but are explicitly not approval gates (see
+  `.ai-review/workflow-v2-1-core/feedback/REVIEW_FEEDBACK.md`'s summary):
+  an untracked symlink-to-directory is still skipped by the cleanliness
+  walk; the omitted-id path propagates raw `FileNotFoundError`/
+  `JSONDecodeError` for missing/malformed state instead of a typed
+  mismatch result; and the no-replacement-object correction has no
+  dedicated regression test despite being behaviorally observable.
+- `workflow_state_demo_test`/`workflow_fingerprint_demo_test` (the two
+  real-repository demo modules) are deliberately excluded from this
+  item's declared six-module suite (documented rationale unchanged since
+  `GPT-R9-002`) — not re-run as part of this checklist.
+
+Findings go in `.ai-review/workflow-v2-1-core/feedback/FUNCTIONAL_REVIEW.md`.
+
+---
+
 ## `v2-1-dry-run` — functional review checklist (implementation revision 4)
 
 This section is unrelated to the roadmap/Milestone 8 content above and to
