@@ -1674,6 +1674,133 @@ class TestPinnedEvidenceWorktreeIsolation(unittest.TestCase):
             finally:
                 ws._remove_pinned_worktree(repo.root, scratch_dir)
 
+    def test_evidence_clone_has_no_alternates_when_source_repository_borrows_objects(self):
+        """`GPT-R136-001`: `--no-hardlinks` alone does not make the
+        evidence clone self-contained when `repo_root` itself borrows
+        objects through `objects/info/alternates` (e.g. a repository
+        created with Git's own `--reference` option) -- a local clone
+        copies that alternate relationship verbatim instead of copying
+        the borrowed objects themselves, so both the source and the
+        clone keep depending on the same external object database.
+        `--dissociate` must make the materialized clone genuinely
+        independent: prove it has no `objects/info/alternates` of its
+        own, and that it remains fully readable after the donor
+        repository the source borrowed from is deleted outright -- the
+        same reproduction shape the combined review used."""
+        workdir = Path(tempfile.mkdtemp(prefix="wfo-alternates-fixture-"))
+        try:
+            donor = workdir / "donor"
+            source = workdir / "source"
+            donor.mkdir()
+            _run(["git", "init", "-q"], cwd=donor)
+            _run(["git", "config", "user.email", "test@example.com"], cwd=donor)
+            _run(["git", "config", "user.name", "Test"], cwd=donor)
+            (donor / "victim.txt").write_text("original content\n")
+            _run(["git", "add", "victim.txt"], cwd=donor)
+            _run(["git", "commit", "-q", "-m", "donor commit"], cwd=donor)
+
+            _run(
+                ["git", "clone", "-q", "--no-local", "--reference", str(donor), str(donor), str(source)],
+                cwd=workdir,
+            )
+            self.assertTrue((source / ".git" / "objects" / "info" / "alternates").is_file())
+            commit = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=source, check=True, capture_output=True, text=True,
+            ).stdout.strip()
+
+            scratch_dir = ws._materialize_pinned_worktree_at_commit(source, commit)
+            try:
+                self.assertFalse(
+                    (scratch_dir / ".git" / "objects" / "info" / "alternates").exists(),
+                    "materialized evidence clone still borrows objects through an "
+                    "alternate -- not self-contained",
+                )
+                self.assertEqual((scratch_dir / "victim.txt").read_text(), "original content\n")
+
+                # The clone must survive the donor's outright removal.
+                shutil.rmtree(donor)
+                result = subprocess.run(
+                    ["git", "cat-file", "-p", "HEAD:victim.txt"], cwd=scratch_dir,
+                    capture_output=True, text=True,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, "original content\n")
+            finally:
+                ws._remove_pinned_worktree(source, scratch_dir)
+        finally:
+            shutil.rmtree(workdir, ignore_errors=True)
+
+    def test_verify_pinned_worktree_clean_catches_nested_dot_git_and_untracked_empty_directory(self):
+        """`OPUS-R136-M03`: the cleanliness walk previously pruned every
+        directory named `.git` anywhere in the tree, not only the
+        checkout root's own administrative `.git`, and only examined
+        files -- so a payload planted under a nested `sub/.git/`
+        directory, or a genuinely empty untracked directory, passed
+        silently despite the function's own "byte-identical to commit's
+        own tree" docstring. Neither shape is ever produced by a clean
+        checkout of a real commit (Git does not track directories, only
+        file paths, and a normal checkout never creates a `.git`-named
+        path outside the checkout root), so both must now be rejected."""
+        with ScratchRepo() as repo:
+            commit = repo.base
+
+            scratch_dir = ws._materialize_pinned_worktree_at_commit(repo.root, commit)
+            try:
+                nested_git = scratch_dir / "sub" / ".git"
+                nested_git.mkdir(parents=True)
+                (nested_git / "payload.py").write_text("evil\n")
+                with self.assertRaises(ws.PinnedEvidenceWorktreeIntegrityError):
+                    ws._verify_pinned_worktree_clean(scratch_dir, commit)
+            finally:
+                ws._remove_pinned_worktree(repo.root, scratch_dir)
+
+            scratch_dir2 = ws._materialize_pinned_worktree_at_commit(repo.root, commit)
+            try:
+                (scratch_dir2 / "empty_dir").mkdir()
+                with self.assertRaises(ws.PinnedEvidenceWorktreeIntegrityError):
+                    ws._verify_pinned_worktree_clean(scratch_dir2, commit)
+            finally:
+                ws._remove_pinned_worktree(repo.root, scratch_dir2)
+
+    def test_materialization_clone_step_ignores_an_inherited_global_hooks_path(self):
+        """`OPUS-R136-M01`: the initial `git clone` call used to be the
+        one Git invocation in this module with no explicit
+        `core.hooksPath` pin, while the materializer's own docstring
+        claims inherited configuration cannot reintroduce a live hook
+        during this phase. `reference-transaction` fires on every ref
+        write a clone performs, so an inherited global `core.hooksPath`
+        is a real channel, not a hypothetical one: with one configured
+        (via `GIT_CONFIG_GLOBAL`, never the real user configuration) to a
+        directory whose `reference-transaction` script writes a marker
+        file, materializing a checkout must leave that marker file
+        absent."""
+        with ScratchRepo() as repo:
+            global_hooks_dir = Path(tempfile.mkdtemp(prefix="wfo-global-hooks-"))
+            global_config_dir = Path(tempfile.mkdtemp(prefix="wfo-global-config-"))
+            marker_dir = Path(tempfile.mkdtemp(prefix="wfo-global-marker-"))
+            marker_path = marker_dir / "FIRED"
+            try:
+                hook_path = global_hooks_dir / "reference-transaction"
+                hook_path.write_text(f"#!/bin/sh\ntouch {marker_path}\nexit 0\n")
+                hook_path.chmod(0o755)
+                global_config_path = global_config_dir / "gitconfig"
+                global_config_path.write_text(f"[core]\n\thooksPath = {global_hooks_dir}\n")
+
+                with unittest.mock.patch.dict(os.environ, {"GIT_CONFIG_GLOBAL": str(global_config_path)}):
+                    scratch_dir = ws._materialize_pinned_worktree_at_commit(repo.root, repo.base)
+                    try:
+                        self.assertFalse(
+                            marker_path.exists(),
+                            "reference-transaction hook fired during clone setup "
+                            "despite the materializer's explicit core.hooksPath pin",
+                        )
+                    finally:
+                        ws._remove_pinned_worktree(repo.root, scratch_dir)
+            finally:
+                shutil.rmtree(global_hooks_dir, ignore_errors=True)
+                shutil.rmtree(global_config_dir, ignore_errors=True)
+                shutil.rmtree(marker_dir, ignore_errors=True)
+
     def test_verification_fails_closed_on_wrong_head_or_dirty_tree(self):
         """`_verify_pinned_worktree_clean` raises rather than returning a
         falsy/ok-shaped result, both when the checkout is pinned to the

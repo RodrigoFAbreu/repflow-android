@@ -7529,10 +7529,15 @@ def _git_ls_tree_blobs(scratch_dir: Path, commit: str) -> dict[str, tuple[str, s
     checkout's own emptied `hooks/` directory here anyway, purely for
     defense in depth: every Git invocation this module issues against a
     pinned clone pins it, with no case-by-case exceptions to reason
-    about."""
+    about. Issued through `_hardened_run`
+    (`--no-replace-objects`/`GIT_NO_REPLACE_OBJECTS=1`, `OPUS-R136-M02`)
+    so a replacement ref present in the clone cannot substitute a
+    different tree/blob for `commit` than the literal object it names --
+    the same hardening this module's other object readers already
+    apply."""
     hooks_dir = scratch_dir / ".git" / "hooks"
-    output = _run(
-        ["git", "-c", f"core.hooksPath={hooks_dir}", "ls-tree", "-r", "-z", "--full-tree", commit],
+    output = _hardened_run(
+        ["-c", f"core.hooksPath={hooks_dir}", "ls-tree", "-r", "-z", "--full-tree", commit],
         cwd=scratch_dir,
     )
     entries: dict[str, tuple[str, str]] = {}
@@ -7577,10 +7582,23 @@ def _verify_pinned_worktree_clean(scratch_dir: Path, commit: str) -> None:
     `core.hooksPath` to the checkout's own emptied `hooks/` directory, so
     `_git_ls_tree_blobs`'s "every Git invocation this module issues
     against a pinned clone pins it, with no case-by-case exceptions to
-    reason about" is true of this whole function too (`OPUS-R134-M02`)."""
+    reason about" is true of this whole function too (`OPUS-R134-M02`).
+    Both `rev-parse` calls also go through `_hardened_run`
+    (`--no-replace-objects`, `OPUS-R136-M02`), matching
+    `_git_ls_tree_blobs`, so "detached exactly at `commit`" means the
+    literal object `commit` names even if a replacement ref exists in the
+    clone.
+
+    The filesystem walk below prunes only the checkout root's own
+    administrative `.git/` -- not every directory anywhere in the tree
+    that happens to be named `.git` -- and raises on any directory (at
+    any depth) left with no files and no subdirectories of its own
+    (`OPUS-R136-M03`): a clean checkout of `commit` never produces a
+    nested `.git`-named directory or a genuinely empty one, since Git
+    does not track directories, only the file paths they hold."""
     hooks_dir = scratch_dir / ".git" / "hooks"
-    resolved = _run(["git", "-c", f"core.hooksPath={hooks_dir}", "rev-parse", commit], cwd=scratch_dir).strip()
-    head = _run(["git", "-c", f"core.hooksPath={hooks_dir}", "rev-parse", "HEAD"], cwd=scratch_dir).strip()
+    resolved = _hardened_run(["-c", f"core.hooksPath={hooks_dir}", "rev-parse", commit], cwd=scratch_dir).strip()
+    head = _hardened_run(["-c", f"core.hooksPath={hooks_dir}", "rev-parse", "HEAD"], cwd=scratch_dir).strip()
     if head != resolved:
         raise PinnedEvidenceWorktreeIntegrityError(
             f"pinned evidence checkout at {scratch_dir} has HEAD {head!r}, "
@@ -7590,7 +7608,15 @@ def _verify_pinned_worktree_clean(scratch_dir: Path, commit: str) -> None:
     expected = _git_ls_tree_blobs(scratch_dir, commit)
     seen: set[str] = set()
     for dirpath, dirnames, filenames in os.walk(scratch_dir):
-        dirnames[:] = [d for d in dirnames if d != ".git"]
+        rel_dir = Path(dirpath).relative_to(scratch_dir).as_posix()
+        if rel_dir == ".":
+            dirnames[:] = [d for d in dirnames if d != ".git"]
+        elif not dirnames and not filenames:
+            raise PinnedEvidenceWorktreeIntegrityError(
+                f"pinned evidence checkout at {scratch_dir} has untracked empty "
+                f"directory {rel_dir!r} -- commit {commit!r}'s own tree cannot "
+                f"produce one"
+            )
         for filename in filenames:
             full_path = Path(dirpath) / filename
             rel_path = full_path.relative_to(scratch_dir).as_posix()
@@ -7684,6 +7710,25 @@ def _materialize_pinned_worktree_at_commit(repo_root: Path, commit: str) -> Path
     file into the clone, so its object database has no filesystem-level
     aliasing with `repo_root`'s.
 
+    `GPT-R136-001` found that `--no-hardlinks` alone is not sufficient
+    when `repo_root` itself borrows objects through its own
+    `objects/info/alternates` (e.g. a source repository created with
+    Git's `--reference`): a local clone copies that alternate
+    relationship verbatim, so both `repo_root` and the evidence clone
+    keep depending on the same external object database. `--dissociate`
+    makes Git copy every object reachable through an inherited alternate
+    into the clone's own object store and drop the alternate file, so
+    the resulting clone never depends on `repo_root`'s object database by
+    any path -- hardlink or alternate.
+
+    The initial clone itself is also pinned to a throwaway empty
+    `core.hooksPath` (`OPUS-R136-M01`): the clone's own destination
+    `.git/hooks/` does not exist yet when the clone command runs, so it
+    cannot be pinned to that not-yet-created path the way every later
+    call is pinned to it. Without an explicit pin here, inherited
+    global/system Git configuration could reintroduce an executable hook
+    path during the one Git invocation that had no pin at all.
+
     The checkout is verified byte-identical to `commit`
     (`_verify_pinned_worktree_clean`) before this function returns, so a
     still-successful hook injection during this specific clone's own
@@ -7697,15 +7742,22 @@ def _materialize_pinned_worktree_at_commit(repo_root: Path, commit: str) -> Path
     scratch_dir = Path(tempfile.mkdtemp(prefix="wfo-ledger-evidence-worktree-"))
     materialized = False
     try:
+        clone_hooks_dir = Path(tempfile.mkdtemp(prefix="wfo-ledger-evidence-clone-hooks-"))
+        try:
+            _run(
+                [
+                    "git", "-c", f"core.hooksPath={clone_hooks_dir}", "clone", "--quiet",
+                    "--no-hardlinks", "--dissociate", "--no-checkout", str(repo_root), str(scratch_dir),
+                ],
+                cwd=repo_root,
+            )
+        finally:
+            shutil.rmtree(clone_hooks_dir, ignore_errors=True)
         hooks_dir = scratch_dir / ".git" / "hooks"
-        _run(
-            ["git", "clone", "--quiet", "--no-hardlinks", "--no-checkout", str(repo_root), str(scratch_dir)],
-            cwd=repo_root,
-        )
         shutil.rmtree(hooks_dir, ignore_errors=True)
         hooks_dir.mkdir(parents=True, exist_ok=True)
-        _run(
-            ["git", "-c", f"core.hooksPath={hooks_dir}", "checkout", "--quiet", "--detach", commit],
+        _hardened_run(
+            ["-c", f"core.hooksPath={hooks_dir}", "checkout", "--quiet", "--detach", commit],
             cwd=scratch_dir,
         )
         _verify_pinned_worktree_clean(scratch_dir, commit)
