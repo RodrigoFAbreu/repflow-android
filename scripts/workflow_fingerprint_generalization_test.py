@@ -1088,7 +1088,7 @@ class TestPrepareAiReviewShImplementationStageHeadGuard(unittest.TestCase):
         impl_head = repo.commit("implement thing", filename="impl.txt")
         return impl_head
 
-    def _write_review_request(self, repo, work_item_id, base, impl_head):
+    def _write_review_request(self, repo, work_item_id, base, impl_head, implementation_revision=1):
         protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
             fingerprint.load_implementation_stage_classification(
                 repo.root, fingerprint.artifacts_path_for_work_item(work_item_id),
@@ -1102,6 +1102,16 @@ class TestPrepareAiReviewShImplementationStageHeadGuard(unittest.TestCase):
         bundle_dir.mkdir(parents=True, exist_ok=True)  # a later round reuses round 1's own directory
         (bundle_dir / "REVIEW_REQUEST.md").write_text(
             f"stage: post-fix\nreview_content_id: {digest}\n"
+        )
+        # OPUS-R133-003: IMPLEMENTATION_SUMMARY.md is a STUB_FILES entry
+        # (prepare-ai-review.sh creates it empty only if missing, never
+        # overwrites) but is also author-edited before every real
+        # invocation, same as REVIEW_REQUEST.md above -- unconditionally
+        # (re)written here so `finalize_bundle_generation`'s now-live
+        # assert_stage_completeness check has a matching revision to find,
+        # exactly as a real round's author-written summary would.
+        (bundle_dir / "IMPLEMENTATION_SUMMARY.md").write_text(
+            f"implementation_revision: {implementation_revision}\n\nfixture round\n"
         )
         return bundle_dir
 
@@ -1468,7 +1478,7 @@ class TestPrepareAiReviewShImplementationStageHeadGuard(unittest.TestCase):
             self._generate_first_round(repo, work_item_id, script_path)
 
             impl_head_2 = repo.commit("second implementation change", filename="impl.txt")
-            self._write_review_request(repo, work_item_id, repo.base, impl_head_2)
+            self._write_review_request(repo, work_item_id, repo.base, impl_head_2, implementation_revision=2)
             self._write_state_entry(repo, work_item_id, base=repo.base, head=impl_head_2, revision=2)
 
             result = subprocess.run(

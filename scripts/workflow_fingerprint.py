@@ -2226,12 +2226,17 @@ def finalize_bundle_generation(
     for the plan stage, additionally the byte-identity binding check
     (part 3, when a pin was captured) and the `TEST_RESULTS.md`/
     `REVIEW_REQUEST.md` consistency check (item 272, unconditional --
-    does not depend on a pin); on any failure, and only when
-    `work_item_id` is given (the marker mechanism has no flat-
-    compatibility-layout counterpart), withdrawal (part 3b) rather than
-    leaving a stale-but-self-verifying artifact in place; on success,
-    clearing any pre-existing `REJECTED` marker for this work item.
-    Returns a dict describing the outcome; never swallows a withdrawal
+    does not depend on a pin); for the implementation/post-fix stages,
+    `assert_stage_completeness`'s `IMPLEMENTATION_SUMMARY.md` revision-
+    consistency check (`OPUS-R133-003`: this branch existed since WF5 but
+    had no live caller before this, so a bundle whose author-written
+    summary stated a stale `implementation_revision` published anyway);
+    on any failure, and only when `work_item_id` is given (the marker
+    mechanism has no flat-compatibility-layout counterpart), withdrawal
+    (part 3b) rather than leaving a stale-but-self-verifying artifact in
+    place; on success, clearing any pre-existing `REJECTED` marker for
+    this work item. Returns a dict describing the outcome; never
+    swallows a withdrawal
     step's own `BundleWithdrawalError`."""
     recorded = read_manifest_identifiers(bundle_dir / MANIFEST_FILENAME)
     recorded_bundle_id = recorded.get("bundle_id")
@@ -2270,6 +2275,23 @@ def finalize_bundle_generation(
                     )
                 except TestResultsStaleError as exc:
                     mismatch_detail = str(exc)
+        elif stage in ("implementation", "post-fix") and work_item_id is not None:
+            # OPUS-R133-003: `assert_stage_completeness`'s implementation/
+            # post-fix branch existed (documented, implemented, tested) but
+            # had no live caller anywhere in the generation path, so a
+            # bundle whose IMPLEMENTATION_SUMMARY.md declared a stale
+            # implementation_revision published anyway -- this is that
+            # branch's first live caller, mirroring the plan stage's own
+            # revision-consistency check immediately above.
+            work_items, _active = _load_workflow_state_work_items(repo_root, None)
+            entry = work_items.get(work_item_id)
+            implementation_revision = entry.get("implementation_revision") if entry else None
+            try:
+                assert_stage_completeness(
+                    bundle_dir, stage, implementation_revision=implementation_revision,
+                )
+            except StageCompletenessError as exc:
+                mismatch_detail = str(exc)
 
         if mismatch_detail is not None:
             if work_item_id is not None:

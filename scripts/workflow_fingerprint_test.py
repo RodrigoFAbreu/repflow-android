@@ -3047,6 +3047,86 @@ class TestGeneratorSideStageDocumentBinding(unittest.TestCase):
             self.assertEqual(result["status"], "withdrawn")
             self.assertIn("authoritative plan document currently declares", result["message"])
 
+    def _build_valid_implementation_bundle(self, repo, work_item_id, implementation_summary_text):
+        """A minimal, internally self-consistent implementation-stage
+        bundle: `MANIFEST.md` alone satisfies `compute_bundle_id`'s own
+        `REQUIRED_BUNDLE_FILES` (`{"MANIFEST.md"}`), so this deliberately
+        skips the full `write_manifest_with_verified_identifiers_
+        implementation_stage` machinery (which additionally demands a
+        matching `REVIEW_REQUEST.md`/real protected paths) -- irrelevant
+        to `finalize_bundle_generation`'s own checks, which read only
+        `bundle_id` from `MANIFEST.md`. Returns `(bundle_dir, archive_path)`."""
+        bundle_dir = repo.root / ".ai-review" / work_item_id / "current"
+        bundle_dir.mkdir(parents=True)
+        (bundle_dir / "IMPLEMENTATION_SUMMARY.md").write_text(implementation_summary_text)
+        placeholder = b"# Bundle Manifest\n\nstage: implementation\n"
+        bundle_id, _entries = wf.compute_bundle_id(bundle_dir, manifest_content_override=placeholder)
+        (bundle_dir / "MANIFEST.md").write_text(
+            f"# Bundle Manifest\n\nstage: implementation\nbundle_id: {bundle_id}\n"
+        )
+        root_dir = bundle_dir.parent
+        archive_path = root_dir / "review-bundle.tar.gz"
+        with tarfile.open(archive_path, "w:gz") as tf:
+            tf.add(bundle_dir, arcname="current")
+        return bundle_dir, archive_path
+
+    def test_finalize_bundle_generation_withdraws_on_implementation_revision_mismatch(self):
+        """`OPUS-R133-003`: the implementation/post-fix branch of
+        `assert_stage_completeness` had no live caller anywhere in the
+        generation path before this -- a bundle whose author-written
+        `IMPLEMENTATION_SUMMARY.md` declared a stale `implementation_
+        revision` (here, carried forward from a previous round) published
+        anyway. This is that branch's first live caller."""
+        work_item_id = "workflow-v2-1-core"
+        with ScratchRepo() as repo:
+            (repo.root / "docs" / "ai-workflow").mkdir(parents=True, exist_ok=True)
+            (repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json").write_text(json.dumps({
+                "schema_version": 1,
+                "active_work_item_id": work_item_id,
+                "work_items": {
+                    work_item_id: {
+                        "work_item_id": work_item_id,
+                        "work_item_type": "process",
+                        "implementation_revision": 14,
+                    },
+                },
+            }))
+            bundle_dir, archive_path = self._build_valid_implementation_bundle(
+                repo, work_item_id,
+                "implementation_revision: 13\n\nstale, carried forward from a previous round\n",
+            )
+            result = wf.finalize_bundle_generation(
+                repo.root, bundle_dir, archive_path, "implementation", work_item_id,
+            )
+            self.assertEqual(result["status"], "withdrawn")
+            self.assertIn("implementation_revision", result["message"])
+            self.assertFalse(bundle_dir.exists())
+
+    def test_finalize_bundle_generation_ok_when_implementation_revision_matches(self):
+        work_item_id = "workflow-v2-1-core"
+        with ScratchRepo() as repo:
+            (repo.root / "docs" / "ai-workflow").mkdir(parents=True, exist_ok=True)
+            (repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json").write_text(json.dumps({
+                "schema_version": 1,
+                "active_work_item_id": work_item_id,
+                "work_items": {
+                    work_item_id: {
+                        "work_item_id": work_item_id,
+                        "work_item_type": "process",
+                        "implementation_revision": 14,
+                    },
+                },
+            }))
+            bundle_dir, archive_path = self._build_valid_implementation_bundle(
+                repo, work_item_id,
+                "implementation_revision: 14\n\ncurrent round\n",
+            )
+            result = wf.finalize_bundle_generation(
+                repo.root, bundle_dir, archive_path, "implementation", work_item_id,
+            )
+            self.assertEqual(result["status"], "ok")
+            self.assertTrue(bundle_dir.exists())
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
