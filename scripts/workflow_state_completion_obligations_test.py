@@ -1547,6 +1547,69 @@ class TestPinnedEvidenceWorktreeIsolation(unittest.TestCase):
             finally:
                 ws._remove_pinned_worktree(repo.root, second)
 
+    def test_evidence_clone_object_storage_shares_no_writable_state_with_source(self):
+        """`GPT-R135-001`: a same-filesystem local `git clone` may
+        hardlink `.git/objects` into the clone instead of copying it, so
+        the clone and the source repository could hold two pathnames for
+        the same object inode -- an in-place write through the clone's
+        object path would then corrupt the source repository's own
+        object bytes, and a later independently materialized clone could
+        fail to resolve the same pinned commit. `--no-hardlinks` must
+        make the clone's object database a real, separately-inode'd copy:
+        prove the source object survives a mutation attempted through one
+        evidence clone's object path untouched, and that a second,
+        independently materialized evidence clone at the same pinned
+        commit still resolves and checks out the original tracked
+        bytes."""
+        with ScratchRepo() as repo:
+            _write(repo, "victim.txt", "original content\n")
+            commit = _commit_paths(repo, ["victim.txt"], "commit victim blob")
+            blob = subprocess.run(
+                ["git", "rev-parse", f"{commit}:victim.txt"],
+                cwd=repo.root, check=True, capture_output=True, text=True,
+            ).stdout.strip()
+            source_object = repo.root / ".git" / "objects" / blob[:2] / blob[2:]
+            self.assertTrue(source_object.is_file())
+
+            first = ws._materialize_pinned_worktree_at_commit(repo.root, commit)
+            try:
+                clone_object = first / ".git" / "objects" / blob[:2] / blob[2:]
+                self.assertTrue(clone_object.is_file())
+                # A same-filesystem `git clone` hardlinks by default;
+                # `--no-hardlinks` must force a distinct inode.
+                self.assertNotEqual(
+                    source_object.stat().st_ino, clone_object.stat().st_ino,
+                    "clone-side object shares an inode with the source repository's "
+                    "own object -- --no-hardlinks did not take effect",
+                )
+
+                # Attempt to corrupt the source object through the clone's
+                # own pathname only.
+                os.chmod(clone_object, 0o600)
+                with open(clone_object, "r+b") as f:
+                    data = bytearray(f.read())
+                    data[0] ^= 0xFF
+                    f.seek(0)
+                    f.write(bytes(data))
+            finally:
+                ws._remove_pinned_worktree(repo.root, first)
+
+            # The source repository's own object must be untouched.
+            result = subprocess.run(
+                ["git", "cat-file", "-p", blob], cwd=repo.root, capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, "original content\n")
+
+            # A second, independently materialized clone at the same
+            # pinned commit must still resolve and check out the
+            # original bytes.
+            second = ws._materialize_pinned_worktree_at_commit(repo.root, commit)
+            try:
+                self.assertEqual((second / "victim.txt").read_text(), "original content\n")
+            finally:
+                ws._remove_pinned_worktree(repo.root, second)
+
     def test_verify_pinned_worktree_clean_ignores_clone_local_hooks_and_filters(self):
         """`OPUS-R133-002`/`-M01`: the previous `git status --porcelain`-
         based cleanliness check could itself be fooled -- a clone-local

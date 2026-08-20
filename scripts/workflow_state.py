@@ -7570,9 +7570,17 @@ def _verify_pinned_worktree_clean(scratch_dir: Path, commit: str) -> None:
     executes). `verify_wfo_ledger_coverage` materializes an independent
     checkout per evidence id and never reuses one (`OPUS-R133-001`), so
     this is the only point in that checkout's lifetime this assertion
-    needs to run."""
-    resolved = _run(["git", "rev-parse", commit], cwd=scratch_dir).strip()
-    head = _run(["git", "rev-parse", "HEAD"], cwd=scratch_dir).strip()
+    needs to run.
+
+    Every Git invocation this function issues -- including its own two
+    `rev-parse` calls, not only `_git_ls_tree_blobs`'s -- pins
+    `core.hooksPath` to the checkout's own emptied `hooks/` directory, so
+    `_git_ls_tree_blobs`'s "every Git invocation this module issues
+    against a pinned clone pins it, with no case-by-case exceptions to
+    reason about" is true of this whole function too (`OPUS-R134-M02`)."""
+    hooks_dir = scratch_dir / ".git" / "hooks"
+    resolved = _run(["git", "-c", f"core.hooksPath={hooks_dir}", "rev-parse", commit], cwd=scratch_dir).strip()
+    head = _run(["git", "-c", f"core.hooksPath={hooks_dir}", "rev-parse", "HEAD"], cwd=scratch_dir).strip()
     if head != resolved:
         raise PinnedEvidenceWorktreeIntegrityError(
             f"pinned evidence checkout at {scratch_dir} has HEAD {head!r}, "
@@ -7598,7 +7606,18 @@ def _verify_pinned_worktree_clean(scratch_dir: Path, commit: str) -> None:
                     f"pinned evidence checkout at {scratch_dir} path {rel_path!r} is not "
                     f"a plain regular file at commit {commit!r} (mode {expected_mode!r})"
                 )
-            actual_mode = "100755" if full_path.stat().st_mode & 0o111 else "100644"
+            file_stat = full_path.stat()
+            if not stat.S_ISREG(file_stat.st_mode):
+                # OPUS-R134-M04: a FIFO/socket/device planted at a tracked
+                # path passes the symlink/mode-membership check above (its
+                # tracked mode is a plain 100644/100755) but would block
+                # `read_bytes()` below forever, or read garbage from a
+                # device. Fail closed on the filesystem entry type instead.
+                raise PinnedEvidenceWorktreeIntegrityError(
+                    f"pinned evidence checkout at {scratch_dir} path {rel_path!r} is not "
+                    f"a regular file on disk at commit {commit!r} (st_mode {file_stat.st_mode:#o})"
+                )
+            actual_mode = "100755" if file_stat.st_mode & 0o111 else "100644"
             if actual_mode != expected_mode:
                 raise PinnedEvidenceWorktreeIntegrityError(
                     f"pinned evidence checkout at {scratch_dir} path {rel_path!r} has mode "
@@ -7652,25 +7671,48 @@ def _materialize_pinned_worktree_at_commit(repo_root: Path, commit: str) -> Path
     tears the result down immediately after
     (`_remove_pinned_worktree`) instead of resetting and reusing it:
     every evidence id gets a brand-new clone that no prior evidence
-    process has ever had the chance to touch, so there is no persisted
-    state left for a later id to inherit, by any mechanism.
+    process has ever had the chance to touch, so nothing inside a prior
+    evidence checkout is reused by a later evidence id.
+
+    `GPT-R135-001` found that the fresh clone this produces was still not
+    a fully independent object store: a same-filesystem local `git clone`
+    hardlinks `.git/objects` by default rather than copying it, so the
+    clone and `repo_root` could hold two pathnames for the same inode --
+    an in-place write through the clone's object path could corrupt
+    `repo_root`'s own object bytes, and removing the clone afterward would
+    not undo that. `--no-hardlinks` forces a real copy of every object
+    file into the clone, so its object database has no filesystem-level
+    aliasing with `repo_root`'s.
 
     The checkout is verified byte-identical to `commit`
     (`_verify_pinned_worktree_clean`) before this function returns, so a
     still-successful hook injection during this specific clone's own
     checkout fails closed here rather than silently producing evidence
-    from unreviewed bytes. Caller owns cleanup via
-    `_remove_pinned_worktree`."""
+    from unreviewed bytes. Caller owns cleanup of a successfully returned
+    `scratch_dir` via `_remove_pinned_worktree`; a failure raised from
+    within this function (clone, checkout, or the cleanliness check
+    itself) removes its own partial `scratch_dir` before propagating,
+    since the caller never receives a path to clean up in that case
+    (`OPUS-R134-M03`)."""
     scratch_dir = Path(tempfile.mkdtemp(prefix="wfo-ledger-evidence-worktree-"))
-    hooks_dir = scratch_dir / ".git" / "hooks"
-    _run(["git", "clone", "--quiet", "--no-checkout", str(repo_root), str(scratch_dir)], cwd=repo_root)
-    shutil.rmtree(hooks_dir, ignore_errors=True)
-    hooks_dir.mkdir(parents=True, exist_ok=True)
-    _run(
-        ["git", "-c", f"core.hooksPath={hooks_dir}", "checkout", "--quiet", "--detach", commit],
-        cwd=scratch_dir,
-    )
-    _verify_pinned_worktree_clean(scratch_dir, commit)
+    materialized = False
+    try:
+        hooks_dir = scratch_dir / ".git" / "hooks"
+        _run(
+            ["git", "clone", "--quiet", "--no-hardlinks", "--no-checkout", str(repo_root), str(scratch_dir)],
+            cwd=repo_root,
+        )
+        shutil.rmtree(hooks_dir, ignore_errors=True)
+        hooks_dir.mkdir(parents=True, exist_ok=True)
+        _run(
+            ["git", "-c", f"core.hooksPath={hooks_dir}", "checkout", "--quiet", "--detach", commit],
+            cwd=scratch_dir,
+        )
+        _verify_pinned_worktree_clean(scratch_dir, commit)
+        materialized = True
+    finally:
+        if not materialized:
+            shutil.rmtree(scratch_dir, ignore_errors=True)
     return scratch_dir
 
 
