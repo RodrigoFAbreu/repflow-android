@@ -2275,7 +2275,7 @@ def finalize_bundle_generation(
                     )
                 except TestResultsStaleError as exc:
                     mismatch_detail = str(exc)
-        elif stage in ("implementation", "post-fix") and work_item_id is not None:
+        elif stage in ("implementation", "post-fix"):
             # OPUS-R133-003: `assert_stage_completeness`'s implementation/
             # post-fix branch existed (documented, implemented, tested) but
             # had no live caller anywhere in the generation path, so a
@@ -2283,15 +2283,40 @@ def finalize_bundle_generation(
             # implementation_revision published anyway -- this is that
             # branch's first live caller, mirroring the plan stage's own
             # revision-consistency check immediately above.
-            work_items, _active = _load_workflow_state_work_items(repo_root, None)
-            entry = work_items.get(work_item_id)
-            implementation_revision = entry.get("implementation_revision") if entry else None
-            try:
-                assert_stage_completeness(
-                    bundle_dir, stage, implementation_revision=implementation_revision,
+            #
+            # OPUS-R136-M04: `REVIEW_PROTOCOL.md` documents `work-item-id`
+            # as optional for these two stages, but the original version of
+            # this branch only ran the check `and work_item_id is not
+            # None` -- the documented omitted-id invocation therefore
+            # skipped the completeness check entirely rather than
+            # resolving a target for it, silently reintroducing the exact
+            # stale-summary publication class OPUS-R133-003 closed. When
+            # `work_item_id` is omitted, resolve the same
+            # `active_work_item_id` fallback the read-only inspection CLI
+            # already uses, and still run the check against it; if no
+            # active work item is recorded either, fail closed (mismatch)
+            # instead of publishing unchecked. This never widens what
+            # `withdraw_bundle` touches below, which still keys off the
+            # caller's own `work_item_id` argument, not this resolved
+            # fallback -- an omitted-id caller's bundle is reported as a
+            # mismatch, never quarantined under a work item it never named.
+            work_items, active_work_item_id = _load_workflow_state_work_items(repo_root, None)
+            completeness_work_item_id = work_item_id if work_item_id is not None else active_work_item_id
+            if completeness_work_item_id is None:
+                mismatch_detail = (
+                    "work_item_id was omitted and WORKFLOW_STATE.json has no "
+                    "active_work_item_id to resolve implementation_revision from -- "
+                    "cannot verify implementation/post-fix stage completeness"
                 )
-            except StageCompletenessError as exc:
-                mismatch_detail = str(exc)
+            else:
+                entry = work_items.get(completeness_work_item_id)
+                implementation_revision = entry.get("implementation_revision") if entry else None
+                try:
+                    assert_stage_completeness(
+                        bundle_dir, stage, implementation_revision=implementation_revision,
+                    )
+                except StageCompletenessError as exc:
+                    mismatch_detail = str(exc)
 
         if mismatch_detail is not None:
             if work_item_id is not None:

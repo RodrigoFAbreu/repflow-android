@@ -3127,6 +3127,120 @@ class TestGeneratorSideStageDocumentBinding(unittest.TestCase):
             self.assertEqual(result["status"], "ok")
             self.assertTrue(bundle_dir.exists())
 
+    def _build_valid_implementation_bundle_flat_layout(self, repo, implementation_summary_text):
+        """`OPUS-R136-M04` regressions: the same fixture as
+        `_build_valid_implementation_bundle`, but written under the flat
+        compatibility path (`.ai-review/current/`) `prepare-ai-review.sh`
+        uses whenever `work-item-id` is omitted, per
+        `docs/ai-workflow/REVIEW_PROTOCOL.md`'s documented optionality for
+        the `implementation`/`post-fix` stages."""
+        bundle_dir = repo.root / ".ai-review" / "current"
+        bundle_dir.mkdir(parents=True)
+        (bundle_dir / "IMPLEMENTATION_SUMMARY.md").write_text(implementation_summary_text)
+        placeholder = b"# Bundle Manifest\n\nstage: implementation\n"
+        bundle_id, _entries = wf.compute_bundle_id(bundle_dir, manifest_content_override=placeholder)
+        (bundle_dir / "MANIFEST.md").write_text(
+            f"# Bundle Manifest\n\nstage: implementation\nbundle_id: {bundle_id}\n"
+        )
+        root_dir = bundle_dir.parent
+        archive_path = root_dir / "review-bundle.tar.gz"
+        with tarfile.open(archive_path, "w:gz") as tf:
+            tf.add(bundle_dir, arcname="current")
+        return bundle_dir, archive_path
+
+    def test_finalize_bundle_generation_omitted_work_item_id_reports_mismatch_on_stale_revision(self):
+        """`OPUS-R136-M04`: before this fix, `finalize_bundle_generation`
+        only ran the implementation/post-fix `assert_stage_completeness`
+        check `and work_item_id is not None` -- the documented omitted-id
+        invocation (`REVIEW_PROTOCOL.md`: work-item-id "remains optional
+        for every other stage") skipped the check entirely rather than
+        resolving a target for it, so a stale `IMPLEMENTATION_SUMMARY.md`
+        published as `status: ok` through this exact call shape even
+        though `WORKFLOW_STATE.json` had a resolvable
+        `active_work_item_id`. The fix must resolve that fallback and
+        still fail closed -- proven here by a stale revision (13 on disk,
+        14 authoritative) reaching this call with `work_item_id=None`."""
+        work_item_id = "workflow-v2-1-core"
+        with ScratchRepo() as repo:
+            (repo.root / "docs" / "ai-workflow").mkdir(parents=True, exist_ok=True)
+            (repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json").write_text(json.dumps({
+                "schema_version": 1,
+                "active_work_item_id": work_item_id,
+                "work_items": {
+                    work_item_id: {
+                        "work_item_id": work_item_id,
+                        "work_item_type": "process",
+                        "implementation_revision": 14,
+                    },
+                },
+            }))
+            bundle_dir, archive_path = self._build_valid_implementation_bundle_flat_layout(
+                repo, "implementation_revision: 13\n\nstale, carried forward from a previous round\n",
+            )
+            result = wf.finalize_bundle_generation(
+                repo.root, bundle_dir, archive_path, "implementation", None,
+            )
+            self.assertEqual(result["status"], "mismatch")
+            self.assertIn("implementation_revision", result["message"])
+            # No `work_item_id` was ever named by this call, so nothing is
+            # quarantined under an inferred one -- the bundle is left in
+            # place, just reported as not ok (mirrors the flat-layout
+            # bundle_id-mismatch behavior already covered by
+            # `test_finalize_bundle_generation_flat_layout_reports_mismatch_without_withdrawing`).
+            self.assertTrue(bundle_dir.exists())
+
+    def test_finalize_bundle_generation_omitted_work_item_id_ok_when_revision_matches(self):
+        """Companion to the stale-revision regression above: the same
+        omitted-id flat-layout call shape must still publish `status: ok`
+        when the resolved `active_work_item_id`'s counter genuinely
+        matches, so the fix does not just fail the omitted-id path
+        unconditionally."""
+        work_item_id = "workflow-v2-1-core"
+        with ScratchRepo() as repo:
+            (repo.root / "docs" / "ai-workflow").mkdir(parents=True, exist_ok=True)
+            (repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json").write_text(json.dumps({
+                "schema_version": 1,
+                "active_work_item_id": work_item_id,
+                "work_items": {
+                    work_item_id: {
+                        "work_item_id": work_item_id,
+                        "work_item_type": "process",
+                        "implementation_revision": 14,
+                    },
+                },
+            }))
+            bundle_dir, archive_path = self._build_valid_implementation_bundle_flat_layout(
+                repo, "implementation_revision: 14\n\ncurrent round\n",
+            )
+            result = wf.finalize_bundle_generation(
+                repo.root, bundle_dir, archive_path, "implementation", None,
+            )
+            self.assertEqual(result["status"], "ok")
+            self.assertTrue(bundle_dir.exists())
+
+    def test_finalize_bundle_generation_omitted_work_item_id_no_active_item_reports_mismatch(self):
+        """When `work_item_id` is omitted and `WORKFLOW_STATE.json` has no
+        `active_work_item_id` to fall back to either, the fix must fail
+        closed (report `mismatch`) rather than silently skip the check --
+        the same "cannot verify, so don't publish unchecked" discipline as
+        the resolvable case above, just with nothing to resolve."""
+        with ScratchRepo() as repo:
+            (repo.root / "docs" / "ai-workflow").mkdir(parents=True, exist_ok=True)
+            (repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json").write_text(json.dumps({
+                "schema_version": 1,
+                "active_work_item_id": None,
+                "work_items": {},
+            }))
+            bundle_dir, archive_path = self._build_valid_implementation_bundle_flat_layout(
+                repo, "implementation_revision: 1\n\nno tracked work item\n",
+            )
+            result = wf.finalize_bundle_generation(
+                repo.root, bundle_dir, archive_path, "implementation", None,
+            )
+            self.assertEqual(result["status"], "mismatch")
+            self.assertIn("active_work_item_id", result["message"])
+            self.assertTrue(bundle_dir.exists())
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
