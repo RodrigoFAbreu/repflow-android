@@ -214,6 +214,52 @@ repeated freely.
 
 Findings go in `.ai-review/workflow-v2-1-core/feedback/FUNCTIONAL_REVIEW.md`.
 
+### `workflow-v2-1-core` — MILESTONE_COMPLETE (real, 2026-08-21)
+
+Functional review for implementation revision 17 was completed and
+recorded clean: `.ai-review/workflow-v2-1-core/feedback/FUNCTIONAL_REVIEW.md`
+(gitignored, not itself a repository artifact) records `Result: PASS`
+against the revision-17 checklist above, citing evidence commit `805b966`
+/ blob `8b0a49ba217d62ff8bafcf0638876dfd564babca`, with no functional
+defect, usability issue, or missing requirement found blocking.
+
+The user then gave literal `/accept-milestone`-stage confirmation for
+`workflow-v2-1-core` ("I confirm acceptance of workflow-v2-1-core."),
+validated for real by `workflow_state.validate_user_confirmation`. The
+advisory terminal-reachability pre-flight
+(`resolve_own_registry_completion_status` → `is_terminal=True`,
+`milestone_complete_gate_reachable` → `True` from phase
+`AWAITING_FUNCTIONAL_REVIEW`) and the authoritative
+`workflow_state.complete_work_item` call both succeeded: no
+`IncompleteChildWorkItemError` (no work item declares
+`workflow-v2-1-core` as its `parent_work_item_id` — only `milestone-8`
+exists alongside it, and is unrelated), no `IncompleteOwnCheckpointsError`
+(all 18 registry checkpoints `COMPLETE`), and no
+`UnsatisfiedCompletionObligationError` (both declared completion
+obligations, `WFO-LEDGER-COVERAGE` and `WFO-STATE-SERIALIZATION`,
+resolved `PASS`, recorded in
+`work_items["workflow-v2-1-core"].completion_obligations_accepted`).
+`work_items["workflow-v2-1-core"].phase` is now `MILESTONE_COMPLETE`;
+`active_work_item_id` reset to `null` (it pointed here).
+
+**Steps 3/5 do not apply — the same gap the `v2-1-dry-run` dry run
+already predicted this item would face** (see that item's own S16
+`MILESTONE_COMPLETE` note further below): `grep` confirms zero mentions
+of `workflow-v2-1-core` anywhere in `docs/ROADMAP.md` (step 3 has no
+entry to mark). `docs/ai-workflow/WORKFLOW_V2_PLAN.md` is **not**
+archived to `docs/milestones/completed/` (step 5) — unlike a product
+milestone's execution/reference plan, which really is finished once its
+feature ships, this document remains the live design reference for the
+workflow tooling itself, still linked from
+`docs/ai-workflow/REVIEW_PROTOCOL.md`, `MILESTONE_WORKFLOW.md`, and this
+repository's `CLAUDE.md`; archiving it would misfile still-authoritative
+documentation as historical. Step 4 is honored via this note itself,
+placed in this item's own section rather than the top-level "Active
+plan" section, which belongs to Milestone 8 alone and is untouched by
+this completion. Step 7 ("Next action") is unaffected for the same
+reason `v2-1-dry-run`'s was: it already correctly points at the real
+`docs/ROADMAP.md`, which `workflow-v2-1-core` was never part of.
+
 ---
 
 ## `workflow-v2-1-core` — functional review checklist (implementation revision 17)

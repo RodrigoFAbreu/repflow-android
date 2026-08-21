@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_work_item_id": "workflow-v2-1-core",
+  "active_work_item_id": null,
   "work_items": {
     "workflow-v2-1-core": {
       "work_item_type": "process",
@@ -11,7 +11,7 @@
       "registry_path": "docs/ai-workflow/registry/workflow-v2-1-core-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/workflow-v2-1-core-mapping.json",
       "governing_workflow_version": "1",
-      "phase": "AWAITING_FUNCTIONAL_REVIEW",
+      "phase": "MILESTONE_COMPLETE",
       "plan_revision": 99,
       "implementation_revision": 17,
       "functional_review_round": null,
@@ -392,8 +392,68 @@
           ]
         }
       ],
-      "state_revision": 130,
-      "last_transition": "2026-08-20T23:42:20+01:00"
+      "state_revision": 131,
+      "last_transition": "2026-08-21T18:27:47+01:00",
+      "completion_obligations_accepted": {
+        "WFO-LEDGER-COVERAGE": {
+          "classification": "PASS",
+          "detail": "all 211 reconciliation-table items accounted for in docs/ai-workflow/registry/workflow-v2-1-core-ledger-status.json",
+          "source_commit": "805b966c0ad2e440da55725b4832f83c0f67ae04",
+          "obligation_content_id": "99548fb73a755fc26a4f91169777985fe4d27c7921b4061c70bbd3c21e17cc1b",
+          "verifier_identity_id": "4f1ef206c719db2bf0fb8e0285dfc973464ced70003e2f7c1a367aa8faf14474",
+          "verifier_entry": "scripts/workflow_state.py",
+          "verifier_source_root": "scripts",
+          "verifier_census": [
+            {
+              "path": "scripts/workflow_state.py",
+              "mode": "100644",
+              "blob": "bbf7bc9d975db6ab021d1eac05ec568e575566ca",
+              "source": "manifest"
+            },
+            {
+              "path": "scripts/workflow_fingerprint.py",
+              "mode": "100755",
+              "blob": "bfbd268a6ee3a6093cedd24d93068f6ee041a24e",
+              "source": "manifest"
+            }
+          ],
+          "technical_approval_commit": "838a523f6d2ef7541e1d1697bd8282bc69ff2f9c",
+          "reviewed_content_commit": "73fe50d010151c3d3cef6ab60bfe3dddab0141e2",
+          "approved_review_content_id": "a44d912afd81fa757d2b9893e77a0d8990bce05ed78ad487352d3e849efe9143",
+          "base_commit": "162154d3e5e10eb65e109833acae4b4fb01fc5d6",
+          "writer_count": 13,
+          "failing_assertions": []
+        },
+        "WFO-STATE-SERIALIZATION": {
+          "classification": "PASS",
+          "detail": "13 writer(s), 1 publisher, 4 non-writer(s) all conform",
+          "source_commit": "805b966c0ad2e440da55725b4832f83c0f67ae04",
+          "obligation_content_id": "a7a2b8c112a74711a41336a8bd35a0ef2ca778cfd56f6e15350b2086f070089f",
+          "verifier_identity_id": "4f1ef206c719db2bf0fb8e0285dfc973464ced70003e2f7c1a367aa8faf14474",
+          "verifier_entry": "scripts/workflow_state.py",
+          "verifier_source_root": "scripts",
+          "verifier_census": [
+            {
+              "path": "scripts/workflow_state.py",
+              "mode": "100644",
+              "blob": "bbf7bc9d975db6ab021d1eac05ec568e575566ca",
+              "source": "manifest"
+            },
+            {
+              "path": "scripts/workflow_fingerprint.py",
+              "mode": "100755",
+              "blob": "bfbd268a6ee3a6093cedd24d93068f6ee041a24e",
+              "source": "manifest"
+            }
+          ],
+          "technical_approval_commit": "838a523f6d2ef7541e1d1697bd8282bc69ff2f9c",
+          "reviewed_content_commit": "73fe50d010151c3d3cef6ab60bfe3dddab0141e2",
+          "approved_review_content_id": "a44d912afd81fa757d2b9893e77a0d8990bce05ed78ad487352d3e849efe9143",
+          "base_commit": "162154d3e5e10eb65e109833acae4b4fb01fc5d6",
+          "writer_count": 13,
+          "failing_assertions": []
+        }
+      }
     },
     "milestone-8": {
       "work_item_type": "product",
