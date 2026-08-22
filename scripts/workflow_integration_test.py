@@ -47,8 +47,10 @@ Stdlib-only. Run: python3 scripts/workflow_integration_test.py
 
 from __future__ import annotations
 
+import ast
 import base64
 import hashlib
+import inspect
 import json
 import os
 import re
@@ -409,6 +411,67 @@ class TestDualModeBranchConformance(unittest.TestCase):
         self.assertIn('governing_workflow_version: "2.1"', approve_review_text)
 
 
+class TestReviewImplementationCommandStaticConformance(unittest.TestCase):
+    """`workflow-v2-3` CP1's own conformance coverage for the new
+    `/review-implementation` command, mirroring
+    `TestBootstrapCommandStaticConformance`'s/
+    `TestVersion21OnlyCommandsRefuseCleanlyForV1`'s pattern of asserting
+    key invariant sentences are actually present in the file's real text,
+    rather than merely described in this plan."""
+
+    def setUp(self):
+        self.text = _command_text("review-implementation.md")
+
+    def test_frontmatter_has_description_and_argument_hint(self):
+        self.assertIn("description:", self.text)
+        self.assertIn("argument-hint:", self.text)
+        self.assertIn("state_writer: false", self.text)
+        self.assertIn("review-subject: bundle", self.text)
+
+    def test_states_model_independence(self):
+        self.assertIn(
+            "Implements a model-independent\n**review role**, not a specific model: "
+            "nothing in this contract, in the\nreport it produces, or in any check it "
+            "performs names a model — running it\nfrom any capable Claude model produces "
+            "the same behavior.",
+            self.text,
+        )
+
+    def test_states_the_report_only_constraint(self):
+        self.assertIn(
+            "**Review and report only.** This command never writes\n"
+            "`<feedback_dir>/REVIEW_FEEDBACK.md`, never writes\n"
+            "`docs/ai-workflow/WORKFLOW_STATE.json`, never edits source/test/doc content,\n"
+            "never approves a stage, and never advances `phase`.",
+            self.text,
+        )
+
+    def test_phase_guard_names_the_exact_required_phase(self):
+        self.assertIn(
+            "2. **Phase guard**: if the resolved item's `phase` is not exactly\n"
+            "   `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`, refuse cleanly, naming the\n"
+            "   actual phase.",
+            self.text,
+        )
+
+    def test_states_it_writes_nothing(self):
+        self.assertIn("**Report only — writes nothing.**", self.text)
+
+    def test_names_artifacts_path_for_work_item(self):
+        """I3/revision 2's own missing-test gap: a regression back to
+        `load_implementation_stage_classification`'s default argument
+        (silently resolving `workflow-v2-1-core`'s artifacts file instead
+        of the resolved work item's own) fails this cheap textual
+        check."""
+        self.assertIn("artifacts_path_for_work_item", self.text)
+
+    def test_names_missing_required_bundle_file_error(self):
+        """Revision 6/7 I2/O1's own missing-test gap: a regression that
+        silently drops the absent-manifest clean-refusal wording fails
+        this check."""
+        self.assertIn("MissingRequiredBundleFileError", self.text)
+
+
 class TestVersion21OnlyCommandsRefuseCleanlyForV1(unittest.TestCase):
     """`/review-plan` and `/record-manual-plan-review` are `"2.1"`-only,
     with no v1 counterpart at all -- D-Self-Governance's enumeration says
@@ -534,6 +597,9 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # Claude-Session: lines, never before them -- intentional content
     # change (the mechanical fix for 4a769fd's own defect class).
     "bootstrap-workflow-v2.md": "6cd29d3d6382ba1e246ecf1779aee9f649cc15a8b3489abbcbdecb04b1be578f",
+    # review-implementation.md: new, workflow-v2-3 CP1 -- the first
+    # recorded hash, not a change.
+    "review-implementation.md": "7343546ce599dc7c6782c6bd3d6640c74759eaf61b2e5b0dcf8c52374af26d90",
 }
 
 
@@ -559,10 +625,11 @@ class TestGoldenCommandFileHashes(unittest.TestCase):
 class TestAssertLocalGenerationMatchesCallSiteConformance(unittest.TestCase):
     """Item 342 (`GPT-R63-001`; narrowed, revision 82, `OPUS-R102-001` --
     `WF8c` scope clause (k)): `assert_local_generation_matches` has
-    exactly two live call sites in this repository today --
-    `/approve-review`'s and `/review-plan`'s own repository-local
-    staleness checks, both at the permissive `require_metadata=False`
-    default. Item 342's own original text (revision 47) expected a third,
+    exactly three live call sites in this repository today --
+    `/approve-review`'s, `/review-plan`'s, and (`workflow-v2-3` CP1)
+    `/review-implementation`'s own repository-local staleness checks, all
+    three at the permissive `require_metadata=False` default. Item 342's
+    own original text (revision 47) expected a third,
     `require_metadata=True` caller -- `D-Approval-Commits`' current-round
     bundle-publication binding check -- but the atomic/staged
     bundle-publication redesign that caller belonged to was superseded,
@@ -577,11 +644,12 @@ class TestAssertLocalGenerationMatchesCallSiteConformance(unittest.TestCase):
     EXPECTED_CALL_SITES = frozenset({
         Path(".claude/commands/approve-review.md"),
         Path(".claude/commands/review-plan.md"),
+        Path(".claude/commands/review-implementation.md"),
     })
 
     _CALL_RE = re.compile(r"assert_local_generation_matches\(")
 
-    def test_exactly_the_two_live_permissive_callers_exist(self):
+    def test_exactly_the_three_live_permissive_callers_exist(self):
         repo_root = _repo_root()
         found: set[Path] = set()
         for path in sorted((repo_root / ".claude" / "commands").glob("*.md")):
@@ -645,6 +713,148 @@ class TestGenerationDiagnosticMetadataCallerWordingConformance(unittest.TestCase
         docstring = match.group(1)
         self.assertIn("/approve-review", docstring)
         self.assertIn("/review-plan", docstring)
+
+
+class TestDemoTestNoLiveAnchorStaticConformance(unittest.TestCase):
+    """`workflow-v2-3`'s own CP1 missing-test item (revision 5/6/7/8,
+    round 4-7 missing tests/B1): a real-repository test anchored at
+    `WORKFLOW_V2_1_CORE_COMPLETION_COMMIT` is only actually fixed if every
+    call site feeding it a `head`/`commit` argument is fixed too -- five
+    functions across both `_demo_test.py` files
+    (`workflow_state.approval_is_current`,
+    `workflow_state.implementing_entry_reachable`,
+    `workflow_fingerprint.compute_review_content_id_plan_stage_at_commit`,
+    `..._at_commit_for_work_item`,
+    `compute_review_content_id_implementation_stage_at_commit`) each carry
+    one parameter (`head` or `commit`, resolved from the real signature via
+    `inspect.signature(fn).bind_partial(...)`, never a hand-maintained
+    positional-index map -- the index a function's anchor sits at differs
+    per function and has drifted out of this document's own prose four
+    rounds running) that must never resolve to live `"HEAD"` -- neither by
+    omission (the parameter's own default) nor by an explicit literal
+    `"HEAD"` string. Gate is this test passing, not a hand-checked list:
+    hand enumeration of this exact call set came up short three consecutive
+    review rounds (five offenders found -> six -> seven), and a fourth time
+    at the property-statement level itself. No allowlist: every real call
+    site into these five functions in either `_demo_test.py` file is
+    scanned, and the one call this property could never apply to
+    (`load_implementation_stage_classification`/`any_protected_path_dirty`
+    in `test_real_implementation_stage_classification_has_no_unclassified_dirty_path`,
+    and the two active-work-item-scoped tests' own deliberately live
+    `_changed_tracked_paths_between` calls) matches none of the five
+    scanned names, so it is never flagged in the first place and needs no
+    exemption."""
+
+    _TARGET_FUNCTIONS = {
+        "approval_is_current": (ws.approval_is_current, "head"),
+        "implementing_entry_reachable": (ws.implementing_entry_reachable, "head"),
+        "compute_review_content_id_plan_stage_at_commit": (
+            fingerprint.compute_review_content_id_plan_stage_at_commit, "commit",
+        ),
+        "compute_review_content_id_plan_stage_at_commit_for_work_item": (
+            fingerprint.compute_review_content_id_plan_stage_at_commit_for_work_item, "commit",
+        ),
+        "compute_review_content_id_implementation_stage_at_commit": (
+            fingerprint.compute_review_content_id_implementation_stage_at_commit, "commit",
+        ),
+    }
+
+    @classmethod
+    def _scan(cls, source_text: str) -> tuple[list[str], int]:
+        """Returns `(flagged_descriptions, total_real_call_site_count)`.
+        A call site is "real" if its function name matches one of the five
+        scanned names (via attribute access, e.g. `ws.approval_is_current(...)`
+        or `wf.compute_review_content_id_plan_stage_at_commit(...)` -- the
+        only calling convention either `_demo_test.py` file uses for these
+        functions); it is "flagged" if the anchor parameter's bound value
+        (resolved via `inspect.signature(fn).bind_partial(...)`, positional
+        or keyword, never a hand-maintained index) is omitted entirely
+        (the parameter's own live-`"HEAD"` default) or is present as the
+        literal constant string `"HEAD"`."""
+        tree = ast.parse(source_text)
+        flagged: list[str] = []
+        total = 0
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if not isinstance(func, ast.Attribute):
+                continue
+            name = func.attr
+            if name not in cls._TARGET_FUNCTIONS:
+                continue
+            real_fn, anchor_param = cls._TARGET_FUNCTIONS[name]
+            if any(isinstance(a, ast.Starred) for a in node.args):
+                continue
+            if any(kw.arg is None for kw in node.keywords):
+                continue
+            sig = inspect.signature(real_fn)
+            try:
+                bound = sig.bind_partial(*node.args, **{kw.arg: kw.value for kw in node.keywords})
+            except TypeError:
+                continue
+            total += 1
+            if anchor_param not in bound.arguments:
+                flagged.append(f"{name}(...) at line {node.lineno}: {anchor_param!r} omitted (live default)")
+                continue
+            value = bound.arguments[anchor_param]
+            if isinstance(value, ast.Constant) and value.value == "HEAD":
+                flagged.append(f"{name}(...) at line {node.lineno}: {anchor_param}=\"HEAD\" (live literal)")
+        return flagged, total
+
+    def test_negative_control_flags_one_synthetic_fixture_per_scanned_function_plus_explicit_head(self):
+        """A silently-broken callee-matcher (wrong attribute/name
+        resolution, a missed `ws.`/`fingerprint.` prefix, a module-alias
+        change) must not pass vacuously by finding nothing -- and a scan
+        that resolves any single function's anchor slot incorrectly must
+        fail this control rather than pass it (revision 8, round 7 B1/
+        missing tests)."""
+        fixture = "\n".join([
+            "ws.approval_is_current(repo_root, work_item, stage='plan', base_commit=base_commit)",
+            "ws.implementing_entry_reachable(repo_root, work_item, base_commit)",
+            "wf.compute_review_content_id_plan_stage_at_commit(repo_root, base, "
+            "work_item_type='process', work_item_id='x', plan_revision=1, protected=p, "
+            "excluded_paths=e, excluded_prefixes=x)",
+            "wf.compute_review_content_id_plan_stage_at_commit_for_work_item(repo_root, 'x')",
+            "wf.compute_review_content_id_implementation_stage_at_commit(repo_root, base, "
+            "work_item_type='process', work_item_id='x', protected_paths=p, "
+            "protected_prefixes=pp, excluded_paths=e, excluded_prefixes=x)",
+            "ws.approval_is_current(repo_root, work_item, stage='plan', base_commit=base_commit, "
+            "head=\"HEAD\")",
+        ])
+        flagged, total = self._scan(fixture)
+        self.assertEqual(total, 6, flagged)
+        self.assertEqual(len(flagged), 6, flagged)
+
+    def test_negative_control_passes_a_fixed_commit_fixture(self):
+        fixture = "\n".join([
+            "ws.approval_is_current(repo_root, work_item, stage='plan', base_commit=base_commit, "
+            "head=FIXED_COMMIT)",
+            "ws.implementing_entry_reachable(repo_root, work_item, base_commit, head=FIXED_COMMIT)",
+            "wf.compute_review_content_id_plan_stage_at_commit(repo_root, base, FIXED_COMMIT, "
+            "work_item_type='process', work_item_id='x', plan_revision=1, protected=p, "
+            "excluded_paths=e, excluded_prefixes=x)",
+            "wf.compute_review_content_id_plan_stage_at_commit_for_work_item(repo_root, 'x', "
+            "FIXED_COMMIT)",
+            "wf.compute_review_content_id_implementation_stage_at_commit(repo_root, base, "
+            "FIXED_COMMIT, work_item_type='process', work_item_id='x', protected_paths=p, "
+            "protected_prefixes=pp, excluded_paths=e, excluded_prefixes=x)",
+        ])
+        flagged, total = self._scan(fixture)
+        self.assertEqual(total, 5, flagged)
+        self.assertEqual(flagged, [])
+
+    def test_real_demo_test_files_have_no_live_anchor_call_site(self):
+        repo_root = _repo_root()
+        all_flagged: list[str] = []
+        total = 0
+        for relpath in ("scripts/workflow_fingerprint_demo_test.py", "scripts/workflow_state_demo_test.py"):
+            text = (repo_root / relpath).read_text()
+            flagged, count = self._scan(text)
+            total += count
+            all_flagged.extend(f"{relpath}: {item}" for item in flagged)
+        self.assertGreater(total, 0, "expected at least one real call site into the five scanned functions")
+        self.assertEqual(all_flagged, [])
 
 
 def _extract_numbered_steps(text: str) -> dict[str, str]:

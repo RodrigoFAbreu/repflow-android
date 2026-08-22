@@ -102,9 +102,10 @@ was generated from, as plain diagnostic lines — never hashed into
 `review_content_id`, and not part of any identity-bearing field contract.
 This is **portability vs. local staleness, split by consumer**:
 
-- A **repository-local command** — today `/approve-review` and
-  `/review-plan`, both calling this at its default, permissive
-  `require_metadata=False` — runs inside a real, current worktree and can
+- A **repository-local command** — today `/approve-review`, `/review-plan`,
+  and `/review-implementation`, all three calling this at its default,
+  permissive `require_metadata=False` — runs inside a real, current
+  worktree and can
   meaningfully ask "is this the same worktree and HEAD I'm sitting in
   right now": it calls
   `workflow_fingerprint.assert_local_generation_matches(...)` and stops,

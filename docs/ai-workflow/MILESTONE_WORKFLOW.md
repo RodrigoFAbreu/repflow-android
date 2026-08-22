@@ -208,7 +208,10 @@ re-enters manual-external review without a fresh local pass first.
 - **Entry**: self-review and verification are complete.
 - **Allowed actions**: run
   `scripts/prepare-ai-review.sh <base-sha> implementation` to export the
-  bundle. No further implementation.
+  bundle. No further implementation. Optionally, run `/review-implementation`
+  — a non-gating, report-only, model-independent second opinion on the
+  current bundle; it writes nothing and never advances this state, so it
+  adds no new gate.
 - **Artifacts**: `.ai-review/current/` (implementation stage) with the real
   diff, changed files, tests run, decisions; `.ai-review/review-bundle.tar.gz`.
 - **Exit**: external reviewer places feedback at

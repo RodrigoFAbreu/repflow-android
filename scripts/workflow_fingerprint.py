@@ -328,13 +328,14 @@ class ReviewContentIdMismatchError(Exception):
 
 class WorktreeOrHeadMismatchError(Exception):
     """Raised by a **repository-local** consumer (`/approve-review`,
-    `/review-plan`) when the current worktree root or HEAD SHA differs
-    from what `MANIFEST.md` recorded at bundle-generation time — the
-    actual first-party Milestone-8 incident (a stale bundle read from a
-    different worktree) this check exists to catch (`D-Bundle-Manifest`,
-    resolves `OPUS-R6-016`). Never raised for an external reviewer
-    consuming a portable extracted archive — that consumer treats the
-    recorded values as diagnostic metadata only (`GPT-R9-015`)."""
+    `/review-plan`, `/review-implementation`) when the current worktree
+    root or HEAD SHA differs from what `MANIFEST.md` recorded at
+    bundle-generation time — the actual first-party Milestone-8 incident
+    (a stale bundle read from a different worktree) this check exists to
+    catch (`D-Bundle-Manifest`, resolves `OPUS-R6-016`). Never raised for
+    an external reviewer consuming a portable extracted archive — that
+    consumer treats the recorded values as diagnostic metadata only
+    (`GPT-R9-015`)."""
 
 
 class StageCompletenessError(Exception):
@@ -1904,9 +1905,9 @@ def assert_bundle_not_rejected(repo_root: Path, work_item_id: str) -> None:
     silently swallow `ENOTDIR`/`ELOOP` (returning `False`, indistinguishable
     from a genuinely absent marker), which would defeat exactly the
     "cannot complete" case this assertion must treat as present. Every
-    required consumer (`/review-plan`, `/record-manual-plan-review`,
-    `/apply-plan-review`, `/approve-review` at both stages,
-    `/apply-implementation-review`, the hand-off reports of
+    required consumer (`/review-plan`, `/review-implementation`,
+    `/record-manual-plan-review`, `/apply-plan-review`, `/approve-review`
+    at both stages, `/apply-implementation-review`, the hand-off reports of
     `/milestone-plan`/`/milestone-implement`/`/prepare-review`, and
     `/apply-functional-review`'s bounded-fix branch) and every writer
     immediately preceding a `record_bundle_generation` call shares this
@@ -2410,13 +2411,14 @@ def assert_local_generation_matches(
     repo_root: Path, manifest_path: Path, *, require_metadata: bool = False,
 ) -> None:
     """**Repository-local commands only** (`/approve-review`,
-    `/review-plan`): stop if the current worktree root or HEAD SHA differs
-    from what `MANIFEST.md` recorded at generation time, naming both. Never
-    call this from a path that also serves external reviewers -- see
-    `WorktreeOrHeadMismatchError` and `WFR-17`.
+    `/review-plan`, `/review-implementation`): stop if the current worktree
+    root or HEAD SHA differs from what `MANIFEST.md` recorded at
+    generation time, naming both. Never call this from a path that also
+    serves external reviewers -- see `WorktreeOrHeadMismatchError` and
+    `WFR-17`.
 
-    `require_metadata=False` (the default -- both callers above use it,
-    unchanged): a `MANIFEST.md` missing either field's line entirely
+    `require_metadata=False` (the default -- all three callers above use
+    it, unchanged): a `MANIFEST.md` missing either field's line entirely
     records nothing to compare for that field, so the pre-metadata legacy
     shape passes with no comparison performed. `require_metadata=True`
     (`GPT-R62-001`, strict local-generation metadata mode -- no live

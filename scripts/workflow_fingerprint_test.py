@@ -599,6 +599,41 @@ class TestWorktreeCommitParity(unittest.TestCase):
             )
             self.assertEqual(worktree_id, commit_id)
 
+    def test_commit_anchored_manifest_is_immune_to_a_later_uncommitted_edit(self):
+        """`workflow-v2-3`'s own CP1 missing-test item (revision 5, round 4
+        B2/I1): pins the *class* of defect the `_blob_at_commit` repair in
+        both real-repository `_demo_test.py` files fixes, not only this
+        repository's own instance of it. A manifest computed at a fixed
+        commit A must report commit A's own blob for a protected path even
+        after that same path is edited in the working tree without being
+        committed -- a commit-anchored recompute must never silently read
+        through to dirty worktree content."""
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            _run(["git", "add", "-A"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "commit A"], cwd=repo.root)
+            commit_a = repo.head()
+            commit_a_id, commit_a_projection = repo.compute_at_commit(commit_a)
+            plan_entry_a = [
+                e for e in commit_a_projection["review_content_manifest"]
+                if e["path"].endswith("WORKFLOW_V2_PLAN.md")
+            ][0]
+            expected_blob_at_a = wf._hash_object(repo.root, plan_entry_a["path"])
+
+            # Edit the working tree without committing -- the hazard.
+            (repo.root / "docs" / "ai-workflow" / "WORKFLOW_V2_PLAN.md").write_text("plan v1 DIRTY EDIT\n")
+            dirty_blob = wf._hash_object(repo.root, plan_entry_a["path"])
+            self.assertNotEqual(dirty_blob, expected_blob_at_a)
+
+            recomputed_id, recomputed_projection = repo.compute_at_commit(commit_a)
+            recomputed_entry = [
+                e for e in recomputed_projection["review_content_manifest"]
+                if e["path"].endswith("WORKFLOW_V2_PLAN.md")
+            ][0]
+            self.assertEqual(recomputed_entry["blob"], expected_blob_at_a)
+            self.assertNotEqual(recomputed_entry["blob"], dirty_blob)
+            self.assertEqual(recomputed_id, commit_a_id)
+
     def test_tracked_unchanged_protected_path_identical_in_both_modes(self):
         with ScratchRepo() as repo:
             repo.write_plan_docs()
