@@ -756,9 +756,11 @@ class TestAssertLocalGenerationMatchesCallSiteConformance(unittest.TestCase):
 
 class TestGenerationDiagnosticMetadataCallerWordingConformance(unittest.TestCase):
     """Item 343 (`GPT-R64-002`, `WF8c` scope clause (k)): active
-    caller-facing documentation must agree with the two-live-caller
+    caller-facing documentation must agree with the three-live-caller
     reality item 342 proves, using non-exclusive wording rather than
-    naming `/approve-review` as the sole repository-local consumer."""
+    naming `/approve-review` as the sole repository-local consumer.
+    `/review-implementation` (`workflow-v2-3` CP1) is the third live
+    caller (`GPT-IR1-002`)."""
 
     def test_review_protocol_names_both_live_callers(self):
         repo_root = _repo_root()
@@ -770,6 +772,7 @@ class TestGenerationDiagnosticMetadataCallerWordingConformance(unittest.TestCase
         section = match.group(0)
         self.assertIn("/approve-review", section)
         self.assertIn("/review-plan", section)
+        self.assertIn("/review-implementation", section)
 
     def test_worktree_or_head_mismatch_docstring_is_non_exclusive(self):
         repo_root = _repo_root()
@@ -779,6 +782,7 @@ class TestGenerationDiagnosticMetadataCallerWordingConformance(unittest.TestCase
         docstring = match.group(1)
         self.assertIn("/approve-review", docstring)
         self.assertIn("/review-plan", docstring)
+        self.assertIn("/review-implementation", docstring)
 
     def test_assert_local_generation_matches_docstring_is_non_exclusive(self):
         repo_root = _repo_root()
@@ -790,6 +794,7 @@ class TestGenerationDiagnosticMetadataCallerWordingConformance(unittest.TestCase
         docstring = match.group(1)
         self.assertIn("/approve-review", docstring)
         self.assertIn("/review-plan", docstring)
+        self.assertIn("/review-implementation", docstring)
 
 
 class TestDemoTestNoLiveAnchorStaticConformance(unittest.TestCase):
