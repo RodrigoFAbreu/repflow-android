@@ -1248,13 +1248,15 @@ class TestReviewSubjectDeclarationsLive(unittest.TestCase):
     docstring, the *value* each file carries here is a recorded,
     known-correct table (the eleven-consumer/four-exempt split:
     `workflow-v2-3`'s own `/review-implementation`, landed at that item's
-    own CP1, is the tenth `bundle` consumer, and `/review-functional`,
-    landed at CP2, is the eleventh), not yet re-derived from each file's
+    own CP1, is the seventh `bundle` consumer, and `/review-functional`,
+    landed at CP2, is the eighth), not yet re-derived from each file's
     own prose against the three semantic disjuncts -- that derivation is
     separate, deferred `WF8c` scope. `recover-implementation-provenance.md`
     (added after `WFR-67`'s design was finalized, `WF8c` item (b)) is
-    correctly outside the named "all fifteen" and carries no declaration at
-    all."""
+    outside the named "all fifteen" and carries no declaration at all; its
+    classification against `WFR-67`'s roster is deliberately left
+    unassigned rather than resolved (see the roster comment above
+    `REVIEW_SUBJECT_ROSTER` for why)."""
 
     EXPECTED = {
         ".claude/commands/accept-milestone.md": "none",
