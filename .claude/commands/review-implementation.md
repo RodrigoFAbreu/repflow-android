@@ -130,11 +130,21 @@ unaffected by this command's existence.
    cause `/approve-review`'s own step 1 names for this phase. Report a
    `WorktreeOrHeadMismatchError` naming that cause and pointing at
    `/recover-implementation-provenance`, not only the raw recorded/current
-   values. Because this check runs after the digest recompute above, that
-   concurrent-commit case surfaces first as a `bundle_id`/`review_content_id`
-   mismatch and only second as the HEAD difference that actually explains
-   it — when both are present, report the HEAD difference as the cause, not
-   the digest mismatch as a separate, unexplained one. **`REJECTED`-bundle
+   values. This check and the digest recompute above catch different
+   failure modes, exactly as `/approve-review`'s own step 2 states: content/
+   digest binding (`bundle_id`/`review_content_id`) detects protected-content
+   drift, while `assert_local_generation_matches` detects repository-local
+   staleness (a different worktree, or a commit landed past the recorded
+   `generation_head`). For the excluded-only concurrent-commit case
+   specifically, the digest recompute stays clean, not mismatched:
+   excluded paths sit outside the protected-content projection and live
+   `HEAD` is never hashed into `review_content_id`
+   (`compute_review_content_id_implementation_stage_at_commit`'s own
+   documented concurrent-excluded-write durability property) — so
+   `bundle_id`/`review_content_id` never mismatch for this case at all.
+   The `WorktreeOrHeadMismatchError` is the only signal it produces; do
+   not expect, or wait for, an accompanying digest mismatch to corroborate
+   it. **`REJECTED`-bundle
    refusal, this command's sole assertion, immediately preceding the
    report**: call `workflow_fingerprint.assert_bundle_not_rejected(repo_root,
    work_item_id)` here.

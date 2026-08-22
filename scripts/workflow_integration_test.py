@@ -668,7 +668,12 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     "bootstrap-workflow-v2.md": "6cd29d3d6382ba1e246ecf1779aee9f649cc15a8b3489abbcbdecb04b1be578f",
     # review-implementation.md: new, workflow-v2-3 CP1 -- the first
     # recorded hash, not a change.
-    "review-implementation.md": "7343546ce599dc7c6782c6bd3d6640c74759eaf61b2e5b0dcf8c52374af26d90",
+    #
+    # review-implementation.md further updated, GPT-IR1-001 (round 1
+    # implementation-review remediation): corrected the false claim that
+    # an excluded-only concurrent commit surfaces as a digest mismatch
+    # before the HEAD difference -- intentional content change.
+    "review-implementation.md": "7b318eb517241124daa48feeedae7bf057e7d2d28bc31da14b0ad563310d0db2",
     # review-functional.md: new, workflow-v2-3 CP2 -- the first recorded
     # hash, not a change.
     "review-functional.md": "579b90a0c6e0eea1246b7ae03347e67f86faf24b8ebc83402909f438877968ca",
