@@ -22,8 +22,7 @@ overrides it.
 
 - **Implementation evidence:**
   - Widened `docs/ai-workflow/registry/workflow-v2-3-artifacts.json`'s
-    `implementation_stage` (17 `excluded_paths`, 11 `excluded_prefixes`, 2
-    `protected_paths`, 2 `protected_prefixes` — mirroring
+    `implementation_stage` (mirroring
     `workflow-v2-1-core-artifacts.json`'s own equivalent sections, per the
     plan's "Revision 3"-"Revision 13" dispositions), and made this item's
     one and only edit to `workflow-v2-1-core-artifacts.json`'s
@@ -36,7 +35,10 @@ overrides it.
     `docs/ai-workflow/WORKFLOW_V2_3_FOLLOWUPS.md`, needed an
     `implementation_stage.excluded_paths` entry in both artifacts files
     (analogous to "Revision 11"'s own self-discovered gap, but found live
-    during CP1 rather than during plan review).
+    during CP1 rather than during plan review). The final
+    `workflow-v2-3-artifacts.json` `implementation_stage` declaration,
+    after both gaps, is 18 `excluded_paths`, 13 `excluded_prefixes`, 4
+    `protected_paths`, 2 `protected_prefixes`.
   - Added `WORKFLOW_V2_1_CORE_COMPLETION_COMMIT` constant and a
     `_blob_at_commit` helper to both `scripts/workflow_fingerprint_demo_test.py`
     and `scripts/workflow_state_demo_test.py`; re-anchored the seven named
