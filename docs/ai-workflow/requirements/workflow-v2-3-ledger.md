@@ -26,7 +26,7 @@ overrides it.
     `workflow-v2-1-core-artifacts.json`'s own equivalent sections, per the
     plan's "Revision 3"-"Revision 13" dispositions), and made this item's
     one and only edit to `workflow-v2-1-core-artifacts.json`'s
-    `implementation_stage` (three `excluded_paths`/`excluded_prefixes`
+    `implementation_stage` (four `excluded_paths`/`excluded_prefixes`
     additions). Two self-discovered classification gaps beyond the plan's
     own text were found and fixed the same way: `docs/ai-workflow/MILESTONE_WORKFLOW.md`/
     `docs/ai-workflow/REVIEW_PROTOCOL.md` needed `protected_paths` entries
