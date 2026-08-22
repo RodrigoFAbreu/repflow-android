@@ -6743,16 +6743,25 @@ _NON_WRITER_VIOLATION_RE = re.compile(
 # Deliberately scoped to a **fixed named roster**, not "every tracked
 # `.claude/commands/*.md` file" the way `discover_state_writers`' own
 # `STATE_WRITER_SURFACE_PREFIXES` scans its whole prefix: `WFR-67`'s own
-# revision-80 text names an exact, closed set -- "the counts become nine
-# consumers and four exempt over the same thirteen files" -- fixed at the
-# moment that text was written. `.claude/commands/recover-implementation-
-# provenance.md` (added afterward, `WF8c` item (b)) postdates that design
-# and was never classified by it; whether it belongs in the roster at all
-# is exactly the kind of "re-derive from this file's own prose against the
-# three semantic disjuncts" judgment call this function's own docstring
-# already defers, not something a scan-everything default should decide
-# by silently demanding a declaration this file's own history never
-# assigned it.
+# revision-80 text named an exact, closed set of thirteen files (nine
+# bundle/verdict consumers, four exempt). The roster is a deliberately
+# extended list, not eternally frozen at that revision-80 snapshot: two
+# later command files -- `.claude/commands/review-implementation.md` and
+# `.claude/commands/review-functional.md` (`workflow-v2-3` CP1/CP2), both
+# bundle-report consumers -- were added when they were built, bringing the
+# roster to its current fifteen files (eleven bundle/verdict consumers,
+# four exempt). Adding a file here is a deliberate per-command decision at
+# the time that command is written, not automatic for everything that
+# postdates any prior snapshot. `.claude/commands/recover-implementation-
+# provenance.md` (added earlier, `WF8c` item (b)) was considered and left
+# off: it is a `state_writer: true` recovery action, not a consumer that
+# reads `REVIEW_FEEDBACK.md` or presents a bundle/verdict as ready for
+# review, so none of `WFR-67`'s three semantic disjuncts apply to it. A
+# future command's own membership is the same "re-derive from this file's
+# own prose against the three semantic disjuncts" judgment call this
+# function's own docstring already defers, not something a
+# scan-everything default should decide by silently demanding a
+# declaration this roster's own history never assigned it.
 #
 # This discovery function covers the *declaration* half only. WFR-67's own
 # text additionally requires the declaration to be "cross-checked against
@@ -6763,10 +6772,12 @@ _NON_WRITER_VIOLATION_RE = re.compile(
 # `workflow_fingerprint.assert_bundle_not_rejected` actually appears at the
 # right points. That derivation is separate, deferred `WF8c` scope; this
 # function and its conformance test instead pin the **known-correct**
-# classification (the nine consumers/four exempt split `WFR-67`'s own
-# revision-80 text states by name) as an explicit expected-value table, so
-# a file that drifts from it is still caught, even though the check is
-# against a recorded table rather than re-derived from first principles.
+# classification (the eleven consumers/four exempt split over the current
+# fifteen-file roster above -- nine/four over thirteen files at `WFR-67`'s
+# own revision-80 text, extended since) as an explicit expected-value
+# table, so a file that drifts from it is still caught, even though the
+# check is against a recorded table rather than re-derived from first
+# principles.
 # ---------------------------------------------------------------------------
 
 REVIEW_SUBJECT_ROSTER = frozenset({
