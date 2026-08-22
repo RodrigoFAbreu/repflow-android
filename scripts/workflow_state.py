@@ -6754,14 +6754,16 @@ _NON_WRITER_VIOLATION_RE = re.compile(
 # the time that command is written, not automatic for everything that
 # postdates any prior snapshot. `.claude/commands/recover-implementation-
 # provenance.md` (added earlier, `WF8c` item (b)) was considered and left
-# off: it is a `state_writer: true` recovery action, not a consumer that
-# reads `REVIEW_FEEDBACK.md` or presents a bundle/verdict as ready for
-# review, so none of `WFR-67`'s three semantic disjuncts apply to it. A
-# future command's own membership is the same "re-derive from this file's
-# own prose against the three semantic disjuncts" judgment call this
-# function's own docstring already defers, not something a
-# scan-everything default should decide by silently demanding a
-# declaration this roster's own history never assigned it.
+# off: it is a `state_writer: true` recovery action, and its classification
+# against `WFR-67`'s roster is deliberately left unassigned rather than
+# resolved -- its own step 6 does read `<bundle_dir>/MANIFEST.md`'s existing
+# `stage:` field over a bundle directory it did not itself generate, which
+# reaches the middle of the three semantic disjuncts, so whether it belongs
+# in the roster at all is the same "re-derive from this file's own prose
+# against the three semantic disjuncts" judgment call this function's own
+# docstring already defers, not something a scan-everything default should
+# decide by silently demanding a declaration this roster's own history
+# never assigned it.
 #
 # This discovery function covers the *declaration* half only. WFR-67's own
 # text additionally requires the declaration to be "cross-checked against
