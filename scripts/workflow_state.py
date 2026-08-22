@@ -6782,6 +6782,7 @@ REVIEW_SUBJECT_ROSTER = frozenset({
     ".claude/commands/prepare-functional-review.md",
     ".claude/commands/prepare-review.md",
     ".claude/commands/record-manual-plan-review.md",
+    ".claude/commands/review-functional.md",
     ".claude/commands/review-implementation.md",
     ".claude/commands/review-plan.md",
 })

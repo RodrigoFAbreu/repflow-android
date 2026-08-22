@@ -472,6 +472,75 @@ class TestReviewImplementationCommandStaticConformance(unittest.TestCase):
         self.assertIn("MissingRequiredBundleFileError", self.text)
 
 
+class TestReviewFunctionalCommandStaticConformance(unittest.TestCase):
+    """`workflow-v2-3` CP2's own conformance coverage for the new
+    `/review-functional` command, mirroring
+    `TestReviewImplementationCommandStaticConformance`'s pattern of
+    asserting key invariant sentences are actually present in the file's
+    real text, rather than merely described in this plan. Also pins
+    revision 10's own round-9 I1/I2 fixes (`GPT-R9-001`/`GPT-R9-002`) as
+    two textual-presence checks, per the plan's "Missing tests?" bullet."""
+
+    def setUp(self):
+        self.text = _command_text("review-functional.md")
+
+    def test_frontmatter_has_description_and_argument_hint(self):
+        self.assertIn("description:", self.text)
+        self.assertIn("argument-hint:", self.text)
+        self.assertIn("state_writer: false", self.text)
+        self.assertIn("review-subject: bundle", self.text)
+
+    def test_states_model_independence(self):
+        self.assertIn(
+            "Implements a model-independent\n**review role**, not a specific model: "
+            "nothing in this contract, in the\nreport it produces, or in any check it "
+            "performs names a model — running it\nfrom any capable Claude model produces "
+            "the same behavior.",
+            self.text,
+        )
+
+    def test_states_the_report_only_constraint(self):
+        self.assertIn(
+            "**Review and report only.** This command never writes\n"
+            "`docs/ACTIVE_MILESTONE.md`, `<feedback_dir>/FUNCTIONAL_REVIEW.md`, or\n"
+            "`docs/ai-workflow/WORKFLOW_STATE.json`, never fixes findings, and never\n"
+            "advances `phase`.",
+            self.text,
+        )
+
+    def test_phase_guard_names_the_exact_required_phase(self):
+        self.assertIn(
+            "2. **Phase guard**: if the resolved item's `phase` is not exactly\n"
+            "   `AWAITING_FUNCTIONAL_REVIEW`, refuse cleanly, naming the actual phase.",
+            self.text,
+        )
+
+    def test_states_it_writes_nothing(self):
+        self.assertIn("**Report only — writes nothing.**", self.text)
+
+    def test_single_coherent_untracked_item_policy(self):
+        """Revision 10, round 9 I1 fix (`GPT-R9-001`): the file must state
+        step 1's single clean refusal for an untracked work item and must
+        not also tell the reviewer to read the checklist directly for that
+        same case -- the two-branch contradiction the round found in
+        revision 9's own text. Mirrors `/review-implementation` step 1
+        exactly, per the round's own decision."""
+        self.assertIn(
+            "Refuse cleanly, naming the\n   problem, if neither resolves to an existing "
+            "`work_items` entry",
+            self.text,
+        )
+        self.assertNotIn("read the checklist", self.text)
+
+    def test_functional_acceptance_wording_is_work_item_neutral(self):
+        """Revision 10, round 9 I2 fix (`GPT-R9-002`): the file's
+        functional-acceptance wording must name the checklist's own
+        required flows, work-item-neutrally, rather than assuming every
+        work item's functional review is an Android-app walkthrough."""
+        self.assertIn("checklist's required functional flows", self.text)
+        self.assertNotIn("the Android app", self.text)
+
+
 class TestVersion21OnlyCommandsRefuseCleanlyForV1(unittest.TestCase):
     """`/review-plan` and `/record-manual-plan-review` are `"2.1"`-only,
     with no v1 counterpart at all -- D-Self-Governance's enumeration says
@@ -600,6 +669,9 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # review-implementation.md: new, workflow-v2-3 CP1 -- the first
     # recorded hash, not a change.
     "review-implementation.md": "7343546ce599dc7c6782c6bd3d6640c74759eaf61b2e5b0dcf8c52374af26d90",
+    # review-functional.md: new, workflow-v2-3 CP2 -- the first recorded
+    # hash, not a change.
+    "review-functional.md": "579b90a0c6e0eea1246b7ae03347e67f86faf24b8ebc83402909f438877968ca",
 }
 
 

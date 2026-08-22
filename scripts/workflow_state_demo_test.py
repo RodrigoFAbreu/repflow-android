@@ -1241,20 +1241,20 @@ class TestCheckpointReachabilityConformanceLive(unittest.TestCase):
 
 class TestReviewSubjectDeclarationsLive(unittest.TestCase):
     """`WFR-67`'s `review-subject:` header conformance (`WF8c` item (h),
-    part 1), run against this repository's real fourteen command files at
+    part 1), run against this repository's real fifteen command files at
     live `HEAD` -- proves the declaration half actually landed on every
     file the plan's own revision-80 text names, not only against synthetic
     fixtures. As documented at `discover_review_subject_declarations`'s own
     docstring, the *value* each file carries here is a recorded,
-    known-correct table (the ten-consumer/four-exempt split that text
-    states by name -- `workflow-v2-3`'s own `/review-implementation`,
-    landed at that item's own CP1, is the tenth `bundle` consumer; the
-    split becomes eleven-consumer once `/review-functional` lands at CP2),
-    not yet re-derived from each file's own prose against the three
-    semantic disjuncts -- that derivation is separate, deferred `WF8c`
-    scope. `recover-implementation-provenance.md` (added after `WFR-67`'s
-    design was finalized, `WF8c` item (b)) is correctly outside the named
-    "all fourteen" and carries no declaration at all."""
+    known-correct table (the eleven-consumer/four-exempt split:
+    `workflow-v2-3`'s own `/review-implementation`, landed at that item's
+    own CP1, is the tenth `bundle` consumer, and `/review-functional`,
+    landed at CP2, is the eleventh), not yet re-derived from each file's
+    own prose against the three semantic disjuncts -- that derivation is
+    separate, deferred `WF8c` scope. `recover-implementation-provenance.md`
+    (added after `WFR-67`'s design was finalized, `WF8c` item (b)) is
+    correctly outside the named "all fifteen" and carries no declaration at
+    all."""
 
     EXPECTED = {
         ".claude/commands/accept-milestone.md": "none",
@@ -1269,6 +1269,7 @@ class TestReviewSubjectDeclarationsLive(unittest.TestCase):
         ".claude/commands/prepare-functional-review.md": "none",
         ".claude/commands/prepare-review.md": "bundle",
         ".claude/commands/record-manual-plan-review.md": "verdict",
+        ".claude/commands/review-functional.md": "bundle",
         ".claude/commands/review-implementation.md": "bundle",
         ".claude/commands/review-plan.md": "bundle",
     }
@@ -1287,10 +1288,11 @@ class TestReviewSubjectDeclarationsLive(unittest.TestCase):
         ".claude/commands/milestone-implement.md": 1,
         ".claude/commands/milestone-plan.md": 1,
         ".claude/commands/prepare-review.md": 1,
+        ".claude/commands/review-functional.md": 1,
         ".claude/commands/review-implementation.md": 1,
     }
 
-    def test_all_fourteen_command_files_declare_the_expected_value(self):
+    def test_all_fifteen_command_files_declare_the_expected_value(self):
         repo_root = _repo_root()
         head = subprocess.run(
             ["git", "rev-parse", "HEAD"], cwd=repo_root, check=True,

@@ -533,18 +533,22 @@
       "registry_path": "docs/ai-workflow/registry/workflow-v2-3-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/workflow-v2-3-mapping.json",
       "governing_workflow_version": "2.1",
-      "phase": "IMPLEMENTING",
+      "phase": "SELF_REVIEWING_IMPLEMENTATION",
       "plan_revision": 13,
       "implementation_revision": null,
       "functional_review_round": null,
       "base_commit": "27f051eba897d77c742ead8b160ed519c0671ee4",
       "reviewed_implementation_head": null,
       "current_checkpoint_id": null,
-      "last_completed_checkpoint_id": "CP1",
+      "last_completed_checkpoint_id": "CP2",
       "checkpoints": {
         "CP1": {
           "status": "COMPLETE",
           "start_commit": "ab0d05639ec01f9afd8513a6046e7acbe55d8770"
+        },
+        "CP2": {
+          "status": "COMPLETE",
+          "start_commit": "aaa124786f9968ef91482663e880d7a4ca5dcbed"
         }
       },
       "current_bundle_id": null,
@@ -598,8 +602,8 @@
       },
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 40,
-      "last_transition": "2026-08-22T15:17:36+01:00"
+      "state_revision": 42,
+      "last_transition": "2026-08-22T15:55:19+01:00"
     }
   }
 }

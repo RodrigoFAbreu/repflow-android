@@ -80,4 +80,7 @@ diff looks small.
 - Slash commands: `.claude/commands/` (`milestone-plan`, `apply-plan-review`,
   `milestone-implement`, `apply-implementation-review`, `approve-review`,
   `prepare-functional-review`, `apply-functional-review`,
-  `accept-milestone`, `prepare-review`).
+  `accept-milestone`, `prepare-review`, `bootstrap-workflow-v2`,
+  `record-manual-plan-review`, `review-plan`, `accept-scoped-remediation`,
+  `recover-implementation-provenance`, `review-implementation`,
+  `review-functional`).

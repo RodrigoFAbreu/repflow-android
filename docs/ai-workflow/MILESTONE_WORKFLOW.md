@@ -257,6 +257,10 @@ re-enters manual-external review without a fresh local pass first.
 - **Allowed actions**: confirm automated verification state; write a concise
   manual functional-review checklist (setup, test data, exact flows,
   expected results, known limitations); update `docs/ACTIVE_MILESTONE.md`.
+  Optionally, run `/review-functional` — a non-gating, report-only,
+  model-independent second opinion on the checklist's completeness and
+  evidence reproducibility; it writes nothing and never advances this
+  state, so it adds no new gate.
 - **Artifacts**: functional-review checklist (in `docs/ACTIVE_MILESTONE.md` or a
   file it links to).
 - **Exit**: user performs functional testing and places findings at
@@ -416,6 +420,14 @@ user-only command reachable from the same `AWAITING_FUNCTIONAL_REVIEW`
 gate as `/accept-milestone`, discriminated by whether the item's own
 registry still has an incomplete checkpoint — never a new phase. The hard
 gate count stays exactly **6**.
+
+`/review-implementation` and `/review-functional` (`workflow-v2-3`) add no
+gate either: both are optional, report-only, non-gating actions reachable
+from inside an existing gate (`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` and
+`AWAITING_FUNCTIONAL_REVIEW` respectively) — neither writes state nor
+advances `phase` — the same "optional action inside an existing gate, not a
+new one" reasoning this section already applies to the plan stage's
+two-stage refinement below.
 
 For a `governing_workflow_version: "2.1"` work item, the edge from
 `REVISING_PLAN` to `AWAITING_PLAN_APPROVAL` is further refined into

@@ -1906,12 +1906,13 @@ def assert_bundle_not_rejected(repo_root: Path, work_item_id: str) -> None:
     from a genuinely absent marker), which would defeat exactly the
     "cannot complete" case this assertion must treat as present. Every
     required consumer (`/review-plan`, `/review-implementation`,
-    `/record-manual-plan-review`, `/apply-plan-review`, `/approve-review`
-    at both stages, `/apply-implementation-review`, the hand-off reports of
-    `/milestone-plan`/`/milestone-implement`/`/prepare-review`, and
-    `/apply-functional-review`'s bounded-fix branch) and every writer
-    immediately preceding a `record_bundle_generation` call shares this
-    one function, so the policy cannot drift command by command."""
+    `/review-functional`, `/record-manual-plan-review`, `/apply-plan-review`,
+    `/approve-review` at both stages, `/apply-implementation-review`, the
+    hand-off reports of `/milestone-plan`/`/milestone-implement`/
+    `/prepare-review`, and `/apply-functional-review`'s bounded-fix branch)
+    and every writer immediately preceding a `record_bundle_generation`
+    call shares this one function, so the policy cannot drift command by
+    command."""
     marker_path = resolve_rejected_marker_path(repo_root, work_item_id)
     full_path = Path(repo_root) / marker_path
     try:
