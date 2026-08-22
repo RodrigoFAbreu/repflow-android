@@ -762,7 +762,7 @@ class TestGenerationDiagnosticMetadataCallerWordingConformance(unittest.TestCase
     `/review-implementation` (`workflow-v2-3` CP1) is the third live
     caller (`GPT-IR1-002`)."""
 
-    def test_review_protocol_names_both_live_callers(self):
+    def test_review_protocol_names_all_live_callers(self):
         repo_root = _repo_root()
         text = (repo_root / "docs" / "ai-workflow" / "REVIEW_PROTOCOL.md").read_text()
         match = re.search(
