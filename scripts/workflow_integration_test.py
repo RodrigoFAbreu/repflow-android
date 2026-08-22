@@ -606,12 +606,18 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # `workflow_state.state_transaction`/`state_lock` -- an intentional
     # content change, not a regression.
     #
-    # All ten entries below further updated by WF8c item (h), part 1
-    # (`WFR-67`): every file gained a `review-subject:` frontmatter
-    # declaration, and every declared consumer among them gained its
+    # The ten entries below that predate WF8c item (h) were further
+    # updated by that item, part 1 (`WFR-67`): each gained a
+    # `review-subject:` frontmatter declaration, and every declared
+    # consumer among them gained its own
     # `workflow_fingerprint.assert_bundle_not_rejected(...)` call site(s)
     # at the points `WFR-67`'s own text names -- intentional content
-    # change, not a regression.
+    # change, not a regression. The two entries below that were created
+    # after WF8c item (h) (`review-implementation.md`/`review-functional.md`,
+    # workflow-v2-3 CP1/CP2) were never "further updated" by it -- they
+    # were authored from the start with their own `review-subject:`
+    # declarations, so their own comments below say "first recorded
+    # hash," not "updated."
     "milestone-plan.md": "310271edac2f76351e8bcd93d540a955050b15b1291de3f008bd61b4678617ad",
     # milestone-implement.md further updated, OPUS-R129-001: step 1f's
     # checkpoint-completion commit instruction now states explicitly that
