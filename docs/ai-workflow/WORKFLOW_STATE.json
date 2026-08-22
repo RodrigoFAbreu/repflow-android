@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_work_item_id": null,
+  "active_work_item_id": "workflow-v2-3",
   "work_items": {
     "workflow-v2-1-core": {
       "work_item_type": "process",
@@ -523,6 +523,78 @@
       "blocking_decisions": [],
       "state_revision": 1,
       "last_transition": "2026-07-31T12:00:00+01:00"
+    },
+    "workflow-v2-3": {
+      "work_item_type": "process",
+      "work_item_kind": "process",
+      "work_item_id": "workflow-v2-3",
+      "parent_work_item_id": null,
+      "plan_path": "docs/ai-workflow/WORKFLOW_V2_3_PLAN.md",
+      "registry_path": "docs/ai-workflow/registry/workflow-v2-3-registry.json",
+      "mapping_path": "docs/ai-workflow/requirements/workflow-v2-3-mapping.json",
+      "governing_workflow_version": "2.1",
+      "phase": "IMPLEMENTING",
+      "plan_revision": 13,
+      "implementation_revision": null,
+      "functional_review_round": null,
+      "base_commit": "27f051eba897d77c742ead8b160ed519c0671ee4",
+      "reviewed_implementation_head": null,
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": null,
+      "checkpoints": {},
+      "current_bundle_id": null,
+      "plan_approval": {
+        "status": "CURRENT",
+        "basis": "EXTERNAL_APPROVE",
+        "reviewed_bundle_id": "01798bdf6196945e0db9db3730cb0254ed74b3efb12919789d9e67ed0920a445",
+        "approved_review_content_id": "e0a222d2c127c634eafed9fb367c7fb9623c5ca69a369348907d7bd413037875",
+        "review_content_manifest": [
+          {
+            "path": "docs/ai-workflow/WORKFLOW_V2_3_PLAN.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2f4c5e7356b81841ab381f516d9598ca1f4d2ae1"
+          },
+          {
+            "path": "docs/ai-workflow/registry/workflow-v2-3-registry.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3fb155c799b5bb22e014f0e1f46f1e2366b343d4"
+          },
+          {
+            "path": "docs/ai-workflow/requirements/workflow-v2-3-mapping.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "40b194f1c61b4a627b6e36a12045688705572da0"
+          }
+        ],
+        "reviewed_content_commit": null,
+        "legacy_evidence": null,
+        "user_confirmation": "I confirm approval of the workflow-v2-3 plan stage.",
+        "waived_guarantees": [],
+        "recorded_at": "2026-08-22T14:45:00+01:00"
+      },
+      "technical_approval": null,
+      "technical_review_block_pins": [],
+      "plan_review_stages": {
+        "review_content_id": "e0a222d2c127c634eafed9fb367c7fb9623c5ca69a369348907d7bd413037875",
+        "local_model_plan_review": {
+          "bundle_id": "01798bdf6196945e0db9db3730cb0254ed74b3efb12919789d9e67ed0920a445",
+          "verdict": "APPROVE",
+          "round": 12,
+          "completed_at": "2026-08-22T14:03:45+01:00"
+        },
+        "manual_external_plan_review": {
+          "bundle_id": "01798bdf6196945e0db9db3730cb0254ed74b3efb12919789d9e67ed0920a445",
+          "verdict": "APPROVE",
+          "round": 1,
+          "completed_at": "2026-08-22T14:19:49+01:00"
+        }
+      },
+      "functional_acceptance_status": null,
+      "blocking_decisions": [],
+      "state_revision": 38,
+      "last_transition": "2026-08-22T14:45:00+01:00"
     }
   }
 }
