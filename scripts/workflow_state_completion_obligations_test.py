@@ -901,6 +901,39 @@ class TestResolveCompletionObligationsPipeline(unittest.TestCase):
             self.assertFalse(satisfied)
             self.assertEqual(outstanding, ["WFO-STATE-SERIALIZATION"])
 
+    def test_malformed_committed_review_content_manifest_rejected_cleanly(self):
+        """I2's committed-blob half (`workflow-v2-3-followups` continued
+        scope, external cross-model review round 4): a `technical_approval`
+        committed historically with the exact malformed projection-wrapper
+        shape (`workflow_fingerprint.compute_review_content_id_*`'s own
+        returned object substituted for its own inner manifest list) must
+        be rejected with a typed `VERIFIER_UNAPPROVED` verdict, never a
+        bare `AttributeError` -- the malformed record here comes from an
+        older commit (`fx.approve`'s own `manifest_override`, committed
+        for real with a `Workflow-Technical-Approval` trailer), not the
+        live `WORKFLOW_STATE.json`, so `validate_state` -- never on this
+        call path regardless -- could not have caught it even if it were."""
+        with ScratchRepo() as repo:
+            fx = _ObligationFixture(repo)
+            fx.seed_base()
+            malformed_manifest = {
+                "stage": "implementation", "work_item_type": "process",
+                "work_item_id": fx.WORK_ITEM_ID, "base_commit": repo.base,
+                "reviewed_implementation_head": None,
+                "review_content_manifest": [
+                    {"path": fx.ARTIFACTS_PATH, "mode": "100644", "blob": "deadbeef"},
+                ],
+                "protected_paths": [], "protected_prefixes": [],
+                "excluded_paths": [], "excluded_prefixes": [],
+            }
+            work_item, _, _ = fx.approve(verifier_status="PASS", manifest_override=malformed_manifest)
+            verdicts = ws.resolve_completion_obligations(repo.root, work_item)
+            self.assertEqual(verdicts["WFO-STATE-SERIALIZATION"].classification, "VERIFIER_UNAPPROVED")
+            self.assertIn("malformed", verdicts["WFO-STATE-SERIALIZATION"].detail)
+            satisfied, outstanding = ws.completion_obligations_satisfied(repo.root, work_item)
+            self.assertFalse(satisfied)
+            self.assertEqual(outstanding, ["WFO-STATE-SERIALIZATION"])
+
     def test_no_declared_obligations_is_vacuously_satisfied_without_consulting_approval(self):
         with ScratchRepo() as repo:
             fx = _ObligationFixture(repo)

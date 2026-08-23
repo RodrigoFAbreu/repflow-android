@@ -6513,13 +6513,31 @@ def _assert_registry_covered_by_current_plan_approval(
     document (the plan, the mapping, `TECHNICAL_DECISIONS.md`, the audit
     doc) carrying a dirty or committed-but-never-approved mutation must
     refuse registry-derived completion exactly as a tampered registry
-    itself would, even though the registry's own bytes are unchanged."""
+    itself would, even though the registry's own bytes are unchanged.
+
+    **The real runtime guard against a malformed persisted `review_content_
+    manifest`** (`workflow-v2-3-followups` continued scope, external
+    cross-model review round 4, `OPUS-R25-007`'s own precedent): this is
+    the exact function `/accept-milestone`/`/accept-scoped-remediation`
+    reach through `resolve_own_registry_completion_status`, over the
+    *live* `WORKFLOW_STATE.json` -- `validate_state`'s own shape check
+    is never on this call path, so the guard below, not that one, is what
+    actually stops a malformed manifest from being iterated as a list of
+    dicts and crashing with a bare `AttributeError`."""
     work_item_id = work_item["work_item_id"]
     plan_approval = work_item.get("plan_approval")
     if plan_approval is None or plan_approval.get("status") != "CURRENT":
         raise StalePlanApprovalRegistryReadError(
             f"work_items[{work_item_id!r}] has no CURRENT plan_approval -- "
             f"registry-derived completion cannot be trusted"
+        )
+    shape_error = _describe_malformed_review_content_manifest_shape(
+        plan_approval.get("review_content_manifest")
+    )
+    if shape_error is not None:
+        raise StalePlanApprovalRegistryReadError(
+            f"work_items[{work_item_id!r}].plan_approval.review_content_manifest is "
+            f"malformed, cannot be trusted for registry-derived completion: {shape_error}"
         )
     manifest = plan_approval.get("review_content_manifest") or []
     approved_entry = next(
@@ -8454,6 +8472,20 @@ def _resolve_one_obligation(repo_root: Path, work_item: dict, obligation_id: str
     reviewed_content_commit = durable_record.get("reviewed_content_commit")
     if not (isinstance(reviewed_content_commit, str) and _GIT_OBJECT_ID_RE.match(reviewed_content_commit)):
         return ObligationVerdict("VERIFIER_UNAPPROVED", "durable reviewed_content_commit is null or malformed")
+    # workflow-v2-3-followups continued scope, external cross-model review
+    # round 4 (I2's committed-blob half, OPUS-R25-007's own precedent):
+    # `durable_record` was read from a historical Git blob (`approval_commit`
+    # above), never from the live WORKFLOW_STATE.json validate_state ever
+    # sees -- a review_content_manifest malformed at approval time and now
+    # immutable history reaches this exact iteration below regardless of
+    # what the live file holds. Shape-check before the dict comprehension
+    # ever runs, returning the same typed VERDICT every other refusal in
+    # this function already returns, never a bare AttributeError.
+    shape_error = _describe_malformed_review_content_manifest_shape(
+        durable_record.get("review_content_manifest")
+    )
+    if shape_error is not None:
+        return ObligationVerdict("VERIFIER_UNAPPROVED", f"durable review_content_manifest is malformed: {shape_error}")
     manifest = durable_record.get("review_content_manifest") or []
     if not manifest:
         return ObligationVerdict("VERIFIER_UNAPPROVED", "durable review_content_manifest is empty")
@@ -9002,6 +9034,40 @@ def build_approval_record(
     return record
 
 
+def _describe_malformed_review_content_manifest_shape(manifest: object) -> str | None:
+    """The one rule every `review_content_manifest` consumer shares --
+    `None` (legitimately absent) or a flat list of `{"path": ...}`
+    entries is well-formed; anything else (most notably the whole
+    projection object `workflow_fingerprint.compute_review_content_id_*`
+    returns, which happens to carry a field of the identical name one
+    level up) is not. Returns a diagnostic description of the malformed
+    shape, or `None` when the value is fine. Factored out (`workflow-v2-3-
+    followups` continued scope, external cross-model review round 4,
+    `OPUS-R25-007`'s own precedent: "the same widened rule" shared
+    between a relocated read-path guard and its write-time/`validate_state`
+    backstop, never a duplicated copy that can drift) so `validate_approval_
+    record` (the write chokepoint), `_assert_registry_covered_by_current_
+    plan_approval` (the live-state read consumer `/accept-milestone`/
+    `/accept-scoped-remediation` reach), and `_resolve_one_obligation`
+    (the committed-blob read consumer, malformed state arriving from a
+    historical commit rather than the live file) all refuse the identical
+    malformed shape the identical way, rather than three separately
+    maintained copies of the same check."""
+    if manifest is None:
+        return None
+    if isinstance(manifest, list) and all(
+        isinstance(entry, dict) and "path" in entry for entry in manifest
+    ):
+        return None
+    shape = f"dict with keys {sorted(manifest.keys())!r}" if isinstance(manifest, dict) else type(manifest).__name__
+    return (
+        f"review_content_manifest must be a flat list of {{'path': ...}} entries -- got a "
+        f"{shape}. This is the exact shape workflow_fingerprint.compute_review_content_id_"
+        f"*'s own returned projection['review_content_manifest'] holds -- pass that field's "
+        f"value, never the whole projection object it lives inside of"
+    )
+
+
 def validate_approval_record(record: dict, *, stage: str) -> None:
     """D2's shape check: known `status`/`basis`, the plan-stage's
     permanently-null `reviewed_content_commit` rule (GPT-R9-006), a
@@ -9011,11 +9077,24 @@ def validate_approval_record(record: dict, *, stage: str) -> None:
     controlled vocabulary (OPUS-R6-025, narrowed OPUS-R10-014), and (this
     item's own `workflow-v2-3-followups` continued scope, self-discovered
     during `/accept-milestone`'s pre-flight) `review_content_manifest`'s
-    own flat-list shape -- closing the gap that twice let a caller pass
-    `workflow_fingerprint.compute_review_content_id_*`'s whole returned
-    projection object (which happens to carry a field of the identical
-    name one level up) instead of that projection's own inner manifest
-    list, silently, with no shape check anywhere in the write path."""
+    own flat-list shape via `_describe_malformed_review_content_manifest_shape`
+    -- closing the gap that twice let a caller pass `workflow_fingerprint.
+    compute_review_content_id_*`'s whole returned projection object
+    instead of that projection's own inner manifest list, silently, with
+    no shape check anywhere in the write path.
+
+    **This is the write chokepoint only** (external cross-model review
+    round 4, `OPUS-R25-007`'s own precedent): this function, and
+    `validate_state`/`_validate_work_item` which calls it over every
+    persisted approval record, are never reached by any production read
+    path -- `validate_state` has no production caller anywhere in this
+    repository; it is a write-time/harness backstop, not a runtime guard.
+    The actual runtime protection for a malformed record already
+    persisted in `WORKFLOW_STATE.json` (an old backup, import, hand edit,
+    or pre-fix tooling) lives at the two real consumer chokepoints instead:
+    `_assert_registry_covered_by_current_plan_approval` (live-state,
+    `/accept-milestone`/`/accept-scoped-remediation`) and
+    `_resolve_one_obligation` (committed-blob, historical state)."""
     if stage not in APPROVAL_STAGES:
         raise InvalidApprovalRecordError(f"unknown approval stage: {stage!r}")
     if record.get("status") not in APPROVAL_STATUSES:
@@ -9034,19 +9113,9 @@ def validate_approval_record(record: dict, *, stage: str) -> None:
                 raise InvalidApprovalRecordError(
                     f"a {basis} approval record must set {field} (only LEGACY_V1 may leave it null)"
                 )
-    manifest = record.get("review_content_manifest")
-    if manifest is not None:
-        malformed = not isinstance(manifest, list) or not all(
-            isinstance(entry, dict) and "path" in entry for entry in manifest
-        )
-        if malformed:
-            shape = f"dict with keys {sorted(manifest.keys())!r}" if isinstance(manifest, dict) else type(manifest).__name__
-            raise InvalidApprovalRecordError(
-                f"review_content_manifest must be a flat list of {{'path': ...}} entries -- got a "
-                f"{shape}. This is the exact shape workflow_fingerprint.compute_review_content_id_"
-                f"*'s own returned projection['review_content_manifest'] holds -- pass that field's "
-                f"value, never the whole projection object it lives inside of"
-            )
+    shape_error = _describe_malformed_review_content_manifest_shape(record.get("review_content_manifest"))
+    if shape_error is not None:
+        raise InvalidApprovalRecordError(shape_error)
     if not record.get("user_confirmation"):
         raise InvalidApprovalRecordError("approval record must set a non-empty user_confirmation")
     for guarantee in record.get("waived_guarantees") or []:
@@ -11051,17 +11120,23 @@ def _validate_work_item(work_item_id: str, work_item: dict) -> None:
     _validate_technical_review_block_pins(work_item)
 
     # I2 (workflow-v2-3-followups continued scope, external cross-model
-    # review round 2): validate_approval_record's shape check protected
-    # only newly *constructed* records, never one already persisted in
-    # `WORKFLOW_STATE.json` -- a malformed plan_approval/technical_approval
-    # from an old backup, import, hand edit, or pre-fix tooling could still
-    # reach a downstream consumer (e.g. _assert_registry_covered_by_
-    # current_plan_approval) and reproduce the original bare AttributeError
-    # this milestone's own first defect closed for the write path only.
-    # Authoritative state validation is the read-side counterpart: every
-    # non-null approval record on every work item is now shape-checked
-    # here too, so a malformed persisted record is rejected cleanly, by
-    # validate_state itself, before any consumer ever sees it.
+    # review rounds 2 and 4): validate_approval_record's shape check
+    # protected only newly *constructed* records, never one already
+    # persisted in `WORKFLOW_STATE.json` -- a malformed plan_approval/
+    # technical_approval from an old backup, import, hand edit, or
+    # pre-fix tooling could still reach a downstream consumer (e.g.
+    # _assert_registry_covered_by_current_plan_approval) and reproduce
+    # the original bare AttributeError this milestone's own first defect
+    # closed for the write path only. Every non-null approval record on
+    # every work item is shape-checked here too, so validate_state
+    # itself rejects a malformed persisted record cleanly -- **but this
+    # is the write-time/harness backstop, not what actually protects a
+    # production consumer** (round 4's own correction: validate_state
+    # has no production caller anywhere in this repository). The real
+    # runtime protection lives at the two consumer chokepoints
+    # themselves, guarded directly and independently of this function:
+    # _assert_registry_covered_by_current_plan_approval (live-state) and
+    # _resolve_one_obligation (committed-blob, historical state).
     plan_approval = work_item.get("plan_approval")
     if plan_approval is not None:
         validate_approval_record(plan_approval, stage="plan")
@@ -11075,6 +11150,20 @@ def validate_state(state: dict, *, registry: dict | None = None, repo_root: Path
     and (optionally) the registry alone. Corrupt/unparseable JSON is the
     caller's concern (`_load_json`/`CorruptJsonError`) -- this function
     receives already-parsed data.
+
+    **This function has no production caller anywhere in this repository**
+    (external cross-model review, `workflow-v2-3-followups` continued
+    scope, round 4): it is a write-time/harness backstop only -- test
+    suites and the test harness call it, no `.claude/commands/*.md` file,
+    shell script, or other production function does, and `state_transaction`
+    (the documented single required entry point for every production
+    writer) does not call it either. Do not infer that a check added here
+    protects any real read path; a check that must protect production
+    consumption belongs at that consumer's own chokepoint too
+    (`OPUS-R25-007`'s own precedent -- see e.g.
+    `_assert_registry_covered_by_current_plan_approval`/
+    `_resolve_one_obligation`'s own `review_content_manifest` shape
+    guards, which this function's own equivalent check does not reach).
 
     `registry`, if given, is a single caller-supplied registry dict used
     for the checkpoint-dependency check below and, if its own

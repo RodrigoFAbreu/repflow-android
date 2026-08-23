@@ -7485,6 +7485,40 @@ class TestRegistryReadBoundToCurrentPlanApproval(unittest.TestCase):
             with self.assertRaises(ws.StalePlanApprovalRegistryReadError):
                 ws.resolve_own_registry_completion_status(repo.root, work_item)
 
+    def test_malformed_live_plan_approval_manifest_rejected_cleanly(self):
+        """I2's live-state half (`workflow-v2-3-followups` continued
+        scope, external cross-model review round 4): the exact
+        `/accept-milestone` step 2a / `/accept-scoped-remediation` entry
+        point, `resolve_own_registry_completion_status`, must reject a
+        malformed `plan_approval.review_content_manifest` -- the whole
+        `workflow_fingerprint.compute_review_content_id_plan_stage*`
+        projection object substituted for its own inner manifest list,
+        the exact historical shape, not a synthetic stand-in -- with a
+        typed `StalePlanApprovalRegistryReadError`, never a bare
+        `AttributeError`. Reproduced first (asserting the real crash
+        before the fix), then guarded against."""
+        with ScratchRepo() as repo:
+            self._write_registry(repo)
+            _commit_paths(repo, [self.REGISTRY_PATH], "registry")
+            malformed_plan_approval = _current_plan_approval_covering(repo, self.REGISTRY_PATH)
+            malformed_plan_approval["review_content_manifest"] = {
+                "stage": "plan", "work_item_type": "process", "work_item_id": "wi",
+                "plan_revision": 1, "base_commit": repo.base, "reviewed_implementation_head": None,
+                "review_content_manifest": [
+                    {"path": self.REGISTRY_PATH, "exists": True, "mode": "100644",
+                     "blob": fingerprint._hash_object(repo.root, self.REGISTRY_PATH)},
+                ],
+                "protected_paths": [self.REGISTRY_PATH], "excluded_paths": [], "excluded_prefixes": [],
+            }
+            work_item = _base_work_item(
+                registry_path=self.REGISTRY_PATH, plan_approval=malformed_plan_approval,
+                checkpoints=self._checkpoints(b_complete=False),
+            )
+            with self.assertRaises(ws.StalePlanApprovalRegistryReadError) as ctx:
+                ws.resolve_own_registry_completion_status(repo.root, work_item)
+            self.assertNotIsInstance(ctx.exception, AttributeError)
+            self.assertIn("malformed", str(ctx.exception))
+
     def test_clean_committed_but_unapproved_mutation_refuses(self):
         with ScratchRepo() as repo:
             self._write_registry(repo)
