@@ -202,3 +202,103 @@ overrides it.
   no product-facing behavior; `/review-implementation`'s own new write
   behavior is exercised for real by this milestone's own functional
   review, per `docs/ai-workflow/WORKFLOW_V2_3_FOLLOWUPS_PLAN.md`).
+
+## `CP3` — Normalize review-role/review-stage identifiers to `SCREAMING_SNAKE_CASE`
+
+- **Implementation evidence, grouped by sub-obligation:**
+  - **Canonical constants + read/write repointing (REQ-8)**: added
+    `LOCAL_MODEL_PLAN_REVIEW`/`MANUAL_EXTERNAL_PLAN_REVIEW` module-level
+    constants to `scripts/workflow_state.py`; repointed both write sites
+    (`record_local_plan_review`'s full-dict replace,
+    `record_manual_plan_review`'s in-place key assignment) and all three
+    read-site lookup literals (`plan_approval_gate_reachable`,
+    `validate_manual_plan_review_preconditions`, `_validate_plan_review_stages`)
+    to the constants.
+  - **Compatibility-normalization helper + collision rule (REQ-8/REQ-22)**:
+    added `_normalize_plan_review_stage_key` (single-key/value primitive)
+    and `normalize_plan_review_stages` (dict-level, used at all three read
+    sites and by the migration function below) — passes
+    `review_content_id` through unchanged, collapses a byte-identical
+    legacy+canonical duplicate silently, and raises the new
+    `AmbiguousPlanReviewStageKeyError` (beside its ten sibling
+    plan-review-stage exceptions) naming both raw keys/values on a genuine
+    conflict, independent of dict insertion order. Applied
+    `_normalize_plan_review_stage_key` directly to
+    `validate_manual_plan_review_preconditions`'s `feedback_role`
+    comparison (a value, not a dict key) so either casing is accepted;
+    reworded its docstring bullet and `WrongReviewerRoleError` message to
+    state the two-value acceptance instead of "exactly".
+  - **One-time migration (REQ-8/REQ-18, `LPR-R2-I02`)**: added
+    `migrate_plan_review_stage_keys(state)` (skips `TERMINAL_PHASES`
+    work items, reuses `normalize_plan_review_stages` for every live
+    non-terminal one) and ran it for real via
+    `workflow_state.state_transaction(repo_root,
+    migrate_plan_review_stage_keys)` against the live
+    `docs/ai-workflow/WORKFLOW_STATE.json` in this same commit —
+    `workflow-v2-3-followups`'s own live, non-terminal `plan_review_stages`
+    ledger (populated by this item's own plan-review rounds, before CP1)
+    is now canonical-cased; `workflow-v2-3`'s own terminal record is
+    confirmed byte-unchanged (verified directly against the real
+    repository file, not only the fixture test below).
+  - **Template/doc casing (REQ-9)**: `.claude/commands/review-plan.md`
+    (frontmatter `description:`, the role-name prose, the `Reviewer
+    role:` template literal, the round-computation prose reworded to
+    count a round entry under either casing, the ledger-fields prose) and
+    `.claude/commands/record-manual-plan-review.md` (frontmatter
+    `description:`, the read/validate/write-set prose, the exact-match
+    expectation prose reworded to state two-value acceptance) repointed
+    to canonical casing throughout; `docs/ai-workflow/MILESTONE_WORKFLOW.md`
+    and `docs/ai-workflow/PLAN_REVIEW_WORKFLOW.md` repointed likewise,
+    with the transition table's "is exactly `manual_external_plan_review`"
+    cell corrected to state the two-value acceptance instead of overstating
+    it as exact-only. Left untouched, per the plan's own disposition:
+    `docs/ai-workflow/WORKFLOW_V2_PLAN.md`, `docs/ai-workflow/WORKFLOW_V2_3_PLAN.md`,
+    `docs/ai-workflow/dry-run/*`, every registry/requirements JSON prose
+    mention, `workflow-v2-3`'s own terminal `plan_review_stages` block, the
+    two real-repository demo-suite comments (`workflow_state_demo_test.py:36`,
+    `workflow_fingerprint_demo_test.py:51`), `docs/ai-workflow/WORKFLOW_V2_3_FOLLOWUPS.md`'s
+    own five source-of-requirements mentions, and the untracked
+    `WORKFLOW_V2_1_OPERATOR_REFERENCE.md`/`diagrams/`.
+  - **Housekeeping (REQ-13)**: `docs/ai-workflow/WORKFLOW_V2_3_FOLLOWUPS.md`
+    item 3's `Status` updated — closed for required follow-ups #1-#6 and
+    #8, and for the "tests, fixtures"/tracked-operator-documentation
+    halves of #7; the untracked-artifacts half of #7 remains explicitly
+    deferred, same disposition as item 2's own #8.
+  - **Conformance surface (`LPR-R1-B02`)**: updated
+    `_GOLDEN_COMMAND_FILE_SHA256["review-plan.md"]`/`["record-manual-plan-review.md"]`
+    in `scripts/workflow_integration_test.py` to their new post-edit
+    hashes, with a rationale comment naming CP3.
+  - **Regression coverage (REQ-10/REQ-22)**: converted all 40 existing
+    `scripts/workflow_state_test.py` fixture/assertion occurrences (and
+    the one non-immutable occurrence in `scripts/workflow_integration_test.py`;
+    the `WORKFLOW_V2_PLAN.md` doc-substring assertion at the other
+    occurrence is immutable and correctly left alone) to canonical casing.
+    Added `TestPlanReviewStageKeyNormalization` (compatibility-read proof
+    for a fully-legacy-cased dict, idempotence on an already-canonical
+    dict, identical-duplicate collapse and conflicting-duplicate refusal
+    proven both insertion orders, `plan_approval_gate_reachable`
+    tolerating legacy keys, a non-terminal legacy-cased work item reading
+    cleanly through `validate_state` and a further `REVISE` transition,
+    `WrongReviewerRoleError`'s two-value acceptance plus a clean refusal
+    on a genuine third value, and a documented regression proving
+    `record_manual_plan_review`'s `APPROVE` branch raises
+    `AmbiguousPlanReviewStageKeyError` on a not-yet-migrated legacy ledger
+    — the accepted, by-design edge case the plan's write-site disposition
+    relies on instead of changing the write site itself) and
+    `TestMigratePlanReviewStageKeys` (migrates every live non-terminal
+    record and leaves a terminal one byte-unchanged, is idempotent, leaves
+    a null ledger untouched, raises on an already-ambiguous non-terminal
+    ledger, and collapses a byte-identical conflicting duplicate) — 14 new
+    tests total.
+- **Verification results:** `python3 -m unittest workflow_fingerprint_test
+  workflow_fingerprint_generalization_test workflow_state_test
+  workflow_state_completion_obligations_test workflow_integration_test
+  workflow_test_harness_test` — 1146 tests, all green (up from 1132 at
+  CP2, +14 new). `workflow_fingerprint_demo_test.py` and
+  `workflow_state_demo_test.py` also re-run standalone this checkpoint
+  (ahead of CP4's own required run) — 15/15 (4 skipped, pre-existing/
+  unrelated) and 45/45 respectively, both clean.
+- **Review findings:** none yet — pending this checkpoint's own review
+  round.
+- **Functional-verification outcome:** not applicable (process checkpoint,
+  no product-facing behavior).

@@ -52,7 +52,7 @@ Whichever command stops, it states, in its own report:
 
 ## What each command does, in one line
 
-- **`/review-plan`**: the `local_model_plan_review` role. Independently
+- **`/review-plan`**: the `LOCAL_MODEL_PLAN_REVIEW` role. Independently
   re-verifies the plan against the repository, writes
   `REVIEW_FEEDBACK.md`, and — for an `APPROVE` only — records the local
   stage in the `plan_review_stages` ledger and advances to

@@ -705,7 +705,7 @@
       "base_commit": "fb134ac4f7cdabb7861d170bb61331bb8d9f5a14",
       "reviewed_implementation_head": null,
       "current_checkpoint_id": null,
-      "last_completed_checkpoint_id": "CP2",
+      "last_completed_checkpoint_id": "CP3",
       "checkpoints": {
         "CP1": {
           "status": "COMPLETE",
@@ -714,6 +714,10 @@
         "CP2": {
           "status": "COMPLETE",
           "start_commit": "570adc2a87d9fb67e47716ce0d6d569597c0b7c8"
+        },
+        "CP3": {
+          "status": "COMPLETE",
+          "start_commit": "bac92372d2e86af82d96ed20b8b07d3af9c3f00d"
         }
       },
       "current_bundle_id": null,
@@ -805,13 +809,13 @@
       "technical_review_block_pins": [],
       "plan_review_stages": {
         "review_content_id": "56f3890338603e57064c3ce88b47a14656db8968e141432181e273dae00e6e1f",
-        "local_model_plan_review": {
+        "LOCAL_MODEL_PLAN_REVIEW": {
           "bundle_id": "26bbae34775ff182234329fc5e786fce193a7c05957d081beb7d24250336d01b",
           "verdict": "APPROVE",
           "round": 13,
           "completed_at": "2026-08-23T17:41:00+01:00"
         },
-        "manual_external_plan_review": {
+        "MANUAL_EXTERNAL_PLAN_REVIEW": {
           "bundle_id": "26bbae34775ff182234329fc5e786fce193a7c05957d081beb7d24250336d01b",
           "verdict": "APPROVE",
           "round": 1,
@@ -820,8 +824,8 @@
       },
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 45,
-      "last_transition": "2026-08-23T18:45:36+01:00"
+      "state_revision": 47,
+      "last_transition": "2026-08-23T19:29:09+01:00"
     }
   }
 }

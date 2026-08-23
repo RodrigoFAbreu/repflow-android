@@ -291,6 +291,15 @@ _GIT_OBJECT_ID_RE = re.compile(r"^[0-9a-f]{40}$")
 # ingest from REVIEW_FEEDBACK.md's `Status:` field.
 PLAN_REVIEW_VERDICTS = frozenset({"APPROVE", "REVISE", "BLOCK"})
 
+# Canonical, SCREAMING_SNAKE_CASE `plan_review_stages` key casing (item 8,
+# workflow-v2-3-followups CP3): every write past this checkpoint uses these
+# two constants, never the legacy lowercase literals directly. Legacy
+# lowercase keys remain readable via `normalize_plan_review_stages` --
+# `workflow-v2-3`'s own terminal record, and any hand-authored fixture,
+# never need rewriting.
+LOCAL_MODEL_PLAN_REVIEW = "LOCAL_MODEL_PLAN_REVIEW"
+MANUAL_EXTERNAL_PLAN_REVIEW = "MANUAL_EXTERNAL_PLAN_REVIEW"
+
 # Only MILESTONE_COMPLETE is terminal -- LEGACY_READY is explicitly
 # "dormant, not terminal" (D-Legacy phase 1, resolves GPT-R9-005).
 TERMINAL_PHASES = frozenset({"MILESTONE_COMPLETE"})
@@ -518,8 +527,8 @@ class PlanReviewStagesInvalidForVersionError(Exception):
 
 
 class ManualStageWithoutLocalStageError(Exception):
-    """Raised when `manual_external_plan_review` is recorded while
-    `local_model_plan_review` is absent (resolves GPT-R11-001)."""
+    """Raised when `MANUAL_EXTERNAL_PLAN_REVIEW` is recorded while
+    `LOCAL_MODEL_PLAN_REVIEW` is absent (resolves GPT-R11-001)."""
 
 
 class StageVerdictNotApproveError(Exception):
@@ -562,18 +571,28 @@ class WrongReviewerRoleError(Exception):
 
 class MissingLocalApprovalForManualStageError(Exception):
     """Raised when `/record-manual-plan-review` is asked to ingest an
-    `APPROVE` while no current `local_model_plan_review` `APPROVE` is
+    `APPROVE` while no current `LOCAL_MODEL_PLAN_REVIEW` `APPROVE` is
     recorded for the same `review_content_id` -- a restated invariant,
     since entry to `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW` already requires
     it; defends against a corrupted or hand-edited state file."""
 
 
 class DuplicateManualStageIngestionError(Exception):
-    """Raised when a `manual_external_plan_review` stage is already
+    """Raised when a `MANUAL_EXTERNAL_PLAN_REVIEW` stage is already
     recorded against the current `review_content_id` -- rejects duplicate
     ingestion (a second invocation after a completed `APPROVE`/`REVISE`
     normally fails the phase precondition first; this only fires for a
     hand-edited or race-condition state, GPT-R12-002/-003)."""
+
+
+class AmbiguousPlanReviewStageKeyError(Exception):
+    """Raised by `normalize_plan_review_stages` when a `plan_review_stages`
+    dict holds both a legacy-cased and a canonical-cased raw key that
+    normalize to the same stage, with conflicting values -- never resolved
+    by dict key-iteration order (resolves `GPT-FUP-R6-I02`, workflow-v2-3-
+    followups CP3). A byte-identical duplicate under both raw keys is
+    tolerated and silently collapsed instead; only a genuine conflict
+    raises."""
 
 
 class ConfigMissingAfterActivationError(Exception):
@@ -8688,6 +8707,85 @@ def create_remediation_child_work_item(
 
 
 # ---------------------------------------------------------------------------
+# workflow-v2-3-followups CP3: `plan_review_stages` key-casing compatibility
+# -- one dedicated normalization-and-collision-detection helper, used at
+# every read site and by the one-time migration function below, so
+# compatibility-reading and migration agree on what "canonical" means by
+# construction (resolves `GPT-FUP-R6-O01`/`-I02`).
+# ---------------------------------------------------------------------------
+
+
+def _normalize_plan_review_stage_key(key: str) -> str:
+    """Maps the two known legacy lowercase `plan_review_stages` tokens to
+    their canonical `SCREAMING_SNAKE_CASE` form; any other key (including
+    an already-canonical one, or `review_content_id`) passes through
+    unchanged -- idempotent by construction."""
+    if key == "local_model_plan_review":
+        return LOCAL_MODEL_PLAN_REVIEW
+    if key == "manual_external_plan_review":
+        return MANUAL_EXTERNAL_PLAN_REVIEW
+    return key
+
+
+def normalize_plan_review_stages(stages: dict) -> dict:
+    """Reads a `plan_review_stages` dict tolerant of both legacy lowercase
+    and canonical `SCREAMING_SNAKE_CASE` keys, returning a dict keyed
+    entirely canonically. `review_content_id` passes through unchanged --
+    it is a value, never a stage key. When two raw keys normalize to the
+    same canonical stage, a byte-identical (`==`) duplicate collapses
+    silently to that one shared value; a genuine conflict raises
+    `AmbiguousPlanReviewStageKeyError`, naming the canonical stage and both
+    raw keys/values, independent of dict insertion order -- never resolved
+    by key-iteration order. Used at every `plan_review_stages` read site
+    and by `migrate_plan_review_stage_keys`."""
+    normalized: dict = {}
+    raw_key_by_canonical: dict[str, str] = {}
+    for key, value in stages.items():
+        if key == "review_content_id":
+            normalized[key] = value
+            continue
+        canonical = _normalize_plan_review_stage_key(key)
+        if canonical in normalized:
+            if normalized[canonical] != value:
+                raise AmbiguousPlanReviewStageKeyError(
+                    f"plan_review_stages: raw keys {raw_key_by_canonical[canonical]!r} and "
+                    f"{key!r} both normalize to {canonical!r} but disagree: "
+                    f"{normalized[canonical]!r} vs. {value!r}"
+                )
+            continue
+        normalized[canonical] = value
+        raw_key_by_canonical[canonical] = key
+    return normalized
+
+
+def migrate_plan_review_stage_keys(state: dict) -> dict:
+    """One-time normalization step (workflow-v2-3-followups CP3, closes
+    migration requirement #2/#4): for every work item whose `phase` is not
+    in `TERMINAL_PHASES`, if its `plan_review_stages` dict is not `None`,
+    replaces it with `normalize_plan_review_stages`'s result -- the same
+    collision-aware helper the read sites use, so migration and
+    compatibility-reading agree on what "canonical" means. An already-
+    ambiguous non-terminal work item's ledger makes this raise
+    `AmbiguousPlanReviewStageKeyError` rather than silently pick a winner;
+    run via `state_transaction`, so a raised exception leaves
+    `WORKFLOW_STATE.json` completely unwritten, not partially migrated.
+    Idempotent (an already-canonical dict round-trips unchanged) and
+    generic (does not hardcode any one work item's id). Terminal-phase
+    records (e.g. `workflow-v2-3`'s own) are skipped and stay
+    byte-unchanged -- immutable historical review evidence, not live
+    state."""
+    new_state = copy.deepcopy(state)
+    for work_item in new_state.get("work_items", {}).values():
+        if work_item.get("phase") in TERMINAL_PHASES:
+            continue
+        stages = work_item.get("plan_review_stages")
+        if stages is None:
+            continue
+        work_item["plan_review_stages"] = normalize_plan_review_stages(stages)
+    return new_state
+
+
+# ---------------------------------------------------------------------------
 # D-States: non-circular gate-reachability for AWAITING_PLAN_APPROVAL /
 # AWAITING_TECHNICAL_APPROVAL (never reads plan_approval/technical_approval
 # themselves -- resolves OPUS-R6-004/-011)
@@ -8737,20 +8835,22 @@ def plan_approval_gate_reachable(
     """`AWAITING_PLAN_APPROVAL`'s entry condition: the shared reachability
     rule above, plus -- for a `governing_workflow_version: "2.1"` work item
     only (resolves GPT-R11-001/-003) -- the `plan_review_stages` ledger
-    must record both `local_model_plan_review` and
-    `manual_external_plan_review` completed (`verdict: APPROVE`) against
+    must record both `LOCAL_MODEL_PLAN_REVIEW` and
+    `MANUAL_EXTERNAL_PLAN_REVIEW` completed (`verdict: APPROVE`) against
     the *current* plan-stage `review_content_id`. A `"1"` item's condition
-    is exactly the shared rule, unchanged."""
+    is exactly the shared rule, unchanged. Tolerant of legacy lowercase
+    keys via `normalize_plan_review_stages` (workflow-v2-3-followups CP3)."""
     if not approval_gate_reachable(latest_round_status):
         return False
     if governing_workflow_version != "2.1":
         return True
     if plan_review_stages is None:
         return False
-    if plan_review_stages.get("review_content_id") != current_review_content_id:
+    stages = normalize_plan_review_stages(plan_review_stages)
+    if stages.get("review_content_id") != current_review_content_id:
         return False
-    local = plan_review_stages.get("local_model_plan_review")
-    manual = plan_review_stages.get("manual_external_plan_review")
+    local = stages.get(LOCAL_MODEL_PLAN_REVIEW)
+    manual = stages.get(MANUAL_EXTERNAL_PLAN_REVIEW)
     return (
         local is not None and local.get("verdict") == "APPROVE"
         and manual is not None and manual.get("verdict") == "APPROVE"
@@ -10425,9 +10525,9 @@ def record_local_plan_review(
     """`/review-plan`'s sole state write set (D-Plan-Review-Stages transition
     table, resolves `GPT-R12-001`/`-002`):
 
-    - `APPROVE`: records the completed `local_model_plan_review` stage
+    - `APPROVE`: records the completed `LOCAL_MODEL_PLAN_REVIEW` stage
       against `review_content_id` (starting a fresh ledger scoped to this
-      content id -- any prior `manual_external_plan_review` entry
+      content id -- any prior `MANUAL_EXTERNAL_PLAN_REVIEW` entry
       necessarily belonged to a different, now-stale content id under the
       correct flow, so it is not carried forward) and transitions to
       `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW`.
@@ -10445,11 +10545,11 @@ def record_local_plan_review(
     if verdict == "APPROVE":
         work_item["plan_review_stages"] = {
             "review_content_id": review_content_id,
-            "local_model_plan_review": {
+            LOCAL_MODEL_PLAN_REVIEW: {
                 "bundle_id": bundle_id, "verdict": "APPROVE",
                 "round": round, "completed_at": now,
             },
-            "manual_external_plan_review": None,
+            MANUAL_EXTERNAL_PLAN_REVIEW: None,
         }
         work_item["phase"] = "AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW"
     elif verdict == "REVISE":
@@ -10472,16 +10572,17 @@ def validate_manual_plan_review_preconditions(
     resolves `GPT-R12-002`/`-003`), checked before writing anything:
 
     - `"2.1"`-governed and currently at `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW`.
-    - the feedback's declared role is exactly `manual_external_plan_review`
-      (rejects a local-role or unlabeled feedback file).
+    - the feedback's declared role is either the canonical
+      `MANUAL_EXTERNAL_PLAN_REVIEW` or the legacy `manual_external_plan_review`
+      (rejects a local-role, unlabeled, or any other feedback file).
     - the feedback's `review_content_id` matches the current recomputed
       value -- **hard**, blocks ingestion (distinct from the advisory-only
       `bundle_id` check, `check_manual_stage_bundle_id_advisory`, never
       performed here).
-    - a current `local_model_plan_review` `APPROVE` is recorded for the
+    - a current `LOCAL_MODEL_PLAN_REVIEW` `APPROVE` is recorded for the
       same `review_content_id` (restated invariant -- entry to this phase
       already required it; defends against a corrupted/hand-edited state).
-    - no `manual_external_plan_review` stage is already recorded against
+    - no `MANUAL_EXTERNAL_PLAN_REVIEW` stage is already recorded against
       the current `review_content_id` (rejects duplicate ingestion).
     """
     _require_v2_1_plan_review(work_item)
@@ -10490,10 +10591,11 @@ def validate_manual_plan_review_preconditions(
             f"{work_item['work_item_id']}: phase is {work_item.get('phase')!r}, "
             f"not \"AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW\""
         )
-    if feedback_role != "manual_external_plan_review":
+    if _normalize_plan_review_stage_key(feedback_role) != MANUAL_EXTERNAL_PLAN_REVIEW:
         raise WrongReviewerRoleError(
             f"REVIEW_FEEDBACK.md declares Reviewer role: {feedback_role!r}, "
-            f"expected \"manual_external_plan_review\""
+            f"expected \"{MANUAL_EXTERNAL_PLAN_REVIEW}\" (or legacy "
+            f"\"manual_external_plan_review\")"
         )
     if feedback_review_content_id != current_review_content_id:
         raise StaleReviewContentIdError(
@@ -10501,19 +10603,19 @@ def validate_manual_plan_review_preconditions(
             f"match the current recomputed value {current_review_content_id!r} -- "
             f"this is a hard block, unlike the manual stage's advisory bundle_id check"
         )
-    stages = work_item.get("plan_review_stages") or {}
-    local = stages.get("local_model_plan_review")
+    stages = normalize_plan_review_stages(work_item.get("plan_review_stages") or {})
+    local = stages.get(LOCAL_MODEL_PLAN_REVIEW)
     if (
         stages.get("review_content_id") != current_review_content_id
         or local is None or local.get("verdict") != "APPROVE"
     ):
         raise MissingLocalApprovalForManualStageError(
-            f"{work_item['work_item_id']}: no current local_model_plan_review "
+            f"{work_item['work_item_id']}: no current LOCAL_MODEL_PLAN_REVIEW "
             f"APPROVE recorded for review_content_id {current_review_content_id!r}"
         )
-    if stages.get("manual_external_plan_review") is not None:
+    if stages.get(MANUAL_EXTERNAL_PLAN_REVIEW) is not None:
         raise DuplicateManualStageIngestionError(
-            f"{work_item['work_item_id']}: manual_external_plan_review is already "
+            f"{work_item['work_item_id']}: MANUAL_EXTERNAL_PLAN_REVIEW is already "
             f"recorded against review_content_id {current_review_content_id!r}"
         )
 
@@ -10545,7 +10647,7 @@ def record_manual_plan_review(
     """`/record-manual-plan-review`'s sole state write set (D-Plan-Review-
     Stages transition table, resolves `GPT-R12-002`/`-003`):
 
-    - `APPROVE`: records the completed `manual_external_plan_review` stage
+    - `APPROVE`: records the completed `MANUAL_EXTERNAL_PLAN_REVIEW` stage
       -- including the feedback's own `bundle_id` **verbatim**, regardless
       of whether it matches the current recomputed one, so the ledger
       records what the reviewer actually saw (`OPUS-R14-005`, missing-test
@@ -10564,7 +10666,7 @@ def record_manual_plan_review(
     )
 
     if verdict == "APPROVE":
-        work_item["plan_review_stages"]["manual_external_plan_review"] = {
+        work_item["plan_review_stages"][MANUAL_EXTERNAL_PLAN_REVIEW] = {
             "bundle_id": bundle_id, "verdict": "APPROVE",
             "round": round, "completed_at": now,
         }
@@ -10795,14 +10897,15 @@ def _validate_plan_review_stages(work_item: dict) -> None:
             f"governing_workflow_version is {work_item.get('governing_workflow_version')!r}, "
             f"not \"2.1\""
         )
-    local = stages.get("local_model_plan_review")
-    manual = stages.get("manual_external_plan_review")
+    stages = normalize_plan_review_stages(stages)
+    local = stages.get(LOCAL_MODEL_PLAN_REVIEW)
+    manual = stages.get(MANUAL_EXTERNAL_PLAN_REVIEW)
     if manual is not None and local is None:
         raise ManualStageWithoutLocalStageError(
-            f"{work_item['work_item_id']}: manual_external_plan_review is recorded "
-            f"while local_model_plan_review is absent"
+            f"{work_item['work_item_id']}: {MANUAL_EXTERNAL_PLAN_REVIEW} is recorded "
+            f"while {LOCAL_MODEL_PLAN_REVIEW} is absent"
         )
-    for stage_name, stage in (("local_model_plan_review", local), ("manual_external_plan_review", manual)):
+    for stage_name, stage in ((LOCAL_MODEL_PLAN_REVIEW, local), (MANUAL_EXTERNAL_PLAN_REVIEW, manual)):
         if stage is not None and stage.get("verdict") != "APPROVE":
             raise StageVerdictNotApproveError(
                 f"{work_item['work_item_id']}.{stage_name}.verdict is "

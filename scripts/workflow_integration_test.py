@@ -763,8 +763,16 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # outcome (resolve_bundle_generation_outcome) and write the matching
     # ordinary/recovered-role trailer set -- intentional content change.
     "apply-implementation-review.md": "d86d648502b1ef2d742cbba1830835e50b0a2ed6e9c5dbac058616971c1e34c1",
-    "review-plan.md": "f9651dae8aa5078c6931ec0aa99c01dc0916514b9cca8573f6d558f3335a063d",
-    "record-manual-plan-review.md": "d2296026ff2440425f0bb133757d368edf9461781dc8e5fd5331ef707ce2de37",
+    # review-plan.md/record-manual-plan-review.md further updated,
+    # workflow-v2-3-followups CP3 (REQ-8/-9): the `Reviewer role:` template
+    # literal, the round-computation prose, the exact-match-expectation
+    # prose, and every other `local_model_plan_review`/
+    # `manual_external_plan_review` mention repointed to the canonical
+    # `LOCAL_MODEL_PLAN_REVIEW`/`MANUAL_EXTERNAL_PLAN_REVIEW` casing (the
+    # legacy casing is still stated as accepted where the command genuinely
+    # tolerates it) -- intentional content change.
+    "review-plan.md": "404cc99de3f23caffcffb92c8fbe680a97edcf6c9cfb52f84a3f0c1450adfbf0",
+    "record-manual-plan-review.md": "43e6bcc9a5fc94cfd84c52301399ad0d1acaf275a03962737964605c14f8e809",
     # bootstrap-workflow-v2.md (WF8c scope clauses (l)/(p)/(q), GPT-R108-002/
     # OPUS-R109-004): the driver-range text made checkpoint-agnostic
     # (OPUS-R102-009), a NO_CHECKPOINT terminal-wrap-up branch added to step
@@ -1729,7 +1737,7 @@ class TestTwoStagePlanReviewIntegration(unittest.TestCase):
             state = ws.record_manual_plan_review(
                 state, "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
                 current_review_content_id=review_content_id,
-                feedback_role="manual_external_plan_review",
+                feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
                 feedback_review_content_id=review_content_id,
             )
             item = state["work_items"]["wi"]

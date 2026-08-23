@@ -400,7 +400,26 @@ This follow-up is higher priority than ordinary cosmetic ergonomics because semi
 
 ### Status
 
-Deferred — address after Workflow v2.3 completes and before freezing the reusable workflow baseline for the Workflow Manager / Bootstrapper.
+Closed by `workflow-v2-3-followups` `CP3` for required follow-ups #1-#6 and
+#8, and for the "tests, fixtures" and tracked-operator-documentation halves
+of #7 (`scripts/workflow_state_test.py`, `scripts/workflow_integration_test.py`,
+`docs/ai-workflow/MILESTONE_WORKFLOW.md`,
+`docs/ai-workflow/PLAN_REVIEW_WORKFLOW.md`) — new writes use only the
+canonical `LOCAL_MODEL_PLAN_REVIEW`/`MANUAL_EXTERNAL_PLAN_REVIEW` tokens,
+compatibility reading of the legacy lowercase tokens is centralized in
+`workflow_state.normalize_plan_review_stages`, every live non-terminal
+work item's ledger (`workflow-v2-3-followups`'s own) was migrated in place
+by `workflow_state.migrate_plan_review_stage_keys`, and `workflow-v2-3`'s
+own terminal record was left byte-unchanged. The remaining half of #7
+(the untracked `docs/ai-workflow/WORKFLOW_V2_1_OPERATOR_REFERENCE.md` and
+`docs/ai-workflow/diagrams/workflow-v2-1-lifecycle.drawio.svg`) remains
+explicitly deferred for the same reason item 2's own required follow-up #8
+is: those two artifacts are untracked, concurrent, out-of-scope scratch
+content left over from a previous session, excluded from this item's own
+plan/implementation artifacts declarations per `CLAUDE.md`'s "don't touch
+unrelated working-tree changes." Carried forward as a named prerequisite
+of "before freezing the reusable workflow baseline" (see the "Follow-up
+policy after v2.3" section below), not silently dropped.
 
 ### Motivation
 

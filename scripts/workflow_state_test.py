@@ -1527,7 +1527,7 @@ class TestPlanReviewStages(unittest.TestCase):
     def test_non_null_on_v1_item_rejected(self):
         wi = _base_work_item(
             governing_workflow_version="1",
-            plan_review_stages={"review_content_id": "x", "local_model_plan_review": None, "manual_external_plan_review": None},
+            plan_review_stages={"review_content_id": "x", "LOCAL_MODEL_PLAN_REVIEW": None, "MANUAL_EXTERNAL_PLAN_REVIEW": None},
         )
         with self.assertRaises(ws.PlanReviewStagesInvalidForVersionError):
             ws.validate_state(_base_state(wi=wi))
@@ -1537,8 +1537,8 @@ class TestPlanReviewStages(unittest.TestCase):
             governing_workflow_version="2.1",
             plan_review_stages={
                 "review_content_id": "x",
-                "local_model_plan_review": None,
-                "manual_external_plan_review": {"bundle_id": "b", "verdict": "APPROVE", "round": 1, "completed_at": "t"},
+                "LOCAL_MODEL_PLAN_REVIEW": None,
+                "MANUAL_EXTERNAL_PLAN_REVIEW": {"bundle_id": "b", "verdict": "APPROVE", "round": 1, "completed_at": "t"},
             },
         )
         with self.assertRaises(ws.ManualStageWithoutLocalStageError):
@@ -1550,8 +1550,8 @@ class TestPlanReviewStages(unittest.TestCase):
             governing_workflow_version="2.1",
             plan_review_stages={
                 "review_content_id": "x",
-                "local_model_plan_review": {"bundle_id": "b", "verdict": "REVISE", "round": 1, "completed_at": "t"},
-                "manual_external_plan_review": None,
+                "LOCAL_MODEL_PLAN_REVIEW": {"bundle_id": "b", "verdict": "REVISE", "round": 1, "completed_at": "t"},
+                "MANUAL_EXTERNAL_PLAN_REVIEW": None,
             },
         )
         with self.assertRaises(ws.StageVerdictNotApproveError):
@@ -1562,8 +1562,8 @@ class TestPlanReviewStages(unittest.TestCase):
             governing_workflow_version="2.1",
             plan_review_stages={
                 "review_content_id": "x",
-                "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
-                "manual_external_plan_review": {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"},
+                "LOCAL_MODEL_PLAN_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+                "MANUAL_EXTERNAL_PLAN_REVIEW": {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"},
             },
         )
         ws.validate_state(_base_state(wi=wi))  # must not raise
@@ -2259,8 +2259,8 @@ class TestApprovalGateReachability(unittest.TestCase):
         ))
         stages = {
             "review_content_id": "c1",
-            "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
-            "manual_external_plan_review": {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"},
+            "LOCAL_MODEL_PLAN_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+            "MANUAL_EXTERNAL_PLAN_REVIEW": {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"},
         }
         self.assertTrue(ws.plan_approval_gate_reachable(
             latest_round_status="APPROVE", governing_workflow_version="2.1",
@@ -2270,8 +2270,8 @@ class TestApprovalGateReachability(unittest.TestCase):
     def test_v2_1_plan_gate_rejects_stale_review_content_id(self):
         stages = {
             "review_content_id": "stale",
-            "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
-            "manual_external_plan_review": {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"},
+            "LOCAL_MODEL_PLAN_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+            "MANUAL_EXTERNAL_PLAN_REVIEW": {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"},
         }
         self.assertFalse(ws.plan_approval_gate_reachable(
             latest_round_status="APPROVE", governing_workflow_version="2.1",
@@ -2281,8 +2281,8 @@ class TestApprovalGateReachability(unittest.TestCase):
     def test_v2_1_plan_gate_rejects_local_only(self):
         stages = {
             "review_content_id": "c1",
-            "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
-            "manual_external_plan_review": None,
+            "LOCAL_MODEL_PLAN_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+            "MANUAL_EXTERNAL_PLAN_REVIEW": None,
         }
         self.assertFalse(ws.plan_approval_gate_reachable(
             latest_round_status="APPROVE", governing_workflow_version="2.1",
@@ -3575,16 +3575,16 @@ class TestRecordLocalPlanReview(unittest.TestCase):
         self.assertEqual(item["phase"], "AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW")
         self.assertEqual(item["plan_review_stages"], {
             "review_content_id": "c1",
-            "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
-            "manual_external_plan_review": None,
+            "LOCAL_MODEL_PLAN_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+            "MANUAL_EXTERNAL_PLAN_REVIEW": None,
         })
         self.assertEqual(item["state_revision"], 2)
 
     def test_approve_clears_stale_manual_entry_from_a_prior_content_id(self):
         wi = _v21_work_item(plan_review_stages={
             "review_content_id": "old",
-            "local_model_plan_review": {"bundle_id": "b0", "verdict": "APPROVE", "round": 1, "completed_at": "t0"},
-            "manual_external_plan_review": {"bundle_id": "b0", "verdict": "APPROVE", "round": 1, "completed_at": "t0"},
+            "LOCAL_MODEL_PLAN_REVIEW": {"bundle_id": "b0", "verdict": "APPROVE", "round": 1, "completed_at": "t0"},
+            "MANUAL_EXTERNAL_PLAN_REVIEW": {"bundle_id": "b0", "verdict": "APPROVE", "round": 1, "completed_at": "t0"},
         })
         new_state = ws.record_local_plan_review(
             _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b1",
@@ -3592,7 +3592,7 @@ class TestRecordLocalPlanReview(unittest.TestCase):
         )
         item = new_state["work_items"]["wi"]
         self.assertEqual(item["plan_review_stages"]["review_content_id"], "new")
-        self.assertIsNone(item["plan_review_stages"]["manual_external_plan_review"])
+        self.assertIsNone(item["plan_review_stages"]["MANUAL_EXTERNAL_PLAN_REVIEW"])
 
     def test_revise_transitions_to_revising_plan_with_no_ledger_write(self):
         """Missing-test item 94: can never reach AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW."""
@@ -3624,8 +3624,8 @@ class TestRecordManualPlanReview(unittest.TestCase):
             "phase": "AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW",
             "plan_review_stages": {
                 "review_content_id": "c1",
-                "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
-                "manual_external_plan_review": None,
+                "LOCAL_MODEL_PLAN_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+                "MANUAL_EXTERNAL_PLAN_REVIEW": None,
             },
         }
         defaults.update(overrides)
@@ -3636,7 +3636,7 @@ class TestRecordManualPlanReview(unittest.TestCase):
         with self.assertRaises(ws.WrongGoverningVersionForPlanReviewStageError):
             ws.record_manual_plan_review(
                 _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
-                current_review_content_id="c1", feedback_role="manual_external_plan_review",
+                current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
                 feedback_review_content_id="c1",
             )
 
@@ -3647,7 +3647,7 @@ class TestRecordManualPlanReview(unittest.TestCase):
         with self.assertRaises(ws.WrongPhaseForPlanReviewStageError):
             ws.record_manual_plan_review(
                 _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
-                current_review_content_id="c1", feedback_role="manual_external_plan_review",
+                current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
                 feedback_review_content_id="c1",
             )
 
@@ -3657,7 +3657,7 @@ class TestRecordManualPlanReview(unittest.TestCase):
         with self.assertRaises(ws.WrongReviewerRoleError):
             ws.record_manual_plan_review(
                 _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
-                current_review_content_id="c1", feedback_role="local_model_plan_review",
+                current_review_content_id="c1", feedback_role="LOCAL_MODEL_PLAN_REVIEW",
                 feedback_review_content_id="c1",
             )
 
@@ -3668,7 +3668,7 @@ class TestRecordManualPlanReview(unittest.TestCase):
         with self.assertRaises(ws.StaleReviewContentIdError):
             ws.record_manual_plan_review(
                 _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
-                current_review_content_id="c1", feedback_role="manual_external_plan_review",
+                current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
                 feedback_review_content_id="stale",
             )
 
@@ -3677,13 +3677,13 @@ class TestRecordManualPlanReview(unittest.TestCase):
         review_content_id."""
         wi = self._local_approved_wi(plan_review_stages={
             "review_content_id": "c1",
-            "local_model_plan_review": None,
-            "manual_external_plan_review": None,
+            "LOCAL_MODEL_PLAN_REVIEW": None,
+            "MANUAL_EXTERNAL_PLAN_REVIEW": None,
         })
         with self.assertRaises(ws.MissingLocalApprovalForManualStageError):
             ws.record_manual_plan_review(
                 _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
-                current_review_content_id="c1", feedback_role="manual_external_plan_review",
+                current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
                 feedback_review_content_id="c1",
             )
 
@@ -3691,13 +3691,13 @@ class TestRecordManualPlanReview(unittest.TestCase):
         """Missing-test item 97."""
         wi = self._local_approved_wi(plan_review_stages={
             "review_content_id": "c1",
-            "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
-            "manual_external_plan_review": {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"},
+            "LOCAL_MODEL_PLAN_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+            "MANUAL_EXTERNAL_PLAN_REVIEW": {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"},
         })
         with self.assertRaises(ws.DuplicateManualStageIngestionError):
             ws.record_manual_plan_review(
                 _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b3", round=2, now="t3",
-                current_review_content_id="c1", feedback_role="manual_external_plan_review",
+                current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
                 feedback_review_content_id="c1",
             )
 
@@ -3707,12 +3707,12 @@ class TestRecordManualPlanReview(unittest.TestCase):
         wi = self._local_approved_wi(state_revision=1)
         new_state = ws.record_manual_plan_review(
             _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
-            current_review_content_id="c1", feedback_role="manual_external_plan_review",
+            current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
             feedback_review_content_id="c1",
         )
         item = new_state["work_items"]["wi"]
         self.assertEqual(item["phase"], "AWAITING_PLAN_APPROVAL")
-        self.assertEqual(item["plan_review_stages"]["manual_external_plan_review"], {
+        self.assertEqual(item["plan_review_stages"]["MANUAL_EXTERNAL_PLAN_REVIEW"], {
             "bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2",
         })
         self.assertEqual(item["state_revision"], 2)
@@ -3732,11 +3732,11 @@ class TestRecordManualPlanReview(unittest.TestCase):
         self.assertIsNotNone(warning)
         new_state = ws.record_manual_plan_review(
             _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="stale-wrapper-bundle", round=1, now="t2",
-            current_review_content_id="c1", feedback_role="manual_external_plan_review",
+            current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
             feedback_review_content_id="c1",
         )
         self.assertEqual(
-            new_state["work_items"]["wi"]["plan_review_stages"]["manual_external_plan_review"]["bundle_id"],
+            new_state["work_items"]["wi"]["plan_review_stages"]["MANUAL_EXTERNAL_PLAN_REVIEW"]["bundle_id"],
             "stale-wrapper-bundle",
         )
 
@@ -3748,12 +3748,12 @@ class TestRecordManualPlanReview(unittest.TestCase):
         wi = self._local_approved_wi(state_revision=1)
         new_state = ws.record_manual_plan_review(
             _base_state(wi=wi), "wi", verdict="REVISE", bundle_id="b2", round=1, now="t2",
-            current_review_content_id="c1", feedback_role="manual_external_plan_review",
+            current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
             feedback_review_content_id="c1",
         )
         item = new_state["work_items"]["wi"]
         self.assertEqual(item["phase"], "REVISING_PLAN")
-        self.assertIsNone(item["plan_review_stages"]["manual_external_plan_review"])
+        self.assertIsNone(item["plan_review_stages"]["MANUAL_EXTERNAL_PLAN_REVIEW"])
 
     def test_block_is_a_true_no_op(self):
         """Missing-test item 99: no ledger write, no transition; remains
@@ -3762,7 +3762,7 @@ class TestRecordManualPlanReview(unittest.TestCase):
         state = _base_state(wi=wi)
         new_state = ws.record_manual_plan_review(
             state, "wi", verdict="BLOCK", bundle_id="b2", round=1, now="t2",
-            current_review_content_id="c1", feedback_role="manual_external_plan_review",
+            current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
             feedback_review_content_id="c1",
         )
         self.assertEqual(new_state, state)
@@ -3777,8 +3777,8 @@ class TestTransitionToAwaitingLocalPlanReview(unittest.TestCase):
         review or to AWAITING_PLAN_APPROVAL."""
         wi = _v21_work_item(phase="REVISING_PLAN", state_revision=3, plan_review_stages={
             "review_content_id": "stale",
-            "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
-            "manual_external_plan_review": None,
+            "LOCAL_MODEL_PLAN_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+            "MANUAL_EXTERNAL_PLAN_REVIEW": None,
         })
         new_state = ws.transition_to_awaiting_local_plan_review(_base_state(wi=wi), "wi", now="t2")
         item = new_state["work_items"]["wi"]
@@ -3813,7 +3813,7 @@ class TestFullTwoStageSequence(unittest.TestCase):
 
         after_manual = ws.record_manual_plan_review(
             after_local, "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
-            current_review_content_id="c1", feedback_role="manual_external_plan_review",
+            current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
             feedback_review_content_id="c1",
         )
         item2 = after_manual["work_items"]["wi"]
@@ -3822,6 +3822,239 @@ class TestFullTwoStageSequence(unittest.TestCase):
             latest_round_status="APPROVE", governing_workflow_version="2.1",
             plan_review_stages=item2["plan_review_stages"], current_review_content_id="c1",
         ))
+
+
+class TestPlanReviewStageKeyNormalization(unittest.TestCase):
+    """workflow-v2-3-followups CP3 (REQ-8/-9/-10/-22): normalize_plan_review_
+    stages' compatibility-reading and collision detection, and
+    migrate_plan_review_stage_keys' one-time migration -- legacy lowercase
+    reads remain supported so historical evidence never needs rewriting,
+    while every live non-terminal ledger is migrated to canonical casing."""
+
+    _LEGACY_LOCAL_APPROVE = {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"}
+    _LEGACY_MANUAL_APPROVE = {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"}
+
+    def test_normalize_passes_review_content_id_through_unchanged(self):
+        stages = {"review_content_id": "c1", "LOCAL_MODEL_PLAN_REVIEW": None, "MANUAL_EXTERNAL_PLAN_REVIEW": None}
+        self.assertEqual(ws.normalize_plan_review_stages(stages), stages)
+
+    def test_normalize_reads_legacy_lowercase_keys(self):
+        """The compatibility-read proof: a dict built entirely with the
+        legacy lowercase keys normalizes to the canonical dict."""
+        legacy = {
+            "review_content_id": "c1",
+            "local_model_plan_review": self._LEGACY_LOCAL_APPROVE,
+            "manual_external_plan_review": None,
+        }
+        self.assertEqual(ws.normalize_plan_review_stages(legacy), {
+            "review_content_id": "c1",
+            "LOCAL_MODEL_PLAN_REVIEW": self._LEGACY_LOCAL_APPROVE,
+            "MANUAL_EXTERNAL_PLAN_REVIEW": None,
+        })
+
+    def test_normalize_is_idempotent_on_an_already_canonical_dict(self):
+        canonical = {
+            "review_content_id": "c1",
+            "LOCAL_MODEL_PLAN_REVIEW": self._LEGACY_LOCAL_APPROVE,
+            "MANUAL_EXTERNAL_PLAN_REVIEW": self._LEGACY_MANUAL_APPROVE,
+        }
+        self.assertEqual(ws.normalize_plan_review_stages(canonical), canonical)
+
+    def test_normalize_collapses_byte_identical_duplicate_regardless_of_insertion_order(self):
+        """GPT-FUP-R6-I02: a legacy+canonical duplicate with byte-identical
+        values collapses silently, proven both ways round (whichever raw
+        key was inserted first)."""
+        forward = {
+            "review_content_id": "c1",
+            "local_model_plan_review": self._LEGACY_LOCAL_APPROVE,
+            "LOCAL_MODEL_PLAN_REVIEW": self._LEGACY_LOCAL_APPROVE,
+        }
+        backward = {
+            "review_content_id": "c1",
+            "LOCAL_MODEL_PLAN_REVIEW": self._LEGACY_LOCAL_APPROVE,
+            "local_model_plan_review": self._LEGACY_LOCAL_APPROVE,
+        }
+        expected = {"review_content_id": "c1", "LOCAL_MODEL_PLAN_REVIEW": self._LEGACY_LOCAL_APPROVE}
+        self.assertEqual(ws.normalize_plan_review_stages(forward), expected)
+        self.assertEqual(ws.normalize_plan_review_stages(backward), expected)
+
+    def test_normalize_raises_on_conflicting_duplicate_regardless_of_insertion_order(self):
+        """GPT-FUP-R6-I02: a legacy+canonical duplicate with conflicting
+        values raises AmbiguousPlanReviewStageKeyError, naming both raw
+        keys -- never resolved by dict key-iteration order."""
+        forward = {
+            "review_content_id": "c1",
+            "local_model_plan_review": self._LEGACY_LOCAL_APPROVE,
+            "LOCAL_MODEL_PLAN_REVIEW": {**self._LEGACY_LOCAL_APPROVE, "round": 2},
+        }
+        backward = {
+            "review_content_id": "c1",
+            "LOCAL_MODEL_PLAN_REVIEW": {**self._LEGACY_LOCAL_APPROVE, "round": 2},
+            "local_model_plan_review": self._LEGACY_LOCAL_APPROVE,
+        }
+        for stages in (forward, backward):
+            with self.assertRaises(ws.AmbiguousPlanReviewStageKeyError) as ctx:
+                ws.normalize_plan_review_stages(stages)
+            self.assertIn("local_model_plan_review", str(ctx.exception))
+            self.assertIn("LOCAL_MODEL_PLAN_REVIEW", str(ctx.exception))
+
+    def test_plan_approval_gate_reachable_tolerates_legacy_keys(self):
+        legacy = {
+            "review_content_id": "c1",
+            "local_model_plan_review": self._LEGACY_LOCAL_APPROVE,
+            "manual_external_plan_review": self._LEGACY_MANUAL_APPROVE,
+        }
+        self.assertTrue(ws.plan_approval_gate_reachable(
+            latest_round_status="APPROVE", governing_workflow_version="2.1",
+            plan_review_stages=legacy, current_review_content_id="c1",
+        ))
+
+    def test_validate_state_accepts_legacy_cased_non_terminal_ledger(self):
+        """LPR-R1-I03: a non-terminal work item's legacy-cased ledger reads
+        and behaves correctly via the compatibility-read helper, and can be
+        driven through a further transition, before any migration runs."""
+        wi = _v21_work_item(phase="AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW", plan_review_stages={
+            "review_content_id": "c1",
+            "local_model_plan_review": self._LEGACY_LOCAL_APPROVE,
+            "manual_external_plan_review": None,
+        })
+        ws.validate_state(_base_state(wi=copy.deepcopy(wi)))  # must not raise
+
+        # The further transition: a REVISE verdict only reads the ledger
+        # (via validate_manual_plan_review_preconditions's compatibility-
+        # tolerant normalization) and never writes it, so it is unaffected
+        # by the write-site hazard the next test documents.
+        new_state = ws.record_manual_plan_review(
+            _base_state(wi=wi), "wi", verdict="REVISE", bundle_id="b2", round=1, now="t2",
+            current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
+            feedback_review_content_id="c1",
+        )
+        item = new_state["work_items"]["wi"]
+        self.assertEqual(item["phase"], "REVISING_PLAN")
+
+    def test_record_manual_plan_review_approve_raises_on_a_legacy_cased_ledger(self):
+        """Documents `GPT-FUP-R6-I02`'s accepted, by-design edge case:
+        `record_manual_plan_review`'s APPROVE branch writes the canonical
+        key by in-place assignment (unlike `record_local_plan_review`,
+        which replaces the whole dict), so a not-yet-migrated legacy-cased
+        ledger ends up holding both a legacy and a canonical key for the
+        MANUAL_EXTERNAL_PLAN_REVIEW stage. This is refused cleanly via
+        AmbiguousPlanReviewStageKeyError -- never silently resolved by
+        dict-iteration order -- exactly the fail-closed behavior CP3's
+        write-site disposition relies on instead of changing the write
+        site itself (not reachable for any item in this repository today,
+        since CP3's own migration runs immediately after this checkpoint
+        lands)."""
+        wi = _v21_work_item(phase="AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW", plan_review_stages={
+            "review_content_id": "c1",
+            "local_model_plan_review": self._LEGACY_LOCAL_APPROVE,
+            "manual_external_plan_review": None,
+        })
+        with self.assertRaises(ws.AmbiguousPlanReviewStageKeyError):
+            ws.record_manual_plan_review(
+                _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
+                current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
+                feedback_review_content_id="c1",
+            )
+
+    def test_reviewer_role_accepts_either_casing_and_refuses_a_third_value(self):
+        wi = _v21_work_item(phase="AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW", plan_review_stages={
+            "review_content_id": "c1",
+            "LOCAL_MODEL_PLAN_REVIEW": self._LEGACY_LOCAL_APPROVE,
+            "MANUAL_EXTERNAL_PLAN_REVIEW": None,
+        })
+        ws.validate_manual_plan_review_preconditions(
+            copy.deepcopy(wi), current_review_content_id="c1",
+            feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW", feedback_review_content_id="c1",
+        )
+        ws.validate_manual_plan_review_preconditions(
+            copy.deepcopy(wi), current_review_content_id="c1",
+            feedback_role="manual_external_plan_review", feedback_review_content_id="c1",
+        )
+        with self.assertRaises(ws.WrongReviewerRoleError):
+            ws.validate_manual_plan_review_preconditions(
+                copy.deepcopy(wi), current_review_content_id="c1",
+                feedback_role="something_else", feedback_review_content_id="c1",
+            )
+
+
+class TestMigratePlanReviewStageKeys(unittest.TestCase):
+    """workflow-v2-3-followups CP3 (LPR-R2-I02): the one-time migration
+    step run against the live WORKFLOW_STATE.json."""
+
+    _LEGACY_LOCAL_APPROVE = {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"}
+    _LEGACY_MANUAL_APPROVE = {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"}
+
+    def _legacy_stages(self):
+        return {
+            "review_content_id": "c1",
+            "local_model_plan_review": self._LEGACY_LOCAL_APPROVE,
+            "manual_external_plan_review": self._LEGACY_MANUAL_APPROVE,
+        }
+
+    def test_migrates_every_live_non_terminal_record_leaves_terminal_untouched(self):
+        non_terminal = _v21_work_item(
+            work_item_id="live", phase="AWAITING_PLAN_APPROVAL", plan_review_stages=self._legacy_stages(),
+        )
+        terminal = _v21_work_item(
+            work_item_id="done", phase="MILESTONE_COMPLETE", plan_review_stages=self._legacy_stages(),
+        )
+        state = _base_state(live=non_terminal, done=terminal)
+
+        migrated = ws.migrate_plan_review_stage_keys(state)
+
+        self.assertEqual(migrated["work_items"]["live"]["plan_review_stages"], {
+            "review_content_id": "c1",
+            "LOCAL_MODEL_PLAN_REVIEW": self._LEGACY_LOCAL_APPROVE,
+            "MANUAL_EXTERNAL_PLAN_REVIEW": self._LEGACY_MANUAL_APPROVE,
+        })
+        # Terminal-phase record is byte-unchanged -- immutable historical
+        # evidence, never rewritten.
+        self.assertEqual(migrated["work_items"]["done"]["plan_review_stages"], self._legacy_stages())
+        # The migrated non-terminal record validates cleanly through the
+        # rest of the codebase, not just a dict that looks right.
+        ws.validate_state(migrated)
+
+    def test_is_idempotent(self):
+        state = _base_state(live=_v21_work_item(
+            work_item_id="live", phase="AWAITING_PLAN_APPROVAL", plan_review_stages=self._legacy_stages(),
+        ))
+        once = ws.migrate_plan_review_stage_keys(state)
+        twice = ws.migrate_plan_review_stage_keys(once)
+        self.assertEqual(once, twice)
+
+    def test_leaves_a_null_or_absent_ledger_untouched(self):
+        wi = _v21_work_item(work_item_id="live", phase="AWAITING_LOCAL_PLAN_REVIEW", plan_review_stages=None)
+        state = _base_state(live=wi)
+        migrated = ws.migrate_plan_review_stage_keys(state)
+        self.assertIsNone(migrated["work_items"]["live"]["plan_review_stages"])
+
+    def test_raises_on_an_ambiguous_non_terminal_ledger_leaving_state_untouched(self):
+        """An already-ambiguous non-terminal work item's ledger makes the
+        migration raise rather than silently pick a winner. Run via
+        state_transaction (the real call site), a raised exception leaves
+        WORKFLOW_STATE.json completely unwritten."""
+        ambiguous = _v21_work_item(work_item_id="live", phase="AWAITING_PLAN_APPROVAL", plan_review_stages={
+            "review_content_id": "c1",
+            "local_model_plan_review": self._LEGACY_LOCAL_APPROVE,
+            "LOCAL_MODEL_PLAN_REVIEW": {**self._LEGACY_LOCAL_APPROVE, "round": 2},
+        })
+        state = _base_state(live=ambiguous)
+        with self.assertRaises(ws.AmbiguousPlanReviewStageKeyError):
+            ws.migrate_plan_review_stage_keys(state)
+
+    def test_conflicting_duplicate_collapses_when_byte_identical(self):
+        identical = _v21_work_item(work_item_id="live", phase="AWAITING_PLAN_APPROVAL", plan_review_stages={
+            "review_content_id": "c1",
+            "local_model_plan_review": self._LEGACY_LOCAL_APPROVE,
+            "LOCAL_MODEL_PLAN_REVIEW": self._LEGACY_LOCAL_APPROVE,
+        })
+        state = _base_state(live=identical)
+        migrated = ws.migrate_plan_review_stage_keys(state)
+        self.assertEqual(
+            migrated["work_items"]["live"]["plan_review_stages"]["LOCAL_MODEL_PLAN_REVIEW"],
+            self._LEGACY_LOCAL_APPROVE,
+        )
 
 
 # ---------------------------------------------------------------------------
