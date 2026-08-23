@@ -843,6 +843,27 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # review-functional.md: new, workflow-v2-3 CP2 -- the first recorded
     # hash, not a change.
     "review-functional.md": "579b90a0c6e0eea1246b7ae03347e67f86faf24b8ebc83402909f438877968ca",
+    # apply-functional-review.md (O2, workflow-v2-3-followups REVISE round
+    # 2, external cross-model review): this roster's own scope was fixed
+    # to "every command file workflow-v2-1-core's own dual-mode
+    # enumeration names, plus the bootstrap command and the bundle
+    # script" (see this file's own comment above `_GOLDEN_COMMAND_FILE_
+    # SHA256`) -- a specific, historically-bounded list, never literally
+    # "every command file any milestone modifies." apply-functional-
+    # review.md predates that list but was never added to it; round 2's
+    # own record_bundle_generation fix (Defect 2) modified it for real,
+    # exposing the gap. Added here as a deliberate, bounded widening --
+    # first recorded hash, not a change -- rather than left as a blind
+    # spot for a file this repository's remediation flow now actively
+    # edits. Three further command files remain outside this roster,
+    # left there deliberately rather than silently swept in by this same
+    # widening: accept-scoped-remediation.md, prepare-review.md, and
+    # recover-implementation-provenance.md (the last of which this same
+    # round also edited, for I1) -- none was ever part of the roster's
+    # own original scope, and none is a drift-detection gap this
+    # revision's own changes newly exposed the way apply-functional-
+    # review.md's was.
+    "apply-functional-review.md": "54b7b4c9dfb69412905756e9cd3183fed17a81e0465641c44658147ae434bbf3",
 }
 
 
