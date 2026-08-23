@@ -362,3 +362,40 @@ overrides it.
 - **Functional-verification outcome:** not applicable (process checkpoint,
   no product-facing behavior; this checkpoint is itself the milestone's
   final cross-cutting verification pass).
+
+## Self-review (`SELF_REVIEWING_IMPLEMENTATION`, milestone-wide)
+
+Full-diff self-review of `fb134ac..HEAD` (CP1–CP4 combined) for
+correctness, layer boundaries, missing tests, and maintainability.
+
+- **Findings, one important, now fixed:** CP2's rewrite of
+  `docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Local reviewer commands"
+  section narrowed a pre-existing "either command's printed report" hand-
+  copy sentence down to `/review-functional` alone, leaving that command
+  as the sole subject of a claim that is false for it: the sentence told
+  an operator they could install `/review-functional`'s report at
+  `<feedback_dir>/REVIEW_FEEDBACK.md` "as the authoritative external
+  round". Two paragraphs later the same section states that report is a
+  checklist-completeness opinion and "never a `Status:` verdict", and the
+  functional gate's own artifact is the user-written
+  `FUNCTIONAL_REVIEW.md`, which only `/apply-functional-review` consumes.
+  The sentence was true of `/review-implementation` before CP2 changed
+  that command's write behavior; after the narrowing it survived attached
+  to the one command it does not describe. Fixed in place: the paragraph
+  now states plainly that `/review-functional`'s report has no
+  authoritative round to become and that `REVIEW_FEEDBACK.md` is not its
+  destination, and points the operator at revising their own
+  `FUNCTIONAL_REVIEW.md` checklist by hand instead. `/review-functional`
+  itself is untouched — requirement 5's out-of-scope boundary is about
+  the command, and this is a sentence in a document CP2 already rewrote
+  and this item already declares implementation-stage protected.
+- **No blocking findings.** No layer-boundary concern arises (this item
+  touches no `app/` code at all), and the mixed-casing
+  `plan_review_stages` write hazard reviewed here is deliberate,
+  fail-loud, and covered by
+  `test_record_manual_plan_review_approve_raises_on_a_legacy_cased_ledger`.
+- **Verification results:** see the milestone-wide full verification
+  recorded in `TEST_RESULTS.md` for this bundle — the Python suites were
+  re-run after this fix (1146 + 45 + 15 tests, all green) alongside the
+  full Gradle gate (`spotlessCheck detekt lintDebug testDebugUnitTest`,
+  `BUILD SUCCESSFUL`).

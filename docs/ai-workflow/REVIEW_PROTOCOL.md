@@ -270,13 +270,16 @@ behavior toward their own review-feedback artifact differs, though:
 REVIEW_FEEDBACK.md` once its own pre-write guards pass (see
 `.claude/commands/review-implementation.md` step 7); `/review-functional`
 remains strictly report-only and writes nothing, including
-`<feedback_dir>/FUNCTIONAL_REVIEW.md` — unchanged by this milestone. For
-`/review-functional`, a user may hand-copy its printed report into
-`<feedback_dir>/REVIEW_FEEDBACK.md` themselves, verbatim or after obtaining
-a further external reviewer's own separate pass, if they choose to treat it
-as the authoritative external round — that choice is always the user's, never
-automatic. `/review-implementation` no longer works this way: once its own
-pre-write guards pass, its write *is* the authoritative
+`<feedback_dir>/FUNCTIONAL_REVIEW.md` — unchanged by this milestone. There
+is no authoritative round for `/review-functional`'s report to become, and
+`<feedback_dir>/REVIEW_FEEDBACK.md` is not its destination: that report is a
+checklist-completeness opinion, never a `Status:` verdict (see the next
+paragraph), and the functional gate's own artifact is the user-written
+`<feedback_dir>/FUNCTIONAL_REVIEW.md`, which only `/apply-functional-review`
+ever acts on. An operator may use the report to revise that checklist by
+hand — that choice is always the user's, never automatic.
+`/review-implementation` works differently: once its own pre-write guards
+pass, its write *is* the authoritative
 `<feedback_dir>/REVIEW_FEEDBACK.md` round the moment it lands, with no
 separate operator installation step. `/apply-implementation-review`,
 `/apply-functional-review`, `/approve-review`, `/accept-milestone`, and
