@@ -47,6 +47,7 @@ from pathlib import Path
 from unittest import mock
 
 import workflow_fingerprint as wf
+import workflow_state as ws
 
 
 def _run(args, cwd):
@@ -1906,6 +1907,106 @@ class TestImplementationStageClassification(unittest.TestCase):
             _run(["git", "commit", "-q", "-m", "state write"], cwd=repo.root)
             digest_after, _ = wf.compute_review_content_id_implementation_stage(repo.root, repo.base, **kwargs)
             self.assertEqual(digest_before, digest_after)
+
+
+class TestApprovalRecordManifestUsesTheRealComputeFunctions(unittest.TestCase):
+    """`workflow-v2-3-followups` continued scope, self-discovered during
+    this item's own `/accept-milestone` pre-flight:
+    `workflow_state.build_approval_record`'s `review_content_manifest`
+    argument must be the real compute function's own returned
+    `projection["review_content_manifest"]`, never `projection` itself --
+    the exact substitution that silently produced two malformed approval
+    records (plan and technical) for this same work item, with zero prior
+    regression coverage in either direction: every pre-existing
+    `build_approval_record` call site in this suite either discarded the
+    real projection (`_`) or hand-built a placeholder manifest, never
+    exercising the real compute-function-to-record sequence."""
+
+    def test_plan_stage_projections_own_manifest_field_is_accepted(self):
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            digest, projection = repo.compute()
+            record = ws.build_approval_record(
+                basis="EXTERNAL_APPROVE", stage="plan", user_confirmation="approve wi plan",
+                now="t", reviewed_bundle_id="b", approved_review_content_id=digest,
+                review_content_manifest=projection["review_content_manifest"],
+            )
+            self.assertEqual(record["review_content_manifest"], projection["review_content_manifest"])
+            self.assertIsInstance(record["review_content_manifest"], list)
+            self.assertTrue(record["review_content_manifest"])
+
+    def test_plan_stage_whole_projection_object_is_rejected(self):
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            digest, projection = repo.compute()
+            with self.assertRaises(ws.InvalidApprovalRecordError):
+                ws.build_approval_record(
+                    basis="EXTERNAL_APPROVE", stage="plan", user_confirmation="approve wi plan",
+                    now="t", reviewed_bundle_id="b", approved_review_content_id=digest,
+                    review_content_manifest=projection,
+                )
+
+    def _write_implementation_artifacts_declaration(self, repo):
+        data = {
+            "schema_version": 2,
+            "work_item_id": "workflow-v2-1-core",
+            "implementation_stage": {
+                "protected_prefixes": {"app/": "source"},
+                "protected_paths": {},
+                "excluded_prefixes": {"docs/ai-workflow/registry/": "artifact-declarations file itself"},
+                "excluded_paths": {},
+            },
+        }
+        artifacts_dir = repo.root / "docs" / "ai-workflow" / "registry"
+        artifacts_dir.mkdir(parents=True, exist_ok=True)
+        (artifacts_dir / "workflow-v2-1-core-artifacts.json").write_text(json.dumps(data))
+        _run(["git", "add", "-A"], cwd=repo.root)
+        _run(["git", "commit", "-q", "-m", "declare implementation-stage artifacts"], cwd=repo.root)
+
+    def _implementation_stage_projection(self, repo):
+        return wf.compute_review_content_id_implementation_stage(
+            repo.root, repo.base, work_item_type="process", work_item_id="workflow-v2-1-core",
+            protected_paths={}, protected_prefixes={"app/": "source"},
+            excluded_paths={},
+            excluded_prefixes={"docs/ai-workflow/registry/": "artifact-declarations file itself"},
+        )
+
+    def test_implementation_stage_projections_own_manifest_field_is_accepted(self):
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            repo.commit_plan_docs_as_base()
+            self._write_implementation_artifacts_declaration(repo)
+            (repo.root / "app").mkdir()
+            (repo.root / "app" / "Foo.kt").write_text("class Foo\n")
+            _run(["git", "add", "-A"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "add app/Foo.kt"], cwd=repo.root)
+
+            digest, projection = self._implementation_stage_projection(repo)
+            record = ws.build_approval_record(
+                basis="EXTERNAL_APPROVE", stage="implementation", user_confirmation="approve wi implementation",
+                now="t", reviewed_bundle_id="b", approved_review_content_id=digest,
+                review_content_manifest=projection["review_content_manifest"], reviewed_content_commit=repo.head(),
+            )
+            self.assertEqual(record["review_content_manifest"], projection["review_content_manifest"])
+            self.assertEqual([e["path"] for e in record["review_content_manifest"]], ["app/Foo.kt"])
+
+    def test_implementation_stage_whole_projection_object_is_rejected(self):
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            repo.commit_plan_docs_as_base()
+            self._write_implementation_artifacts_declaration(repo)
+            (repo.root / "app").mkdir()
+            (repo.root / "app" / "Foo.kt").write_text("class Foo\n")
+            _run(["git", "add", "-A"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "add app/Foo.kt"], cwd=repo.root)
+
+            digest, projection = self._implementation_stage_projection(repo)
+            with self.assertRaises(ws.InvalidApprovalRecordError):
+                ws.build_approval_record(
+                    basis="EXTERNAL_APPROVE", stage="implementation", user_confirmation="approve wi implementation",
+                    now="t", reviewed_bundle_id="b", approved_review_content_id=digest,
+                    review_content_manifest=projection, reviewed_content_commit=repo.head(),
+                )
 
 
 class TestBundleLayoutResolver(unittest.TestCase):

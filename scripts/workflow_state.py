@@ -8973,8 +8973,15 @@ def validate_approval_record(record: dict, *, stage: str) -> None:
     permanently-null `reviewed_content_commit` rule (GPT-R9-006), a
     non-`LEGACY_V1` basis requiring `reviewed_bundle_id`/
     `approved_review_content_id`/`review_content_manifest`, a non-empty
-    `user_confirmation` ("every basis"), and the `waived_guarantees`
-    controlled vocabulary (OPUS-R6-025, narrowed OPUS-R10-014)."""
+    `user_confirmation` ("every basis"), the `waived_guarantees`
+    controlled vocabulary (OPUS-R6-025, narrowed OPUS-R10-014), and (this
+    item's own `workflow-v2-3-followups` continued scope, self-discovered
+    during `/accept-milestone`'s pre-flight) `review_content_manifest`'s
+    own flat-list shape -- closing the gap that twice let a caller pass
+    `workflow_fingerprint.compute_review_content_id_*`'s whole returned
+    projection object (which happens to carry a field of the identical
+    name one level up) instead of that projection's own inner manifest
+    list, silently, with no shape check anywhere in the write path."""
     if stage not in APPROVAL_STAGES:
         raise InvalidApprovalRecordError(f"unknown approval stage: {stage!r}")
     if record.get("status") not in APPROVAL_STATUSES:
@@ -8993,6 +9000,19 @@ def validate_approval_record(record: dict, *, stage: str) -> None:
                 raise InvalidApprovalRecordError(
                     f"a {basis} approval record must set {field} (only LEGACY_V1 may leave it null)"
                 )
+    manifest = record.get("review_content_manifest")
+    if manifest is not None:
+        malformed = not isinstance(manifest, list) or not all(
+            isinstance(entry, dict) and "path" in entry for entry in manifest
+        )
+        if malformed:
+            shape = f"dict with keys {sorted(manifest.keys())!r}" if isinstance(manifest, dict) else type(manifest).__name__
+            raise InvalidApprovalRecordError(
+                f"review_content_manifest must be a flat list of {{'path': ...}} entries -- got a "
+                f"{shape}. This is the exact shape workflow_fingerprint.compute_review_content_id_"
+                f"*'s own returned projection['review_content_manifest'] holds -- pass that field's "
+                f"value, never the whole projection object it lives inside of"
+            )
     if not record.get("user_confirmation"):
         raise InvalidApprovalRecordError("approval record must set a non-empty user_confirmation")
     for guarantee in record.get("waived_guarantees") or []:

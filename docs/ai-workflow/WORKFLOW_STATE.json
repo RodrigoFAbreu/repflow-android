@@ -757,7 +757,7 @@
         "recorded_at": "2026-08-23T18:05:00+01:00"
       },
       "technical_approval": {
-        "status": "CURRENT",
+        "status": "STALE",
         "basis": "EXTERNAL_APPROVE",
         "reviewed_bundle_id": "b3407a882e16c6ea6c1758ea102e0bc4d7465702104a9fd6d18468bd37fa51d7",
         "approved_review_content_id": "e8a4a76420995dc9eca3bd015267de890b32dc5d75684bd379833440816f2435",
@@ -877,8 +877,8 @@
       },
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 51,
-      "last_transition": "2026-08-23T20:34:25+01:00"
+      "state_revision": 52,
+      "last_transition": "2026-08-23T21:33:15+01:00"
     }
   }
 }

@@ -182,6 +182,21 @@ actually load-bearing control for the Skill exposure path, not mechanism
    `reviewed_content_commit` left unset for the plan stage (permanently
    null, `D-Approval-Commits`/`GPT-R9-006`) and set to the current
    `reviewed_implementation_head` for the implementation stage.
+   **`review_content_manifest`, exact source** (self-discovered during
+   this item's own `/accept-milestone` pre-flight, closed as continued
+   `workflow-v2-3-followups` scope): whichever
+   `workflow_fingerprint.compute_review_content_id_plan_stage[_at_commit[_for_work_item]]`/
+   `compute_review_content_id_implementation_stage[_at_commit]` variant
+   step 2 used to recompute `review_content_id` returns `(digest,
+   projection)` — `build_approval_record`'s `review_content_manifest`
+   argument is `projection["review_content_manifest"]`, the projection's
+   own inner flat list of `{path, exists, mode, blob}` entries, **never**
+   `projection` itself, which carries a field of the identical name one
+   level up. Passing the whole projection now raises
+   `InvalidApprovalRecordError` (`validate_approval_record`'s own shape
+   check, added to close this exact trap after it silently produced two
+   independently-malformed approval records — plan and technical — for
+   this same work item).
 4a. **Plan stage only — resolve the complete commit member set, before any
     durable mutation** (`D-Approval-Commits`' "Conditional fifth commit
     member", `GPT-R67-001`; generalized beyond `workflow-v2-1-core`'s own

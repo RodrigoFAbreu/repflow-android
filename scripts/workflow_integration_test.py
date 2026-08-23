@@ -139,7 +139,7 @@ class TestFullPassAuthorizedCommitKinds(unittest.TestCase):
             plan_record = ws.build_approval_record(
                 basis="USER_OVERRIDE", stage="plan", user_confirmation="wi plan",
                 reviewed_bundle_id="bundle-plan-1", approved_review_content_id="plan-content-1",
-                review_content_manifest={"paths": []}, now="t0",
+                review_content_manifest=[], now="t0",
             )
             state = ws.apply_plan_approval(state, "wi", plan_record, now="t0")
             plan_commit = repo.commit_files(
@@ -169,7 +169,7 @@ class TestFullPassAuthorizedCommitKinds(unittest.TestCase):
             impl_record = ws.build_approval_record(
                 basis="USER_OVERRIDE", stage="implementation", user_confirmation="wi implementation",
                 reviewed_bundle_id="bundle-impl-1", approved_review_content_id="impl-content-1",
-                review_content_manifest={"paths": []}, reviewed_content_commit=ck_b_commit, now="t5",
+                review_content_manifest=[], reviewed_content_commit=ck_b_commit, now="t5",
             )
             state = ws.apply_technical_approval(state, "wi", impl_record, now="t5")
             tech_commit = repo.commit_files(
@@ -752,7 +752,14 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # text reworded to name the merged step; step 6.4's commit instruction
     # gained the "trailers must be the commit message's own final
     # paragraph" sentence -- intentional content change.
-    "approve-review.md": "632410b8f7c1ac19da8f07d7f5fef7dc689c412d434460510c592bdf39dd59a7",
+    #
+    # approve-review.md further updated, workflow-v2-3-followups REVISE
+    # round 1 (self-discovered during this item's own /accept-milestone
+    # pre-flight): step 4 gained the explicit review_content_manifest
+    # extraction requirement (projection["review_content_manifest"], never
+    # the whole projection object) -- intentional content change, the fix
+    # for the defect that produced two malformed approval records.
+    "approve-review.md": "3612da5aa2af4d5319dc0651689bc9dbd6859508d938810953392bc69aaa5ffd",
     "accept-milestone.md": "3822aa4adb7838dfc76a8a41fe102d32d0435ce2ed740939662bb37035a07f70",
     "prepare-functional-review.md": "1b4a08cc0a28c09e0031f73e6003f23fd96fdc6c3fe22553e9f2408c1798f8cd",
     # apply-plan-review.md/bootstrap-workflow-v2.md (D-Plan-Revision-Publication,
