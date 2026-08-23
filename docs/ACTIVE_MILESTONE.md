@@ -943,3 +943,49 @@ than assumes, that it wrote nothing.
   its own printed report.
 
 Findings go in `.ai-review/feedback/FUNCTIONAL_REVIEW.md`.
+
+### `workflow-v2-3` — MILESTONE_COMPLETE (real, 2026-08-23)
+
+The user gave literal `/accept-milestone`-stage confirmation for
+`workflow-v2-3` ("I confirm acceptance of workflow-v2-3."), validated for
+real by `workflow_state.validate_user_confirmation`, after confirming they
+had walked the functional-review checklist above. No finding was filed —
+`.ai-review/feedback/FUNCTIONAL_REVIEW.md` was never created, unlike
+`workflow-v2-1-core`'s own acceptance (which did have a written `Result:
+PASS` record); this item's acceptance rests on the user's in-conversation
+confirmation alone, per this command's own preamble, not on a separate
+written artifact.
+
+The advisory terminal-reachability pre-flight
+(`resolve_own_registry_completion_status` → `is_terminal=True`,
+`milestone_complete_gate_reachable` → `True` from phase
+`AWAITING_FUNCTIONAL_REVIEW`) and the authoritative
+`workflow_state.complete_work_item` call both succeeded: no
+`IncompleteChildWorkItemError` (no work item declares `workflow-v2-3` as
+its `parent_work_item_id`), no `IncompleteOwnCheckpointsError` (both
+registry checkpoints, `CP1`/`CP2`, `COMPLETE`), and no
+`UnsatisfiedCompletionObligationError` (`workflow-v2-3-registry.json`
+declares no completion obligations — `resolve_completion_obligations`
+returns `{}`, vacuously satisfied, same as `v2-1-dry-run`'s own
+acceptance). `work_items["workflow-v2-3"].phase` is now
+`MILESTONE_COMPLETE`; `active_work_item_id` resets to `null` (it pointed
+here).
+
+**Steps 3/5 do not apply** — the same gap `workflow-v2-1-core`'s and
+`v2-1-dry-run`'s own completions already documented: `grep` confirms zero
+mentions of `workflow-v2-3` anywhere in `docs/ROADMAP.md` (step 3 has no
+entry to mark). `docs/ai-workflow/WORKFLOW_V2_3_PLAN.md` is **not**
+archived to `docs/milestones/completed/` (step 5) — that directory holds
+only real product-milestone execution/reference plan pairs (milestones
+1-8); a process work item's own plan document was never the kind of
+artifact it exists to hold, and `WORKFLOW_V2_3_PLAN.md` is referenced only
+from this file's own `workflow-v2-3` section and this item's registry/
+artifacts declarations, not linked as ongoing operator-facing guidance the
+way `WORKFLOW_V2_PLAN.md` is. Step 4 is honored via this note itself,
+placed in this item's own section rather than the top-level "Active plan"
+section, which belongs to Milestone 8 alone and is untouched by this
+completion. Step 7 ("Next action") is unaffected for the same reason both
+prior completions' was: it already correctly points at the real
+`docs/ROADMAP.md`, which `workflow-v2-3` was never part of, and explicitly
+defers the next roadmap milestone (the Figma-led redesign) until the user
+initiates it.
