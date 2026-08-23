@@ -234,12 +234,27 @@ existence.
      phase-based wait to honor; the operator judges the file by hand from
      its own `Reviewed bundle ID:`/`Reviewed base commit:` fields and may
      delete it if it is leftover.
-   - Once both guards pass, write `<feedback_dir>/REVIEW_FEEDBACK.md`
-     unconditionally, overwriting whatever same-work-item feedback (if any)
-     currently sits there. This write is now the authoritative round the
-     moment it lands — no separate operator installation step. Still never
-     write `docs/ai-workflow/WORKFLOW_STATE.json`, never approve, never
-     advance `phase`, never auto-continue to any other command.
+   - **Self-check the composed text, immediately before the write**
+     (`workflow-v2-3-followups` continued scope, closes the gap step 6's
+     own "hard precondition" wording named but this step did not actually
+     enforce): call `workflow_fingerprint.parse_review_feedback_binding_fields`
+     on the composed report text itself, then
+     `workflow_fingerprint.assert_feedback_matches_bundle(<the parsed
+     fields>, bundle_id=<step 4's freshly recomputed bundle_id>,
+     base_commit=work_item["base_commit"], work_item_id=work_item_id)` —
+     the exact same values step 6 was instructed to state. A failure here
+     means the composed text itself drifted from what step 4 actually
+     recomputed (a transcription slip in the very fields `/approve-review
+     implementation` binds against): fix the composed text and re-run this
+     check before writing — never write text that fails its own
+     self-check.
+   - Once both guards pass and the self-check above succeeds, write
+     `<feedback_dir>/REVIEW_FEEDBACK.md` unconditionally, overwriting
+     whatever same-work-item feedback (if any) currently sits there. This
+     write is now the authoritative round the moment it lands — no
+     separate operator installation step. Still never write
+     `docs/ai-workflow/WORKFLOW_STATE.json`, never approve, never advance
+     `phase`, never auto-continue to any other command.
 8. **Report and stop.** On a successful write, state plainly that
    `<feedback_dir>/REVIEW_FEEDBACK.md` was written and is now the
    authoritative round for `/apply-implementation-review`/`/approve-review

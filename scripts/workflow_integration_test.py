@@ -819,7 +819,15 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # and the step 6/step 7 provenance text no longer describe a manual
     # hand-copy installation -- intentional content change, not a
     # regression.
-    "review-implementation.md": "a54f6d3a7893d4d4eb6f00c41ad566f2739d57ecc52083c43941e05b0cd32318",
+    #
+    # review-implementation.md further updated, workflow-v2-3-followups
+    # REVISE round 1 (O5): step 7 gained a self-check on the composed
+    # report text -- parse_review_feedback_binding_fields/
+    # assert_feedback_matches_bundle against step 4's own recomputed
+    # values, immediately before the write -- so step 6's "hard
+    # precondition" wording is now actually enforced -- intentional
+    # content change.
+    "review-implementation.md": "a017359a961ac5dc3e9cee1c3c2f8265e38f924f1af2cdbe984b381f79f4de6a",
     # review-functional.md: new, workflow-v2-3 CP2 -- the first recorded
     # hash, not a change.
     "review-functional.md": "579b90a0c6e0eea1246b7ae03347e67f86faf24b8ebc83402909f438877968ca",
