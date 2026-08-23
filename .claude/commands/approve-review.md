@@ -145,9 +145,24 @@ actually load-bearing control for the Skill exposure path, not mechanism
    invocable only from `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` itself,
    for a bundle staled by a concurrent excluded-only commit landing after
    `T` while no new implementation round has started — the only phase from
-   which `record_bundle_generation`'s own two entry phases
-   (`APPLYING_REVIEW_FEEDBACK`/`SELF_REVIEWING_IMPLEMENTATION`) are
-   unreachable without first re-entering a review-feedback cycle.*
+   which `record_bundle_generation`'s own legal source phases are
+   unreachable without first re-entering either kind of remediation cycle.
+   `record_bundle_generation`'s legality is stage-specific
+   (`workflow-v2-3-followups` continued scope,
+   `BUNDLE_GENERATION_LEGAL_SOURCE_PHASES_BY_STAGE`), not a flat two-phase
+   set: `stage="implementation"` only from `SELF_REVIEWING_IMPLEMENTATION`;
+   `stage="post-fix"` from `APPLYING_REVIEW_FEEDBACK` (an ordinary
+   implementation-review REVISE round) or from `AWAITING_FUNCTIONAL_REVIEW`
+   (`/apply-functional-review`'s own bounded-fix branch) — the latter only
+   when `technical_approval.status == "STALE"`
+   (`BundleGenerationRequiresStaleTechnicalApprovalError` otherwise). This
+   third, functional-review source weakens none of this command's own
+   stale-bundle/approval guards: the `STALE` gate means a `CURRENT`
+   approval can never take this path at all; `/apply-functional-review`
+   step 4 still calls `assert_bundle_not_rejected` before generating, the
+   same as the ordinary post-fix path; and `resolve_bundle_generation_outcome`
+   still independently re-derives the outcome from real Git content, never
+   merely trusting which phase the caller arrived from.*
 2. **Recompute fresh**: `bundle_id` over the current bundle and the
    stage-appropriate `review_content_id` (`scripts/workflow_fingerprint.py`)
    over the working tree. Display both, and the protected/excluded path

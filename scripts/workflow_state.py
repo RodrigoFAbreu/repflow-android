@@ -10077,8 +10077,13 @@ def apply_implementation_provenance_recovery(state: dict, work_item_id: str, now
     and remains there -- only `state_revision`/`last_transition` change,
     the recovered-role field set `record_bundle_generation`'s own
     `same_content` outcome already uses, minus `phase` itself since there
-    is no transition to *perform* here (unlike that function's two entry
-    points, both of which do transition into this phase).
+    is no transition to *perform* here (unlike that function's own legal
+    source phases -- `SELF_REVIEWING_IMPLEMENTATION` for
+    `stage="implementation"`; `APPLYING_REVIEW_FEEDBACK`, or
+    `AWAITING_FUNCTIONAL_REVIEW` with a `STALE` `technical_approval`, for
+    `stage="post-fix"` -- every one of which does transition into this
+    phase; `workflow-v2-3-followups` continued scope widened this from two
+    to three).
     `reviewed_implementation_head`/`implementation_revision` are never
     touched, exactly as the recovered role requires. Refuses via
     `IllegalImplementationProvenanceRecoverySourcePhaseError` if the

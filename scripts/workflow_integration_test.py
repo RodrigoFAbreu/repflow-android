@@ -759,7 +759,14 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # extraction requirement (projection["review_content_manifest"], never
     # the whole projection object) -- intentional content change, the fix
     # for the defect that produced two malformed approval records.
-    "approve-review.md": "3612da5aa2af4d5319dc0651689bc9dbd6859508d938810953392bc69aaa5ffd",
+    #
+    # approve-review.md further updated, workflow-v2-3-followups REVISE
+    # round 2 (I1, external cross-model review): the step-4a1 note's
+    # `record_bundle_generation`'s own two entry phases" claim corrected
+    # to the stage-aware, now-three-phase contract round 2's own record_
+    # bundle_generation widening introduced -- intentional content change,
+    # a documentation-only correction with no behavioral effect.
+    "approve-review.md": "90b2a37c13c647a1444de30798556afd0ad5bec4b4db9323559b7d43bacb430e",
     "accept-milestone.md": "3822aa4adb7838dfc76a8a41fe102d32d0435ce2ed740939662bb37035a07f70",
     "prepare-functional-review.md": "1b4a08cc0a28c09e0031f73e6003f23fd96fdc6c3fe22553e9f2408c1798f8cd",
     # apply-plan-review.md/bootstrap-workflow-v2.md (D-Plan-Revision-Publication,

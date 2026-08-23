@@ -25,12 +25,16 @@ implementation round: `reviewed_implementation_head`/
 stays exactly `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` throughout. It is
 the standalone counterpart of `WF8c` (c)'s
 `resolve_bundle_generation_outcome`-driven `record_bundle_generation`
-same-content path — that path only runs from
-`SELF_REVIEWING_IMPLEMENTATION`/`APPLYING_REVIEW_FEEDBACK` (a caller
-already regenerating a bundle for other reasons); this command is the only
-way to reach the identical recovered-role commit shape from
-`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` itself, without re-entering a
-review-feedback cycle just to fix a provenance pointer.
+same-content path — that path only runs from `record_bundle_generation`'s
+own legal source phases (`workflow-v2-3-followups` continued scope,
+stage-specific: `SELF_REVIEWING_IMPLEMENTATION` for
+`stage="implementation"`; `APPLYING_REVIEW_FEEDBACK`, or
+`AWAITING_FUNCTIONAL_REVIEW` with a `STALE` `technical_approval`, for
+`stage="post-fix"` — a caller already regenerating a bundle for other
+reasons); this command is the only way to reach the identical
+recovered-role commit shape from `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`
+itself, without re-entering any of those remediation cycles just to fix a
+provenance pointer.
 
 `<bundle_dir>` below resolves per
 `docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Bundle location"
@@ -45,11 +49,14 @@ review-feedback cycle just to fix a provenance pointer.
    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`, stop and say so, naming the
    actual phase — this is the only legal source phase
    (`IllegalImplementationProvenanceRecoverySourcePhaseError`). A work item
-   still being written (`SELF_REVIEWING_IMPLEMENTATION`/
-   `APPLYING_REVIEW_FEEDBACK`) already has its own same-content path
-   through `record_bundle_generation`'s `outcome="same_content"` (`WF8c`
-   (c)) the next time its bundle is regenerated — never invoke this command
-   from those phases.
+   already at one of `record_bundle_generation`'s own legal source phases
+   — still being written (`SELF_REVIEWING_IMPLEMENTATION`/
+   `APPLYING_REVIEW_FEEDBACK`), or mid functional-review bounded fix
+   (`AWAITING_FUNCTIONAL_REVIEW` with `technical_approval.status ==
+   "STALE"`) — already has its own same-content path through
+   `record_bundle_generation`'s `outcome="same_content"` (`WF8c` (c)) the
+   next time its bundle is regenerated — never invoke this command from
+   those phases.
 3. **Diagnose, read-only, before asking for confirmation**: call
    `workflow_state.verify_implementation_provenance_recovery(repo_root,
    work_item, base_commit=<base_commit>, head=<current HEAD SHA>)`. This
@@ -91,8 +98,8 @@ review-feedback cycle just to fix a provenance pointer.
    work_item_id, now=<now>))` (the recovered-role field set: only
    `state_revision`/`last_transition` change — `phase` stays
    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` value-unchanged, unlike
-   `record_bundle_generation`'s own two entry points, both of which
-   transition *into* it), persist the returned state, and commit it
+   `record_bundle_generation`'s own legal source phases, every one of
+   which transitions *into* it), persist the returned state, and commit it
    **alone** — stage exactly `docs/ai-workflow/WORKFLOW_STATE.json` (never
    a broader `git add`) — as the one first-parent child of live HEAD
    (never of `t`; ancestry is never rewritten), carrying exactly three
