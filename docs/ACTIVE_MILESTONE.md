@@ -989,3 +989,193 @@ prior completions' was: it already correctly points at the real
 `docs/ROADMAP.md`, which `workflow-v2-3` was never part of, and explicitly
 defers the next roadmap milestone (the Figma-led redesign) until the user
 initiates it.
+
+---
+
+## `workflow-v2-3-followups` — functional review checklist (implementation revision 1)
+
+This section is unrelated to the roadmap/Milestone 8 content above and to
+the `workflow-v2-1-core`/`v2-1-dry-run`/`v2-1-dry-run-legacy`/`workflow-v2-3`
+sections above it. It tracks the separate, non-product process work item
+`workflow-v2-3-followups` (see
+`docs/ai-workflow/WORKFLOW_V2_3_FOLLOWUPS_PLAN.md`,
+`docs/ai-workflow/WORKFLOW_STATE.json`), entering `AWAITING_FUNCTIONAL_REVIEW`
+for the first time.
+
+**Context**: a focused maintenance milestone closing three deferred
+workflow-tooling defects recorded in `docs/ai-workflow/WORKFLOW_V2_3_FOLLOWUPS.md`
+after `workflow-v2-3` reached `MILESTONE_COMPLETE`, plus one explicitly
+opportunistic fourth item. No `app/` code is touched at all — every change
+lands in `.claude/commands/`, `docs/ai-workflow/`, and `scripts/`. Four
+registry checkpoints (`CP1`-`CP4`), all `COMPLETE`, one commit each
+(`570adc2`, `bac9237`, `5442ea6`, `5b5b9c7`), plus one self-review fix commit
+(`994608f`) and this round's bundle-generation record (`54befc7`).
+
+One external implementation-review round: `.ai-review/feedback/REVIEW_FEEDBACK.md`
+returned `Status: APPROVE` (0 Blocking, 0 Important, 5 Optional — O1
+through O5, all recorded as accepted trade-offs or documentation
+observations, none a required acceptance criterion).
+`technical_approval` was just recorded this session (commit `5ab2c99`,
+`Workflow-Technical-Approval:
+e8a4a76420995dc9eca3bd015267de890b32dc5d75684bd379833440816f2435`, basis
+`EXTERNAL_APPROVE`).
+
+### Setup
+
+No Android app / Gradle changes are involved — this is process tooling
+only (`scripts/*.py`, `.claude/commands/*.md`, `docs/ai-workflow/*`). No
+build/install step is needed; everything below runs with `python3` from
+the repo root (`scripts/` for the checks that `cd` there).
+
+### Automated verification (re-confirmed this session, current)
+
+Re-run independently, live, right before this checklist was written (only
+`docs/ai-workflow/WORKFLOW_STATE.json` — implementation-stage excluded —
+has changed since `technical_approval.reviewed_content_commit`, `994608f`,
+via the bundle-generation-record commit `54befc7` and this session's own
+metadata-only approval commit `5ab2c99`; `git log 994608f..HEAD -- .
+':!docs/ai-workflow/WORKFLOW_STATE.json'` is empty):
+
+```
+python3 -m unittest workflow_fingerprint_test workflow_fingerprint_generalization_test \
+  workflow_state_test workflow_state_completion_obligations_test \
+  workflow_integration_test workflow_test_harness_test
+```
+
+Result: **1146 tests, OK**, 27.973s.
+
+```
+python3 -m unittest workflow_state_demo_test         # 45/45, OK
+python3 -m unittest workflow_fingerprint_demo_test    # 15/15, OK (skipped=4)
+```
+
+Total **1206**, zero failures/errors beyond the 4 pre-existing/unrelated
+skips — matches `TEST_RESULTS.md`'s recorded result exactly.
+
+### Test data
+
+None to seed — every check below reads this repository's own real,
+already-committed state (`workflow-v2-3-followups`'s own entry in
+`docs/ai-workflow/WORKFLOW_STATE.json`, the changed command/doc/script
+files, and this milestone's own real review history).
+
+### Flows to exercise manually
+
+1. **Re-run the automated suite yourself** (commands above, from
+   `scripts/`) and confirm the same 1146/45/15 result independently,
+   rather than trusting this document's claim alone.
+2. **CP1's merged staging-and-pin fix.** No live plan-stage approval with
+   a fresh conditional fifth member (`<work_item>-artifacts.json`, both
+   pending and fresh) is available to re-demonstrate right now — this
+   item's own plan-stage approval already consumed the one naturally
+   occurring opportunity, reproducing the pre-fix bug live before CP1
+   landed (`IMPLEMENTATION_SUMMARY.md`'s CP1 section: "This work item's own
+   plan-stage approval reproduced it live."). Confirm the fix instead
+   through its own non-mocked regression coverage, run from `scripts/`:
+   ```
+   python3 -m unittest workflow_integration_test.TestPlanApprovalPermanentSiteEndToEnd.test_five_member_fixture_succeeds_through_the_real_merged_step_5
+   ```
+   Expected: `OK` (re-confirmed live for this checklist). The test drives
+   a genuine five-member fixture through the real primitives to a
+   committed, materialized, journal-closed outcome, not a mock.
+3. **CP1's trailer final-paragraph requirement, stated in all three
+   places it should be.** Confirm:
+   ```
+   grep -ln "OPUS-R129-001" .claude/commands/approve-review.md \
+     .claude/commands/milestone-implement.md .claude/commands/bootstrap-workflow-v2.md
+   ```
+   Expected: all three files listed (the milestone added the sentence,
+   citing this same marker, to `approve-review.md`; the other two already
+   stated it citing the same marker). A plain `grep "final paragraph"`
+   under-matches two of the three files, since the phrase wraps across a
+   line break there — use the marker, not the phrase.
+4. **CP2's real, live deliverable — the exact review that authorized this
+   round.** Read `.ai-review/feedback/REVIEW_FEEDBACK.md` directly: confirm
+   its `Status: APPROVE`, `Reviewed bundle ID:`, `Reviewed base commit:`,
+   and `Work item:` fields, and that its "Independent verification
+   performed" section documents real re-execution (fresh `bundle_id`/
+   `review_content_id` recomputation, a full independent test re-run) —
+   this file is itself `/review-implementation`'s own write for this
+   round, not a simulation. No live cross-work-item ownership collision
+   exists today to re-trigger the new `FeedbackOwnedByOtherWorkItemError`
+   guard; its regression coverage
+   (`test_different_work_item_refuses_naming_both`,
+   `test_refused_run_for_b_leaves_as_own_feedback_byte_identical_and_creates_no_scoped_dir`,
+   `test_a_may_overwrite_its_own_feedback_at_the_same_flat_path`) is the
+   available evidence instead.
+5. **CP3's canonical casing, live in this exact item's own record.**
+   Confirm `docs/ai-workflow/WORKFLOW_STATE.json`'s
+   `work_items["workflow-v2-3-followups"].plan_review_stages` shows
+   `LOCAL_MODEL_PLAN_REVIEW` and `MANUAL_EXTERNAL_PLAN_REVIEW` as the
+   literal keys (canonical `SCREAMING_SNAKE_CASE`, not the old lowercase
+   tokens) — this is real live state the migration/normalization produced,
+   not a fixture.
+6. **CP4's cross-cutting sweep, re-run yourself.** Confirm no scope creep:
+   ```
+   grep -rn "AWAITING_LOCAL_IMPLEMENTATION_REVIEW\|quorum\|Reviewer role:" \
+     .claude/commands/ docs/ai-workflow/ scripts/*.py
+   ```
+   Expected: every hit is prose explicitly declining the concept, or
+   pre-existing plan-review-stage vocabulary (`Reviewer role:` in
+   `record-manual-plan-review.md`) — none introduces a new lifecycle state
+   or reviewer-quorum mechanism. Then confirm the hard-gate count is
+   still exactly six: `docs/ai-workflow/MILESTONE_WORKFLOW.md`'s "Hard
+   gates summary" section.
+7. **The self-review fix (`994608f`).** Read
+   `docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Local reviewer commands"
+   section: confirm it now states `/review-functional`'s report has no
+   authoritative round to become and is not destined for
+   `REVIEW_FEEDBACK.md`, pointing the operator at revising
+   `FUNCTIONAL_REVIEW.md` by hand instead — not the pre-fix wording that
+   let this sentence read as true of `/review-functional` when it was
+   only ever true of `/review-implementation`.
+8. **The real `/approve-review implementation` flow, exercised for real
+   this very session.** Gate-reachability check (worktree/HEAD match,
+   `REJECTED`-marker absence, `bundle_id`/`review_content_id`
+   recomputation matching `REVIEW_FEEDBACK.md` exactly, implementation
+   provenance-interval verification), `resolve_approval_basis` →
+   `EXTERNAL_APPROVE`, a `state_transaction`-guarded write of
+   `technical_approval`, and a metadata-only commit (`5ab2c99`) carrying
+   the trailers. Confirm independently:
+   ```
+   git show --stat 5ab2c99
+   git log -1 --format=%B 5ab2c99
+   ```
+   Expected: exactly one file changed
+   (`docs/ai-workflow/WORKFLOW_STATE.json`), and the trailers read
+   `Workflow-Technical-Approval:
+   e8a4a76420995dc9eca3bd015267de890b32dc5d75684bd379833440816f2435` /
+   `Workflow-Work-Item: workflow-v2-3-followups`.
+9. **Command surface is fully registered.** Confirm `.claude/commands/`
+   contains exactly 16 files and `CLAUDE.md`'s "Slash commands" list names
+   all 16.
+
+### Expected result
+
+All nine checks above pass exactly as described. Checks 1, 3, 5, 6, 7, 8,
+and 9 are read-only or inspect commits/state that already exist (safe to
+repeat freely); checks 2 and 4 point at the strongest available evidence
+(a real non-mocked regression test; this round's own real review artifact)
+where a fresh live re-demonstration of the exact original trigger is not
+available today.
+
+### Known limitations / out of scope for this review
+
+- No live re-demonstration of CP1's five-member plan-stage-approval branch
+  or CP2's cross-work-item ownership-guard collision exists today — see
+  checks 2 and 4 above for the available evidence instead.
+- Required follow-up #8 (operator reference / lifecycle diagram sync,
+  `WORKFLOW_V2_3_FOLLOWUPS.md` item 2) remains deferred. The two artifacts
+  involved — `docs/ai-workflow/WORKFLOW_V2_1_OPERATOR_REFERENCE.md` and
+  `docs/ai-workflow/diagrams/` — are untracked working-tree leftovers,
+  declared `excluded` in this item's own artifacts declaration and left
+  unmodified throughout this review, per `CLAUDE.md`'s "don't touch
+  unrelated working-tree changes".
+- The five Optional findings in `REVIEW_FEEDBACK.md` (O1-O5) are
+  non-blocking commentary, not defects requiring a fix before functional
+  review; none is a required acceptance criterion for this round. O1 in
+  particular (the implementation-review gate's now-self-satisfiable
+  character) was explicitly considered and accepted at plan stage
+  (`LPR-R2-B01`).
+
+Findings go in `.ai-review/feedback/FUNCTIONAL_REVIEW.md`.
