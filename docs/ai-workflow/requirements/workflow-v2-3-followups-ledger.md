@@ -108,3 +108,97 @@ overrides it.
   round.
 - **Functional-verification outcome:** not applicable (process checkpoint,
   no product-facing behavior).
+
+## `CP2` — `/review-implementation` canonical feedback writeback + plan-conformance read
+
+- **Implementation evidence, grouped by sub-obligation:**
+  - **New ownership guard (REQ-4/REQ-21)**: added
+    `assert_feedback_not_owned_by_other_work_item` and the new
+    `FeedbackOwnedByOtherWorkItemError` exception to
+    `scripts/workflow_fingerprint.py`, beside
+    `MissingFeedbackBindingFieldError`/`FeedbackBundleMismatchError` and
+    `parse_review_feedback_binding_fields`/`assert_feedback_matches_bundle`
+    respectively (`LPR-R8-O01`). Pure function over already-read content —
+    never touches `resolve_feedback_dir` or the filesystem itself.
+  - **Command rewrite (REQ-3/REQ-4/REQ-6/REQ-17/REQ-20)**:
+    `.claude/commands/review-implementation.md` — step 3 gained a
+    `PLAN.md`/`plan_path` read; step 5 gained a plan-conformance search
+    arm; step 6's provenance clause no longer describes a hypothetical
+    hand-copy; the frontmatter `description:` line no longer reads
+    "Report-only"; a new step 7 re-calls `assert_bundle_not_rejected`
+    (second of two, `WFR-67` classification change from "once" to
+    "twice") then the new ownership guard, immediately before an
+    unconditional write of `<feedback_dir>/REVIEW_FEEDBACK.md`, with
+    refusal behavior stated per guard (suppress the report on a
+    `BundleRejectedError`; still print it in full on a
+    `FeedbackOwnedByOtherWorkItemError`) and recovery keyed on a live A
+    reaching the terminal phase `MILESTONE_COMPLETE`; step 8 (was step 7)
+    no longer claims the command writes nothing.
+  - **Doc sync (REQ-7/REQ-19/REQ-23)**:
+    `docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Local reviewer commands"
+    section split its shared "writes nothing"/"that choice is always the
+    user's" sentences by command; `docs/ai-workflow/MILESTONE_WORKFLOW.md`
+    updated at three sites — the `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`
+    "Allowed actions" clause, the "Hard gates summary" sentence, and the
+    "Feedback file locations" section — each stating `/review-implementation`'s
+    new write precisely while leaving `/review-functional`'s own equivalent
+    text true and untouched.
+  - **Housekeeping (REQ-13)**: `docs/ai-workflow/WORKFLOW_V2_3_FOLLOWUPS.md`
+    git-added and tracked for the first time this checkpoint. Item 4's
+    Status closed; item 2's Status closed except required follow-up #8
+    (explicitly deferred, untracked operator-reference/diagram scratch
+    content out of scope); item 2's required follow-up items 1–7 and 9
+    marked closed, #8 marked deferred with its own disposition recorded.
+  - **Conformance surface (`LPR-R1-B02`)**: updated
+    `_GOLDEN_COMMAND_FILE_SHA256["review-implementation.md"]` in
+    `scripts/workflow_integration_test.py` to the new post-edit hash, with
+    a rationale comment naming CP2 and the changed steps; rewrote
+    `test_states_the_report_only_constraint`/`test_states_it_writes_nothing`
+    to the new, narrower invariant; updated
+    `EXPECTED_ASSERTION_COUNT["...review-implementation.md"]` in
+    `scripts/workflow_state_demo_test.py` from `1` to `2`, with the
+    explanatory comment above the table corrected to match (REQ-5).
+  - **Regression coverage**: `scripts/workflow_integration_test.py`'s
+    `TestReviewImplementationCommandStaticConformance` gained four new
+    doc-assertion methods (plan-conformance read, step 6/7 no longer
+    describing manual installation + frontmatter no longer "Report-only",
+    the write step naming the ownership guard, and the refusal-path prose
+    stated per guard with terminal-phase-keyed recovery).
+    `scripts/workflow_fingerprint_test.py` gained three new test classes:
+    `TestFeedbackNotOwnedByOtherWorkItem` (no-existing-file, same-work-item
+    overwrite, unparseable `Work item:` field, different-work-item refusal
+    naming both ids — four cases), `TestReviewImplementationWritebackCrossWorkItemIsolation`
+    (a genuine flat-path collision between two work items via the real
+    `resolve_feedback_dir`, proving the refused write leaves the other
+    work item's feedback byte-identical and creates no scoped
+    `.ai-review/<work_item_id>/feedback/` directory as a side effect, per
+    `LPR-R8-I01`; plus a same-work-item-overwrite-succeeds case), and
+    `TestReviewImplementationFeedbackBindingRoundTrip` (a freshly composed
+    `REVIEW_FEEDBACK.md` in the command's own step-6 shape, including the
+    non-binding `Reviewed review content ID:` line, binds successfully
+    through the shared parsers). The three "stale/rejected/wrong-phase
+    implementation review writes nothing" negative paths REQ-5 names are
+    covered by the pre-existing, unmodified, generically-tested
+    `assert_bundle_not_rejected`/`assert_local_generation_matches`
+    machinery and the phase-guard doc-assertion (unchanged by this
+    checkpoint) rather than duplicated under a review-implementation-specific
+    fixture — this checkpoint adds a second call site to the first two
+    functions and no new call site to the third; their own existing
+    coverage in `workflow_fingerprint_test.py`/`workflow_integration_test.py`
+    already proves each raises/refuses correctly and is unaffected by
+    which command calls them.
+- **Verification results:** `python3 -m unittest workflow_fingerprint_test
+  workflow_fingerprint_generalization_test workflow_state_test
+  workflow_state_completion_obligations_test workflow_integration_test
+  workflow_test_harness_test` — 1132 tests, all green. `workflow_state_demo_test.py`
+  run standalone (this checkpoint's own required addition, REQ-5's
+  sequencing note) — 45 tests, all green, including
+  `test_all_fifteen_command_files_declare_the_expected_value` and
+  `test_every_non_exempt_file_calls_the_shared_assertion_the_expected_number_of_times`
+  against the updated `EXPECTED_ASSERTION_COUNT` table.
+- **Review findings:** none yet — pending this checkpoint's own review
+  round.
+- **Functional-verification outcome:** not applicable (process checkpoint,
+  no product-facing behavior; `/review-implementation`'s own new write
+  behavior is exercised for real by this milestone's own functional
+  review, per `docs/ai-workflow/WORKFLOW_V2_3_FOLLOWUPS_PLAN.md`).

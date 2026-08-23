@@ -1287,19 +1287,26 @@ class TestReviewSubjectDeclarationsLive(unittest.TestCase):
     # The "twice" consumers (existing pre-mutation refusal point + the
     # operation's own mutation guard) vs. the "once" report-only consumers
     # (revision 79: "the single assertion immediately preceding the report
-    # IS the mutation-guard assertion").
+    # IS the mutation-guard assertion"). `review-implementation.md` moved
+    # from "once" to "twice" at `workflow-v2-3-followups` `CP2` (REQ-5,
+    # `LPR-R1-I01`): it now writes `<feedback_dir>/REVIEW_FEEDBACK.md`
+    # once its own pre-write guards -- including a second, immediately-
+    # pre-write `assert_bundle_not_rejected` call -- pass, the same "real
+    # write follows the guard" shape the other five "twice" consumers
+    # already have; it is no longer a report-only consumer whose single
+    # assertion doubles as its own mutation guard.
     EXPECTED_ASSERTION_COUNT = {
         ".claude/commands/apply-implementation-review.md": 2,
         ".claude/commands/apply-plan-review.md": 2,
         ".claude/commands/approve-review.md": 2,
         ".claude/commands/record-manual-plan-review.md": 2,
         ".claude/commands/review-plan.md": 2,
+        ".claude/commands/review-implementation.md": 2,
         ".claude/commands/apply-functional-review.md": 1,
         ".claude/commands/milestone-implement.md": 1,
         ".claude/commands/milestone-plan.md": 1,
         ".claude/commands/prepare-review.md": 1,
         ".claude/commands/review-functional.md": 1,
-        ".claude/commands/review-implementation.md": 1,
     }
 
     def test_all_fifteen_command_files_declare_the_expected_value(self):

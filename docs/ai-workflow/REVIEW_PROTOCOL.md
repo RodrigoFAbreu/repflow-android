@@ -262,18 +262,27 @@ work item sits at `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`) and
 `/review-functional` (usable while a work item sits at
 `AWAITING_FUNCTIONAL_REVIEW`). Both implement a model-independent review
 role — nothing about either command's contract, checks, or report format
-names a specific model — and both are strictly report-only: neither ever
-writes `docs/ai-workflow/WORKFLOW_STATE.json`, `<feedback_dir>/
-REVIEW_FEEDBACK.md`, `<feedback_dir>/FUNCTIONAL_REVIEW.md`, or
-`docs/ACTIVE_MILESTONE.md`, approves a stage, applies a finding, or advances
-`phase`. A user may hand-copy either command's printed report into
+names a specific model. Neither ever writes
+`docs/ai-workflow/WORKFLOW_STATE.json` or `docs/ACTIVE_MILESTONE.md`,
+approves a stage, applies a finding, or advances `phase`. Their write
+behavior toward their own review-feedback artifact differs, though:
+`/review-implementation` writes the current `<feedback_dir>/
+REVIEW_FEEDBACK.md` once its own pre-write guards pass (see
+`.claude/commands/review-implementation.md` step 7); `/review-functional`
+remains strictly report-only and writes nothing, including
+`<feedback_dir>/FUNCTIONAL_REVIEW.md` — unchanged by this milestone. For
+`/review-functional`, a user may hand-copy its printed report into
 `<feedback_dir>/REVIEW_FEEDBACK.md` themselves, verbatim or after obtaining
 a further external reviewer's own separate pass, if they choose to treat it
 as the authoritative external round — that choice is always the user's, never
-automatic. `/apply-implementation-review`, `/apply-functional-review`,
-`/approve-review`, `/accept-milestone`, and `/accept-scoped-remediation`
-remain the only commands that ever act on a real, recorded review round;
-neither local reviewer command changes any of their behavior.
+automatic. `/review-implementation` no longer works this way: once its own
+pre-write guards pass, its write *is* the authoritative
+`<feedback_dir>/REVIEW_FEEDBACK.md` round the moment it lands, with no
+separate operator installation step. `/apply-implementation-review`,
+`/apply-functional-review`, `/approve-review`, `/accept-milestone`, and
+`/accept-scoped-remediation` remain the only commands that ever act on a
+real, recorded review round; neither local reviewer command changes any of
+their behavior.
 
 The two commands' reports are deliberately differently shaped, since they
 review different-shaped artifacts: `/review-implementation`'s report follows

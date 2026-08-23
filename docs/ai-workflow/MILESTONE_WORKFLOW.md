@@ -209,9 +209,12 @@ re-enters manual-external review without a fresh local pass first.
 - **Allowed actions**: run
   `scripts/prepare-ai-review.sh <base-sha> implementation` to export the
   bundle. No further implementation. Optionally, run `/review-implementation`
-  — a non-gating, report-only, model-independent second opinion on the
-  current bundle; it writes nothing and never advances this state, so it
-  adds no new gate.
+  — a non-gating, model-independent second opinion on the current bundle;
+  it writes the current `.ai-review/feedback/REVIEW_FEEDBACK.md` (or the
+  scoped equivalent) once its own pre-write guards pass, but still writes
+  no `docs/ai-workflow/WORKFLOW_STATE.json` and never advances this state,
+  so it remains non-gating and adds no new gate — just no longer "writes
+  nothing".
 - **Artifacts**: `.ai-review/current/` (implementation stage) with the real
   diff, changed files, tests run, decisions; `.ai-review/review-bundle.tar.gz`.
 - **Exit**: external reviewer places feedback at
@@ -422,12 +425,17 @@ registry still has an incomplete checkpoint — never a new phase. The hard
 gate count stays exactly **6**.
 
 `/review-implementation` and `/review-functional` (`workflow-v2-3`) add no
-gate either: both are optional, report-only, non-gating actions reachable
-from inside an existing gate (`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` and
-`AWAITING_FUNCTIONAL_REVIEW` respectively) — neither writes state nor
-advances `phase` — the same "optional action inside an existing gate, not a
-new one" reasoning this section already applies to the plan stage's
-two-stage refinement below.
+gate either: both are optional, non-gating actions reachable from inside an
+existing gate (`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` and
+`AWAITING_FUNCTIONAL_REVIEW` respectively) — neither writes
+`docs/ai-workflow/WORKFLOW_STATE.json` nor advances `phase` — the same
+"optional action inside an existing gate, not a new one" reasoning this
+section already applies to the plan stage's two-stage refinement below.
+`/review-implementation` (`workflow-v2-3-followups`) does write a review
+artifact, `.ai-review/feedback/REVIEW_FEEDBACK.md` (or the scoped
+equivalent), once its own pre-write guards pass — but not `WORKFLOW_STATE.json`
+and not a `phase` transition, so it stays non-gating for the same reason.
+`/review-functional` writes nothing at all, unchanged.
 
 For a `governing_workflow_version: "2.1"` work item, the edge from
 `REVISING_PLAN` to `AWAITING_PLAN_APPROVAL` is further refined into
@@ -450,5 +458,10 @@ operations, repeated verification failures, unrelated working-tree changes).
 - Plan/implementation review: `.ai-review/feedback/REVIEW_FEEDBACK.md`
 - Functional review: `.ai-review/feedback/FUNCTIONAL_REVIEW.md`
 
-Both are read, never written, by Claude — see
-`docs/ai-workflow/REVIEW_PROTOCOL.md` for the required feedback structure.
+`REVIEW_FEEDBACK.md` is written by `/review-plan` (the
+`local_model_plan_review` stage) and, since `workflow-v2-3-followups`, also
+by `/review-implementation` once its own pre-write guards pass — otherwise
+read, never written, by Claude. `FUNCTIONAL_REVIEW.md` stays read-only:
+nothing this repository's commands write it, including
+`/review-functional`. See `docs/ai-workflow/REVIEW_PROTOCOL.md` for the
+required feedback structure.

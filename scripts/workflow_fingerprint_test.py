@@ -2504,6 +2504,121 @@ class TestFeedbackBindingFields(unittest.TestCase):
             )
 
 
+class TestFeedbackNotOwnedByOtherWorkItem(unittest.TestCase):
+    """`workflow-v2-3-followups` `CP2` (REQ-4/REQ-21, `GPT-FUP-R6-I01`,
+    `LPR-R7-B01`): `/review-implementation`'s new pre-write ownership
+    guard. Refuses rather than relocates, and never touches
+    `resolve_feedback_dir` or the filesystem itself -- it is a pure
+    function over already-read content."""
+
+    def _feedback(self, *, work_item="workflow-v2-1-core", bundle_id=FAKE_ID_A):
+        return (
+            f"# Review Decision\n\nStatus: APPROVE\n\n"
+            f"Reviewed bundle ID: {bundle_id}\n"
+            f"Reviewed base commit: {'a' * 40}\n"
+            f"Work item: {work_item}\n"
+        )
+
+    def test_no_existing_file_is_unowned(self):
+        wf.assert_feedback_not_owned_by_other_work_item(None, work_item_id="workflow-v2-3-followups")
+
+    def test_same_work_item_overwrite_is_allowed(self):
+        wf.assert_feedback_not_owned_by_other_work_item(
+            self._feedback(work_item="workflow-v2-3-followups"),
+            work_item_id="workflow-v2-3-followups",
+        )
+
+    def test_unparseable_work_item_field_is_treated_as_unowned(self):
+        wf.assert_feedback_not_owned_by_other_work_item(
+            "# Review Decision\n\nStatus: APPROVE\n",  # predates the binding-field convention
+            work_item_id="workflow-v2-3-followups",
+        )
+
+    def test_different_work_item_refuses_naming_both(self):
+        with self.assertRaises(wf.FeedbackOwnedByOtherWorkItemError) as ctx:
+            wf.assert_feedback_not_owned_by_other_work_item(
+                self._feedback(work_item="workflow-v2-1-core"),
+                work_item_id="workflow-v2-3-followups",
+            )
+        self.assertIn("workflow-v2-1-core", str(ctx.exception))
+        self.assertIn("workflow-v2-3-followups", str(ctx.exception))
+
+
+class TestReviewImplementationWritebackCrossWorkItemIsolation(unittest.TestCase):
+    """`workflow-v2-3-followups` `CP2` (REQ-21, `GPT-FUP-R6-I01`,
+    `LPR-R7-B01`, extended `LPR-R8-I01`): the concrete scenario the new
+    guard exists to prevent -- two work items resolving the identical flat
+    `resolve_feedback_dir` path, since neither yet has its own scoped
+    `.ai-review/<work_item_id>/feedback/` directory. Drives the real
+    resolver, not a stand-in path."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.repo_root = Path(self._tmp.name)
+        (self.repo_root / ".ai-review" / "feedback").mkdir(parents=True)
+
+    def _write_a_feedback(self, work_item="work-item-a"):
+        path = self.repo_root / wf.resolve_feedback_dir(self.repo_root, "work-item-a")
+        content = (
+            f"# Review Decision\n\nStatus: APPROVE\n\n"
+            f"Reviewed bundle ID: {FAKE_ID_A}\n"
+            f"Reviewed base commit: {'a' * 40}\n"
+            f"Work item: {work_item}\n"
+        )
+        (path / "REVIEW_FEEDBACK.md").write_text(content)
+        return path / "REVIEW_FEEDBACK.md", content
+
+    def test_refused_run_for_b_leaves_as_own_feedback_byte_identical_and_creates_no_scoped_dir(self):
+        a_file, a_content = self._write_a_feedback(work_item="work-item-a")
+        # Both A and B resolve the same flat path today -- neither has a
+        # scoped directory of its own yet.
+        self.assertEqual(
+            wf.resolve_feedback_dir(self.repo_root, "work-item-b"), Path(".ai-review/feedback"),
+        )
+
+        existing = a_file.read_text()
+        with self.assertRaises(wf.FeedbackOwnedByOtherWorkItemError):
+            wf.assert_feedback_not_owned_by_other_work_item(existing, work_item_id="work-item-b")
+
+        self.assertEqual(a_file.read_text(), a_content, "A's feedback must survive byte-identical")
+        self.assertFalse(
+            (self.repo_root / ".ai-review" / "work-item-b").exists(),
+            "the refused run must create no .ai-review/work-item-b/feedback/ directory as a side effect",
+        )
+
+    def test_a_may_overwrite_its_own_feedback_at_the_same_flat_path(self):
+        a_file, _ = self._write_a_feedback(work_item="work-item-a")
+        wf.assert_feedback_not_owned_by_other_work_item(
+            a_file.read_text(), work_item_id="work-item-a",
+        )
+
+
+class TestReviewImplementationFeedbackBindingRoundTrip(unittest.TestCase):
+    """`workflow-v2-3-followups` `CP2` (REQ-5): a freshly composed
+    `REVIEW_FEEDBACK.md` in exactly the shape `/review-implementation`
+    step 6 composes -- the three binding fields plus the non-binding
+    `Reviewed review content ID:` line -- parses and validates cleanly
+    through the same shared, stage-agnostic parsers `/review-plan` and
+    `/approve-review` already use, with the extra line ignored rather than
+    breaking parsing."""
+
+    def test_freshly_written_feedback_binds_successfully(self):
+        content = (
+            "# Review Decision\n\n"
+            "Status: APPROVE\n\n"
+            f"Reviewed bundle ID: {FAKE_ID_A}\n"
+            f"Reviewed base commit: {'c' * 40}\n"
+            "Work item: workflow-v2-3-followups\n"
+            f"Reviewed review content ID: {FAKE_ID_B}\n"
+        )
+        fields = wf.parse_review_feedback_binding_fields(content)
+        wf.assert_feedback_matches_bundle(
+            fields, bundle_id=FAKE_ID_A, base_commit="c" * 40,
+            work_item_id="workflow-v2-3-followups",
+        )
+
+
 class TestBinaryAndUnusualPathBundleEntries(unittest.TestCase):
     """`OPUS-R6-019`/`WFR-05`: `compute_bundle_id` treats bundle-file
     content as opaque bytes throughout, so binaries and unusual-but-

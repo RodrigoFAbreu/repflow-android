@@ -438,11 +438,17 @@ class TestReviewImplementationCommandStaticConformance(unittest.TestCase):
         )
 
     def test_states_the_report_only_constraint(self):
+        """Narrowed, `workflow-v2-3-followups` `CP2` (REQ-5): the command
+        no longer claims to write nothing -- it states the new, narrower
+        invariant instead (writes `REVIEW_FEEDBACK.md`; still never writes
+        `WORKFLOW_STATE.json`, never approves, never advances `phase`)."""
         self.assertIn(
-            "**Review and report only.** This command never writes\n"
-            "`<feedback_dir>/REVIEW_FEEDBACK.md`, never writes\n"
-            "`docs/ai-workflow/WORKFLOW_STATE.json`, never edits source/test/doc content,\n"
-            "never approves a stage, and never advances `phase`.",
+            "**Writes `<feedback_dir>/REVIEW_FEEDBACK.md`; nothing else.** This command\n"
+            "writes the current `<feedback_dir>/REVIEW_FEEDBACK.md` (step 7, once every\n"
+            "guard there passes) but never writes\n"
+            "`docs/ai-workflow/WORKFLOW_STATE.json`, never edits source/test/plan/\n"
+            "registry/mapping/bundle content, never approves a stage, and never\n"
+            "advances `phase`.",
             self.text,
         )
 
@@ -455,7 +461,104 @@ class TestReviewImplementationCommandStaticConformance(unittest.TestCase):
         )
 
     def test_states_it_writes_nothing(self):
-        self.assertIn("**Report only — writes nothing.**", self.text)
+        """Narrowed, `workflow-v2-3-followups` `CP2` (REQ-5): the command
+        no longer states "Report only -- writes nothing." anywhere -- it
+        now writes `<feedback_dir>/REVIEW_FEEDBACK.md` once its own
+        pre-write guards pass (step 7), and step 8's own closing text says
+        so."""
+        self.assertNotIn("Report only", self.text)
+        self.assertNotIn("writes nothing", self.text)
+        self.assertIn(
+            "8. **Report and stop.** On a successful write, state plainly that\n"
+            "   `<feedback_dir>/REVIEW_FEEDBACK.md` was written and is now the\n"
+            "   authoritative round for `/apply-implementation-review`/`/approve-review\n"
+            "   implementation` to act on",
+            self.text,
+        )
+
+    def test_states_plan_conformance_read(self):
+        """`workflow-v2-3-followups` `CP2` (REQ-6, item 4's deferred
+        follow-up): step 3's read list names `PLAN.md`/`plan_path`, and
+        step 5 gains a plan-conformance search arm mirroring
+        `/review-plan` step 6 -- a further method on this class, not a
+        new fixture, per `LPR-R2-O02`'s correction of the original
+        (inapplicable) precedent citation."""
+        self.assertIn(
+            "3. **Read**: `<bundle_dir>/PLAN.md` and the item's own `plan_path`",
+            self.text,
+        )
+        self.assertIn(
+            "**Also independently verify the implementation against what the\n"
+            "   approved plan (`PLAN.md`/`plan_path`, read in step 3) actually\n"
+            "   specified**",
+            self.text,
+        )
+
+    def test_step_six_and_seven_no_longer_describe_manual_installation(self):
+        """`LPR-R3-I02`/`LPR-R4-I02`: the provenance text this command's
+        own step 6 and (what was) step 7 carried -- describing the
+        operator hand-copying this report into `REVIEW_FEEDBACK.md` as an
+        optional installation step -- no longer appears anywhere,
+        including the frontmatter `description:` line, which no longer
+        reads "Report-only" (`LPR-R4-I02`'s own `assertNotIn`, added to
+        this same method rather than a new fixture)."""
+        self.assertNotIn("hand-copy this report", self.text)
+        self.assertNotIn(
+            "if the user chooses to hand-copy this report into", self.text,
+        )
+        self.assertNotIn("Report-only", self.text)
+        self.assertIn(
+            "since satisfying\n"
+            "   `workflow_fingerprint.parse_review_feedback_binding_fields`/\n"
+            "   `assert_feedback_matches_bundle` is a hard precondition of this\n"
+            "   command's own write in step 7 below, not a convenience for a\n"
+            "   hypothetical hand-copy.",
+            self.text,
+        )
+
+    def test_write_step_names_the_ownership_guard(self):
+        """`GPT-FUP-R6-I01`, revised `LPR-R7-B01`: a further method
+        proving the command's own prose actually instructs the fix, not
+        only that `workflow_fingerprint.assert_feedback_not_owned_by_other_work_item`
+        exists and behaves correctly in isolation -- named, and stated to
+        run immediately before the write against the unmodified
+        `resolve_feedback_dir(repo_root, work_item_id)` path."""
+        self.assertIn("assert_feedback_not_owned_by_other_work_item", self.text)
+        self.assertIn(
+            "ownership guard runs immediately before the write, against this same\n"
+            "     unmodified `resolve_feedback_dir(repo_root, work_item_id)` path.",
+            self.text,
+        )
+
+    def test_refusal_path_states_report_printing_per_guard_and_recovery(self):
+        """`LPR-R10-B01`/`LPR-R11-I01`/`LPR-R11-I02`/`LPR-R12-I01` (round-10
+        through round-12 local plan review): the refusal-path prose is
+        stated per guard, not as one "either guard" sentence, and the
+        recovery text is keyed on a live A reaching the terminal phase
+        `MILESTONE_COMPLETE`, not on a fixed two-phase consumption list --
+        including that hand-creating a scoped feedback directory is not an
+        endorsed remedy."""
+        self.assertIn(
+            "**On a `BundleRejectedError` here, suppress the\n"
+            "     composed report entirely**",
+            self.text,
+        )
+        self.assertIn(
+            "**On a `FeedbackOwnedByOtherWorkItemError` here, still print the\n"
+            "     composed report in full**",
+            self.text,
+        )
+        self.assertIn(
+            "hand-creating a scoped\n"
+            "     `.ai-review/<work_item_id>/feedback/` directory is",
+            self.text,
+        )
+        self.assertIn("**not** an endorsed", self.text)
+        self.assertIn(
+            "Only once a live A's `phase`\n"
+            "     independently reaches `MILESTONE_COMPLETE` may the operator delete the",
+            self.text,
+        )
 
     def test_names_artifacts_path_for_work_item(self):
         """I3/revision 2's own missing-test gap: a regression back to
@@ -689,7 +792,19 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # implementation-review remediation): corrected the false claim that
     # an excluded-only concurrent commit surfaces as a digest mismatch
     # before the HEAD difference -- intentional content change.
-    "review-implementation.md": "7b318eb517241124daa48feeedae7bf057e7d2d28bc31da14b0ad563310d0db2",
+    #
+    # review-implementation.md further updated, workflow-v2-3-followups CP2
+    # (REQ-3/REQ-4/REQ-6/REQ-17/REQ-20/REQ-21): step 3 gained a PLAN.md/
+    # plan_path read; step 5 gained a plan-conformance search arm; step 7 is
+    # new -- a second assert_bundle_not_rejected call plus the new
+    # assert_feedback_not_owned_by_other_work_item ownership guard,
+    # immediately before an unconditional write of
+    # <feedback_dir>/REVIEW_FEEDBACK.md; step 8 (was step 7) no longer
+    # states the command writes nothing; the frontmatter description: line
+    # and the step 6/step 7 provenance text no longer describe a manual
+    # hand-copy installation -- intentional content change, not a
+    # regression.
+    "review-implementation.md": "a54f6d3a7893d4d4eb6f00c41ad566f2739d57ecc52083c43941e05b0cd32318",
     # review-functional.md: new, workflow-v2-3 CP2 -- the first recorded
     # hash, not a change.
     "review-functional.md": "579b90a0c6e0eea1246b7ae03347e67f86faf24b8ebc83402909f438877968ca",

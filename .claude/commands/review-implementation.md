@@ -1,5 +1,5 @@
 ---
-description: Independently review the current implementation bundle for the active (or named) work item and print an advisory REVIEW_FEEDBACK.md-shaped report. Report-only -- never writes state, never approves, never applies findings.
+description: Independently review the current implementation bundle for the active (or named) work item and write the current advisory REVIEW_FEEDBACK.md. Writes <feedback_dir>/REVIEW_FEEDBACK.md -- never writes WORKFLOW_STATE.json, never approves, never applies findings, never advances phase.
 argument-hint: "[work-item-id]"
 state_writer: false
 review-subject: bundle
@@ -13,14 +13,16 @@ while the resolved item's `phase` is exactly
 report it produces, or in any check it performs names a model — running it
 from any capable Claude model produces the same behavior.
 
-**Review and report only.** This command never writes
-`<feedback_dir>/REVIEW_FEEDBACK.md`, never writes
-`docs/ai-workflow/WORKFLOW_STATE.json`, never edits source/test/doc content,
-never approves a stage, and never advances `phase`. `/apply-implementation-review`
-remains the sole authoritative path for validating and applying real
-implementation-review feedback, and `/approve-review implementation`
-remains the sole, user-only approval gate — both entirely unchanged and
-unaffected by this command's existence.
+**Writes `<feedback_dir>/REVIEW_FEEDBACK.md`; nothing else.** This command
+writes the current `<feedback_dir>/REVIEW_FEEDBACK.md` (step 7, once every
+guard there passes) but never writes
+`docs/ai-workflow/WORKFLOW_STATE.json`, never edits source/test/plan/
+registry/mapping/bundle content, never approves a stage, and never
+advances `phase`. `/apply-implementation-review` remains the sole
+authoritative path for validating and applying real implementation-review
+feedback, and `/approve-review implementation` remains the sole, user-only
+approval gate — both entirely unchanged and unaffected by this command's
+existence.
 
 `<bundle_dir>`/`<feedback_dir>` below resolve per
 `docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Bundle location"
@@ -44,7 +46,9 @@ unaffected by this command's existence.
    separate, generation-time precondition, orthogonal to
    `governing_workflow_version` and not implied by it (see step 3/4's
    manifest precondition below).
-3. **Read**: `<bundle_dir>/REVIEW_REQUEST.md`, `IMPLEMENTATION_SUMMARY.md`,
+3. **Read**: `<bundle_dir>/PLAN.md` and the item's own `plan_path` (the
+   authoritative plan doc, for step 5's plan-conformance arm below),
+   alongside `<bundle_dir>/REVIEW_REQUEST.md`, `IMPLEMENTATION_SUMMARY.md`,
    `TEST_RESULTS.md`, `CHANGED_FILES.txt`, `COMMITS.txt`, `DIFF.patch`,
    `files/`, `MANIFEST.md`, the required-context file list, and any prior
    `<feedback_dir>/REVIEW_FEEDBACK.md` for continuity across rounds. An
@@ -144,9 +148,9 @@ unaffected by this command's existence.
    `bundle_id`/`review_content_id` never mismatch for this case at all.
    The `WorktreeOrHeadMismatchError` is the only signal it produces; do
    not expect, or wait for, an accompanying digest mismatch to corroborate
-   it. **`REJECTED`-bundle
-   refusal, this command's sole assertion, immediately preceding the
-   report**: call `workflow_fingerprint.assert_bundle_not_rejected(repo_root,
+   it. **`REJECTED`-bundle refusal, first of two** (`WFR-67`; step 7 below
+   re-calls this immediately before the write): call
+   `workflow_fingerprint.assert_bundle_not_rejected(repo_root,
    work_item_id)` here.
 5. **Independently verify** every claim `IMPLEMENTATION_SUMMARY.md`/
    `TEST_RESULTS.md` makes against the actual repository state — rerun the
@@ -158,6 +162,11 @@ unaffected by this command's existence.
    `docs/adr/0002-offline-first-local-database-source-of-truth.md` if
    relevant), missing tests, and usability concerns — exactly as thoroughly
    as `/apply-implementation-review`'s own step 2 validation requirement.
+   **Also independently verify the implementation against what the
+   approved plan (`PLAN.md`/`plan_path`, read in step 3) actually
+   specified** — mirroring `/review-plan` step 6's "independently verify
+   every finding... against the actual repository state" instruction —
+   not only against the bundle's own self-reported disposition.
 6. **Compose the report** in exactly `docs/ai-workflow/REVIEW_PROTOCOL.md`'s
    `REVIEW_FEEDBACK.md` structure (`Status: APPROVE | REVISE | BLOCK`,
    Blocking/Important/Optional findings, Missing tests, Architecture and
@@ -165,27 +174,81 @@ unaffected by this command's existence.
    Usability concerns, Required acceptance criteria), plus the three
    binding fields (`Reviewed bundle ID:`, `Reviewed base commit:`,
    `Work item:`) stated with this invocation's own freshly recomputed
-   values — so that if the user chooses to hand-copy this report into
-   `<feedback_dir>/REVIEW_FEEDBACK.md` as the authoritative external round,
-   it already satisfies `workflow_fingerprint.parse_review_feedback_binding_fields`/
-   `assert_feedback_matches_bundle` without further editing. Also state
+   values — since satisfying
+   `workflow_fingerprint.parse_review_feedback_binding_fields`/
+   `assert_feedback_matches_bundle` is a hard precondition of this
+   command's own write in step 7 below, not a convenience for a
+   hypothetical hand-copy. Also state
    `Reviewed review content ID:` with step 4's freshly recomputed
    implementation-stage `review_content_id` — not one of the three parsed
    binding fields, so no parser or approval requirement changes; purely so
    the printed advisory opinion is easy to correlate against the exact
    reviewed implementation content.
-7. **Report only — writes nothing.** Print the composed report directly in
-   this turn's response. State plainly that this is an independent,
-   advisory opinion from whichever model ran this command, not a recorded
-   review round: `<feedback_dir>/REVIEW_FEEDBACK.md`,
-   `docs/ai-workflow/WORKFLOW_STATE.json`, and every other repository file
-   are untouched. If the user wants this opinion to become the authoritative
-   round, they place it (verbatim, or after obtaining a further external
-   reviewer's own separate pass) at `<feedback_dir>/REVIEW_FEEDBACK.md`
-   themselves — `/apply-implementation-review` and `/approve-review
-   implementation` remain the only commands that ever act on that file.
-   Never approve, never apply findings, never transition `phase`, never
-   auto-continue to any other command.
+7. **`REJECTED`-bundle refusal, second of two, then the ownership guard,
+   immediately before the write** (`WFR-67`: this is a genuine
+   classification change, not just a count bump — this command moves from
+   the "once" report-only consumer group to the "twice" mutation-guarded
+   group `apply-plan-review`, `approve-review`, `record-manual-plan-review`,
+   and `review-plan` already occupy, since a real write now follows the
+   guard):
+   - Re-call `workflow_fingerprint.assert_bundle_not_rejected(repo_root,
+     work_item_id)` — a withdrawal landing between step 4 and here must
+     still be caught. **On a `BundleRejectedError` here, suppress the
+     composed report entirely** (produce no report output, only the
+     refusal), exactly as the existing step 4 call already does — this
+     checkpoint's write does not change that withdrawal invariant.
+   - Resolve `<feedback_dir>` via the existing, unmodified
+     `resolve_feedback_dir(repo_root, work_item_id)`, read whatever
+     `REVIEW_FEEDBACK.md` already sits there (`None` if nothing does), and
+     call `workflow_fingerprint.assert_feedback_not_owned_by_other_work_item(
+     existing_content, work_item_id=work_item_id)` against it — the
+     ownership guard runs immediately before the write, against this same
+     unmodified `resolve_feedback_dir(repo_root, work_item_id)` path.
+     **On a `FeedbackOwnedByOtherWorkItemError` here, still print the
+     composed report in full**, exactly as before this checkpoint, and
+     state the refusal alongside it, naming both work item ids — the
+     operator loses only the write, not the completed review.
+   - **Recovery from an ownership refusal**: hand-creating a scoped
+     `.ai-review/<work_item_id>/feedback/` directory is **not** an endorsed
+     remedy — it would reproduce, by hand, the same silent-shadowing hazard
+     this guard exists to prevent. The blocking file's own `Work item:`
+     value names a work item A. If A is tracked in
+     `docs/ai-workflow/WORKFLOW_STATE.json` and live (its `phase` still
+     advancing toward `MILESTONE_COMPLETE` on some scheduled cause, not
+     dormant — `LEGACY_READY` is dormant, not terminal), the operator must
+     leave the file in place and wait: re-running this command before A
+     reaches a terminal phase changes nothing, since nothing in this
+     repository deletes or relocates `REVIEW_FEEDBACK.md` as a side effect
+     of A's own review cycle. A's feedback is live — unconsumed and
+     waiting, or consumed but still read by a later command — for the
+     entire span between the round that wrote it and A's own terminal
+     phase, `MILESTONE_COMPLETE`; `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`
+     (the exact phase this command's own write leaves A in immediately
+     after it runs) is not an exception to that rule, so the recovery must
+     never treat that phase as spent. Only once a live A's `phase`
+     independently reaches `MILESTONE_COMPLETE` may the operator delete the
+     blocking file by hand and re-run — deletion, not the re-run alone, is
+     what clears the refusal. If the blocking file's `Work item:` value
+     names no entry in `WORKFLOW_STATE.json` at all, or names a
+     tracked-but-dormant entry (e.g. `LEGACY_READY`), there is no
+     phase-based wait to honor; the operator judges the file by hand from
+     its own `Reviewed bundle ID:`/`Reviewed base commit:` fields and may
+     delete it if it is leftover.
+   - Once both guards pass, write `<feedback_dir>/REVIEW_FEEDBACK.md`
+     unconditionally, overwriting whatever same-work-item feedback (if any)
+     currently sits there. This write is now the authoritative round the
+     moment it lands — no separate operator installation step. Still never
+     write `docs/ai-workflow/WORKFLOW_STATE.json`, never approve, never
+     advance `phase`, never auto-continue to any other command.
+8. **Report and stop.** On a successful write, state plainly that
+   `<feedback_dir>/REVIEW_FEEDBACK.md` was written and is now the
+   authoritative round for `/apply-implementation-review`/`/approve-review
+   implementation` to act on — an independent, advisory opinion from
+   whichever model ran this command, not a human reviewer's own pass unless
+   the operator obtained one separately. `docs/ai-workflow/WORKFLOW_STATE.json`
+   and every other repository file remain untouched. Never approve, never
+   apply findings, never transition `phase`, never auto-continue to any
+   other command.
 
 Do not implement product or test code in this command. Do not edit the
 plan/registry/mapping/artifacts files or any other command file.

@@ -374,6 +374,17 @@ class FeedbackBundleMismatchError(Exception):
     concern applied to feedback matching rather than worktree/HEAD)."""
 
 
+class FeedbackOwnedByOtherWorkItemError(Exception):
+    """Raised when `/review-implementation`'s write would overwrite a
+    `REVIEW_FEEDBACK.md` whose own `Work item:` binding field names a
+    different work item — `resolve_feedback_dir`'s scoped-else-flat rule
+    means two work items can resolve the identical flat path before
+    either has its own scoped feedback directory; this refuses the write
+    rather than relocating it, leaving `resolve_feedback_dir` and every
+    other command's resolution against it completely untouched
+    (`GPT-FUP-R6-I01`, `LPR-R7-B01`)."""
+
+
 # ---------------------------------------------------------------------------
 # D-Fingerprint-Generalization (Revision 21, `WF8B-S1-001`): per-work-item
 # plan-stage metadata resolution. `resolve_plan_stage_metadata` is the one
@@ -2642,6 +2653,38 @@ def assert_feedback_matches_bundle(
         raise FeedbackBundleMismatchError(
             f"feedback names work item {feedback_fields['work_item']!r}, "
             f"expected {work_item_id!r}"
+        )
+
+
+def assert_feedback_not_owned_by_other_work_item(
+    existing_content: str | None, *, work_item_id: str,
+) -> None:
+    """Refuse `/review-implementation`'s write when whatever content
+    already sits at the resolved `<feedback_dir>/REVIEW_FEEDBACK.md` path
+    belongs to a *different* work item — checked immediately before the
+    write, alongside a second `assert_bundle_not_rejected` call, so a
+    genuine cross-work-item collision at `resolve_feedback_dir`'s
+    scoped-else-flat path is refused rather than silently overwritten
+    (`GPT-FUP-R6-I01`).
+
+    `existing_content` is `None` when no file sits at the resolved path
+    yet, in which case this returns immediately. Otherwise the content is
+    parsed with `parse_review_feedback_binding_fields`; a present `work_item`
+    field that disagrees with `work_item_id` raises
+    `FeedbackOwnedByOtherWorkItemError` naming both. A missing/unparsed
+    `work_item` field (a hand-authored file, or one predating the binding-
+    field convention) is treated as unowned and does not block the write —
+    matching how a same-work-item overwrite already behaves today via
+    `/review-plan` step 8's guard-then-overwrite pattern. `resolve_feedback_dir`
+    itself is never touched by this function or by any caller of it
+    (`LPR-R7-B01`)."""
+    if existing_content is None:
+        return
+    existing_work_item = parse_review_feedback_binding_fields(existing_content).get("work_item")
+    if existing_work_item is not None and existing_work_item != work_item_id:
+        raise FeedbackOwnedByOtherWorkItemError(
+            f"existing feedback at this path belongs to work item {existing_work_item!r}, "
+            f"not {work_item_id!r} -- refusing to overwrite"
         )
 
 
