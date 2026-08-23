@@ -2128,6 +2128,85 @@ class TestRejectedBundleMarker(unittest.TestCase):
                 wf.assert_bundle_not_rejected(repo.root, "milestone-8")
 
 
+class TestFunctionalReviewConsumedMarker(unittest.TestCase):
+    """O3 (`workflow-v2-3-followups` continued scope, external cross-model
+    review round 2): the smallest mechanism consistent with two existing
+    conventions at once -- `assert_bundle_not_rejected`'s presence-then-
+    content marker shape (`.ai-review/<work_item_id>/REJECTED`, an
+    untracked sibling of the artifact it describes) and `/prepare-
+    functional-review`'s own checklist-evidence content-hash binding --
+    that prevents an already-applied `FUNCTIONAL_REVIEW.md` from being
+    re-read as fresh findings on a later `/apply-functional-review` pass,
+    without any lifecycle/review-stage/ledger-stage/quorum addition."""
+
+    def _write_feedback(self, repo, work_item_id, content):
+        feedback_dir = repo.root / wf.resolve_feedback_dir(repo.root, work_item_id)
+        feedback_dir.mkdir(parents=True, exist_ok=True)
+        (feedback_dir / "FUNCTIONAL_REVIEW.md").write_text(content)
+
+    def test_resolves_flat_path_when_scoped_dir_absent(self):
+        with ScratchRepo() as repo:
+            self.assertEqual(
+                wf.resolve_functional_review_consumed_marker_path(repo.root, "workflow-v2-1-core"),
+                Path(".ai-review/feedback/FUNCTIONAL_REVIEW.consumed"),
+            )
+
+    def test_resolves_scoped_path_once_scoped_layout_exists(self):
+        with ScratchRepo() as repo:
+            (repo.root / ".ai-review" / "workflow-v2-1-core" / "feedback").mkdir(parents=True)
+            self.assertEqual(
+                wf.resolve_functional_review_consumed_marker_path(repo.root, "workflow-v2-1-core"),
+                Path(".ai-review/workflow-v2-1-core/feedback/FUNCTIONAL_REVIEW.consumed"),
+            )
+
+    def test_passes_when_no_marker_present(self):
+        with ScratchRepo() as repo:
+            self._write_feedback(repo, "wi", "# finding 1\n")
+            wf.assert_functional_review_not_already_consumed(repo.root, "wi")  # must not raise
+
+    def test_refuses_when_current_content_matches_the_recorded_hash(self):
+        with ScratchRepo() as repo:
+            self._write_feedback(repo, "wi", "# finding 1\n")
+            wf.mark_functional_review_consumed(repo.root, "wi")
+            with self.assertRaises(wf.FunctionalReviewAlreadyAppliedError) as ctx:
+                wf.assert_functional_review_not_already_consumed(repo.root, "wi")
+            self.assertIn("already applied", str(ctx.exception))
+
+    def test_passes_when_content_changed_since_the_marker_was_written(self):
+        """A genuinely new round of functional testing wrote fresh
+        findings -- the marker's own hash no longer matches, so this
+        must be treated as unconsumed, not refused."""
+        with ScratchRepo() as repo:
+            self._write_feedback(repo, "wi", "# finding 1\n")
+            wf.mark_functional_review_consumed(repo.root, "wi")
+            self._write_feedback(repo, "wi", "# finding 2 (new round)\n")
+            wf.assert_functional_review_not_already_consumed(repo.root, "wi")  # must not raise
+
+    def test_marking_twice_for_the_same_content_stays_idempotent(self):
+        with ScratchRepo() as repo:
+            self._write_feedback(repo, "wi", "# finding 1\n")
+            wf.mark_functional_review_consumed(repo.root, "wi")
+            wf.mark_functional_review_consumed(repo.root, "wi")  # must not raise
+            with self.assertRaises(wf.FunctionalReviewAlreadyAppliedError):
+                wf.assert_functional_review_not_already_consumed(repo.root, "wi")
+
+    def test_two_scoped_work_items_have_independent_markers(self):
+        """Distinguished by the scoped-layout `feedback_dir`, mirroring
+        `TestRejectedBundleMarker.test_two_work_items_have_independent_markers`
+        -- both must already be on the scoped layout, or they would
+        collide at the same flat compatibility path
+        (`resolve_feedback_dir`'s own documented fallback)."""
+        with ScratchRepo() as repo:
+            (repo.root / ".ai-review" / "workflow-v2-1-core" / "feedback").mkdir(parents=True)
+            (repo.root / ".ai-review" / "milestone-8" / "feedback").mkdir(parents=True)
+            self._write_feedback(repo, "workflow-v2-1-core", "# shared content\n")
+            self._write_feedback(repo, "milestone-8", "# shared content\n")
+            wf.mark_functional_review_consumed(repo.root, "workflow-v2-1-core")
+            with self.assertRaises(wf.FunctionalReviewAlreadyAppliedError):
+                wf.assert_functional_review_not_already_consumed(repo.root, "workflow-v2-1-core")
+            wf.assert_functional_review_not_already_consumed(repo.root, "milestone-8")  # must not raise
+
+
 class TestGenerationDiagnosticMetadata(unittest.TestCase):
     """`worktree_root`/`generation_head` recorded in `MANIFEST.md` as
     diagnostic metadata, and the repository-local-only staleness check

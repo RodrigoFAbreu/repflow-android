@@ -863,7 +863,14 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # own original scope, and none is a drift-detection gap this
     # revision's own changes newly exposed the way apply-functional-
     # review.md's was.
-    "apply-functional-review.md": "54b7b4c9dfb69412905756e9cd3183fed17a81e0465641c44658147ae434bbf3",
+    #
+    # apply-functional-review.md further updated, same round (O3): step 1
+    # gained the already-applied refusal
+    # (assert_functional_review_not_already_consumed), and both of this
+    # command's own exit points (the bounded branch's step 5, and the
+    # normal step 7) gained the mark_functional_review_consumed call --
+    # intentional content change.
+    "apply-functional-review.md": "9a75190c9519e2125ac203cabf7c031437dbd4d24d1ae1bcb37904700cd1ab7e",
 }
 
 

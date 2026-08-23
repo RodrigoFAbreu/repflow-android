@@ -30,7 +30,15 @@ Enter the `FIXING_FUNCTIONAL_FINDINGS` state of
      three-way branch below; steps 1-3 and 5-7 execute unchanged.
 
 1. Read `<feedback_dir>/FUNCTIONAL_REVIEW.md`. If it does not exist,
-   stop and say so.
+   stop and say so. **Already-applied refusal** (O3,
+   `workflow-v2-3-followups` continued scope): call
+   `workflow_fingerprint.assert_functional_review_not_already_consumed(
+   repo_root, work_item_id)` — a `FunctionalReviewAlreadyAppliedError`
+   means this exact content was already classified and acted on by a
+   prior round; stop and say so rather than re-processing findings that
+   already have a disposition. This is what keeps a `FUNCTIONAL_REVIEW.md`
+   left in place after a bounded fix from being misread as fresh the next
+   time this item reaches `AWAITING_FUNCTIONAL_REVIEW`.
 2. Classify each finding as one of: **defect**, **usability issue**,
    **missing requirement**, **enhancement**, or **expected behavior**. State
    the classification and reasoning for each.
@@ -112,8 +120,14 @@ all in the same invocation.
      wrote, permanently re-breaking `/approve-review implementation`'s
      provenance-interval check on every round. Then run
      `./scripts/prepare-ai-review.sh <base-sha> post-fix [work_item_id]`.
-  5. This finding now requires a fresh implementation-review round: report
-     readiness and **stop** — this re-enters
+  5. **Mark this round's `FUNCTIONAL_REVIEW.md` consumed** (O3): call
+     `workflow_fingerprint.mark_functional_review_consumed(repo_root,
+     work_item_id)` — every finding this round classified now has a
+     disposition (fixed here, or already handled by an earlier "no code
+     change"/"broad" branch in this same invocation), so this exact
+     content must never be re-read as fresh on a later pass. This finding
+     now requires a fresh implementation-review round: report readiness
+     and **stop** — this re-enters
      `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` exactly like an ordinary
      post-fix round (`/apply-implementation-review` drives it from here).
      A fresh `/approve-review implementation` must succeed before
@@ -157,8 +171,14 @@ all in the same invocation.
 6. Update the functional-review checklist in `docs/ACTIVE_MILESTONE.md` to
    reflect what changed, what was deferred to a remediation child (name the
    child work-item id), and what still needs re-testing.
-7. Report and return to `AWAITING_FUNCTIONAL_REVIEW` — stop for the user to
-   re-test, unless the user explicitly waives another round. If any finding
-   this round took the bounded branch, that stop already happened above
-   instead (a fresh implementation-review round is required first); do not
-   report both stops as satisfied by the same invocation.
+7. **Mark this round's `FUNCTIONAL_REVIEW.md` consumed** (O3): call
+   `workflow_fingerprint.mark_functional_review_consumed(repo_root,
+   work_item_id)` — every finding this round classified now has a
+   disposition ("no code change", fixed inline, or deferred to a
+   remediation child), so this exact content must never be re-read as
+   fresh on a later pass. Report and return to `AWAITING_FUNCTIONAL_REVIEW`
+   — stop for the user to re-test, unless the user explicitly waives
+   another round. If any finding this round took the bounded branch, that
+   stop already happened above instead (a fresh implementation-review
+   round is required first); do not report both stops as satisfied by the
+   same invocation.

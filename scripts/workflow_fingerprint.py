@@ -495,6 +495,15 @@ class BundleRejectedError(Exception):
     content it holds."""
 
 
+class FunctionalReviewAlreadyAppliedError(Exception):
+    """Raised by `assert_functional_review_not_already_consumed` (O3,
+    `workflow-v2-3-followups` continued scope, external cross-model
+    review round 2) when `<feedback_dir>/FUNCTIONAL_REVIEW.md`'s current
+    content byte-for-byte matches what `mark_functional_review_consumed`
+    already recorded as applied -- refuses before `/apply-functional-
+    review` re-processes findings it has already acted on."""
+
+
 class PlanStageDocumentStaleError(Exception):
     """Raised by `assert_plan_stage_document_matches_pin` (`WFR-67`,
     generator-side stage-document binding, part 3) when `bundle_dir/PLAN.md`,
@@ -1802,6 +1811,76 @@ def resolve_feedback_dir(repo_root: Path, work_item_id: str) -> Path:
     if (repo_root / scoped).is_dir():
         return scoped
     return Path(".ai-review/feedback")
+
+
+def resolve_functional_review_consumed_marker_path(repo_root: Path, work_item_id: str) -> Path:
+    """O3 (`workflow-v2-3-followups` continued scope, external cross-model
+    review round 2): sibling to `resolve_feedback_dir`'s own
+    `FUNCTIONAL_REVIEW.md`, repo-root-relative, mirroring
+    `resolve_rejected_marker_path`'s own sibling-to-the-artifact-it-
+    describes placement. `FUNCTIONAL_REVIEW.md` has no binding fields of
+    its own to bind against (`docs/ai-workflow/REVIEW_PROTOCOL.md`: "no
+    binding-field requirement, since functional review has no
+    `bundle_id`/`review_content_id` of its own") and lives entirely
+    outside Git (`.ai-review/` is gitignored), so this marker -- not a
+    commit trailer, the mechanism `/prepare-functional-review`'s own
+    checklist-evidence binding uses for the Git-tracked
+    `docs/ACTIVE_MILESTONE.md` -- is the smallest mechanism consistent
+    with both existing conventions at once."""
+    return resolve_feedback_dir(repo_root, work_item_id) / "FUNCTIONAL_REVIEW.consumed"
+
+
+def assert_functional_review_not_already_consumed(repo_root: Path, work_item_id: str) -> None:
+    """Refuses if `<feedback_dir>/FUNCTIONAL_REVIEW.md`'s current content
+    is byte-identical to what `mark_functional_review_consumed` last
+    recorded as applied -- mirroring `assert_bundle_not_rejected`'s own
+    presence-then-content read shape. A missing `FUNCTIONAL_REVIEW.md` is
+    the caller's own concern (`/apply-functional-review` step 1 already
+    stops and says so before this would ever run); a missing or
+    non-matching marker means this content has not been recorded as
+    applied yet -- proceed normally in both cases, since a marker whose
+    hash simply differs (genuinely new findings written since the last
+    round) is exactly the case this check must let through."""
+    feedback_dir = resolve_feedback_dir(repo_root, work_item_id)
+    review_rel = (feedback_dir / "FUNCTIONAL_REVIEW.md").as_posix()
+    review_path = Path(repo_root) / review_rel
+    marker_path = Path(repo_root) / resolve_functional_review_consumed_marker_path(repo_root, work_item_id)
+    try:
+        recorded_hash = marker_path.read_text().strip()
+    except FileNotFoundError:
+        return
+    current_hash = _hash_object(repo_root, review_rel)
+    if recorded_hash and recorded_hash == current_hash:
+        raise FunctionalReviewAlreadyAppliedError(
+            f"{marker_path} records this exact content of {review_path} (blob "
+            f"{current_hash}) as already applied by a prior /apply-functional-review "
+            f"round -- write fresh findings to {review_path} before running it again, "
+            f"or if this file is genuinely unprocessed leftover from a stale round, "
+            f"remove the marker by hand after confirming that by hand"
+        )
+
+
+def mark_functional_review_consumed(repo_root: Path, work_item_id: str) -> None:
+    """Records `<feedback_dir>/FUNCTIONAL_REVIEW.md`'s current content
+    hash as applied -- called once `/apply-functional-review` has
+    classified and acted on every finding in this round (fixed, deferred
+    to a remediation child, or rejected with evidence), immediately
+    before whichever of its two exit points this round actually takes
+    (the bounded branch's own early stop, or the normal step 7), mirroring
+    `mark_identity_reference_gap_consumed`'s own "run once the work the
+    marker describes has actually completed" discipline. Idempotent:
+    writing the same content's hash twice is a no-op in effect."""
+    feedback_dir = resolve_feedback_dir(repo_root, work_item_id)
+    review_rel = (feedback_dir / "FUNCTIONAL_REVIEW.md").as_posix()
+    content_hash = _hash_object(repo_root, review_rel)
+    marker_path = Path(repo_root) / resolve_functional_review_consumed_marker_path(repo_root, work_item_id)
+    marker_path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(dir=str(marker_path.parent), prefix=".functional-review-consumed-", suffix=".tmp")
+    with os.fdopen(fd, "w") as handle:
+        handle.write(content_hash + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(tmp_name, marker_path)
 
 
 def _snapshot_directory_file_hashes(directory: Path) -> dict[str, str]:
