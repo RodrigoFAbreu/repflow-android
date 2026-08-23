@@ -907,7 +907,7 @@
     {
       "item": 313,
       "evidence": "workflow_state_test.TestRecoveredRoleLegalParentPhaseCombinations.test_item_313_self_reviewing_parent_wrong_committed_phase_and_illegal_parent_both_refused",
-      "note": "New this round: the symmetric SELF_REVIEWING_IMPLEMENTATION-parent mismatch (committed phase left value-unchanged instead of performing the real transition), plus a wholly illegal parent phase (IMPLEMENTING, outside all three combinations) -- both refused, the three-combination analogue of item 294."
+      "note": "New this round: the symmetric SELF_REVIEWING_IMPLEMENTATION-parent mismatch (committed phase left value-unchanged instead of performing the real transition), plus a wholly illegal parent phase (IMPLEMENTING, outside every legal parent phase) -- both refused, the same-shaped analogue of item 294 (repaired alongside item 292's own note, workflow-v2-3-followups continued scope, external cross-model review round 4: the recovered-role legal set widened from three to four phases when AWAITING_FUNCTIONAL_REVIEW joined it, so a count-based description goes stale the same way the class name item 292 already explains did)."
     },
     {
       "item": 284,
