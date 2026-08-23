@@ -4546,12 +4546,31 @@ class TestRecordBundleGeneration(unittest.TestCase):
         )
 
     def test_illegal_source_phase_refused_naming_actual_and_legal_phases(self):
+        """Stage-specific since workflow-v2-3-followups's own continued
+        scope widened legality per stage: `stage="implementation"`'s only
+        legal source is `SELF_REVIEWING_IMPLEMENTATION` -- the refusal
+        message for it must name only that, never `APPLYING_REVIEW_FEEDBACK`
+        (a `post-fix`-only source since the widening, never legal for a
+        round's first bundle)."""
         state = _base_state(wi=_base_work_item(phase="IMPLEMENTING"))
         with self.assertRaises(ws.IllegalBundleGenerationSourcePhaseError) as ctx:
             ws.record_bundle_generation(state, "wi", stage="implementation", head="abc123", now="t1")
         self.assertIn("IMPLEMENTING", str(ctx.exception))
         self.assertIn("SELF_REVIEWING_IMPLEMENTATION", str(ctx.exception))
+        self.assertNotIn("APPLYING_REVIEW_FEEDBACK", str(ctx.exception))
+
+    def test_post_fix_illegal_source_phase_names_its_own_three_legal_phases(self):
+        """The `stage="post-fix"` counterpart: its own legal set is
+        `{APPLYING_REVIEW_FEEDBACK, AWAITING_FUNCTIONAL_REVIEW}` --
+        `SELF_REVIEWING_IMPLEMENTATION` (legal only for `stage=
+        "implementation"`) must never appear in this refusal's message."""
+        state = _base_state(wi=_base_work_item(phase="IMPLEMENTING"))
+        with self.assertRaises(ws.IllegalBundleGenerationSourcePhaseError) as ctx:
+            ws.record_bundle_generation(state, "wi", stage="post-fix", head="abc123", now="t1")
+        self.assertIn("IMPLEMENTING", str(ctx.exception))
         self.assertIn("APPLYING_REVIEW_FEEDBACK", str(ctx.exception))
+        self.assertIn("AWAITING_FUNCTIONAL_REVIEW", str(ctx.exception))
+        self.assertNotIn("SELF_REVIEWING_IMPLEMENTATION", str(ctx.exception))
 
     def test_post_fix_from_illegal_source_phase_also_refused(self):
         state = _base_state(wi=_base_work_item(phase="AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW"))
@@ -4701,6 +4720,135 @@ class TestRecordBundleGeneration(unittest.TestCase):
         resumed = ws.record_bundle_generation(state, "wi", stage="implementation", head="abc123", now="t1")
         self.assertEqual(interrupted, resumed)
         self.assertEqual(resumed["work_items"]["wi"]["implementation_revision"], 1)
+
+
+class TestFunctionalReviewBoundedFixReachesRecordBundleGeneration(unittest.TestCase):
+    """workflow-v2-3-followups continued scope (self-discovered during
+    this item's own `/accept-milestone` pre-flight): the real end-to-end
+    sequence `/apply-functional-review`'s own "bounded code change" branch
+    drives -- `AWAITING_FUNCTIONAL_REVIEW` with a `CURRENT` technical_
+    approval -> `mark_technical_approval_stale` -> a bounded fix ->
+    `record_bundle_generation(stage="post-fix", ...)` ->
+    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` -- was never exercised end
+    to end before this widening. OPUS-R101-001's phase-transition
+    contract (landed 2026-08-15 15:06) made this structurally unreachable
+    for the only phase this branch is ever actually invoked from: the
+    real prior exercise of this branch, `v2-1-dry-run`'s S10 scenario
+    (commits `fae7420`/`c11ec01`, both 2026-08-15 10:44-11:06), ran
+    *before* that contract landed and was never re-tested against it."""
+
+    WI = "wi"
+
+    def _approved_technical_approval(self, reviewed_content_commit: str) -> dict:
+        return ws.build_approval_record(
+            basis="EXTERNAL_APPROVE", stage="implementation",
+            user_confirmation="approve wi implementation", now="t0",
+            reviewed_bundle_id="b1", approved_review_content_id="c1",
+            review_content_manifest=[
+                {"path": "src/Foo.kt", "exists": True, "mode": "100644", "blob": "deadbeef"},
+            ],
+            reviewed_content_commit=reviewed_content_commit,
+        )
+
+    def test_bounded_fix_from_awaiting_functional_review_reaches_external_review_durably(self):
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p1 = repo.commit("protected content, round 1", filename="src/Foo.kt")
+
+            approved = self._approved_technical_approval(p1)
+            self.assertEqual(approved["status"], "CURRENT")
+            pre_fix_state = _base_state(wi={
+                "work_item_id": self.WI,
+                "work_item_type": "process",
+                "phase": "AWAITING_FUNCTIONAL_REVIEW",
+                "technical_approval": approved,
+                "reviewed_implementation_head": p1,
+                "implementation_revision": 1,
+                "state_revision": 1,
+                "last_transition": "t0",
+            })
+
+            # 1. Stale-before-edit ordering: mark stale and persist it as
+            # its own commit -- this becomes the generation-record
+            # commit's own git parent below.
+            staled = ws.mark_technical_approval_stale(pre_fix_state, self.WI, now="t1")
+            wi_staled = staled["work_items"][self.WI]
+            self.assertEqual(wi_staled["technical_approval"]["status"], "STALE")
+            self.assertEqual(wi_staled["phase"], "AWAITING_FUNCTIONAL_REVIEW")
+            _commit_state_only(repo, self.WI, wi_staled, "mark technical approval stale")
+
+            # 2. The bounded fix itself -- a real protected-content commit,
+            # touching no state (mirrors /apply-functional-review's own
+            # "commit the fix" step, separate from the durability commit).
+            p2 = repo.commit("bounded fix", filename="src/Foo.kt")
+
+            # 3. resolve_bundle_generation_outcome + record_bundle_generation
+            # (post-fix stage), exactly as /apply-functional-review's
+            # bounded branch drives them.
+            outcome, _ = ws.resolve_bundle_generation_outcome(
+                repo.root, wi_staled, base_commit=repo.base, head=p2,
+            )
+            self.assertEqual(outcome, "ordinary")
+            post_fix = ws.record_bundle_generation(
+                staled, self.WI, stage="post-fix", head=p2, now="t2", outcome=outcome,
+            )
+            wi_post_fix = post_fix["work_items"][self.WI]
+            self.assertEqual(wi_post_fix["phase"], "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW")
+            self.assertEqual(wi_post_fix["reviewed_implementation_head"], p2)
+            self.assertEqual(wi_post_fix["implementation_revision"], 2)
+
+            # 4. The durability commit -- touches only WORKFLOW_STATE.json,
+            # its git parent is the STALE-marking commit from step 1 (the
+            # bounded-fix commit in between touched no state, so the state
+            # file's own bytes are unchanged between them).
+            s = _commit_state_only(
+                repo, self.WI, wi_post_fix, "record gen (post-fix)",
+                trailers=_record_trailers(self.WI, 2),
+            )
+            ws.validate_bundle_generation_record_commit(repo.root, s, self.WI)  # must not raise
+
+            durable = ws._read_json_at_commit_or_empty(repo.root, s, STATE_REL_PATH)
+            self.assertEqual(
+                durable["work_items"][self.WI]["phase"], "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+            )
+
+    def test_post_fix_from_awaiting_functional_review_refused_unless_stale(self):
+        """Regression requirement 2: the bounded-fix marker
+        (`technical_approval.status == "STALE"`) is a hard precondition,
+        not merely the phase -- a `CURRENT` approval at
+        `AWAITING_FUNCTIONAL_REVIEW` means no bounded fix is actually in
+        flight."""
+        state = _base_state(wi={
+            "work_item_id": self.WI,
+            "phase": "AWAITING_FUNCTIONAL_REVIEW",
+            "technical_approval": self._approved_technical_approval("abc123"),
+            "reviewed_implementation_head": "abc123",
+            "implementation_revision": 1,
+        })
+        self.assertEqual(state["work_items"][self.WI]["technical_approval"]["status"], "CURRENT")
+        with self.assertRaises(ws.BundleGenerationRequiresStaleTechnicalApprovalError) as ctx:
+            ws.record_bundle_generation(state, self.WI, stage="post-fix", head="def456", now="t2")
+        self.assertIn("CURRENT", str(ctx.exception))
+
+    def test_post_fix_from_awaiting_functional_review_with_no_technical_approval_refused(self):
+        state = _base_state(wi=_base_work_item(phase="AWAITING_FUNCTIONAL_REVIEW"))
+        with self.assertRaises(ws.BundleGenerationRequiresStaleTechnicalApprovalError):
+            ws.record_bundle_generation(state, "wi", stage="post-fix", head="def456", now="t2")
+
+    def test_ordinary_implementation_stage_generation_still_refused_from_awaiting_functional_review(self):
+        """Regression requirement 3: widening `stage="post-fix"`'s
+        legality must never widen `stage="implementation"`'s -- a round's
+        first bundle can never legitimately be generated from
+        `AWAITING_FUNCTIONAL_REVIEW`, STALE or not."""
+        state = _base_state(wi={
+            "work_item_id": "wi",
+            "phase": "AWAITING_FUNCTIONAL_REVIEW",
+            "technical_approval": self._approved_technical_approval("abc123") | {"status": "STALE"},
+        })
+        with self.assertRaises(ws.IllegalBundleGenerationSourcePhaseError) as ctx:
+            ws.record_bundle_generation(state, "wi", stage="implementation", head="def456", now="t2")
+        self.assertIn("AWAITING_FUNCTIONAL_REVIEW", str(ctx.exception))
 
 
 class TestEnterApplyingReviewFeedback(unittest.TestCase):
@@ -6496,17 +6644,23 @@ class TestValidateImplementationProvenanceRecoveryConfirmation(unittest.TestCase
         )  # no raise
 
 
-class TestRecoveredRoleThreeCombinationValidation(unittest.TestCase):
+class TestRecoveredRoleLegalParentPhaseCombinations(unittest.TestCase):
     """`WF8c` (b)/(c), items 292/293/294/313: direct, isolated coverage of
     `validate_bundle_generation_record_commit`'s recovered-role branch
-    against each of its three legal parent-phase combinations and the
-    illegal ones around them -- distinguished entirely by committed parent
-    state (`RECOVERED_BUNDLE_GENERATION_RECORD_LEGAL_SOURCE_PHASES`) and the
+    against each of its legal parent-phase combinations and the illegal
+    ones around them -- distinguished entirely by committed parent state
+    (`RECOVERED_BUNDLE_GENERATION_RECORD_LEGAL_SOURCE_PHASES`) and the
     single required committed-phase target, never by which command
     (`/recover-implementation-provenance` vs `record_bundle_generation`'s
     same-content branch) happened to produce the commit -- no such signal
     exists anywhere in a commit's own trailers or fields for the validator
-    to consult, which is exactly item 294's claim."""
+    to consult, which is exactly item 294's claim. `AWAITING_FUNCTIONAL_
+    REVIEW` joined the legal set as workflow-v2-3-followups's own
+    continued scope (self-discovered during this item's own
+    `/accept-milestone` pre-flight) -- see
+    `test_awaiting_functional_review_parent_phase_validates` below; this
+    class's own name was originally "ThreeCombination", pinned to a count
+    that widening made stale, so it no longer names one."""
 
     WI = "wi"
 
@@ -6580,6 +6734,20 @@ class TestRecoveredRoleThreeCombinationValidation(unittest.TestCase):
             with self.assertRaises(ws.MalformedBundleGenerationRecordCommitError) as ctx:
                 ws.validate_bundle_generation_record_commit(repo.root, child, self.WI)
             self.assertIn("IMPLEMENTING", str(ctx.exception))
+
+    def test_awaiting_functional_review_parent_phase_validates(self):
+        """workflow-v2-3-followups continued scope: `AWAITING_FUNCTIONAL_
+        REVIEW` joined `RECOVERED_BUNDLE_GENERATION_RECORD_LEGAL_SOURCE_
+        PHASES` alongside `record_bundle_generation`'s own widened
+        per-stage legality -- a recovered-role commit whose parent sat at
+        `AWAITING_FUNCTIONAL_REVIEW` (the functional-review bounded-fix
+        path) validates exactly like the pre-existing
+        `APPLYING_REVIEW_FEEDBACK`/`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`
+        combinations `test_item_292` already covers."""
+        with ScratchRepo() as repo:
+            p, parent = self._seed_and_parent(repo, "AWAITING_FUNCTIONAL_REVIEW")
+            child = self._child(repo, p, "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW", parent)
+            ws.validate_bundle_generation_record_commit(repo.root, child, self.WI)  # must not raise
 
 
 class TestImplementationProvenanceRecoveryEndToEnd(unittest.TestCase):

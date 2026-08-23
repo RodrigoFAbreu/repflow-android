@@ -769,17 +769,51 @@ class InvalidBundleGenerationOutcomeError(Exception):
     only two, legal outcomes)."""
 
 
-BUNDLE_GENERATION_LEGAL_SOURCE_PHASES = frozenset({
-    "SELF_REVIEWING_IMPLEMENTATION", "APPLYING_REVIEW_FEEDBACK",
-})
+BUNDLE_GENERATION_LEGAL_SOURCE_PHASES_BY_STAGE = {
+    # "implementation" (a round's first bundle) is legal only from
+    # SELF_REVIEWING_IMPLEMENTATION -- never from APPLYING_REVIEW_FEEDBACK
+    # (already mid-remediation) or AWAITING_FUNCTIONAL_REVIEW (past
+    # technical approval; a first-round bundle for this work item's own
+    # implementation content already exists by construction there).
+    "implementation": frozenset({"SELF_REVIEWING_IMPLEMENTATION"}),
+    # "post-fix" is legal from APPLYING_REVIEW_FEEDBACK (an ordinary
+    # implementation-review REVISE round) and, self-discovered during
+    # workflow-v2-3-followups's own /accept-milestone pre-flight,
+    # AWAITING_FUNCTIONAL_REVIEW -- the only phase /apply-functional-
+    # review's own "bounded code change" branch (D-Functional-Remediation)
+    # can ever be entered from, since that is its own documented
+    # precondition. The AWAITING_FUNCTIONAL_REVIEW branch additionally
+    # requires technical_approval.status == "STALE" (record_bundle_
+    # generation's own check below) -- the bounded-fix marker
+    # mark_technical_approval_stale writes before the first edit lands,
+    # so this phase alone is never sufficient on its own.
+    "post-fix": frozenset({"APPLYING_REVIEW_FEEDBACK", "AWAITING_FUNCTIONAL_REVIEW"}),
+}
+
+BUNDLE_GENERATION_LEGAL_SOURCE_PHASES = frozenset.union(
+    *BUNDLE_GENERATION_LEGAL_SOURCE_PHASES_BY_STAGE.values()
+)
 
 
 class IllegalBundleGenerationSourcePhaseError(Exception):
-    """Raised when `record_bundle_generation` is called from a phase other
-    than `SELF_REVIEWING_IMPLEMENTATION` (round's first bundle) or
-    `APPLYING_REVIEW_FEEDBACK` (`post-fix` bundle) -- OPUS-R101-001,
-    missing-test item 275: a behavioral refusal, never a silent proceed,
-    naming the actual phase and both legal ones."""
+    """Raised when `record_bundle_generation` is called from a phase that
+    is not legal for the requested `stage`
+    (`BUNDLE_GENERATION_LEGAL_SOURCE_PHASES_BY_STAGE`) -- OPUS-R101-001,
+    missing-test item 275, widened by workflow-v2-3-followups's own
+    continued scope: a behavioral refusal, never a silent proceed, naming
+    the actual phase, the requested stage, and the phase(s) legal for
+    that stage."""
+
+
+class BundleGenerationRequiresStaleTechnicalApprovalError(Exception):
+    """Raised when `record_bundle_generation(stage="post-fix", ...)` is
+    called from `AWAITING_FUNCTIONAL_REVIEW` while `technical_approval.status`
+    is not `"STALE"` -- the functional-review bounded-fix marker
+    `mark_technical_approval_stale` writes before the first edit lands
+    (`D-Functional-Remediation`). `AWAITING_FUNCTIONAL_REVIEW` alone is
+    not sufficient: a `CURRENT` approval at this phase means no bounded
+    fix is actually in flight, so a post-fix regeneration would silently
+    fabricate provenance for a round that never happened."""
 
 
 class IllegalApplyingReviewFeedbackEntryPhaseError(Exception):
@@ -9144,12 +9178,21 @@ def record_bundle_generation(
     round) or `"post-fix"` (every remediation round after, whether driven
     by an implementation-review finding or a functional-review bounded
     fix) stage -- never any other. Also `phase`'s sole writer for this
-    transition (OPUS-R101-001): refuses outright, naming the actual phase
-    and both legal ones, unless called from `SELF_REVIEWING_IMPLEMENTATION`
-    or `APPLYING_REVIEW_FEEDBACK`, and always sets the durable target
-    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` -- the "Ordinary
-    bundle-publication phase transition" contract, `WFR-61`'s five-field
-    mutation.
+    transition (OPUS-R101-001, widened by workflow-v2-3-followups's own
+    continued scope): legality is stage-specific
+    (`BUNDLE_GENERATION_LEGAL_SOURCE_PHASES_BY_STAGE`) -- `"implementation"`
+    only from `SELF_REVIEWING_IMPLEMENTATION`; `"post-fix"` from
+    `APPLYING_REVIEW_FEEDBACK`, or from `AWAITING_FUNCTIONAL_REVIEW` when
+    (and only when) `technical_approval.status == "STALE"`, the bounded-fix
+    marker `/apply-functional-review`'s own branch writes before its first
+    edit lands. Refuses outright otherwise, naming the actual phase, the
+    requested stage, and the phase(s) legal for it
+    (`IllegalBundleGenerationSourcePhaseError`), or naming the non-`STALE`
+    status for the `AWAITING_FUNCTIONAL_REVIEW` case specifically
+    (`BundleGenerationRequiresStaleTechnicalApprovalError`). Always sets
+    the durable target `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` -- the
+    "Ordinary bundle-publication phase transition" contract, `WFR-61`'s
+    five-field mutation.
 
     `outcome` (WF8c (c), D-Commit-Provenance "Same-content post-fix
     republication") selects which of this function's two legal outcomes
@@ -9173,10 +9216,10 @@ def record_bundle_generation(
     intervening commits are all legitimately excluded-only; `head` itself
     is otherwise unused in this branch, kept only for call-shape symmetry.
     Both outcomes always perform a real `phase` transition into
-    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` from whichever of the two
-    legal source phases was current -- never value-wise unchanged, since
-    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` itself is never one of this
-    function's own legal source phases."""
+    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` from whichever legal source
+    phase for the requested `stage` was current -- never value-wise
+    unchanged, since `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` itself is
+    never one of this function's own legal source phases for any stage."""
     if stage not in ("implementation", "post-fix"):
         raise InvalidBundleGenerationStageError(
             f"reviewed_implementation_head is written only at the "
@@ -9190,12 +9233,21 @@ def record_bundle_generation(
     new_state = copy.deepcopy(state)
     work_item = new_state["work_items"][work_item_id]
     current_phase = work_item.get("phase")
-    if current_phase not in BUNDLE_GENERATION_LEGAL_SOURCE_PHASES:
+    legal_phases_for_stage = BUNDLE_GENERATION_LEGAL_SOURCE_PHASES_BY_STAGE[stage]
+    if current_phase not in legal_phases_for_stage:
         raise IllegalBundleGenerationSourcePhaseError(
-            f"record_bundle_generation invoked from phase {current_phase!r}, "
-            f"but the only legal source phases are "
-            f"{sorted(BUNDLE_GENERATION_LEGAL_SOURCE_PHASES)}"
+            f"record_bundle_generation invoked from phase {current_phase!r} for stage "
+            f"{stage!r}, but the only legal source phase(s) for this stage are "
+            f"{sorted(legal_phases_for_stage)}"
         )
+    if current_phase == "AWAITING_FUNCTIONAL_REVIEW":
+        technical_approval_status = (work_item.get("technical_approval") or {}).get("status")
+        if technical_approval_status != "STALE":
+            raise BundleGenerationRequiresStaleTechnicalApprovalError(
+                f"record_bundle_generation invoked from phase 'AWAITING_FUNCTIONAL_REVIEW' "
+                f"requires technical_approval.status == 'STALE' (the functional-review "
+                f"bounded-fix marker) -- got {technical_approval_status!r}"
+            )
     work_item["phase"] = "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW"
     if outcome == "ordinary":
         work_item["reviewed_implementation_head"] = head
@@ -9539,7 +9591,7 @@ def validate_bundle_generation_record_commit(repo_root: Path, commit: str, work_
     if parent_phase not in RECOVERED_BUNDLE_GENERATION_RECORD_LEGAL_SOURCE_PHASES:
         raise MalformedBundleGenerationRecordCommitError(
             f"{commit}'s parent {parent} has {work_item_id!r}'s phase as {parent_phase!r}, "
-            f"not one of the three legal recovered-role source phases "
+            f"not one of the legal recovered-role source phases "
             f"{sorted(RECOVERED_BUNDLE_GENERATION_RECORD_LEGAL_SOURCE_PHASES)}"
         )
 

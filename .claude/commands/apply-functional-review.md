@@ -86,8 +86,18 @@ all in the same invocation.
      stage="post-fix", head=<current HEAD SHA>, now=<now>, outcome=<the
      resolved outcome>)` — this is the step that writes the new
      `reviewed_implementation_head` for the `"ordinary"` outcome
-     (D-Approval-Commits' sole writer; left unchanged for `"same_content"`);
-     nothing else makes `/approve-review implementation` reachable again —
+     (D-Approval-Commits' sole writer; left unchanged for `"same_content"`).
+     **Legal from `AWAITING_FUNCTIONAL_REVIEW` specifically because of
+     step 1's stale-before-edit write** (self-discovered during
+     `workflow-v2-3-followups`'s own `/accept-milestone` pre-flight,
+     closed as continued scope):
+     `BUNDLE_GENERATION_LEGAL_SOURCE_PHASES_BY_STAGE["post-fix"]` includes
+     `AWAITING_FUNCTIONAL_REVIEW`, and `record_bundle_generation` itself
+     additionally verifies `technical_approval.status == "STALE"` for that
+     phase — refusing with `BundleGenerationRequiresStaleTechnicalApprovalError`
+     if step 1's write never landed. Never invoke this call with a
+     `CURRENT` `technical_approval` still in place. Nothing else makes
+     `/approve-review implementation` reachable again —
      persist the returned state to `WORKFLOW_STATE.json`, and commit it
      **alone**: stage exactly that one path (never a broader `git add`) and
      create one commit carrying, for `"ordinary"`,
