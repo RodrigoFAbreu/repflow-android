@@ -713,6 +713,35 @@ class TestAgainstRealRepository(unittest.TestCase):
             excluded_prefixes=fingerprint.PLAN_STAGE_EXCLUDED_PREFIXES,
         )  # must not raise
 
+    def test_real_state_file_no_non_terminal_work_item_holds_a_legacy_cased_plan_review_stage_key(self):
+        """O3 (`workflow-v2-3-followups` round-1 implementation review,
+        folded into continued scope): CP3's own deprecation condition --
+        "no live non-terminal work item holds a legacy-cased
+        `plan_review_stages` key" -- was previously verified once, by
+        hand, in that round's own `TEST_RESULTS.md`, and by nothing
+        thereafter. This asserts it directly against the live state file,
+        so a legacy-cased ledger re-entering the file (hand edit,
+        restored backup, imported legacy item) fails this test rather
+        than silently going unnoticed."""
+        repo_root = _repo_root()
+        state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
+        for work_item_id, work_item in state["work_items"].items():
+            if work_item.get("phase") in ws.TERMINAL_PHASES:
+                continue
+            stages = work_item.get("plan_review_stages")
+            if not stages:
+                continue
+            for key in stages:
+                if key == "review_content_id":
+                    continue
+                with self.subTest(work_item_id=work_item_id, key=key):
+                    self.assertEqual(
+                        ws._normalize_plan_review_stage_key(key), key,
+                        f"{work_item_id!r}'s plan_review_stages holds legacy-cased key {key!r} "
+                        f"while non-terminal (phase {work_item.get('phase')!r}) -- CP3's "
+                        f"deprecation condition no longer holds",
+                    )
+
 
 class TestLegacyImportAgainstRealMilestone8(unittest.TestCase):
     """WF-M8a's own real-repository check: Milestone 8's actual, already-
