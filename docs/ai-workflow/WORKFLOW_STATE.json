@@ -698,7 +698,7 @@
       "registry_path": "docs/ai-workflow/registry/workflow-v2-3-followups-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/workflow-v2-3-followups-mapping.json",
       "governing_workflow_version": "2.1",
-      "phase": "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+      "phase": "APPLYING_REVIEW_FEEDBACK",
       "plan_revision": 13,
       "implementation_revision": 3,
       "functional_review_round": null,
@@ -877,8 +877,8 @@
       },
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 55,
-      "last_transition": "2026-08-23T23:49:18+01:00"
+      "state_revision": 56,
+      "last_transition": "2026-08-24T00:09:09+01:00"
     }
   }
 }
