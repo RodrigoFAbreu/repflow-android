@@ -302,3 +302,63 @@ overrides it.
   round.
 - **Functional-verification outcome:** not applicable (process checkpoint,
   no product-facing behavior).
+
+## `CP4` — Final cross-cutting verification and protocol/workflow doc coherence check
+
+- **Implementation evidence:** no new logic — this checkpoint is
+  verification-only, per the plan's own "No new logic" instruction. No
+  source or documentation file was modified.
+  - **Doc coherence cross-check (REQ-7/REQ-19/REQ-23)**: re-read all four
+    named sites together — `docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Local
+    reviewer commands" section, `docs/ai-workflow/MILESTONE_WORKFLOW.md`'s
+    "Hard gates summary" sentence, its
+    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` "Allowed actions" clause, and
+    its "Feedback file locations" section. All four state
+    `/review-implementation`'s new write behavior
+    (`.ai-review/feedback/REVIEW_FEEDBACK.md`, once its own pre-write
+    guards pass, still no `WORKFLOW_STATE.json` write and no `phase`
+    advance) consistently with each other, and all confirm
+    `/review-functional`'s own `AWAITING_FUNCTIONAL_REVIEW` "Allowed
+    actions" clause is unchanged ("it writes nothing and never advances
+    this state, so it adds no new gate").
+  - **Hard-gate count (REQ-11)**: `MILESTONE_WORKFLOW.md`'s "Hard gates
+    summary" still lists exactly six numbered gates and explicitly states
+    `/review-implementation`/`/review-functional` add no new one.
+  - **Scope-creep grep sweep (REQ-11)**: swept the CP1–CP3 diff
+    (`fb134ac..HEAD` on `scripts/workflow_state.py`, `.claude/commands/`,
+    `MILESTONE_WORKFLOW.md`, `REVIEW_PROTOCOL.md`) plus a whole-repo grep
+    for `AWAITING_LOCAL_IMPLEMENTATION_REVIEW`, `quorum`, and
+    `Reviewer role:`. Every `AWAITING_LOCAL_IMPLEMENTATION_REVIEW`/quorum
+    hit is prose in `WORKFLOW_V2_3_FOLLOWUPS.md`/`WORKFLOW_V2_3_FOLLOWUPS_PLAN.md`/
+    the mapping JSON explicitly declining to introduce it (REQ-11 itself);
+    every `Reviewer role:` hit outside those declining-prose sites belongs
+    to the pre-existing plan-review-stage vocabulary
+    (`LOCAL_MODEL_PLAN_REVIEW`/`MANUAL_EXTERNAL_PLAN_REVIEW`, CP3's own
+    casing normalization) — no implementation-review `Reviewer role:`
+    marker exists in `.claude/commands/review-implementation.md`. No new
+    implementation-review lifecycle state, ledger stage, reviewer-quorum
+    concept, or controller-lifecycle content was introduced anywhere
+    across CP1–CP3.
+  - **`WORKFLOW_V2_3_FOLLOWUPS.md` status accuracy (REQ-13)**: re-read all
+    four items' `Status` sections. Item 1: closed by CP1. Item 2: closed
+    by CP2, except required follow-up #8 (operator reference / lifecycle
+    diagram sync), explicitly deferred. Item 3: closed by CP3 for required
+    follow-ups #1–#6 and #8, and for the "tests, fixtures" and
+    tracked-operator-documentation halves of #7; the untracked-artifacts
+    half of #7 explicitly deferred. Item 4: closed by CP2. Matches this
+    checkpoint's own expected disposition exactly — no item overstates
+    what CP1–CP3 actually closed.
+- **Verification results:** `python3 -m unittest workflow_fingerprint_test
+  workflow_fingerprint_generalization_test workflow_state_test
+  workflow_state_completion_obligations_test workflow_integration_test
+  workflow_test_harness_test` — 1146 tests, all green, zero regressions
+  from CP1–CP3 combined (matches CP3's own recorded total exactly, since
+  this checkpoint added no test). `workflow_fingerprint_demo_test.py` and
+  `workflow_state_demo_test.py` (both real-repository demo suites)
+  re-run standalone — 15/15 (4 skipped, pre-existing/unrelated) and 45/45
+  respectively, both clean.
+- **Review findings:** none yet — pending this checkpoint's own review
+  round.
+- **Functional-verification outcome:** not applicable (process checkpoint,
+  no product-facing behavior; this checkpoint is itself the milestone's
+  final cross-cutting verification pass).
