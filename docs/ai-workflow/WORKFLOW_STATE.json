@@ -730,79 +730,26 @@
         "basis": "EXTERNAL_APPROVE",
         "reviewed_bundle_id": "26bbae34775ff182234329fc5e786fce193a7c05957d081beb7d24250336d01b",
         "approved_review_content_id": "56f3890338603e57064c3ce88b47a14656db8968e141432181e273dae00e6e1f",
-        "review_content_manifest": {
-          "stage": "plan",
-          "work_item_type": "process",
-          "work_item_id": "workflow-v2-3-followups",
-          "plan_revision": 13,
-          "base_commit": "fb134ac4f7cdabb7861d170bb61331bb8d9f5a14",
-          "reviewed_implementation_head": null,
-          "review_content_manifest": [
-            {
-              "path": "docs/ai-workflow/WORKFLOW_V2_3_FOLLOWUPS_PLAN.md",
-              "exists": true,
-              "mode": "100644",
-              "blob": "dc4f80d574bd01ca8182a42a51e8073ad0f26693"
-            },
-            {
-              "path": "docs/ai-workflow/registry/workflow-v2-3-followups-registry.json",
-              "exists": true,
-              "mode": "100644",
-              "blob": "b8c21afcfa9a2195fd207fe43483bdd459215121"
-            },
-            {
-              "path": "docs/ai-workflow/requirements/workflow-v2-3-followups-mapping.json",
-              "exists": true,
-              "mode": "100644",
-              "blob": "69df92b45e29d379f9924d8c74f9d864083fb131"
-            }
-          ],
-          "protected_paths": [
-            "docs/ai-workflow/WORKFLOW_V2_3_FOLLOWUPS_PLAN.md",
-            "docs/ai-workflow/registry/workflow-v2-3-followups-registry.json",
-            "docs/ai-workflow/requirements/workflow-v2-3-followups-mapping.json"
-          ],
-          "excluded_paths": [
-            ".github/workflows/ci.yml",
-            ".gitignore",
-            "AGENTS.md",
-            "CLAUDE.md",
-            "README.md",
-            "docs/ACTIVE_MILESTONE.md",
-            "docs/DOMAIN_GLOSSARY.md",
-            "docs/PROJECT_BRIEF.md",
-            "docs/ROADMAP.md",
-            "docs/TECHNICAL_DECISIONS.md",
-            "docs/UX_FLOWS.md",
-            "docs/ai-workflow/MILESTONE_WORKFLOW.md",
-            "docs/ai-workflow/PLAN_REVIEW_WORKFLOW.md",
-            "docs/ai-workflow/REVIEW_PROTOCOL.md",
-            "docs/ai-workflow/WORKFLOW_CONFIG.json",
-            "docs/ai-workflow/WORKFLOW_STATE.json",
-            "docs/ai-workflow/WORKFLOW_V2_1_OPERATOR_REFERENCE.md",
-            "docs/ai-workflow/WORKFLOW_V2_3_FOLLOWUPS.md",
-            "docs/ai-workflow/WORKFLOW_V2_3_PLAN.md",
-            "docs/ai-workflow/WORKFLOW_V2_AUDIT.md",
-            "docs/ai-workflow/WORKFLOW_V2_PLAN.md"
-          ],
-          "excluded_prefixes": [
-            ".claude/commands/",
-            ".github/",
-            "app/",
-            "config/",
-            "docs/adr/",
-            "docs/agent-context/",
-            "docs/ai-workflow/archive/",
-            "docs/ai-workflow/diagrams/",
-            "docs/ai-workflow/dry-run/",
-            "docs/ai-workflow/registry/",
-            "docs/ai-workflow/requirements/",
-            "docs/improvements/",
-            "docs/milestones/",
-            "gradle/",
-            "scripts/"
-          ]
-        },
+        "review_content_manifest": [
+          {
+            "path": "docs/ai-workflow/WORKFLOW_V2_3_FOLLOWUPS_PLAN.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "dc4f80d574bd01ca8182a42a51e8073ad0f26693"
+          },
+          {
+            "path": "docs/ai-workflow/registry/workflow-v2-3-followups-registry.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b8c21afcfa9a2195fd207fe43483bdd459215121"
+          },
+          {
+            "path": "docs/ai-workflow/requirements/workflow-v2-3-followups-mapping.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "69df92b45e29d379f9924d8c74f9d864083fb131"
+          }
+        ],
         "reviewed_content_commit": null,
         "legacy_evidence": null,
         "user_confirmation": "plan workflow-v2-3-followups",
@@ -814,150 +761,98 @@
         "basis": "EXTERNAL_APPROVE",
         "reviewed_bundle_id": "b3407a882e16c6ea6c1758ea102e0bc4d7465702104a9fd6d18468bd37fa51d7",
         "approved_review_content_id": "e8a4a76420995dc9eca3bd015267de890b32dc5d75684bd379833440816f2435",
-        "review_content_manifest": {
-          "stage": "implementation",
-          "work_item_type": "process",
-          "work_item_id": "workflow-v2-3-followups",
-          "base_commit": "fb134ac4f7cdabb7861d170bb61331bb8d9f5a14",
-          "reviewed_implementation_head": null,
-          "review_content_manifest": [
-            {
-              "path": ".claude/commands/approve-review.md",
-              "exists": true,
-              "mode": "100644",
-              "blob": "761155806b7183e2d9547e2d5416602367d5b926"
-            },
-            {
-              "path": ".claude/commands/record-manual-plan-review.md",
-              "exists": true,
-              "mode": "100644",
-              "blob": "1aaaf8b3d1a199794e1453a5aca18e01bbda5f56"
-            },
-            {
-              "path": ".claude/commands/review-implementation.md",
-              "exists": true,
-              "mode": "100644",
-              "blob": "71fefa777809162a710998aecf0002f5cb756e42"
-            },
-            {
-              "path": ".claude/commands/review-plan.md",
-              "exists": true,
-              "mode": "100644",
-              "blob": "7ccd6f7870f7232671c915557b0bf70958ec47ae"
-            },
-            {
-              "path": "docs/ai-workflow/MILESTONE_WORKFLOW.md",
-              "exists": true,
-              "mode": "100644",
-              "blob": "df7e43eae7e89a9d863bb057ada369ef6373c64c"
-            },
-            {
-              "path": "docs/ai-workflow/PLAN_REVIEW_WORKFLOW.md",
-              "exists": true,
-              "mode": "100644",
-              "blob": "03a5d3bec40e9a87e9f5bd5562a66b7a8a8563e8"
-            },
-            {
-              "path": "docs/ai-workflow/REVIEW_PROTOCOL.md",
-              "exists": true,
-              "mode": "100644",
-              "blob": "d2c3e8f8507afd404f55a04fd6602171c0c55896"
-            },
-            {
-              "path": "docs/ai-workflow/WORKFLOW_V2_3_FOLLOWUPS.md",
-              "exists": true,
-              "mode": "100644",
-              "blob": "7c0587f65f73f369b731b84954713163b43582d0"
-            },
-            {
-              "path": "docs/ai-workflow/registry/workflow-v2-3-followups-artifacts.json",
-              "exists": true,
-              "mode": "100644",
-              "blob": "0fc6bebedc58738e110883ab41b5399d87f22226"
-            },
-            {
-              "path": "scripts/workflow_fingerprint.py",
-              "exists": true,
-              "mode": "100755",
-              "blob": "b1d29974775dac72c9f88c3541c99d078e77f416"
-            },
-            {
-              "path": "scripts/workflow_fingerprint_test.py",
-              "exists": true,
-              "mode": "100644",
-              "blob": "46e0c9fd692e23fba445aad7feec2fe8364060ce"
-            },
-            {
-              "path": "scripts/workflow_integration_test.py",
-              "exists": true,
-              "mode": "100644",
-              "blob": "1d4ae2d5b9979e8b8943bbea766d436e59c4d1f7"
-            },
-            {
-              "path": "scripts/workflow_state.py",
-              "exists": true,
-              "mode": "100644",
-              "blob": "8783c784b32e4a069d68403fe7fa0d258583e7f6"
-            },
-            {
-              "path": "scripts/workflow_state_demo_test.py",
-              "exists": true,
-              "mode": "100644",
-              "blob": "a96fcfa7530ba04e9e60545543872eb706bc6a17"
-            },
-            {
-              "path": "scripts/workflow_state_test.py",
-              "exists": true,
-              "mode": "100644",
-              "blob": "efd613f0bf13f0de9cb6b437414fd823eada1b05"
-            }
-          ],
-          "protected_paths": [
-            "docs/ai-workflow/MILESTONE_WORKFLOW.md",
-            "docs/ai-workflow/PLAN_REVIEW_WORKFLOW.md",
-            "docs/ai-workflow/REVIEW_PROTOCOL.md",
-            "docs/ai-workflow/WORKFLOW_V2_3_FOLLOWUPS.md",
-            "docs/ai-workflow/registry/workflow-v2-3-followups-artifacts.json"
-          ],
-          "protected_prefixes": [
-            ".claude/commands/",
-            "scripts/"
-          ],
-          "excluded_paths": [
-            ".gitignore",
-            "AGENTS.md",
-            "CLAUDE.md",
-            "README.md",
-            "docs/ACTIVE_MILESTONE.md",
-            "docs/DOMAIN_GLOSSARY.md",
-            "docs/PROJECT_BRIEF.md",
-            "docs/ROADMAP.md",
-            "docs/TECHNICAL_DECISIONS.md",
-            "docs/UX_FLOWS.md",
-            "docs/ai-workflow/WORKFLOW_CONFIG.json",
-            "docs/ai-workflow/WORKFLOW_STATE.json",
-            "docs/ai-workflow/WORKFLOW_V2_1_OPERATOR_REFERENCE.md",
-            "docs/ai-workflow/WORKFLOW_V2_3_FOLLOWUPS_PLAN.md",
-            "docs/ai-workflow/WORKFLOW_V2_3_PLAN.md",
-            "docs/ai-workflow/WORKFLOW_V2_AUDIT.md",
-            "docs/ai-workflow/WORKFLOW_V2_PLAN.md"
-          ],
-          "excluded_prefixes": [
-            ".github/",
-            "app/",
-            "config/",
-            "docs/adr/",
-            "docs/agent-context/",
-            "docs/ai-workflow/archive/",
-            "docs/ai-workflow/diagrams/",
-            "docs/ai-workflow/dry-run/",
-            "docs/ai-workflow/registry/",
-            "docs/ai-workflow/requirements/",
-            "docs/improvements/",
-            "docs/milestones/",
-            "gradle/"
-          ]
-        },
+        "review_content_manifest": [
+          {
+            "path": ".claude/commands/approve-review.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "761155806b7183e2d9547e2d5416602367d5b926"
+          },
+          {
+            "path": ".claude/commands/record-manual-plan-review.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "1aaaf8b3d1a199794e1453a5aca18e01bbda5f56"
+          },
+          {
+            "path": ".claude/commands/review-implementation.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "71fefa777809162a710998aecf0002f5cb756e42"
+          },
+          {
+            "path": ".claude/commands/review-plan.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7ccd6f7870f7232671c915557b0bf70958ec47ae"
+          },
+          {
+            "path": "docs/ai-workflow/MILESTONE_WORKFLOW.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "df7e43eae7e89a9d863bb057ada369ef6373c64c"
+          },
+          {
+            "path": "docs/ai-workflow/PLAN_REVIEW_WORKFLOW.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "03a5d3bec40e9a87e9f5bd5562a66b7a8a8563e8"
+          },
+          {
+            "path": "docs/ai-workflow/REVIEW_PROTOCOL.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d2c3e8f8507afd404f55a04fd6602171c0c55896"
+          },
+          {
+            "path": "docs/ai-workflow/WORKFLOW_V2_3_FOLLOWUPS.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7c0587f65f73f369b731b84954713163b43582d0"
+          },
+          {
+            "path": "docs/ai-workflow/registry/workflow-v2-3-followups-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0fc6bebedc58738e110883ab41b5399d87f22226"
+          },
+          {
+            "path": "scripts/workflow_fingerprint.py",
+            "exists": true,
+            "mode": "100755",
+            "blob": "b1d29974775dac72c9f88c3541c99d078e77f416"
+          },
+          {
+            "path": "scripts/workflow_fingerprint_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "46e0c9fd692e23fba445aad7feec2fe8364060ce"
+          },
+          {
+            "path": "scripts/workflow_integration_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "1d4ae2d5b9979e8b8943bbea766d436e59c4d1f7"
+          },
+          {
+            "path": "scripts/workflow_state.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8783c784b32e4a069d68403fe7fa0d258583e7f6"
+          },
+          {
+            "path": "scripts/workflow_state_demo_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a96fcfa7530ba04e9e60545543872eb706bc6a17"
+          },
+          {
+            "path": "scripts/workflow_state_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "efd613f0bf13f0de9cb6b437414fd823eada1b05"
+          }
+        ],
         "reviewed_content_commit": "994608f7d01aa6516c4c929d890ed0b9a8739351",
         "legacy_evidence": null,
         "user_confirmation": "I confirm approval of the workflow-v2-3-followups implementation stage.",
