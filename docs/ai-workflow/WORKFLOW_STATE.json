@@ -698,7 +698,7 @@
       "registry_path": "docs/ai-workflow/registry/workflow-v2-3-followups-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/workflow-v2-3-followups-mapping.json",
       "governing_workflow_version": "2.1",
-      "phase": "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+      "phase": "AWAITING_FUNCTIONAL_REVIEW",
       "plan_revision": 13,
       "implementation_revision": 4,
       "functional_review_round": null,
@@ -757,16 +757,22 @@
         "recorded_at": "2026-08-23T18:05:00+01:00"
       },
       "technical_approval": {
-        "status": "STALE",
+        "status": "CURRENT",
         "basis": "EXTERNAL_APPROVE",
-        "reviewed_bundle_id": "b3407a882e16c6ea6c1758ea102e0bc4d7465702104a9fd6d18468bd37fa51d7",
-        "approved_review_content_id": "e8a4a76420995dc9eca3bd015267de890b32dc5d75684bd379833440816f2435",
+        "reviewed_bundle_id": "52e6edf3fe258959710869f64f3d7050304c6f8c75d37b67a1abb15021b09638",
+        "approved_review_content_id": "55b3f4d0322dccc7e2ece1ab3fd6ca17e0ec62b1bbc9b7bd14e240ac476cb5c8",
         "review_content_manifest": [
+          {
+            "path": ".claude/commands/apply-functional-review.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8adf005b816d033443320255b695ec8fe09d5af6"
+          },
           {
             "path": ".claude/commands/approve-review.md",
             "exists": true,
             "mode": "100644",
-            "blob": "761155806b7183e2d9547e2d5416602367d5b926"
+            "blob": "8c02f8dffc10fe100c6a63ee986eef0651740e27"
           },
           {
             "path": ".claude/commands/record-manual-plan-review.md",
@@ -775,10 +781,16 @@
             "blob": "1aaaf8b3d1a199794e1453a5aca18e01bbda5f56"
           },
           {
+            "path": ".claude/commands/recover-implementation-provenance.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "094a0a34f7f570e42879bb24b2d8d69712fcae34"
+          },
+          {
             "path": ".claude/commands/review-implementation.md",
             "exists": true,
             "mode": "100644",
-            "blob": "71fefa777809162a710998aecf0002f5cb756e42"
+            "blob": "373b0bb9b986284a9082b832287d9108fd733ae0"
           },
           {
             "path": ".claude/commands/review-plan.md",
@@ -820,44 +832,50 @@
             "path": "scripts/workflow_fingerprint.py",
             "exists": true,
             "mode": "100755",
-            "blob": "b1d29974775dac72c9f88c3541c99d078e77f416"
+            "blob": "651ab2cec5394a0e84ac44c6b3e0fb9032f108e2"
           },
           {
             "path": "scripts/workflow_fingerprint_test.py",
             "exists": true,
             "mode": "100644",
-            "blob": "46e0c9fd692e23fba445aad7feec2fe8364060ce"
+            "blob": "da70abf9cde796dbc77b92f6325c7253cac708f3"
           },
           {
             "path": "scripts/workflow_integration_test.py",
             "exists": true,
             "mode": "100644",
-            "blob": "1d4ae2d5b9979e8b8943bbea766d436e59c4d1f7"
+            "blob": "6449d979da165a4bf8dcf553743ad79cf6d9e317"
           },
           {
             "path": "scripts/workflow_state.py",
             "exists": true,
             "mode": "100644",
-            "blob": "8783c784b32e4a069d68403fe7fa0d258583e7f6"
+            "blob": "c74bf22311daf220f584a3f5210218e7db720d5f"
+          },
+          {
+            "path": "scripts/workflow_state_completion_obligations_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "4923a015c78469563276f905fb7fead4f6f77dbd"
           },
           {
             "path": "scripts/workflow_state_demo_test.py",
             "exists": true,
             "mode": "100644",
-            "blob": "a96fcfa7530ba04e9e60545543872eb706bc6a17"
+            "blob": "a66059ee7223049bf32c578274038e5991c29469"
           },
           {
             "path": "scripts/workflow_state_test.py",
             "exists": true,
             "mode": "100644",
-            "blob": "efd613f0bf13f0de9cb6b437414fd823eada1b05"
+            "blob": "4e96d30eef21523fbfc4fff229418dc8a23a09c7"
           }
         ],
-        "reviewed_content_commit": "994608f7d01aa6516c4c929d890ed0b9a8739351",
+        "reviewed_content_commit": "2302cc425635fd4fe28ff349da31d14a1115deee",
         "legacy_evidence": null,
         "user_confirmation": "I confirm approval of the workflow-v2-3-followups implementation stage.",
         "waived_guarantees": [],
-        "recorded_at": "2026-08-23T20:34:25+01:00"
+        "recorded_at": "2026-08-23T23:42:37Z"
       },
       "technical_review_block_pins": [],
       "plan_review_stages": {
@@ -877,8 +895,8 @@
       },
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 57,
-      "last_transition": "2026-08-24T00:19:56+01:00"
+      "state_revision": 58,
+      "last_transition": "2026-08-23T23:42:37Z"
     }
   }
 }
