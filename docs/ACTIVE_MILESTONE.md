@@ -1179,3 +1179,205 @@ available today.
   (`LPR-R2-B01`).
 
 Findings go in `.ai-review/feedback/FUNCTIONAL_REVIEW.md`.
+
+---
+
+## `workflow-v2-3-followups` — functional review checklist (implementation revision 4)
+
+This section supersedes the implementation-revision-1 section immediately
+above for review purposes -- that section is left in place as historical
+record, not edited. This is the same work item re-entering
+`AWAITING_FUNCTIONAL_REVIEW` after a real functional-review finding was
+filed against revision 1's content, worked through three further
+implementation-review rounds, and re-approved.
+
+**Context**: while walking revision 1's checklist above (specifically,
+running `/accept-milestone`'s own advisory pre-flight), a real defect was
+found and filed as `.ai-review/feedback/FUNCTIONAL_REVIEW.md`'s Finding 1:
+both `plan_approval.review_content_manifest` and
+`technical_approval.review_content_manifest` had been stored as the
+*entire* `compute_review_content_id_*_stage` projection object instead of
+that object's own inner flat `review_content_manifest` list, so
+`resolve_own_registry_completion_status` crashed with a bare
+`AttributeError: 'str' object has no attribute 'get'` instead of a typed
+refusal. Per `D-Functional-Remediation`'s bounded-fix branch, three
+Optional findings from this item's own round-1 implementation review (O2,
+O3, O5) were folded into the same round at the user's direction; O1 and O4
+were explicitly declined as out of scope.
+
+That single finding drove three further implementation-review rounds
+(`implementation_revision` `1` -> `2` -> `3` -> `4`), each fixing what the
+previous round's own review found still incomplete:
+
+- **Round 2** added the shape check to `_validate_work_item`
+  (`validate_state`'s own call path) -- exactly what the finding asked for
+  on its face.
+- **Round 3**'s review (Blocking) found that `validate_state`/
+  `_validate_work_item` has **no production caller anywhere in this
+  repository** -- not `state_transaction`, not any `.claude/commands/*.md`
+  step -- so the read-side crash the finding actually reproduced was still
+  live. Round 3 corrected two overstated claims but had not yet reached
+  round 4's real fix.
+- **Round 4** (this revision) closed it for real, following
+  `OPUS-R25-007`'s precedent: the shape-check logic was factored into one
+  shared helper, `_describe_malformed_review_content_manifest_shape`, used
+  at all three sites -- `validate_approval_record` (the write chokepoint,
+  unchanged behavior), `_assert_registry_covered_by_current_plan_approval`
+  (the live-state consumer, the exact `/accept-milestone` step 2a entry
+  point, now raising `StalePlanApprovalRegistryReadError`), and
+  `_resolve_one_obligation` (the committed-blob consumer -- `durable_record`
+  is read from immutable Git history, so a manifest malformed at approval
+  time reaches it regardless of any live-file fix -- now returning
+  `ObligationVerdict("VERIFIER_UNAPPROVED", ...)`). Commit `6827417` (B1).
+  A small, unrelated documentation reword (item 313's stale
+  three-combination count language) landed alongside it as commit `2302cc4`
+  (O1, from round 3's own review).
+
+A fresh `/review-implementation` round against round 4's bundle returned
+`Status: APPROVE` -- 0 Blocking, 0 Important, 2 Optional (both explicitly
+non-blocking; see "Known limitations" below).
+`technical_approval` is now recorded (commit
+`e84da52d153390d41c423b98dd04eb8123b1e798`, `Workflow-Technical-Approval:
+55b3f4d0322dccc7e2ece1ab3fd6ca17e0ec62b1bbc9b7bd14e240ac476cb5c8`, basis
+`EXTERNAL_APPROVE`), preceded by the bundle-generation-record commit
+`e121d2d91537a76abd0453180d56fc58eb8ef594`
+(`Workflow-Bundle-Generation-Record: workflow-v2-3-followups/4`).
+
+### Setup
+
+No Android app / Gradle changes are involved -- this is process tooling
+only (`scripts/*.py`, `.claude/commands/*.md`, `docs/ai-workflow/*`). No
+build/install step is needed; everything below runs with `python3` from
+the repo root (`scripts/` for the checks that `cd` there).
+
+### Automated verification (re-confirmed this session, current)
+
+Re-run independently, live, right before this checklist was written (only
+`docs/ai-workflow/WORKFLOW_STATE.json` -- implementation-stage excluded --
+has changed since `technical_approval.reviewed_content_commit`, `2302cc4`,
+via the bundle-generation-record commit `e121d2d` and this session's own
+metadata-only approval commit `e84da52`; `git diff --stat 2302cc4..HEAD`
+touches only that one file):
+
+```
+python3 -m unittest discover -s scripts -p "workflow_*_test.py" -t scripts
+```
+
+Result: **1230 tests, OK (skipped=4)**, ~122s -- matches
+`TEST_RESULTS.md`'s round-4 total exactly.
+
+```
+python3 -m unittest workflow_state_demo_test        # from scripts/: 46/46, OK
+python3 -m unittest workflow_fingerprint_demo_test   # from scripts/: 15/15, OK (skipped=4)
+```
+
+```
+./gradlew spotlessCheck detekt lintDebug testDebugUnitTest
+```
+
+Result: **BUILD SUCCESSFUL**, 45 actionable tasks, 44 up-to-date -- fully
+up-to-date, as expected, since this round touches no `app/` file.
+
+### Test data
+
+None to seed -- every check below reads this repository's own real,
+already-committed state (`workflow-v2-3-followups`'s own entry in
+`docs/ai-workflow/WORKFLOW_STATE.json`, the changed script/test/registry
+files, and this round's own real review history).
+
+### Flows to exercise manually
+
+1. **Re-run the automated suite yourself** (commands above, from the repo
+   root and from `scripts/` as noted) and confirm the same 1230/46/15
+   result and a successful Gradle gate independently, rather than trusting
+   this document's claim alone.
+2. **B1's fix -- the actual `/accept-milestone`-crash defect is closed at
+   both real production consumers.** Run, from `scripts/`:
+   ```
+   python3 -m unittest workflow_state_test.TestRegistryReadBoundToCurrentPlanApproval.test_malformed_live_plan_approval_manifest_rejected_cleanly
+   python3 -m unittest workflow_state_completion_obligations_test.TestResolveCompletionObligationsPipeline.test_malformed_committed_review_content_manifest_rejected_cleanly
+   ```
+   Expected: both `OK`. The first plants the malformed shape in a live-state
+   work item and calls `resolve_own_registry_completion_status` directly
+   (the exact `/accept-milestone` step 2a entry point that originally
+   crashed); the second commits the malformed shape for real, with a
+   `Workflow-Technical-Approval` trailer, and calls
+   `resolve_completion_obligations` against that committed blob -- proving
+   the fix holds even for a manifest that was already malformed in
+   immutable history, not just in the live file.
+3. **No caller downgrades the new refusal.** Confirm:
+   ```
+   grep -n "StalePlanApprovalRegistryReadError" scripts/workflow_state.py
+   ```
+   Expected: every `raise StalePlanApprovalRegistryReadError(...)` site
+   (four, one per malformation branch) lives inside the single function
+   `_assert_registry_covered_by_current_plan_approval`, and the class
+   appears in no `except` clause anywhere in the file -- both call sites in
+   `complete_work_item`/`work_item_completion_status` let it propagate
+   uncaught.
+4. **The two round-4 Optional findings are correctly left open, not
+   silently dropped.** Read `.ai-review/feedback/REVIEW_FEEDBACK.md`'s
+   "Optional findings" section: confirm O1 (the shape helper does not
+   constrain the `path` value's own type, a narrow residual gap in the
+   committed-blob consumer) and O2 (a tautological
+   `assertNotIsInstance` in one regression test) are both still named
+   there, and that "Required acceptance criteria" reads "None. This bundle
+   is approvable as it stands."
+5. **The real `/approve-review implementation` flow, exercised for real
+   this session.** Confirm independently:
+   ```
+   git show --stat e84da52d153390d41c423b98dd04eb8123b1e798
+   git log -1 --format=%B e84da52d153390d41c423b98dd04eb8123b1e798
+   ```
+   Expected: exactly one file changed
+   (`docs/ai-workflow/WORKFLOW_STATE.json`), and the trailers read
+   `Workflow-Technical-Approval:
+   55b3f4d0322dccc7e2ece1ab3fd6ca17e0ec62b1bbc9b7bd14e240ac476cb5c8` /
+   `Workflow-Work-Item: workflow-v2-3-followups`.
+6. **The bundle-generation-record commit is likewise metadata-only.**
+   Confirm:
+   ```
+   git show --stat e121d2d91537a76abd0453180d56fc58eb8ef594
+   ```
+   Expected: exactly one file changed
+   (`docs/ai-workflow/WORKFLOW_STATE.json`), trailer
+   `Workflow-Bundle-Generation-Record: workflow-v2-3-followups/4`.
+7. **Scope discipline for this specific remediation round.** Confirm:
+   ```
+   git diff 3b05bf8..HEAD -- app/
+   git diff 3b05bf8..HEAD -- .claude/commands/
+   ```
+   Expected: both empty -- round 4 touches only
+   `scripts/workflow_state.py`, its two test files, and one registry JSON
+   reword (O1), matching `TEST_RESULTS.md`'s own account exactly.
+8. **Command surface and hard-gate count are unchanged.** Confirm
+   `.claude/commands/` still contains exactly 16 files, all 16 named in
+   `CLAUDE.md`'s "Slash commands" list, and that
+   `docs/ai-workflow/MILESTONE_WORKFLOW.md`'s "Hard gates summary" still
+   lists exactly six gates.
+
+### Expected result
+
+All eight checks above pass exactly as described. Checks 1, 3, 4, 5, 6, 7,
+and 8 are read-only or inspect commits/state that already exist (safe to
+repeat freely); check 2 runs two regression tests directly against real
+production consumers (also safe, no writes to the real repository).
+
+### Known limitations / out of scope for this review
+
+- This is **not** a re-walk of CP1-CP4's own original checkpoint behavior
+  -- revision 1's checklist above already covers that ground in full; this
+  section targets only what changed between revision 1 and revision 4
+  (Finding 1's fix and the three-round remediation arc it drove).
+- O1 and O2 from round 4's own `REVIEW_FEEDBACK.md` remain open,
+  explicitly non-blocking, and may be declined or deferred without
+  weakening this round's approval -- not required acceptance criteria for
+  this functional review.
+- Required follow-up #8 (operator reference / lifecycle diagram sync,
+  `WORKFLOW_V2_3_FOLLOWUPS.md` item 2) remains deferred, unchanged since
+  revision 1. `docs/ai-workflow/WORKFLOW_V2_1_OPERATOR_REFERENCE.md` and
+  `docs/ai-workflow/diagrams/` are still untracked working-tree leftovers,
+  declared `excluded` in this item's own artifacts declaration, and are
+  left unmodified throughout this review.
+
+Findings go in `.ai-review/feedback/FUNCTIONAL_REVIEW.md`.
