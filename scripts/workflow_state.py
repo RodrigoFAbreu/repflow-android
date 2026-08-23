@@ -2207,6 +2207,7 @@ PLAN_APPROVAL_DESTRUCTIVE_STEPS = frozenset({
 })
 PLAN_APPROVAL_ORDINARY_STEPS = frozenset({
     "step-5-declaration-pin",
+    "step-5-stage-and-pin",
     "step-6.1b-state-pin",
     "step-6.2-stage-ordinary",
     "step-7b-amend-stage",

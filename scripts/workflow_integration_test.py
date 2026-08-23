@@ -639,7 +639,17 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # workflow-v2-1-core's own plan-stage approvals until the Bootstrap
     # plan-approval procedure is withdrawn, and new steps 4b/4c/6c/6d --
     # intentional content change.
-    "approve-review.md": "cdc3582076a9c357e18774622ec65e7b722252fd3148197909559d34012a1e32",
+    #
+    # approve-review.md further updated, workflow-v2-3-followups CP1
+    # (LPR-R1-B01/LPR-R3-B01/LPR-R3-B02): steps 5 and 6.1 merged into one
+    # guarded window (new ordinary step label "step-5-stage-and-pin") that
+    # stages every non-state plan-approval member -- ordinary members and
+    # the conditional fifth member alike -- in a single call, fixing the
+    # fifth-member DirtyIndexBeforeStagingError; step 6a's amend-recovery
+    # text reworded to name the merged step; step 6.4's commit instruction
+    # gained the "trailers must be the commit message's own final
+    # paragraph" sentence -- intentional content change.
+    "approve-review.md": "632410b8f7c1ac19da8f07d7f5fef7dc689c412d434460510c592bdf39dd59a7",
     "accept-milestone.md": "3822aa4adb7838dfc76a8a41fe102d32d0435ce2ed740939662bb37035a07f70",
     "prepare-functional-review.md": "1b4a08cc0a28c09e0031f73e6003f23fd96fdc6c3fe22553e9f2408c1798f8cd",
     # apply-plan-review.md/bootstrap-workflow-v2.md (D-Plan-Revision-Publication,
@@ -703,6 +713,44 @@ class TestGoldenCommandFileHashes(unittest.TestCase):
                     f"{filename} content changed since this golden hash was recorded -- "
                     f"if intentional, update _GOLDEN_COMMAND_FILE_SHA256",
                 )
+
+
+class TestPlanApprovalCommitTrailerFinalParagraphConformance(unittest.TestCase):
+    """`workflow-v2-3-followups` CP1 (`LPR-R3-B01`, round-3 local plan
+    review): `approve-review.md` step 6.4's commit instruction must state
+    the same "trailers must be the commit message's own final paragraph"
+    requirement `milestone-implement.md`/`bootstrap-workflow-v2.md` already
+    state verbatim -- without it, a plausible commit-message shape makes
+    the approval commit's own trailers unparseable by `git
+    interpret-trailers --parse`, `discover_plan_approval_commit`'s exact
+    mechanism. No existing test asserted this for any of the three files
+    before this checkpoint; this is new coverage for all three, not just
+    `approve-review.md`."""
+
+    def test_approve_review_states_the_final_paragraph_requirement(self):
+        text = _command_text("approve-review.md")
+        self.assertIn(
+            "**These\n     two lines must be the commit message's own final paragraph** — after\n"
+            "     any `Co-Authored-By:`/`Claude-Session:` lines, never before them",
+            text,
+        )
+        self.assertIn("discover_plan_approval_commit", text)
+
+    def test_milestone_implement_states_the_final_paragraph_requirement(self):
+        text = _command_text("milestone-implement.md")
+        self.assertIn(
+            "**These\n      two lines must be the commit message's final paragraph** -- after\n"
+            "      any `Co-Authored-By:`/`Claude-Session:` lines, never before them",
+            text,
+        )
+
+    def test_bootstrap_workflow_v2_states_the_final_paragraph_requirement(self):
+        text = _command_text("bootstrap-workflow-v2.md")
+        self.assertIn(
+            "**These two lines must be the commit message's final\n   paragraph** — after any `Co-Authored-By:`/`Claude-Session:` lines, never\n"
+            "   before them",
+            text,
+        )
 
 
 class TestAssertLocalGenerationMatchesCallSiteConformance(unittest.TestCase):
@@ -3283,14 +3331,14 @@ class TestPlanApprovalPermanentSiteEndToEnd(unittest.TestCase):
             owner_token = journal["owner_token"]
             post_state = ws.apply_plan_approval(pre_state, wi, record, "t1")
 
-            # Step 5: no fifth member in this fixture -- no-op (confirms
-            # the simple four-member case this class exercises).
+            # Step 5 (merged staging-and-pin): no fifth member in this
+            # fixture, so the single call covers the three ordinary
+            # members only and no pin follows -- confirms the merge left
+            # the simple four-member case's behavior unchanged.
             self.assertIsNone(plan.artifacts_declaration_path)
-
-            # Step 6.1: stage the ordinary members.
             ordinary_paths = tuple(p for p in plan.paths if p != str(_STATE_PATH))
             with ws.plan_approval_guarded_mutation(
-                repo.root, owner_token=owner_token, step="step-6.2-stage-ordinary", now="t2",
+                repo.root, owner_token=owner_token, step="step-5-stage-and-pin", now="t2",
             ):
                 ws.stage_plan_approval_commit_paths(repo.root, ordinary_paths)
 
@@ -3361,6 +3409,235 @@ class TestPlanApprovalPermanentSiteEndToEnd(unittest.TestCase):
             final = json.loads((repo.root / _STATE_PATH).read_text())
             self.assertEqual(final, post_state)
             self.assertEqual(_run(["git", "status", "--porcelain"], cwd=repo.root), "")
+
+    def _setup_with_fifth_member(self, repo: h.ScratchRepo, wi: str):
+        """The real defect's exact fixture, reused for this class's own
+        real-choreography exercise: the artifacts declaration is pending
+        (never committed) and fresh in the bundle capture, so
+        `resolve_plan_stage_approval_commit_paths` resolves the genuine
+        five-member set step 5's merged staging-and-pin window must now
+        handle in one call (`workflow-v2-3-followups` CP1,
+        `LPR-R1-B01`)."""
+        membership = TestPlanStageApprovalCommitMembership()
+        repo.write_plan_docs(work_item_id=wi)
+        membership._commit_base_without_artifacts(repo, wi)
+        work_item = h.base_work_item(
+            work_item_id=wi, governing_workflow_version="2.1", phase="AWAITING_PLAN_APPROVAL",
+            plan_path="docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+            registry_path=f"docs/ai-workflow/registry/{wi}-registry.json",
+            mapping_path=f"docs/ai-workflow/requirements/{wi}-mapping.json",
+            base_commit=repo.base,
+        )
+        repo.write_workflow_state(**{wi: work_item})
+        # Canonicalize and commit the state file before the journal opens
+        # -- mirrors `_setup` above: `plan_approval_state_matches_pre_
+        # transaction`'s fresh, whole-file byte comparison depends on the
+        # live bytes matching `_serialize_state`'s canonical form, and the
+        # merged step's own state-pin sub-step (6.2) needs a stable `HEAD`
+        # to diff its own new pin against. Only the fifth member --
+        # `<wi>-artifacts.json` -- stays genuinely pending.
+        pre_state = json.loads((repo.root / _STATE_PATH).read_text())
+        (repo.root / _STATE_PATH).write_bytes(ws._serialize_state(pre_state))
+        _run(["git", "add", str(_STATE_PATH)], cwd=repo.root)
+        _run(["git", "commit", "-q", "-m", "seed workflow state"], cwd=repo.root)
+        artifacts_rel = f"docs/ai-workflow/registry/{wi}-artifacts.json"
+        membership._seed_bundle_capture(repo, wi, artifacts_rel)
+
+        plan = fingerprint.resolve_plan_stage_approval_commit_paths(
+            repo.root, wi, Path("docs/ai-workflow/WORKFLOW_STATE.json"),
+        )
+        self.assertIsNotNone(plan.artifacts_declaration_path)  # confirms the five-member case
+
+        protected = h.plan_stage_protected_paths(wi)
+        review_content_id, _ = fingerprint.compute_review_content_id_plan_stage(
+            repo.root, repo.base, work_item_type="process", work_item_id=wi,
+            plan_revision=1, protected=protected,
+            excluded_paths=h.plan_stage_excluded_paths(),
+            excluded_prefixes=h.plan_stage_excluded_prefixes(),
+        )
+        record = ws.build_approval_record(
+            basis="EXTERNAL_APPROVE", stage="plan",
+            user_confirmation=f"I confirm plan approval for {wi}, plan stage.", now="t1",
+            reviewed_bundle_id="b1", approved_review_content_id=review_content_id,
+            review_content_manifest=[{"path": "x", "exists": True, "mode": "100644", "blob": "y"}],
+        )
+        return pre_state, record, review_content_id, plan
+
+    def test_five_member_fixture_succeeds_through_the_real_merged_step_5(self):
+        """The exact gap `workflow-v2-3-followups` CP1 closes and
+        `WORKFLOW_V2_3_FOLLOWUPS.md` confirmed no test covered: a genuine
+        five-member fixture (fifth member pending and fresh) driven
+        through `approve-review.md`'s own real, merged step 5 -- one call
+        to `stage_plan_approval_commit_paths` over all four non-state
+        members, then the fifth-member pin, both inside the same
+        `"step-5-stage-and-pin"` guarded window -- proving the documented
+        sequence now succeeds end to end, all the way through to a
+        committed, materialized, journal-closed outcome. The *old*
+        two-call split is proven broken by
+        `TestPlanStageApprovalCommitMembership`'s own low-level fixture
+        already; this test proves the *new* one-call choreography works,
+        not merely that the underlying primitive accepts an arbitrary
+        path tuple."""
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup_with_fifth_member(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+            owner_token = journal["owner_token"]
+            post_state = ws.apply_plan_approval(pre_state, wi, record, "t1")
+
+            # Step 5 (merged): one call over every non-state member,
+            # ordinary members plus the fifth, then pin the fifth --
+            # exactly approve-review.md's own documented call shape.
+            fifth = plan.artifacts_declaration_path
+            self.assertIsNotNone(fifth)
+            ordinary_paths = tuple(p for p in plan.paths if p not in (str(_STATE_PATH), fifth))
+            self.assertEqual(len(ordinary_paths), 3)
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=owner_token, step="step-5-stage-and-pin", now="t2",
+            ):
+                ws.stage_plan_approval_commit_paths(repo.root, ordinary_paths + (fifth,))
+                ws.verify_staged_blob_sha256(repo.root, fifth, plan.artifacts_declaration_sha256)
+
+            # The fifth member is the only one of the four with real
+            # changed content at this fixture's HEAD (the three ordinary
+            # members were already settled by `_commit_base_without_
+            # artifacts`) -- a subset check, matching
+            # `stage_plan_approval_commit_paths`'s own post-staging
+            # assertion, not exact equality (a byte-identical member
+            # legitimately produces no diff entry).
+            staged = _run(["git", "diff", "--name-only", "--cached", "HEAD"], cwd=repo.root)
+            staged_paths = {line for line in staged.splitlines() if line}
+            self.assertIn(fifth, staged_paths)
+            self.assertTrue(staged_paths.issubset(set(ordinary_paths) | {fifth}))
+
+            # Step 6.2: 6.1a compare-and-swap, then pin the state blob.
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=owner_token, step="step-6.1b-state-pin", now="t3",
+            ):
+                self.assertTrue(
+                    ws.plan_approval_state_matches_pre_transaction(
+                        repo.root, journal["pre_procedure_state_sha256"],
+                    ),
+                )
+                ws.pin_plan_approval_state_blob(
+                    repo.root, base64.b64decode(journal["expected_post_state_b64"]),
+                )
+                ws.verify_staged_plan_approval_state_blob(
+                    repo.root, journal["expected_post_state_sha256"],
+                )
+
+            # Step 6.3: staged-set assertion.
+            staged = _run(["git", "diff", "--name-only", "--cached", "HEAD"], cwd=repo.root)
+            staged_paths = {line for line in staged.splitlines() if line}
+            self.assertTrue(staged_paths.issubset(set(journal["applicable_paths"])))
+
+            # Step 6.4: the commit.
+            body = f"plan approval\n\nWorkflow-Plan-Approval: {review_content_id}\nWorkflow-Work-Item: {wi}"
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=owner_token, step="step-6.5-commit", now="t4",
+            ):
+                _run(["git", "commit", "-q", "-m", body], cwd=repo.root)
+            commit = repo.head()
+
+            # Step 6a: classify -> COMMITTED; the post-commit verification
+            # set, fifth-member blob check included.
+            self.assertEqual(
+                ws.classify_plan_approval_outcome(repo.root, journal),
+                ws.PLAN_APPROVAL_OUTCOME_COMMITTED,
+            )
+            ws.verify_post_approval_manifest_match(
+                repo.root, post_state["work_items"][wi], stage="plan",
+                base_commit=repo.base, commit=commit,
+            )
+            ws.assert_committed_path_set_matches(repo.root, commit, journal["applicable_paths"])
+            ws.verify_committed_plan_approval_state_blob(
+                repo.root, commit, journal["expected_post_state_sha256"],
+            )
+            ws.verify_committed_blob_sha256(repo.root, commit, fifth, plan.artifacts_declaration_sha256)
+
+            # Step 6c: materialize; step 6d: close the journal.
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=owner_token, step="step-8b-materialize", now="t5",
+            ):
+                target = ws.classify_plan_approval_materialize_target(repo.root, wi, pre_state, post_state)
+                self.assertEqual(target, ws.PLAN_APPROVAL_MATERIALIZE_WRITE)
+                ws.materialize_plan_approval_state(repo.root, commit, journal["expected_post_state_sha256"])
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=owner_token, step="step-8a-close-journal", now="t6",
+            ):
+                ws.close_plan_approval_journal(repo.root)
+
+            self.assertIsNone(ws.read_plan_approval_journal(repo.root))
+            self.assertIsNone(ws.read_plan_approval_guard(repo.root))
+            final = json.loads((repo.root / _STATE_PATH).read_text())
+            self.assertEqual(final, post_state)
+            self.assertEqual(_run(["git", "status", "--porcelain"], cwd=repo.root), "")
+
+    def test_merged_step_5_still_refuses_on_unrelated_dirty_index(self):
+        """The merge does not weaken the pre-staging precondition: unrelated
+        content already staged with real changed content before the merged
+        window's own `stage_plan_approval_commit_paths` call runs still
+        raises `DirtyIndexBeforeStagingError`, and the guard releases
+        without advancing progress -- step 6b's rollback then resets it
+        cleanly, and a retry (with the unrelated content removed) succeeds
+        through the same merged step."""
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup_with_fifth_member(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+            owner_token = journal["owner_token"]
+
+            status_before = _run(["git", "status", "--porcelain"], cwd=repo.root)
+            (repo.root / "unrelated.txt").write_text("unrelated concurrent content\n")
+            _run(["git", "add", "unrelated.txt"], cwd=repo.root)
+
+            fifth = plan.artifacts_declaration_path
+            ordinary_paths = tuple(p for p in plan.paths if p not in (str(_STATE_PATH), fifth))
+            with self.assertRaises(ws.DirtyIndexBeforeStagingError):
+                with ws.plan_approval_guarded_mutation(
+                    repo.root, owner_token=owner_token, step="step-5-stage-and-pin", now="t2",
+                ):
+                    ws.stage_plan_approval_commit_paths(repo.root, ordinary_paths + (fifth,))
+
+            # The guard released without advancing progress -- no
+            # progress record for this step exists yet.
+            self.assertIsNone(ws.read_plan_approval_guard(repo.root))
+            progress = ws.read_plan_approval_owner_progress(repo.root, owner_token)
+            self.assertTrue(progress is None or progress.get("step") != "step-5-stage-and-pin")
+
+            # Step 6b's rollback resets the whole index back to HEAD --
+            # both this attempt's own unrelated stage and (a no-op, since
+            # the call above raised before staging anything of its own)
+            # any partial staging from the merged call.
+            lease = ws.acquire_plan_approval_guard(
+                repo.root, holder_owner_token=owner_token, step="rollback-index-reset", now="t3",
+            )
+            try:
+                ws.rollback_plan_approval_transaction(repo.root, owner_token=owner_token)
+            finally:
+                ws.release_plan_approval_guard(repo.root, lease)
+            self.assertEqual(repo.head(), journal["pre_procedure_head"])
+            status_after = _run(["git", "status", "--porcelain"], cwd=repo.root)
+            expected = set(status_before.splitlines()) | {"?? unrelated.txt"}
+            self.assertEqual(set(status_after.splitlines()), expected)
+
+    def test_new_step_label_classifies_ordinary_and_acquires_the_guard(self):
+        """`plan_approval_step_class("step-5-stage-and-pin")` returns
+        `"ordinary"` and `plan_approval_guarded_mutation` successfully
+        acquires the guard under it -- the existing generic
+        `TestPlanApprovalFailureAtomicityTransaction`-sibling set-iteration
+        test covers the frozensets' exhaustiveness generically but proves
+        nothing about this specific, newly-added label (`LPR-R3-B02`)."""
+        self.assertEqual(ws.plan_approval_step_class("step-5-stage-and-pin"), ws.ORDINARY)
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            journal = self._open_journal(repo, wi, *self._setup(repo, wi))
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=journal["owner_token"], step="step-5-stage-and-pin", now="t2",
+            ):
+                pass
+            progress = ws.read_plan_approval_owner_progress(repo.root, journal["owner_token"])
+            self.assertEqual(progress["step"], "step-5-stage-and-pin")
 
     def test_not_committed_outcome_runs_the_step_6b_rollback_pattern(self):
         """Nothing staged, nothing committed -- classify must find

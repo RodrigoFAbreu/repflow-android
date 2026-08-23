@@ -219,6 +219,14 @@ _GRANDFATHERED_WORKFLOW_TRAILER_LOOKALIKE_VIOLATIONS = frozenset({
     # this pre-existing violation is not this work item's own regression
     # (revision 13, round 11 I1).
     "27f051eba897d77c742ead8b160ed519c0671ee4",
+    # `workflow-v2-3`'s own `/accept-milestone` commit (`workflow-v2-3-
+    # followups`'s own `base_commit`) -- `accept-milestone.md`'s commit
+    # step carries the same missing-final-paragraph trailer gap CP1 fixes
+    # in `approve-review.md` step 6.4; fixing `accept-milestone.md` itself
+    # is explicitly declined for this milestone (`workflow-v2-3-followups`
+    # plan, "Executing this plan"), so this pre-existing violation is not
+    # this work item's own regression (`LPR-R3-B01`/`LPR-R3-I01`).
+    "fb134ac4f7cdabb7861d170bb61331bb8d9f5a14",
 })
 
 
