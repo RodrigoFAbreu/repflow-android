@@ -891,22 +891,22 @@
     },
     {
       "item": 292,
-      "evidence": "workflow_state_test.TestRecoveredRoleThreeCombinationValidation.test_item_292_both_recovery_and_republication_parent_phases_independently_validate",
-      "note": "New this round: new test class TestRecoveredRoleThreeCombinationValidation, calling validate_bundle_generation_record_commit directly against hand-built recovered-role commits for both the recovery-shaped (parent phase AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW) and republication-shaped (parent phase APPLYING_REVIEW_FEEDBACK) combinations, both independently validating."
+      "evidence": "workflow_state_test.TestRecoveredRoleLegalParentPhaseCombinations.test_item_292_both_recovery_and_republication_parent_phases_independently_validate",
+      "note": "New this round: new test class TestRecoveredRoleLegalParentPhaseCombinations (renamed from TestRecoveredRoleThreeCombinationValidation by workflow-v2-3-followups's own continued scope, once a fourth legal parent phase -- AWAITING_FUNCTIONAL_REVIEW -- made the original count-based name stale; this evidence pointer repaired to match, the test's own behavior for items 292/293/294/313 unchanged), calling validate_bundle_generation_record_commit directly against hand-built recovered-role commits for both the recovery-shaped (parent phase AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW) and republication-shaped (parent phase APPLYING_REVIEW_FEEDBACK) combinations, both independently validating."
     },
     {
       "item": 293,
-      "evidence": "workflow_state_test.TestRecoveredRoleThreeCombinationValidation.test_item_293_awaiting_technical_approval_parent_phase_refused",
+      "evidence": "workflow_state_test.TestRecoveredRoleLegalParentPhaseCombinations.test_item_293_awaiting_technical_approval_parent_phase_refused",
       "note": "New this round: a recovered-role commit whose parent phase is the now-durably-unreachable AWAITING_TECHNICAL_APPROVAL is refused as malformed, naming the phase, even though its trailer/field set is otherwise well-formed."
     },
     {
       "item": 294,
-      "evidence": "workflow_state_test.TestRecoveredRoleThreeCombinationValidation.test_item_294_wrong_committed_phase_refused_despite_legal_parent",
+      "evidence": "workflow_state_test.TestRecoveredRoleLegalParentPhaseCombinations.test_item_294_wrong_committed_phase_refused_despite_legal_parent",
       "note": "New this round: a recovered-role commit with a legal republication parent phase (APPLYING_REVIEW_FEEDBACK) but a value-unchanged committed phase (the recovery shape, not the required real transition) is refused -- confirming the committed-phase requirement is unconditional and the validator has no notion of \"which command produced this,\" only committed parent/child state."
     },
     {
       "item": 313,
-      "evidence": "workflow_state_test.TestRecoveredRoleThreeCombinationValidation.test_item_313_self_reviewing_parent_wrong_committed_phase_and_illegal_parent_both_refused",
+      "evidence": "workflow_state_test.TestRecoveredRoleLegalParentPhaseCombinations.test_item_313_self_reviewing_parent_wrong_committed_phase_and_illegal_parent_both_refused",
       "note": "New this round: the symmetric SELF_REVIEWING_IMPLEMENTATION-parent mismatch (committed phase left value-unchanged instead of performing the real transition), plus a wholly illegal parent phase (IMPLEMENTING, outside all three combinations) -- both refused, the three-combination analogue of item 294."
     },
     {
