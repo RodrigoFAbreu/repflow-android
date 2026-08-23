@@ -4624,7 +4624,7 @@ class TestRecordBundleGeneration(unittest.TestCase):
         self.assertIn("SELF_REVIEWING_IMPLEMENTATION", str(ctx.exception))
         self.assertNotIn("APPLYING_REVIEW_FEEDBACK", str(ctx.exception))
 
-    def test_post_fix_illegal_source_phase_names_its_own_three_legal_phases(self):
+    def test_post_fix_illegal_source_phase_names_its_own_legal_phases(self):
         """The `stage="post-fix"` counterpart: its own legal set is
         `{APPLYING_REVIEW_FEEDBACK, AWAITING_FUNCTIONAL_REVIEW}` --
         `SELF_REVIEWING_IMPLEMENTATION` (legal only for `stage=
