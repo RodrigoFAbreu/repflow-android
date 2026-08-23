@@ -159,10 +159,11 @@ actually load-bearing control for the Skill exposure path, not mechanism
    third, functional-review source weakens none of this command's own
    stale-bundle/approval guards: the `STALE` gate means a `CURRENT`
    approval can never take this path at all; `/apply-functional-review`
-   step 4 still calls `assert_bundle_not_rejected` before generating, the
-   same as the ordinary post-fix path; and `resolve_bundle_generation_outcome`
-   still independently re-derives the outcome from real Git content, never
-   merely trusting which phase the caller arrived from.*
+   step 4 still re-checks the `REJECTED`-bundle marker (`WFR-67`) before
+   generating, the same as the ordinary post-fix path; and
+   `resolve_bundle_generation_outcome` still independently re-derives the
+   outcome from real Git content, never merely trusting which phase the
+   caller arrived from.*
 2. **Recompute fresh**: `bundle_id` over the current bundle and the
    stage-appropriate `review_content_id` (`scripts/workflow_fingerprint.py`)
    over the working tree. Display both, and the protected/excluded path

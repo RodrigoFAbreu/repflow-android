@@ -765,8 +765,13 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # `record_bundle_generation`'s own two entry phases" claim corrected
     # to the stage-aware, now-three-phase contract round 2's own record_
     # bundle_generation widening introduced -- intentional content change,
-    # a documentation-only correction with no behavioral effect.
-    "approve-review.md": "90b2a37c13c647a1444de30798556afd0ad5bec4b4db9323559b7d43bacb430e",
+    # a documentation-only correction with no behavioral effect. Worded to
+    # explain the REJECTED-bundle guard by citation (WFR-67) rather than by
+    # naming assert_bundle_not_rejected inline, so this file's own prose
+    # never perturbs test_every_non_exempt_file_calls_the_shared_assertion_
+    # the_expected_number_of_times's exact-count check of its two real call
+    # sites.
+    "approve-review.md": "9e6de2e744460b5897810a05031554e0c0829f0a12742e4fd9e20b217745ff38",
     "accept-milestone.md": "3822aa4adb7838dfc76a8a41fe102d32d0435ce2ed740939662bb37035a07f70",
     "prepare-functional-review.md": "1b4a08cc0a28c09e0031f73e6003f23fd96fdc6c3fe22553e9f2408c1798f8cd",
     # apply-plan-review.md/bootstrap-workflow-v2.md (D-Plan-Revision-Publication,
