@@ -11050,6 +11050,25 @@ def _validate_work_item(work_item_id: str, work_item: dict) -> None:
     _validate_plan_review_stages(work_item)
     _validate_technical_review_block_pins(work_item)
 
+    # I2 (workflow-v2-3-followups continued scope, external cross-model
+    # review round 2): validate_approval_record's shape check protected
+    # only newly *constructed* records, never one already persisted in
+    # `WORKFLOW_STATE.json` -- a malformed plan_approval/technical_approval
+    # from an old backup, import, hand edit, or pre-fix tooling could still
+    # reach a downstream consumer (e.g. _assert_registry_covered_by_
+    # current_plan_approval) and reproduce the original bare AttributeError
+    # this milestone's own first defect closed for the write path only.
+    # Authoritative state validation is the read-side counterpart: every
+    # non-null approval record on every work item is now shape-checked
+    # here too, so a malformed persisted record is rejected cleanly, by
+    # validate_state itself, before any consumer ever sees it.
+    plan_approval = work_item.get("plan_approval")
+    if plan_approval is not None:
+        validate_approval_record(plan_approval, stage="plan")
+    technical_approval = work_item.get("technical_approval")
+    if technical_approval is not None:
+        validate_approval_record(technical_approval, stage="implementation")
+
 
 def validate_state(state: dict, *, registry: dict | None = None, repo_root: Path | None = None) -> None:
     """D3's "Validator rejects" list, to the extent checkable from schema
