@@ -533,7 +533,7 @@
       "registry_path": "docs/ai-workflow/registry/workflow-v2-3-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/workflow-v2-3-mapping.json",
       "governing_workflow_version": "2.1",
-      "phase": "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+      "phase": "AWAITING_FUNCTIONAL_REVIEW",
       "plan_revision": 13,
       "implementation_revision": 4,
       "functional_review_round": null,
@@ -583,7 +583,91 @@
         "waived_guarantees": [],
         "recorded_at": "2026-08-22T14:45:00+01:00"
       },
-      "technical_approval": null,
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "EXTERNAL_APPROVE",
+        "reviewed_bundle_id": "c3f7d876f01102a0d990b576829374e7e547ea8bfef4fbb4d1555ac31281ea34",
+        "approved_review_content_id": "b4ec046e8a2acc7144135a242c96b2d609a3a144ed844e7493cb04d3e4b8a7a9",
+        "review_content_manifest": [
+          {
+            "path": ".claude/commands/review-functional.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "290a8e4cc7a208674cf348aa36ec91bc64cb08b3"
+          },
+          {
+            "path": ".claude/commands/review-implementation.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8bc0436b0d642c5e09313c7f17c296b0e8d8592b"
+          },
+          {
+            "path": "docs/ai-workflow/MILESTONE_WORKFLOW.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "38e48acf084b4b32bb6e6e9e1eaf0eef78cdb5a2"
+          },
+          {
+            "path": "docs/ai-workflow/REVIEW_PROTOCOL.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "858aead42e40af1ca0635119944d21bff3e79c91"
+          },
+          {
+            "path": "docs/ai-workflow/registry/workflow-v2-1-core-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ea56faa8b65c71625f1d67b80c5990d08f89e8c6"
+          },
+          {
+            "path": "docs/ai-workflow/registry/workflow-v2-3-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "df887bafaa172ef35ebf86f5830553e87d85f05d"
+          },
+          {
+            "path": "scripts/workflow_fingerprint.py",
+            "exists": true,
+            "mode": "100755",
+            "blob": "0b6e4858f4e73cfb06224da7073792a6a5d4db21"
+          },
+          {
+            "path": "scripts/workflow_fingerprint_demo_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "05e7c69c1780a59f24e46fc5c6da30eab11639a6"
+          },
+          {
+            "path": "scripts/workflow_fingerprint_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "bbc3a24b6ec1a152612198a9cb50f277847f9ed0"
+          },
+          {
+            "path": "scripts/workflow_integration_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6bc1d2ae5e466264e4a0187ad72b4e706dd3abce"
+          },
+          {
+            "path": "scripts/workflow_state.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2dcb838881406cdb8787afd62bb22dc38496bbcc"
+          },
+          {
+            "path": "scripts/workflow_state_demo_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "fdcfec898a86727f9a4c4be0393853776f1bca24"
+          }
+        ],
+        "reviewed_content_commit": "bef2da9a7d62d5f26a3853be1bc1643b458a7c3b",
+        "legacy_evidence": null,
+        "user_confirmation": "I confirm approval of the workflow-v2-3 implementation stage.",
+        "waived_guarantees": [],
+        "recorded_at": "2026-08-23T01:22:15+01:00"
+      },
       "technical_review_block_pins": [],
       "plan_review_stages": {
         "review_content_id": "e0a222d2c127c634eafed9fb367c7fb9623c5ca69a369348907d7bd413037875",
@@ -602,8 +686,8 @@
       },
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 49,
-      "last_transition": "2026-08-23T00:43:40+01:00"
+      "state_revision": 50,
+      "last_transition": "2026-08-23T01:22:15+01:00"
     }
   }
 }
