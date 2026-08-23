@@ -775,3 +775,171 @@ checklist section itself.
   evidence (the adoption transition itself, checked above), and not
   fixed ad hoc here — filed for the same remediation routing S11's other
   discovered gap uses.
+
+---
+
+## `workflow-v2-3` — functional review checklist (implementation revision 4)
+
+This section is unrelated to the roadmap/Milestone 8 content above and to
+the `workflow-v2-1-core`/`v2-1-dry-run`/`v2-1-dry-run-legacy` sections
+above it. It tracks the separate, non-product process work item
+`workflow-v2-3` (see `docs/ai-workflow/WORKFLOW_V2_3_PLAN.md`,
+`docs/ai-workflow/WORKFLOW_STATE.json`), entering
+`AWAITING_FUNCTIONAL_REVIEW` for the first time.
+
+**Context**: `workflow-v2-3` adds two optional, report-only,
+model-independent "second opinion" slash commands —
+`/review-implementation` (usable at `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`)
+and `/review-functional` (usable at `AWAITING_FUNCTIONAL_REVIEW`, i.e. the
+gate this checklist itself belongs to) — that give an operator a
+repository-local advisory review before handing a stage to its real gate.
+Neither command writes any state (`WORKFLOW_STATE.json`,
+`REVIEW_FEEDBACK.md`, `FUNCTIONAL_REVIEW.md`, this file), approves a
+stage, applies a finding, or advances `phase`; the hard-gate count stays
+exactly 6 (`docs/ai-workflow/MILESTONE_WORKFLOW.md`'s "Hard gates
+summary"). Two checkpoints (`CP1`, `CP2`), both `COMPLETE` — no
+continued-scope remediation round is open, so this item's eventual
+acceptance goes through `/accept-milestone`, not
+`/accept-scoped-remediation`.
+
+Four implementation-review rounds ran before technical approval:
+`GPT-IR1` (`REVISE`, 2 Important — both fixed), a second round whose
+authoritative feedback was `/review-implementation`'s **own advisory
+report, hand-copied for real** by the operator to
+`.ai-review/feedback/REVIEW_FEEDBACK.md` (`RI2`, `REVISE`, 2 Important/3
+Optional — one Important deferred with recorded reasoning, the rest
+fixed), a third round using the same hand-copy mechanism (`RI3`,
+`APPROVE`, 4 Optional, all fixed), and a final post-fix round (`APPROVE`,
+0 Blocking/0 Important/2 Optional). `technical_approval` is now recorded
+(commit `08c87ab41f75aeda8bf9cee4f8b72dcd4e6dbcd5`,
+`Workflow-Technical-Approval:
+b4ec046e8a2acc7144135a242c96b2d609a3a144ed844e7493cb04d3e4b8a7a9`, basis
+`EXTERNAL_APPROVE`, generation-record commit
+`096052650d6247b7c9ecdde4a35b0f0f54ddf7cf`).
+
+### Setup
+
+No Android app / Gradle changes are involved — this is process tooling
+only (`scripts/*.py`, `.claude/commands/*.md`, `docs/ai-workflow/*`). No
+build/install step is needed; everything below runs with `python3` from
+the repo root (`scripts/` for the checks that `cd` there).
+
+### Automated verification (re-confirmed this session, current)
+
+Re-run independently right before this checklist was written (only
+`docs/ai-workflow/WORKFLOW_STATE.json` — implementation-stage excluded —
+has changed since the last full run at the round-4 generation-record
+commit `0960526`, via the metadata-only technical-approval commit
+`08c87ab`):
+
+```
+python3 -m unittest workflow_fingerprint_test workflow_fingerprint_generalization_test \
+  workflow_state_test workflow_state_completion_obligations_test \
+  workflow_integration_test workflow_test_harness_test
+```
+
+Result: **1115 tests, all green** (`OK`), 27.8s — matches
+`TEST_RESULTS.md`'s round-4 total exactly.
+
+```
+python3 workflow_fingerprint_demo_test.py   # real-repository suite
+python3 workflow_state_demo_test.py         # real-repository suite
+```
+
+Result: **15/15 green** (4 skipped, pre-existing/unrelated) and **45/45
+green** respectively — both matching `TEST_RESULTS.md`'s round-4 result
+exactly.
+
+### Test data
+
+None to seed — every check below reads this repository's own real,
+already-committed state (`workflow-v2-3`'s own entry in
+`docs/ai-workflow/WORKFLOW_STATE.json`, the two new command files, and
+this milestone's own real review history).
+
+### Flows to exercise manually
+
+1. **Re-run the automated suite yourself** (commands above, from
+   `scripts/`) and confirm the same 1115/15/45 result independently,
+   rather than trusting this document's claim alone.
+2. **`/review-functional` — run it live, right now, against this exact
+   checklist.** From the repo root, invoke `/review-functional
+   workflow-v2-3` (or with no argument, since `active_work_item_id` is
+   currently `workflow-v2-3`). Expected: a printed
+   checklist-completeness/evidence-reproducibility advisory report (never
+   a `Status: APPROVE | REVISE | BLOCK` verdict), which independently
+   re-runs the automated-verification commands cited above and assesses
+   manual-flow coverage against the CP1/CP2 diff. Confirm afterward, via
+   `git status --porcelain`, that `docs/ai-workflow/WORKFLOW_STATE.json`,
+   `.ai-review/feedback/REVIEW_FEEDBACK.md`,
+   `.ai-review/feedback/FUNCTIONAL_REVIEW.md`, and this file are all
+   byte-identical to before the command ran — the command's own
+   write-nothing guarantee, exercised for real rather than taken on
+   faith.
+3. **`/review-implementation` — already exercised for real, twice, during
+   this very milestone.** Unlike `/review-functional` above, no work item
+   currently sits at `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` to
+   re-demonstrate it live against today. Instead, confirm the historical
+   record: `IMPLEMENTATION_SUMMARY.md`'s "Review round 2 remediation" and
+   "Review round 3 remediation" sections both state that round's
+   authoritative feedback was `/review-implementation`'s own advisory
+   report, hand-copied by the operator into
+   `.ai-review/feedback/REVIEW_FEEDBACK.md` — i.e. this milestone's own
+   `RI2`/`RI3` review rounds were real, substantive uses of the exact
+   command being functionally reviewed here, not a simulation.
+4. **Command surface is fully registered.** Confirm `.claude/commands/`
+   contains exactly 16 files and `CLAUDE.md`'s "Slash commands" list names
+   all 16, including `review-implementation` and `review-functional`
+   (`grep -c '^' <(ls .claude/commands/*.md)` and a visual diff against
+   `CLAUDE.md:85-86`).
+5. **Hard-gate count is unchanged.** Confirm
+   `docs/ai-workflow/MILESTONE_WORKFLOW.md`'s "Hard gates summary" still
+   lists exactly six gates and explicitly states that
+   `/review-implementation`/`/review-functional` add no new one.
+6. **The real `/approve-review implementation` flow, exercised for real
+   this session**: gate-reachability check (worktree/HEAD match,
+   `REJECTED`-marker absence, `bundle_id`/`review_content_id`
+   recomputation, provenance-interval verification), `resolve_approval_basis`
+   → `EXTERNAL_APPROVE`, a `state_transaction`-guarded write of
+   `technical_approval`, and a metadata-only commit (`08c87ab`) carrying
+   the `Workflow-Technical-Approval`/`Workflow-Work-Item` trailers.
+   Confirm independently:
+   ```
+   git show --stat 08c87ab41f75aeda8bf9cee4f8b72dcd4e6dbcd5
+   git log -1 --format=%B 08c87ab41f75aeda8bf9cee4f8b72dcd4e6dbcd5
+   ```
+   Expected: exactly one file changed
+   (`docs/ai-workflow/WORKFLOW_STATE.json`), and the trailers read
+   `Workflow-Technical-Approval:
+   b4ec046e8a2acc7144135a242c96b2d609a3a144ed844e7493cb04d3e4b8a7a9` /
+   `Workflow-Work-Item: workflow-v2-3`.
+
+### Expected result
+
+All six checks above pass exactly as described. Checks 1, 3, 4, 5, and 6
+are read-only or inspect commits that already exist (safe to repeat
+freely); check 2 runs a report-only command and then verifies, rather
+than assumes, that it wrote nothing.
+
+### Known limitations / out of scope for this review
+
+- No live re-demonstration of `/review-implementation` against a work
+  item actually sitting at `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`
+  exists today (see check 3) — this milestone's own two real uses of it
+  during rounds 2/3 are the available evidence instead.
+- The plan-conformance gap in `/review-implementation` (no read of
+  `<bundle_dir>/PLAN.md`/the item's `plan_path`) is a known, already-filed
+  limitation (`docs/ai-workflow/WORKFLOW_V2_3_FOLLOWUPS.md` item 4;
+  `IMPLEMENTATION_SUMMARY.md`'s `RI2-002`) — not a defect introduced by
+  this diff, and not blocking for this functional review.
+- `docs/ai-workflow/WORKFLOW_V2_1_OPERATOR_REFERENCE.md`,
+  `docs/ai-workflow/WORKFLOW_V2_3_FOLLOWUPS.md`, and
+  `docs/ai-workflow/diagrams/` are untracked, concurrent, out-of-scope
+  scratch content — explicitly classified `excluded` in this item's own
+  `implementation_stage` artifacts declaration; leave them unmodified
+  during this review.
+- Both new commands are advisory only and cannot replace this checklist's
+  own manual walkthrough; `/review-functional` states this explicitly in
+  its own printed report.
+
+Findings go in `.ai-review/feedback/FUNCTIONAL_REVIEW.md`.
