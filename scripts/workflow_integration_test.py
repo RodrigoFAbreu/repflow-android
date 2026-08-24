@@ -781,7 +781,13 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # (27f051e/fb134ac/d271d89, all individually grandfathered in
     # workflow_state_demo_test.py) -- intentional content change.
     "accept-milestone.md": "79b3f9bfb81b444291f17eea5f2a2bc706b7952284acb36422aa52c5faa0daa0",
-    "prepare-functional-review.md": "1b4a08cc0a28c09e0031f73e6003f23fd96fdc6c3fe22553e9f2408c1798f8cd",
+    # prepare-functional-review.md further updated, baseline-portability
+    # correctness fix (OPUS-R129-001): step 3a's checklist-evidence
+    # provenance commit instruction now states the same "trailers must be
+    # the commit message's own final paragraph" requirement
+    # milestone-implement.md/bootstrap-workflow-v2.md/approve-review.md/
+    # accept-milestone.md already state -- intentional content change.
+    "prepare-functional-review.md": "fb07409fbc738f373a227fdfd17cfd84131c5848c3e43a59e8b4ebd31f2e7d36",
     # apply-plan-review.md/bootstrap-workflow-v2.md (D-Plan-Revision-Publication,
     # WFR-65): intentional content change, publish_plan_revision wiring.
     "apply-plan-review.md": "fbfa7e9c980720c77c547cbdce01a4e75ec1bbba69c1be5cbf2fc6584e514ae6",
@@ -789,7 +795,14 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # record_bundle_generation call site widened to first resolve the
     # outcome (resolve_bundle_generation_outcome) and write the matching
     # ordinary/recovered-role trailer set -- intentional content change.
-    "apply-implementation-review.md": "d86d648502b1ef2d742cbba1830835e50b0a2ed6e9c5dbac058616971c1e34c1",
+    # apply-implementation-review.md further updated, baseline-portability
+    # correctness fix (OPUS-R129-001): step 7's post-fix
+    # bundle-generation-record commit instruction now states the same
+    # "trailers must be the commit message's own final paragraph"
+    # requirement milestone-implement.md/bootstrap-workflow-v2.md/
+    # approve-review.md/accept-milestone.md already state -- intentional
+    # content change.
+    "apply-implementation-review.md": "9049e2c964ab02a5b2d2e0c429ed21c9a4dcdadd316f37c651525de5a64f24fc",
     # review-plan.md/record-manual-plan-review.md further updated,
     # workflow-v2-3-followups CP3 (REQ-8/-9): the `Reviewer role:` template
     # literal, the round-computation prose, the exact-match-expectation
@@ -878,7 +891,15 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # command's own exit points (the bounded branch's step 5, and the
     # normal step 7) gained the mark_functional_review_consumed call --
     # intentional content change.
-    "apply-functional-review.md": "9a75190c9519e2125ac203cabf7c031437dbd4d24d1ae1bcb37904700cd1ab7e",
+    #
+    # apply-functional-review.md further updated, baseline-portability
+    # correctness fix (OPUS-R129-001): the bounded branch's post-fix
+    # bundle-generation-record commit instruction now states the same
+    # "trailers must be the commit message's own final paragraph"
+    # requirement milestone-implement.md/bootstrap-workflow-v2.md/
+    # approve-review.md/accept-milestone.md already state -- intentional
+    # content change.
+    "apply-functional-review.md": "e345f2a16e42b1d5ad9f1fd2f7069ba03ae35bd573ef2ec94aef95b63a121bde",
 }
 
 
@@ -955,6 +976,82 @@ class TestPlanApprovalCommitTrailerFinalParagraphConformance(unittest.TestCase):
         )
         self.assertIn("OPUS-R129-001", text)
 
+    def test_accept_scoped_remediation_states_the_final_paragraph_requirement(self):
+        """Baseline-portability correctness fix: `accept-scoped-remediation.md`
+        step 10 never stated this rule at all for its own
+        `Workflow-Scoped-Remediation-Acceptance`/`Workflow-Work-Item`
+        provenance commit -- unlike the other five commands that write a
+        Workflow-* trailer pair a later command re-discovers by search."""
+        text = _command_text("accept-scoped-remediation.md")
+        self.assertIn(
+            "**These two lines must be the commit message's own final\n"
+            "    paragraph** — after any `Co-Authored-By:`/`Claude-Session:` lines,\n"
+            "    never before them",
+            text,
+        )
+        self.assertIn("OPUS-R129-001", text)
+        self.assertIn("discover_scoped_remediation_commits", text)
+
+    def test_prepare_functional_review_states_the_final_paragraph_requirement(self):
+        """Baseline-portability correctness fix: `prepare-functional-review.md`
+        step 3a never stated this rule at all for its own
+        `Workflow-Functional-Checklist`/`Workflow-Work-Item` checklist-
+        evidence provenance commit -- the exact evidence
+        `/accept-scoped-remediation`'s confirmation guard requires."""
+        text = _command_text("prepare-functional-review.md")
+        self.assertIn(
+            "**These two lines must be the commit message's own final\n"
+            "         paragraph** — after any `Co-Authored-By:`/`Claude-Session:` lines,\n"
+            "         never before them",
+            text,
+        )
+        self.assertIn("OPUS-R129-001", text)
+        self.assertIn("discover_current_functional_checklist_evidence", text)
+
+    def test_apply_functional_review_states_the_final_paragraph_requirement(self):
+        """Baseline-portability correctness fix: `apply-functional-review.md`'s
+        bounded-branch post-fix bundle-generation-record commit never stated
+        this rule at all."""
+        text = _command_text("apply-functional-review.md")
+        self.assertIn(
+            "**These trailer lines\n"
+            "     must be the commit message's own final paragraph** — after any\n"
+            "     `Co-Authored-By:`/`Claude-Session:` lines, never before them",
+            text,
+        )
+        self.assertIn("OPUS-R129-001", text)
+        self.assertIn("discover_current_bundle_generation_record_commit", text)
+
+    def test_apply_implementation_review_states_the_final_paragraph_requirement(self):
+        """Baseline-portability correctness fix: `apply-implementation-review.md`
+        step 7's post-fix bundle-generation-record commit never stated this
+        rule at all."""
+        text = _command_text("apply-implementation-review.md")
+        self.assertIn(
+            "**These trailer lines must be the commit\n"
+            "   message's own final paragraph** — after any `Co-Authored-By:`/\n"
+            "   `Claude-Session:` lines, never before them",
+            text,
+        )
+        self.assertIn("OPUS-R129-001", text)
+        self.assertIn("discover_current_bundle_generation_record_commit", text)
+
+    def test_recover_implementation_provenance_states_the_final_paragraph_requirement(self):
+        """Baseline-portability correctness fix:
+        `recover-implementation-provenance.md` step 5's recovery commit
+        (the three-trailer `Workflow-Bundle-Generation-Record`/
+        `Workflow-Work-Item`/`Workflow-Supersedes` set) never stated this
+        rule at all."""
+        text = _command_text("recover-implementation-provenance.md")
+        self.assertIn(
+            "**These three trailer\n"
+            "   lines must be the commit message's own final paragraph** — after any\n"
+            "   `Co-Authored-By:`/`Claude-Session:` lines, never before them",
+            text,
+        )
+        self.assertIn("OPUS-R129-001", text)
+        self.assertIn("discover_current_bundle_generation_record_commit", text)
+
 
 class TestAcceptMilestoneCompletionCommitTrailerShape(unittest.TestCase):
     """Baseline-freeze correctness fix, required acceptance criterion 3:
@@ -1015,6 +1112,139 @@ class TestAcceptMilestoneCompletionCommitTrailerShape(unittest.TestCase):
             commit = self._commit_with_body(repo, body)
             trailers = ws._commit_trailers(repo.root, commit)
             self.assertEqual(trailers.get("Workflow-Work-Item"), "demo-item")
+
+
+class TestBaselinePortabilityCommandsCommitTrailerShape(unittest.TestCase):
+    """Baseline-portability correctness fix, the same required proof
+    `TestAcceptMilestoneCompletionCommitTrailerShape` establishes for
+    `accept-milestone.md`, generalized here across the three distinct
+    Workflow-* trailer families the five commands fixed in this same round
+    write (`accept-scoped-remediation.md`,
+    `prepare-functional-review.md`, `apply-functional-review.md`,
+    `apply-implementation-review.md`, `recover-implementation-provenance.md`):
+    constructs both the pre-fix layout (the trailer paragraph separated from
+    `Co-Authored-By:`/`Claude-Session:` by a blank line) and the corrected
+    layout (the trailer paragraph positioned after them, as the message's
+    own final paragraph) against a real `ScratchRepo` commit for each
+    family, and confirms via the real `git interpret-trailers --parse`
+    mechanism (`workflow_state._commit_trailers`, the exact primitive
+    `discover_scoped_remediation_commits`/
+    `discover_current_functional_checklist_evidence`/
+    `discover_current_bundle_generation_record_commit` all build on) which
+    layout actually yields a recognized trailer. One trailer family is
+    shared by three of the five commands
+    (`Workflow-Bundle-Generation-Record`/`Workflow-Work-Item`, optionally
+    with `Workflow-Supersedes`) since `_discover_trailer_commits` parses it
+    identically regardless of which command wrote a given commit -- the
+    shape proof does not need to repeat per command once per family is
+    covered."""
+
+    _SUBJECT = "chore(demo-item): record trailer, revision 1"
+    _NARRATIVE = "Demonstration commit for the trailer-shape proof."
+    _COAUTHOR_LINES = (
+        "Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\n"
+        "Claude-Session: https://claude.ai/code/session_demo"
+    )
+
+    def _commit_with_body(self, repo: h.ScratchRepo, body: str) -> str:
+        (repo.root / "demo.txt").write_text(body)
+        subprocess.run(["git", "add", "demo.txt"], cwd=repo.root, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-q", "-m", body], cwd=repo.root, check=True, capture_output=True)
+        return repo.head()
+
+    def _assert_pre_fix_layout_silently_drops_the_trailer(self, trailer_lines: str, trailer_keys: list[str]):
+        with h.ScratchRepo() as repo:
+            body = (
+                f"{self._SUBJECT}\n\n{self._NARRATIVE}\n\n"
+                f"{trailer_lines}\n\n"
+                f"{self._COAUTHOR_LINES}\n"
+            )
+            commit = self._commit_with_body(repo, body)
+            trailers = ws._commit_trailers(repo.root, commit)
+            for key in trailer_keys:
+                self.assertNotIn(key, trailers)
+
+    def _assert_final_paragraph_layout_is_recognized(self, trailer_lines: str, expected: dict[str, str]):
+        with h.ScratchRepo() as repo:
+            body = (
+                f"{self._SUBJECT}\n\n{self._NARRATIVE}\n\n"
+                f"{self._COAUTHOR_LINES}\n"
+                f"{trailer_lines}\n"
+            )
+            commit = self._commit_with_body(repo, body)
+            trailers = ws._commit_trailers(repo.root, commit)
+            for key, value in expected.items():
+                self.assertEqual(trailers.get(key), value)
+
+    def test_scoped_remediation_acceptance_pre_fix_layout_silently_drops_the_trailer(self):
+        """`accept-scoped-remediation.md` step 10's own trailer pair."""
+        self._assert_pre_fix_layout_silently_drops_the_trailer(
+            "Workflow-Scoped-Remediation-Acceptance: WF8b/4\n"
+            "Workflow-Work-Item: demo-item",
+            ["Workflow-Scoped-Remediation-Acceptance", "Workflow-Work-Item"],
+        )
+
+    def test_scoped_remediation_acceptance_final_paragraph_layout_is_recognized(self):
+        self._assert_final_paragraph_layout_is_recognized(
+            "Workflow-Scoped-Remediation-Acceptance: WF8b/4\n"
+            "Workflow-Work-Item: demo-item",
+            {"Workflow-Scoped-Remediation-Acceptance": "WF8b/4", "Workflow-Work-Item": "demo-item"},
+        )
+
+    def test_functional_checklist_pre_fix_layout_silently_drops_the_trailer(self):
+        """`prepare-functional-review.md` step 3a's own trailer pair."""
+        self._assert_pre_fix_layout_silently_drops_the_trailer(
+            "Workflow-Functional-Checklist: demo-item/4/abc123\n"
+            "Workflow-Work-Item: demo-item",
+            ["Workflow-Functional-Checklist", "Workflow-Work-Item"],
+        )
+
+    def test_functional_checklist_final_paragraph_layout_is_recognized(self):
+        self._assert_final_paragraph_layout_is_recognized(
+            "Workflow-Functional-Checklist: demo-item/4/abc123\n"
+            "Workflow-Work-Item: demo-item",
+            {"Workflow-Functional-Checklist": "demo-item/4/abc123", "Workflow-Work-Item": "demo-item"},
+        )
+
+    def test_bundle_generation_record_pre_fix_layout_silently_drops_the_trailer(self):
+        """The trailer pair `apply-functional-review.md`'s bounded branch and
+        `apply-implementation-review.md` step 7 both write for the
+        `"ordinary"` outcome."""
+        self._assert_pre_fix_layout_silently_drops_the_trailer(
+            "Workflow-Bundle-Generation-Record: demo-item/4\n"
+            "Workflow-Work-Item: demo-item",
+            ["Workflow-Bundle-Generation-Record", "Workflow-Work-Item"],
+        )
+
+    def test_bundle_generation_record_final_paragraph_layout_is_recognized(self):
+        self._assert_final_paragraph_layout_is_recognized(
+            "Workflow-Bundle-Generation-Record: demo-item/4\n"
+            "Workflow-Work-Item: demo-item",
+            {"Workflow-Bundle-Generation-Record": "demo-item/4", "Workflow-Work-Item": "demo-item"},
+        )
+
+    def test_bundle_generation_record_with_supersedes_pre_fix_layout_silently_drops_the_trailer(self):
+        """The three-trailer set `recover-implementation-provenance.md`
+        step 5 writes (and the `"same_content"` outcome branch in
+        `apply-functional-review.md`/`apply-implementation-review.md`)."""
+        self._assert_pre_fix_layout_silently_drops_the_trailer(
+            "Workflow-Bundle-Generation-Record: demo-item/4\n"
+            "Workflow-Work-Item: demo-item\n"
+            "Workflow-Supersedes: 0123456789abcdef0123456789abcdef01234567",
+            ["Workflow-Bundle-Generation-Record", "Workflow-Work-Item", "Workflow-Supersedes"],
+        )
+
+    def test_bundle_generation_record_with_supersedes_final_paragraph_layout_is_recognized(self):
+        self._assert_final_paragraph_layout_is_recognized(
+            "Workflow-Bundle-Generation-Record: demo-item/4\n"
+            "Workflow-Work-Item: demo-item\n"
+            "Workflow-Supersedes: 0123456789abcdef0123456789abcdef01234567",
+            {
+                "Workflow-Bundle-Generation-Record": "demo-item/4",
+                "Workflow-Work-Item": "demo-item",
+                "Workflow-Supersedes": "0123456789abcdef0123456789abcdef01234567",
+            },
+        )
 
 
 class TestAssertLocalGenerationMatchesCallSiteConformance(unittest.TestCase):

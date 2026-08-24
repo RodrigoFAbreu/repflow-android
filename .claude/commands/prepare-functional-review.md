@@ -87,11 +87,21 @@ Enter the `AWAITING_FUNCTIONAL_REVIEW` state of
          + the ordinary `Workflow-Work-Item: <work_item_id>` trailer, where
          `<checklist_blob>` is step 1's computed blob (which, once
          committed, is exactly the commit's own `HEAD:docs/ACTIVE_MILESTONE.md`
-         blob). This is what makes an interrupted preparation safe to
-         retry: rerunning after the file write already landed but the
-         commit did not either finds nothing new to commit (already
-         committed by the prior partial run) or completes the commit that
-         didn't happen yet — never a duplicate.
+         blob). **These two lines must be the commit message's own final
+         paragraph** — after any `Co-Authored-By:`/`Claude-Session:` lines,
+         never before them (`OPUS-R129-001`, the same rule
+         `milestone-implement.md` step 1f, `bootstrap-workflow-v2.md` step
+         6, `approve-review.md` step 6.4, and `accept-milestone.md` step 6
+         already state): Git's `git interpret-trailers --parse`, the exact
+         mechanism `discover_current_functional_checklist_evidence` uses,
+         treats only the message's last paragraph as trailers, so a blank
+         line after these two lines (e.g. one followed by
+         `Co-Authored-By:`) silently discards both and makes the checklist
+         evidence undiscoverable. This is what makes an interrupted
+         preparation safe to retry: rerunning after the file write already
+         landed but the commit did not either finds nothing new to commit
+         (already committed by the prior partial run) or completes the
+         commit that didn't happen yet — never a duplicate.
        - The result's `"blob"` already equals step 1's freshly computed
          blob exactly: nothing to commit — this is the existing, current
          evidence commit; do not create an empty commit.

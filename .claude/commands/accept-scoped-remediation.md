@@ -153,8 +153,17 @@ inserted revision 27, `GPT-R40-001`):
     metadata-only commit — no production/test changes — carrying
     `Workflow-Scoped-Remediation-Acceptance: <outstanding_checkpoint_id>/<implementation_revision>`
     + `Workflow-Work-Item: <work_item_id>` trailers, together or not at
-    all. Do not report success until the commit exists and `git status`
-    confirms a clean worktree.
+    all. **These two lines must be the commit message's own final
+    paragraph** — after any `Co-Authored-By:`/`Claude-Session:` lines,
+    never before them (`OPUS-R129-001`, the same rule
+    `milestone-implement.md` step 1f, `bootstrap-workflow-v2.md` step 6,
+    `approve-review.md` step 6.4, and `accept-milestone.md` step 6 already
+    state): Git's `git interpret-trailers --parse`, the exact mechanism
+    `discover_scoped_remediation_commits` uses, treats only the message's
+    last paragraph as trailers, so a blank line after these two lines
+    (e.g. one followed by `Co-Authored-By:`) silently discards both and
+    makes the acceptance commit undiscoverable. Do not report success
+    until the commit exists and `git status` confirms a clean worktree.
 11. Report the new `phase` (`IMPLEMENTING`), the commit SHA, and the
     outstanding checkpoint (`WF8b` or otherwise) now resumable, and
     **stop**. Do not resume the checkpoint in this same invocation — a
