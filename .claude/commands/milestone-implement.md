@@ -225,8 +225,18 @@ dirty-resume rule, `WF2`):
      **alone** — stage exactly that one path (never a broader `git add`)
      and create one commit carrying `Workflow-Bundle-Generation-Record:
      <work_item_id>/<implementation_revision>` +
-     `Workflow-Work-Item: <work_item_id>` trailers, no other trailer. This
-     durability commit must land *before* generation, never after
+     `Workflow-Work-Item: <work_item_id>` trailers, no other trailer.
+     **These two trailer lines must be the commit message's own final
+     paragraph** -- after any `Co-Authored-By:`/`Claude-Session:` lines,
+     never before them (`OPUS-R129-001`, the same rule step 1f above,
+     `bootstrap-workflow-v2.md` step 6, `approve-review.md` step 6.4, and
+     `accept-milestone.md` step 6 already state): Git's `git
+     interpret-trailers --parse`, the exact mechanism
+     `discover_current_bundle_generation_record_commit` uses, treats only
+     the message's last paragraph as trailers, so a blank line after these
+     two lines (e.g. one followed by `Co-Authored-By:`) silently discards
+     both and makes the bundle-generation-record commit undiscoverable.
+     This durability commit must land *before* generation, never after
      (`WF8B-003`, resolved `D-Approval-Commits` revision 28): a durability
      commit made after generation is by definition one commit ahead of the
      value it just wrote, permanently re-breaking

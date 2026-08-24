@@ -728,7 +728,15 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # commit message's own final paragraph, after any Co-Authored-By:/
     # Claude-Session: lines, never before them -- intentional content
     # change (the mechanical fix for 4a769fd's own defect class).
-    "milestone-implement.md": "83385a3203826b8fb7f5191af0ee6369c7d8154d9818135ced482ae0ec38a1f5",
+    #
+    # milestone-implement.md further updated, baseline-tag verification
+    # cleanup (OPUS-R129-001): step 4's bundle-generation-record commit
+    # instruction now also states the same "trailers must be the commit
+    # message's own final paragraph" requirement step 1f already states,
+    # closing the gap a fresh Opus review found at this second trailer-
+    # write site in an already-corrected file -- intentional content
+    # change.
+    "milestone-implement.md": "a9ef8b1111b9fc2cc2a368cab99a1dde7780c326aaf1894792802920203cccfd",
     # approve-review.md (WF8c item (c), same-content bundle-generation
     # republication idempotency; further updated WF8c item (b): the
     # trailing caveat naming the dedicated /recover-implementation-provenance
@@ -771,7 +779,15 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # never perturbs test_every_non_exempt_file_calls_the_shared_assertion_
     # the_expected_number_of_times's exact-count check of its two real call
     # sites.
-    "approve-review.md": "9e6de2e744460b5897810a05031554e0c0829f0a12742e4fd9e20b217745ff38",
+    #
+    # approve-review.md further updated, baseline-tag verification cleanup
+    # (OPUS-R129-001): the implementation stage's technical-approval commit
+    # instruction now also states the same "trailers must be the commit
+    # message's own final paragraph" requirement step 6.4 (the plan-stage
+    # commit, same step) already states, closing the gap a fresh Opus
+    # review found at this second trailer-write site in an already-
+    # corrected file -- intentional content change.
+    "approve-review.md": "d0e8191c9c67e72973336da4ae7bb211879973dbdfdf559f3e72f8e0def3340b",
     # accept-milestone.md updated, baseline-freeze correctness fix
     # (OPUS-R129-001): step 6's completion-commit instruction now states
     # the same "trailers must be the commit message's own final paragraph"
@@ -832,7 +848,15 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # commit message's own final paragraph, after any Co-Authored-By:/
     # Claude-Session: lines, never before them -- intentional content
     # change (the mechanical fix for 4a769fd's own defect class).
-    "bootstrap-workflow-v2.md": "6cd29d3d6382ba1e246ecf1779aee9f649cc15a8b3489abbcbdecb04b1be578f",
+    #
+    # bootstrap-workflow-v2.md further updated, baseline-tag verification
+    # cleanup (OPUS-R129-001): the NO_CHECKPOINT terminal-wrap-up branch's
+    # bundle-generation-record commit instruction (step 3) now also states
+    # the same "trailers must be the commit message's own final paragraph"
+    # requirement step 6 already states, closing the gap a fresh Opus
+    # review found at this second trailer-write site in an already-
+    # corrected file -- intentional content change.
+    "bootstrap-workflow-v2.md": "3059f9535b0e34403a49370bf79e1ce64605c4708a006568af03e0982fc6c55d",
     # review-implementation.md: new, workflow-v2-3 CP1 -- the first
     # recorded hash, not a change.
     #
@@ -1052,6 +1076,57 @@ class TestPlanApprovalCommitTrailerFinalParagraphConformance(unittest.TestCase):
         self.assertIn("OPUS-R129-001", text)
         self.assertIn("discover_current_bundle_generation_record_commit", text)
 
+    def test_milestone_implement_bundle_generation_states_the_final_paragraph_requirement(self):
+        """Baseline-tag verification cleanup: a fresh Opus review found
+        that `milestone-implement.md` step 4's bundle-generation-record
+        commit instruction never stated this rule at all -- unlike step
+        1f's own checkpoint-completion commit in the same file, which
+        OPUS-R129-001 already covered. Same trailer family
+        `apply-implementation-review.md`/`apply-functional-review.md`
+        already state it for."""
+        text = _command_text("milestone-implement.md")
+        self.assertIn(
+            "**These two trailer lines must be the commit message's own final\n"
+            "     paragraph** -- after any `Co-Authored-By:`/`Claude-Session:` lines,\n"
+            "     never before them",
+            text,
+        )
+        self.assertIn("OPUS-R129-001", text)
+        self.assertIn("discover_current_bundle_generation_record_commit", text)
+
+    def test_bootstrap_workflow_v2_bundle_generation_states_the_final_paragraph_requirement(self):
+        """Baseline-tag verification cleanup: a fresh Opus review found
+        that `bootstrap-workflow-v2.md`'s NO_CHECKPOINT terminal-wrap-up
+        branch's bundle-generation-record commit instruction (step 3)
+        never stated this rule at all -- unlike step 6's own
+        checkpoint-completion commit in the same file, which
+        OPUS-R129-001 already covered."""
+        text = _command_text("bootstrap-workflow-v2.md")
+        self.assertIn(
+            "**These two trailer lines must be the commit message's own final\n"
+            "     paragraph** — after any `Co-Authored-By:`/`Claude-Session:` lines,\n"
+            "     never before them",
+            text,
+        )
+        self.assertIn("OPUS-R129-001", text)
+        self.assertIn("discover_current_bundle_generation_record_commit", text)
+
+    def test_approve_review_technical_approval_states_the_final_paragraph_requirement(self):
+        """Baseline-tag verification cleanup: a fresh Opus review found
+        that `approve-review.md`'s implementation-stage technical-approval
+        commit instruction never stated this rule at all -- unlike step
+        6.4's own plan-stage approval commit in the same file, which the
+        earlier `workflow-v2-3-followups` round already covered."""
+        text = _command_text("approve-review.md")
+        self.assertIn(
+            "**These two trailer lines must also be\n"
+            "   the commit message's own final paragraph** — after any\n"
+            "   `Co-Authored-By:`/`Claude-Session:` lines, never before them",
+            text,
+        )
+        self.assertIn("OPUS-R129-001", text)
+        self.assertIn("discover_technical_approval_commit", text)
+
 
 class TestAcceptMilestoneCompletionCommitTrailerShape(unittest.TestCase):
     """Baseline-freeze correctness fix, required acceptance criterion 3:
@@ -1137,7 +1212,16 @@ class TestBaselinePortabilityCommandsCommitTrailerShape(unittest.TestCase):
     with `Workflow-Supersedes`) since `_discover_trailer_commits` parses it
     identically regardless of which command wrote a given commit -- the
     shape proof does not need to repeat per command once per family is
-    covered."""
+    covered.
+
+    Baseline-tag verification cleanup (`OPUS-R129-001`): extended with the
+    `Workflow-Technical-Approval`/`Workflow-Work-Item` family, the one
+    genuinely new family among the three trailer-write sites this round
+    fixes (`milestone-implement.md` step 4, `bootstrap-workflow-v2.md`'s
+    NO_CHECKPOINT branch, `approve-review.md`'s implementation-stage
+    technical-approval commit) -- the other two sites both write
+    `Workflow-Bundle-Generation-Record`/`Workflow-Work-Item`, already
+    proven above."""
 
     _SUBJECT = "chore(demo-item): record trailer, revision 1"
     _NARRATIVE = "Demonstration commit for the trailer-shape proof."
@@ -1243,6 +1327,31 @@ class TestBaselinePortabilityCommandsCommitTrailerShape(unittest.TestCase):
                 "Workflow-Bundle-Generation-Record": "demo-item/4",
                 "Workflow-Work-Item": "demo-item",
                 "Workflow-Supersedes": "0123456789abcdef0123456789abcdef01234567",
+            },
+        )
+
+    def test_technical_approval_pre_fix_layout_silently_drops_the_trailer(self):
+        """`approve-review.md`'s implementation-stage technical-approval
+        commit's own trailer pair -- baseline-tag verification cleanup, the
+        one distinct trailer family among the three closed-gap sites this
+        round fixes that had no prior `ScratchRepo`-based shape proof (the
+        other two sites share the `Workflow-Bundle-Generation-Record`
+        family already proven above)."""
+        self._assert_pre_fix_layout_silently_drops_the_trailer(
+            "Workflow-Technical-Approval: "
+            "33139aaf7e637fc32dfd86a31f73c6153e32d2dc0a4ff8c4fa46ee2afe131a96\n"
+            "Workflow-Work-Item: demo-item",
+            ["Workflow-Technical-Approval", "Workflow-Work-Item"],
+        )
+
+    def test_technical_approval_final_paragraph_layout_is_recognized(self):
+        self._assert_final_paragraph_layout_is_recognized(
+            "Workflow-Technical-Approval: "
+            "33139aaf7e637fc32dfd86a31f73c6153e32d2dc0a4ff8c4fa46ee2afe131a96\n"
+            "Workflow-Work-Item: demo-item",
+            {
+                "Workflow-Technical-Approval": "33139aaf7e637fc32dfd86a31f73c6153e32d2dc0a4ff8c4fa46ee2afe131a96",
+                "Workflow-Work-Item": "demo-item",
             },
         )
 

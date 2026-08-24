@@ -384,8 +384,18 @@ actually load-bearing control for the Skill exposure path, not mechanism
    <full review_content_id>` + `Workflow-Work-Item: <id>`, via the same
    direct `apply_technical_approval`/`state_transaction` write and plain
    `git commit` this stage has always used; none of 4b/4c/5/6.2-6.4/
-   6a/6b/6c/6d below apply to it. The exact scoped trailer lookup is
-   `workflow_state.discover_technical_approval_commit` (`WF4a-iii`).
+   6a/6b/6c/6d below apply to it. **These two trailer lines must also be
+   the commit message's own final paragraph** — after any
+   `Co-Authored-By:`/`Claude-Session:` lines, never before them
+   (`OPUS-R129-001`, the same rule `milestone-implement.md` step 1f,
+   `bootstrap-workflow-v2.md` step 6, step 6.4 above, and
+   `accept-milestone.md` step 6 already state): Git's `git
+   interpret-trailers --parse` treats only the message's last paragraph
+   as trailers, so a blank line after these two lines (e.g. one followed
+   by `Co-Authored-By:`) silently discards both and makes the
+   technical-approval commit undiscoverable. The exact scoped trailer
+   lookup is `workflow_state.discover_technical_approval_commit`
+   (`WF4a-iii`).
 6a. **Plan stage only — classify the outcome from durable Git state**
     (`WF8c` items 347/350, never from this invocation's own exit status
     and never from `WORKFLOW_STATE.json`'s own content): call
