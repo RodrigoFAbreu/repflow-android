@@ -227,6 +227,36 @@ _GRANDFATHERED_WORKFLOW_TRAILER_LOOKALIKE_VIOLATIONS = frozenset({
     # plan, "Executing this plan"), so this pre-existing violation is not
     # this work item's own regression (`LPR-R3-B01`/`LPR-R3-I01`).
     "fb134ac4f7cdabb7861d170bb61331bb8d9f5a14",
+    # `workflow-v2-3-followups`'s own `/accept-milestone` commit -- the
+    # same `accept-milestone.md` gap recurring a third time, verified with
+    # `git log -1 --format=%B d271d89 | git interpret-trailers --parse`
+    # (only `Co-Authored-By:`/`Claude-Session:` come out; `Workflow-Work-
+    # Item:` does not). This is not a new defect: `accept-milestone.md`
+    # still carries no "trailers must be the message's own final
+    # paragraph" requirement -- unlike `milestone-implement.md`/
+    # `bootstrap-workflow-v2.md`/`approve-review.md` step 6.4, which
+    # `workflow-v2-3-followups` CP1 fixed -- fixing `accept-milestone.md`
+    # itself was explicitly, by name, declined for that same milestone
+    # (`WORKFLOW_V2_3_FOLLOWUPS_PLAN.md`'s "Executing this plan": "the
+    # same disposition as item 2 #8/item 3 #7 ... recorded here, by name,
+    # so it is not rediscovered as a surprise"). No production discovery/
+    # provenance mechanism reads this commit's `Workflow-Work-Item`
+    # trailer: `_discover_trailer_commits` (`workflow_state.py`) is only
+    # ever called for `Workflow-Checkpoint`/`Workflow-Plan-Approval`/
+    # `Workflow-Technical-Approval`/`Workflow-Scoped-Remediation-
+    # Acceptance`/`Workflow-Functional-Checklist`/`Workflow-Bundle-
+    # Generation-Record` trailer pairs, none of which this
+    # `MILESTONE_COMPLETE` commit carries or needs to be discoverable by
+    # -- `/accept-milestone` is a terminal, one-way transition with no
+    # later command that re-discovers its own commit via trailer search.
+    # Still an open, tracked, *recurring* gap in `accept-milestone.md`
+    # itself (not fixed here -- baseline-verification cleanup, out of
+    # scope for a command-behavior change): the next real `/accept-
+    # milestone` invocation will very likely reproduce this same
+    # violation again unless a future work item finally applies the
+    # same one-sentence fix to `accept-milestone.md` step 6 (baseline-
+    # freeze verification cleanup, 2026-08-24).
+    "d271d89249a6f7b8c45684e1a235ca518e53e95d",
 })
 
 
@@ -641,10 +671,27 @@ class TestAgainstRealRepository(unittest.TestCase):
         *currently active* item's own still-moving footprint, unlike the
         seven tests fixed at `WORKFLOW_V2_1_CORE_COMPLETION_COMMIT` above,
         which validate a fact about `workflow-v2-1-core`'s own closed
-        history instead."""
+        history instead.
+
+        `active_work_item_id` is a legitimate, documented `null` value
+        (`workflow_state.py`'s own `validate_state` invariant only
+        constrains it when *not* `None`) when the repository is quiescent
+        between work items -- e.g. right after a `MILESTONE_COMPLETE`
+        acceptance resets it, as `workflow-v2-3`'s own did. There is no
+        "currently active item" for this test's assertion to mean anything
+        about in that state, so it skips rather than either crashing on a
+        `None` dict key or fabricating a fake active item / mutating
+        `WORKFLOW_STATE.json` to force one (baseline-freeze verification
+        cleanup, 2026-08-24)."""
         repo_root = _repo_root()
         state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
         active_work_item_id = state["active_work_item_id"]
+        if active_work_item_id is None:
+            self.skipTest(
+                "active_work_item_id is null -- the repository is legitimately "
+                "quiescent (no live work item) right now, so there is no "
+                "currently active item's changed-set to classify"
+            )
         work_item = state["work_items"][active_work_item_id]
         protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
             fingerprint.load_implementation_stage_classification(
@@ -675,10 +722,22 @@ class TestAgainstRealRepository(unittest.TestCase):
         other new tests in this file exercises this: the active-work-item
         test above is implementation-stage only, and the standalone
         assertion below is pinned to `workflow-v2-1-core`'s own frozen
-        constants and closed history range."""
+        constants and closed history range.
+
+        Same `active_work_item_id is None` skip as the test immediately
+        above, for the same reason: a quiescent repository with no active
+        work item has no "currently active item" for this assertion to
+        mean anything about (baseline-freeze verification cleanup,
+        2026-08-24)."""
         repo_root = _repo_root()
         state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
         active_work_item_id = state["active_work_item_id"]
+        if active_work_item_id is None:
+            self.skipTest(
+                "active_work_item_id is null -- the repository is legitimately "
+                "quiescent (no live work item) right now, so there is no "
+                "currently active item's changed-set to classify"
+            )
         work_item = state["work_items"][active_work_item_id]
         metadata = fingerprint.resolve_plan_stage_metadata(repo_root, active_work_item_id)
         changed = sorted(
