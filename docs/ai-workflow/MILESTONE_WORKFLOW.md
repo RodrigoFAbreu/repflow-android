@@ -84,11 +84,11 @@ between `REVISING_PLAN` and `AWAITING_PLAN_APPROVAL`. Scoped entirely to
 - **Allowed actions**: run `/review-plan` (recommended in a fresh session,
   for genuine independence from the session that wrote the plan — strongly
   recommended operational guidance, not a verified precondition).
-- **Artifacts**: `REVIEW_FEEDBACK.md` (`Reviewer role: local_model_plan_review`);
+- **Artifacts**: `REVIEW_FEEDBACK.md` (`Reviewer role: LOCAL_MODEL_PLAN_REVIEW`);
   for an `APPROVE` verdict only, a new `plan_review_stages` ledger entry.
 - **Exit, verdict-specific** (see the transition table below):
   - **`APPROVE`**: `/review-plan` records the completed
-    `local_model_plan_review` stage against the current `review_content_id`
+    `LOCAL_MODEL_PLAN_REVIEW` stage against the current `review_content_id`
     and transitions to `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW`. Only a
     current local `APPROVE` may satisfy that transition.
   - **`REVISE`**: `/review-plan` writes `REVIEW_FEEDBACK.md` only (no
@@ -103,21 +103,21 @@ between `REVISING_PLAN` and `AWAITING_PLAN_APPROVAL`. Scoped entirely to
 ### AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW (`governing_workflow_version: "2.1"` only)
 
 - **Entry**: the `plan_review_stages` ledger records a
-  `local_model_plan_review` stage completed with `verdict: APPROVE` against
+  `LOCAL_MODEL_PLAN_REVIEW` stage completed with `verdict: APPROVE` against
   the *current* plan-stage `review_content_id` — by construction, the only
   way to reach this state.
 - **Allowed actions**: the user uploads the exact bundle `/review-plan`
   named (path, `bundle_id`, `review_content_id`) to a manual external
   reviewer (recommended: ChatGPT) and pastes its feedback into
-  `REVIEW_FEEDBACK.md` (`Reviewer role: manual_external_plan_review`) —
+  `REVIEW_FEEDBACK.md` (`Reviewer role: MANUAL_EXTERNAL_PLAN_REVIEW`) —
   manual end-to-end, identical in mechanism to today's single external
   review, only gated on the local stage having completed first. Once
   feedback is pasted, run `/record-manual-plan-review` to ingest it.
-- **Artifacts**: `REVIEW_FEEDBACK.md` (`Reviewer role: manual_external_plan_review`);
+- **Artifacts**: `REVIEW_FEEDBACK.md` (`Reviewer role: MANUAL_EXTERNAL_PLAN_REVIEW`);
   for an `APPROVE` verdict only, the ledger's second stage entry.
 - **Exit, verdict-specific** (see the transition table below):
   - **`APPROVE`**: `/record-manual-plan-review` records the completed
-    `manual_external_plan_review` stage against the current
+    `MANUAL_EXTERNAL_PLAN_REVIEW` stage against the current
     `review_content_id` and transitions to `AWAITING_PLAN_APPROVAL`.
   - **`REVISE`**: `/record-manual-plan-review` records nothing in the
     ledger; transitions to `REVISING_PLAN`; `/apply-plan-review` is then
@@ -136,7 +136,7 @@ between `REVISING_PLAN` and `AWAITING_PLAN_APPROVAL`. Scoped entirely to
 | `AWAITING_LOCAL_PLAN_REVIEW` | `APPROVE` | `/review-plan` | record local stage (`verdict: APPROVE`) against current `review_content_id` → `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW` | item is `"2.1"`; `phase == AWAITING_LOCAL_PLAN_REVIEW`; recomputed `bundle_id`/`review_content_id` match `MANIFEST.md`/`REVIEW_REQUEST.md` (not stale) |
 | `AWAITING_LOCAL_PLAN_REVIEW` | `REVISE` | `/review-plan` | write `REVIEW_FEEDBACK.md` only, no ledger write → `REVISING_PLAN`; `/apply-plan-review` required | same as above |
 | `AWAITING_LOCAL_PLAN_REVIEW` | `BLOCK` | `/review-plan` | no ledger write, no transition; remains `AWAITING_LOCAL_PLAN_REVIEW` | same as above; explicit user resolution required before any further command |
-| `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW` | `APPROVE` | `/record-manual-plan-review` | record manual stage (`verdict: APPROVE`, plus the feedback's own `bundle_id`) against current `review_content_id` → `AWAITING_PLAN_APPROVAL` | item is `"2.1"`; `phase == AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW`; a current `local_model_plan_review` `APPROVE` recorded for the same `review_content_id`; `REVIEW_FEEDBACK.md`'s `Reviewer role:` is exactly `manual_external_plan_review`; its `review_content_id` matches the current recomputed value (**hard**, blocks ingestion) — its `bundle_id` matching the current recomputed value is **advisory only** (warns, naming both, never blocks); no `manual_external_plan_review` stage already recorded against this `review_content_id` (rejects duplicate ingestion) |
+| `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW` | `APPROVE` | `/record-manual-plan-review` | record manual stage (`verdict: APPROVE`, plus the feedback's own `bundle_id`) against current `review_content_id` → `AWAITING_PLAN_APPROVAL` | item is `"2.1"`; `phase == AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW`; a current `LOCAL_MODEL_PLAN_REVIEW` `APPROVE` recorded for the same `review_content_id`; `REVIEW_FEEDBACK.md`'s `Reviewer role:` is `MANUAL_EXTERNAL_PLAN_REVIEW` or the legacy `manual_external_plan_review`; its `review_content_id` matches the current recomputed value (**hard**, blocks ingestion) — its `bundle_id` matching the current recomputed value is **advisory only** (warns, naming both, never blocks); no `MANUAL_EXTERNAL_PLAN_REVIEW` stage already recorded against this `review_content_id` (rejects duplicate ingestion) |
 | `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW` | `REVISE` | `/record-manual-plan-review` | no ledger write → `REVISING_PLAN`; `/apply-plan-review` required | same as above |
 | `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW` | `BLOCK` | `/record-manual-plan-review` | no ledger write, no transition; remains `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW` | same as above; explicit user resolution required |
 
@@ -156,7 +156,7 @@ re-enters manual-external review without a fresh local pass first.
 - **Entry**: `REVISING_PLAN`'s exit condition is met. For a
   `governing_workflow_version: "2.1"` work item, one further condition
   applies: the work item's `plan_review_stages` ledger must additionally
-  record both `local_model_plan_review` and `manual_external_plan_review`
+  record both `LOCAL_MODEL_PLAN_REVIEW` and `MANUAL_EXTERNAL_PLAN_REVIEW`
   completed, in that order, against the *current* plan-stage
   `review_content_id` (the two-stage local-then-manual-external plan-review
   protocol, `/review-plan`/`/record-manual-plan-review`) — a single
@@ -208,7 +208,13 @@ re-enters manual-external review without a fresh local pass first.
 - **Entry**: self-review and verification are complete.
 - **Allowed actions**: run
   `scripts/prepare-ai-review.sh <base-sha> implementation` to export the
-  bundle. No further implementation.
+  bundle. No further implementation. Optionally, run `/review-implementation`
+  — a non-gating, model-independent second opinion on the current bundle;
+  it writes the current `.ai-review/feedback/REVIEW_FEEDBACK.md` (or the
+  scoped equivalent) once its own pre-write guards pass, but still writes
+  no `docs/ai-workflow/WORKFLOW_STATE.json` and never advances this state,
+  so it remains non-gating and adds no new gate — just no longer "writes
+  nothing".
 - **Artifacts**: `.ai-review/current/` (implementation stage) with the real
   diff, changed files, tests run, decisions; `.ai-review/review-bundle.tar.gz`.
 - **Exit**: external reviewer places feedback at
@@ -254,6 +260,10 @@ re-enters manual-external review without a fresh local pass first.
 - **Allowed actions**: confirm automated verification state; write a concise
   manual functional-review checklist (setup, test data, exact flows,
   expected results, known limitations); update `docs/ACTIVE_MILESTONE.md`.
+  Optionally, run `/review-functional` — a non-gating, report-only,
+  model-independent second opinion on the checklist's completeness and
+  evidence reproducibility; it writes nothing and never advances this
+  state, so it adds no new gate.
 - **Artifacts**: functional-review checklist (in `docs/ACTIVE_MILESTONE.md` or a
   file it links to).
 - **Exit**: user performs functional testing and places findings at
@@ -414,6 +424,19 @@ gate as `/accept-milestone`, discriminated by whether the item's own
 registry still has an incomplete checkpoint — never a new phase. The hard
 gate count stays exactly **6**.
 
+`/review-implementation` and `/review-functional` (`workflow-v2-3`) add no
+gate either: both are optional, non-gating actions reachable from inside an
+existing gate (`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` and
+`AWAITING_FUNCTIONAL_REVIEW` respectively) — neither writes
+`docs/ai-workflow/WORKFLOW_STATE.json` nor advances `phase` — the same
+"optional action inside an existing gate, not a new one" reasoning this
+section already applies to the plan stage's two-stage refinement below.
+`/review-implementation` (`workflow-v2-3-followups`) does write a review
+artifact, `.ai-review/feedback/REVIEW_FEEDBACK.md` (or the scoped
+equivalent), once its own pre-write guards pass — but not `WORKFLOW_STATE.json`
+and not a `phase` transition, so it stays non-gating for the same reason.
+`/review-functional` writes nothing at all, unchanged.
+
 For a `governing_workflow_version: "2.1"` work item, the edge from
 `REVISING_PLAN` to `AWAITING_PLAN_APPROVAL` is further refined into
 `REVISING_PLAN → AWAITING_LOCAL_PLAN_REVIEW → AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW
@@ -435,5 +458,10 @@ operations, repeated verification failures, unrelated working-tree changes).
 - Plan/implementation review: `.ai-review/feedback/REVIEW_FEEDBACK.md`
 - Functional review: `.ai-review/feedback/FUNCTIONAL_REVIEW.md`
 
-Both are read, never written, by Claude — see
-`docs/ai-workflow/REVIEW_PROTOCOL.md` for the required feedback structure.
+`REVIEW_FEEDBACK.md` is written by `/review-plan` (the
+`LOCAL_MODEL_PLAN_REVIEW` stage) and, since `workflow-v2-3-followups`, also
+by `/review-implementation` once its own pre-write guards pass — otherwise
+read, never written, by Claude. `FUNCTIONAL_REVIEW.md` stays read-only:
+nothing this repository's commands write it, including
+`/review-functional`. See `docs/ai-workflow/REVIEW_PROTOCOL.md` for the
+required feedback structure.

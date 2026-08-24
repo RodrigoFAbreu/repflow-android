@@ -291,6 +291,15 @@ _GIT_OBJECT_ID_RE = re.compile(r"^[0-9a-f]{40}$")
 # ingest from REVIEW_FEEDBACK.md's `Status:` field.
 PLAN_REVIEW_VERDICTS = frozenset({"APPROVE", "REVISE", "BLOCK"})
 
+# Canonical, SCREAMING_SNAKE_CASE `plan_review_stages` key casing (item 8,
+# workflow-v2-3-followups CP3): every write past this checkpoint uses these
+# two constants, never the legacy lowercase literals directly. Legacy
+# lowercase keys remain readable via `normalize_plan_review_stages` --
+# `workflow-v2-3`'s own terminal record, and any hand-authored fixture,
+# never need rewriting.
+LOCAL_MODEL_PLAN_REVIEW = "LOCAL_MODEL_PLAN_REVIEW"
+MANUAL_EXTERNAL_PLAN_REVIEW = "MANUAL_EXTERNAL_PLAN_REVIEW"
+
 # Only MILESTONE_COMPLETE is terminal -- LEGACY_READY is explicitly
 # "dormant, not terminal" (D-Legacy phase 1, resolves GPT-R9-005).
 TERMINAL_PHASES = frozenset({"MILESTONE_COMPLETE"})
@@ -518,8 +527,8 @@ class PlanReviewStagesInvalidForVersionError(Exception):
 
 
 class ManualStageWithoutLocalStageError(Exception):
-    """Raised when `manual_external_plan_review` is recorded while
-    `local_model_plan_review` is absent (resolves GPT-R11-001)."""
+    """Raised when `MANUAL_EXTERNAL_PLAN_REVIEW` is recorded while
+    `LOCAL_MODEL_PLAN_REVIEW` is absent (resolves GPT-R11-001)."""
 
 
 class StageVerdictNotApproveError(Exception):
@@ -562,18 +571,28 @@ class WrongReviewerRoleError(Exception):
 
 class MissingLocalApprovalForManualStageError(Exception):
     """Raised when `/record-manual-plan-review` is asked to ingest an
-    `APPROVE` while no current `local_model_plan_review` `APPROVE` is
+    `APPROVE` while no current `LOCAL_MODEL_PLAN_REVIEW` `APPROVE` is
     recorded for the same `review_content_id` -- a restated invariant,
     since entry to `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW` already requires
     it; defends against a corrupted or hand-edited state file."""
 
 
 class DuplicateManualStageIngestionError(Exception):
-    """Raised when a `manual_external_plan_review` stage is already
+    """Raised when a `MANUAL_EXTERNAL_PLAN_REVIEW` stage is already
     recorded against the current `review_content_id` -- rejects duplicate
     ingestion (a second invocation after a completed `APPROVE`/`REVISE`
     normally fails the phase precondition first; this only fires for a
     hand-edited or race-condition state, GPT-R12-002/-003)."""
+
+
+class AmbiguousPlanReviewStageKeyError(Exception):
+    """Raised by `normalize_plan_review_stages` when a `plan_review_stages`
+    dict holds both a legacy-cased and a canonical-cased raw key that
+    normalize to the same stage, with conflicting values -- never resolved
+    by dict key-iteration order (resolves `GPT-FUP-R6-I02`, workflow-v2-3-
+    followups CP3). A byte-identical duplicate under both raw keys is
+    tolerated and silently collapsed instead; only a genuine conflict
+    raises."""
 
 
 class ConfigMissingAfterActivationError(Exception):
@@ -750,17 +769,51 @@ class InvalidBundleGenerationOutcomeError(Exception):
     only two, legal outcomes)."""
 
 
-BUNDLE_GENERATION_LEGAL_SOURCE_PHASES = frozenset({
-    "SELF_REVIEWING_IMPLEMENTATION", "APPLYING_REVIEW_FEEDBACK",
-})
+BUNDLE_GENERATION_LEGAL_SOURCE_PHASES_BY_STAGE = {
+    # "implementation" (a round's first bundle) is legal only from
+    # SELF_REVIEWING_IMPLEMENTATION -- never from APPLYING_REVIEW_FEEDBACK
+    # (already mid-remediation) or AWAITING_FUNCTIONAL_REVIEW (past
+    # technical approval; a first-round bundle for this work item's own
+    # implementation content already exists by construction there).
+    "implementation": frozenset({"SELF_REVIEWING_IMPLEMENTATION"}),
+    # "post-fix" is legal from APPLYING_REVIEW_FEEDBACK (an ordinary
+    # implementation-review REVISE round) and, self-discovered during
+    # workflow-v2-3-followups's own /accept-milestone pre-flight,
+    # AWAITING_FUNCTIONAL_REVIEW -- the only phase /apply-functional-
+    # review's own "bounded code change" branch (D-Functional-Remediation)
+    # can ever be entered from, since that is its own documented
+    # precondition. The AWAITING_FUNCTIONAL_REVIEW branch additionally
+    # requires technical_approval.status == "STALE" (record_bundle_
+    # generation's own check below) -- the bounded-fix marker
+    # mark_technical_approval_stale writes before the first edit lands,
+    # so this phase alone is never sufficient on its own.
+    "post-fix": frozenset({"APPLYING_REVIEW_FEEDBACK", "AWAITING_FUNCTIONAL_REVIEW"}),
+}
+
+BUNDLE_GENERATION_LEGAL_SOURCE_PHASES = frozenset.union(
+    *BUNDLE_GENERATION_LEGAL_SOURCE_PHASES_BY_STAGE.values()
+)
 
 
 class IllegalBundleGenerationSourcePhaseError(Exception):
-    """Raised when `record_bundle_generation` is called from a phase other
-    than `SELF_REVIEWING_IMPLEMENTATION` (round's first bundle) or
-    `APPLYING_REVIEW_FEEDBACK` (`post-fix` bundle) -- OPUS-R101-001,
-    missing-test item 275: a behavioral refusal, never a silent proceed,
-    naming the actual phase and both legal ones."""
+    """Raised when `record_bundle_generation` is called from a phase that
+    is not legal for the requested `stage`
+    (`BUNDLE_GENERATION_LEGAL_SOURCE_PHASES_BY_STAGE`) -- OPUS-R101-001,
+    missing-test item 275, widened by workflow-v2-3-followups's own
+    continued scope: a behavioral refusal, never a silent proceed, naming
+    the actual phase, the requested stage, and the phase(s) legal for
+    that stage."""
+
+
+class BundleGenerationRequiresStaleTechnicalApprovalError(Exception):
+    """Raised when `record_bundle_generation(stage="post-fix", ...)` is
+    called from `AWAITING_FUNCTIONAL_REVIEW` while `technical_approval.status`
+    is not `"STALE"` -- the functional-review bounded-fix marker
+    `mark_technical_approval_stale` writes before the first edit lands
+    (`D-Functional-Remediation`). `AWAITING_FUNCTIONAL_REVIEW` alone is
+    not sufficient: a `CURRENT` approval at this phase means no bounded
+    fix is actually in flight, so a post-fix regeneration would silently
+    fabricate provenance for a round that never happened."""
 
 
 class IllegalApplyingReviewFeedbackEntryPhaseError(Exception):
@@ -2207,6 +2260,7 @@ PLAN_APPROVAL_DESTRUCTIVE_STEPS = frozenset({
 })
 PLAN_APPROVAL_ORDINARY_STEPS = frozenset({
     "step-5-declaration-pin",
+    "step-5-stage-and-pin",
     "step-6.1b-state-pin",
     "step-6.2-stage-ordinary",
     "step-7b-amend-stage",
@@ -6459,13 +6513,31 @@ def _assert_registry_covered_by_current_plan_approval(
     document (the plan, the mapping, `TECHNICAL_DECISIONS.md`, the audit
     doc) carrying a dirty or committed-but-never-approved mutation must
     refuse registry-derived completion exactly as a tampered registry
-    itself would, even though the registry's own bytes are unchanged."""
+    itself would, even though the registry's own bytes are unchanged.
+
+    **The real runtime guard against a malformed persisted `review_content_
+    manifest`** (`workflow-v2-3-followups` continued scope, external
+    cross-model review round 4, `OPUS-R25-007`'s own precedent): this is
+    the exact function `/accept-milestone`/`/accept-scoped-remediation`
+    reach through `resolve_own_registry_completion_status`, over the
+    *live* `WORKFLOW_STATE.json` -- `validate_state`'s own shape check
+    is never on this call path, so the guard below, not that one, is what
+    actually stops a malformed manifest from being iterated as a list of
+    dicts and crashing with a bare `AttributeError`."""
     work_item_id = work_item["work_item_id"]
     plan_approval = work_item.get("plan_approval")
     if plan_approval is None or plan_approval.get("status") != "CURRENT":
         raise StalePlanApprovalRegistryReadError(
             f"work_items[{work_item_id!r}] has no CURRENT plan_approval -- "
             f"registry-derived completion cannot be trusted"
+        )
+    shape_error = _describe_malformed_review_content_manifest_shape(
+        plan_approval.get("review_content_manifest")
+    )
+    if shape_error is not None:
+        raise StalePlanApprovalRegistryReadError(
+            f"work_items[{work_item_id!r}].plan_approval.review_content_manifest is "
+            f"malformed, cannot be trusted for registry-derived completion: {shape_error}"
         )
     manifest = plan_approval.get("review_content_manifest") or []
     approved_entry = next(
@@ -6743,16 +6815,27 @@ _NON_WRITER_VIOLATION_RE = re.compile(
 # Deliberately scoped to a **fixed named roster**, not "every tracked
 # `.claude/commands/*.md` file" the way `discover_state_writers`' own
 # `STATE_WRITER_SURFACE_PREFIXES` scans its whole prefix: `WFR-67`'s own
-# revision-80 text names an exact, closed set -- "the counts become nine
-# consumers and four exempt over the same thirteen files" -- fixed at the
-# moment that text was written. `.claude/commands/recover-implementation-
-# provenance.md` (added afterward, `WF8c` item (b)) postdates that design
-# and was never classified by it; whether it belongs in the roster at all
-# is exactly the kind of "re-derive from this file's own prose against the
-# three semantic disjuncts" judgment call this function's own docstring
-# already defers, not something a scan-everything default should decide
-# by silently demanding a declaration this file's own history never
-# assigned it.
+# revision-80 text named an exact, closed set of thirteen files (nine
+# bundle/verdict consumers, four exempt). The roster is a deliberately
+# extended list, not eternally frozen at that revision-80 snapshot: two
+# later command files -- `.claude/commands/review-implementation.md` and
+# `.claude/commands/review-functional.md` (`workflow-v2-3` CP1/CP2), both
+# bundle-report consumers -- were added when they were built, bringing the
+# roster to its current fifteen files (eleven bundle/verdict consumers,
+# four exempt). Adding a file here is a deliberate per-command decision at
+# the time that command is written, not automatic for everything that
+# postdates any prior snapshot. `.claude/commands/recover-implementation-
+# provenance.md` (added earlier, `WF8c` item (b)) was considered and left
+# off: it is a `state_writer: true` recovery action, and its classification
+# against `WFR-67`'s roster is deliberately left unassigned rather than
+# resolved -- its own step 6 does read `<bundle_dir>/MANIFEST.md`'s existing
+# `stage:` field over a bundle directory it did not itself generate, which
+# reaches the middle of the three semantic disjuncts, so whether it belongs
+# in the roster at all is the same "re-derive from this file's own prose
+# against the three semantic disjuncts" judgment call this function's own
+# docstring already defers, not something a scan-everything default should
+# decide by silently demanding a declaration this roster's own history
+# never assigned it.
 #
 # This discovery function covers the *declaration* half only. WFR-67's own
 # text additionally requires the declaration to be "cross-checked against
@@ -6763,10 +6846,12 @@ _NON_WRITER_VIOLATION_RE = re.compile(
 # `workflow_fingerprint.assert_bundle_not_rejected` actually appears at the
 # right points. That derivation is separate, deferred `WF8c` scope; this
 # function and its conformance test instead pin the **known-correct**
-# classification (the nine consumers/four exempt split `WFR-67`'s own
-# revision-80 text states by name) as an explicit expected-value table, so
-# a file that drifts from it is still caught, even though the check is
-# against a recorded table rather than re-derived from first principles.
+# classification (the eleven consumers/four exempt split over the current
+# fifteen-file roster above -- nine/four over thirteen files at `WFR-67`'s
+# own revision-80 text, extended since) as an explicit expected-value
+# table, so a file that drifts from it is still caught, even though the
+# check is against a recorded table rather than re-derived from first
+# principles.
 # ---------------------------------------------------------------------------
 
 REVIEW_SUBJECT_ROSTER = frozenset({
@@ -6782,6 +6867,8 @@ REVIEW_SUBJECT_ROSTER = frozenset({
     ".claude/commands/prepare-functional-review.md",
     ".claude/commands/prepare-review.md",
     ".claude/commands/record-manual-plan-review.md",
+    ".claude/commands/review-functional.md",
+    ".claude/commands/review-implementation.md",
     ".claude/commands/review-plan.md",
 })
 
@@ -8385,6 +8472,20 @@ def _resolve_one_obligation(repo_root: Path, work_item: dict, obligation_id: str
     reviewed_content_commit = durable_record.get("reviewed_content_commit")
     if not (isinstance(reviewed_content_commit, str) and _GIT_OBJECT_ID_RE.match(reviewed_content_commit)):
         return ObligationVerdict("VERIFIER_UNAPPROVED", "durable reviewed_content_commit is null or malformed")
+    # workflow-v2-3-followups continued scope, external cross-model review
+    # round 4 (I2's committed-blob half, OPUS-R25-007's own precedent):
+    # `durable_record` was read from a historical Git blob (`approval_commit`
+    # above), never from the live WORKFLOW_STATE.json validate_state ever
+    # sees -- a review_content_manifest malformed at approval time and now
+    # immutable history reaches this exact iteration below regardless of
+    # what the live file holds. Shape-check before the dict comprehension
+    # ever runs, returning the same typed VERDICT every other refusal in
+    # this function already returns, never a bare AttributeError.
+    shape_error = _describe_malformed_review_content_manifest_shape(
+        durable_record.get("review_content_manifest")
+    )
+    if shape_error is not None:
+        return ObligationVerdict("VERIFIER_UNAPPROVED", f"durable review_content_manifest is malformed: {shape_error}")
     manifest = durable_record.get("review_content_manifest") or []
     if not manifest:
         return ObligationVerdict("VERIFIER_UNAPPROVED", "durable review_content_manifest is empty")
@@ -8672,6 +8773,85 @@ def create_remediation_child_work_item(
 
 
 # ---------------------------------------------------------------------------
+# workflow-v2-3-followups CP3: `plan_review_stages` key-casing compatibility
+# -- one dedicated normalization-and-collision-detection helper, used at
+# every read site and by the one-time migration function below, so
+# compatibility-reading and migration agree on what "canonical" means by
+# construction (resolves `GPT-FUP-R6-O01`/`-I02`).
+# ---------------------------------------------------------------------------
+
+
+def _normalize_plan_review_stage_key(key: str) -> str:
+    """Maps the two known legacy lowercase `plan_review_stages` tokens to
+    their canonical `SCREAMING_SNAKE_CASE` form; any other key (including
+    an already-canonical one, or `review_content_id`) passes through
+    unchanged -- idempotent by construction."""
+    if key == "local_model_plan_review":
+        return LOCAL_MODEL_PLAN_REVIEW
+    if key == "manual_external_plan_review":
+        return MANUAL_EXTERNAL_PLAN_REVIEW
+    return key
+
+
+def normalize_plan_review_stages(stages: dict) -> dict:
+    """Reads a `plan_review_stages` dict tolerant of both legacy lowercase
+    and canonical `SCREAMING_SNAKE_CASE` keys, returning a dict keyed
+    entirely canonically. `review_content_id` passes through unchanged --
+    it is a value, never a stage key. When two raw keys normalize to the
+    same canonical stage, a byte-identical (`==`) duplicate collapses
+    silently to that one shared value; a genuine conflict raises
+    `AmbiguousPlanReviewStageKeyError`, naming the canonical stage and both
+    raw keys/values, independent of dict insertion order -- never resolved
+    by key-iteration order. Used at every `plan_review_stages` read site
+    and by `migrate_plan_review_stage_keys`."""
+    normalized: dict = {}
+    raw_key_by_canonical: dict[str, str] = {}
+    for key, value in stages.items():
+        if key == "review_content_id":
+            normalized[key] = value
+            continue
+        canonical = _normalize_plan_review_stage_key(key)
+        if canonical in normalized:
+            if normalized[canonical] != value:
+                raise AmbiguousPlanReviewStageKeyError(
+                    f"plan_review_stages: raw keys {raw_key_by_canonical[canonical]!r} and "
+                    f"{key!r} both normalize to {canonical!r} but disagree: "
+                    f"{normalized[canonical]!r} vs. {value!r}"
+                )
+            continue
+        normalized[canonical] = value
+        raw_key_by_canonical[canonical] = key
+    return normalized
+
+
+def migrate_plan_review_stage_keys(state: dict) -> dict:
+    """One-time normalization step (workflow-v2-3-followups CP3, closes
+    migration requirement #2/#4): for every work item whose `phase` is not
+    in `TERMINAL_PHASES`, if its `plan_review_stages` dict is not `None`,
+    replaces it with `normalize_plan_review_stages`'s result -- the same
+    collision-aware helper the read sites use, so migration and
+    compatibility-reading agree on what "canonical" means. An already-
+    ambiguous non-terminal work item's ledger makes this raise
+    `AmbiguousPlanReviewStageKeyError` rather than silently pick a winner;
+    run via `state_transaction`, so a raised exception leaves
+    `WORKFLOW_STATE.json` completely unwritten, not partially migrated.
+    Idempotent (an already-canonical dict round-trips unchanged) and
+    generic (does not hardcode any one work item's id). Terminal-phase
+    records (e.g. `workflow-v2-3`'s own) are skipped and stay
+    byte-unchanged -- immutable historical review evidence, not live
+    state."""
+    new_state = copy.deepcopy(state)
+    for work_item in new_state.get("work_items", {}).values():
+        if work_item.get("phase") in TERMINAL_PHASES:
+            continue
+        stages = work_item.get("plan_review_stages")
+        if stages is None:
+            continue
+        work_item["plan_review_stages"] = normalize_plan_review_stages(stages)
+    return new_state
+
+
+# ---------------------------------------------------------------------------
 # D-States: non-circular gate-reachability for AWAITING_PLAN_APPROVAL /
 # AWAITING_TECHNICAL_APPROVAL (never reads plan_approval/technical_approval
 # themselves -- resolves OPUS-R6-004/-011)
@@ -8721,20 +8901,22 @@ def plan_approval_gate_reachable(
     """`AWAITING_PLAN_APPROVAL`'s entry condition: the shared reachability
     rule above, plus -- for a `governing_workflow_version: "2.1"` work item
     only (resolves GPT-R11-001/-003) -- the `plan_review_stages` ledger
-    must record both `local_model_plan_review` and
-    `manual_external_plan_review` completed (`verdict: APPROVE`) against
+    must record both `LOCAL_MODEL_PLAN_REVIEW` and
+    `MANUAL_EXTERNAL_PLAN_REVIEW` completed (`verdict: APPROVE`) against
     the *current* plan-stage `review_content_id`. A `"1"` item's condition
-    is exactly the shared rule, unchanged."""
+    is exactly the shared rule, unchanged. Tolerant of legacy lowercase
+    keys via `normalize_plan_review_stages` (workflow-v2-3-followups CP3)."""
     if not approval_gate_reachable(latest_round_status):
         return False
     if governing_workflow_version != "2.1":
         return True
     if plan_review_stages is None:
         return False
-    if plan_review_stages.get("review_content_id") != current_review_content_id:
+    stages = normalize_plan_review_stages(plan_review_stages)
+    if stages.get("review_content_id") != current_review_content_id:
         return False
-    local = plan_review_stages.get("local_model_plan_review")
-    manual = plan_review_stages.get("manual_external_plan_review")
+    local = stages.get(LOCAL_MODEL_PLAN_REVIEW)
+    manual = stages.get(MANUAL_EXTERNAL_PLAN_REVIEW)
     return (
         local is not None and local.get("verdict") == "APPROVE"
         and manual is not None and manual.get("verdict") == "APPROVE"
@@ -8852,13 +9034,67 @@ def build_approval_record(
     return record
 
 
+def _describe_malformed_review_content_manifest_shape(manifest: object) -> str | None:
+    """The one rule every `review_content_manifest` consumer shares --
+    `None` (legitimately absent) or a flat list of `{"path": ...}`
+    entries is well-formed; anything else (most notably the whole
+    projection object `workflow_fingerprint.compute_review_content_id_*`
+    returns, which happens to carry a field of the identical name one
+    level up) is not. Returns a diagnostic description of the malformed
+    shape, or `None` when the value is fine. Factored out (`workflow-v2-3-
+    followups` continued scope, external cross-model review round 4,
+    `OPUS-R25-007`'s own precedent: "the same widened rule" shared
+    between a relocated read-path guard and its write-time/`validate_state`
+    backstop, never a duplicated copy that can drift) so `validate_approval_
+    record` (the write chokepoint), `_assert_registry_covered_by_current_
+    plan_approval` (the live-state read consumer `/accept-milestone`/
+    `/accept-scoped-remediation` reach), and `_resolve_one_obligation`
+    (the committed-blob read consumer, malformed state arriving from a
+    historical commit rather than the live file) all refuse the identical
+    malformed shape the identical way, rather than three separately
+    maintained copies of the same check."""
+    if manifest is None:
+        return None
+    if isinstance(manifest, list) and all(
+        isinstance(entry, dict) and "path" in entry for entry in manifest
+    ):
+        return None
+    shape = f"dict with keys {sorted(manifest.keys())!r}" if isinstance(manifest, dict) else type(manifest).__name__
+    return (
+        f"review_content_manifest must be a flat list of {{'path': ...}} entries -- got a "
+        f"{shape}. This is the exact shape workflow_fingerprint.compute_review_content_id_"
+        f"*'s own returned projection['review_content_manifest'] holds -- pass that field's "
+        f"value, never the whole projection object it lives inside of"
+    )
+
+
 def validate_approval_record(record: dict, *, stage: str) -> None:
     """D2's shape check: known `status`/`basis`, the plan-stage's
     permanently-null `reviewed_content_commit` rule (GPT-R9-006), a
     non-`LEGACY_V1` basis requiring `reviewed_bundle_id`/
     `approved_review_content_id`/`review_content_manifest`, a non-empty
-    `user_confirmation` ("every basis"), and the `waived_guarantees`
-    controlled vocabulary (OPUS-R6-025, narrowed OPUS-R10-014)."""
+    `user_confirmation` ("every basis"), the `waived_guarantees`
+    controlled vocabulary (OPUS-R6-025, narrowed OPUS-R10-014), and (this
+    item's own `workflow-v2-3-followups` continued scope, self-discovered
+    during `/accept-milestone`'s pre-flight) `review_content_manifest`'s
+    own flat-list shape via `_describe_malformed_review_content_manifest_shape`
+    -- closing the gap that twice let a caller pass `workflow_fingerprint.
+    compute_review_content_id_*`'s whole returned projection object
+    instead of that projection's own inner manifest list, silently, with
+    no shape check anywhere in the write path.
+
+    **This is the write chokepoint only** (external cross-model review
+    round 4, `OPUS-R25-007`'s own precedent): this function, and
+    `validate_state`/`_validate_work_item` which calls it over every
+    persisted approval record, are never reached by any production read
+    path -- `validate_state` has no production caller anywhere in this
+    repository; it is a write-time/harness backstop, not a runtime guard.
+    The actual runtime protection for a malformed record already
+    persisted in `WORKFLOW_STATE.json` (an old backup, import, hand edit,
+    or pre-fix tooling) lives at the two real consumer chokepoints instead:
+    `_assert_registry_covered_by_current_plan_approval` (live-state,
+    `/accept-milestone`/`/accept-scoped-remediation`) and
+    `_resolve_one_obligation` (committed-blob, historical state)."""
     if stage not in APPROVAL_STAGES:
         raise InvalidApprovalRecordError(f"unknown approval stage: {stage!r}")
     if record.get("status") not in APPROVAL_STATUSES:
@@ -8877,6 +9113,9 @@ def validate_approval_record(record: dict, *, stage: str) -> None:
                 raise InvalidApprovalRecordError(
                     f"a {basis} approval record must set {field} (only LEGACY_V1 may leave it null)"
                 )
+    shape_error = _describe_malformed_review_content_manifest_shape(record.get("review_content_manifest"))
+    if shape_error is not None:
+        raise InvalidApprovalRecordError(shape_error)
     if not record.get("user_confirmation"):
         raise InvalidApprovalRecordError("approval record must set a non-empty user_confirmation")
     for guarantee in record.get("waived_guarantees") or []:
@@ -9008,12 +9247,21 @@ def record_bundle_generation(
     round) or `"post-fix"` (every remediation round after, whether driven
     by an implementation-review finding or a functional-review bounded
     fix) stage -- never any other. Also `phase`'s sole writer for this
-    transition (OPUS-R101-001): refuses outright, naming the actual phase
-    and both legal ones, unless called from `SELF_REVIEWING_IMPLEMENTATION`
-    or `APPLYING_REVIEW_FEEDBACK`, and always sets the durable target
-    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` -- the "Ordinary
-    bundle-publication phase transition" contract, `WFR-61`'s five-field
-    mutation.
+    transition (OPUS-R101-001, widened by workflow-v2-3-followups's own
+    continued scope): legality is stage-specific
+    (`BUNDLE_GENERATION_LEGAL_SOURCE_PHASES_BY_STAGE`) -- `"implementation"`
+    only from `SELF_REVIEWING_IMPLEMENTATION`; `"post-fix"` from
+    `APPLYING_REVIEW_FEEDBACK`, or from `AWAITING_FUNCTIONAL_REVIEW` when
+    (and only when) `technical_approval.status == "STALE"`, the bounded-fix
+    marker `/apply-functional-review`'s own branch writes before its first
+    edit lands. Refuses outright otherwise, naming the actual phase, the
+    requested stage, and the phase(s) legal for it
+    (`IllegalBundleGenerationSourcePhaseError`), or naming the non-`STALE`
+    status for the `AWAITING_FUNCTIONAL_REVIEW` case specifically
+    (`BundleGenerationRequiresStaleTechnicalApprovalError`). Always sets
+    the durable target `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` -- the
+    "Ordinary bundle-publication phase transition" contract, `WFR-61`'s
+    five-field mutation.
 
     `outcome` (WF8c (c), D-Commit-Provenance "Same-content post-fix
     republication") selects which of this function's two legal outcomes
@@ -9037,10 +9285,10 @@ def record_bundle_generation(
     intervening commits are all legitimately excluded-only; `head` itself
     is otherwise unused in this branch, kept only for call-shape symmetry.
     Both outcomes always perform a real `phase` transition into
-    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` from whichever of the two
-    legal source phases was current -- never value-wise unchanged, since
-    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` itself is never one of this
-    function's own legal source phases."""
+    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` from whichever legal source
+    phase for the requested `stage` was current -- never value-wise
+    unchanged, since `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` itself is
+    never one of this function's own legal source phases for any stage."""
     if stage not in ("implementation", "post-fix"):
         raise InvalidBundleGenerationStageError(
             f"reviewed_implementation_head is written only at the "
@@ -9054,12 +9302,21 @@ def record_bundle_generation(
     new_state = copy.deepcopy(state)
     work_item = new_state["work_items"][work_item_id]
     current_phase = work_item.get("phase")
-    if current_phase not in BUNDLE_GENERATION_LEGAL_SOURCE_PHASES:
+    legal_phases_for_stage = BUNDLE_GENERATION_LEGAL_SOURCE_PHASES_BY_STAGE[stage]
+    if current_phase not in legal_phases_for_stage:
         raise IllegalBundleGenerationSourcePhaseError(
-            f"record_bundle_generation invoked from phase {current_phase!r}, "
-            f"but the only legal source phases are "
-            f"{sorted(BUNDLE_GENERATION_LEGAL_SOURCE_PHASES)}"
+            f"record_bundle_generation invoked from phase {current_phase!r} for stage "
+            f"{stage!r}, but the only legal source phase(s) for this stage are "
+            f"{sorted(legal_phases_for_stage)}"
         )
+    if current_phase == "AWAITING_FUNCTIONAL_REVIEW":
+        technical_approval_status = (work_item.get("technical_approval") or {}).get("status")
+        if technical_approval_status != "STALE":
+            raise BundleGenerationRequiresStaleTechnicalApprovalError(
+                f"record_bundle_generation invoked from phase 'AWAITING_FUNCTIONAL_REVIEW' "
+                f"requires technical_approval.status == 'STALE' (the functional-review "
+                f"bounded-fix marker) -- got {technical_approval_status!r}"
+            )
     work_item["phase"] = "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW"
     if outcome == "ordinary":
         work_item["reviewed_implementation_head"] = head
@@ -9403,7 +9660,7 @@ def validate_bundle_generation_record_commit(repo_root: Path, commit: str, work_
     if parent_phase not in RECOVERED_BUNDLE_GENERATION_RECORD_LEGAL_SOURCE_PHASES:
         raise MalformedBundleGenerationRecordCommitError(
             f"{commit}'s parent {parent} has {work_item_id!r}'s phase as {parent_phase!r}, "
-            f"not one of the three legal recovered-role source phases "
+            f"not one of the legal recovered-role source phases "
             f"{sorted(RECOVERED_BUNDLE_GENERATION_RECORD_LEGAL_SOURCE_PHASES)}"
         )
 
@@ -9889,8 +10146,13 @@ def apply_implementation_provenance_recovery(state: dict, work_item_id: str, now
     and remains there -- only `state_revision`/`last_transition` change,
     the recovered-role field set `record_bundle_generation`'s own
     `same_content` outcome already uses, minus `phase` itself since there
-    is no transition to *perform* here (unlike that function's two entry
-    points, both of which do transition into this phase).
+    is no transition to *perform* here (unlike that function's own legal
+    source phases -- `SELF_REVIEWING_IMPLEMENTATION` for
+    `stage="implementation"`; `APPLYING_REVIEW_FEEDBACK`, or
+    `AWAITING_FUNCTIONAL_REVIEW` with a `STALE` `technical_approval`, for
+    `stage="post-fix"` -- every one of which does transition into this
+    phase; `workflow-v2-3-followups` continued scope widened this from two
+    to three).
     `reviewed_implementation_head`/`implementation_revision` are never
     touched, exactly as the recovered role requires. Refuses via
     `IllegalImplementationProvenanceRecoverySourcePhaseError` if the
@@ -10409,9 +10671,9 @@ def record_local_plan_review(
     """`/review-plan`'s sole state write set (D-Plan-Review-Stages transition
     table, resolves `GPT-R12-001`/`-002`):
 
-    - `APPROVE`: records the completed `local_model_plan_review` stage
+    - `APPROVE`: records the completed `LOCAL_MODEL_PLAN_REVIEW` stage
       against `review_content_id` (starting a fresh ledger scoped to this
-      content id -- any prior `manual_external_plan_review` entry
+      content id -- any prior `MANUAL_EXTERNAL_PLAN_REVIEW` entry
       necessarily belonged to a different, now-stale content id under the
       correct flow, so it is not carried forward) and transitions to
       `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW`.
@@ -10429,11 +10691,11 @@ def record_local_plan_review(
     if verdict == "APPROVE":
         work_item["plan_review_stages"] = {
             "review_content_id": review_content_id,
-            "local_model_plan_review": {
+            LOCAL_MODEL_PLAN_REVIEW: {
                 "bundle_id": bundle_id, "verdict": "APPROVE",
                 "round": round, "completed_at": now,
             },
-            "manual_external_plan_review": None,
+            MANUAL_EXTERNAL_PLAN_REVIEW: None,
         }
         work_item["phase"] = "AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW"
     elif verdict == "REVISE":
@@ -10456,16 +10718,17 @@ def validate_manual_plan_review_preconditions(
     resolves `GPT-R12-002`/`-003`), checked before writing anything:
 
     - `"2.1"`-governed and currently at `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW`.
-    - the feedback's declared role is exactly `manual_external_plan_review`
-      (rejects a local-role or unlabeled feedback file).
+    - the feedback's declared role is either the canonical
+      `MANUAL_EXTERNAL_PLAN_REVIEW` or the legacy `manual_external_plan_review`
+      (rejects a local-role, unlabeled, or any other feedback file).
     - the feedback's `review_content_id` matches the current recomputed
       value -- **hard**, blocks ingestion (distinct from the advisory-only
       `bundle_id` check, `check_manual_stage_bundle_id_advisory`, never
       performed here).
-    - a current `local_model_plan_review` `APPROVE` is recorded for the
+    - a current `LOCAL_MODEL_PLAN_REVIEW` `APPROVE` is recorded for the
       same `review_content_id` (restated invariant -- entry to this phase
       already required it; defends against a corrupted/hand-edited state).
-    - no `manual_external_plan_review` stage is already recorded against
+    - no `MANUAL_EXTERNAL_PLAN_REVIEW` stage is already recorded against
       the current `review_content_id` (rejects duplicate ingestion).
     """
     _require_v2_1_plan_review(work_item)
@@ -10474,10 +10737,11 @@ def validate_manual_plan_review_preconditions(
             f"{work_item['work_item_id']}: phase is {work_item.get('phase')!r}, "
             f"not \"AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW\""
         )
-    if feedback_role != "manual_external_plan_review":
+    if _normalize_plan_review_stage_key(feedback_role) != MANUAL_EXTERNAL_PLAN_REVIEW:
         raise WrongReviewerRoleError(
             f"REVIEW_FEEDBACK.md declares Reviewer role: {feedback_role!r}, "
-            f"expected \"manual_external_plan_review\""
+            f"expected \"{MANUAL_EXTERNAL_PLAN_REVIEW}\" (or legacy "
+            f"\"manual_external_plan_review\")"
         )
     if feedback_review_content_id != current_review_content_id:
         raise StaleReviewContentIdError(
@@ -10485,19 +10749,19 @@ def validate_manual_plan_review_preconditions(
             f"match the current recomputed value {current_review_content_id!r} -- "
             f"this is a hard block, unlike the manual stage's advisory bundle_id check"
         )
-    stages = work_item.get("plan_review_stages") or {}
-    local = stages.get("local_model_plan_review")
+    stages = normalize_plan_review_stages(work_item.get("plan_review_stages") or {})
+    local = stages.get(LOCAL_MODEL_PLAN_REVIEW)
     if (
         stages.get("review_content_id") != current_review_content_id
         or local is None or local.get("verdict") != "APPROVE"
     ):
         raise MissingLocalApprovalForManualStageError(
-            f"{work_item['work_item_id']}: no current local_model_plan_review "
+            f"{work_item['work_item_id']}: no current LOCAL_MODEL_PLAN_REVIEW "
             f"APPROVE recorded for review_content_id {current_review_content_id!r}"
         )
-    if stages.get("manual_external_plan_review") is not None:
+    if stages.get(MANUAL_EXTERNAL_PLAN_REVIEW) is not None:
         raise DuplicateManualStageIngestionError(
-            f"{work_item['work_item_id']}: manual_external_plan_review is already "
+            f"{work_item['work_item_id']}: MANUAL_EXTERNAL_PLAN_REVIEW is already "
             f"recorded against review_content_id {current_review_content_id!r}"
         )
 
@@ -10529,7 +10793,7 @@ def record_manual_plan_review(
     """`/record-manual-plan-review`'s sole state write set (D-Plan-Review-
     Stages transition table, resolves `GPT-R12-002`/`-003`):
 
-    - `APPROVE`: records the completed `manual_external_plan_review` stage
+    - `APPROVE`: records the completed `MANUAL_EXTERNAL_PLAN_REVIEW` stage
       -- including the feedback's own `bundle_id` **verbatim**, regardless
       of whether it matches the current recomputed one, so the ledger
       records what the reviewer actually saw (`OPUS-R14-005`, missing-test
@@ -10548,7 +10812,7 @@ def record_manual_plan_review(
     )
 
     if verdict == "APPROVE":
-        work_item["plan_review_stages"]["manual_external_plan_review"] = {
+        work_item["plan_review_stages"][MANUAL_EXTERNAL_PLAN_REVIEW] = {
             "bundle_id": bundle_id, "verdict": "APPROVE",
             "round": round, "completed_at": now,
         }
@@ -10779,14 +11043,15 @@ def _validate_plan_review_stages(work_item: dict) -> None:
             f"governing_workflow_version is {work_item.get('governing_workflow_version')!r}, "
             f"not \"2.1\""
         )
-    local = stages.get("local_model_plan_review")
-    manual = stages.get("manual_external_plan_review")
+    stages = normalize_plan_review_stages(stages)
+    local = stages.get(LOCAL_MODEL_PLAN_REVIEW)
+    manual = stages.get(MANUAL_EXTERNAL_PLAN_REVIEW)
     if manual is not None and local is None:
         raise ManualStageWithoutLocalStageError(
-            f"{work_item['work_item_id']}: manual_external_plan_review is recorded "
-            f"while local_model_plan_review is absent"
+            f"{work_item['work_item_id']}: {MANUAL_EXTERNAL_PLAN_REVIEW} is recorded "
+            f"while {LOCAL_MODEL_PLAN_REVIEW} is absent"
         )
-    for stage_name, stage in (("local_model_plan_review", local), ("manual_external_plan_review", manual)):
+    for stage_name, stage in ((LOCAL_MODEL_PLAN_REVIEW, local), (MANUAL_EXTERNAL_PLAN_REVIEW, manual)):
         if stage is not None and stage.get("verdict") != "APPROVE":
             raise StageVerdictNotApproveError(
                 f"{work_item['work_item_id']}.{stage_name}.verdict is "
@@ -10854,12 +11119,51 @@ def _validate_work_item(work_item_id: str, work_item: dict) -> None:
     _validate_plan_review_stages(work_item)
     _validate_technical_review_block_pins(work_item)
 
+    # I2 (workflow-v2-3-followups continued scope, external cross-model
+    # review rounds 2 and 4): validate_approval_record's shape check
+    # protected only newly *constructed* records, never one already
+    # persisted in `WORKFLOW_STATE.json` -- a malformed plan_approval/
+    # technical_approval from an old backup, import, hand edit, or
+    # pre-fix tooling could still reach a downstream consumer (e.g.
+    # _assert_registry_covered_by_current_plan_approval) and reproduce
+    # the original bare AttributeError this milestone's own first defect
+    # closed for the write path only. Every non-null approval record on
+    # every work item is shape-checked here too, so validate_state
+    # itself rejects a malformed persisted record cleanly -- **but this
+    # is the write-time/harness backstop, not what actually protects a
+    # production consumer** (round 4's own correction: validate_state
+    # has no production caller anywhere in this repository). The real
+    # runtime protection lives at the two consumer chokepoints
+    # themselves, guarded directly and independently of this function:
+    # _assert_registry_covered_by_current_plan_approval (live-state) and
+    # _resolve_one_obligation (committed-blob, historical state).
+    plan_approval = work_item.get("plan_approval")
+    if plan_approval is not None:
+        validate_approval_record(plan_approval, stage="plan")
+    technical_approval = work_item.get("technical_approval")
+    if technical_approval is not None:
+        validate_approval_record(technical_approval, stage="implementation")
+
 
 def validate_state(state: dict, *, registry: dict | None = None, repo_root: Path | None = None) -> None:
     """D3's "Validator rejects" list, to the extent checkable from schema
     and (optionally) the registry alone. Corrupt/unparseable JSON is the
     caller's concern (`_load_json`/`CorruptJsonError`) -- this function
     receives already-parsed data.
+
+    **This function has no production caller anywhere in this repository**
+    (external cross-model review, `workflow-v2-3-followups` continued
+    scope, round 4): it is a write-time/harness backstop only -- test
+    suites and the test harness call it, no `.claude/commands/*.md` file,
+    shell script, or other production function does, and `state_transaction`
+    (the documented single required entry point for every production
+    writer) does not call it either. Do not infer that a check added here
+    protects any real read path; a check that must protect production
+    consumption belongs at that consumer's own chokepoint too
+    (`OPUS-R25-007`'s own precedent -- see e.g.
+    `_assert_registry_covered_by_current_plan_approval`/
+    `_resolve_one_obligation`'s own `review_content_manifest` shape
+    guards, which this function's own equivalent check does not reach).
 
     `registry`, if given, is a single caller-supplied registry dict used
     for the checkpoint-dependency check below and, if its own

@@ -523,6 +523,380 @@
       "blocking_decisions": [],
       "state_revision": 1,
       "last_transition": "2026-07-31T12:00:00+01:00"
+    },
+    "workflow-v2-3": {
+      "work_item_type": "process",
+      "work_item_kind": "process",
+      "work_item_id": "workflow-v2-3",
+      "parent_work_item_id": null,
+      "plan_path": "docs/ai-workflow/WORKFLOW_V2_3_PLAN.md",
+      "registry_path": "docs/ai-workflow/registry/workflow-v2-3-registry.json",
+      "mapping_path": "docs/ai-workflow/requirements/workflow-v2-3-mapping.json",
+      "governing_workflow_version": "2.1",
+      "phase": "MILESTONE_COMPLETE",
+      "plan_revision": 13,
+      "implementation_revision": 4,
+      "functional_review_round": null,
+      "base_commit": "27f051eba897d77c742ead8b160ed519c0671ee4",
+      "reviewed_implementation_head": "bef2da9a7d62d5f26a3853be1bc1643b458a7c3b",
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": "CP2",
+      "checkpoints": {
+        "CP1": {
+          "status": "COMPLETE",
+          "start_commit": "ab0d05639ec01f9afd8513a6046e7acbe55d8770"
+        },
+        "CP2": {
+          "status": "COMPLETE",
+          "start_commit": "aaa124786f9968ef91482663e880d7a4ca5dcbed"
+        }
+      },
+      "current_bundle_id": null,
+      "plan_approval": {
+        "status": "CURRENT",
+        "basis": "EXTERNAL_APPROVE",
+        "reviewed_bundle_id": "01798bdf6196945e0db9db3730cb0254ed74b3efb12919789d9e67ed0920a445",
+        "approved_review_content_id": "e0a222d2c127c634eafed9fb367c7fb9623c5ca69a369348907d7bd413037875",
+        "review_content_manifest": [
+          {
+            "path": "docs/ai-workflow/WORKFLOW_V2_3_PLAN.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2f4c5e7356b81841ab381f516d9598ca1f4d2ae1"
+          },
+          {
+            "path": "docs/ai-workflow/registry/workflow-v2-3-registry.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3fb155c799b5bb22e014f0e1f46f1e2366b343d4"
+          },
+          {
+            "path": "docs/ai-workflow/requirements/workflow-v2-3-mapping.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "40b194f1c61b4a627b6e36a12045688705572da0"
+          }
+        ],
+        "reviewed_content_commit": null,
+        "legacy_evidence": null,
+        "user_confirmation": "I confirm approval of the workflow-v2-3 plan stage.",
+        "waived_guarantees": [],
+        "recorded_at": "2026-08-22T14:45:00+01:00"
+      },
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "EXTERNAL_APPROVE",
+        "reviewed_bundle_id": "c3f7d876f01102a0d990b576829374e7e547ea8bfef4fbb4d1555ac31281ea34",
+        "approved_review_content_id": "b4ec046e8a2acc7144135a242c96b2d609a3a144ed844e7493cb04d3e4b8a7a9",
+        "review_content_manifest": [
+          {
+            "path": ".claude/commands/review-functional.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "290a8e4cc7a208674cf348aa36ec91bc64cb08b3"
+          },
+          {
+            "path": ".claude/commands/review-implementation.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8bc0436b0d642c5e09313c7f17c296b0e8d8592b"
+          },
+          {
+            "path": "docs/ai-workflow/MILESTONE_WORKFLOW.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "38e48acf084b4b32bb6e6e9e1eaf0eef78cdb5a2"
+          },
+          {
+            "path": "docs/ai-workflow/REVIEW_PROTOCOL.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "858aead42e40af1ca0635119944d21bff3e79c91"
+          },
+          {
+            "path": "docs/ai-workflow/registry/workflow-v2-1-core-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ea56faa8b65c71625f1d67b80c5990d08f89e8c6"
+          },
+          {
+            "path": "docs/ai-workflow/registry/workflow-v2-3-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "df887bafaa172ef35ebf86f5830553e87d85f05d"
+          },
+          {
+            "path": "scripts/workflow_fingerprint.py",
+            "exists": true,
+            "mode": "100755",
+            "blob": "0b6e4858f4e73cfb06224da7073792a6a5d4db21"
+          },
+          {
+            "path": "scripts/workflow_fingerprint_demo_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "05e7c69c1780a59f24e46fc5c6da30eab11639a6"
+          },
+          {
+            "path": "scripts/workflow_fingerprint_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "bbc3a24b6ec1a152612198a9cb50f277847f9ed0"
+          },
+          {
+            "path": "scripts/workflow_integration_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6bc1d2ae5e466264e4a0187ad72b4e706dd3abce"
+          },
+          {
+            "path": "scripts/workflow_state.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2dcb838881406cdb8787afd62bb22dc38496bbcc"
+          },
+          {
+            "path": "scripts/workflow_state_demo_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "fdcfec898a86727f9a4c4be0393853776f1bca24"
+          }
+        ],
+        "reviewed_content_commit": "bef2da9a7d62d5f26a3853be1bc1643b458a7c3b",
+        "legacy_evidence": null,
+        "user_confirmation": "I confirm approval of the workflow-v2-3 implementation stage.",
+        "waived_guarantees": [],
+        "recorded_at": "2026-08-23T01:22:15+01:00"
+      },
+      "technical_review_block_pins": [],
+      "plan_review_stages": {
+        "review_content_id": "e0a222d2c127c634eafed9fb367c7fb9623c5ca69a369348907d7bd413037875",
+        "local_model_plan_review": {
+          "bundle_id": "01798bdf6196945e0db9db3730cb0254ed74b3efb12919789d9e67ed0920a445",
+          "verdict": "APPROVE",
+          "round": 12,
+          "completed_at": "2026-08-22T14:03:45+01:00"
+        },
+        "manual_external_plan_review": {
+          "bundle_id": "01798bdf6196945e0db9db3730cb0254ed74b3efb12919789d9e67ed0920a445",
+          "verdict": "APPROVE",
+          "round": 1,
+          "completed_at": "2026-08-22T14:19:49+01:00"
+        }
+      },
+      "functional_acceptance_status": null,
+      "blocking_decisions": [],
+      "state_revision": 51,
+      "last_transition": "2026-08-23T01:46:26+01:00"
+    },
+    "workflow-v2-3-followups": {
+      "work_item_type": "process",
+      "work_item_kind": "process",
+      "work_item_id": "workflow-v2-3-followups",
+      "parent_work_item_id": null,
+      "plan_path": "docs/ai-workflow/WORKFLOW_V2_3_FOLLOWUPS_PLAN.md",
+      "registry_path": "docs/ai-workflow/registry/workflow-v2-3-followups-registry.json",
+      "mapping_path": "docs/ai-workflow/requirements/workflow-v2-3-followups-mapping.json",
+      "governing_workflow_version": "2.1",
+      "phase": "MILESTONE_COMPLETE",
+      "plan_revision": 13,
+      "implementation_revision": 4,
+      "functional_review_round": null,
+      "base_commit": "fb134ac4f7cdabb7861d170bb61331bb8d9f5a14",
+      "reviewed_implementation_head": "2302cc425635fd4fe28ff349da31d14a1115deee",
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": "CP4",
+      "checkpoints": {
+        "CP1": {
+          "status": "COMPLETE",
+          "start_commit": "dd061f7b9090e7ce0407c944b1537b52f2136ddc"
+        },
+        "CP2": {
+          "status": "COMPLETE",
+          "start_commit": "570adc2a87d9fb67e47716ce0d6d569597c0b7c8"
+        },
+        "CP3": {
+          "status": "COMPLETE",
+          "start_commit": "bac92372d2e86af82d96ed20b8b07d3af9c3f00d"
+        },
+        "CP4": {
+          "status": "COMPLETE",
+          "start_commit": "5442ea64fe7cae1c91f1b5cf7e5f4a76f6d4d7a7"
+        }
+      },
+      "current_bundle_id": null,
+      "plan_approval": {
+        "status": "CURRENT",
+        "basis": "EXTERNAL_APPROVE",
+        "reviewed_bundle_id": "26bbae34775ff182234329fc5e786fce193a7c05957d081beb7d24250336d01b",
+        "approved_review_content_id": "56f3890338603e57064c3ce88b47a14656db8968e141432181e273dae00e6e1f",
+        "review_content_manifest": [
+          {
+            "path": "docs/ai-workflow/WORKFLOW_V2_3_FOLLOWUPS_PLAN.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "dc4f80d574bd01ca8182a42a51e8073ad0f26693"
+          },
+          {
+            "path": "docs/ai-workflow/registry/workflow-v2-3-followups-registry.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b8c21afcfa9a2195fd207fe43483bdd459215121"
+          },
+          {
+            "path": "docs/ai-workflow/requirements/workflow-v2-3-followups-mapping.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "69df92b45e29d379f9924d8c74f9d864083fb131"
+          }
+        ],
+        "reviewed_content_commit": null,
+        "legacy_evidence": null,
+        "user_confirmation": "plan workflow-v2-3-followups",
+        "waived_guarantees": [],
+        "recorded_at": "2026-08-23T18:05:00+01:00"
+      },
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "EXTERNAL_APPROVE",
+        "reviewed_bundle_id": "52e6edf3fe258959710869f64f3d7050304c6f8c75d37b67a1abb15021b09638",
+        "approved_review_content_id": "55b3f4d0322dccc7e2ece1ab3fd6ca17e0ec62b1bbc9b7bd14e240ac476cb5c8",
+        "review_content_manifest": [
+          {
+            "path": ".claude/commands/apply-functional-review.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8adf005b816d033443320255b695ec8fe09d5af6"
+          },
+          {
+            "path": ".claude/commands/approve-review.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8c02f8dffc10fe100c6a63ee986eef0651740e27"
+          },
+          {
+            "path": ".claude/commands/record-manual-plan-review.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "1aaaf8b3d1a199794e1453a5aca18e01bbda5f56"
+          },
+          {
+            "path": ".claude/commands/recover-implementation-provenance.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "094a0a34f7f570e42879bb24b2d8d69712fcae34"
+          },
+          {
+            "path": ".claude/commands/review-implementation.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "373b0bb9b986284a9082b832287d9108fd733ae0"
+          },
+          {
+            "path": ".claude/commands/review-plan.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7ccd6f7870f7232671c915557b0bf70958ec47ae"
+          },
+          {
+            "path": "docs/ai-workflow/MILESTONE_WORKFLOW.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "df7e43eae7e89a9d863bb057ada369ef6373c64c"
+          },
+          {
+            "path": "docs/ai-workflow/PLAN_REVIEW_WORKFLOW.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "03a5d3bec40e9a87e9f5bd5562a66b7a8a8563e8"
+          },
+          {
+            "path": "docs/ai-workflow/REVIEW_PROTOCOL.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d2c3e8f8507afd404f55a04fd6602171c0c55896"
+          },
+          {
+            "path": "docs/ai-workflow/WORKFLOW_V2_3_FOLLOWUPS.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7c0587f65f73f369b731b84954713163b43582d0"
+          },
+          {
+            "path": "docs/ai-workflow/registry/workflow-v2-3-followups-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0fc6bebedc58738e110883ab41b5399d87f22226"
+          },
+          {
+            "path": "scripts/workflow_fingerprint.py",
+            "exists": true,
+            "mode": "100755",
+            "blob": "651ab2cec5394a0e84ac44c6b3e0fb9032f108e2"
+          },
+          {
+            "path": "scripts/workflow_fingerprint_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "da70abf9cde796dbc77b92f6325c7253cac708f3"
+          },
+          {
+            "path": "scripts/workflow_integration_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6449d979da165a4bf8dcf553743ad79cf6d9e317"
+          },
+          {
+            "path": "scripts/workflow_state.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "c74bf22311daf220f584a3f5210218e7db720d5f"
+          },
+          {
+            "path": "scripts/workflow_state_completion_obligations_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "4923a015c78469563276f905fb7fead4f6f77dbd"
+          },
+          {
+            "path": "scripts/workflow_state_demo_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a66059ee7223049bf32c578274038e5991c29469"
+          },
+          {
+            "path": "scripts/workflow_state_test.py",
+            "exists": true,
+            "mode": "100644",
+            "blob": "4e96d30eef21523fbfc4fff229418dc8a23a09c7"
+          }
+        ],
+        "reviewed_content_commit": "2302cc425635fd4fe28ff349da31d14a1115deee",
+        "legacy_evidence": null,
+        "user_confirmation": "I confirm approval of the workflow-v2-3-followups implementation stage.",
+        "waived_guarantees": [],
+        "recorded_at": "2026-08-23T23:42:37Z"
+      },
+      "technical_review_block_pins": [],
+      "plan_review_stages": {
+        "review_content_id": "56f3890338603e57064c3ce88b47a14656db8968e141432181e273dae00e6e1f",
+        "LOCAL_MODEL_PLAN_REVIEW": {
+          "bundle_id": "26bbae34775ff182234329fc5e786fce193a7c05957d081beb7d24250336d01b",
+          "verdict": "APPROVE",
+          "round": 13,
+          "completed_at": "2026-08-23T17:41:00+01:00"
+        },
+        "MANUAL_EXTERNAL_PLAN_REVIEW": {
+          "bundle_id": "26bbae34775ff182234329fc5e786fce193a7c05957d081beb7d24250336d01b",
+          "verdict": "APPROVE",
+          "round": 1,
+          "completed_at": "2026-08-23T17:59:28+01:00"
+        }
+      },
+      "functional_acceptance_status": null,
+      "blocking_decisions": [],
+      "state_revision": 59,
+      "last_transition": "2026-08-24T00:56:14Z"
     }
   }
 }

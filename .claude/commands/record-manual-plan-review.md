@@ -1,5 +1,5 @@
 ---
-description: Ingest an already-pasted manual external reviewer's verdict as the manual_external_plan_review stage of the two-stage plan-review protocol ("2.1" work items only).
+description: Ingest an already-pasted manual external reviewer's verdict as the MANUAL_EXTERNAL_PLAN_REVIEW stage of the two-stage plan-review protocol ("2.1" work items only).
 argument-hint: "[work-item-id]"
 state_writer: true
 review-subject: verdict
@@ -39,9 +39,10 @@ second ingestion path.
    actual phase — including "already ingested this round" and "no local
    `APPROVE` on record" (`WrongPhaseForPlanReviewStageError`).
 4. **Read**: `<feedback_dir>/REVIEW_FEEDBACK.md` (must declare
-   `Reviewer role: manual_external_plan_review`), `<bundle_dir>/MANIFEST.md`,
+   `Reviewer role: MANUAL_EXTERNAL_PLAN_REVIEW` -- the legacy
+   `manual_external_plan_review` is also accepted), `<bundle_dir>/MANIFEST.md`,
    `<bundle_dir>/REVIEW_REQUEST.md`, and the ledger's existing
-   `local_model_plan_review` entry.
+   `LOCAL_MODEL_PLAN_REVIEW` entry.
 5. **Recompute fresh**: the current `bundle_id` and plan-stage
    `review_content_id`, identical in mechanism to `/review-plan`'s own
    (staleness/wrong-worktree handling included).
@@ -51,16 +52,17 @@ second ingestion path.
    the marker path and its recorded detail.
 6. **Validate before writing anything**
    (`workflow_state.validate_manual_plan_review_preconditions`), in order:
-   - the feedback's declared role is exactly `manual_external_plan_review`
+   - the feedback's declared role is either the canonical
+     `MANUAL_EXTERNAL_PLAN_REVIEW` or the legacy `manual_external_plan_review`
      (`WrongReviewerRoleError` otherwise, naming what was declared instead);
    - the feedback's `review_content_id` matches the current recomputed
      value — **hard**, blocks ingestion (`StaleReviewContentIdError`,
      naming both values);
-   - a current `local_model_plan_review` `APPROVE` is recorded for the
+   - a current `LOCAL_MODEL_PLAN_REVIEW` `APPROVE` is recorded for the
      same `review_content_id` (`MissingLocalApprovalForManualStageError` —
      a restated invariant, since entry to this phase already required it;
      defends against a corrupted or hand-edited state file);
-   - no `manual_external_plan_review` stage is already recorded against
+   - no `MANUAL_EXTERNAL_PLAN_REVIEW` stage is already recorded against
      the current `review_content_id` (`DuplicateManualStageIngestionError`
      — a second invocation after a completed `APPROVE`/`REVISE` normally
      fails the phase guard first; this only fires for a hand-edited or
@@ -79,7 +81,7 @@ second ingestion path.
    still be caught.
    - `APPROVE`: via `workflow_state.record_manual_plan_review(...,
      verdict="APPROVE", bundle_id=<the feedback's own bundle_id,
-     verbatim>, ...)` — the resolved work item's `manual_external_plan_review`
+     verbatim>, ...)` — the resolved work item's `MANUAL_EXTERNAL_PLAN_REVIEW`
      ledger fields (recording the feedback's actual `bundle_id` regardless
      of whether it matched the current recomputed one, so the ledger
      records what the reviewer actually saw) and its phase transition to

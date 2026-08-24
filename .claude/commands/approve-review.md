@@ -145,9 +145,25 @@ actually load-bearing control for the Skill exposure path, not mechanism
    invocable only from `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` itself,
    for a bundle staled by a concurrent excluded-only commit landing after
    `T` while no new implementation round has started — the only phase from
-   which `record_bundle_generation`'s own two entry phases
-   (`APPLYING_REVIEW_FEEDBACK`/`SELF_REVIEWING_IMPLEMENTATION`) are
-   unreachable without first re-entering a review-feedback cycle.*
+   which `record_bundle_generation`'s own legal source phases are
+   unreachable without first re-entering either kind of remediation cycle.
+   `record_bundle_generation`'s legality is stage-specific
+   (`workflow-v2-3-followups` continued scope,
+   `BUNDLE_GENERATION_LEGAL_SOURCE_PHASES_BY_STAGE`), not a flat two-phase
+   set: `stage="implementation"` only from `SELF_REVIEWING_IMPLEMENTATION`;
+   `stage="post-fix"` from `APPLYING_REVIEW_FEEDBACK` (an ordinary
+   implementation-review REVISE round) or from `AWAITING_FUNCTIONAL_REVIEW`
+   (`/apply-functional-review`'s own bounded-fix branch) — the latter only
+   when `technical_approval.status == "STALE"`
+   (`BundleGenerationRequiresStaleTechnicalApprovalError` otherwise). This
+   third, functional-review source weakens none of this command's own
+   stale-bundle/approval guards: the `STALE` gate means a `CURRENT`
+   approval can never take this path at all; `/apply-functional-review`
+   step 4 still re-checks the `REJECTED`-bundle marker (`WFR-67`) before
+   generating, the same as the ordinary post-fix path; and
+   `resolve_bundle_generation_outcome` still independently re-derives the
+   outcome from real Git content, never merely trusting which phase the
+   caller arrived from.*
 2. **Recompute fresh**: `bundle_id` over the current bundle and the
    stage-appropriate `review_content_id` (`scripts/workflow_fingerprint.py`)
    over the working tree. Display both, and the protected/excluded path
@@ -182,6 +198,21 @@ actually load-bearing control for the Skill exposure path, not mechanism
    `reviewed_content_commit` left unset for the plan stage (permanently
    null, `D-Approval-Commits`/`GPT-R9-006`) and set to the current
    `reviewed_implementation_head` for the implementation stage.
+   **`review_content_manifest`, exact source** (self-discovered during
+   this item's own `/accept-milestone` pre-flight, closed as continued
+   `workflow-v2-3-followups` scope): whichever
+   `workflow_fingerprint.compute_review_content_id_plan_stage[_at_commit[_for_work_item]]`/
+   `compute_review_content_id_implementation_stage[_at_commit]` variant
+   step 2 used to recompute `review_content_id` returns `(digest,
+   projection)` — `build_approval_record`'s `review_content_manifest`
+   argument is `projection["review_content_manifest"]`, the projection's
+   own inner flat list of `{path, exists, mode, blob}` entries, **never**
+   `projection` itself, which carries a field of the identical name one
+   level up. Passing the whole projection now raises
+   `InvalidApprovalRecordError` (`validate_approval_record`'s own shape
+   check, added to close this exact trap after it silently produced two
+   independently-malformed approval records — plan and technical — for
+   this same work item).
 4a. **Plan stage only — resolve the complete commit member set, before any
     durable mutation** (`D-Approval-Commits`' "Conditional fifth commit
     member", `GPT-R67-001`; generalized beyond `workflow-v2-1-core`'s own
@@ -284,32 +315,29 @@ actually load-bearing control for the Skill exposure path, not mechanism
     its own dedicated, journal-backed transaction instead, verified by
     the freshness re-checks steps 6.2/6c run immediately before ever
     touching the file.)
-5. **Plan stage only — pin the fifth member, if resolved** (guarded,
-   ordinary, `step="step-5-declaration-pin"`): inside
+5. **Plan stage only — stage every non-state approval member, then pin
+   the fifth, if resolved** (guarded, ordinary,
+   `step="step-5-stage-and-pin"`): inside
    `with workflow_state.plan_approval_guarded_mutation(repo_root,
-   owner_token=owner_token, step="step-5-declaration-pin", now=<now>):`,
-   when step 4a resolved a fifth member, stage *only* it via
+   owner_token=owner_token, step="step-5-stage-and-pin", now=<now>):`,
+   stage the plan doc, registry JSON, and mapping file, plus the fifth
+   member if step 4a resolved one (step 4a's resolved set *minus*
+   `docs/ai-workflow/WORKFLOW_STATE.json`) via **one** call to
    `workflow_state.stage_plan_approval_commit_paths(repo_root,
-   (fifth_member_path,))` then
+   ordinary_paths + ((fifth_member_path,) if fifth_member_path else
+   ()))` — never `git add -A`/`git add .`, and never two separate calls.
+   Fifth member resolved: immediately, inside this same window, call
    `workflow_state.verify_staged_blob_sha256(repo_root, fifth_member_path,
    pinned_sha256)` to close the race window between resolution and
-   staging. `StagedBlobMismatchError`/`DirtyIndexBeforeStagingError`/
-   `UnexpectedStagedPathSetError` inside this window: let the exception
-   propagate out of the `with` block (the guard still releases via its
-   own `finally`, without advancing progress) straight to step 6b's
-   rollback. No fifth member resolved: this step is a no-op, proceed to
-   step 6.1. Implementation stage: not applicable.
-6. **Plan stage only — create the approval commit**, three further
+   staging, before advancing progress. `StagedBlobMismatchError`/
+   `DirtyIndexBeforeStagingError`/`UnexpectedStagedPathSetError` inside
+   this window: let the exception propagate out of the `with` block (the
+   guard still releases via its own `finally`, without advancing
+   progress) straight to step 6b's rollback. No fifth member resolved:
+   the same call, over the three ordinary members only, with no
+   verification step after it. Implementation stage: not applicable.
+6. **Plan stage only — create the approval commit**, two further
    guarded sub-steps plus one unguarded structural assertion:
-   - **6.1 stage the ordinary members** (guarded, ordinary,
-     `step="step-6.2-stage-ordinary"`): stage the plan doc, registry
-     JSON, and mapping file (step 4a's resolved set *minus*
-     `docs/ai-workflow/WORKFLOW_STATE.json` and minus the fifth member,
-     already staged by step 5) via
-     `workflow_state.stage_plan_approval_commit_paths(repo_root,
-     ordinary_paths)` — never `git add -A`/`git add .`. Same
-     `DirtyIndexBeforeStagingError`/`UnexpectedStagedPathSetError`
-     checks as before; either propagates to step 6b's rollback.
    - **6.2 the state-pin compare-and-swap and pin** (guarded, ordinary,
      `step="step-6.1b-state-pin"`): **first**, `WF8c` item 348(gg)'s
      sub-step 6.1a compare-and-swap — call
@@ -342,13 +370,20 @@ actually load-bearing control for the Skill exposure path, not mechanism
      `Workflow-Work-Item: <id>` trailers. This command only writes the
      trailer; it never needs to search for one itself. The exact scoped
      trailer *lookup* later durability/freshness checks use is
-     `workflow_state.discover_plan_approval_commit` (`WF4a-iii`).
+     `workflow_state.discover_plan_approval_commit` (`WF4a-iii`). **These
+     two lines must be the commit message's own final paragraph** — after
+     any `Co-Authored-By:`/`Claude-Session:` lines, never before them
+     (`OPUS-R129-001`): Git's `git interpret-trailers --parse`, the exact
+     mechanism `discover_plan_approval_commit` uses, treats only the
+     message's last paragraph as trailers, so a blank line after these
+     two lines (e.g. one followed by `Co-Authored-By:`) silently discards
+     both and makes the approval commit undiscoverable.
 
    Implementation stage: unchanged — a metadata-only commit (zero
    production/test changes) carrying `Workflow-Technical-Approval:
    <full review_content_id>` + `Workflow-Work-Item: <id>`, via the same
    direct `apply_technical_approval`/`state_transaction` write and plain
-   `git commit` this stage has always used; none of 4b/4c/5/6.1-6.4/
+   `git commit` this stage has always used; none of 4b/4c/5/6.2-6.4/
    6a/6b/6c/6d below apply to it. The exact scoped trailer lookup is
    `workflow_state.discover_technical_approval_commit` (`WF4a-iii`).
 6a. **Plan stage only — classify the outcome from durable Git state**
@@ -367,15 +402,15 @@ actually load-bearing control for the Skill exposure path, not mechanism
       commit, fifth_member_path, pinned_sha256)`. All pass: proceed to
       step 6c. Any one fails (only reachable via a genuine
       transaction-invariant violation — e.g. a `pre-commit`/`commit-msg`
-      hook re-staging a file after 6.1-6.3 ran but before `git commit`
+      hook re-staging a file after step 5 through 6.3 ran but before `git commit`
       wrote the final tree, `WF8c` item 348(ff)/(nn)): run **6a1, amend
       recovery** (guarded, ordinary then destructive,
       `step="step-7b-amend-stage"` then `step="step-7d-amend-commit"`) —
       inside one `plan_approval_guarded_mutation(..., step=
-      "step-7b-amend-stage", ...)` window, unconditionally re-run 6.1's
-      staging and 6.2's compare-and-swap-and-pin (re-staging the
-      *correct*, already-verified bytes is a harmless no-op for any
-      member that was not actually corrupted); inside a second
+      "step-7b-amend-stage", ...)` window, unconditionally re-run step 5's
+      merged staging-and-pin in full and 6.2's compare-and-swap-and-pin
+      (re-staging the *correct*, already-verified bytes is a harmless
+      no-op for any member that was not actually corrupted); inside a second
       `plan_approval_guarded_mutation(..., step="step-7d-amend-commit",
       ...)` window, `git commit --amend --no-edit` (identical trailers,
       same parent, only the corrected tree differs); then re-run this

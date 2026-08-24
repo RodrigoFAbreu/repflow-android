@@ -102,9 +102,10 @@ was generated from, as plain diagnostic lines — never hashed into
 `review_content_id`, and not part of any identity-bearing field contract.
 This is **portability vs. local staleness, split by consumer**:
 
-- A **repository-local command** — today `/approve-review` and
-  `/review-plan`, both calling this at its default, permissive
-  `require_metadata=False` — runs inside a real, current worktree and can
+- A **repository-local command** — today `/approve-review`, `/review-plan`,
+  and `/review-implementation`, all three calling this at its default,
+  permissive `require_metadata=False` — runs inside a real, current
+  worktree and can
   meaningfully ask "is this the same worktree and HEAD I'm sitting in
   right now": it calls
   `workflow_fingerprint.assert_local_generation_matches(...)` and stops,
@@ -251,6 +252,59 @@ has no `bundle_id`/`review_content_id` of its own to bind against —
 important finding must end up either resolved, or explicitly rejected in the
 plan/summary with repository evidence (file, line, test, or doc reference)
 and a clear explanation.
+
+## Local reviewer commands (operator ergonomics)
+
+Two commands (`workflow-v2-3`) give an operator a repository-local, second
+opinion before handing a stage to its real gate, without adding a new
+lifecycle state or ledger stage: `/review-implementation` (usable while a
+work item sits at `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`) and
+`/review-functional` (usable while a work item sits at
+`AWAITING_FUNCTIONAL_REVIEW`). Both implement a model-independent review
+role — nothing about either command's contract, checks, or report format
+names a specific model. Neither ever writes
+`docs/ai-workflow/WORKFLOW_STATE.json` or `docs/ACTIVE_MILESTONE.md`,
+approves a stage, applies a finding, or advances `phase`. Their write
+behavior toward their own review-feedback artifact differs, though:
+`/review-implementation` writes the current `<feedback_dir>/
+REVIEW_FEEDBACK.md` once its own pre-write guards pass (see
+`.claude/commands/review-implementation.md` step 7); `/review-functional`
+remains strictly report-only and writes nothing, including
+`<feedback_dir>/FUNCTIONAL_REVIEW.md` — unchanged by this milestone. There
+is no authoritative round for `/review-functional`'s report to become, and
+`<feedback_dir>/REVIEW_FEEDBACK.md` is not its destination: that report is a
+checklist-completeness opinion, never a `Status:` verdict (see the next
+paragraph), and the functional gate's own artifact is the user-written
+`<feedback_dir>/FUNCTIONAL_REVIEW.md`, which only `/apply-functional-review`
+ever acts on. An operator may use the report to revise that checklist by
+hand — that choice is always the user's, never automatic.
+`/review-implementation` works differently: once its own pre-write guards
+pass, its write *is* the authoritative
+`<feedback_dir>/REVIEW_FEEDBACK.md` round the moment it lands, with no
+separate operator installation step. `/apply-implementation-review`,
+`/apply-functional-review`, `/approve-review`, `/accept-milestone`, and
+`/accept-scoped-remediation` remain the only commands that ever act on a
+real, recorded review round; neither local reviewer command changes any of
+their behavior.
+
+The two commands' reports are deliberately differently shaped, since they
+review different-shaped artifacts: `/review-implementation`'s report follows
+this file's own `REVIEW_FEEDBACK.md` structure (`Status: APPROVE | REVISE |
+BLOCK`, the same binding fields an external round's feedback carries), since
+an implementation bundle is exactly what that structure describes.
+`/review-functional`'s report is a checklist-completeness/
+evidence-reproducibility opinion instead — never a `Status:` verdict — since
+there is no bundle or ledger stage at the functional-review gate for a
+verdict to gate. This asymmetry is intentional, not an inconsistency between
+an otherwise-matched pair of commands.
+
+`/review-functional` also illustrates a narrower asymmetry worth noting
+explicitly: unlike `/prepare-functional-review` (whose subject,
+`FUNCTIONAL_REVIEW.md`, is a user-written checklist bound to no bundle, so a
+work-item-scoped `REJECTED` marker can never reach it), `/review-functional`
+does consult that marker before composing its report — a withdrawn work item
+must not receive an advisory functional-review opinion either, even though
+`/review-functional` itself touches no bundle at all.
 
 ## Context-efficiency rules
 

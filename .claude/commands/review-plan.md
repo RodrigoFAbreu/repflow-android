@@ -1,5 +1,5 @@
 ---
-description: Independently review the current plan bundle as the local_model_plan_review stage of the two-stage plan-review protocol ("2.1" work items only).
+description: Independently review the current plan bundle as the LOCAL_MODEL_PLAN_REVIEW stage of the two-stage plan-review protocol ("2.1" work items only).
 argument-hint: "[work-item-id]"
 state_writer: true
 review-subject: bundle
@@ -9,7 +9,7 @@ review-subject: bundle
 
 Enter the `AWAITING_LOCAL_PLAN_REVIEW` state of
 `docs/ai-workflow/MILESTONE_WORKFLOW.md` (`docs/ai-workflow/WORKFLOW_V2_PLAN.md`'s
-`D-Plan-Review-Stages`). Implements the `local_model_plan_review` **role**,
+`D-Plan-Review-Stages`). Implements the `LOCAL_MODEL_PLAN_REVIEW` **role**,
 not a specific model: nothing in this contract, the written feedback
 schema, or the state transition it produces names a model. Running it from
 any capable Claude model produces the same schema and the same transition.
@@ -64,14 +64,15 @@ not a verified precondition; no check here depends on session freshness.
    `<feedback_dir>/REVIEW_FEEDBACK.md` per
    `docs/ai-workflow/REVIEW_PROTOCOL.md`'s required structure, **plus**
    these provenance fields this role always includes:
-   - `Reviewer role: local_model_plan_review` (never a model name here);
+   - `Reviewer role: LOCAL_MODEL_PLAN_REVIEW` (never a model name here);
    - the three binding fields `docs/ai-workflow/REVIEW_PROTOCOL.md` now
      requires on every round (`Reviewed bundle ID:`, `Reviewed base
      commit:`, `Work item:`), stated with the recomputed `bundle_id`,
      `base_commit`, and `work_item_id` from step 5 (`WFR-03`), plus the
      recomputed plan-stage `review_content_id` as its own labelled line;
    - the round/sequence number (one more than the highest prior
-     `local_model_plan_review` round on record, or `1` if none);
+     `LOCAL_MODEL_PLAN_REVIEW` round on record, counting a round entry under
+     either casing of the stage key, or `1` if none);
    - a completion timestamp.
    Malformed prior feedback is reported and stops rather than guessed at.
 8. **Write set, exact.** **`REJECTED`-bundle refusal, second of two,
@@ -82,7 +83,7 @@ not a verified precondition; no check here depends on session freshness.
    still be caught.
    - `APPROVE`: `REVIEW_FEEDBACK.md`, plus — via
      `workflow_state.record_local_plan_review(..., verdict="APPROVE", ...)`
-     — the resolved work item's `local_model_plan_review` ledger fields and
+     — the resolved work item's `LOCAL_MODEL_PLAN_REVIEW` ledger fields and
      its phase transition to `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW` in
      `WORKFLOW_STATE.json`.
    - `REVISE`: `REVIEW_FEEDBACK.md`, plus the phase transition to

@@ -328,13 +328,14 @@ class ReviewContentIdMismatchError(Exception):
 
 class WorktreeOrHeadMismatchError(Exception):
     """Raised by a **repository-local** consumer (`/approve-review`,
-    `/review-plan`) when the current worktree root or HEAD SHA differs
-    from what `MANIFEST.md` recorded at bundle-generation time — the
-    actual first-party Milestone-8 incident (a stale bundle read from a
-    different worktree) this check exists to catch (`D-Bundle-Manifest`,
-    resolves `OPUS-R6-016`). Never raised for an external reviewer
-    consuming a portable extracted archive — that consumer treats the
-    recorded values as diagnostic metadata only (`GPT-R9-015`)."""
+    `/review-plan`, `/review-implementation`) when the current worktree
+    root or HEAD SHA differs from what `MANIFEST.md` recorded at
+    bundle-generation time — the actual first-party Milestone-8 incident
+    (a stale bundle read from a different worktree) this check exists to
+    catch (`D-Bundle-Manifest`, resolves `OPUS-R6-016`). Never raised for
+    an external reviewer consuming a portable extracted archive — that
+    consumer treats the recorded values as diagnostic metadata only
+    (`GPT-R9-015`)."""
 
 
 class StageCompletenessError(Exception):
@@ -371,6 +372,17 @@ class FeedbackBundleMismatchError(Exception):
     and the current value so the mismatch is diagnosable, never silently
     absorbed (`WFR-03`, resolves `OPUS-R6-021`/`GPT-R9-015`'s underlying
     concern applied to feedback matching rather than worktree/HEAD)."""
+
+
+class FeedbackOwnedByOtherWorkItemError(Exception):
+    """Raised when `/review-implementation`'s write would overwrite a
+    `REVIEW_FEEDBACK.md` whose own `Work item:` binding field names a
+    different work item — `resolve_feedback_dir`'s scoped-else-flat rule
+    means two work items can resolve the identical flat path before
+    either has its own scoped feedback directory; this refuses the write
+    rather than relocating it, leaving `resolve_feedback_dir` and every
+    other command's resolution against it completely untouched
+    (`GPT-FUP-R6-I01`, `LPR-R7-B01`)."""
 
 
 # ---------------------------------------------------------------------------
@@ -481,6 +493,15 @@ class BundleRejectedError(Exception):
     determined -- refuses before the caller's own first durable write,
     read, or report, naming the marker path and whatever diagnostic
     content it holds."""
+
+
+class FunctionalReviewAlreadyAppliedError(Exception):
+    """Raised by `assert_functional_review_not_already_consumed` (O3,
+    `workflow-v2-3-followups` continued scope, external cross-model
+    review round 2) when `<feedback_dir>/FUNCTIONAL_REVIEW.md`'s current
+    content byte-for-byte matches what `mark_functional_review_consumed`
+    already recorded as applied -- refuses before `/apply-functional-
+    review` re-processes findings it has already acted on."""
 
 
 class PlanStageDocumentStaleError(Exception):
@@ -1792,6 +1813,76 @@ def resolve_feedback_dir(repo_root: Path, work_item_id: str) -> Path:
     return Path(".ai-review/feedback")
 
 
+def resolve_functional_review_consumed_marker_path(repo_root: Path, work_item_id: str) -> Path:
+    """O3 (`workflow-v2-3-followups` continued scope, external cross-model
+    review round 2): sibling to `resolve_feedback_dir`'s own
+    `FUNCTIONAL_REVIEW.md`, repo-root-relative, mirroring
+    `resolve_rejected_marker_path`'s own sibling-to-the-artifact-it-
+    describes placement. `FUNCTIONAL_REVIEW.md` has no binding fields of
+    its own to bind against (`docs/ai-workflow/REVIEW_PROTOCOL.md`: "no
+    binding-field requirement, since functional review has no
+    `bundle_id`/`review_content_id` of its own") and lives entirely
+    outside Git (`.ai-review/` is gitignored), so this marker -- not a
+    commit trailer, the mechanism `/prepare-functional-review`'s own
+    checklist-evidence binding uses for the Git-tracked
+    `docs/ACTIVE_MILESTONE.md` -- is the smallest mechanism consistent
+    with both existing conventions at once."""
+    return resolve_feedback_dir(repo_root, work_item_id) / "FUNCTIONAL_REVIEW.consumed"
+
+
+def assert_functional_review_not_already_consumed(repo_root: Path, work_item_id: str) -> None:
+    """Refuses if `<feedback_dir>/FUNCTIONAL_REVIEW.md`'s current content
+    is byte-identical to what `mark_functional_review_consumed` last
+    recorded as applied -- mirroring `assert_bundle_not_rejected`'s own
+    presence-then-content read shape. A missing `FUNCTIONAL_REVIEW.md` is
+    the caller's own concern (`/apply-functional-review` step 1 already
+    stops and says so before this would ever run); a missing or
+    non-matching marker means this content has not been recorded as
+    applied yet -- proceed normally in both cases, since a marker whose
+    hash simply differs (genuinely new findings written since the last
+    round) is exactly the case this check must let through."""
+    feedback_dir = resolve_feedback_dir(repo_root, work_item_id)
+    review_rel = (feedback_dir / "FUNCTIONAL_REVIEW.md").as_posix()
+    review_path = Path(repo_root) / review_rel
+    marker_path = Path(repo_root) / resolve_functional_review_consumed_marker_path(repo_root, work_item_id)
+    try:
+        recorded_hash = marker_path.read_text().strip()
+    except FileNotFoundError:
+        return
+    current_hash = _hash_object(repo_root, review_rel)
+    if recorded_hash and recorded_hash == current_hash:
+        raise FunctionalReviewAlreadyAppliedError(
+            f"{marker_path} records this exact content of {review_path} (blob "
+            f"{current_hash}) as already applied by a prior /apply-functional-review "
+            f"round -- write fresh findings to {review_path} before running it again, "
+            f"or if this file is genuinely unprocessed leftover from a stale round, "
+            f"remove the marker by hand after confirming that by hand"
+        )
+
+
+def mark_functional_review_consumed(repo_root: Path, work_item_id: str) -> None:
+    """Records `<feedback_dir>/FUNCTIONAL_REVIEW.md`'s current content
+    hash as applied -- called once `/apply-functional-review` has
+    classified and acted on every finding in this round (fixed, deferred
+    to a remediation child, or rejected with evidence), immediately
+    before whichever of its two exit points this round actually takes
+    (the bounded branch's own early stop, or the normal step 7), mirroring
+    `mark_identity_reference_gap_consumed`'s own "run once the work the
+    marker describes has actually completed" discipline. Idempotent:
+    writing the same content's hash twice is a no-op in effect."""
+    feedback_dir = resolve_feedback_dir(repo_root, work_item_id)
+    review_rel = (feedback_dir / "FUNCTIONAL_REVIEW.md").as_posix()
+    content_hash = _hash_object(repo_root, review_rel)
+    marker_path = Path(repo_root) / resolve_functional_review_consumed_marker_path(repo_root, work_item_id)
+    marker_path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(dir=str(marker_path.parent), prefix=".functional-review-consumed-", suffix=".tmp")
+    with os.fdopen(fd, "w") as handle:
+        handle.write(content_hash + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(tmp_name, marker_path)
+
+
 def _snapshot_directory_file_hashes(directory: Path) -> dict[str, str]:
     """Every regular file under `directory`, keyed by POSIX-relative path,
     mapped to its sha256 -- the pre-move snapshot
@@ -1904,13 +1995,14 @@ def assert_bundle_not_rejected(repo_root: Path, work_item_id: str) -> None:
     silently swallow `ENOTDIR`/`ELOOP` (returning `False`, indistinguishable
     from a genuinely absent marker), which would defeat exactly the
     "cannot complete" case this assertion must treat as present. Every
-    required consumer (`/review-plan`, `/record-manual-plan-review`,
-    `/apply-plan-review`, `/approve-review` at both stages,
-    `/apply-implementation-review`, the hand-off reports of
-    `/milestone-plan`/`/milestone-implement`/`/prepare-review`, and
-    `/apply-functional-review`'s bounded-fix branch) and every writer
-    immediately preceding a `record_bundle_generation` call shares this
-    one function, so the policy cannot drift command by command."""
+    required consumer (`/review-plan`, `/review-implementation`,
+    `/review-functional`, `/record-manual-plan-review`, `/apply-plan-review`,
+    `/approve-review` at both stages, `/apply-implementation-review`, the
+    hand-off reports of `/milestone-plan`/`/milestone-implement`/
+    `/prepare-review`, and `/apply-functional-review`'s bounded-fix branch)
+    and every writer immediately preceding a `record_bundle_generation`
+    call shares this one function, so the policy cannot drift command by
+    command."""
     marker_path = resolve_rejected_marker_path(repo_root, work_item_id)
     full_path = Path(repo_root) / marker_path
     try:
@@ -2410,13 +2502,14 @@ def assert_local_generation_matches(
     repo_root: Path, manifest_path: Path, *, require_metadata: bool = False,
 ) -> None:
     """**Repository-local commands only** (`/approve-review`,
-    `/review-plan`): stop if the current worktree root or HEAD SHA differs
-    from what `MANIFEST.md` recorded at generation time, naming both. Never
-    call this from a path that also serves external reviewers -- see
-    `WorktreeOrHeadMismatchError` and `WFR-17`.
+    `/review-plan`, `/review-implementation`): stop if the current worktree
+    root or HEAD SHA differs from what `MANIFEST.md` recorded at
+    generation time, naming both. Never call this from a path that also
+    serves external reviewers -- see `WorktreeOrHeadMismatchError` and
+    `WFR-17`.
 
-    `require_metadata=False` (the default -- both callers above use it,
-    unchanged): a `MANIFEST.md` missing either field's line entirely
+    `require_metadata=False` (the default -- all three callers above use
+    it, unchanged): a `MANIFEST.md` missing either field's line entirely
     records nothing to compare for that field, so the pre-metadata legacy
     shape passes with no comparison performed. `require_metadata=True`
     (`GPT-R62-001`, strict local-generation metadata mode -- no live
@@ -2639,6 +2732,38 @@ def assert_feedback_matches_bundle(
         raise FeedbackBundleMismatchError(
             f"feedback names work item {feedback_fields['work_item']!r}, "
             f"expected {work_item_id!r}"
+        )
+
+
+def assert_feedback_not_owned_by_other_work_item(
+    existing_content: str | None, *, work_item_id: str,
+) -> None:
+    """Refuse `/review-implementation`'s write when whatever content
+    already sits at the resolved `<feedback_dir>/REVIEW_FEEDBACK.md` path
+    belongs to a *different* work item — checked immediately before the
+    write, alongside a second `assert_bundle_not_rejected` call, so a
+    genuine cross-work-item collision at `resolve_feedback_dir`'s
+    scoped-else-flat path is refused rather than silently overwritten
+    (`GPT-FUP-R6-I01`).
+
+    `existing_content` is `None` when no file sits at the resolved path
+    yet, in which case this returns immediately. Otherwise the content is
+    parsed with `parse_review_feedback_binding_fields`; a present `work_item`
+    field that disagrees with `work_item_id` raises
+    `FeedbackOwnedByOtherWorkItemError` naming both. A missing/unparsed
+    `work_item` field (a hand-authored file, or one predating the binding-
+    field convention) is treated as unowned and does not block the write —
+    matching how a same-work-item overwrite already behaves today via
+    `/review-plan` step 8's guard-then-overwrite pattern. `resolve_feedback_dir`
+    itself is never touched by this function or by any caller of it
+    (`LPR-R7-B01`)."""
+    if existing_content is None:
+        return
+    existing_work_item = parse_review_feedback_binding_fields(existing_content).get("work_item")
+    if existing_work_item is not None and existing_work_item != work_item_id:
+        raise FeedbackOwnedByOtherWorkItemError(
+            f"existing feedback at this path belongs to work item {existing_work_item!r}, "
+            f"not {work_item_id!r} -- refusing to overwrite"
         )
 
 

@@ -47,6 +47,7 @@ from pathlib import Path
 from unittest import mock
 
 import workflow_fingerprint as wf
+import workflow_state as ws
 
 
 def _run(args, cwd):
@@ -598,6 +599,41 @@ class TestWorktreeCommitParity(unittest.TestCase):
                 commit_projection["review_content_manifest"],
             )
             self.assertEqual(worktree_id, commit_id)
+
+    def test_commit_anchored_manifest_is_immune_to_a_later_uncommitted_edit(self):
+        """`workflow-v2-3`'s own CP1 missing-test item (revision 5, round 4
+        B2/I1): pins the *class* of defect the `_blob_at_commit` repair in
+        both real-repository `_demo_test.py` files fixes, not only this
+        repository's own instance of it. A manifest computed at a fixed
+        commit A must report commit A's own blob for a protected path even
+        after that same path is edited in the working tree without being
+        committed -- a commit-anchored recompute must never silently read
+        through to dirty worktree content."""
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            _run(["git", "add", "-A"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "commit A"], cwd=repo.root)
+            commit_a = repo.head()
+            commit_a_id, commit_a_projection = repo.compute_at_commit(commit_a)
+            plan_entry_a = [
+                e for e in commit_a_projection["review_content_manifest"]
+                if e["path"].endswith("WORKFLOW_V2_PLAN.md")
+            ][0]
+            expected_blob_at_a = wf._hash_object(repo.root, plan_entry_a["path"])
+
+            # Edit the working tree without committing -- the hazard.
+            (repo.root / "docs" / "ai-workflow" / "WORKFLOW_V2_PLAN.md").write_text("plan v1 DIRTY EDIT\n")
+            dirty_blob = wf._hash_object(repo.root, plan_entry_a["path"])
+            self.assertNotEqual(dirty_blob, expected_blob_at_a)
+
+            recomputed_id, recomputed_projection = repo.compute_at_commit(commit_a)
+            recomputed_entry = [
+                e for e in recomputed_projection["review_content_manifest"]
+                if e["path"].endswith("WORKFLOW_V2_PLAN.md")
+            ][0]
+            self.assertEqual(recomputed_entry["blob"], expected_blob_at_a)
+            self.assertNotEqual(recomputed_entry["blob"], dirty_blob)
+            self.assertEqual(recomputed_id, commit_a_id)
 
     def test_tracked_unchanged_protected_path_identical_in_both_modes(self):
         with ScratchRepo() as repo:
@@ -1873,6 +1909,106 @@ class TestImplementationStageClassification(unittest.TestCase):
             self.assertEqual(digest_before, digest_after)
 
 
+class TestApprovalRecordManifestUsesTheRealComputeFunctions(unittest.TestCase):
+    """`workflow-v2-3-followups` continued scope, self-discovered during
+    this item's own `/accept-milestone` pre-flight:
+    `workflow_state.build_approval_record`'s `review_content_manifest`
+    argument must be the real compute function's own returned
+    `projection["review_content_manifest"]`, never `projection` itself --
+    the exact substitution that silently produced two malformed approval
+    records (plan and technical) for this same work item, with zero prior
+    regression coverage in either direction: every pre-existing
+    `build_approval_record` call site in this suite either discarded the
+    real projection (`_`) or hand-built a placeholder manifest, never
+    exercising the real compute-function-to-record sequence."""
+
+    def test_plan_stage_projections_own_manifest_field_is_accepted(self):
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            digest, projection = repo.compute()
+            record = ws.build_approval_record(
+                basis="EXTERNAL_APPROVE", stage="plan", user_confirmation="approve wi plan",
+                now="t", reviewed_bundle_id="b", approved_review_content_id=digest,
+                review_content_manifest=projection["review_content_manifest"],
+            )
+            self.assertEqual(record["review_content_manifest"], projection["review_content_manifest"])
+            self.assertIsInstance(record["review_content_manifest"], list)
+            self.assertTrue(record["review_content_manifest"])
+
+    def test_plan_stage_whole_projection_object_is_rejected(self):
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            digest, projection = repo.compute()
+            with self.assertRaises(ws.InvalidApprovalRecordError):
+                ws.build_approval_record(
+                    basis="EXTERNAL_APPROVE", stage="plan", user_confirmation="approve wi plan",
+                    now="t", reviewed_bundle_id="b", approved_review_content_id=digest,
+                    review_content_manifest=projection,
+                )
+
+    def _write_implementation_artifacts_declaration(self, repo):
+        data = {
+            "schema_version": 2,
+            "work_item_id": "workflow-v2-1-core",
+            "implementation_stage": {
+                "protected_prefixes": {"app/": "source"},
+                "protected_paths": {},
+                "excluded_prefixes": {"docs/ai-workflow/registry/": "artifact-declarations file itself"},
+                "excluded_paths": {},
+            },
+        }
+        artifacts_dir = repo.root / "docs" / "ai-workflow" / "registry"
+        artifacts_dir.mkdir(parents=True, exist_ok=True)
+        (artifacts_dir / "workflow-v2-1-core-artifacts.json").write_text(json.dumps(data))
+        _run(["git", "add", "-A"], cwd=repo.root)
+        _run(["git", "commit", "-q", "-m", "declare implementation-stage artifacts"], cwd=repo.root)
+
+    def _implementation_stage_projection(self, repo):
+        return wf.compute_review_content_id_implementation_stage(
+            repo.root, repo.base, work_item_type="process", work_item_id="workflow-v2-1-core",
+            protected_paths={}, protected_prefixes={"app/": "source"},
+            excluded_paths={},
+            excluded_prefixes={"docs/ai-workflow/registry/": "artifact-declarations file itself"},
+        )
+
+    def test_implementation_stage_projections_own_manifest_field_is_accepted(self):
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            repo.commit_plan_docs_as_base()
+            self._write_implementation_artifacts_declaration(repo)
+            (repo.root / "app").mkdir()
+            (repo.root / "app" / "Foo.kt").write_text("class Foo\n")
+            _run(["git", "add", "-A"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "add app/Foo.kt"], cwd=repo.root)
+
+            digest, projection = self._implementation_stage_projection(repo)
+            record = ws.build_approval_record(
+                basis="EXTERNAL_APPROVE", stage="implementation", user_confirmation="approve wi implementation",
+                now="t", reviewed_bundle_id="b", approved_review_content_id=digest,
+                review_content_manifest=projection["review_content_manifest"], reviewed_content_commit=repo.head(),
+            )
+            self.assertEqual(record["review_content_manifest"], projection["review_content_manifest"])
+            self.assertEqual([e["path"] for e in record["review_content_manifest"]], ["app/Foo.kt"])
+
+    def test_implementation_stage_whole_projection_object_is_rejected(self):
+        with ScratchRepo() as repo:
+            repo.write_plan_docs()
+            repo.commit_plan_docs_as_base()
+            self._write_implementation_artifacts_declaration(repo)
+            (repo.root / "app").mkdir()
+            (repo.root / "app" / "Foo.kt").write_text("class Foo\n")
+            _run(["git", "add", "-A"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "add app/Foo.kt"], cwd=repo.root)
+
+            digest, projection = self._implementation_stage_projection(repo)
+            with self.assertRaises(ws.InvalidApprovalRecordError):
+                ws.build_approval_record(
+                    basis="EXTERNAL_APPROVE", stage="implementation", user_confirmation="approve wi implementation",
+                    now="t", reviewed_bundle_id="b", approved_review_content_id=digest,
+                    review_content_manifest=projection, reviewed_content_commit=repo.head(),
+                )
+
+
 class TestBundleLayoutResolver(unittest.TestCase):
     """WF5's `.ai-review/<work_item_id>/{current,feedback}/` relayout
     resolver, with the stated compatibility fallback (resolves
@@ -1990,6 +2126,85 @@ class TestRejectedBundleMarker(unittest.TestCase):
             wf.assert_bundle_not_rejected(repo.root, "workflow-v2-1-core")
             with self.assertRaises(wf.BundleRejectedError):
                 wf.assert_bundle_not_rejected(repo.root, "milestone-8")
+
+
+class TestFunctionalReviewConsumedMarker(unittest.TestCase):
+    """O3 (`workflow-v2-3-followups` continued scope, external cross-model
+    review round 2): the smallest mechanism consistent with two existing
+    conventions at once -- `assert_bundle_not_rejected`'s presence-then-
+    content marker shape (`.ai-review/<work_item_id>/REJECTED`, an
+    untracked sibling of the artifact it describes) and `/prepare-
+    functional-review`'s own checklist-evidence content-hash binding --
+    that prevents an already-applied `FUNCTIONAL_REVIEW.md` from being
+    re-read as fresh findings on a later `/apply-functional-review` pass,
+    without any lifecycle/review-stage/ledger-stage/quorum addition."""
+
+    def _write_feedback(self, repo, work_item_id, content):
+        feedback_dir = repo.root / wf.resolve_feedback_dir(repo.root, work_item_id)
+        feedback_dir.mkdir(parents=True, exist_ok=True)
+        (feedback_dir / "FUNCTIONAL_REVIEW.md").write_text(content)
+
+    def test_resolves_flat_path_when_scoped_dir_absent(self):
+        with ScratchRepo() as repo:
+            self.assertEqual(
+                wf.resolve_functional_review_consumed_marker_path(repo.root, "workflow-v2-1-core"),
+                Path(".ai-review/feedback/FUNCTIONAL_REVIEW.consumed"),
+            )
+
+    def test_resolves_scoped_path_once_scoped_layout_exists(self):
+        with ScratchRepo() as repo:
+            (repo.root / ".ai-review" / "workflow-v2-1-core" / "feedback").mkdir(parents=True)
+            self.assertEqual(
+                wf.resolve_functional_review_consumed_marker_path(repo.root, "workflow-v2-1-core"),
+                Path(".ai-review/workflow-v2-1-core/feedback/FUNCTIONAL_REVIEW.consumed"),
+            )
+
+    def test_passes_when_no_marker_present(self):
+        with ScratchRepo() as repo:
+            self._write_feedback(repo, "wi", "# finding 1\n")
+            wf.assert_functional_review_not_already_consumed(repo.root, "wi")  # must not raise
+
+    def test_refuses_when_current_content_matches_the_recorded_hash(self):
+        with ScratchRepo() as repo:
+            self._write_feedback(repo, "wi", "# finding 1\n")
+            wf.mark_functional_review_consumed(repo.root, "wi")
+            with self.assertRaises(wf.FunctionalReviewAlreadyAppliedError) as ctx:
+                wf.assert_functional_review_not_already_consumed(repo.root, "wi")
+            self.assertIn("already applied", str(ctx.exception))
+
+    def test_passes_when_content_changed_since_the_marker_was_written(self):
+        """A genuinely new round of functional testing wrote fresh
+        findings -- the marker's own hash no longer matches, so this
+        must be treated as unconsumed, not refused."""
+        with ScratchRepo() as repo:
+            self._write_feedback(repo, "wi", "# finding 1\n")
+            wf.mark_functional_review_consumed(repo.root, "wi")
+            self._write_feedback(repo, "wi", "# finding 2 (new round)\n")
+            wf.assert_functional_review_not_already_consumed(repo.root, "wi")  # must not raise
+
+    def test_marking_twice_for_the_same_content_stays_idempotent(self):
+        with ScratchRepo() as repo:
+            self._write_feedback(repo, "wi", "# finding 1\n")
+            wf.mark_functional_review_consumed(repo.root, "wi")
+            wf.mark_functional_review_consumed(repo.root, "wi")  # must not raise
+            with self.assertRaises(wf.FunctionalReviewAlreadyAppliedError):
+                wf.assert_functional_review_not_already_consumed(repo.root, "wi")
+
+    def test_two_scoped_work_items_have_independent_markers(self):
+        """Distinguished by the scoped-layout `feedback_dir`, mirroring
+        `TestRejectedBundleMarker.test_two_work_items_have_independent_markers`
+        -- both must already be on the scoped layout, or they would
+        collide at the same flat compatibility path
+        (`resolve_feedback_dir`'s own documented fallback)."""
+        with ScratchRepo() as repo:
+            (repo.root / ".ai-review" / "workflow-v2-1-core" / "feedback").mkdir(parents=True)
+            (repo.root / ".ai-review" / "milestone-8" / "feedback").mkdir(parents=True)
+            self._write_feedback(repo, "workflow-v2-1-core", "# shared content\n")
+            self._write_feedback(repo, "milestone-8", "# shared content\n")
+            wf.mark_functional_review_consumed(repo.root, "workflow-v2-1-core")
+            with self.assertRaises(wf.FunctionalReviewAlreadyAppliedError):
+                wf.assert_functional_review_not_already_consumed(repo.root, "workflow-v2-1-core")
+            wf.assert_functional_review_not_already_consumed(repo.root, "milestone-8")  # must not raise
 
 
 class TestGenerationDiagnosticMetadata(unittest.TestCase):
@@ -2467,6 +2682,121 @@ class TestFeedbackBindingFields(unittest.TestCase):
             wf.assert_feedback_matches_bundle(
                 fields, bundle_id=FAKE_ID_A, base_commit="a" * 40, work_item_id="workflow-v2-1-core"
             )
+
+
+class TestFeedbackNotOwnedByOtherWorkItem(unittest.TestCase):
+    """`workflow-v2-3-followups` `CP2` (REQ-4/REQ-21, `GPT-FUP-R6-I01`,
+    `LPR-R7-B01`): `/review-implementation`'s new pre-write ownership
+    guard. Refuses rather than relocates, and never touches
+    `resolve_feedback_dir` or the filesystem itself -- it is a pure
+    function over already-read content."""
+
+    def _feedback(self, *, work_item="workflow-v2-1-core", bundle_id=FAKE_ID_A):
+        return (
+            f"# Review Decision\n\nStatus: APPROVE\n\n"
+            f"Reviewed bundle ID: {bundle_id}\n"
+            f"Reviewed base commit: {'a' * 40}\n"
+            f"Work item: {work_item}\n"
+        )
+
+    def test_no_existing_file_is_unowned(self):
+        wf.assert_feedback_not_owned_by_other_work_item(None, work_item_id="workflow-v2-3-followups")
+
+    def test_same_work_item_overwrite_is_allowed(self):
+        wf.assert_feedback_not_owned_by_other_work_item(
+            self._feedback(work_item="workflow-v2-3-followups"),
+            work_item_id="workflow-v2-3-followups",
+        )
+
+    def test_unparseable_work_item_field_is_treated_as_unowned(self):
+        wf.assert_feedback_not_owned_by_other_work_item(
+            "# Review Decision\n\nStatus: APPROVE\n",  # predates the binding-field convention
+            work_item_id="workflow-v2-3-followups",
+        )
+
+    def test_different_work_item_refuses_naming_both(self):
+        with self.assertRaises(wf.FeedbackOwnedByOtherWorkItemError) as ctx:
+            wf.assert_feedback_not_owned_by_other_work_item(
+                self._feedback(work_item="workflow-v2-1-core"),
+                work_item_id="workflow-v2-3-followups",
+            )
+        self.assertIn("workflow-v2-1-core", str(ctx.exception))
+        self.assertIn("workflow-v2-3-followups", str(ctx.exception))
+
+
+class TestReviewImplementationWritebackCrossWorkItemIsolation(unittest.TestCase):
+    """`workflow-v2-3-followups` `CP2` (REQ-21, `GPT-FUP-R6-I01`,
+    `LPR-R7-B01`, extended `LPR-R8-I01`): the concrete scenario the new
+    guard exists to prevent -- two work items resolving the identical flat
+    `resolve_feedback_dir` path, since neither yet has its own scoped
+    `.ai-review/<work_item_id>/feedback/` directory. Drives the real
+    resolver, not a stand-in path."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.repo_root = Path(self._tmp.name)
+        (self.repo_root / ".ai-review" / "feedback").mkdir(parents=True)
+
+    def _write_a_feedback(self, work_item="work-item-a"):
+        path = self.repo_root / wf.resolve_feedback_dir(self.repo_root, "work-item-a")
+        content = (
+            f"# Review Decision\n\nStatus: APPROVE\n\n"
+            f"Reviewed bundle ID: {FAKE_ID_A}\n"
+            f"Reviewed base commit: {'a' * 40}\n"
+            f"Work item: {work_item}\n"
+        )
+        (path / "REVIEW_FEEDBACK.md").write_text(content)
+        return path / "REVIEW_FEEDBACK.md", content
+
+    def test_refused_run_for_b_leaves_as_own_feedback_byte_identical_and_creates_no_scoped_dir(self):
+        a_file, a_content = self._write_a_feedback(work_item="work-item-a")
+        # Both A and B resolve the same flat path today -- neither has a
+        # scoped directory of its own yet.
+        self.assertEqual(
+            wf.resolve_feedback_dir(self.repo_root, "work-item-b"), Path(".ai-review/feedback"),
+        )
+
+        existing = a_file.read_text()
+        with self.assertRaises(wf.FeedbackOwnedByOtherWorkItemError):
+            wf.assert_feedback_not_owned_by_other_work_item(existing, work_item_id="work-item-b")
+
+        self.assertEqual(a_file.read_text(), a_content, "A's feedback must survive byte-identical")
+        self.assertFalse(
+            (self.repo_root / ".ai-review" / "work-item-b").exists(),
+            "the refused run must create no .ai-review/work-item-b/feedback/ directory as a side effect",
+        )
+
+    def test_a_may_overwrite_its_own_feedback_at_the_same_flat_path(self):
+        a_file, _ = self._write_a_feedback(work_item="work-item-a")
+        wf.assert_feedback_not_owned_by_other_work_item(
+            a_file.read_text(), work_item_id="work-item-a",
+        )
+
+
+class TestReviewImplementationFeedbackBindingRoundTrip(unittest.TestCase):
+    """`workflow-v2-3-followups` `CP2` (REQ-5): a freshly composed
+    `REVIEW_FEEDBACK.md` in exactly the shape `/review-implementation`
+    step 6 composes -- the three binding fields plus the non-binding
+    `Reviewed review content ID:` line -- parses and validates cleanly
+    through the same shared, stage-agnostic parsers `/review-plan` and
+    `/approve-review` already use, with the extra line ignored rather than
+    breaking parsing."""
+
+    def test_freshly_written_feedback_binds_successfully(self):
+        content = (
+            "# Review Decision\n\n"
+            "Status: APPROVE\n\n"
+            f"Reviewed bundle ID: {FAKE_ID_A}\n"
+            f"Reviewed base commit: {'c' * 40}\n"
+            "Work item: workflow-v2-3-followups\n"
+            f"Reviewed review content ID: {FAKE_ID_B}\n"
+        )
+        fields = wf.parse_review_feedback_binding_fields(content)
+        wf.assert_feedback_matches_bundle(
+            fields, bundle_id=FAKE_ID_A, base_commit="c" * 40,
+            work_item_id="workflow-v2-3-followups",
+        )
 
 
 class TestBinaryAndUnusualPathBundleEntries(unittest.TestCase):

@@ -41,6 +41,16 @@ import workflow_fingerprint as wf
 
 BASE_COMMIT = "162154d3e5e10eb65e109833acae4b4fb01fc5d6"
 
+# `workflow-v2-1-core`'s own `/accept-milestone` commit -- its `base_commit`
+# reached `MILESTONE_COMPLETE`. Every real-repository test in this file that
+# exists to validate a fact about `workflow-v2-1-core`'s own now-closed
+# history is anchored here, never at live `"HEAD"`/the working tree: that
+# history stopped moving the instant the item completed, so a fixed anchor
+# stays green permanently regardless of what a later, concurrent work item
+# (e.g. `workflow-v2-3`) commits on top of it (revision 4/5/6, round 3/4/5
+# `local_model_plan_review` B1).
+WORKFLOW_V2_1_CORE_COMPLETION_COMMIT = "27f051eba897d77c742ead8b160ed519c0671ee4"
+
 
 def _repo_root() -> Path:
     return Path(
@@ -51,6 +61,16 @@ def _repo_root() -> Path:
     )
 
 
+def _blob_at_commit(repo_root: Path, commit: str, rel_path: str) -> str:
+    """The blob SHA `rel_path` had at `commit`, never the live worktree --
+    so a manifest fixed at a commit and its own verification loop are
+    always compared from the same source (revision 5, round 4 B2/I1)."""
+    return subprocess.run(
+        ["git", "rev-parse", f"{commit}:{rel_path}"], cwd=repo_root, check=True,
+        capture_output=True, text=True,
+    ).stdout.strip()
+
+
 class TestAgainstRealRepository(unittest.TestCase):
     def test_demonstration_against_real_repo(self):
         repo_root = _repo_root()
@@ -59,9 +79,12 @@ class TestAgainstRealRepository(unittest.TestCase):
         # drift `test_plan_title_revision_matches_declared_plan_revision`
         # guards against is now structurally impossible here: there is no
         # second copy of the number left to drift.
-        plan_revision = wf.load_plan_revision(repo_root, wf.DEFAULT_REGISTRY_PATH, wf.DEFAULT_PLAN_PATH)
-        digest, projection = wf.compute_review_content_id_plan_stage(
-            repo_root, BASE_COMMIT,
+        plan_revision = wf.load_plan_revision(
+            repo_root, wf.DEFAULT_REGISTRY_PATH, wf.DEFAULT_PLAN_PATH,
+            at_commit=WORKFLOW_V2_1_CORE_COMPLETION_COMMIT,
+        )
+        digest, projection = wf.compute_review_content_id_plan_stage_at_commit(
+            repo_root, BASE_COMMIT, WORKFLOW_V2_1_CORE_COMPLETION_COMMIT,
             work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=plan_revision,
             protected=wf.PLAN_STAGE_PROTECTED, excluded_paths=wf.PLAN_STAGE_EXCLUDED_PATHS,
             excluded_prefixes=wf.PLAN_STAGE_EXCLUDED_PREFIXES,
@@ -90,7 +113,7 @@ class TestAgainstRealRepository(unittest.TestCase):
         )
         for entry in manifest:
             self.assertTrue(entry["exists"])
-            real_sha = wf._hash_object(repo_root, entry["path"])
+            real_sha = _blob_at_commit(repo_root, WORKFLOW_V2_1_CORE_COMPLETION_COMMIT, entry["path"])
             self.assertEqual(entry["blob"], real_sha)
         print(f"\n[demonstration] base_commit (resolved): {projection['base_commit']}")
         print(f"[demonstration] review_content_id = {digest}")
@@ -121,12 +144,15 @@ class TestAgainstRealRepository(unittest.TestCase):
         never a hardcoded literal this revision's own approval
         necessarily invalidates the moment it is recorded."""
         repo_root = _repo_root()
-        digest_generalized, _ = wf.compute_review_content_id_plan_stage_for_work_item(
-            repo_root, "workflow-v2-1-core", base=BASE_COMMIT,
+        digest_generalized, _ = wf.compute_review_content_id_plan_stage_at_commit_for_work_item(
+            repo_root, "workflow-v2-1-core", WORKFLOW_V2_1_CORE_COMPLETION_COMMIT, base=BASE_COMMIT,
         )
-        plan_revision = wf.load_plan_revision(repo_root, wf.DEFAULT_REGISTRY_PATH, wf.DEFAULT_PLAN_PATH)
-        digest_frozen_defaults, _ = wf.compute_review_content_id_plan_stage(
-            repo_root, BASE_COMMIT,
+        plan_revision = wf.load_plan_revision(
+            repo_root, wf.DEFAULT_REGISTRY_PATH, wf.DEFAULT_PLAN_PATH,
+            at_commit=WORKFLOW_V2_1_CORE_COMPLETION_COMMIT,
+        )
+        digest_frozen_defaults, _ = wf.compute_review_content_id_plan_stage_at_commit(
+            repo_root, BASE_COMMIT, WORKFLOW_V2_1_CORE_COMPLETION_COMMIT,
             work_item_type="process", work_item_id="workflow-v2-1-core", plan_revision=plan_revision,
             protected=wf.PLAN_STAGE_PROTECTED, excluded_paths=wf.PLAN_STAGE_EXCLUDED_PATHS,
             excluded_prefixes=wf.PLAN_STAGE_EXCLUDED_PREFIXES,
@@ -381,7 +407,7 @@ class TestImplementationStageAgainstRealRepository(unittest.TestCase):
             wf.load_implementation_stage_classification(repo_root)
         )
         changed = sorted(
-            wf._changed_tracked_paths(repo_root, BASE_COMMIT) | wf._untracked_paths(repo_root)
+            wf._changed_tracked_paths_between(repo_root, BASE_COMMIT, WORKFLOW_V2_1_CORE_COMPLETION_COMMIT)
         )
         self.assertTrue(changed, "expected at least one changed path since this milestone's base commit")
         for path in changed:
@@ -424,8 +450,8 @@ class TestImplementationStageAgainstRealRepository(unittest.TestCase):
         protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
             wf.load_implementation_stage_classification(repo_root)
         )
-        digest, projection = wf.compute_review_content_id_implementation_stage(
-            repo_root, BASE_COMMIT,
+        digest, projection = wf.compute_review_content_id_implementation_stage_at_commit(
+            repo_root, BASE_COMMIT, WORKFLOW_V2_1_CORE_COMPLETION_COMMIT,
             work_item_type="process", work_item_id="workflow-v2-1-core",
             protected_paths=protected_paths, protected_prefixes=protected_prefixes,
             excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,
@@ -457,12 +483,12 @@ class TestImplementationStageAgainstRealRepository(unittest.TestCase):
                     f"categories: {entry['path']}",
                 )
             self.assertTrue(entry["exists"])
-            real_sha = wf._hash_object(repo_root, entry["path"])
+            real_sha = _blob_at_commit(repo_root, WORKFLOW_V2_1_CORE_COMPLETION_COMMIT, entry["path"])
             self.assertEqual(entry["blob"], real_sha)
         # Recomputing twice must be idempotent, same discipline as the
         # plan-stage identity function.
-        digest2, _ = wf.compute_review_content_id_implementation_stage(
-            repo_root, BASE_COMMIT,
+        digest2, _ = wf.compute_review_content_id_implementation_stage_at_commit(
+            repo_root, BASE_COMMIT, WORKFLOW_V2_1_CORE_COMPLETION_COMMIT,
             work_item_type="process", work_item_id="workflow-v2-1-core",
             protected_paths=protected_paths, protected_prefixes=protected_prefixes,
             excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,

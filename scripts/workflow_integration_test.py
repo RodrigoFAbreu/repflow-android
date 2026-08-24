@@ -47,8 +47,10 @@ Stdlib-only. Run: python3 scripts/workflow_integration_test.py
 
 from __future__ import annotations
 
+import ast
 import base64
 import hashlib
+import inspect
 import json
 import os
 import re
@@ -137,7 +139,7 @@ class TestFullPassAuthorizedCommitKinds(unittest.TestCase):
             plan_record = ws.build_approval_record(
                 basis="USER_OVERRIDE", stage="plan", user_confirmation="wi plan",
                 reviewed_bundle_id="bundle-plan-1", approved_review_content_id="plan-content-1",
-                review_content_manifest={"paths": []}, now="t0",
+                review_content_manifest=[], now="t0",
             )
             state = ws.apply_plan_approval(state, "wi", plan_record, now="t0")
             plan_commit = repo.commit_files(
@@ -167,7 +169,7 @@ class TestFullPassAuthorizedCommitKinds(unittest.TestCase):
             impl_record = ws.build_approval_record(
                 basis="USER_OVERRIDE", stage="implementation", user_confirmation="wi implementation",
                 reviewed_bundle_id="bundle-impl-1", approved_review_content_id="impl-content-1",
-                review_content_manifest={"paths": []}, reviewed_content_commit=ck_b_commit, now="t5",
+                review_content_manifest=[], reviewed_content_commit=ck_b_commit, now="t5",
             )
             state = ws.apply_technical_approval(state, "wi", impl_record, now="t5")
             tech_commit = repo.commit_files(
@@ -409,6 +411,239 @@ class TestDualModeBranchConformance(unittest.TestCase):
         self.assertIn('governing_workflow_version: "2.1"', approve_review_text)
 
 
+class TestReviewImplementationCommandStaticConformance(unittest.TestCase):
+    """`workflow-v2-3` CP1's own conformance coverage for the new
+    `/review-implementation` command, mirroring
+    `TestBootstrapCommandStaticConformance`'s/
+    `TestVersion21OnlyCommandsRefuseCleanlyForV1`'s pattern of asserting
+    key invariant sentences are actually present in the file's real text,
+    rather than merely described in this plan."""
+
+    def setUp(self):
+        self.text = _command_text("review-implementation.md")
+
+    def test_frontmatter_has_description_and_argument_hint(self):
+        self.assertIn("description:", self.text)
+        self.assertIn("argument-hint:", self.text)
+        self.assertIn("state_writer: false", self.text)
+        self.assertIn("review-subject: bundle", self.text)
+
+    def test_states_model_independence(self):
+        self.assertIn(
+            "Implements a model-independent\n**review role**, not a specific model: "
+            "nothing in this contract, in the\nreport it produces, or in any check it "
+            "performs names a model — running it\nfrom any capable Claude model produces "
+            "the same behavior.",
+            self.text,
+        )
+
+    def test_states_the_report_only_constraint(self):
+        """Narrowed, `workflow-v2-3-followups` `CP2` (REQ-5): the command
+        no longer claims to write nothing -- it states the new, narrower
+        invariant instead (writes `REVIEW_FEEDBACK.md`; still never writes
+        `WORKFLOW_STATE.json`, never approves, never advances `phase`)."""
+        self.assertIn(
+            "**Writes `<feedback_dir>/REVIEW_FEEDBACK.md`; nothing else.** This command\n"
+            "writes the current `<feedback_dir>/REVIEW_FEEDBACK.md` (step 7, once every\n"
+            "guard there passes) but never writes\n"
+            "`docs/ai-workflow/WORKFLOW_STATE.json`, never edits source/test/plan/\n"
+            "registry/mapping/bundle content, never approves a stage, and never\n"
+            "advances `phase`.",
+            self.text,
+        )
+
+    def test_phase_guard_names_the_exact_required_phase(self):
+        self.assertIn(
+            "2. **Phase guard**: if the resolved item's `phase` is not exactly\n"
+            "   `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`, refuse cleanly, naming the\n"
+            "   actual phase.",
+            self.text,
+        )
+
+    def test_states_it_writes_nothing(self):
+        """Narrowed, `workflow-v2-3-followups` `CP2` (REQ-5): the command
+        no longer states "Report only -- writes nothing." anywhere -- it
+        now writes `<feedback_dir>/REVIEW_FEEDBACK.md` once its own
+        pre-write guards pass (step 7), and step 8's own closing text says
+        so."""
+        self.assertNotIn("Report only", self.text)
+        self.assertNotIn("writes nothing", self.text)
+        self.assertIn(
+            "8. **Report and stop.** On a successful write, state plainly that\n"
+            "   `<feedback_dir>/REVIEW_FEEDBACK.md` was written and is now the\n"
+            "   authoritative round for `/apply-implementation-review`/`/approve-review\n"
+            "   implementation` to act on",
+            self.text,
+        )
+
+    def test_states_plan_conformance_read(self):
+        """`workflow-v2-3-followups` `CP2` (REQ-6, item 4's deferred
+        follow-up): step 3's read list names `PLAN.md`/`plan_path`, and
+        step 5 gains a plan-conformance search arm mirroring
+        `/review-plan` step 6 -- a further method on this class, not a
+        new fixture, per `LPR-R2-O02`'s correction of the original
+        (inapplicable) precedent citation."""
+        self.assertIn(
+            "3. **Read**: `<bundle_dir>/PLAN.md` and the item's own `plan_path`",
+            self.text,
+        )
+        self.assertIn(
+            "**Also independently verify the implementation against what the\n"
+            "   approved plan (`PLAN.md`/`plan_path`, read in step 3) actually\n"
+            "   specified**",
+            self.text,
+        )
+
+    def test_step_six_and_seven_no_longer_describe_manual_installation(self):
+        """`LPR-R3-I02`/`LPR-R4-I02`: the provenance text this command's
+        own step 6 and (what was) step 7 carried -- describing the
+        operator hand-copying this report into `REVIEW_FEEDBACK.md` as an
+        optional installation step -- no longer appears anywhere,
+        including the frontmatter `description:` line, which no longer
+        reads "Report-only" (`LPR-R4-I02`'s own `assertNotIn`, added to
+        this same method rather than a new fixture)."""
+        self.assertNotIn("hand-copy this report", self.text)
+        self.assertNotIn(
+            "if the user chooses to hand-copy this report into", self.text,
+        )
+        self.assertNotIn("Report-only", self.text)
+        self.assertIn(
+            "since satisfying\n"
+            "   `workflow_fingerprint.parse_review_feedback_binding_fields`/\n"
+            "   `assert_feedback_matches_bundle` is a hard precondition of this\n"
+            "   command's own write in step 7 below, not a convenience for a\n"
+            "   hypothetical hand-copy.",
+            self.text,
+        )
+
+    def test_write_step_names_the_ownership_guard(self):
+        """`GPT-FUP-R6-I01`, revised `LPR-R7-B01`: a further method
+        proving the command's own prose actually instructs the fix, not
+        only that `workflow_fingerprint.assert_feedback_not_owned_by_other_work_item`
+        exists and behaves correctly in isolation -- named, and stated to
+        run immediately before the write against the unmodified
+        `resolve_feedback_dir(repo_root, work_item_id)` path."""
+        self.assertIn("assert_feedback_not_owned_by_other_work_item", self.text)
+        self.assertIn(
+            "ownership guard runs immediately before the write, against this same\n"
+            "     unmodified `resolve_feedback_dir(repo_root, work_item_id)` path.",
+            self.text,
+        )
+
+    def test_refusal_path_states_report_printing_per_guard_and_recovery(self):
+        """`LPR-R10-B01`/`LPR-R11-I01`/`LPR-R11-I02`/`LPR-R12-I01` (round-10
+        through round-12 local plan review): the refusal-path prose is
+        stated per guard, not as one "either guard" sentence, and the
+        recovery text is keyed on a live A reaching the terminal phase
+        `MILESTONE_COMPLETE`, not on a fixed two-phase consumption list --
+        including that hand-creating a scoped feedback directory is not an
+        endorsed remedy."""
+        self.assertIn(
+            "**On a `BundleRejectedError` here, suppress the\n"
+            "     composed report entirely**",
+            self.text,
+        )
+        self.assertIn(
+            "**On a `FeedbackOwnedByOtherWorkItemError` here, still print the\n"
+            "     composed report in full**",
+            self.text,
+        )
+        self.assertIn(
+            "hand-creating a scoped\n"
+            "     `.ai-review/<work_item_id>/feedback/` directory is",
+            self.text,
+        )
+        self.assertIn("**not** an endorsed", self.text)
+        self.assertIn(
+            "Only once a live A's `phase`\n"
+            "     independently reaches `MILESTONE_COMPLETE` may the operator delete the",
+            self.text,
+        )
+
+    def test_names_artifacts_path_for_work_item(self):
+        """I3/revision 2's own missing-test gap: a regression back to
+        `load_implementation_stage_classification`'s default argument
+        (silently resolving `workflow-v2-1-core`'s artifacts file instead
+        of the resolved work item's own) fails this cheap textual
+        check."""
+        self.assertIn("artifacts_path_for_work_item", self.text)
+
+    def test_names_missing_required_bundle_file_error(self):
+        """Revision 6/7 I2/O1's own missing-test gap: a regression that
+        silently drops the absent-manifest clean-refusal wording fails
+        this check."""
+        self.assertIn("MissingRequiredBundleFileError", self.text)
+
+
+class TestReviewFunctionalCommandStaticConformance(unittest.TestCase):
+    """`workflow-v2-3` CP2's own conformance coverage for the new
+    `/review-functional` command, mirroring
+    `TestReviewImplementationCommandStaticConformance`'s pattern of
+    asserting key invariant sentences are actually present in the file's
+    real text, rather than merely described in this plan. Also pins
+    revision 10's own round-9 I1/I2 fixes (`GPT-R9-001`/`GPT-R9-002`) as
+    two textual-presence checks, per the plan's "Missing tests?" bullet."""
+
+    def setUp(self):
+        self.text = _command_text("review-functional.md")
+
+    def test_frontmatter_has_description_and_argument_hint(self):
+        self.assertIn("description:", self.text)
+        self.assertIn("argument-hint:", self.text)
+        self.assertIn("state_writer: false", self.text)
+        self.assertIn("review-subject: bundle", self.text)
+
+    def test_states_model_independence(self):
+        self.assertIn(
+            "Implements a model-independent\n**review role**, not a specific model: "
+            "nothing in this contract, in the\nreport it produces, or in any check it "
+            "performs names a model — running it\nfrom any capable Claude model produces "
+            "the same behavior.",
+            self.text,
+        )
+
+    def test_states_the_report_only_constraint(self):
+        self.assertIn(
+            "**Review and report only.** This command never writes\n"
+            "`docs/ACTIVE_MILESTONE.md`, `<feedback_dir>/FUNCTIONAL_REVIEW.md`, or\n"
+            "`docs/ai-workflow/WORKFLOW_STATE.json`, never fixes findings, and never\n"
+            "advances `phase`.",
+            self.text,
+        )
+
+    def test_phase_guard_names_the_exact_required_phase(self):
+        self.assertIn(
+            "2. **Phase guard**: if the resolved item's `phase` is not exactly\n"
+            "   `AWAITING_FUNCTIONAL_REVIEW`, refuse cleanly, naming the actual phase.",
+            self.text,
+        )
+
+    def test_states_it_writes_nothing(self):
+        self.assertIn("**Report only — writes nothing.**", self.text)
+
+    def test_single_coherent_untracked_item_policy(self):
+        """Revision 10, round 9 I1 fix (`GPT-R9-001`): the file must state
+        step 1's single clean refusal for an untracked work item and must
+        not also tell the reviewer to read the checklist directly for that
+        same case -- the two-branch contradiction the round found in
+        revision 9's own text. Mirrors `/review-implementation` step 1
+        exactly, per the round's own decision."""
+        self.assertIn(
+            "Refuse cleanly, naming the\n   problem, if neither resolves to an existing "
+            "`work_items` entry",
+            self.text,
+        )
+        self.assertNotIn("read the checklist", self.text)
+
+    def test_functional_acceptance_wording_is_work_item_neutral(self):
+        """Revision 10, round 9 I2 fix (`GPT-R9-002`): the file's
+        functional-acceptance wording must name the checklist's own
+        required flows, work-item-neutrally, rather than assuming every
+        work item's functional review is an Android-app walkthrough."""
+        self.assertIn("checklist's required functional flows", self.text)
+        self.assertNotIn("the Android app", self.text)
+
+
 class TestVersion21OnlyCommandsRefuseCleanlyForV1(unittest.TestCase):
     """`/review-plan` and `/record-manual-plan-review` are `"2.1"`-only,
     with no v1 counterpart at all -- D-Self-Governance's enumeration says
@@ -474,12 +709,18 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # `workflow_state.state_transaction`/`state_lock` -- an intentional
     # content change, not a regression.
     #
-    # All ten entries below further updated by WF8c item (h), part 1
-    # (`WFR-67`): every file gained a `review-subject:` frontmatter
-    # declaration, and every declared consumer among them gained its
+    # The ten entries below that predate WF8c item (h) were further
+    # updated by that item, part 1 (`WFR-67`): each gained a
+    # `review-subject:` frontmatter declaration, and every declared
+    # consumer among them gained its own
     # `workflow_fingerprint.assert_bundle_not_rejected(...)` call site(s)
     # at the points `WFR-67`'s own text names -- intentional content
-    # change, not a regression.
+    # change, not a regression. The two entries below that were created
+    # after WF8c item (h) (`review-implementation.md`/`review-functional.md`,
+    # workflow-v2-3 CP1/CP2) were never "further updated" by it -- they
+    # were authored from the start with their own `review-subject:`
+    # declarations, so their own comments below say "first recorded
+    # hash," not "updated."
     "milestone-plan.md": "310271edac2f76351e8bcd93d540a955050b15b1291de3f008bd61b4678617ad",
     # milestone-implement.md further updated, OPUS-R129-001: step 1f's
     # checkpoint-completion commit instruction now states explicitly that
@@ -501,7 +742,36 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # workflow-v2-1-core's own plan-stage approvals until the Bootstrap
     # plan-approval procedure is withdrawn, and new steps 4b/4c/6c/6d --
     # intentional content change.
-    "approve-review.md": "cdc3582076a9c357e18774622ec65e7b722252fd3148197909559d34012a1e32",
+    #
+    # approve-review.md further updated, workflow-v2-3-followups CP1
+    # (LPR-R1-B01/LPR-R3-B01/LPR-R3-B02): steps 5 and 6.1 merged into one
+    # guarded window (new ordinary step label "step-5-stage-and-pin") that
+    # stages every non-state plan-approval member -- ordinary members and
+    # the conditional fifth member alike -- in a single call, fixing the
+    # fifth-member DirtyIndexBeforeStagingError; step 6a's amend-recovery
+    # text reworded to name the merged step; step 6.4's commit instruction
+    # gained the "trailers must be the commit message's own final
+    # paragraph" sentence -- intentional content change.
+    #
+    # approve-review.md further updated, workflow-v2-3-followups REVISE
+    # round 1 (self-discovered during this item's own /accept-milestone
+    # pre-flight): step 4 gained the explicit review_content_manifest
+    # extraction requirement (projection["review_content_manifest"], never
+    # the whole projection object) -- intentional content change, the fix
+    # for the defect that produced two malformed approval records.
+    #
+    # approve-review.md further updated, workflow-v2-3-followups REVISE
+    # round 2 (I1, external cross-model review): the step-4a1 note's
+    # `record_bundle_generation`'s own two entry phases" claim corrected
+    # to the stage-aware, now-three-phase contract round 2's own record_
+    # bundle_generation widening introduced -- intentional content change,
+    # a documentation-only correction with no behavioral effect. Worded to
+    # explain the REJECTED-bundle guard by citation (WFR-67) rather than by
+    # naming assert_bundle_not_rejected inline, so this file's own prose
+    # never perturbs test_every_non_exempt_file_calls_the_shared_assertion_
+    # the_expected_number_of_times's exact-count check of its two real call
+    # sites.
+    "approve-review.md": "9e6de2e744460b5897810a05031554e0c0829f0a12742e4fd9e20b217745ff38",
     "accept-milestone.md": "3822aa4adb7838dfc76a8a41fe102d32d0435ce2ed740939662bb37035a07f70",
     "prepare-functional-review.md": "1b4a08cc0a28c09e0031f73e6003f23fd96fdc6c3fe22553e9f2408c1798f8cd",
     # apply-plan-review.md/bootstrap-workflow-v2.md (D-Plan-Revision-Publication,
@@ -512,8 +782,16 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # outcome (resolve_bundle_generation_outcome) and write the matching
     # ordinary/recovered-role trailer set -- intentional content change.
     "apply-implementation-review.md": "d86d648502b1ef2d742cbba1830835e50b0a2ed6e9c5dbac058616971c1e34c1",
-    "review-plan.md": "f9651dae8aa5078c6931ec0aa99c01dc0916514b9cca8573f6d558f3335a063d",
-    "record-manual-plan-review.md": "d2296026ff2440425f0bb133757d368edf9461781dc8e5fd5331ef707ce2de37",
+    # review-plan.md/record-manual-plan-review.md further updated,
+    # workflow-v2-3-followups CP3 (REQ-8/-9): the `Reviewer role:` template
+    # literal, the round-computation prose, the exact-match-expectation
+    # prose, and every other `local_model_plan_review`/
+    # `manual_external_plan_review` mention repointed to the canonical
+    # `LOCAL_MODEL_PLAN_REVIEW`/`MANUAL_EXTERNAL_PLAN_REVIEW` casing (the
+    # legacy casing is still stated as accepted where the command genuinely
+    # tolerates it) -- intentional content change.
+    "review-plan.md": "404cc99de3f23caffcffb92c8fbe680a97edcf6c9cfb52f84a3f0c1450adfbf0",
+    "record-manual-plan-review.md": "43e6bcc9a5fc94cfd84c52301399ad0d1acaf275a03962737964605c14f8e809",
     # bootstrap-workflow-v2.md (WF8c scope clauses (l)/(p)/(q), GPT-R108-002/
     # OPUS-R109-004): the driver-range text made checkpoint-agnostic
     # (OPUS-R102-009), a NO_CHECKPOINT terminal-wrap-up branch added to step
@@ -534,6 +812,65 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # Claude-Session: lines, never before them -- intentional content
     # change (the mechanical fix for 4a769fd's own defect class).
     "bootstrap-workflow-v2.md": "6cd29d3d6382ba1e246ecf1779aee9f649cc15a8b3489abbcbdecb04b1be578f",
+    # review-implementation.md: new, workflow-v2-3 CP1 -- the first
+    # recorded hash, not a change.
+    #
+    # review-implementation.md further updated, GPT-IR1-001 (round 1
+    # implementation-review remediation): corrected the false claim that
+    # an excluded-only concurrent commit surfaces as a digest mismatch
+    # before the HEAD difference -- intentional content change.
+    #
+    # review-implementation.md further updated, workflow-v2-3-followups CP2
+    # (REQ-3/REQ-4/REQ-6/REQ-17/REQ-20/REQ-21): step 3 gained a PLAN.md/
+    # plan_path read; step 5 gained a plan-conformance search arm; step 7 is
+    # new -- a second assert_bundle_not_rejected call plus the new
+    # assert_feedback_not_owned_by_other_work_item ownership guard,
+    # immediately before an unconditional write of
+    # <feedback_dir>/REVIEW_FEEDBACK.md; step 8 (was step 7) no longer
+    # states the command writes nothing; the frontmatter description: line
+    # and the step 6/step 7 provenance text no longer describe a manual
+    # hand-copy installation -- intentional content change, not a
+    # regression.
+    #
+    # review-implementation.md further updated, workflow-v2-3-followups
+    # REVISE round 1 (O5): step 7 gained a self-check on the composed
+    # report text -- parse_review_feedback_binding_fields/
+    # assert_feedback_matches_bundle against step 4's own recomputed
+    # values, immediately before the write -- so step 6's "hard
+    # precondition" wording is now actually enforced -- intentional
+    # content change.
+    "review-implementation.md": "a017359a961ac5dc3e9cee1c3c2f8265e38f924f1af2cdbe984b381f79f4de6a",
+    # review-functional.md: new, workflow-v2-3 CP2 -- the first recorded
+    # hash, not a change.
+    "review-functional.md": "579b90a0c6e0eea1246b7ae03347e67f86faf24b8ebc83402909f438877968ca",
+    # apply-functional-review.md (O2, workflow-v2-3-followups REVISE round
+    # 2, external cross-model review): this roster's own scope was fixed
+    # to "every command file workflow-v2-1-core's own dual-mode
+    # enumeration names, plus the bootstrap command and the bundle
+    # script" (see this file's own comment above `_GOLDEN_COMMAND_FILE_
+    # SHA256`) -- a specific, historically-bounded list, never literally
+    # "every command file any milestone modifies." apply-functional-
+    # review.md predates that list but was never added to it; round 2's
+    # own record_bundle_generation fix (Defect 2) modified it for real,
+    # exposing the gap. Added here as a deliberate, bounded widening --
+    # first recorded hash, not a change -- rather than left as a blind
+    # spot for a file this repository's remediation flow now actively
+    # edits. Three further command files remain outside this roster,
+    # left there deliberately rather than silently swept in by this same
+    # widening: accept-scoped-remediation.md, prepare-review.md, and
+    # recover-implementation-provenance.md (the last of which this same
+    # round also edited, for I1) -- none was ever part of the roster's
+    # own original scope, and none is a drift-detection gap this
+    # revision's own changes newly exposed the way apply-functional-
+    # review.md's was.
+    #
+    # apply-functional-review.md further updated, same round (O3): step 1
+    # gained the already-applied refusal
+    # (assert_functional_review_not_already_consumed), and both of this
+    # command's own exit points (the bounded branch's step 5, and the
+    # normal step 7) gained the mark_functional_review_consumed call --
+    # intentional content change.
+    "apply-functional-review.md": "9a75190c9519e2125ac203cabf7c031437dbd4d24d1ae1bcb37904700cd1ab7e",
 }
 
 
@@ -556,13 +893,52 @@ class TestGoldenCommandFileHashes(unittest.TestCase):
                 )
 
 
+class TestPlanApprovalCommitTrailerFinalParagraphConformance(unittest.TestCase):
+    """`workflow-v2-3-followups` CP1 (`LPR-R3-B01`, round-3 local plan
+    review): `approve-review.md` step 6.4's commit instruction must state
+    the same "trailers must be the commit message's own final paragraph"
+    requirement `milestone-implement.md`/`bootstrap-workflow-v2.md` already
+    state verbatim -- without it, a plausible commit-message shape makes
+    the approval commit's own trailers unparseable by `git
+    interpret-trailers --parse`, `discover_plan_approval_commit`'s exact
+    mechanism. No existing test asserted this for any of the three files
+    before this checkpoint; this is new coverage for all three, not just
+    `approve-review.md`."""
+
+    def test_approve_review_states_the_final_paragraph_requirement(self):
+        text = _command_text("approve-review.md")
+        self.assertIn(
+            "**These\n     two lines must be the commit message's own final paragraph** — after\n"
+            "     any `Co-Authored-By:`/`Claude-Session:` lines, never before them",
+            text,
+        )
+        self.assertIn("discover_plan_approval_commit", text)
+
+    def test_milestone_implement_states_the_final_paragraph_requirement(self):
+        text = _command_text("milestone-implement.md")
+        self.assertIn(
+            "**These\n      two lines must be the commit message's final paragraph** -- after\n"
+            "      any `Co-Authored-By:`/`Claude-Session:` lines, never before them",
+            text,
+        )
+
+    def test_bootstrap_workflow_v2_states_the_final_paragraph_requirement(self):
+        text = _command_text("bootstrap-workflow-v2.md")
+        self.assertIn(
+            "**These two lines must be the commit message's final\n   paragraph** — after any `Co-Authored-By:`/`Claude-Session:` lines, never\n"
+            "   before them",
+            text,
+        )
+
+
 class TestAssertLocalGenerationMatchesCallSiteConformance(unittest.TestCase):
     """Item 342 (`GPT-R63-001`; narrowed, revision 82, `OPUS-R102-001` --
     `WF8c` scope clause (k)): `assert_local_generation_matches` has
-    exactly two live call sites in this repository today --
-    `/approve-review`'s and `/review-plan`'s own repository-local
-    staleness checks, both at the permissive `require_metadata=False`
-    default. Item 342's own original text (revision 47) expected a third,
+    exactly three live call sites in this repository today --
+    `/approve-review`'s, `/review-plan`'s, and (`workflow-v2-3` CP1)
+    `/review-implementation`'s own repository-local staleness checks, all
+    three at the permissive `require_metadata=False` default. Item 342's
+    own original text (revision 47) expected a third,
     `require_metadata=True` caller -- `D-Approval-Commits`' current-round
     bundle-publication binding check -- but the atomic/staged
     bundle-publication redesign that caller belonged to was superseded,
@@ -577,11 +953,12 @@ class TestAssertLocalGenerationMatchesCallSiteConformance(unittest.TestCase):
     EXPECTED_CALL_SITES = frozenset({
         Path(".claude/commands/approve-review.md"),
         Path(".claude/commands/review-plan.md"),
+        Path(".claude/commands/review-implementation.md"),
     })
 
     _CALL_RE = re.compile(r"assert_local_generation_matches\(")
 
-    def test_exactly_the_two_live_permissive_callers_exist(self):
+    def test_exactly_the_three_live_permissive_callers_exist(self):
         repo_root = _repo_root()
         found: set[Path] = set()
         for path in sorted((repo_root / ".claude" / "commands").glob("*.md")):
@@ -611,11 +988,13 @@ class TestAssertLocalGenerationMatchesCallSiteConformance(unittest.TestCase):
 
 class TestGenerationDiagnosticMetadataCallerWordingConformance(unittest.TestCase):
     """Item 343 (`GPT-R64-002`, `WF8c` scope clause (k)): active
-    caller-facing documentation must agree with the two-live-caller
+    caller-facing documentation must agree with the three-live-caller
     reality item 342 proves, using non-exclusive wording rather than
-    naming `/approve-review` as the sole repository-local consumer."""
+    naming `/approve-review` as the sole repository-local consumer.
+    `/review-implementation` (`workflow-v2-3` CP1) is the third live
+    caller (`GPT-IR1-002`)."""
 
-    def test_review_protocol_names_both_live_callers(self):
+    def test_review_protocol_names_all_live_callers(self):
         repo_root = _repo_root()
         text = (repo_root / "docs" / "ai-workflow" / "REVIEW_PROTOCOL.md").read_text()
         match = re.search(
@@ -625,6 +1004,7 @@ class TestGenerationDiagnosticMetadataCallerWordingConformance(unittest.TestCase
         section = match.group(0)
         self.assertIn("/approve-review", section)
         self.assertIn("/review-plan", section)
+        self.assertIn("/review-implementation", section)
 
     def test_worktree_or_head_mismatch_docstring_is_non_exclusive(self):
         repo_root = _repo_root()
@@ -634,6 +1014,7 @@ class TestGenerationDiagnosticMetadataCallerWordingConformance(unittest.TestCase
         docstring = match.group(1)
         self.assertIn("/approve-review", docstring)
         self.assertIn("/review-plan", docstring)
+        self.assertIn("/review-implementation", docstring)
 
     def test_assert_local_generation_matches_docstring_is_non_exclusive(self):
         repo_root = _repo_root()
@@ -645,6 +1026,149 @@ class TestGenerationDiagnosticMetadataCallerWordingConformance(unittest.TestCase
         docstring = match.group(1)
         self.assertIn("/approve-review", docstring)
         self.assertIn("/review-plan", docstring)
+        self.assertIn("/review-implementation", docstring)
+
+
+class TestDemoTestNoLiveAnchorStaticConformance(unittest.TestCase):
+    """`workflow-v2-3`'s own CP1 missing-test item (revision 5/6/7/8,
+    round 4-7 missing tests/B1): a real-repository test anchored at
+    `WORKFLOW_V2_1_CORE_COMPLETION_COMMIT` is only actually fixed if every
+    call site feeding it a `head`/`commit` argument is fixed too -- five
+    functions across both `_demo_test.py` files
+    (`workflow_state.approval_is_current`,
+    `workflow_state.implementing_entry_reachable`,
+    `workflow_fingerprint.compute_review_content_id_plan_stage_at_commit`,
+    `..._at_commit_for_work_item`,
+    `compute_review_content_id_implementation_stage_at_commit`) each carry
+    one parameter (`head` or `commit`, resolved from the real signature via
+    `inspect.signature(fn).bind_partial(...)`, never a hand-maintained
+    positional-index map -- the index a function's anchor sits at differs
+    per function and has drifted out of this document's own prose four
+    rounds running) that must never resolve to live `"HEAD"` -- neither by
+    omission (the parameter's own default) nor by an explicit literal
+    `"HEAD"` string. Gate is this test passing, not a hand-checked list:
+    hand enumeration of this exact call set came up short three consecutive
+    review rounds (five offenders found -> six -> seven), and a fourth time
+    at the property-statement level itself. No allowlist: every real call
+    site into these five functions in either `_demo_test.py` file is
+    scanned, and the one call this property could never apply to
+    (`load_implementation_stage_classification`/`any_protected_path_dirty`
+    in `test_real_implementation_stage_classification_has_no_unclassified_dirty_path`,
+    and the two active-work-item-scoped tests' own deliberately live
+    `_changed_tracked_paths_between` calls) matches none of the five
+    scanned names, so it is never flagged in the first place and needs no
+    exemption."""
+
+    _TARGET_FUNCTIONS = {
+        "approval_is_current": (ws.approval_is_current, "head"),
+        "implementing_entry_reachable": (ws.implementing_entry_reachable, "head"),
+        "compute_review_content_id_plan_stage_at_commit": (
+            fingerprint.compute_review_content_id_plan_stage_at_commit, "commit",
+        ),
+        "compute_review_content_id_plan_stage_at_commit_for_work_item": (
+            fingerprint.compute_review_content_id_plan_stage_at_commit_for_work_item, "commit",
+        ),
+        "compute_review_content_id_implementation_stage_at_commit": (
+            fingerprint.compute_review_content_id_implementation_stage_at_commit, "commit",
+        ),
+    }
+
+    @classmethod
+    def _scan(cls, source_text: str) -> tuple[list[str], int]:
+        """Returns `(flagged_descriptions, total_real_call_site_count)`.
+        A call site is "real" if its function name matches one of the five
+        scanned names (via attribute access, e.g. `ws.approval_is_current(...)`
+        or `wf.compute_review_content_id_plan_stage_at_commit(...)` -- the
+        only calling convention either `_demo_test.py` file uses for these
+        functions); it is "flagged" if the anchor parameter's bound value
+        (resolved via `inspect.signature(fn).bind_partial(...)`, positional
+        or keyword, never a hand-maintained index) is omitted entirely
+        (the parameter's own live-`"HEAD"` default) or is present as the
+        literal constant string `"HEAD"`."""
+        tree = ast.parse(source_text)
+        flagged: list[str] = []
+        total = 0
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if not isinstance(func, ast.Attribute):
+                continue
+            name = func.attr
+            if name not in cls._TARGET_FUNCTIONS:
+                continue
+            real_fn, anchor_param = cls._TARGET_FUNCTIONS[name]
+            if any(isinstance(a, ast.Starred) for a in node.args):
+                continue
+            if any(kw.arg is None for kw in node.keywords):
+                continue
+            sig = inspect.signature(real_fn)
+            try:
+                bound = sig.bind_partial(*node.args, **{kw.arg: kw.value for kw in node.keywords})
+            except TypeError:
+                continue
+            total += 1
+            if anchor_param not in bound.arguments:
+                flagged.append(f"{name}(...) at line {node.lineno}: {anchor_param!r} omitted (live default)")
+                continue
+            value = bound.arguments[anchor_param]
+            if isinstance(value, ast.Constant) and value.value == "HEAD":
+                flagged.append(f"{name}(...) at line {node.lineno}: {anchor_param}=\"HEAD\" (live literal)")
+        return flagged, total
+
+    def test_negative_control_flags_one_synthetic_fixture_per_scanned_function_plus_explicit_head(self):
+        """A silently-broken callee-matcher (wrong attribute/name
+        resolution, a missed `ws.`/`fingerprint.` prefix, a module-alias
+        change) must not pass vacuously by finding nothing -- and a scan
+        that resolves any single function's anchor slot incorrectly must
+        fail this control rather than pass it (revision 8, round 7 B1/
+        missing tests)."""
+        fixture = "\n".join([
+            "ws.approval_is_current(repo_root, work_item, stage='plan', base_commit=base_commit)",
+            "ws.implementing_entry_reachable(repo_root, work_item, base_commit)",
+            "wf.compute_review_content_id_plan_stage_at_commit(repo_root, base, "
+            "work_item_type='process', work_item_id='x', plan_revision=1, protected=p, "
+            "excluded_paths=e, excluded_prefixes=x)",
+            "wf.compute_review_content_id_plan_stage_at_commit_for_work_item(repo_root, 'x')",
+            "wf.compute_review_content_id_implementation_stage_at_commit(repo_root, base, "
+            "work_item_type='process', work_item_id='x', protected_paths=p, "
+            "protected_prefixes=pp, excluded_paths=e, excluded_prefixes=x)",
+            "ws.approval_is_current(repo_root, work_item, stage='plan', base_commit=base_commit, "
+            "head=\"HEAD\")",
+        ])
+        flagged, total = self._scan(fixture)
+        self.assertEqual(total, 6, flagged)
+        self.assertEqual(len(flagged), 6, flagged)
+
+    def test_negative_control_passes_a_fixed_commit_fixture(self):
+        fixture = "\n".join([
+            "ws.approval_is_current(repo_root, work_item, stage='plan', base_commit=base_commit, "
+            "head=FIXED_COMMIT)",
+            "ws.implementing_entry_reachable(repo_root, work_item, base_commit, head=FIXED_COMMIT)",
+            "wf.compute_review_content_id_plan_stage_at_commit(repo_root, base, FIXED_COMMIT, "
+            "work_item_type='process', work_item_id='x', plan_revision=1, protected=p, "
+            "excluded_paths=e, excluded_prefixes=x)",
+            "wf.compute_review_content_id_plan_stage_at_commit_for_work_item(repo_root, 'x', "
+            "FIXED_COMMIT)",
+            "wf.compute_review_content_id_implementation_stage_at_commit(repo_root, base, "
+            "FIXED_COMMIT, work_item_type='process', work_item_id='x', protected_paths=p, "
+            "protected_prefixes=pp, excluded_paths=e, excluded_prefixes=x)",
+        ])
+        flagged, total = self._scan(fixture)
+        self.assertEqual(total, 5, flagged)
+        self.assertEqual(flagged, [])
+
+    def test_real_demo_test_files_have_no_live_anchor_call_site(self):
+        repo_root = _repo_root()
+        all_flagged: list[str] = []
+        total = 0
+        for relpath in ("scripts/workflow_fingerprint_demo_test.py", "scripts/workflow_state_demo_test.py"):
+            text = (repo_root / relpath).read_text()
+            flagged, count = self._scan(text)
+            total += count
+            all_flagged.extend(f"{relpath}: {item}" for item in flagged)
+        self.assertGreater(total, 0, "expected at least one real call site into the five scanned functions")
+        self.assertEqual(all_flagged, [])
 
 
 def _extract_numbered_steps(text: str) -> dict[str, str]:
@@ -1268,7 +1792,7 @@ class TestTwoStagePlanReviewIntegration(unittest.TestCase):
             state = ws.record_manual_plan_review(
                 state, "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
                 current_review_content_id=review_content_id,
-                feedback_role="manual_external_plan_review",
+                feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
                 feedback_review_content_id=review_content_id,
             )
             item = state["work_items"]["wi"]
@@ -2985,14 +3509,14 @@ class TestPlanApprovalPermanentSiteEndToEnd(unittest.TestCase):
             owner_token = journal["owner_token"]
             post_state = ws.apply_plan_approval(pre_state, wi, record, "t1")
 
-            # Step 5: no fifth member in this fixture -- no-op (confirms
-            # the simple four-member case this class exercises).
+            # Step 5 (merged staging-and-pin): no fifth member in this
+            # fixture, so the single call covers the three ordinary
+            # members only and no pin follows -- confirms the merge left
+            # the simple four-member case's behavior unchanged.
             self.assertIsNone(plan.artifacts_declaration_path)
-
-            # Step 6.1: stage the ordinary members.
             ordinary_paths = tuple(p for p in plan.paths if p != str(_STATE_PATH))
             with ws.plan_approval_guarded_mutation(
-                repo.root, owner_token=owner_token, step="step-6.2-stage-ordinary", now="t2",
+                repo.root, owner_token=owner_token, step="step-5-stage-and-pin", now="t2",
             ):
                 ws.stage_plan_approval_commit_paths(repo.root, ordinary_paths)
 
@@ -3063,6 +3587,235 @@ class TestPlanApprovalPermanentSiteEndToEnd(unittest.TestCase):
             final = json.loads((repo.root / _STATE_PATH).read_text())
             self.assertEqual(final, post_state)
             self.assertEqual(_run(["git", "status", "--porcelain"], cwd=repo.root), "")
+
+    def _setup_with_fifth_member(self, repo: h.ScratchRepo, wi: str):
+        """The real defect's exact fixture, reused for this class's own
+        real-choreography exercise: the artifacts declaration is pending
+        (never committed) and fresh in the bundle capture, so
+        `resolve_plan_stage_approval_commit_paths` resolves the genuine
+        five-member set step 5's merged staging-and-pin window must now
+        handle in one call (`workflow-v2-3-followups` CP1,
+        `LPR-R1-B01`)."""
+        membership = TestPlanStageApprovalCommitMembership()
+        repo.write_plan_docs(work_item_id=wi)
+        membership._commit_base_without_artifacts(repo, wi)
+        work_item = h.base_work_item(
+            work_item_id=wi, governing_workflow_version="2.1", phase="AWAITING_PLAN_APPROVAL",
+            plan_path="docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+            registry_path=f"docs/ai-workflow/registry/{wi}-registry.json",
+            mapping_path=f"docs/ai-workflow/requirements/{wi}-mapping.json",
+            base_commit=repo.base,
+        )
+        repo.write_workflow_state(**{wi: work_item})
+        # Canonicalize and commit the state file before the journal opens
+        # -- mirrors `_setup` above: `plan_approval_state_matches_pre_
+        # transaction`'s fresh, whole-file byte comparison depends on the
+        # live bytes matching `_serialize_state`'s canonical form, and the
+        # merged step's own state-pin sub-step (6.2) needs a stable `HEAD`
+        # to diff its own new pin against. Only the fifth member --
+        # `<wi>-artifacts.json` -- stays genuinely pending.
+        pre_state = json.loads((repo.root / _STATE_PATH).read_text())
+        (repo.root / _STATE_PATH).write_bytes(ws._serialize_state(pre_state))
+        _run(["git", "add", str(_STATE_PATH)], cwd=repo.root)
+        _run(["git", "commit", "-q", "-m", "seed workflow state"], cwd=repo.root)
+        artifacts_rel = f"docs/ai-workflow/registry/{wi}-artifacts.json"
+        membership._seed_bundle_capture(repo, wi, artifacts_rel)
+
+        plan = fingerprint.resolve_plan_stage_approval_commit_paths(
+            repo.root, wi, Path("docs/ai-workflow/WORKFLOW_STATE.json"),
+        )
+        self.assertIsNotNone(plan.artifacts_declaration_path)  # confirms the five-member case
+
+        protected = h.plan_stage_protected_paths(wi)
+        review_content_id, _ = fingerprint.compute_review_content_id_plan_stage(
+            repo.root, repo.base, work_item_type="process", work_item_id=wi,
+            plan_revision=1, protected=protected,
+            excluded_paths=h.plan_stage_excluded_paths(),
+            excluded_prefixes=h.plan_stage_excluded_prefixes(),
+        )
+        record = ws.build_approval_record(
+            basis="EXTERNAL_APPROVE", stage="plan",
+            user_confirmation=f"I confirm plan approval for {wi}, plan stage.", now="t1",
+            reviewed_bundle_id="b1", approved_review_content_id=review_content_id,
+            review_content_manifest=[{"path": "x", "exists": True, "mode": "100644", "blob": "y"}],
+        )
+        return pre_state, record, review_content_id, plan
+
+    def test_five_member_fixture_succeeds_through_the_real_merged_step_5(self):
+        """The exact gap `workflow-v2-3-followups` CP1 closes and
+        `WORKFLOW_V2_3_FOLLOWUPS.md` confirmed no test covered: a genuine
+        five-member fixture (fifth member pending and fresh) driven
+        through `approve-review.md`'s own real, merged step 5 -- one call
+        to `stage_plan_approval_commit_paths` over all four non-state
+        members, then the fifth-member pin, both inside the same
+        `"step-5-stage-and-pin"` guarded window -- proving the documented
+        sequence now succeeds end to end, all the way through to a
+        committed, materialized, journal-closed outcome. The *old*
+        two-call split is proven broken by
+        `TestPlanStageApprovalCommitMembership`'s own low-level fixture
+        already; this test proves the *new* one-call choreography works,
+        not merely that the underlying primitive accepts an arbitrary
+        path tuple."""
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup_with_fifth_member(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+            owner_token = journal["owner_token"]
+            post_state = ws.apply_plan_approval(pre_state, wi, record, "t1")
+
+            # Step 5 (merged): one call over every non-state member,
+            # ordinary members plus the fifth, then pin the fifth --
+            # exactly approve-review.md's own documented call shape.
+            fifth = plan.artifacts_declaration_path
+            self.assertIsNotNone(fifth)
+            ordinary_paths = tuple(p for p in plan.paths if p not in (str(_STATE_PATH), fifth))
+            self.assertEqual(len(ordinary_paths), 3)
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=owner_token, step="step-5-stage-and-pin", now="t2",
+            ):
+                ws.stage_plan_approval_commit_paths(repo.root, ordinary_paths + (fifth,))
+                ws.verify_staged_blob_sha256(repo.root, fifth, plan.artifacts_declaration_sha256)
+
+            # The fifth member is the only one of the four with real
+            # changed content at this fixture's HEAD (the three ordinary
+            # members were already settled by `_commit_base_without_
+            # artifacts`) -- a subset check, matching
+            # `stage_plan_approval_commit_paths`'s own post-staging
+            # assertion, not exact equality (a byte-identical member
+            # legitimately produces no diff entry).
+            staged = _run(["git", "diff", "--name-only", "--cached", "HEAD"], cwd=repo.root)
+            staged_paths = {line for line in staged.splitlines() if line}
+            self.assertIn(fifth, staged_paths)
+            self.assertTrue(staged_paths.issubset(set(ordinary_paths) | {fifth}))
+
+            # Step 6.2: 6.1a compare-and-swap, then pin the state blob.
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=owner_token, step="step-6.1b-state-pin", now="t3",
+            ):
+                self.assertTrue(
+                    ws.plan_approval_state_matches_pre_transaction(
+                        repo.root, journal["pre_procedure_state_sha256"],
+                    ),
+                )
+                ws.pin_plan_approval_state_blob(
+                    repo.root, base64.b64decode(journal["expected_post_state_b64"]),
+                )
+                ws.verify_staged_plan_approval_state_blob(
+                    repo.root, journal["expected_post_state_sha256"],
+                )
+
+            # Step 6.3: staged-set assertion.
+            staged = _run(["git", "diff", "--name-only", "--cached", "HEAD"], cwd=repo.root)
+            staged_paths = {line for line in staged.splitlines() if line}
+            self.assertTrue(staged_paths.issubset(set(journal["applicable_paths"])))
+
+            # Step 6.4: the commit.
+            body = f"plan approval\n\nWorkflow-Plan-Approval: {review_content_id}\nWorkflow-Work-Item: {wi}"
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=owner_token, step="step-6.5-commit", now="t4",
+            ):
+                _run(["git", "commit", "-q", "-m", body], cwd=repo.root)
+            commit = repo.head()
+
+            # Step 6a: classify -> COMMITTED; the post-commit verification
+            # set, fifth-member blob check included.
+            self.assertEqual(
+                ws.classify_plan_approval_outcome(repo.root, journal),
+                ws.PLAN_APPROVAL_OUTCOME_COMMITTED,
+            )
+            ws.verify_post_approval_manifest_match(
+                repo.root, post_state["work_items"][wi], stage="plan",
+                base_commit=repo.base, commit=commit,
+            )
+            ws.assert_committed_path_set_matches(repo.root, commit, journal["applicable_paths"])
+            ws.verify_committed_plan_approval_state_blob(
+                repo.root, commit, journal["expected_post_state_sha256"],
+            )
+            ws.verify_committed_blob_sha256(repo.root, commit, fifth, plan.artifacts_declaration_sha256)
+
+            # Step 6c: materialize; step 6d: close the journal.
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=owner_token, step="step-8b-materialize", now="t5",
+            ):
+                target = ws.classify_plan_approval_materialize_target(repo.root, wi, pre_state, post_state)
+                self.assertEqual(target, ws.PLAN_APPROVAL_MATERIALIZE_WRITE)
+                ws.materialize_plan_approval_state(repo.root, commit, journal["expected_post_state_sha256"])
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=owner_token, step="step-8a-close-journal", now="t6",
+            ):
+                ws.close_plan_approval_journal(repo.root)
+
+            self.assertIsNone(ws.read_plan_approval_journal(repo.root))
+            self.assertIsNone(ws.read_plan_approval_guard(repo.root))
+            final = json.loads((repo.root / _STATE_PATH).read_text())
+            self.assertEqual(final, post_state)
+            self.assertEqual(_run(["git", "status", "--porcelain"], cwd=repo.root), "")
+
+    def test_merged_step_5_still_refuses_on_unrelated_dirty_index(self):
+        """The merge does not weaken the pre-staging precondition: unrelated
+        content already staged with real changed content before the merged
+        window's own `stage_plan_approval_commit_paths` call runs still
+        raises `DirtyIndexBeforeStagingError`, and the guard releases
+        without advancing progress -- step 6b's rollback then resets it
+        cleanly, and a retry (with the unrelated content removed) succeeds
+        through the same merged step."""
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            pre_state, record, review_content_id, plan = self._setup_with_fifth_member(repo, wi)
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+            owner_token = journal["owner_token"]
+
+            status_before = _run(["git", "status", "--porcelain"], cwd=repo.root)
+            (repo.root / "unrelated.txt").write_text("unrelated concurrent content\n")
+            _run(["git", "add", "unrelated.txt"], cwd=repo.root)
+
+            fifth = plan.artifacts_declaration_path
+            ordinary_paths = tuple(p for p in plan.paths if p not in (str(_STATE_PATH), fifth))
+            with self.assertRaises(ws.DirtyIndexBeforeStagingError):
+                with ws.plan_approval_guarded_mutation(
+                    repo.root, owner_token=owner_token, step="step-5-stage-and-pin", now="t2",
+                ):
+                    ws.stage_plan_approval_commit_paths(repo.root, ordinary_paths + (fifth,))
+
+            # The guard released without advancing progress -- no
+            # progress record for this step exists yet.
+            self.assertIsNone(ws.read_plan_approval_guard(repo.root))
+            progress = ws.read_plan_approval_owner_progress(repo.root, owner_token)
+            self.assertTrue(progress is None or progress.get("step") != "step-5-stage-and-pin")
+
+            # Step 6b's rollback resets the whole index back to HEAD --
+            # both this attempt's own unrelated stage and (a no-op, since
+            # the call above raised before staging anything of its own)
+            # any partial staging from the merged call.
+            lease = ws.acquire_plan_approval_guard(
+                repo.root, holder_owner_token=owner_token, step="rollback-index-reset", now="t3",
+            )
+            try:
+                ws.rollback_plan_approval_transaction(repo.root, owner_token=owner_token)
+            finally:
+                ws.release_plan_approval_guard(repo.root, lease)
+            self.assertEqual(repo.head(), journal["pre_procedure_head"])
+            status_after = _run(["git", "status", "--porcelain"], cwd=repo.root)
+            expected = set(status_before.splitlines()) | {"?? unrelated.txt"}
+            self.assertEqual(set(status_after.splitlines()), expected)
+
+    def test_new_step_label_classifies_ordinary_and_acquires_the_guard(self):
+        """`plan_approval_step_class("step-5-stage-and-pin")` returns
+        `"ordinary"` and `plan_approval_guarded_mutation` successfully
+        acquires the guard under it -- the existing generic
+        `TestPlanApprovalFailureAtomicityTransaction`-sibling set-iteration
+        test covers the frozensets' exhaustiveness generically but proves
+        nothing about this specific, newly-added label (`LPR-R3-B02`)."""
+        self.assertEqual(ws.plan_approval_step_class("step-5-stage-and-pin"), ws.ORDINARY)
+        with h.ScratchRepo() as repo:
+            wi = "wi"
+            journal = self._open_journal(repo, wi, *self._setup(repo, wi))
+            with ws.plan_approval_guarded_mutation(
+                repo.root, owner_token=journal["owner_token"], step="step-5-stage-and-pin", now="t2",
+            ):
+                pass
+            progress = ws.read_plan_approval_owner_progress(repo.root, journal["owner_token"])
+            self.assertEqual(progress["step"], "step-5-stage-and-pin")
 
     def test_not_committed_outcome_runs_the_step_6b_rollback_pattern(self):
         """Nothing staged, nothing committed -- classify must find

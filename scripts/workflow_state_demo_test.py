@@ -26,6 +26,26 @@ import workflow_state as ws
 BASE_COMMIT = "162154d3e5e10eb65e109833acae4b4fb01fc5d6"
 WORK_ITEM_ID = "workflow-v2-1-core"
 
+# `workflow-v2-1-core`'s own `/accept-milestone` commit -- its `base_commit`
+# reached `MILESTONE_COMPLETE`. Every real-repository test in this file that
+# exists to validate a fact about `workflow-v2-1-core`'s own now-closed
+# history is anchored here, never at live `"HEAD"`/the working tree: that
+# history stopped moving the instant the item completed, so a fixed anchor
+# stays green permanently regardless of what a later, concurrent work item
+# (e.g. `workflow-v2-3`) commits on top of it (revision 4/5/6, round 3/4/5
+# `local_model_plan_review` B1).
+WORKFLOW_V2_1_CORE_COMPLETION_COMMIT = "27f051eba897d77c742ead8b160ed519c0671ee4"
+
+
+def _blob_at_commit(repo_root: Path, commit: str, rel_path: str) -> str:
+    """The blob SHA `rel_path` had at `commit`, never the live worktree --
+    so a manifest fixed at a commit and its own verification loop are
+    always compared from the same source (revision 5, round 4 B2/I1)."""
+    return subprocess.run(
+        ["git", "rev-parse", f"{commit}:{rel_path}"], cwd=repo_root, check=True,
+        capture_output=True, text=True,
+    ).stdout.strip()
+
 
 def _repo_root() -> Path:
     return Path(
@@ -192,6 +212,21 @@ _GRANDFATHERED_WORKFLOW_TRAILER_LOOKALIKE_VIOLATIONS = frozenset({
     "fac2bac3a6daee56a8393c50b1bcc6cfc64fced9",
     "fb7cc3eafebcc232b79644abd021fe17b48e161f",
     "fd0eb73e5d1895a24e018b44526f7e7dbf400e5f",
+    # `workflow-v2-1-core`'s own `/accept-milestone` commit (this item's own
+    # `base_commit`) -- `/approve-review` step 6.4, unlike
+    # `milestone-implement.md`/`bootstrap-workflow-v2.md`, carries no
+    # "trailers must be the message's own final paragraph" requirement, so
+    # this pre-existing violation is not this work item's own regression
+    # (revision 13, round 11 I1).
+    "27f051eba897d77c742ead8b160ed519c0671ee4",
+    # `workflow-v2-3`'s own `/accept-milestone` commit (`workflow-v2-3-
+    # followups`'s own `base_commit`) -- `accept-milestone.md`'s commit
+    # step carries the same missing-final-paragraph trailer gap CP1 fixes
+    # in `approve-review.md` step 6.4; fixing `accept-milestone.md` itself
+    # is explicitly declined for this milestone (`workflow-v2-3-followups`
+    # plan, "Executing this plan"), so this pre-existing violation is not
+    # this work item's own regression (`LPR-R3-B01`/`LPR-R3-I01`).
+    "fb134ac4f7cdabb7861d170bb61331bb8d9f5a14",
 })
 
 
@@ -562,14 +597,19 @@ class TestAgainstRealRepository(unittest.TestCase):
         repo_root = _repo_root()
         state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
         work_item = state["work_items"][WORK_ITEM_ID]
-        self.assertTrue(ws.implementing_entry_reachable(repo_root, work_item, work_item["base_commit"]))
+        self.assertTrue(ws.implementing_entry_reachable(
+            repo_root, work_item, work_item["base_commit"], head=WORKFLOW_V2_1_CORE_COMPLETION_COMMIT
+        ))
 
     def test_real_plan_approval_is_current(self):
         repo_root = _repo_root()
         state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
         work_item = state["work_items"][WORK_ITEM_ID]
         self.assertTrue(
-            ws.approval_is_current(repo_root, work_item, stage="plan", base_commit=work_item["base_commit"])
+            ws.approval_is_current(
+                repo_root, work_item, stage="plan", base_commit=work_item["base_commit"],
+                head=WORKFLOW_V2_1_CORE_COMPLETION_COMMIT,
+            )
         )
 
     def test_real_implementation_stage_classification_has_no_unclassified_dirty_path(self):
@@ -586,6 +626,121 @@ class TestAgainstRealRepository(unittest.TestCase):
         ws.any_protected_path_dirty(
             repo_root, protected_paths, protected_prefixes, excluded_paths, excluded_prefixes
         )  # must not raise
+
+    def test_real_active_work_item_implementation_stage_changed_set_classifies_exhaustively(self):
+        """`workflow-v2-3`'s own CP1 missing-test item (revision 9, round 8
+        missing tests): the *changed-since-base_commit* set (not the
+        dirty-only set the test above covers), classified against
+        whichever item is *currently* active's own artifacts declaration
+        (`artifacts_path_for_work_item(active_work_item_id)`, never the
+        hardcoded `workflow-v2-1-core` default) -- so a future work item's
+        own under-widened implementation-stage declaration fails this
+        suite immediately, the way B1's own defect (revision 3) should
+        have been caught at generation time rather than at external
+        review. Deliberately live `"HEAD"`-scoped: this checks the
+        *currently active* item's own still-moving footprint, unlike the
+        seven tests fixed at `WORKFLOW_V2_1_CORE_COMPLETION_COMMIT` above,
+        which validate a fact about `workflow-v2-1-core`'s own closed
+        history instead."""
+        repo_root = _repo_root()
+        state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
+        active_work_item_id = state["active_work_item_id"]
+        work_item = state["work_items"][active_work_item_id]
+        protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
+            fingerprint.load_implementation_stage_classification(
+                repo_root, artifacts_path=fingerprint.artifacts_path_for_work_item(active_work_item_id)
+            )
+        )
+        changed = sorted(
+            fingerprint._changed_tracked_paths_between(repo_root, work_item["base_commit"], "HEAD")
+        )
+        for path in changed:
+            with self.subTest(path=path):
+                try:
+                    fingerprint.classify_path_implementation_stage(
+                        path, protected_paths, protected_prefixes, excluded_paths, excluded_prefixes
+                    )
+                except fingerprint.UnclassifiedPathError:
+                    self.fail(
+                        f"{path} changed since {active_work_item_id!r}'s own base_commit "
+                        f"{work_item['base_commit']} but its own implementation-stage "
+                        f"classifier does not recognize it as protected or excluded"
+                    )
+
+    def test_real_active_work_item_plan_stage_changed_set_classifies_exhaustively(self):
+        """Plan-stage counterpart of the test immediately above (revision
+        9, round 8 missing tests): the currently active item's own live
+        `plan_stage` declaration (`resolve_plan_stage_metadata`), exercised
+        against the same changed-since-base_commit set. Neither of the
+        other new tests in this file exercises this: the active-work-item
+        test above is implementation-stage only, and the standalone
+        assertion below is pinned to `workflow-v2-1-core`'s own frozen
+        constants and closed history range."""
+        repo_root = _repo_root()
+        state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
+        active_work_item_id = state["active_work_item_id"]
+        work_item = state["work_items"][active_work_item_id]
+        metadata = fingerprint.resolve_plan_stage_metadata(repo_root, active_work_item_id)
+        changed = sorted(
+            fingerprint._changed_tracked_paths_between(repo_root, work_item["base_commit"], "HEAD")
+        )
+        for path in changed:
+            with self.subTest(path=path):
+                try:
+                    fingerprint.classify_path(
+                        path, metadata.protected_paths, metadata.excluded_paths, metadata.excluded_prefixes
+                    )
+                except fingerprint.UnclassifiedPathError:
+                    self.fail(
+                        f"{path} changed since {active_work_item_id!r}'s own base_commit "
+                        f"{work_item['base_commit']} but its own plan-stage classifier "
+                        f"does not recognize it as protected or excluded"
+                    )
+
+    def test_real_workflow_v2_1_core_plan_stage_classification_gap_is_closed_at_completion_commit(self):
+        """The direct, standalone test of exactly B1's own failure class
+        (revision 4, missing tests item 2): asserts
+        `assert_all_changed_paths_classified_commit` raises nothing for
+        `workflow-v2-1-core`'s own closed `162154d3..27f051eb` history,
+        against the frozen `PLAN_STAGE_*` constants -- naming the
+        classification gap directly as its own assertion rather than only
+        as a precondition buried inside a digest computation."""
+        repo_root = _repo_root()
+        fingerprint.assert_all_changed_paths_classified_commit(
+            repo_root, BASE_COMMIT, WORKFLOW_V2_1_CORE_COMPLETION_COMMIT,
+            protected=fingerprint.PLAN_STAGE_PROTECTED,
+            excluded_paths=fingerprint.PLAN_STAGE_EXCLUDED_PATHS,
+            excluded_prefixes=fingerprint.PLAN_STAGE_EXCLUDED_PREFIXES,
+        )  # must not raise
+
+    def test_real_state_file_no_non_terminal_work_item_holds_a_legacy_cased_plan_review_stage_key(self):
+        """O3 (`workflow-v2-3-followups` round-1 implementation review,
+        folded into continued scope): CP3's own deprecation condition --
+        "no live non-terminal work item holds a legacy-cased
+        `plan_review_stages` key" -- was previously verified once, by
+        hand, in that round's own `TEST_RESULTS.md`, and by nothing
+        thereafter. This asserts it directly against the live state file,
+        so a legacy-cased ledger re-entering the file (hand edit,
+        restored backup, imported legacy item) fails this test rather
+        than silently going unnoticed."""
+        repo_root = _repo_root()
+        state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
+        for work_item_id, work_item in state["work_items"].items():
+            if work_item.get("phase") in ws.TERMINAL_PHASES:
+                continue
+            stages = work_item.get("plan_review_stages")
+            if not stages:
+                continue
+            for key in stages:
+                if key == "review_content_id":
+                    continue
+                with self.subTest(work_item_id=work_item_id, key=key):
+                    self.assertEqual(
+                        ws._normalize_plan_review_stage_key(key), key,
+                        f"{work_item_id!r}'s plan_review_stages holds legacy-cased key {key!r} "
+                        f"while non-terminal (phase {work_item.get('phase')!r}) -- CP3's "
+                        f"deprecation condition no longer holds",
+                    )
 
 
 class TestLegacyImportAgainstRealMilestone8(unittest.TestCase):
@@ -854,7 +1009,9 @@ class TestCheckpointOriginationAgainstRealRepository(unittest.TestCase):
         state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
         work_item = state["work_items"][WORK_ITEM_ID]
         self.assertTrue(
-            ws.implementing_entry_reachable(repo_root, work_item, work_item["base_commit"]),
+            ws.implementing_entry_reachable(
+                repo_root, work_item, work_item["base_commit"], head=WORKFLOW_V2_1_CORE_COMPLETION_COMMIT
+            ),
         )
 
     def test_bootstrap_step_0_journal_precondition_is_installed_and_ownership_guard_aware(self):
@@ -1121,17 +1278,22 @@ class TestCheckpointReachabilityConformanceLive(unittest.TestCase):
 
 class TestReviewSubjectDeclarationsLive(unittest.TestCase):
     """`WFR-67`'s `review-subject:` header conformance (`WF8c` item (h),
-    part 1), run against this repository's real thirteen command files at
+    part 1), run against this repository's real fifteen command files at
     live `HEAD` -- proves the declaration half actually landed on every
     file the plan's own revision-80 text names, not only against synthetic
     fixtures. As documented at `discover_review_subject_declarations`'s own
     docstring, the *value* each file carries here is a recorded,
-    known-correct table (the nine-consumer/four-exempt split that text
-    states by name), not yet re-derived from each file's own prose against
-    the three semantic disjuncts -- that derivation is separate, deferred
-    `WF8c` scope. `recover-implementation-provenance.md` (added after
-    `WFR-67`'s design was finalized, `WF8c` item (b)) is correctly outside
-    the named "all thirteen" and carries no declaration at all."""
+    known-correct table (the eleven-consumer/four-exempt split:
+    `workflow-v2-3`'s own `/review-implementation`, landed at that item's
+    own CP1, is the seventh `bundle` consumer, and `/review-functional`,
+    landed at CP2, is the eighth), not yet re-derived from each file's
+    own prose against the three semantic disjuncts -- that derivation is
+    separate, deferred `WF8c` scope. `recover-implementation-provenance.md`
+    (added after `WFR-67`'s design was finalized, `WF8c` item (b)) is
+    outside the named "all fifteen" and carries no declaration at all; its
+    classification against `WFR-67`'s roster is deliberately left
+    unassigned rather than resolved (see the roster comment above
+    `REVIEW_SUBJECT_ROSTER` for why)."""
 
     EXPECTED = {
         ".claude/commands/accept-milestone.md": "none",
@@ -1146,26 +1308,37 @@ class TestReviewSubjectDeclarationsLive(unittest.TestCase):
         ".claude/commands/prepare-functional-review.md": "none",
         ".claude/commands/prepare-review.md": "bundle",
         ".claude/commands/record-manual-plan-review.md": "verdict",
+        ".claude/commands/review-functional.md": "bundle",
+        ".claude/commands/review-implementation.md": "bundle",
         ".claude/commands/review-plan.md": "bundle",
     }
 
     # The "twice" consumers (existing pre-mutation refusal point + the
     # operation's own mutation guard) vs. the "once" report-only consumers
     # (revision 79: "the single assertion immediately preceding the report
-    # IS the mutation-guard assertion").
+    # IS the mutation-guard assertion"). `review-implementation.md` moved
+    # from "once" to "twice" at `workflow-v2-3-followups` `CP2` (REQ-5,
+    # `LPR-R1-I01`): it now writes `<feedback_dir>/REVIEW_FEEDBACK.md`
+    # once its own pre-write guards -- including a second, immediately-
+    # pre-write `assert_bundle_not_rejected` call -- pass, the same "real
+    # write follows the guard" shape the other five "twice" consumers
+    # already have; it is no longer a report-only consumer whose single
+    # assertion doubles as its own mutation guard.
     EXPECTED_ASSERTION_COUNT = {
         ".claude/commands/apply-implementation-review.md": 2,
         ".claude/commands/apply-plan-review.md": 2,
         ".claude/commands/approve-review.md": 2,
         ".claude/commands/record-manual-plan-review.md": 2,
         ".claude/commands/review-plan.md": 2,
+        ".claude/commands/review-implementation.md": 2,
         ".claude/commands/apply-functional-review.md": 1,
         ".claude/commands/milestone-implement.md": 1,
         ".claude/commands/milestone-plan.md": 1,
         ".claude/commands/prepare-review.md": 1,
+        ".claude/commands/review-functional.md": 1,
     }
 
-    def test_all_thirteen_command_files_declare_the_expected_value(self):
+    def test_all_fifteen_command_files_declare_the_expected_value(self):
         repo_root = _repo_root()
         head = subprocess.run(
             ["git", "rev-parse", "HEAD"], cwd=repo_root, check=True,

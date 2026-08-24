@@ -971,6 +971,71 @@ class TestStateValidation(unittest.TestCase):
     def test_minimal_valid_state_passes(self):
         ws.validate_state(_base_state(wi=_base_work_item()))
 
+    def _valid_plan_approval(self):
+        return ws.build_approval_record(
+            basis="EXTERNAL_APPROVE", stage="plan", user_confirmation="approve wi plan",
+            now="t0", reviewed_bundle_id="b", approved_review_content_id="c",
+            review_content_manifest=[{"path": "x", "exists": True, "mode": "100644", "blob": "y"}],
+        )
+
+    def _valid_technical_approval(self):
+        return ws.build_approval_record(
+            basis="EXTERNAL_APPROVE", stage="implementation",
+            user_confirmation="approve wi implementation", now="t0",
+            reviewed_bundle_id="b", approved_review_content_id="c",
+            review_content_manifest=[{"path": "x", "exists": True, "mode": "100644", "blob": "y"}],
+            reviewed_content_commit="deadbeef",
+        )
+
+    def test_valid_persisted_plan_approval_passes_state_validation(self):
+        wi = _base_work_item(plan_approval=self._valid_plan_approval())
+        ws.validate_state(_base_state(wi=wi))  # must not raise
+
+    def test_valid_persisted_technical_approval_passes_state_validation(self):
+        wi = _base_work_item(technical_approval=self._valid_technical_approval())
+        ws.validate_state(_base_state(wi=wi))  # must not raise
+
+    def test_malformed_persisted_plan_approval_manifest_rejected_by_state_validation(self):
+        """I2 (`workflow-v2-3-followups` continued scope, external
+        cross-model review round 2): `validate_approval_record`'s shape
+        check protected only newly *constructed* records -- a malformed
+        `plan_approval` already sitting in `WORKFLOW_STATE.json` (the
+        exact shape that reached `/accept-milestone` undetected and
+        crashed `_assert_registry_covered_by_current_plan_approval` with
+        a bare `AttributeError`) must now be rejected cleanly by
+        `validate_state` itself, before any consumer ever sees it. The
+        malformed manifest here is the whole projection object
+        `workflow_fingerprint.compute_review_content_id_plan_stage*`
+        returns -- a dict, not the flat list every consumer expects --
+        the exact historical shape, not a synthetic stand-in."""
+        malformed = self._valid_plan_approval()
+        malformed["review_content_manifest"] = {
+            "stage": "plan", "work_item_type": "process", "work_item_id": "wi",
+            "plan_revision": 1, "base_commit": "deadbeef", "reviewed_implementation_head": None,
+            "review_content_manifest": [{"path": "x", "exists": True, "mode": "100644", "blob": "y"}],
+            "protected_paths": ["x"], "excluded_paths": [], "excluded_prefixes": [],
+        }
+        wi = _base_work_item(plan_approval=malformed)
+        with self.assertRaises(ws.InvalidApprovalRecordError) as ctx:
+            ws.validate_state(_base_state(wi=wi))
+        self.assertNotIsInstance(ctx.exception, AttributeError)
+
+    def test_malformed_persisted_technical_approval_manifest_rejected_by_state_validation(self):
+        """I2's technical_approval counterpart -- the second of the two
+        approval records the original incident found malformed."""
+        malformed = self._valid_technical_approval()
+        malformed["review_content_manifest"] = {
+            "stage": "implementation", "work_item_type": "process", "work_item_id": "wi",
+            "base_commit": "deadbeef", "reviewed_implementation_head": None,
+            "review_content_manifest": [{"path": "x", "exists": True, "mode": "100644", "blob": "y"}],
+            "protected_paths": [], "protected_prefixes": ["src/"],
+            "excluded_paths": [], "excluded_prefixes": [],
+        }
+        wi = _base_work_item(technical_approval=malformed)
+        with self.assertRaises(ws.InvalidApprovalRecordError) as ctx:
+            ws.validate_state(_base_state(wi=wi))
+        self.assertNotIsInstance(ctx.exception, AttributeError)
+
     def test_unknown_phase_rejected(self):
         with self.assertRaises(ws.UnknownPhaseError):
             ws.validate_state(_base_state(wi=_base_work_item(phase="NOT_A_REAL_PHASE")))
@@ -1527,7 +1592,7 @@ class TestPlanReviewStages(unittest.TestCase):
     def test_non_null_on_v1_item_rejected(self):
         wi = _base_work_item(
             governing_workflow_version="1",
-            plan_review_stages={"review_content_id": "x", "local_model_plan_review": None, "manual_external_plan_review": None},
+            plan_review_stages={"review_content_id": "x", "LOCAL_MODEL_PLAN_REVIEW": None, "MANUAL_EXTERNAL_PLAN_REVIEW": None},
         )
         with self.assertRaises(ws.PlanReviewStagesInvalidForVersionError):
             ws.validate_state(_base_state(wi=wi))
@@ -1537,8 +1602,8 @@ class TestPlanReviewStages(unittest.TestCase):
             governing_workflow_version="2.1",
             plan_review_stages={
                 "review_content_id": "x",
-                "local_model_plan_review": None,
-                "manual_external_plan_review": {"bundle_id": "b", "verdict": "APPROVE", "round": 1, "completed_at": "t"},
+                "LOCAL_MODEL_PLAN_REVIEW": None,
+                "MANUAL_EXTERNAL_PLAN_REVIEW": {"bundle_id": "b", "verdict": "APPROVE", "round": 1, "completed_at": "t"},
             },
         )
         with self.assertRaises(ws.ManualStageWithoutLocalStageError):
@@ -1550,8 +1615,8 @@ class TestPlanReviewStages(unittest.TestCase):
             governing_workflow_version="2.1",
             plan_review_stages={
                 "review_content_id": "x",
-                "local_model_plan_review": {"bundle_id": "b", "verdict": "REVISE", "round": 1, "completed_at": "t"},
-                "manual_external_plan_review": None,
+                "LOCAL_MODEL_PLAN_REVIEW": {"bundle_id": "b", "verdict": "REVISE", "round": 1, "completed_at": "t"},
+                "MANUAL_EXTERNAL_PLAN_REVIEW": None,
             },
         )
         with self.assertRaises(ws.StageVerdictNotApproveError):
@@ -1562,8 +1627,8 @@ class TestPlanReviewStages(unittest.TestCase):
             governing_workflow_version="2.1",
             plan_review_stages={
                 "review_content_id": "x",
-                "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
-                "manual_external_plan_review": {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"},
+                "LOCAL_MODEL_PLAN_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+                "MANUAL_EXTERNAL_PLAN_REVIEW": {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"},
             },
         )
         ws.validate_state(_base_state(wi=wi))  # must not raise
@@ -2259,8 +2324,8 @@ class TestApprovalGateReachability(unittest.TestCase):
         ))
         stages = {
             "review_content_id": "c1",
-            "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
-            "manual_external_plan_review": {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"},
+            "LOCAL_MODEL_PLAN_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+            "MANUAL_EXTERNAL_PLAN_REVIEW": {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"},
         }
         self.assertTrue(ws.plan_approval_gate_reachable(
             latest_round_status="APPROVE", governing_workflow_version="2.1",
@@ -2270,8 +2335,8 @@ class TestApprovalGateReachability(unittest.TestCase):
     def test_v2_1_plan_gate_rejects_stale_review_content_id(self):
         stages = {
             "review_content_id": "stale",
-            "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
-            "manual_external_plan_review": {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"},
+            "LOCAL_MODEL_PLAN_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+            "MANUAL_EXTERNAL_PLAN_REVIEW": {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"},
         }
         self.assertFalse(ws.plan_approval_gate_reachable(
             latest_round_status="APPROVE", governing_workflow_version="2.1",
@@ -2281,8 +2346,8 @@ class TestApprovalGateReachability(unittest.TestCase):
     def test_v2_1_plan_gate_rejects_local_only(self):
         stages = {
             "review_content_id": "c1",
-            "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
-            "manual_external_plan_review": None,
+            "LOCAL_MODEL_PLAN_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+            "MANUAL_EXTERNAL_PLAN_REVIEW": None,
         }
         self.assertFalse(ws.plan_approval_gate_reachable(
             latest_round_status="APPROVE", governing_workflow_version="2.1",
@@ -3575,16 +3640,16 @@ class TestRecordLocalPlanReview(unittest.TestCase):
         self.assertEqual(item["phase"], "AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW")
         self.assertEqual(item["plan_review_stages"], {
             "review_content_id": "c1",
-            "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
-            "manual_external_plan_review": None,
+            "LOCAL_MODEL_PLAN_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+            "MANUAL_EXTERNAL_PLAN_REVIEW": None,
         })
         self.assertEqual(item["state_revision"], 2)
 
     def test_approve_clears_stale_manual_entry_from_a_prior_content_id(self):
         wi = _v21_work_item(plan_review_stages={
             "review_content_id": "old",
-            "local_model_plan_review": {"bundle_id": "b0", "verdict": "APPROVE", "round": 1, "completed_at": "t0"},
-            "manual_external_plan_review": {"bundle_id": "b0", "verdict": "APPROVE", "round": 1, "completed_at": "t0"},
+            "LOCAL_MODEL_PLAN_REVIEW": {"bundle_id": "b0", "verdict": "APPROVE", "round": 1, "completed_at": "t0"},
+            "MANUAL_EXTERNAL_PLAN_REVIEW": {"bundle_id": "b0", "verdict": "APPROVE", "round": 1, "completed_at": "t0"},
         })
         new_state = ws.record_local_plan_review(
             _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b1",
@@ -3592,7 +3657,7 @@ class TestRecordLocalPlanReview(unittest.TestCase):
         )
         item = new_state["work_items"]["wi"]
         self.assertEqual(item["plan_review_stages"]["review_content_id"], "new")
-        self.assertIsNone(item["plan_review_stages"]["manual_external_plan_review"])
+        self.assertIsNone(item["plan_review_stages"]["MANUAL_EXTERNAL_PLAN_REVIEW"])
 
     def test_revise_transitions_to_revising_plan_with_no_ledger_write(self):
         """Missing-test item 94: can never reach AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW."""
@@ -3624,8 +3689,8 @@ class TestRecordManualPlanReview(unittest.TestCase):
             "phase": "AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW",
             "plan_review_stages": {
                 "review_content_id": "c1",
-                "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
-                "manual_external_plan_review": None,
+                "LOCAL_MODEL_PLAN_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+                "MANUAL_EXTERNAL_PLAN_REVIEW": None,
             },
         }
         defaults.update(overrides)
@@ -3636,7 +3701,7 @@ class TestRecordManualPlanReview(unittest.TestCase):
         with self.assertRaises(ws.WrongGoverningVersionForPlanReviewStageError):
             ws.record_manual_plan_review(
                 _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
-                current_review_content_id="c1", feedback_role="manual_external_plan_review",
+                current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
                 feedback_review_content_id="c1",
             )
 
@@ -3647,7 +3712,7 @@ class TestRecordManualPlanReview(unittest.TestCase):
         with self.assertRaises(ws.WrongPhaseForPlanReviewStageError):
             ws.record_manual_plan_review(
                 _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
-                current_review_content_id="c1", feedback_role="manual_external_plan_review",
+                current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
                 feedback_review_content_id="c1",
             )
 
@@ -3657,7 +3722,7 @@ class TestRecordManualPlanReview(unittest.TestCase):
         with self.assertRaises(ws.WrongReviewerRoleError):
             ws.record_manual_plan_review(
                 _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
-                current_review_content_id="c1", feedback_role="local_model_plan_review",
+                current_review_content_id="c1", feedback_role="LOCAL_MODEL_PLAN_REVIEW",
                 feedback_review_content_id="c1",
             )
 
@@ -3668,7 +3733,7 @@ class TestRecordManualPlanReview(unittest.TestCase):
         with self.assertRaises(ws.StaleReviewContentIdError):
             ws.record_manual_plan_review(
                 _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
-                current_review_content_id="c1", feedback_role="manual_external_plan_review",
+                current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
                 feedback_review_content_id="stale",
             )
 
@@ -3677,13 +3742,13 @@ class TestRecordManualPlanReview(unittest.TestCase):
         review_content_id."""
         wi = self._local_approved_wi(plan_review_stages={
             "review_content_id": "c1",
-            "local_model_plan_review": None,
-            "manual_external_plan_review": None,
+            "LOCAL_MODEL_PLAN_REVIEW": None,
+            "MANUAL_EXTERNAL_PLAN_REVIEW": None,
         })
         with self.assertRaises(ws.MissingLocalApprovalForManualStageError):
             ws.record_manual_plan_review(
                 _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
-                current_review_content_id="c1", feedback_role="manual_external_plan_review",
+                current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
                 feedback_review_content_id="c1",
             )
 
@@ -3691,13 +3756,13 @@ class TestRecordManualPlanReview(unittest.TestCase):
         """Missing-test item 97."""
         wi = self._local_approved_wi(plan_review_stages={
             "review_content_id": "c1",
-            "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
-            "manual_external_plan_review": {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"},
+            "LOCAL_MODEL_PLAN_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+            "MANUAL_EXTERNAL_PLAN_REVIEW": {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"},
         })
         with self.assertRaises(ws.DuplicateManualStageIngestionError):
             ws.record_manual_plan_review(
                 _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b3", round=2, now="t3",
-                current_review_content_id="c1", feedback_role="manual_external_plan_review",
+                current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
                 feedback_review_content_id="c1",
             )
 
@@ -3707,12 +3772,12 @@ class TestRecordManualPlanReview(unittest.TestCase):
         wi = self._local_approved_wi(state_revision=1)
         new_state = ws.record_manual_plan_review(
             _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
-            current_review_content_id="c1", feedback_role="manual_external_plan_review",
+            current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
             feedback_review_content_id="c1",
         )
         item = new_state["work_items"]["wi"]
         self.assertEqual(item["phase"], "AWAITING_PLAN_APPROVAL")
-        self.assertEqual(item["plan_review_stages"]["manual_external_plan_review"], {
+        self.assertEqual(item["plan_review_stages"]["MANUAL_EXTERNAL_PLAN_REVIEW"], {
             "bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2",
         })
         self.assertEqual(item["state_revision"], 2)
@@ -3732,11 +3797,11 @@ class TestRecordManualPlanReview(unittest.TestCase):
         self.assertIsNotNone(warning)
         new_state = ws.record_manual_plan_review(
             _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="stale-wrapper-bundle", round=1, now="t2",
-            current_review_content_id="c1", feedback_role="manual_external_plan_review",
+            current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
             feedback_review_content_id="c1",
         )
         self.assertEqual(
-            new_state["work_items"]["wi"]["plan_review_stages"]["manual_external_plan_review"]["bundle_id"],
+            new_state["work_items"]["wi"]["plan_review_stages"]["MANUAL_EXTERNAL_PLAN_REVIEW"]["bundle_id"],
             "stale-wrapper-bundle",
         )
 
@@ -3748,12 +3813,12 @@ class TestRecordManualPlanReview(unittest.TestCase):
         wi = self._local_approved_wi(state_revision=1)
         new_state = ws.record_manual_plan_review(
             _base_state(wi=wi), "wi", verdict="REVISE", bundle_id="b2", round=1, now="t2",
-            current_review_content_id="c1", feedback_role="manual_external_plan_review",
+            current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
             feedback_review_content_id="c1",
         )
         item = new_state["work_items"]["wi"]
         self.assertEqual(item["phase"], "REVISING_PLAN")
-        self.assertIsNone(item["plan_review_stages"]["manual_external_plan_review"])
+        self.assertIsNone(item["plan_review_stages"]["MANUAL_EXTERNAL_PLAN_REVIEW"])
 
     def test_block_is_a_true_no_op(self):
         """Missing-test item 99: no ledger write, no transition; remains
@@ -3762,7 +3827,7 @@ class TestRecordManualPlanReview(unittest.TestCase):
         state = _base_state(wi=wi)
         new_state = ws.record_manual_plan_review(
             state, "wi", verdict="BLOCK", bundle_id="b2", round=1, now="t2",
-            current_review_content_id="c1", feedback_role="manual_external_plan_review",
+            current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
             feedback_review_content_id="c1",
         )
         self.assertEqual(new_state, state)
@@ -3777,8 +3842,8 @@ class TestTransitionToAwaitingLocalPlanReview(unittest.TestCase):
         review or to AWAITING_PLAN_APPROVAL."""
         wi = _v21_work_item(phase="REVISING_PLAN", state_revision=3, plan_review_stages={
             "review_content_id": "stale",
-            "local_model_plan_review": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
-            "manual_external_plan_review": None,
+            "LOCAL_MODEL_PLAN_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+            "MANUAL_EXTERNAL_PLAN_REVIEW": None,
         })
         new_state = ws.transition_to_awaiting_local_plan_review(_base_state(wi=wi), "wi", now="t2")
         item = new_state["work_items"]["wi"]
@@ -3813,7 +3878,7 @@ class TestFullTwoStageSequence(unittest.TestCase):
 
         after_manual = ws.record_manual_plan_review(
             after_local, "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
-            current_review_content_id="c1", feedback_role="manual_external_plan_review",
+            current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
             feedback_review_content_id="c1",
         )
         item2 = after_manual["work_items"]["wi"]
@@ -3822,6 +3887,239 @@ class TestFullTwoStageSequence(unittest.TestCase):
             latest_round_status="APPROVE", governing_workflow_version="2.1",
             plan_review_stages=item2["plan_review_stages"], current_review_content_id="c1",
         ))
+
+
+class TestPlanReviewStageKeyNormalization(unittest.TestCase):
+    """workflow-v2-3-followups CP3 (REQ-8/-9/-10/-22): normalize_plan_review_
+    stages' compatibility-reading and collision detection, and
+    migrate_plan_review_stage_keys' one-time migration -- legacy lowercase
+    reads remain supported so historical evidence never needs rewriting,
+    while every live non-terminal ledger is migrated to canonical casing."""
+
+    _LEGACY_LOCAL_APPROVE = {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"}
+    _LEGACY_MANUAL_APPROVE = {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"}
+
+    def test_normalize_passes_review_content_id_through_unchanged(self):
+        stages = {"review_content_id": "c1", "LOCAL_MODEL_PLAN_REVIEW": None, "MANUAL_EXTERNAL_PLAN_REVIEW": None}
+        self.assertEqual(ws.normalize_plan_review_stages(stages), stages)
+
+    def test_normalize_reads_legacy_lowercase_keys(self):
+        """The compatibility-read proof: a dict built entirely with the
+        legacy lowercase keys normalizes to the canonical dict."""
+        legacy = {
+            "review_content_id": "c1",
+            "local_model_plan_review": self._LEGACY_LOCAL_APPROVE,
+            "manual_external_plan_review": None,
+        }
+        self.assertEqual(ws.normalize_plan_review_stages(legacy), {
+            "review_content_id": "c1",
+            "LOCAL_MODEL_PLAN_REVIEW": self._LEGACY_LOCAL_APPROVE,
+            "MANUAL_EXTERNAL_PLAN_REVIEW": None,
+        })
+
+    def test_normalize_is_idempotent_on_an_already_canonical_dict(self):
+        canonical = {
+            "review_content_id": "c1",
+            "LOCAL_MODEL_PLAN_REVIEW": self._LEGACY_LOCAL_APPROVE,
+            "MANUAL_EXTERNAL_PLAN_REVIEW": self._LEGACY_MANUAL_APPROVE,
+        }
+        self.assertEqual(ws.normalize_plan_review_stages(canonical), canonical)
+
+    def test_normalize_collapses_byte_identical_duplicate_regardless_of_insertion_order(self):
+        """GPT-FUP-R6-I02: a legacy+canonical duplicate with byte-identical
+        values collapses silently, proven both ways round (whichever raw
+        key was inserted first)."""
+        forward = {
+            "review_content_id": "c1",
+            "local_model_plan_review": self._LEGACY_LOCAL_APPROVE,
+            "LOCAL_MODEL_PLAN_REVIEW": self._LEGACY_LOCAL_APPROVE,
+        }
+        backward = {
+            "review_content_id": "c1",
+            "LOCAL_MODEL_PLAN_REVIEW": self._LEGACY_LOCAL_APPROVE,
+            "local_model_plan_review": self._LEGACY_LOCAL_APPROVE,
+        }
+        expected = {"review_content_id": "c1", "LOCAL_MODEL_PLAN_REVIEW": self._LEGACY_LOCAL_APPROVE}
+        self.assertEqual(ws.normalize_plan_review_stages(forward), expected)
+        self.assertEqual(ws.normalize_plan_review_stages(backward), expected)
+
+    def test_normalize_raises_on_conflicting_duplicate_regardless_of_insertion_order(self):
+        """GPT-FUP-R6-I02: a legacy+canonical duplicate with conflicting
+        values raises AmbiguousPlanReviewStageKeyError, naming both raw
+        keys -- never resolved by dict key-iteration order."""
+        forward = {
+            "review_content_id": "c1",
+            "local_model_plan_review": self._LEGACY_LOCAL_APPROVE,
+            "LOCAL_MODEL_PLAN_REVIEW": {**self._LEGACY_LOCAL_APPROVE, "round": 2},
+        }
+        backward = {
+            "review_content_id": "c1",
+            "LOCAL_MODEL_PLAN_REVIEW": {**self._LEGACY_LOCAL_APPROVE, "round": 2},
+            "local_model_plan_review": self._LEGACY_LOCAL_APPROVE,
+        }
+        for stages in (forward, backward):
+            with self.assertRaises(ws.AmbiguousPlanReviewStageKeyError) as ctx:
+                ws.normalize_plan_review_stages(stages)
+            self.assertIn("local_model_plan_review", str(ctx.exception))
+            self.assertIn("LOCAL_MODEL_PLAN_REVIEW", str(ctx.exception))
+
+    def test_plan_approval_gate_reachable_tolerates_legacy_keys(self):
+        legacy = {
+            "review_content_id": "c1",
+            "local_model_plan_review": self._LEGACY_LOCAL_APPROVE,
+            "manual_external_plan_review": self._LEGACY_MANUAL_APPROVE,
+        }
+        self.assertTrue(ws.plan_approval_gate_reachable(
+            latest_round_status="APPROVE", governing_workflow_version="2.1",
+            plan_review_stages=legacy, current_review_content_id="c1",
+        ))
+
+    def test_validate_state_accepts_legacy_cased_non_terminal_ledger(self):
+        """LPR-R1-I03: a non-terminal work item's legacy-cased ledger reads
+        and behaves correctly via the compatibility-read helper, and can be
+        driven through a further transition, before any migration runs."""
+        wi = _v21_work_item(phase="AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW", plan_review_stages={
+            "review_content_id": "c1",
+            "local_model_plan_review": self._LEGACY_LOCAL_APPROVE,
+            "manual_external_plan_review": None,
+        })
+        ws.validate_state(_base_state(wi=copy.deepcopy(wi)))  # must not raise
+
+        # The further transition: a REVISE verdict only reads the ledger
+        # (via validate_manual_plan_review_preconditions's compatibility-
+        # tolerant normalization) and never writes it, so it is unaffected
+        # by the write-site hazard the next test documents.
+        new_state = ws.record_manual_plan_review(
+            _base_state(wi=wi), "wi", verdict="REVISE", bundle_id="b2", round=1, now="t2",
+            current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
+            feedback_review_content_id="c1",
+        )
+        item = new_state["work_items"]["wi"]
+        self.assertEqual(item["phase"], "REVISING_PLAN")
+
+    def test_record_manual_plan_review_approve_raises_on_a_legacy_cased_ledger(self):
+        """Documents `GPT-FUP-R6-I02`'s accepted, by-design edge case:
+        `record_manual_plan_review`'s APPROVE branch writes the canonical
+        key by in-place assignment (unlike `record_local_plan_review`,
+        which replaces the whole dict), so a not-yet-migrated legacy-cased
+        ledger ends up holding both a legacy and a canonical key for the
+        MANUAL_EXTERNAL_PLAN_REVIEW stage. This is refused cleanly via
+        AmbiguousPlanReviewStageKeyError -- never silently resolved by
+        dict-iteration order -- exactly the fail-closed behavior CP3's
+        write-site disposition relies on instead of changing the write
+        site itself (not reachable for any item in this repository today,
+        since CP3's own migration runs immediately after this checkpoint
+        lands)."""
+        wi = _v21_work_item(phase="AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW", plan_review_stages={
+            "review_content_id": "c1",
+            "local_model_plan_review": self._LEGACY_LOCAL_APPROVE,
+            "manual_external_plan_review": None,
+        })
+        with self.assertRaises(ws.AmbiguousPlanReviewStageKeyError):
+            ws.record_manual_plan_review(
+                _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
+                current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
+                feedback_review_content_id="c1",
+            )
+
+    def test_reviewer_role_accepts_either_casing_and_refuses_a_third_value(self):
+        wi = _v21_work_item(phase="AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW", plan_review_stages={
+            "review_content_id": "c1",
+            "LOCAL_MODEL_PLAN_REVIEW": self._LEGACY_LOCAL_APPROVE,
+            "MANUAL_EXTERNAL_PLAN_REVIEW": None,
+        })
+        ws.validate_manual_plan_review_preconditions(
+            copy.deepcopy(wi), current_review_content_id="c1",
+            feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW", feedback_review_content_id="c1",
+        )
+        ws.validate_manual_plan_review_preconditions(
+            copy.deepcopy(wi), current_review_content_id="c1",
+            feedback_role="manual_external_plan_review", feedback_review_content_id="c1",
+        )
+        with self.assertRaises(ws.WrongReviewerRoleError):
+            ws.validate_manual_plan_review_preconditions(
+                copy.deepcopy(wi), current_review_content_id="c1",
+                feedback_role="something_else", feedback_review_content_id="c1",
+            )
+
+
+class TestMigratePlanReviewStageKeys(unittest.TestCase):
+    """workflow-v2-3-followups CP3 (LPR-R2-I02): the one-time migration
+    step run against the live WORKFLOW_STATE.json."""
+
+    _LEGACY_LOCAL_APPROVE = {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"}
+    _LEGACY_MANUAL_APPROVE = {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"}
+
+    def _legacy_stages(self):
+        return {
+            "review_content_id": "c1",
+            "local_model_plan_review": self._LEGACY_LOCAL_APPROVE,
+            "manual_external_plan_review": self._LEGACY_MANUAL_APPROVE,
+        }
+
+    def test_migrates_every_live_non_terminal_record_leaves_terminal_untouched(self):
+        non_terminal = _v21_work_item(
+            work_item_id="live", phase="AWAITING_PLAN_APPROVAL", plan_review_stages=self._legacy_stages(),
+        )
+        terminal = _v21_work_item(
+            work_item_id="done", phase="MILESTONE_COMPLETE", plan_review_stages=self._legacy_stages(),
+        )
+        state = _base_state(live=non_terminal, done=terminal)
+
+        migrated = ws.migrate_plan_review_stage_keys(state)
+
+        self.assertEqual(migrated["work_items"]["live"]["plan_review_stages"], {
+            "review_content_id": "c1",
+            "LOCAL_MODEL_PLAN_REVIEW": self._LEGACY_LOCAL_APPROVE,
+            "MANUAL_EXTERNAL_PLAN_REVIEW": self._LEGACY_MANUAL_APPROVE,
+        })
+        # Terminal-phase record is byte-unchanged -- immutable historical
+        # evidence, never rewritten.
+        self.assertEqual(migrated["work_items"]["done"]["plan_review_stages"], self._legacy_stages())
+        # The migrated non-terminal record validates cleanly through the
+        # rest of the codebase, not just a dict that looks right.
+        ws.validate_state(migrated)
+
+    def test_is_idempotent(self):
+        state = _base_state(live=_v21_work_item(
+            work_item_id="live", phase="AWAITING_PLAN_APPROVAL", plan_review_stages=self._legacy_stages(),
+        ))
+        once = ws.migrate_plan_review_stage_keys(state)
+        twice = ws.migrate_plan_review_stage_keys(once)
+        self.assertEqual(once, twice)
+
+    def test_leaves_a_null_or_absent_ledger_untouched(self):
+        wi = _v21_work_item(work_item_id="live", phase="AWAITING_LOCAL_PLAN_REVIEW", plan_review_stages=None)
+        state = _base_state(live=wi)
+        migrated = ws.migrate_plan_review_stage_keys(state)
+        self.assertIsNone(migrated["work_items"]["live"]["plan_review_stages"])
+
+    def test_raises_on_an_ambiguous_non_terminal_ledger_leaving_state_untouched(self):
+        """An already-ambiguous non-terminal work item's ledger makes the
+        migration raise rather than silently pick a winner. Run via
+        state_transaction (the real call site), a raised exception leaves
+        WORKFLOW_STATE.json completely unwritten."""
+        ambiguous = _v21_work_item(work_item_id="live", phase="AWAITING_PLAN_APPROVAL", plan_review_stages={
+            "review_content_id": "c1",
+            "local_model_plan_review": self._LEGACY_LOCAL_APPROVE,
+            "LOCAL_MODEL_PLAN_REVIEW": {**self._LEGACY_LOCAL_APPROVE, "round": 2},
+        })
+        state = _base_state(live=ambiguous)
+        with self.assertRaises(ws.AmbiguousPlanReviewStageKeyError):
+            ws.migrate_plan_review_stage_keys(state)
+
+    def test_conflicting_duplicate_collapses_when_byte_identical(self):
+        identical = _v21_work_item(work_item_id="live", phase="AWAITING_PLAN_APPROVAL", plan_review_stages={
+            "review_content_id": "c1",
+            "local_model_plan_review": self._LEGACY_LOCAL_APPROVE,
+            "LOCAL_MODEL_PLAN_REVIEW": self._LEGACY_LOCAL_APPROVE,
+        })
+        state = _base_state(live=identical)
+        migrated = ws.migrate_plan_review_stage_keys(state)
+        self.assertEqual(
+            migrated["work_items"]["live"]["plan_review_stages"]["LOCAL_MODEL_PLAN_REVIEW"],
+            self._LEGACY_LOCAL_APPROVE,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -4313,12 +4611,31 @@ class TestRecordBundleGeneration(unittest.TestCase):
         )
 
     def test_illegal_source_phase_refused_naming_actual_and_legal_phases(self):
+        """Stage-specific since workflow-v2-3-followups's own continued
+        scope widened legality per stage: `stage="implementation"`'s only
+        legal source is `SELF_REVIEWING_IMPLEMENTATION` -- the refusal
+        message for it must name only that, never `APPLYING_REVIEW_FEEDBACK`
+        (a `post-fix`-only source since the widening, never legal for a
+        round's first bundle)."""
         state = _base_state(wi=_base_work_item(phase="IMPLEMENTING"))
         with self.assertRaises(ws.IllegalBundleGenerationSourcePhaseError) as ctx:
             ws.record_bundle_generation(state, "wi", stage="implementation", head="abc123", now="t1")
         self.assertIn("IMPLEMENTING", str(ctx.exception))
         self.assertIn("SELF_REVIEWING_IMPLEMENTATION", str(ctx.exception))
+        self.assertNotIn("APPLYING_REVIEW_FEEDBACK", str(ctx.exception))
+
+    def test_post_fix_illegal_source_phase_names_its_own_legal_phases(self):
+        """The `stage="post-fix"` counterpart: its own legal set is
+        `{APPLYING_REVIEW_FEEDBACK, AWAITING_FUNCTIONAL_REVIEW}` --
+        `SELF_REVIEWING_IMPLEMENTATION` (legal only for `stage=
+        "implementation"`) must never appear in this refusal's message."""
+        state = _base_state(wi=_base_work_item(phase="IMPLEMENTING"))
+        with self.assertRaises(ws.IllegalBundleGenerationSourcePhaseError) as ctx:
+            ws.record_bundle_generation(state, "wi", stage="post-fix", head="abc123", now="t1")
+        self.assertIn("IMPLEMENTING", str(ctx.exception))
         self.assertIn("APPLYING_REVIEW_FEEDBACK", str(ctx.exception))
+        self.assertIn("AWAITING_FUNCTIONAL_REVIEW", str(ctx.exception))
+        self.assertNotIn("SELF_REVIEWING_IMPLEMENTATION", str(ctx.exception))
 
     def test_post_fix_from_illegal_source_phase_also_refused(self):
         state = _base_state(wi=_base_work_item(phase="AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW"))
@@ -4468,6 +4785,135 @@ class TestRecordBundleGeneration(unittest.TestCase):
         resumed = ws.record_bundle_generation(state, "wi", stage="implementation", head="abc123", now="t1")
         self.assertEqual(interrupted, resumed)
         self.assertEqual(resumed["work_items"]["wi"]["implementation_revision"], 1)
+
+
+class TestFunctionalReviewBoundedFixReachesRecordBundleGeneration(unittest.TestCase):
+    """workflow-v2-3-followups continued scope (self-discovered during
+    this item's own `/accept-milestone` pre-flight): the real end-to-end
+    sequence `/apply-functional-review`'s own "bounded code change" branch
+    drives -- `AWAITING_FUNCTIONAL_REVIEW` with a `CURRENT` technical_
+    approval -> `mark_technical_approval_stale` -> a bounded fix ->
+    `record_bundle_generation(stage="post-fix", ...)` ->
+    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` -- was never exercised end
+    to end before this widening. OPUS-R101-001's phase-transition
+    contract (landed 2026-08-15 15:06) made this structurally unreachable
+    for the only phase this branch is ever actually invoked from: the
+    real prior exercise of this branch, `v2-1-dry-run`'s S10 scenario
+    (commits `fae7420`/`c11ec01`, both 2026-08-15 10:44-11:06), ran
+    *before* that contract landed and was never re-tested against it."""
+
+    WI = "wi"
+
+    def _approved_technical_approval(self, reviewed_content_commit: str) -> dict:
+        return ws.build_approval_record(
+            basis="EXTERNAL_APPROVE", stage="implementation",
+            user_confirmation="approve wi implementation", now="t0",
+            reviewed_bundle_id="b1", approved_review_content_id="c1",
+            review_content_manifest=[
+                {"path": "src/Foo.kt", "exists": True, "mode": "100644", "blob": "deadbeef"},
+            ],
+            reviewed_content_commit=reviewed_content_commit,
+        )
+
+    def test_bounded_fix_from_awaiting_functional_review_reaches_external_review_durably(self):
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, self.WI)
+            _seed_base_provenance_state(repo, self.WI)
+            p1 = repo.commit("protected content, round 1", filename="src/Foo.kt")
+
+            approved = self._approved_technical_approval(p1)
+            self.assertEqual(approved["status"], "CURRENT")
+            pre_fix_state = _base_state(wi={
+                "work_item_id": self.WI,
+                "work_item_type": "process",
+                "phase": "AWAITING_FUNCTIONAL_REVIEW",
+                "technical_approval": approved,
+                "reviewed_implementation_head": p1,
+                "implementation_revision": 1,
+                "state_revision": 1,
+                "last_transition": "t0",
+            })
+
+            # 1. Stale-before-edit ordering: mark stale and persist it as
+            # its own commit -- this becomes the generation-record
+            # commit's own git parent below.
+            staled = ws.mark_technical_approval_stale(pre_fix_state, self.WI, now="t1")
+            wi_staled = staled["work_items"][self.WI]
+            self.assertEqual(wi_staled["technical_approval"]["status"], "STALE")
+            self.assertEqual(wi_staled["phase"], "AWAITING_FUNCTIONAL_REVIEW")
+            _commit_state_only(repo, self.WI, wi_staled, "mark technical approval stale")
+
+            # 2. The bounded fix itself -- a real protected-content commit,
+            # touching no state (mirrors /apply-functional-review's own
+            # "commit the fix" step, separate from the durability commit).
+            p2 = repo.commit("bounded fix", filename="src/Foo.kt")
+
+            # 3. resolve_bundle_generation_outcome + record_bundle_generation
+            # (post-fix stage), exactly as /apply-functional-review's
+            # bounded branch drives them.
+            outcome, _ = ws.resolve_bundle_generation_outcome(
+                repo.root, wi_staled, base_commit=repo.base, head=p2,
+            )
+            self.assertEqual(outcome, "ordinary")
+            post_fix = ws.record_bundle_generation(
+                staled, self.WI, stage="post-fix", head=p2, now="t2", outcome=outcome,
+            )
+            wi_post_fix = post_fix["work_items"][self.WI]
+            self.assertEqual(wi_post_fix["phase"], "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW")
+            self.assertEqual(wi_post_fix["reviewed_implementation_head"], p2)
+            self.assertEqual(wi_post_fix["implementation_revision"], 2)
+
+            # 4. The durability commit -- touches only WORKFLOW_STATE.json,
+            # its git parent is the STALE-marking commit from step 1 (the
+            # bounded-fix commit in between touched no state, so the state
+            # file's own bytes are unchanged between them).
+            s = _commit_state_only(
+                repo, self.WI, wi_post_fix, "record gen (post-fix)",
+                trailers=_record_trailers(self.WI, 2),
+            )
+            ws.validate_bundle_generation_record_commit(repo.root, s, self.WI)  # must not raise
+
+            durable = ws._read_json_at_commit_or_empty(repo.root, s, STATE_REL_PATH)
+            self.assertEqual(
+                durable["work_items"][self.WI]["phase"], "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+            )
+
+    def test_post_fix_from_awaiting_functional_review_refused_unless_stale(self):
+        """Regression requirement 2: the bounded-fix marker
+        (`technical_approval.status == "STALE"`) is a hard precondition,
+        not merely the phase -- a `CURRENT` approval at
+        `AWAITING_FUNCTIONAL_REVIEW` means no bounded fix is actually in
+        flight."""
+        state = _base_state(wi={
+            "work_item_id": self.WI,
+            "phase": "AWAITING_FUNCTIONAL_REVIEW",
+            "technical_approval": self._approved_technical_approval("abc123"),
+            "reviewed_implementation_head": "abc123",
+            "implementation_revision": 1,
+        })
+        self.assertEqual(state["work_items"][self.WI]["technical_approval"]["status"], "CURRENT")
+        with self.assertRaises(ws.BundleGenerationRequiresStaleTechnicalApprovalError) as ctx:
+            ws.record_bundle_generation(state, self.WI, stage="post-fix", head="def456", now="t2")
+        self.assertIn("CURRENT", str(ctx.exception))
+
+    def test_post_fix_from_awaiting_functional_review_with_no_technical_approval_refused(self):
+        state = _base_state(wi=_base_work_item(phase="AWAITING_FUNCTIONAL_REVIEW"))
+        with self.assertRaises(ws.BundleGenerationRequiresStaleTechnicalApprovalError):
+            ws.record_bundle_generation(state, "wi", stage="post-fix", head="def456", now="t2")
+
+    def test_ordinary_implementation_stage_generation_still_refused_from_awaiting_functional_review(self):
+        """Regression requirement 3: widening `stage="post-fix"`'s
+        legality must never widen `stage="implementation"`'s -- a round's
+        first bundle can never legitimately be generated from
+        `AWAITING_FUNCTIONAL_REVIEW`, STALE or not."""
+        state = _base_state(wi={
+            "work_item_id": "wi",
+            "phase": "AWAITING_FUNCTIONAL_REVIEW",
+            "technical_approval": self._approved_technical_approval("abc123") | {"status": "STALE"},
+        })
+        with self.assertRaises(ws.IllegalBundleGenerationSourcePhaseError) as ctx:
+            ws.record_bundle_generation(state, "wi", stage="implementation", head="def456", now="t2")
+        self.assertIn("AWAITING_FUNCTIONAL_REVIEW", str(ctx.exception))
 
 
 class TestEnterApplyingReviewFeedback(unittest.TestCase):
@@ -6263,17 +6709,23 @@ class TestValidateImplementationProvenanceRecoveryConfirmation(unittest.TestCase
         )  # no raise
 
 
-class TestRecoveredRoleThreeCombinationValidation(unittest.TestCase):
+class TestRecoveredRoleLegalParentPhaseCombinations(unittest.TestCase):
     """`WF8c` (b)/(c), items 292/293/294/313: direct, isolated coverage of
     `validate_bundle_generation_record_commit`'s recovered-role branch
-    against each of its three legal parent-phase combinations and the
-    illegal ones around them -- distinguished entirely by committed parent
-    state (`RECOVERED_BUNDLE_GENERATION_RECORD_LEGAL_SOURCE_PHASES`) and the
+    against each of its legal parent-phase combinations and the illegal
+    ones around them -- distinguished entirely by committed parent state
+    (`RECOVERED_BUNDLE_GENERATION_RECORD_LEGAL_SOURCE_PHASES`) and the
     single required committed-phase target, never by which command
     (`/recover-implementation-provenance` vs `record_bundle_generation`'s
     same-content branch) happened to produce the commit -- no such signal
     exists anywhere in a commit's own trailers or fields for the validator
-    to consult, which is exactly item 294's claim."""
+    to consult, which is exactly item 294's claim. `AWAITING_FUNCTIONAL_
+    REVIEW` joined the legal set as workflow-v2-3-followups's own
+    continued scope (self-discovered during this item's own
+    `/accept-milestone` pre-flight) -- see
+    `test_awaiting_functional_review_parent_phase_validates` below; this
+    class's own name was originally "ThreeCombination", pinned to a count
+    that widening made stale, so it no longer names one."""
 
     WI = "wi"
 
@@ -6347,6 +6799,20 @@ class TestRecoveredRoleThreeCombinationValidation(unittest.TestCase):
             with self.assertRaises(ws.MalformedBundleGenerationRecordCommitError) as ctx:
                 ws.validate_bundle_generation_record_commit(repo.root, child, self.WI)
             self.assertIn("IMPLEMENTING", str(ctx.exception))
+
+    def test_awaiting_functional_review_parent_phase_validates(self):
+        """workflow-v2-3-followups continued scope: `AWAITING_FUNCTIONAL_
+        REVIEW` joined `RECOVERED_BUNDLE_GENERATION_RECORD_LEGAL_SOURCE_
+        PHASES` alongside `record_bundle_generation`'s own widened
+        per-stage legality -- a recovered-role commit whose parent sat at
+        `AWAITING_FUNCTIONAL_REVIEW` (the functional-review bounded-fix
+        path) validates exactly like the pre-existing
+        `APPLYING_REVIEW_FEEDBACK`/`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`
+        combinations `test_item_292` already covers."""
+        with ScratchRepo() as repo:
+            p, parent = self._seed_and_parent(repo, "AWAITING_FUNCTIONAL_REVIEW")
+            child = self._child(repo, p, "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW", parent)
+            ws.validate_bundle_generation_record_commit(repo.root, child, self.WI)  # must not raise
 
 
 class TestImplementationProvenanceRecoveryEndToEnd(unittest.TestCase):
@@ -7018,6 +7484,40 @@ class TestRegistryReadBoundToCurrentPlanApproval(unittest.TestCase):
             )
             with self.assertRaises(ws.StalePlanApprovalRegistryReadError):
                 ws.resolve_own_registry_completion_status(repo.root, work_item)
+
+    def test_malformed_live_plan_approval_manifest_rejected_cleanly(self):
+        """I2's live-state half (`workflow-v2-3-followups` continued
+        scope, external cross-model review round 4): the exact
+        `/accept-milestone` step 2a / `/accept-scoped-remediation` entry
+        point, `resolve_own_registry_completion_status`, must reject a
+        malformed `plan_approval.review_content_manifest` -- the whole
+        `workflow_fingerprint.compute_review_content_id_plan_stage*`
+        projection object substituted for its own inner manifest list,
+        the exact historical shape, not a synthetic stand-in -- with a
+        typed `StalePlanApprovalRegistryReadError`, never a bare
+        `AttributeError`. Reproduced first (asserting the real crash
+        before the fix), then guarded against."""
+        with ScratchRepo() as repo:
+            self._write_registry(repo)
+            _commit_paths(repo, [self.REGISTRY_PATH], "registry")
+            malformed_plan_approval = _current_plan_approval_covering(repo, self.REGISTRY_PATH)
+            malformed_plan_approval["review_content_manifest"] = {
+                "stage": "plan", "work_item_type": "process", "work_item_id": "wi",
+                "plan_revision": 1, "base_commit": repo.base, "reviewed_implementation_head": None,
+                "review_content_manifest": [
+                    {"path": self.REGISTRY_PATH, "exists": True, "mode": "100644",
+                     "blob": fingerprint._hash_object(repo.root, self.REGISTRY_PATH)},
+                ],
+                "protected_paths": [self.REGISTRY_PATH], "excluded_paths": [], "excluded_prefixes": [],
+            }
+            work_item = _base_work_item(
+                registry_path=self.REGISTRY_PATH, plan_approval=malformed_plan_approval,
+                checkpoints=self._checkpoints(b_complete=False),
+            )
+            with self.assertRaises(ws.StalePlanApprovalRegistryReadError) as ctx:
+                ws.resolve_own_registry_completion_status(repo.root, work_item)
+            self.assertNotIsInstance(ctx.exception, AttributeError)
+            self.assertIn("malformed", str(ctx.exception))
 
     def test_clean_committed_but_unapproved_mutation_refuses(self):
         with ScratchRepo() as repo:
