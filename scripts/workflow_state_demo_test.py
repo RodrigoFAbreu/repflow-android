@@ -249,13 +249,12 @@ _GRANDFATHERED_WORKFLOW_TRAILER_LOOKALIKE_VIOLATIONS = frozenset({
     # `MILESTONE_COMPLETE` commit carries or needs to be discoverable by
     # -- `/accept-milestone` is a terminal, one-way transition with no
     # later command that re-discovers its own commit via trailer search.
-    # Still an open, tracked, *recurring* gap in `accept-milestone.md`
-    # itself (not fixed here -- baseline-verification cleanup, out of
-    # scope for a command-behavior change): the next real `/accept-
-    # milestone` invocation will very likely reproduce this same
-    # violation again unless a future work item finally applies the
-    # same one-sentence fix to `accept-milestone.md` step 6 (baseline-
-    # freeze verification cleanup, 2026-08-24).
+    # `accept-milestone.md` step 6 now states the same final-paragraph
+    # requirement (`OPUS-R129-001`, baseline-freeze verification cleanup,
+    # 2026-08-24 -- landed in the same commit as this comment's own
+    # update), so this gap does not recur for any future `/accept-
+    # milestone` invocation. This SHA remains permanently grandfathered:
+    # it predates that fix and history is not rewritten.
     "d271d89249a6f7b8c45684e1a235ca518e53e95d",
 })
 
