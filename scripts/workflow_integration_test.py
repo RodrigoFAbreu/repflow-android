@@ -772,7 +772,15 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # the_expected_number_of_times's exact-count check of its two real call
     # sites.
     "approve-review.md": "9e6de2e744460b5897810a05031554e0c0829f0a12742e4fd9e20b217745ff38",
-    "accept-milestone.md": "3822aa4adb7838dfc76a8a41fe102d32d0435ce2ed740939662bb37035a07f70",
+    # accept-milestone.md updated, baseline-freeze correctness fix
+    # (OPUS-R129-001): step 6's completion-commit instruction now states
+    # the same "trailers must be the commit message's own final paragraph"
+    # requirement milestone-implement.md/bootstrap-workflow-v2.md/
+    # approve-review.md already state -- the fix for the defect class every
+    # real /accept-milestone completion commit to date reproduced
+    # (27f051e/fb134ac/d271d89, all individually grandfathered in
+    # workflow_state_demo_test.py) -- intentional content change.
+    "accept-milestone.md": "79b3f9bfb81b444291f17eea5f2a2bc706b7952284acb36422aa52c5faa0daa0",
     "prepare-functional-review.md": "1b4a08cc0a28c09e0031f73e6003f23fd96fdc6c3fe22553e9f2408c1798f8cd",
     # apply-plan-review.md/bootstrap-workflow-v2.md (D-Plan-Revision-Publication,
     # WFR-65): intentional content change, publish_plan_revision wiring.
@@ -929,6 +937,84 @@ class TestPlanApprovalCommitTrailerFinalParagraphConformance(unittest.TestCase):
             "   before them",
             text,
         )
+
+    def test_accept_milestone_states_the_final_paragraph_requirement(self):
+        """Baseline-freeze correctness fix: `accept-milestone.md` step 6
+        never stated this rule at all -- every real `/accept-milestone`
+        completion commit to date (`27f051e`/`fb134ac`/`d271d89`, all
+        individually grandfathered in `workflow_state_demo_test.py`'s
+        `_GRANDFATHERED_WORKFLOW_TRAILER_LOOKALIKE_VIOLATIONS`) reproduced
+        the same defect class as a result. This closes the gap those three
+        grandfathered entries' own comments name explicitly as still open."""
+        text = _command_text("accept-milestone.md")
+        self.assertIn(
+            "**This line must be part of the commit\n   message's own final paragraph** -- after any `Co-Authored-By:`/\n"
+            "   `Claude-Session:` lines, never in an earlier paragraph separated from\n"
+            "   them by a blank line",
+            text,
+        )
+        self.assertIn("OPUS-R129-001", text)
+
+
+class TestAcceptMilestoneCompletionCommitTrailerShape(unittest.TestCase):
+    """Baseline-freeze correctness fix, required acceptance criterion 3:
+    constructs the `/accept-milestone` completion commit's own message shape
+    -- a `Workflow-Work-Item: <work_item_id>` trailer alongside
+    `Co-Authored-By:`/`Claude-Session:` metadata -- in both the pre-fix
+    layout every real completion commit to date used
+    (`27f051e`/`fb134ac`/`d271d89`) and the corrected layout
+    `accept-milestone.md` step 6 now requires, and confirms via the real
+    `git interpret-trailers --parse` mechanism
+    (`workflow_state._commit_trailers`, `discover_checkpoint_commits`'s own
+    parsing primitive) which one actually yields a recognized
+    `Workflow-Work-Item` trailer. Uses a real `ScratchRepo` commit, not a
+    string-parsing simulation, so this exercises Git's own trailer
+    machinery rather than a reimplementation of it."""
+
+    _SUBJECT = "docs(demo-item): accept milestone (real /accept-milestone, MILESTONE_COMPLETE)"
+    _NARRATIVE = (
+        'User confirmation: "I confirm acceptance of demo-item." validated by '
+        "workflow_state.validate_user_confirmation."
+    )
+    _COAUTHOR_LINES = (
+        "Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>\n"
+        "Claude-Session: https://claude.ai/code/session_demo"
+    )
+
+    def _commit_with_body(self, repo: h.ScratchRepo, body: str) -> str:
+        (repo.root / "demo.txt").write_text(body)
+        subprocess.run(["git", "add", "demo.txt"], cwd=repo.root, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-q", "-m", body], cwd=repo.root, check=True, capture_output=True)
+        return repo.head()
+
+    def test_pre_fix_layout_silently_drops_the_trailer(self):
+        """The exact shape `27f051e`/`fb134ac`/`d271d89` all share: the
+        Workflow-Work-Item paragraph precedes Co-Authored-By/Claude-Session,
+        separated by a blank line, so it is not part of the message's own
+        last paragraph and git interpret-trailers --parse never sees it."""
+        with h.ScratchRepo() as repo:
+            body = (
+                f"{self._SUBJECT}\n\n{self._NARRATIVE}\n\n"
+                "Workflow-Work-Item: demo-item\n\n"
+                f"{self._COAUTHOR_LINES}\n"
+            )
+            commit = self._commit_with_body(repo, body)
+            trailers = ws._commit_trailers(repo.root, commit)
+            self.assertNotIn("Workflow-Work-Item", trailers)
+
+    def test_final_paragraph_layout_is_recognized_as_a_trailer(self):
+        """The layout accept-milestone.md step 6 now requires: the
+        Workflow-Work-Item line inside the same final trailer paragraph as
+        Co-Authored-By/Claude-Session, positioned after them."""
+        with h.ScratchRepo() as repo:
+            body = (
+                f"{self._SUBJECT}\n\n{self._NARRATIVE}\n\n"
+                f"{self._COAUTHOR_LINES}\n"
+                "Workflow-Work-Item: demo-item\n"
+            )
+            commit = self._commit_with_body(repo, body)
+            trailers = ws._commit_trailers(repo.root, commit)
+            self.assertEqual(trailers.get("Workflow-Work-Item"), "demo-item")
 
 
 class TestAssertLocalGenerationMatchesCallSiteConformance(unittest.TestCase):
