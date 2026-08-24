@@ -1243,31 +1243,94 @@ non-blocking; see "Known limitations" below).
 `e121d2d91537a76abd0453180d56fc58eb8ef594`
 (`Workflow-Bundle-Generation-Record: workflow-v2-3-followups/4`).
 
+**Checklist correction (2026-08-24, same round -- `implementation_revision`
+stays `4`, `technical_approval` untouched)**: an independent `/review-functional`
+advisory pass over this exact section found it under-covered five
+behaviorally significant fixes that landed between the round-1 and round-4
+bundles -- all real, all inside `technical_approval`'s own reviewed content
+(`2302cc4`), none previously given their own flow here -- plus four wording/
+evidence defects in the checklist prose itself. Both are corrected in place
+below rather than superseding this section with a new one, since no new
+implementation round ran: six new flows (2 through 7) were added for
+`c41eaf8` (O5, `/review-implementation` pre-write self-validation), `31dabbd`
+(the self-discovered stage-aware `record_bundle_generation` fix), `910afd7`
+(B1, WF8c evidence-pointer repair), `5b2ca7e`/`be748c3` (I1, the
+`approve-review.md`/`recover-implementation-provenance.md` bundle-generation
+contract reword), `bb7ecb7` (I2, persisted-approval-record shape
+validation), and `20206a6` (O3, `FUNCTIONAL_REVIEW.md` consumed-marking);
+the automated-verification freshness claim above, Setup's toolchain claim
+above, the old flow 3 grep command (now flow 9), and the old flow 8 command
+surface/hard-gate check (now flow 14) are each corrected below at the point
+they appear, with the reason noted inline. No `app/`, `scripts/`, or `.claude/commands/` file changed in
+this pass -- confirmed by the scope-discipline flow (now flow 12) and by
+`workflow_state.approval_is_current` staying `True` throughout (see
+"Automated verification" below); only this file changed.
+
 ### Setup
 
-No Android app / Gradle changes are involved -- this is process tooling
-only (`scripts/*.py`, `.claude/commands/*.md`, `docs/ai-workflow/*`). No
-build/install step is needed; everything below runs with `python3` from
-the repo root (`scripts/` for the checks that `cd` there).
+No Android app / Gradle changes are involved in this round's own diff --
+this is process tooling only (`scripts/*.py`, `.claude/commands/*.md`,
+`docs/ai-workflow/*`). Every manual flow below (2 through 14) runs with
+`python3` from the repo root (`scripts/` for the checks that `cd` there);
+none needs an Android app install or a device/emulator. **This does not
+mean the checklist has no build-toolchain requirement at all** (a prior
+version of this section claimed "everything below runs with `python3`",
+which was true of the manual flows but not of the checklist as a whole):
+the "Automated verification" section immediately below re-runs
+`./gradlew spotlessCheck detekt lintDebug testDebugUnitTest` as one of its
+required commands, and that needs this repository's normal Gradle/Android/
+JDK toolchain (`AGENTS.md`'s "Build/test/lint commands") installed and on
+`PATH`, even though this round touches no `app/` file -- the gate still
+runs, it is just expected to report every task `UP-TO-DATE` (or, on a
+worktree where the daemon has not run these tasks yet in this exact
+session, a fast no-op rebuild) rather than recompiling anything.
 
-### Automated verification (re-confirmed this session, current)
+### Automated verification (re-confirmed live this session, current)
 
-Re-run independently, live, right before this checklist was written (only
-`docs/ai-workflow/WORKFLOW_STATE.json` -- implementation-stage excluded --
-has changed since `technical_approval.reviewed_content_commit`, `2302cc4`,
-via the bundle-generation-record commit `e121d2d` and this session's own
-metadata-only approval commit `e84da52`; `git diff --stat 2302cc4..HEAD`
-touches only that one file):
+**Freshness claim, corrected**: the prior wording here (`git diff --stat
+2302cc4..HEAD`) was unstable -- `HEAD` moves every time a further
+checklist-evidence commit lands (this correction's own commit included),
+so the same command produces a different, increasingly misleading answer
+each time it is re-run, even though nothing implementation-stage has
+actually changed. The stable, reproducible replacement is the real
+production freshness check `/approve-review implementation` and
+`/accept-milestone`'s own pre-flight both use --
+`workflow_state.approval_is_current` -- which recomputes the
+implementation-stage `review_content_id` fresh from live `HEAD`'s
+committed content (scoped to this item's own declared protected/excluded
+paths, `docs/ai-workflow/registry/workflow-v2-3-followups-artifacts.json`)
+and compares it to `technical_approval.approved_review_content_id`, rather
+than diffing against a moving target:
+
+```
+python3 -c "
+import sys, pathlib, json
+sys.path.insert(0, 'scripts')
+import workflow_state as ws
+repo_root = pathlib.Path('.').resolve()
+wi = json.loads((repo_root/'docs/ai-workflow/WORKFLOW_STATE.json').read_text())['work_items']['workflow-v2-3-followups']
+print(ws.approval_is_current(repo_root, wi, stage='implementation', base_commit=wi['base_commit'], head='HEAD'))
+"
+```
+
+Expected/observed: `True` (re-confirmed live immediately before writing
+this correction) -- proving no protected implementation-stage content has
+changed since `technical_approval.reviewed_content_commit`, `2302cc4`,
+regardless of how many further checklist-only commits (`e121d2d`,
+`e84da52`, `77060f3`, and this correction's own) have since advanced
+`HEAD`. This command remains valid to re-run at any later point for the
+same reason: it always answers the live question, never a stale range.
 
 ```
 python3 -m unittest discover -s scripts -p "workflow_*_test.py" -t scripts
 ```
 
-Result: **1230 tests, OK (skipped=4)**, ~122s -- matches
-`TEST_RESULTS.md`'s round-4 total exactly.
+Result: **1230 tests, OK (skipped=4)**, 121.7s -- matches
+`TEST_RESULTS.md`'s round-4 total exactly. Re-run live for this correction,
+not carried over from the prior session's claim.
 
 ```
-python3 -m unittest workflow_state_demo_test        # from scripts/: 46/46, OK
+python3 -m unittest workflow_state_demo_test        # from scripts/: 46/46, OK, 93.1s
 python3 -m unittest workflow_fingerprint_demo_test   # from scripts/: 15/15, OK (skipped=4)
 ```
 
@@ -1275,15 +1338,26 @@ python3 -m unittest workflow_fingerprint_demo_test   # from scripts/: 15/15, OK 
 ./gradlew spotlessCheck detekt lintDebug testDebugUnitTest
 ```
 
-Result: **BUILD SUCCESSFUL**, 45 actionable tasks, 44 up-to-date -- fully
-up-to-date, as expected, since this round touches no `app/` file.
+Result: **BUILD SUCCESSFUL**, 45 actionable tasks (1 executed -- `lintDebug`
+itself, not previously run in this exact session/daemon lifetime -- 44
+up-to-date) -- fully up-to-date in substance, as expected, since this round
+(and this correction) touches no `app/` file; the exact executed/up-to-date
+split depends on this machine's own Gradle daemon/build-cache state at the
+moment the gate runs, not on any repository content change, so a different
+split (e.g. all 45 up-to-date) on a fresh checkout is not itself a defect.
 
 ### Test data
 
 None to seed -- every check below reads this repository's own real,
 already-committed state (`workflow-v2-3-followups`'s own entry in
 `docs/ai-workflow/WORKFLOW_STATE.json`, the changed script/test/registry
-files, and this round's own real review history).
+files, and this round's own real review history). Flows 3 and 7 below
+additionally point at existing `ScratchRepo`-isolated regression tests
+(real Git commits inside a disposable temporary repository, never mocks)
+for the one behavior neither can safely re-demonstrate live against this
+item's own real state without actually mutating it -- consistent with how
+checks 2/4 in the revision-1 checklist above already handle the same
+"no live opportunity exists today" situation.
 
 ### Flows to exercise manually
 
@@ -1291,8 +1365,213 @@ files, and this round's own real review history).
    root and from `scripts/` as noted) and confirm the same 1230/46/15
    result and a successful Gradle gate independently, rather than trusting
    this document's claim alone.
-2. **B1's fix -- the actual `/accept-milestone`-crash defect is closed at
-   both real production consumers.** Run, from `scripts/`:
+2. **O5 -- `/review-implementation` now self-checks its own write before
+   making it.** `c41eaf8` closed round-1's own Optional finding O5: step 6
+   called the binding-field shape (`bundle_id`/`base_commit`/`work_item_id`)
+   a "hard precondition" of step 7's write that step 7 never actually
+   enforced. Confirm the command file states the enforcement, immediately
+   before the write, not merely the precondition:
+   ```
+   grep -n "Self-check the composed text" .claude/commands/review-implementation.md
+   grep -c "parse_review_feedback_binding_fields" .claude/commands/review-implementation.md
+   ```
+   Expected: one hit for the first (step 7's own heading, line 237) and
+   `2` for the second (step 6's precondition statement plus step 7's actual
+   enforcement call -- both now present, closing the gap between them).
+   Then confirm the two primitives step 7 calls
+   (`parse_review_feedback_binding_fields`/`assert_feedback_matches_bundle`)
+   are themselves correct, from `scripts/`:
+   ```
+   python3 -m unittest workflow_fingerprint_test.TestFeedbackBindingFields
+   ```
+   Expected: `OK` (7 tests). This self-check has also already run for real,
+   live, every time `/review-implementation` wrote this exact round's own
+   `.ai-review/feedback/REVIEW_FEEDBACK.md` (rounds 2 through 4, all after
+   `c41eaf8` landed) -- had it failed, that file would never have been
+   written with matching binding fields, which check 11 below independently
+   confirms it was.
+3. **The self-discovered fix that made Finding 1's own bounded-fix branch
+   reachable at all -- `record_bundle_generation`'s legality is now
+   stage-aware.** `31dabbd` is not a review-finding fix like the others in
+   this list; it was discovered *while literally executing*
+   `/apply-functional-review`'s bounded branch for this item's own
+   Finding 1 (`OPUS-R101-001`'s phase-transition contract, landed after the
+   only prior real exercise of this branch, had made
+   `record_bundle_generation(stage="post-fix", ...)` structurally
+   unreachable from `AWAITING_FUNCTIONAL_REVIEW` -- the *only* phase that
+   branch is ever invoked from). Re-demonstrating this live against this
+   item's own real state is not safe (it would require staling a `CURRENT`
+   technical approval this checklist itself depends on), so this exercises
+   the same sequence end-to-end inside an isolated `ScratchRepo` fixture --
+   real Git commits, the real production functions, not mocks. From
+   `scripts/`:
+   ```
+   python3 -m unittest workflow_state_test.TestFunctionalReviewBoundedFixReachesRecordBundleGeneration
+   ```
+   Expected: `OK` (4 tests) --
+   `test_bounded_fix_from_awaiting_functional_review_reaches_external_review_durably`
+   drives the full sequence for real (`AWAITING_FUNCTIONAL_REVIEW` with
+   `CURRENT` technical_approval -> `mark_technical_approval_stale` ->
+   a real protected-content commit -> `record_bundle_generation(stage=
+   "post-fix", ...)` -> `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`, closed
+   by a real durability commit);
+   `test_post_fix_from_awaiting_functional_review_refused_unless_stale` and
+   `test_post_fix_from_awaiting_functional_review_with_no_technical_approval_refused`
+   prove the `STALE` gate is a hard precondition, not merely the phase;
+   `test_ordinary_implementation_stage_generation_still_refused_from_awaiting_functional_review`
+   proves this widening never legalizes `stage="implementation"` from the
+   same phase. No new lifecycle state, review stage, or phase was added by
+   this fix -- confirm check 14 below still finds exactly six hard gates.
+4. **B1 (round 2) -- the WF8c evidence pointers `31dabbd`'s own class
+   rename broke are repaired.** `31dabbd` renamed
+   `workflow_state_test.TestRecoveredRoleThreeCombinationValidation` to
+   `TestRecoveredRoleLegalParentPhaseCombinations` (a fourth legal parent
+   phase made the count-based name stale), but left four evidence
+   identifiers in `workflow-v2-1-core-wf8c-evidence.json` (items
+   292/293/294/313) pointing at the old name -- a real regression for a
+   different, already-`MILESTONE_COMPLETE` item's own evidence, not a
+   hypothetical one. Confirm the pointers now read the current class name:
+   ```
+   grep -c '"evidence": "workflow_state_test.TestRecoveredRoleLegalParentPhaseCombinations' docs/ai-workflow/registry/workflow-v2-1-core-wf8c-evidence.json
+   grep -c '"evidence": "workflow_state_test.TestRecoveredRoleThreeCombinationValidation' docs/ai-workflow/registry/workflow-v2-1-core-wf8c-evidence.json
+   ```
+   Expected: `4` and `0`. Note: the bare (unscoped) form of these two greps
+   returns `5`/`1`, not `4`/`0` -- the evidence file's own explanatory note
+   for item 292 legitimately mentions the old class name once, narrating
+   that it was "renamed from `TestRecoveredRoleThreeCombinationValidation`"
+   (historical prose, not a stale pointer); scoping to `"evidence": "..."`
+   lines isolates the four pointers that actually matter. Then confirm the
+   pointed-at tests still resolve and pass for real against a pinned
+   worktree -- the same real production consumer
+   (`workflow_state_demo_test.TestReconciliationTableLedgerStatusAgreement`)
+   that this repair keeps from failing, already re-run as part of the
+   46/46 `workflow_state_demo_test` total in check 1 above; to isolate just
+   this piece (from `scripts/`, ~90s):
+   ```
+   python3 -m unittest workflow_state_demo_test.TestReconciliationTableLedgerStatusAgreement
+   ```
+   Expected: `OK` (4 tests).
+5. **I1 -- the bundle-generation contract's command-file prose no longer
+   describes a stale two-phase model.** `5b2ca7e` (further reworded by
+   `be748c3` to avoid perturbing an exact-occurrence-count regression, see
+   below) corrected `approve-review.md`'s step-4a1 note and three spots in
+   `recover-implementation-provenance.md`, all of which still described
+   `record_bundle_generation` as legal from only two source phases after
+   `31dabbd` (flow 3 above) added the third. Confirm the stale phrasing is
+   gone and the corrected, stage-aware phrasing is present in both files:
+   ```
+   grep -n "own two entry phase\|own two entry point" .claude/commands/approve-review.md .claude/commands/recover-implementation-provenance.md
+   grep -c "legal source phases\|legality is stage-specific" .claude/commands/approve-review.md .claude/commands/recover-implementation-provenance.md
+   ```
+   Expected: the first produces no output at all (both stale phrasings
+   fully replaced, not merely supplemented); the second reports at least
+   one hit in each file. Then confirm `be748c3`'s own reason for existing
+   still holds -- I1's first draft accidentally named
+   `assert_bundle_not_rejected` inline in `approve-review.md`, bumping that
+   literal's occurrence count from 2 (its real call sites) to 3 and
+   breaking the regression that counts it as a call-site proxy; the reword
+   cites the guard by name (`WFR-67`) instead:
+   ```
+   python3 -m unittest workflow_state_demo_test.TestReviewSubjectDeclarationsLive.test_every_non_exempt_file_calls_the_shared_assertion_the_expected_number_of_times
+   python3 -m unittest workflow_integration_test.TestGoldenCommandFileHashes.test_every_roster_command_file_matches_its_recorded_hash
+   ```
+   Expected: both `OK` -- the second additionally confirms `approve-review.md`'s
+   own golden hash was updated to match, so this wording is exactly what
+   `technical_approval` was recorded against, not a later untracked edit.
+6. **I2 -- `validate_state` itself now rejects a malformed persisted
+   `plan_approval`/`technical_approval`, not just a newly constructed
+   one.** `bb7ecb7` added the shape check to `_validate_work_item`
+   (`validate_state`'s own call path), so a malformed record already
+   sitting in `WORKFLOW_STATE.json` (an old backup, import, hand edit, or
+   pre-fix tooling -- not merely one built fresh via `build_approval_record`,
+   which `validate_approval_record` already guarded) is now rejected by
+   `validate_state` with a typed `InvalidApprovalRecordError`. **Scope
+   correction, since `bb7ecb7`'s own commit message overstates this**: its
+   message claims this closes the live `/accept-milestone` crash path at
+   `_assert_registry_covered_by_current_plan_approval` -- round 3's own
+   review (Blocking, see "Context" above) found this **false**:
+   `validate_state`/`_validate_work_item` has no production caller
+   anywhere in this repository, so `_assert_registry_covered_by_current_plan_approval`
+   (confirmed: defined independently at a different line, calls neither
+   function) never runs this check at all. That live crash path was closed
+   for real only by flow 8 below (`6827417`, round 4). I2's own real,
+   narrower value -- `validate_state` itself behaving correctly whenever
+   something does call it (tests, a future migration/import tool, or a
+   manual sanity check) -- is what this flow verifies, not the production
+   crash path. From `scripts/`:
+   ```
+   python3 -m unittest workflow_state_test.TestStateValidation.test_valid_persisted_plan_approval_passes_state_validation workflow_state_test.TestStateValidation.test_valid_persisted_technical_approval_passes_state_validation workflow_state_test.TestStateValidation.test_malformed_persisted_plan_approval_manifest_rejected_by_state_validation workflow_state_test.TestStateValidation.test_malformed_persisted_technical_approval_manifest_rejected_by_state_validation
+   ```
+   Expected: `OK` (4 tests) -- the first two prove a well-formed persisted
+   record still passes unchanged; the second two construct the exact
+   historical malformed shape (the whole compute-function projection
+   object, not a synthetic stand-in) directly inside a work item's
+   `plan_approval`/`technical_approval` and assert `validate_state` raises
+   `InvalidApprovalRecordError` -- proving `validate_state`'s own
+   read/validation path, distinct from flow 8 below's two real production
+   consumer sites. Confirm the two are genuinely separate call paths:
+   ```
+   grep -n "^def _assert_registry_covered_by_current_plan_approval\|^def _validate_work_item\|^def validate_state" scripts/workflow_state.py
+   ```
+   Expected: three well-separated `def` lines (currently 6494, 11093,
+   11148) -- `_assert_registry_covered_by_current_plan_approval` is not
+   nested inside, and does not call, `_validate_work_item`/`validate_state`.
+7. **O3 -- an applied `FUNCTIONAL_REVIEW.md` is now marked consumed in a
+   content-hash-bound way, so it is never re-read as fresh findings on a
+   later pass, and this checklist introduces no new lifecycle state or
+   stage to do it.** `20206a6` closed round-1's own Optional finding O3:
+   before this fix, `FUNCTIONAL_REVIEW.md` remained in place after its
+   findings were applied, so a later return to `AWAITING_FUNCTIONAL_REVIEW`
+   could re-read already-remediated findings as though they were fresh --
+   exactly what happened once already during this item's own first bounded
+   fix (Finding 1). Live, real, read-only evidence exists for this today,
+   using this item's own actual `.ai-review/feedback/FUNCTIONAL_REVIEW.md`
+   (Finding 1's real content, still on disk) and its real marker file --
+   run from the repo root:
+   ```
+   python3 -c "
+   import sys, pathlib
+   sys.path.insert(0, 'scripts')
+   import workflow_fingerprint as wf
+   repo_root = pathlib.Path('.').resolve()
+   try:
+       wf.assert_functional_review_not_already_consumed(repo_root, 'workflow-v2-3-followups')
+       print('did not raise -- unexpected')
+   except wf.FunctionalReviewAlreadyAppliedError as e:
+       print('raised as expected:', str(e)[:80])
+   "
+   ```
+   Expected: `raised as expected: ...` -- this is the exact production
+   primitive `/apply-functional-review` step 1 calls, run live against this
+   item's own real, already-applied `FUNCTIONAL_REVIEW.md`/`.consumed`
+   marker pair, proving both that the marker is genuinely content-hash-bound
+   (`git hash-object .ai-review/feedback/FUNCTIONAL_REVIEW.md` matches the
+   marker file's own recorded hash) and that this exact content would be
+   correctly refused as stale findings if `/apply-functional-review` were
+   invoked again right now. This call only reads and raises -- it writes
+   nothing, safe to repeat freely. For the negative path (genuinely new
+   findings must *not* be refused) and the full set of marker invariants,
+   which cannot safely be demonstrated against this item's own live,
+   already-consumed file without overwriting it, run the isolated
+   regression suite instead, from `scripts/`:
+   ```
+   python3 -m unittest workflow_fingerprint_test.TestFunctionalReviewConsumedMarker
+   ```
+   Expected: `OK` (7 tests), including
+   `test_passes_when_content_changed_since_the_marker_was_written` (a
+   genuinely new round's findings are never refused as stale) and
+   `test_marking_twice_for_the_same_content_stays_idempotent`. Confirm no
+   new lifecycle state was added to do any of this:
+   ```
+   grep -n "phase" scripts/workflow_fingerprint.py | grep -i "consumed\|functional_review"
+   ```
+   Expected: no output -- `resolve_functional_review_consumed_marker_path`/
+   `assert_functional_review_not_already_consumed`/
+   `mark_functional_review_consumed` touch a plain sentinel file only, never
+   `phase` or any other state field (also confirmed structurally by check 14
+   below still finding exactly six hard gates).
+8. **B1 (round 3) -- the actual `/accept-milestone`-crash defect is closed
+   at both real production consumers.** Run, from `scripts/`:
    ```
    python3 -m unittest workflow_state_test.TestRegistryReadBoundToCurrentPlanApproval.test_malformed_live_plan_approval_manifest_rejected_cleanly
    python3 -m unittest workflow_state_completion_obligations_test.TestResolveCompletionObligationsPipeline.test_malformed_committed_review_content_manifest_rejected_cleanly
@@ -1305,79 +1584,123 @@ files, and this round's own real review history).
    `resolve_completion_obligations` against that committed blob -- proving
    the fix holds even for a manifest that was already malformed in
    immutable history, not just in the live file.
-3. **No caller downgrades the new refusal.** Confirm:
+9. **No caller downgrades the new refusal -- command corrected to count
+   only the four `raise` sites, not every mention of the class.** The prior
+   wording here (a bare `grep -n "StalePlanApprovalRegistryReadError"`)
+   under-specifies its own expected result: that pattern also matches the
+   class definition itself and one docstring reference, so a plain hit
+   count is `6`, not `4`, and the operator was left to manually pick the
+   four `raise` sites out by eye. Scope the grep to what actually matters:
    ```
-   grep -n "StalePlanApprovalRegistryReadError" scripts/workflow_state.py
+   grep -n "raise StalePlanApprovalRegistryReadError" scripts/workflow_state.py
+   grep -c "raise StalePlanApprovalRegistryReadError" scripts/workflow_state.py
+   grep -n "except.*StalePlanApprovalRegistryReadError" scripts/workflow_state.py
    ```
-   Expected: every `raise StalePlanApprovalRegistryReadError(...)` site
-   (four, one per malformation branch) lives inside the single function
-   `_assert_registry_covered_by_current_plan_approval`, and the class
-   appears in no `except` clause anywhere in the file -- both call sites in
-   `complete_work_item`/`work_item_completion_status` let it propagate
-   uncaught.
-4. **The two round-4 Optional findings are correctly left open, not
-   silently dropped.** Read `.ai-review/feedback/REVIEW_FEEDBACK.md`'s
-   "Optional findings" section: confirm O1 (the shape helper does not
-   constrain the `path` value's own type, a narrow residual gap in the
-   committed-blob consumer) and O2 (a tautological
-   `assertNotIsInstance` in one regression test) are both still named
-   there, and that "Required acceptance criteria" reads "None. This bundle
-   is approvable as it stands."
-5. **The real `/approve-review implementation` flow, exercised for real
-   this session.** Confirm independently:
-   ```
-   git show --stat e84da52d153390d41c423b98dd04eb8123b1e798
-   git log -1 --format=%B e84da52d153390d41c423b98dd04eb8123b1e798
-   ```
-   Expected: exactly one file changed
-   (`docs/ai-workflow/WORKFLOW_STATE.json`), and the trailers read
-   `Workflow-Technical-Approval:
-   55b3f4d0322dccc7e2ece1ab3fd6ca17e0ec62b1bbc9b7bd14e240ac476cb5c8` /
-   `Workflow-Work-Item: workflow-v2-3-followups`.
-6. **The bundle-generation-record commit is likewise metadata-only.**
-   Confirm:
-   ```
-   git show --stat e121d2d91537a76abd0453180d56fc58eb8ef594
-   ```
-   Expected: exactly one file changed
-   (`docs/ai-workflow/WORKFLOW_STATE.json`), trailer
-   `Workflow-Bundle-Generation-Record: workflow-v2-3-followups/4`.
-7. **Scope discipline for this specific remediation round.** Confirm:
-   ```
-   git diff 3b05bf8..HEAD -- app/
-   git diff 3b05bf8..HEAD -- .claude/commands/
-   ```
-   Expected: both empty -- round 4 touches only
-   `scripts/workflow_state.py`, its two test files, and one registry JSON
-   reword (O1), matching `TEST_RESULTS.md`'s own account exactly.
-8. **Command surface and hard-gate count are unchanged.** Confirm
-   `.claude/commands/` still contains exactly 16 files, all 16 named in
-   `CLAUDE.md`'s "Slash commands" list, and that
-   `docs/ai-workflow/MILESTONE_WORKFLOW.md`'s "Hard gates summary" still
-   lists exactly six gates.
+   Expected: the first lists exactly four lines (currently 6530, 6538, 6547,
+   6559), the second reports `4`, and the third produces no output (the
+   class appears in no `except` clause anywhere in the file -- both call
+   sites in `complete_work_item`/`work_item_completion_status` let it
+   propagate uncaught). Confirm all four listed lines fall between
+   `_assert_registry_covered_by_current_plan_approval`'s own `def` line and
+   the next top-level `def` after it.
+10. **The two round-4 Optional findings are correctly left open, not
+    silently dropped.** Read `.ai-review/feedback/REVIEW_FEEDBACK.md`'s
+    "Optional findings" section: confirm O1 (the shape helper does not
+    constrain the `path` value's own type, a narrow residual gap in the
+    committed-blob consumer) and O2 (a tautological
+    `assertNotIsInstance` in one regression test) are both still named
+    there, and that "Required acceptance criteria" reads "None. This bundle
+    is approvable as it stands."
+11. **The real `/approve-review implementation` flow, exercised for real
+    this session.** Confirm independently:
+    ```
+    git show --stat e84da52d153390d41c423b98dd04eb8123b1e798
+    git log -1 --format=%B e84da52d153390d41c423b98dd04eb8123b1e798
+    ```
+    Expected: exactly one file changed
+    (`docs/ai-workflow/WORKFLOW_STATE.json`), and the trailers read
+    `Workflow-Technical-Approval:
+    55b3f4d0322dccc7e2ece1ab3fd6ca17e0ec62b1bbc9b7bd14e240ac476cb5c8` /
+    `Workflow-Work-Item: workflow-v2-3-followups`.
+12. **The bundle-generation-record commit is likewise metadata-only.**
+    Confirm:
+    ```
+    git show --stat e121d2d91537a76abd0453180d56fc58eb8ef594
+    ```
+    Expected: exactly one file changed
+    (`docs/ai-workflow/WORKFLOW_STATE.json`), trailer
+    `Workflow-Bundle-Generation-Record: workflow-v2-3-followups/4`.
+13. **Scope discipline for this specific remediation round.** Confirm:
+    ```
+    git diff 3b05bf8..HEAD -- app/
+    git diff 3b05bf8..HEAD -- .claude/commands/
+    ```
+    Expected: both empty -- round 4 (`3b05bf8`..`2302cc4`) touches only
+    `scripts/workflow_state.py`, its two test files, and one registry JSON
+    reword (O1), matching `TEST_RESULTS.md`'s own account exactly. This
+    correction pass itself (`2302cc4`..current) touches neither `app/` nor
+    `.claude/commands/` either -- confirm the same two commands against
+    `2302cc4..HEAD` report the same two empty results.
+14. **Command surface and hard-gate count are unchanged -- now with
+    concrete, runnable commands rather than narrative alone.** Run, from
+    the repo root:
+    ```
+    ls .claude/commands/*.md | wc -l
+    diff <(ls .claude/commands/*.md | xargs -n1 basename -s .md | sort) \
+         <(sed -n '80,86p' CLAUDE.md | grep -o '`[a-z0-9-]*`' | tr -d '`' | sort)
+    grep -c '^[0-9]\. `AWAITING' docs/ai-workflow/MILESTONE_WORKFLOW.md
+    ```
+    Expected: `16`; an empty diff (exit `0`) -- the command-file roster and
+    `CLAUDE.md`'s "Slash commands" list name exactly the same 16 commands;
+    and `6`. Do **not** grep for the phrase "hard gate count stays exactly"
+    to confirm the six-gate total -- `docs/ai-workflow/MILESTONE_WORKFLOW.md`
+    wraps that exact phrase across a line break (`... The hard\ngate count
+    stays exactly **6**.`), so a plain phrase grep under-matches it, the
+    same wrapping gotcha the revision-1 checklist above already documented
+    for a different marker; the numbered-list count above is the
+    unambiguous, non-wrapping signal.
 
 ### Expected result
 
-All eight checks above pass exactly as described. Checks 1, 3, 4, 5, 6, 7,
-and 8 are read-only or inspect commits/state that already exist (safe to
-repeat freely); check 2 runs two regression tests directly against real
-production consumers (also safe, no writes to the real repository).
+All fourteen checks above pass exactly as described. None writes to the
+real repository: checks 1, 5 (second half), 8 through 14 are read-only
+greps/diffs or inspect commits/state/files that already exist; checks 2,
+3, 4, 6, and 7 run regression tests either directly against real
+production consumers/primitives (read-only) or inside an isolated
+`ScratchRepo` fixture (writes only inside a disposable temporary
+repository); check 7's live `assert_functional_review_not_already_consumed`
+call against this item's own real `FUNCTIONAL_REVIEW.md` also only reads
+and raises. All fourteen are safe to repeat freely.
 
 ### Known limitations / out of scope for this review
 
 - This is **not** a re-walk of CP1-CP4's own original checkpoint behavior
   -- revision 1's checklist above already covers that ground in full; this
-  section targets only what changed between revision 1 and revision 4
-  (Finding 1's fix and the three-round remediation arc it drove).
+  section targets what changed between revision 1 and revision 4 (Finding
+  1's fix and the three-round remediation arc it drove), now including the
+  five previously-uncovered behavioral fixes from that arc's own round-2
+  review (flows 2 through 7 above) that this correction pass added.
 - O1 and O2 from round 4's own `REVIEW_FEEDBACK.md` remain open,
   explicitly non-blocking, and may be declined or deferred without
   weakening this round's approval -- not required acceptance criteria for
-  this functional review.
+  this functional review. The same is true of round 2's own O1/O2 (folded
+  in as `0a677b9`/`0736956`, both test-only and already landed) and round
+  3's O1 (folded in as `2302cc4`, already landed) -- none of the three
+  rounds' Optional findings are open today; this bullet names only the
+  final round's, since those are the only ones still listed as open in the
+  currently-authoritative `REVIEW_FEEDBACK.md`.
 - Required follow-up #8 (operator reference / lifecycle diagram sync,
   `WORKFLOW_V2_3_FOLLOWUPS.md` item 2) remains deferred, unchanged since
   revision 1. `docs/ai-workflow/WORKFLOW_V2_1_OPERATOR_REFERENCE.md` and
   `docs/ai-workflow/diagrams/` are still untracked working-tree leftovers,
   declared `excluded` in this item's own artifacts declaration, and are
-  left unmodified throughout this review.
+  left unmodified throughout this review (including this correction pass).
+- This correction pass is a checklist/evidence-only change: it does not
+  reopen, re-litigate, or alter `technical_approval` (still `CURRENT`,
+  still bound to `2302cc4`), `plan_approval`, `phase` (still
+  `AWAITING_FUNCTIONAL_REVIEW`), or any `REVIEW_FEEDBACK.md` verdict. No
+  new functional defect was found while adding flows 2 through 7 or
+  correcting flows 9/14 above -- every command was re-run live and produced
+  its stated result before this section was written.
 
 Findings go in `.ai-review/feedback/FUNCTIONAL_REVIEW.md`.
