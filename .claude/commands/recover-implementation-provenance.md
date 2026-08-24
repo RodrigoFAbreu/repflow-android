@@ -107,7 +107,17 @@ provenance pointer.
    <work_item_id>/<implementation_revision>` value (never a new revision
    number), `Workflow-Work-Item: <work_item_id>`, and
    `Workflow-Supersedes: <t>` naming the commit step 3 returned. No other
-   trailer, and no other path in the same commit.
+   trailer, and no other path in the same commit. **These three trailer
+   lines must be the commit message's own final paragraph** — after any
+   `Co-Authored-By:`/`Claude-Session:` lines, never before them
+   (`OPUS-R129-001`, the same rule `milestone-implement.md` step 1f,
+   `bootstrap-workflow-v2.md` step 6, `approve-review.md` step 6.4, and
+   `accept-milestone.md` step 6 already state): Git's `git
+   interpret-trailers --parse`, the exact mechanism
+   `discover_current_bundle_generation_record_commit` uses, treats only
+   the message's last paragraph as trailers, so a blank line after these
+   lines (e.g. one followed by `Co-Authored-By:`) silently discards them
+   and makes the recovery commit undiscoverable.
 6. **Regenerate the bundle at the new tip**: read `<bundle_dir>/MANIFEST.md`'s
    existing `stage:` field (recovery does not change what kind of round
    this is, only which commit its content is measured at) and run

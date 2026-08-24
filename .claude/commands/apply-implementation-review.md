@@ -100,15 +100,24 @@ no `docs/ai-workflow/WORKFLOW_STATE.json` entry.
    `"same_content"`, that same `Workflow-Bundle-Generation-Record` value
    (unchanged, never bumped) + `Workflow-Work-Item: <work_item_id>` +
    `Workflow-Supersedes: <t>` (`t` the commit `resolve_bundle_generation_outcome`
-   returned), no other trailer. This durability commit must land *before*
-   generation, never after (`WF8B-003`, resolved `D-Approval-Commits`
-   revision 28) — a durability commit made after generation is by
-   definition one commit ahead of the value it just wrote, permanently
-   re-breaking `/approve-review implementation`'s provenance-interval check
-   on every round; skip this whole step for a work item with no state
-   entry. Then run `./scripts/prepare-ai-review.sh <base-sha> post-fix
-   [work_item_id]` — required before `AWAITING_TECHNICAL_APPROVAL` can be
-   reachable again.
+   returned), no other trailer. **These trailer lines must be the commit
+   message's own final paragraph** — after any `Co-Authored-By:`/
+   `Claude-Session:` lines, never before them (`OPUS-R129-001`, the same
+   rule `milestone-implement.md` step 1f, `bootstrap-workflow-v2.md` step
+   6, `approve-review.md` step 6.4, and `accept-milestone.md` step 6
+   already state): Git's `git interpret-trailers --parse`, the exact
+   mechanism `discover_current_bundle_generation_record_commit` uses,
+   treats only the message's last paragraph as trailers, so a blank line
+   after these lines (e.g. one followed by `Co-Authored-By:`) silently
+   discards them and makes the bundle-generation-record commit
+   undiscoverable. This durability commit must land *before* generation,
+   never after (`WF8B-003`, resolved `D-Approval-Commits` revision 28) — a
+   durability commit made after generation is by definition one commit
+   ahead of the value it just wrote, permanently re-breaking
+   `/approve-review implementation`'s provenance-interval check on every
+   round; skip this whole step for a work item with no state entry. Then
+   run `./scripts/prepare-ai-review.sh <base-sha> post-fix [work_item_id]`
+   — required before `AWAITING_TECHNICAL_APPROVAL` can be reachable again.
 8. If any Blocking finding remains unresolved, or the fix was structurally
    significant, stay in `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` and stop
    for another review round. Otherwise report readiness and that
