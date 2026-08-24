@@ -1259,18 +1259,40 @@ implementation round ran: six new flows (2 through 7) were added for
 contract reword), `bb7ecb7` (I2, persisted-approval-record shape
 validation), and `20206a6` (O3, `FUNCTIONAL_REVIEW.md` consumed-marking);
 the automated-verification freshness claim above, Setup's toolchain claim
-above, the old flow 3 grep command (now flow 9), and the old flow 8 command
-surface/hard-gate check (now flow 14) are each corrected below at the point
-they appear, with the reason noted inline. No `app/`, `scripts/`, or `.claude/commands/` file changed in
-this pass -- confirmed by the scope-discipline flow (now flow 12) and by
+above, the old flow 3 grep command (now flow 10, after the second
+correction pass below inserted a further flow ahead of it), and the old
+flow 8 command surface/hard-gate check (now flow 15) are each corrected
+below at the point they appear, with the reason noted inline. No `app/`,
+`scripts/`, or `.claude/commands/` file changed in this pass -- confirmed
+by the scope-discipline flow (now flow 14) and by
 `workflow_state.approval_is_current` staying `True` throughout (see
 "Automated verification" below); only this file changed.
+
+**Checklist correction, pass 2 (2026-08-24, same round -- `implementation_revision`
+stays `4`, `technical_approval` untouched)**: a follow-up pass added one
+further flow and fixed one further wording defect, neither found by
+re-litigating anything the first pass above already settled. **New flow 8**
+verifies the real *data*-repair half of the original Finding 1 --
+`b0ee6a9`'s live, already-persisted `plan_approval`/`technical_approval`
+manifests, and the real `resolve_own_registry_completion_status` pre-flight
+primitive against them -- since every flow the first pass added (6 and, at
+the time, 8) only exercised the *code*-level guard against a hand-built
+malformed fixture, never the live record itself; inserting it ahead of the
+old flow 8 shifts flows 9 through 14 down to 10 through 15 (cross-references
+throughout this section are updated to match). **Flow 7** (unaffected by
+the renumbering -- it already sat at position 7 before and after) is
+corrected so each of its three commands resolves the repository root itself
+(`git rev-parse --show-toplevel`) rather than relying on the operator's
+current shell location, which a prior version left ambiguous across three
+inconsistent directory instructions. Every command below -- new, renumbered,
+or reworded -- was re-run live and produced its stated result before this
+paragraph was written.
 
 ### Setup
 
 No Android app / Gradle changes are involved in this round's own diff --
 this is process tooling only (`scripts/*.py`, `.claude/commands/*.md`,
-`docs/ai-workflow/*`). Every manual flow below (2 through 14) runs with
+`docs/ai-workflow/*`). Every manual flow below (2 through 15) runs with
 `python3` from the repo root (`scripts/` for the checks that `cd` there);
 none needs an Android app install or a device/emulator. **This does not
 mean the checklist has no build-toolchain requirement at all** (a prior
@@ -1388,7 +1410,7 @@ checks 2/4 in the revision-1 checklist above already handle the same
    live, every time `/review-implementation` wrote this exact round's own
    `.ai-review/feedback/REVIEW_FEEDBACK.md` (rounds 2 through 4, all after
    `c41eaf8` landed) -- had it failed, that file would never have been
-   written with matching binding fields, which check 11 below independently
+   written with matching binding fields, which check 12 below independently
    confirms it was.
 3. **The self-discovered fix that made Finding 1's own bounded-fix branch
    reachable at all -- `record_bundle_generation`'s legality is now
@@ -1421,7 +1443,7 @@ checks 2/4 in the revision-1 checklist above already handle the same
    `test_ordinary_implementation_stage_generation_still_refused_from_awaiting_functional_review`
    proves this widening never legalizes `stage="implementation"` from the
    same phase. No new lifecycle state, review stage, or phase was added by
-   this fix -- confirm check 14 below still finds exactly six hard gates.
+   this fix -- confirm check 15 below still finds exactly six hard gates.
 4. **B1 (round 2) -- the WF8c evidence pointers `31dabbd`'s own class
    rename broke are repaired.** `31dabbd` renamed
    `workflow_state_test.TestRecoveredRoleThreeCombinationValidation` to
@@ -1494,7 +1516,7 @@ checks 2/4 in the revision-1 checklist above already handle the same
    anywhere in this repository, so `_assert_registry_covered_by_current_plan_approval`
    (confirmed: defined independently at a different line, calls neither
    function) never runs this check at all. That live crash path was closed
-   for real only by flow 8 below (`6827417`, round 4). I2's own real,
+   for real only by flow 9 below (`6827417`, round 4). I2's own real,
    narrower value -- `validate_state` itself behaving correctly whenever
    something does call it (tests, a future migration/import tool, or a
    manual sanity check) -- is what this flow verifies, not the production
@@ -1508,7 +1530,7 @@ checks 2/4 in the revision-1 checklist above already handle the same
    object, not a synthetic stand-in) directly inside a work item's
    `plan_approval`/`technical_approval` and assert `validate_state` raises
    `InvalidApprovalRecordError` -- proving `validate_state`'s own
-   read/validation path, distinct from flow 8 below's two real production
+   read/validation path, distinct from flow 9 below's two real production
    consumer sites. Confirm the two are genuinely separate call paths:
    ```
    grep -n "^def _assert_registry_covered_by_current_plan_approval\|^def _validate_work_item\|^def validate_state" scripts/workflow_state.py
@@ -1526,10 +1548,19 @@ checks 2/4 in the revision-1 checklist above already handle the same
    exactly what happened once already during this item's own first bounded
    fix (Finding 1). Live, real, read-only evidence exists for this today,
    using this item's own actual `.ai-review/feedback/FUNCTIONAL_REVIEW.md`
-   (Finding 1's real content, still on disk) and its real marker file --
-   run from the repo root:
+   (Finding 1's real content, still on disk) and its real marker file.
+   **Every command below is self-contained**: each resolves the repository
+   root itself via `git rev-parse --show-toplevel` and `cd`s there (or into
+   `scripts/` beneath it) inside its own subshell, so it runs correctly
+   regardless of whether the operator's shell happens to be at the repo
+   root, inside `scripts/`, or anywhere else in the working tree when it is
+   pasted -- a prior version of this flow instead narrated "run from the
+   repo root" for one command and "from `scripts/`" for another, then gave
+   a third with no directory statement at all, which silently broke if
+   pasted right after the second (looking for the nonexistent
+   `scripts/scripts/workflow_fingerprint.py`):
    ```
-   python3 -c "
+   (cd "$(git rev-parse --show-toplevel)" && python3 -c "
    import sys, pathlib
    sys.path.insert(0, 'scripts')
    import workflow_fingerprint as wf
@@ -1539,7 +1570,7 @@ checks 2/4 in the revision-1 checklist above already handle the same
        print('did not raise -- unexpected')
    except wf.FunctionalReviewAlreadyAppliedError as e:
        print('raised as expected:', str(e)[:80])
-   "
+   ")
    ```
    Expected: `raised as expected: ...` -- this is the exact production
    primitive `/apply-functional-review` step 1 calls, run live against this
@@ -1553,9 +1584,9 @@ checks 2/4 in the revision-1 checklist above already handle the same
    findings must *not* be refused) and the full set of marker invariants,
    which cannot safely be demonstrated against this item's own live,
    already-consumed file without overwriting it, run the isolated
-   regression suite instead, from `scripts/`:
+   regression suite instead:
    ```
-   python3 -m unittest workflow_fingerprint_test.TestFunctionalReviewConsumedMarker
+   (cd "$(git rev-parse --show-toplevel)/scripts" && python3 -m unittest workflow_fingerprint_test.TestFunctionalReviewConsumedMarker)
    ```
    Expected: `OK` (7 tests), including
    `test_passes_when_content_changed_since_the_marker_was_written` (a
@@ -1563,14 +1594,64 @@ checks 2/4 in the revision-1 checklist above already handle the same
    `test_marking_twice_for_the_same_content_stays_idempotent`. Confirm no
    new lifecycle state was added to do any of this:
    ```
-   grep -n "phase" scripts/workflow_fingerprint.py | grep -i "consumed\|functional_review"
+   (cd "$(git rev-parse --show-toplevel)" && grep -n "phase" scripts/workflow_fingerprint.py | grep -i "consumed\|functional_review")
    ```
    Expected: no output -- `resolve_functional_review_consumed_marker_path`/
    `assert_functional_review_not_already_consumed`/
    `mark_functional_review_consumed` touch a plain sentinel file only, never
-   `phase` or any other state field (also confirmed structurally by check 14
+   `phase` or any other state field (also confirmed structurally by check 15
    below still finding exactly six hard gates).
-8. **B1 (round 3) -- the actual `/accept-milestone`-crash defect is closed
+8. **The real data-repair half of Finding 1 -- the live
+   `review_content_manifest` shape actually holds today, in this item's
+   own real `WORKFLOW_STATE.json`, not only in a synthetic fixture.**
+   Flows 6 and 9 (I2 and B1 round 3) each prove the *code* now rejects a
+   hand-built malformed shape; neither touches this item's own real,
+   already-persisted `plan_approval`/`technical_approval` records, so
+   neither actually confirms the live data was repaired. `b0ee6a9` is that
+   repair: it unwrapped both fields from the full
+   `compute_review_content_id_*_stage` projection object down to that
+   object's own inner flat `review_content_manifest` list, verified
+   byte-identical `path`/`exists`/`mode`/`blob` values throughout (diffed
+   against the pre-repair file) -- not a new approval, no
+   `Workflow-Plan-Approval`/`Workflow-Technical-Approval` trailer. Confirm
+   the live shape directly, and that the real `/accept-milestone`
+   pre-flight primitive the original crash came from now succeeds against
+   it, run from the repo root:
+   ```
+   python3 -c "
+   import sys, pathlib, json
+   sys.path.insert(0, 'scripts')
+   import workflow_state as ws
+   repo_root = pathlib.Path('.').resolve()
+   wi = json.loads((repo_root/'docs/ai-workflow/WORKFLOW_STATE.json').read_text())['work_items']['workflow-v2-3-followups']
+
+   def is_flat_manifest(m):
+       return isinstance(m, list) and all(
+           isinstance(e, dict) and {'path', 'exists', 'mode', 'blob'}.issubset(e.keys()) for e in m
+       )
+
+   pm = wi['plan_approval']['review_content_manifest']
+   tm = wi['technical_approval']['review_content_manifest']
+   print('plan_approval.review_content_manifest: list of', len(pm), '-- flat shape:', is_flat_manifest(pm))
+   print('technical_approval.review_content_manifest: list of', len(tm), '-- flat shape:', is_flat_manifest(tm))
+
+   result = ws.resolve_own_registry_completion_status(repo_root, wi)
+   print('resolve_own_registry_completion_status:', result)
+   assert result == (True, None), result
+   print('all checks passed')
+   "
+   ```
+   Expected: `plan_approval.review_content_manifest: list of 3 -- flat
+   shape: True`; `technical_approval.review_content_manifest: list of 18
+   -- flat shape: True`; `resolve_own_registry_completion_status: (True,
+   None)`; `all checks passed` -- the exact real production pre-flight
+   primitive `complete_work_item` and `/accept-milestone`'s own advisory
+   pre-flight both call, invoked against this item's own real, live work
+   item dict (not a hand-built fixture), returning cleanly rather than
+   crashing with the original bare `AttributeError`. This call only reads
+   `WORKFLOW_STATE.json` and the item's own registry file -- it writes
+   nothing, safe to repeat freely.
+9. **B1 (round 3) -- the actual `/accept-milestone`-crash defect is closed
    at both real production consumers.** Run, from `scripts/`:
    ```
    python3 -m unittest workflow_state_test.TestRegistryReadBoundToCurrentPlanApproval.test_malformed_live_plan_approval_manifest_rejected_cleanly
@@ -1584,7 +1665,7 @@ checks 2/4 in the revision-1 checklist above already handle the same
    `resolve_completion_obligations` against that committed blob -- proving
    the fix holds even for a manifest that was already malformed in
    immutable history, not just in the live file.
-9. **No caller downgrades the new refusal -- command corrected to count
+10. **No caller downgrades the new refusal -- command corrected to count
    only the four `raise` sites, not every mention of the class.** The prior
    wording here (a bare `grep -n "StalePlanApprovalRegistryReadError"`)
    under-specifies its own expected result: that pattern also matches the
@@ -1603,7 +1684,7 @@ checks 2/4 in the revision-1 checklist above already handle the same
    propagate uncaught). Confirm all four listed lines fall between
    `_assert_registry_covered_by_current_plan_approval`'s own `def` line and
    the next top-level `def` after it.
-10. **The two round-4 Optional findings are correctly left open, not
+11. **The two round-4 Optional findings are correctly left open, not
     silently dropped.** Read `.ai-review/feedback/REVIEW_FEEDBACK.md`'s
     "Optional findings" section: confirm O1 (the shape helper does not
     constrain the `path` value's own type, a narrow residual gap in the
@@ -1611,7 +1692,7 @@ checks 2/4 in the revision-1 checklist above already handle the same
     `assertNotIsInstance` in one regression test) are both still named
     there, and that "Required acceptance criteria" reads "None. This bundle
     is approvable as it stands."
-11. **The real `/approve-review implementation` flow, exercised for real
+12. **The real `/approve-review implementation` flow, exercised for real
     this session.** Confirm independently:
     ```
     git show --stat e84da52d153390d41c423b98dd04eb8123b1e798
@@ -1622,7 +1703,7 @@ checks 2/4 in the revision-1 checklist above already handle the same
     `Workflow-Technical-Approval:
     55b3f4d0322dccc7e2ece1ab3fd6ca17e0ec62b1bbc9b7bd14e240ac476cb5c8` /
     `Workflow-Work-Item: workflow-v2-3-followups`.
-12. **The bundle-generation-record commit is likewise metadata-only.**
+13. **The bundle-generation-record commit is likewise metadata-only.**
     Confirm:
     ```
     git show --stat e121d2d91537a76abd0453180d56fc58eb8ef594
@@ -1630,7 +1711,7 @@ checks 2/4 in the revision-1 checklist above already handle the same
     Expected: exactly one file changed
     (`docs/ai-workflow/WORKFLOW_STATE.json`), trailer
     `Workflow-Bundle-Generation-Record: workflow-v2-3-followups/4`.
-13. **Scope discipline for this specific remediation round.** Confirm:
+14. **Scope discipline for this specific remediation round.** Confirm:
     ```
     git diff 3b05bf8..HEAD -- app/
     git diff 3b05bf8..HEAD -- .claude/commands/
@@ -1641,7 +1722,7 @@ checks 2/4 in the revision-1 checklist above already handle the same
     correction pass itself (`2302cc4`..current) touches neither `app/` nor
     `.claude/commands/` either -- confirm the same two commands against
     `2302cc4..HEAD` report the same two empty results.
-14. **Command surface and hard-gate count are unchanged -- now with
+15. **Command surface and hard-gate count are unchanged -- now with
     concrete, runnable commands rather than narrative alone.** Run, from
     the repo root:
     ```
@@ -1662,15 +1743,17 @@ checks 2/4 in the revision-1 checklist above already handle the same
 
 ### Expected result
 
-All fourteen checks above pass exactly as described. None writes to the
-real repository: checks 1, 5 (second half), 8 through 14 are read-only
-greps/diffs or inspect commits/state/files that already exist; checks 2,
-3, 4, 6, and 7 run regression tests either directly against real
+All fifteen checks above pass exactly as described. None writes to the
+real repository: checks 1, 5 (second half), 8, and 9 through 15 are
+read-only greps/diffs/live-primitive calls or inspect commits/state/files
+that already exist (check 8's `resolve_own_registry_completion_status`
+call reads `WORKFLOW_STATE.json` and this item's own registry file only);
+checks 2, 3, 4, 6, and 7 run regression tests either directly against real
 production consumers/primitives (read-only) or inside an isolated
 `ScratchRepo` fixture (writes only inside a disposable temporary
 repository); check 7's live `assert_functional_review_not_already_consumed`
 call against this item's own real `FUNCTIONAL_REVIEW.md` also only reads
-and raises. All fourteen are safe to repeat freely.
+and raises. All fifteen are safe to repeat freely.
 
 ### Known limitations / out of scope for this review
 
@@ -1695,12 +1778,14 @@ and raises. All fourteen are safe to repeat freely.
   `docs/ai-workflow/diagrams/` are still untracked working-tree leftovers,
   declared `excluded` in this item's own artifacts declaration, and are
   left unmodified throughout this review (including this correction pass).
-- This correction pass is a checklist/evidence-only change: it does not
-  reopen, re-litigate, or alter `technical_approval` (still `CURRENT`,
+- Both correction passes are checklist/evidence-only changes: neither
+  reopens, re-litigates, or alters `technical_approval` (still `CURRENT`,
   still bound to `2302cc4`), `plan_approval`, `phase` (still
   `AWAITING_FUNCTIONAL_REVIEW`), or any `REVIEW_FEEDBACK.md` verdict. No
-  new functional defect was found while adding flows 2 through 7 or
-  correcting flows 9/14 above -- every command was re-run live and produced
-  its stated result before this section was written.
+  new functional defect was found while adding flows 2 through 7 (pass 1)
+  or flow 8 (pass 2), or while correcting the old flows 9/14 (renumbered by
+  pass 2 to 10/15) or flow 7's working-directory ambiguity (pass 2) -- every
+  command in this section, at both passes, was re-run live and produced its
+  stated result before the corresponding paragraph was written.
 
 Findings go in `.ai-review/feedback/FUNCTIONAL_REVIEW.md`.
