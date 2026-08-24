@@ -1666,24 +1666,24 @@ checks 2/4 in the revision-1 checklist above already handle the same
    the fix holds even for a manifest that was already malformed in
    immutable history, not just in the live file.
 10. **No caller downgrades the new refusal -- command corrected to count
-   only the four `raise` sites, not every mention of the class.** The prior
-   wording here (a bare `grep -n "StalePlanApprovalRegistryReadError"`)
-   under-specifies its own expected result: that pattern also matches the
-   class definition itself and one docstring reference, so a plain hit
-   count is `6`, not `4`, and the operator was left to manually pick the
-   four `raise` sites out by eye. Scope the grep to what actually matters:
-   ```
-   grep -n "raise StalePlanApprovalRegistryReadError" scripts/workflow_state.py
-   grep -c "raise StalePlanApprovalRegistryReadError" scripts/workflow_state.py
-   grep -n "except.*StalePlanApprovalRegistryReadError" scripts/workflow_state.py
-   ```
-   Expected: the first lists exactly four lines (currently 6530, 6538, 6547,
-   6559), the second reports `4`, and the third produces no output (the
-   class appears in no `except` clause anywhere in the file -- both call
-   sites in `complete_work_item`/`work_item_completion_status` let it
-   propagate uncaught). Confirm all four listed lines fall between
-   `_assert_registry_covered_by_current_plan_approval`'s own `def` line and
-   the next top-level `def` after it.
+    only the four `raise` sites, not every mention of the class.** The prior
+    wording here (a bare `grep -n "StalePlanApprovalRegistryReadError"`)
+    under-specifies its own expected result: that pattern also matches the
+    class definition itself and one docstring reference, so a plain hit
+    count is `6`, not `4`, and the operator was left to manually pick the
+    four `raise` sites out by eye. Scope the grep to what actually matters:
+    ```
+    grep -n "raise StalePlanApprovalRegistryReadError" scripts/workflow_state.py
+    grep -c "raise StalePlanApprovalRegistryReadError" scripts/workflow_state.py
+    grep -n "except.*StalePlanApprovalRegistryReadError" scripts/workflow_state.py
+    ```
+    Expected: the first lists exactly four lines (currently 6530, 6538, 6547,
+    6559), the second reports `4`, and the third produces no output (the
+    class appears in no `except` clause anywhere in the file -- both call
+    sites in `complete_work_item`/`work_item_completion_status` let it
+    propagate uncaught). Confirm all four listed lines fall between
+    `_assert_registry_covered_by_current_plan_approval`'s own `def` line and
+    the next top-level `def` after it.
 11. **The two round-4 Optional findings are correctly left open, not
     silently dropped.** Read `.ai-review/feedback/REVIEW_FEEDBACK.md`'s
     "Optional findings" section: confirm O1 (the shape helper does not
