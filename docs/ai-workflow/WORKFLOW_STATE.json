@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_work_item_id": "workflow-v2-3-followups",
+  "active_work_item_id": null,
   "work_items": {
     "workflow-v2-1-core": {
       "work_item_type": "process",
@@ -698,7 +698,7 @@
       "registry_path": "docs/ai-workflow/registry/workflow-v2-3-followups-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/workflow-v2-3-followups-mapping.json",
       "governing_workflow_version": "2.1",
-      "phase": "AWAITING_FUNCTIONAL_REVIEW",
+      "phase": "MILESTONE_COMPLETE",
       "plan_revision": 13,
       "implementation_revision": 4,
       "functional_review_round": null,
@@ -895,8 +895,8 @@
       },
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 58,
-      "last_transition": "2026-08-23T23:42:37Z"
+      "state_revision": 59,
+      "last_transition": "2026-08-24T00:56:14Z"
     }
   }
 }
