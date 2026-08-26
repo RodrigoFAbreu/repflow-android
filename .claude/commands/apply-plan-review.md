@@ -1,5 +1,6 @@
 ---
 description: Apply external plan-review feedback and revise the plan.
+argument-hint: "[work-item-id]"
 state_writer: true
 review-subject: verdict
 ---
@@ -10,10 +11,29 @@ Enter the `REVISING_PLAN` state of `docs/ai-workflow/MILESTONE_WORKFLOW.md`.
 
 `<bundle_dir>`/`<feedback_dir>` below resolve per
 `docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Bundle location"
-(`workflow_fingerprint.resolve_bundle_dir`/`resolve_feedback_dir`).
+(`workflow_fingerprint.resolve_bundle_dir(repo_root, work_item_id,
+stage="plan")`/`resolve_feedback_dir(repo_root, work_item_id)`). This is a
+plan-stage command, so `<bundle_dir>` is **always**
+`.ai-review/<work_item_id>/current/` -- the `stage="plan"` argument is
+required and load-bearing, never decorative: without it the resolver takes
+its compatibility branch and answers the flat `.ai-review/current/` for a
+work item with nothing under `.ai-review/<work_item_id>/` yet (a
+brand-new milestone's first plan bundle, or the first
+`/milestone-plan <child-id>` on a remediation child), while the generator
+writes and validates the scoped one. `<feedback_dir>` takes no stage
+argument: `feedback/` is stage-agnostic and keeps the scoped-else-flat
+rule for every stage alike.
 
-0. **Dual-mode branch** (Workflow v2.1, `WF4a-ii`/`WF4a-iv`): read the
-   target work item's `governing_workflow_version` from
+0. **Dual-mode branch** (Workflow v2.1, `WF4a-ii`/`WF4a-iv`): resolve the
+   target work item first -- the id named in `$ARGUMENTS`, or
+   `active_work_item_id` from `docs/ai-workflow/WORKFLOW_STATE.json` if
+   omitted. Refuse with a named error if neither resolves to an existing,
+   non-terminal `work_items` entry -- never guess. The explicit id is what
+   makes a work item that is *not* `active_work_item_id` drivable at all
+   (`D1`: the pointer is resume focus, not an execution lock), which is the
+   only way a `<parent-id>-remediation-<n>` child's own `REVISE` round can
+   be applied while its parent holds the pointer. Then read that work
+   item's `governing_workflow_version` from
    `docs/ai-workflow/WORKFLOW_STATE.json` (missing entirely is equivalent to
    `"1"`).
    - **`governing_workflow_version: "1"`**: steps 1-7 execute exactly as
@@ -41,8 +61,12 @@ Enter the `REVISING_PLAN` state of `docs/ai-workflow/MILESTONE_WORKFLOW.md`.
    mutation guard** (`WFR-67`): immediately before the first edit below,
    re-call `workflow_fingerprint.assert_bundle_not_rejected(repo_root,
    work_item_id)` — a withdrawal landing between step 1 and here must
-   still be caught. Apply accepted findings to the plan
-   (`<bundle_dir>/PLAN.md` and the real execution/reference plan doc).
+   still be caught. Apply accepted findings to the **authoritative**
+   execution/reference plan document (`plan_path`) only -- never to
+   `<bundle_dir>/PLAN.md`, which since `WFR-67` the generator derives
+   unconditionally from a private pinned snapshot of every plan-stage
+   protected path. An edit made to the bundle copy is silently
+   overwritten by the next generation and never reaches the reviewer.
 4. For any finding you reject, write the rejection with concrete repository
    evidence (file path, line, existing test, or doc reference) directly in
    the plan doc's decisions section — not a separate rebuttal file.
@@ -51,15 +75,53 @@ Enter the `REVISING_PLAN` state of `docs/ai-workflow/MILESTONE_WORKFLOW.md`.
    `plan_revision` (`workflow_state.generate_registry(...)`/
    `generate_mapping(...)`/`write_registry_and_mapping(...)`, unchanged
    checkpoints/requirements unless this round's accepted findings changed
-   them), then call `workflow_state.publish_plan_revision(state,
+   them), **and re-embed `workflow_state.render_registry_markdown(registry)`'s
+   output into the plan document, replacing the table already there**
+   (workflow system audit, convergence pass 12, ledger row `I22`).
+   `/milestone-plan` step 3 calls that table the plan document's own
+   "generated, human-readable checkpoint table — never hand-edited"; this
+   step regenerated the registry behind it and never said to refresh it,
+   so a revision that added, removed or renamed a checkpoint published a
+   plan bundle whose table silently disagreed with the authoritative
+   registry. Nothing detects that: the table is not hashed separately, and
+   `assert_stage_completeness` checks only the document's `(Revision N)`
+   marker, so the external reviewer reviews the stale table as if it were
+   the plan. Re-embed **unconditionally** whenever the registry is
+   regenerated: the render is a pure function of the checkpoint set, so it
+   is a byte-identical no-op when this round changed no checkpoint, and
+   making the step conditional only reintroduces the judgement call that
+   produced the stale table. Then call `workflow_state.publish_plan_revision(state,
    work_item_id, plan_revision, now)` and persist the returned state to
    `docs/ai-workflow/WORKFLOW_STATE.json` — in the same operation, before
    the bundle below is regenerated, and on both this step's governing-version
    branches alike (`D-Plan-Revision-Publication`, `WFR-65`). This step
    applies only to a work item with an existing `WORKFLOW_STATE.json`
    entry (`registry_path` non-null); an ordinary `"1"`-governed milestone
-   with no such entry is unaffected, unchanged. Update
-   `<bundle_dir>/REVIEW_REQUEST.md` to reflect the revision and rerun
+   with no such entry is unaffected, unchanged. If this revision creates
+   any of the four plan-stage files for the first time, apply
+   `/milestone-plan` step 3's staging step to it as well (`git add -N`,
+   salvage audit `B6`) -- an untracked declared path makes
+   `resolve_plan_stage_metadata` refuse before the regeneration below
+   writes anything. Then refresh **both**
+   author-written files the generator's own closing checks bind to this
+   round -- a stale entry does not warn, it *withdraws* the bundle
+   (`finalize_bundle_generation` quarantines `current/` and deletes the
+   archive):
+   - `<bundle_dir>/REVIEW_REQUEST.md`, restating this round's
+     `review_content_id: <hex>`
+     (`assert_review_request_states_review_content_id`), obtained from the
+     single canonical entry point `docs/ai-workflow/REVIEW_PROTOCOL.md`'s
+     "Computing `review_content_id`" names for this stage -- never a
+     second, ad hoc computation, and never the previous round's value;
+   - `<bundle_dir>/TEST_RESULTS.md`, restating **both** of the labelled
+     lines `assert_test_results_consistent_with_plan_review_request`
+     requires -- `stage: plan (revision N)` with `N` equal to the
+     `plan_revision` just published, and `head: <sha>` equal to this
+     generation's own HEAD. Both values change every round, so a copy
+     carried forward from the previous round fails this check even when
+     the revision alone would still match.
+
+   Then rerun
    `./scripts/prepare-ai-review.sh <base-sha> plan <work_item_id>` to refresh the
    bundle (`work_item_id` is **required** for the plan stage, never
    resolved from the live `active_work_item_id` -- `D-Fingerprint-Generalization`).

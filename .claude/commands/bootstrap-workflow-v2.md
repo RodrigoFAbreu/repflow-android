@@ -127,10 +127,35 @@ until `docs/ai-workflow/WORKFLOW_STATE.json` exists to read it from
    the same tracked self-review -> verification -> bundle-generation
    sequence `/milestone-implement`'s own steps 2-4 perform for every other
    work item, never a hand-off to that command:
-   - enter `SELF_REVIEWING_IMPLEMENTATION`: review the full work item
-     diff (since `base_commit`) for correctness, layer-boundary
-     violations, missing tests, and maintainability; fix all blocking and
-     important findings;
+   - enter `SELF_REVIEWING_IMPLEMENTATION` **as a state write, not
+     narrative** (salvage audit `B8`): call
+     `workflow_state.enter_self_reviewing_implementation(state,
+     "workflow-v2-1-core", registry, now=<now>)` and persist the returned
+     state, where `registry` is the same
+     `docs/ai-workflow/registry/workflow-v2-1-core-registry.json` step 3
+     already walked. It is a true no-op (no `state_revision` bump) when
+     the phase is already `SELF_REVIEWING_IMPLEMENTATION` — the ordinary
+     case, since step 6's own `complete_checkpoint` wrote it when the last
+     checkpoint completed — and performs the real transition when the
+     phase is `IMPLEMENTING`, which is what a plan re-approval on an
+     already-complete registry leaves behind. Without this call the next
+     bullet's `record_bundle_generation` refuses with
+     `IllegalBundleGenerationSourcePhaseError` and the work item has no
+     command-reachable way out of `IMPLEMENTING` at all. An outstanding
+     checkpoint raises `IncompleteCheckpointsForSelfReviewError`: stop and
+     report it — this branch was entered wrongly, and step 4 is where the
+     work happens. **When (and only when) the call actually transitioned
+     the phase**, commit `docs/ai-workflow/WORKFLOW_STATE.json` alone,
+     carrying a single `Workflow-Work-Item: workflow-v2-1-core` trailer as
+     the message's final paragraph and no generation-record or checkpoint
+     trailer — the next bullet's own commit is validated against its
+     parent's *committed* phase whenever the round resolves
+     `same_content`, so a source phase left only in the working tree
+     refuses one step later (`milestone-implement.md` step 2 states the
+     same rule). A no-op call commits nothing. Then review the full work
+     item diff (since
+     `base_commit`) for correctness, layer-boundary violations, missing
+     tests, and maintainability; fix all blocking and important findings;
    - run this work item's own applicable verification suite, with
      `scripts/` as the working directory: `python3 -m unittest
      workflow_integration_test workflow_state_test

@@ -50,12 +50,17 @@ from __future__ import annotations
 import ast
 import base64
 import hashlib
+import html
+import inspect
+import itertools
 import inspect
 import json
 import os
 import re
 import subprocess
+import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import workflow_fingerprint as fingerprint
@@ -721,7 +726,65 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # were authored from the start with their own `review-subject:`
     # declarations, so their own comments below say "first recorded
     # hash," not "updated."
-    "milestone-plan.md": "310271edac2f76351e8bcd93d540a955050b15b1291de3f008bd61b4678617ad",
+    # prepare-functional-review.md updated by the salvage audit's final
+    # clean-slate pass (repair `R10`, ledger row `I7`): step 3a gains the
+    # unchanged-checklist branch, without which a round that needs no
+    # checklist change has no discoverable evidence at all.
+    # Updated once more by the clean-slate re-audit's second finding
+    # (repair `R3` extension, ledger row `B7`): step 3 now states the one
+    # classification judgment the template makes rather than defers, and
+    # what a work item whose deliverable is a workflow design document
+    # must do about it.
+    # Updated again by the salvage audit's clean-slate re-audit (repair
+    # `R8`, ledger row `B6`): `milestone-plan.md` step 3 gains the
+    # intent-to-add staging step `workflow_state.py` already assumed
+    # existed, and `apply-plan-review.md` step 5 points at it.
+    # Updated by the Workflow v2.x salvage audit (repair `R3`/`R5`,
+    # ledger rows `B4`, `I3`, `I4`, `O4`): `milestone-plan.md` step 3 now
+    # passes the required `work_item_type` to
+    # `generate_artifacts_declarations` and step 6 names the complete
+    # author-written input set the generator hard-requires (dropping the
+    # stale "author PLAN.md" instruction WFR-67 superseded, adding
+    # TEST_RESULTS.md's two mandatory marker lines);
+    # `apply-plan-review.md` steps 3/5, `milestone-implement.md` step 4
+    # and `apply-implementation-review.md` step 7 carry the matching
+    # corrections. Intentional content change, not a regression.
+    # Updated by the Workflow v2.x convergence campaign (ledger row
+    # `B9`, finding `A9`): the five files below gained the explicit
+    # `[work-item-id]` targeting contract a `<parent-id>-remediation-<n>`
+    # child needs -- `milestone-plan.md` an `argument-hint` plus the
+    # step-0 explicit-target branch and the two-argument resolution
+    # rule; `apply-plan-review.md`/`apply-implementation-review.md`/
+    # `accept-milestone.md` an `argument-hint` plus step-0 target
+    # resolution (`accept-milestone.md` also step 2a's
+    # `UnsatisfiedCompletionObligationError` stop and step 2b's
+    # remediation-child bookkeeping branch); `apply-functional-review.md`
+    # an `argument-hint` plus the corrected broad-branch child sequence.
+    # Intentional content change, not a regression.
+    # Updated by the workflow system audit's convergence repair `I1`
+    # (first-plan-bundle bundle-directory resolution): the five plan-stage
+    # entries below now name `resolve_bundle_dir(repo_root, work_item_id,
+    # stage="plan")` explicitly, and state why the `stage="plan"` argument
+    # is load-bearing rather than decorative -- without it the resolver's
+    # compatibility branch answers the flat `.ai-review/current/` for a
+    # work item whose scoped directory does not exist yet (a first plan
+    # bundle, a first `/milestone-plan <child-id>` on a remediation child,
+    # or a regeneration after `withdraw_bundle` quarantined `current/`),
+    # while `prepare-ai-review.sh` writes and validates the scoped one.
+    # `approve-review.md` runs at both stages, so its own paragraph states
+    # the stage-dependent form. Intentional content change, not a
+    # regression.
+    # Updated by the workflow system audit's convergence pass 12 (ledger
+    # row `O31`, external Optional `N3`): the five generation drivers below
+    # now point at `docs/ai-workflow/REVIEW_PROTOCOL.md`'s new "Computing
+    # `review_content_id`" section for the value each of them already told
+    # the author to state. Before this, not one driver named any
+    # computation at all -- and the generation *refuses* on a wrong digest
+    # rather than warning, so "state the correct value" was an instruction
+    # with no procedure. The algorithm is written once, in the protocol;
+    # each command carries a reference, never a restatement. Intentional
+    # content change, not a regression.
+    "milestone-plan.md": "23fffdcca909726c89e6d4f348386be0a37683ce097cd8d4af685a4e4b72ebea",
     # milestone-implement.md further updated, OPUS-R129-001: step 1f's
     # checkpoint-completion commit instruction now states explicitly that
     # the Workflow-Checkpoint/Workflow-Work-Item trailer must be the
@@ -736,7 +799,7 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # closing the gap a fresh Opus review found at this second trailer-
     # write site in an already-corrected file -- intentional content
     # change.
-    "milestone-implement.md": "a9ef8b1111b9fc2cc2a368cab99a1dde7780c326aaf1894792802920203cccfd",
+    "milestone-implement.md": "efb929144f3ba5c5033e522dfcfa48f286502887c548f45fce780f4c72a980ea",
     # approve-review.md (WF8c item (c), same-content bundle-generation
     # republication idempotency; further updated WF8c item (b): the
     # trailing caveat naming the dedicated /recover-implementation-provenance
@@ -787,7 +850,23 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # commit, same step) already states, closing the gap a fresh Opus
     # review found at this second trailer-write site in an already-
     # corrected file -- intentional content change.
-    "approve-review.md": "d0e8191c9c67e72973336da4ae7bb211879973dbdfdf559f3e72f8e0def3340b",
+    # approve-review.md further updated by the workflow system audit's
+    # convergence repair, optional finding 3: step 4b gains the explicit
+    # takeover target check -- the plan-approval journal is a single,
+    # repository-wide object, so an interrupted transaction belonging to
+    # another work item must be reported and refused rather than taken
+    # over and completed under this invocation's target.
+    # `take_over_plan_approval_transaction` now takes that resolved target
+    # as a required argument and refuses a mismatch in production.
+    # Intentional content change, not a regression.
+    # Updated by the workflow system audit's convergence pass 12 (ledger
+    # row `I21`): step 6's implementation-stage paragraph now names the
+    # post-commit verification set that stage never had --
+    # `validate_technical_approval_commit` (which had no production caller
+    # at all) and `verify_post_approval_manifest_match` -- applied to the
+    # commit the invocation just created, never retroactively to
+    # discovered history. Intentional content change, not a regression.
+    "approve-review.md": "3efde74cddebf89cc7e07f5ddc1359a7b18cbc0aa8fe30ee4e886c8e111abf52",
     # accept-milestone.md updated, baseline-freeze correctness fix
     # (OPUS-R129-001): step 6's completion-commit instruction now states
     # the same "trailers must be the commit message's own final paragraph"
@@ -796,17 +875,37 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # real /accept-milestone completion commit to date reproduced
     # (27f051e/fb134ac/d271d89, all individually grandfathered in
     # workflow_state_demo_test.py) -- intentional content change.
-    "accept-milestone.md": "79b3f9bfb81b444291f17eea5f2a2bc706b7952284acb36422aa52c5faa0daa0",
+    #
+    # accept-milestone.md further updated, dead-contract cleanup (ledger
+    # `I10`): step 2a's two refusal branches pointed the operator at
+    # /accept-scoped-remediation, a command whose own gate had no producer
+    # in any supported lifecycle. Both now name the three supported ways
+    # forward instead (finish the checkpoint with /milestone-implement, or
+    # route a functional finding through /apply-functional-review's
+    # bounded/broad branches) -- intentional content change.
+    "accept-milestone.md": "3d1efc80a42a32164b4a068e8de53ffd3654f63b7a2f9d1aab4b1d35cacf17d3",
     # prepare-functional-review.md further updated, baseline-portability
     # correctness fix (OPUS-R129-001): step 3a's checklist-evidence
     # provenance commit instruction now states the same "trailers must be
     # the commit message's own final paragraph" requirement
     # milestone-implement.md/bootstrap-workflow-v2.md/approve-review.md/
     # accept-milestone.md already state -- intentional content change.
-    "prepare-functional-review.md": "fb07409fbc738f373a227fdfd17cfd84131c5848c3e43a59e8b4ebd31f2e7d36",
+    #
+    # prepare-functional-review.md further updated, dead-contract cleanup
+    # (ledger `I10`): step 3a's rationale and step 4's operator
+    # instruction both described the retired /accept-scoped-remediation's
+    # confirmation guard as the consumer of the checklist-evidence commit.
+    # The commit itself stays -- step 4 reports its identity and
+    # /review-functional reads it back -- but the guidance now names only
+    # supported next steps -- intentional content change.
+    "prepare-functional-review.md": "e5c918c32daef7c241ba177d09448e7c3bf9b18e0a17493773a39d7e7993b81e",
     # apply-plan-review.md/bootstrap-workflow-v2.md (D-Plan-Revision-Publication,
     # WFR-65): intentional content change, publish_plan_revision wiring.
-    "apply-plan-review.md": "fbfa7e9c980720c77c547cbdce01a4e75ec1bbba69c1be5cbf2fc6584e514ae6",
+    # apply-plan-review.md further updated, convergence pass 12 (ledger row
+    # `I22`): step 5 now names the `render_registry_markdown` re-embed the
+    # plan document's generated checkpoint table owes whenever the registry
+    # is regenerated. Intentional content change, not a regression.
+    "apply-plan-review.md": "93e7f23ec703ed006a075b8b809c8aeeb6b6b927a765db401c9310f67e59b6d5",
     # apply-implementation-review.md (WF8c item (c)): step 7's
     # record_bundle_generation call site widened to first resolve the
     # outcome (resolve_bundle_generation_outcome) and write the matching
@@ -818,7 +917,7 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # requirement milestone-implement.md/bootstrap-workflow-v2.md/
     # approve-review.md/accept-milestone.md already state -- intentional
     # content change.
-    "apply-implementation-review.md": "9049e2c964ab02a5b2d2e0c429ed21c9a4dcdadd316f37c651525de5a64f24fc",
+    "apply-implementation-review.md": "0234cd1c6cf698650762711b3569ed5c73e9088ff9adf85501ba821dc0e13b13",
     # review-plan.md/record-manual-plan-review.md further updated,
     # workflow-v2-3-followups CP3 (REQ-8/-9): the `Reviewer role:` template
     # literal, the round-computation prose, the exact-match-expectation
@@ -827,8 +926,13 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # `LOCAL_MODEL_PLAN_REVIEW`/`MANUAL_EXTERNAL_PLAN_REVIEW` casing (the
     # legacy casing is still stated as accepted where the command genuinely
     # tolerates it) -- intentional content change.
-    "review-plan.md": "404cc99de3f23caffcffb92c8fbe680a97edcf6c9cfb52f84a3f0c1450adfbf0",
-    "record-manual-plan-review.md": "43e6bcc9a5fc94cfd84c52301399ad0d1acaf275a03962737964605c14f8e809",
+    # Updated by convergence pass 12 (ledger row `O31`): the two plan-review
+    # consumers below named no computation at all for the plan-stage
+    # `review_content_id` they recompute; both now reference
+    # `REVIEW_PROTOCOL.md`'s "Computing `review_content_id`". Intentional
+    # content change, not a regression.
+    "review-plan.md": "20603d29b085c93cc31a5597e5951146a453a6a9a1edfa16b0046ffdedd86402",
+    "record-manual-plan-review.md": "e0b27966cca274ff09722179903ae631ff4ae979b2c9e1adffcea46912c395ab",
     # bootstrap-workflow-v2.md (WF8c scope clauses (l)/(p)/(q), GPT-R108-002/
     # OPUS-R109-004): the driver-range text made checkpoint-agnostic
     # (OPUS-R102-009), a NO_CHECKPOINT terminal-wrap-up branch added to step
@@ -856,7 +960,7 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # requirement step 6 already states, closing the gap a fresh Opus
     # review found at this second trailer-write site in an already-
     # corrected file -- intentional content change.
-    "bootstrap-workflow-v2.md": "3059f9535b0e34403a49370bf79e1ce64605c4708a006568af03e0982fc6c55d",
+    "bootstrap-workflow-v2.md": "01d5873ba807e78f0d0618eb944246783cb3827fe3e31ad253e0158f879e5cae",
     # review-implementation.md: new, workflow-v2-3 CP1 -- the first
     # recorded hash, not a change.
     #
@@ -887,7 +991,13 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     "review-implementation.md": "a017359a961ac5dc3e9cee1c3c2f8265e38f924f1af2cdbe984b381f79f4de6a",
     # review-functional.md: new, workflow-v2-3 CP2 -- the first recorded
     # hash, not a change.
-    "review-functional.md": "579b90a0c6e0eea1246b7ae03347e67f86faf24b8ebc83402909f438877968ca",
+    #
+    # review-functional.md updated, dead-contract cleanup (ledger `I10`):
+    # its two references to the acceptance gates named
+    # /accept-milestone`/`/accept-scoped-remediation` as a pair; the second
+    # is retired, so both now name /accept-milestone alone -- intentional
+    # content change.
+    "review-functional.md": "f6e6cdbc0780d018664dcb2481919f14302eb0776626eeb5e8ade3bad6d7deae",
     # apply-functional-review.md (O2, workflow-v2-3-followups REVISE round
     # 2, external cross-model review): this roster's own scope was fixed
     # to "every command file workflow-v2-1-core's own dual-mode
@@ -902,7 +1012,8 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # spot for a file this repository's remediation flow now actively
     # edits. Three further command files remain outside this roster,
     # left there deliberately rather than silently swept in by this same
-    # widening: accept-scoped-remediation.md, prepare-review.md, and
+    # widening: accept-scoped-remediation.md (since deleted outright,
+    # ledger I10), prepare-review.md, and
     # recover-implementation-provenance.md (the last of which this same
     # round also edited, for I1) -- none was ever part of the roster's
     # own original scope, and none is a drift-detection gap this
@@ -923,8 +1034,1274 @@ _GOLDEN_COMMAND_FILE_SHA256 = {
     # requirement milestone-implement.md/bootstrap-workflow-v2.md/
     # approve-review.md/accept-milestone.md already state -- intentional
     # content change.
-    "apply-functional-review.md": "e345f2a16e42b1d5ad9f1fd2f7069ba03ae35bd573ef2ec94aef95b63a121bde",
+    # apply-functional-review.md further updated by the workflow system
+    # audit's convergence pass 11 (ledger `I19`): the preamble now resolves
+    # `<bundle_dir>` through `workflow_fingerprint.resolve_bundle_dir` (the
+    # compatibility form, not the plan stage's scoped-by-construction one),
+    # and the bounded-code-change branch names the two author-written
+    # generation preconditions it drives -- `IMPLEMENTATION_SUMMARY.md`'s
+    # `implementation_revision: <N>` line and `REVIEW_REQUEST.md`'s
+    # `review_content_id: <hex>` line -- with the assertions that enforce
+    # them, what each outcome does to the counter, and the two different
+    # consequences (withdrawal vs outright refusal). Intentional content
+    # change, not a regression.
+    "apply-functional-review.md": "2a8380524d3aad1eb50d87164b84af15a92f8510d3a35a7952f8202c9e338ef6",
 }
+
+
+class TestPlanApprovalGuardCarriesNoWorkItemLiteral(unittest.TestCase):
+    """Salvage audit `O8`: the plan-approval mutation guard is
+    repository-scoped -- one fixed path, one holder at a time, whichever
+    work item is being approved -- so its body must not assert a
+    work-item identity it does not know. It used to hardcode
+    `"work_item_id": "workflow-v2-1-core"`, which was simply false for
+    any other item's plan approval."""
+
+    def test_guard_body_names_no_work_item(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _run(["git", "init", "-q"], cwd=root)
+            _run(["git", "config", "user.email", "t@e.st"], cwd=root)
+            _run(["git", "config", "user.name", "t"], cwd=root)
+            (root / "a.txt").write_text("a\n")
+            _run(["git", "add", "-A"], cwd=root)
+            _run(["git", "commit", "-q", "-m", "base"], cwd=root)
+            lease = ws.acquire_plan_approval_guard(
+                root, holder_owner_token="t0" * 16, step="step-5-stage-and-pin", now="t1",
+            )
+            try:
+                held = ws.read_plan_approval_guard(root)
+                self.assertNotIn("work_item_id", held)
+                self.assertNotIn("workflow-v2-1-core", json.dumps(held))
+                # The identity a caller actually needs comes from the
+                # journal, which is per-item.
+                self.assertEqual(
+                    set(held),
+                    {"lease_id", "holder_owner_token", "stage", "step", "step_class",
+                     "acquired_at"},
+                )
+            finally:
+                ws.release_plan_approval_guard(root, lease)
+
+
+# ---------------------------------------------------------------------------
+# The generation-driving command census (workflow system audit, convergence
+# pass 11, ledger row `I19`).
+#
+# `TestGenerationCommandsNameTheCompleteAuthorInputSet` below used to name
+# four commands by hand and call that the population of commands that drive
+# `scripts/prepare-ai-review.sh`. It was wrong: eight command files instruct
+# their own run of the generator, and the one the hand-written list omitted
+# (`/apply-functional-review`) was the one whose bounded-fix branch named no
+# author-written precondition at all. A census that is a hand-maintained
+# literal cannot notice its own omissions, so the population is now
+# *discovered* from the command corpus and the literal below is checked
+# against it -- a ninth driver, or a renamed one, fails this suite instead of
+# quietly falling outside it.
+#
+# Two regexes, because "mentions the generator" and "drives the generator"
+# are genuinely different populations and both matter: a command may name the
+# script in a diagnostic it tells the operator to report (`/review-implementation`)
+# or in an explanation of a resolver's compatibility branch (`/approve-review`)
+# without ever running it. The run regex requires the imperative form -- a
+# `run`/`rerun` word immediately followed by the backticked `./scripts/...`
+# invocation -- which is exactly how all eight drivers phrase their own step
+# and is not how either mention-only command phrases its reference.
+# ---------------------------------------------------------------------------
+
+_GENERATOR_MENTION_RE = re.compile(r"prepare-ai-review\.sh")
+# The stage token is captured, not merely stepped over (convergence pass 12,
+# ledger `O29`): the obligations below are *derived* from the stage a command
+# actually names in its own invocation line, so no second hand-maintained
+# command-name list decides which drivers owe which authoring contract. The
+# stage alternative admits a `<placeholder>` (which may contain spaces, as in
+# `<that stage>`) as well as a literal `post-fix`-shaped token.
+_GENERATOR_RUN_RE = re.compile(
+    r"\b(?:[Rr]un|[Rr]erun)\b\s*`\./scripts/prepare-ai-review\.sh"
+    r"\s+(?:<[^>\n]*>|\S+)\s+(<[^>\n]*>|[a-z][a-z-]*)"
+)
+
+
+def _command_filenames() -> list[str]:
+    return sorted(p.name for p in (_repo_root() / ".claude" / "commands").glob("*.md"))
+
+
+def _commands_matching(pattern: "re.Pattern[str]") -> set[str]:
+    return {name for name in _command_filenames() if pattern.search(_command_text(name))}
+
+
+def _declared_generation_stages(text: str) -> set[str]:
+    """Every stage token this command's own generator-run instructions
+    name, read out of the invocation line itself rather than declared
+    beside the filename. A command with more than one run instruction
+    contributes all of them."""
+    return {match.group(1) for match in _GENERATOR_RUN_RE.finditer(text)}
+
+
+#: The stages whose round carries an `implementation_revision` that can move
+#: between generations, so both author-written marker lines have to be
+#: refreshed immediately before the run. `plan` is the only generation stage
+#: that is not one of these (`functional-review` writes no manifest at all
+#: and no command drives it; `prepare-review.md` can still name it through
+#: its `<stage>` placeholder, which is handled below).
+_MOVING_COUNTER_STAGES = frozenset({"implementation", "post-fix"})
+
+
+def _carries_moving_counter_obligation(stages: "set[str]") -> bool:
+    """Whether a driver naming `stages` owes the moving-counter authoring
+    contract specifically. A literal `implementation`/`post-fix` obviously
+    does, and so does a `<placeholder>` stage -- the caller
+    (`/prepare-review`) or a previous round's `MANIFEST.md`
+    (`/recover-implementation-provenance`) resolves those at run time and
+    can resolve them to either moving stage, so the derivation is
+    default-deny for them too."""
+    return any(
+        stage in _MOVING_COUNTER_STAGES or stage.startswith("<") for stage in stages
+    )
+
+
+#: Which contract `kind`s are admissible for a driver naming a given stage.
+#: This is the anti-mis-declaration half: a driver whose invocation line
+#: runs `post-fix` cannot claim the plan stage's (weaker, different)
+#: marker-line contract, and vice versa. The two exemption kinds are
+#: admissible at any stage -- they carry their own evidence checks instead.
+_CONTRACT_KINDS_BY_STAGE = {
+    "plan": frozenset({"plan-marker-step", "protocol-reference", "pinned-round"}),
+    "moving": frozenset({"moving-counter-step", "protocol-reference", "pinned-round"}),
+}
+
+
+def _admissible_contract_kinds(stages: "set[str]") -> "frozenset[str]":
+    """Every `kind` a driver naming `stages` could legitimately declare.
+    A `<placeholder>` stage is both at once, so only the two exemption
+    kinds -- the ones that hold whatever the placeholder resolves to --
+    remain admissible for it."""
+    admissible = None
+    for stage in stages:
+        key = "moving" if stage in _MOVING_COUNTER_STAGES else "plan"
+        allowed = _CONTRACT_KINDS_BY_STAGE[key]
+        if stage.startswith("<"):
+            allowed = _CONTRACT_KINDS_BY_STAGE["plan"] & _CONTRACT_KINDS_BY_STAGE["moving"]
+        admissible = allowed if admissible is None else (admissible & allowed)
+    return admissible if admissible is not None else frozenset()
+
+
+# filename -> the stage token set its own invocation lines name. Not trusted
+# prose: `test_every_declared_stage_matches_the_commands_own_invocation_line`
+# checks each entry against `_declared_generation_stages` over the live file,
+# so a driver cannot be declared `plan` while running `post-fix`.
+_GENERATION_DRIVING_COMMANDS = {
+    "milestone-plan.md": {"plan"},
+    "apply-plan-review.md": {"plan"},
+    "milestone-implement.md": {"implementation"},
+    "apply-implementation-review.md": {"post-fix"},
+    "apply-functional-review.md": {"post-fix"},
+    # Regenerates at whatever stage the existing MANIFEST.md records --
+    # recovery changes which commit the content is measured at, never what
+    # kind of round it is.
+    "recover-implementation-provenance.md": {"<that stage>"},
+    # Ad-hoc, outside the milestone gates: the caller names the stage.
+    "prepare-review.md": {"<stage>"},
+    # One-time bootstrap driver, retained as an accepted Optional. Its
+    # hardcoded target work item is complete, so it is unreachable at
+    # current HEAD and fails closed rather than merely idling -- executed,
+    # not claimed here, by `workflow_state_demo_test.py`'s
+    # `test_the_bootstrap_driver_is_unreachable_and_fail_closed_at_live_head`
+    # (ledger `O33`).
+    "bootstrap-workflow-v2.md": {"implementation"},
+}
+
+# Commands that name the generator without ever running it. Recorded
+# explicitly, with the reason, so the discovery test above can prove the two
+# populations partition the corpus rather than merely overlapping it.
+_GENERATOR_MENTION_ONLY_COMMANDS = {
+    "approve-review.md": (
+        "explains why the technical/implementation stage keeps the "
+        "scoped-else-flat resolver rule -- the bundle it reads may have been "
+        "generated without the script's optional [work-item-id] argument"
+    ),
+    "review-implementation.md": (
+        "report-only: names the omitted-id invocation as the documented cause "
+        "of a MissingRequiredBundleFileError refusal, and tells the *user* to "
+        "regenerate scoped; it never generates anything itself"
+    ),
+}
+
+# How each generation-driving command discharges its own author-written
+# generation preconditions. **Every** driver needs an entry: silence is a
+# violation, never an exemption (convergence pass 12, ledger `O29`).
+#
+# The previous shape was a second hand-maintained command-name list sitting
+# behind the mechanically discovered census, naming only the three
+# implementation/post-fix drivers. A driver simply absent from it conformed
+# while naming no marker line at all -- and the same hole existed on the
+# plan side, where the two live drivers' contracts were asserted by two
+# hand-written `assertIn` tests naming those two files, so a *third* plan
+# driver would have been checked by nothing.
+#
+# Every stage this generator accepts has author-written preconditions that
+# fail the generation when unmet, so there is no stage for which "no
+# contract" is the right answer:
+#
+# - `plan`: `assert_test_results_consistent_with_plan_review_request`'s
+#   `stage: plan (revision N)` / `head: <sha>` pair in `TEST_RESULTS.md`
+#   (withdrawal), plus `assert_review_request_states_review_content_id`
+#   (refusal);
+# - `implementation`/`post-fix`: `assert_stage_completeness`'s
+#   `implementation_revision: <N>` line in `IMPLEMENTATION_SUMMARY.md`
+#   (withdrawal), plus the same `review_content_id` refusal.
+#
+# `kind` selects the discipline, and is itself checked against the stage the
+# command's own invocation line names (`_admissible_contract_kinds`), so a
+# `post-fix` driver cannot claim the plan stage's different contract:
+#
+# - "moving-counter-step": the named step block states the
+#   implementation/post-fix marker lines and the assertions that enforce
+#   them. `review_request_contract` records which of the two sanctioned
+#   forms the command uses to state the `REVIEW_REQUEST.md` half:
+#     - "explicit": the step block names the `review_content_id: <hex>` line
+#       and the assertion that enforces it;
+#     - "protocol-reference": the step block says to author REVIEW_REQUEST.md
+#       *per* `docs/ai-workflow/REVIEW_PROTOCOL.md`, whose "Author-written
+#       files" section states the same requirement.
+#   `states_revision_behaviour` marks the drivers whose round can resolve
+#   either generation outcome and which therefore have to say what the
+#   counter does in each.
+# - "plan-marker-step": the plan-stage counterpart -- the named step block
+#   states `TEST_RESULTS.md`'s two marker lines and the assertion that
+#   enforces them.
+# - "protocol-reference": the whole command routes its bundle-input authoring
+#   through `docs/ai-workflow/REVIEW_PROTOCOL.md` rather than restating the
+#   contract inline -- the two drivers outside the milestone gates, which is
+#   also why they are the two whose stage is a placeholder or unreachable.
+#   The evidence for that claim is checked, not assumed, on both the command
+#   and the protocol document.
+# - "pinned-round": the round's `implementation_revision` cannot move at all,
+#   by the command's own contract, so both author-written lines stay valid
+#   untouched. The evidence for *that* claim is checked too.
+_GENERATION_AUTHORING_CONTRACTS = {
+    "milestone-plan.md": {"kind": "plan-marker-step", "step": "6"},
+    "apply-plan-review.md": {"kind": "plan-marker-step", "step": "5"},
+    "milestone-implement.md": {
+        "kind": "moving-counter-step",
+        "step": "4",
+        "review_request_contract": "protocol-reference",
+        "states_revision_behaviour": False,
+    },
+    "apply-implementation-review.md": {
+        "kind": "moving-counter-step",
+        "step": "7",
+        "review_request_contract": "explicit",
+        "states_revision_behaviour": True,
+    },
+    "apply-functional-review.md": {
+        # The bounded-code-change branch lives inside the "[state-tracked
+        # items only] Step 4, replaced" block, which `_extract_numbered_steps`
+        # returns as part of step 4 (its sub-items are indented, so they are
+        # not top-level numbered steps).
+        "kind": "moving-counter-step",
+        "step": "4",
+        "review_request_contract": "explicit",
+        "states_revision_behaviour": True,
+    },
+    "recover-implementation-provenance.md": {"kind": "pinned-round"},
+    "prepare-review.md": {"kind": "protocol-reference"},
+    "bootstrap-workflow-v2.md": {"kind": "protocol-reference"},
+}
+
+
+def _generation_authoring_violations(
+    filename: str, text: str, contracts: "dict | None" = None,
+) -> list[str]:
+    """Every author-written generation precondition `filename` must name,
+    as a list of human-readable violations -- empty means the contract is
+    complete. Deliberately a pure function of the command text rather than
+    a bag of `assertIn` calls, so the identical checker can run against the
+    live file *and* against a deliberately reverted copy of it
+    (`TestRevertingTheAuthoringInstructionsFailsConformance`). A conformance
+    assertion nobody has ever seen fail is a claim, not evidence.
+
+    `contracts` defaults to `_GENERATION_AUTHORING_CONTRACTS`; the
+    synthetic-driver control arm passes its own table instead, so the
+    planted driver never has to be written into the live corpus every
+    other test in this suite reads."""
+    violations: list[str] = []
+    if "resolve_bundle_dir" not in text:
+        violations.append(
+            f"{filename}: never resolves <bundle_dir> through "
+            f"workflow_fingerprint.resolve_bundle_dir, so the half that authors "
+            f"the bundle's input files and the half that generates it can "
+            f"disagree about which directory they mean"
+        )
+    stages = _declared_generation_stages(text)
+    if not stages:
+        return violations
+    if contracts is None:
+        contracts = _GENERATION_AUTHORING_CONTRACTS
+    spec = contracts.get(filename)
+    if spec is None:
+        # Default-deny (ledger `O29`). Every stage this generator accepts
+        # has author-written preconditions that fail the generation when
+        # unmet, so a driver with no declared contract is a driver nothing
+        # holds to any of them.
+        violations.append(
+            f"{filename}: runs the generator at stage(s) {sorted(stages)} but "
+            f"declares no entry in _GENERATION_AUTHORING_CONTRACTS -- so none of "
+            f"its author-written generation preconditions (`TEST_RESULTS.md`'s "
+            f"`stage: plan (revision N)`/`head: <sha>` pair at the plan stage, "
+            f"`IMPLEMENTATION_SUMMARY.md`'s `implementation_revision: <N>` line "
+            f"at the implementation/post-fix stages, `REVIEW_REQUEST.md`'s "
+            f"`review_content_id: <hex>` line at every stage) is required of it "
+            f"by anything"
+        )
+        return violations
+    admissible = _admissible_contract_kinds(stages)
+    if spec["kind"] not in admissible:
+        # The anti-mis-declaration half: the declared discipline has to be
+        # one the command's own stage can actually owe.
+        violations.append(
+            f"{filename}: declares the {spec['kind']!r} authoring contract, which "
+            f"is not admissible for a driver running the generator at stage(s) "
+            f"{sorted(stages)} -- admissible kinds are {sorted(admissible)}"
+        )
+        return violations
+    if spec["kind"] == "pinned-round":
+        # The exemption's own evidence, checked rather than assumed: the
+        # command must state that its round is pinned, which is what makes
+        # both author-written lines stay valid untouched.
+        for needed in ("never a new revision", "recovery does not change what kind of round"):
+            if needed not in text:
+                violations.append(
+                    f"{filename}: claims the pinned-round exemption from the "
+                    f"moving-counter authoring contract but never states "
+                    f"{needed!r}"
+                )
+        return violations
+    if spec["kind"] == "protocol-reference":
+        for needed in ("REVIEW_REQUEST.md", "docs/ai-workflow/REVIEW_PROTOCOL.md"):
+            if needed not in text:
+                violations.append(
+                    f"{filename}: routes bundle-input authoring through the review "
+                    f"protocol instead of restating it, but never names {needed!r}"
+                )
+        return violations
+    block = _extract_numbered_steps(text).get(spec["step"], "")
+    # Both step-form disciplines owe this one (convergence pass 12, ledger
+    # `O31`): a driver that tells the author to state a `review_content_id`
+    # has to say where the value comes from. Before this repair not one of
+    # the five in-gate drivers named any computation at all, so "state the
+    # correct digest" was an instruction with no procedure -- and the
+    # generation *refuses* outright on a wrong one, it does not warn. The
+    # reference is to the single shared contract; no command restates the
+    # algorithm. Whitespace-normalized, since every driver line-wraps the
+    # phrase differently.
+    normalized_block = " ".join(block.split())
+    for needed in ('"Computing `review_content_id`"',
+                   "docs/ai-workflow/REVIEW_PROTOCOL.md"):
+        if needed not in normalized_block:
+            violations.append(
+                f"{filename} step {spec['step']}: tells the author to state a "
+                f"`review_content_id` but never names {needed} -- the one place "
+                f"the canonical computation for this stage is written down"
+            )
+    if spec["kind"] == "plan-marker-step":
+        # The plan stage's own author-written generation precondition, held
+        # to the same standard as its implementation-stage counterpart
+        # below: the marker lines, the assertion that enforces them, and the
+        # consequence of a stale one.
+        for needed in ("TEST_RESULTS.md", "stage: plan (revision N)", "head: <sha>",
+                       "assert_test_results_consistent_with_plan_review_request"):
+            if needed not in block:
+                violations.append(
+                    f"{filename} step {spec['step']}: never names {needed!r}, part of "
+                    f"the plan stage's own author-written generation precondition"
+                )
+        if "withdraw" not in block.lower():
+            violations.append(
+                f"{filename} step {spec['step']}: never states the consequence of a "
+                f"stale TEST_RESULTS.md -- withdrawal and quarantine, not a warning"
+            )
+        # Ledger `I22`: a plan driver that regenerates the registry owes the
+        # plan document's generated checkpoint table too. `/milestone-plan`
+        # step 3 calls that table "never hand-edited"; nothing detects a
+        # stale one, so a driver that regenerates the registry without
+        # saying to re-embed publishes a document the registry contradicts.
+        if "generate_registry" in block and "render_registry_markdown" not in block:
+            violations.append(
+                f"{filename} step {spec['step']}: regenerates the registry "
+                f"(`generate_registry`) but never names "
+                f"`render_registry_markdown`, so the plan document's own "
+                f"generated checkpoint table is left stating the previous "
+                f"revision's checkpoints"
+            )
+        return violations
+    if "implementation_revision: <N>" not in block:
+        violations.append(
+            f"{filename} step {spec['step']}: never names the "
+            f"`implementation_revision: <N>` line IMPLEMENTATION_SUMMARY.md must state"
+        )
+    if "assert_stage_completeness" not in block:
+        violations.append(
+            f"{filename} step {spec['step']}: never names assert_stage_completeness, "
+            f"the check that enforces that line"
+        )
+    if "withdraw" not in block.lower():
+        violations.append(
+            f"{filename} step {spec['step']}: never states the consequence of a stale "
+            f"line -- withdrawal and quarantine, not a warning"
+        )
+    if spec["review_request_contract"] == "explicit":
+        if "review_content_id: <hex>" not in block:
+            violations.append(
+                f"{filename} step {spec['step']}: never names the "
+                f"`review_content_id: <hex>` line REVIEW_REQUEST.md must state for "
+                f"this round"
+            )
+        if "assert_review_request_states_review_content_id" not in block:
+            violations.append(
+                f"{filename} step {spec['step']}: never names "
+                f"assert_review_request_states_review_content_id, the check that "
+                f"enforces that line"
+            )
+    else:
+        if "REVIEW_REQUEST.md` per" not in block:
+            violations.append(
+                f"{filename} step {spec['step']}: never routes REVIEW_REQUEST.md "
+                f"authoring through docs/ai-workflow/REVIEW_PROTOCOL.md"
+            )
+        if "REVIEW_PROTOCOL.md" not in block:
+            violations.append(
+                f"{filename} step {spec['step']}: names no protocol document for the "
+                f"REVIEW_REQUEST.md contract"
+            )
+    if spec["states_revision_behaviour"]:
+        if "unchanged*" not in block:
+            violations.append(
+                f"{filename} step {spec['step']}: never says the counter stays "
+                f"*unchanged* for a `same_content` round"
+            )
+        if '`"ordinary"`' not in block or '`"same_content"`' not in block:
+            violations.append(
+                f"{filename} step {spec['step']}: does not name both generation "
+                f"outcomes when stating what the counter does"
+            )
+    return violations
+
+
+class TestGenerationCommandsNameTheCompleteAuthorInputSet(unittest.TestCase):
+    """Salvage audit `I3`/`I4`/`O4` (repair `R5`), extended by the
+    workflow system audit's convergence pass 11 (ledger `I19`).
+    `finalize_bundle_generation` hard-requires two author-written marker
+    lines and *withdraws* the bundle when either is missing or stale --
+    `assert_test_results_consistent_with_plan_review_request`'s
+    `stage: plan (revision N)`/`head: <sha>` pair at the plan stage, and
+    `assert_stage_completeness`'s `implementation_revision: <N>` line at
+    the implementation/post-fix stages. A third, earlier precondition,
+    `assert_review_request_states_review_content_id`, runs inside
+    `--write-manifest` and *refuses* the generation outright. None of the
+    commands that drive a generation named them, so a run following a
+    command exactly published nothing and quarantined `current/`.
+    Separately (`O4`), two commands still instructed authoring
+    `<bundle_dir>/PLAN.md`, which `WFR-67` made a generator-derived
+    artifact.
+
+    `R5`'s original pass covered four commands, and the class docstring
+    called those four "the commands that drive a generation". The census
+    above proves that population is eight, and pass 11 closed the one
+    genuine contract gap the miscount hid
+    (`/apply-functional-review`'s bounded-fix branch, ledger `I19`).
+
+    These are text-conformance assertions over the command files
+    themselves -- the same mechanism this suite already uses for every
+    other command-vs-Python claim. The behavioural half (that a bundle
+    missing either marker really is withdrawn, and that a stale
+    `review_content_id` refuses first) is proven end to end by
+    `workflow_acceptance_matrix_test.py` rows A4, B6, C9 and C10."""
+
+    def test_milestone_plan_step6_names_test_results_and_its_marker_lines(self):
+        step6 = _extract_numbered_steps(_command_text("milestone-plan.md"))["6"]
+        self.assertIn("TEST_RESULTS.md", step6)
+        self.assertIn("stage: plan (revision N)", step6)
+        self.assertIn("head: <sha>", step6)
+        self.assertIn("assert_test_results_consistent_with_plan_review_request", step6)
+
+    def test_milestone_plan_step6_no_longer_instructs_authoring_plan_md(self):
+        step6 = _extract_numbered_steps(_command_text("milestone-plan.md"))["6"]
+        self.assertNotIn("write/refresh `<bundle_dir>/PLAN.md`", step6)
+        self.assertIn("WFR-67", step6)
+
+    def test_apply_plan_review_step5_names_test_results_and_its_marker_lines(self):
+        step5 = _extract_numbered_steps(_command_text("apply-plan-review.md"))["5"]
+        self.assertIn("TEST_RESULTS.md", step5)
+        self.assertIn("stage: plan (revision N)", step5)
+        self.assertIn("head: <sha>", step5)
+
+    def test_apply_plan_review_step3_routes_edits_to_the_authoritative_plan(self):
+        step3 = _extract_numbered_steps(_command_text("apply-plan-review.md"))["3"]
+        self.assertIn("never to", step3)
+        self.assertIn("`<bundle_dir>/PLAN.md`, which since `WFR-67`", step3)
+        self.assertIn("WFR-67", step3)
+
+    def test_milestone_implement_step4_names_the_implementation_revision_line(self):
+        step4 = _extract_numbered_steps(_command_text("milestone-implement.md"))["4"]
+        self.assertIn("implementation_revision: <N>", step4)
+        self.assertIn("assert_stage_completeness", step4)
+
+    def test_apply_implementation_review_step7_names_the_revision_refresh(self):
+        step7 = _extract_numbered_steps(_command_text("apply-implementation-review.md"))["7"]
+        self.assertIn("implementation_revision: <N>", step7)
+        self.assertIn("assert_stage_completeness", step7)
+        # The same_content outcome deliberately does not advance it.
+        self.assertIn("unchanged*", step7)
+
+    def test_prepare_functional_review_step3a_handles_an_unchanged_checklist(self):
+        """Salvage audit `I7`: a round that legitimately needs no
+        checklist change still needs its own round-scoped evidence, and
+        a plain `git commit -- <path>` on an unchanged file fails."""
+        text = _command_text("prepare-functional-review.md")
+        self.assertIn("Unchanged checklist, new round", text)
+        self.assertIn("--allow-empty", text)
+        self.assertIn("nothing to commit, working tree clean", text)
+        # The consequence named is now a live one: ledger `I10` retired
+        # `/accept-scoped-remediation`, whose permanently-refusing guard
+        # this branch originally cited.
+        self.assertNotIn("accept-scoped-remediation", text)
+        self.assertIn("/review-functional", text)
+        # And the exception is scoped: no other command may use it.
+        for filename in ("milestone-implement.md", "apply-implementation-review.md",
+                         "apply-functional-review.md", "approve-review.md",
+                         "accept-milestone.md",
+                         "recover-implementation-provenance.md", "milestone-plan.md"):
+            self.assertNotIn("--allow-empty", _command_text(filename), filename)
+
+    def test_milestone_plan_step3_names_the_intent_to_add_staging_step(self):
+        """Salvage audit `B6`: `workflow_state.py` twice documents
+        "`/milestone-plan`'s own staging step" (in
+        `DirtyIndexBeforeStagingError` and
+        `stage_plan_approval_commit_paths`), but no such step existed, so a
+        freshly created work item's four untracked plan-stage files made
+        `resolve_plan_stage_metadata` refuse before any bundle content was
+        written."""
+        step3 = _extract_numbered_steps(_command_text("milestone-plan.md"))["3"]
+        self.assertIn("git add -N", step3)
+        self.assertIn("intent-to-add", step3)
+        self.assertIn("resolve_plan_stage_metadata", step3)
+        self.assertIn("InvalidPlanStageMetadataPathError", step3)
+        self.assertIn("stage_plan_approval_commit_paths", step3)
+
+    def test_apply_plan_review_step5_points_at_the_same_staging_step(self):
+        step5 = _extract_numbered_steps(_command_text("apply-plan-review.md"))["5"]
+        self.assertIn("git add -N", step5)
+        self.assertIn("resolve_plan_stage_metadata", step5)
+
+    def test_milestone_plan_step3_passes_work_item_type_to_the_generator(self):
+        step3 = _extract_numbered_steps(_command_text("milestone-plan.md"))["3"]
+        self.assertIn("generate_artifacts_declarations", step3)
+        self.assertIn("work_item_type=", step3)
+        self.assertIn("implementation_stage", step3)
+
+    # --- the census itself (convergence pass 11, ledger `I19`) ---
+
+    def test_the_declared_census_is_exactly_the_commands_that_run_the_generator(self):
+        """Mechanical, not hand-maintained: the population is discovered
+        from the command corpus and compared against the declared literal.
+        A ninth driver, a renamed file, or a driver whose imperative run
+        instruction is deleted all fail here."""
+        self.assertEqual(
+            _commands_matching(_GENERATOR_RUN_RE),
+            set(_GENERATION_DRIVING_COMMANDS),
+        )
+
+    def test_every_declared_stage_matches_the_commands_own_invocation_line(self):
+        """The census's stage column is checked against the file, not
+        trusted (ledger `O29`). Since the moving-counter obligation is
+        derived from this column, a driver declared `plan` while its own
+        invocation line runs `post-fix` would be exempted by a lie; here
+        the declaration is only ever a restatement of what the command
+        actually says."""
+        for filename, declared in sorted(_GENERATION_DRIVING_COMMANDS.items()):
+            with self.subTest(filename=filename):
+                self.assertEqual(
+                    _declared_generation_stages(_command_text(filename)), declared,
+                )
+
+    def test_every_driver_declares_an_authoring_contract(self):
+        """The property ledger row `O29` exists to guarantee. Every stage
+        this generator accepts has author-written preconditions that fail
+        the generation when unmet, so every driver owes a declared
+        discipline and nothing declares one it is not a driver for.
+        Neither side is hand-maintained against the other: the left is the
+        mechanically discovered census."""
+        self.assertEqual(
+            set(_GENERATION_DRIVING_COMMANDS), set(_GENERATION_AUTHORING_CONTRACTS),
+        )
+
+    def test_the_declared_contract_kind_is_admissible_for_the_declared_stage(self):
+        """The derivation is discriminating, not vacuous: the marker-line
+        discipline a driver declares has to be one its own stage can owe.
+        A `post-fix` driver claiming the plan stage's contract -- or the
+        reverse -- fails here rather than being checked against the wrong
+        marker lines."""
+        for filename, spec in sorted(_GENERATION_AUTHORING_CONTRACTS.items()):
+            with self.subTest(filename=filename):
+                stages = _declared_generation_stages(_command_text(filename))
+                self.assertIn(spec["kind"], _admissible_contract_kinds(stages))
+        # And the two disciplines really do partition the five in-gate
+        # drivers by stage, so the admissibility rule is doing work.
+        by_kind: "dict[str, set[str]]" = {}
+        for filename, spec in _GENERATION_AUTHORING_CONTRACTS.items():
+            by_kind.setdefault(spec["kind"], set()).add(filename)
+        self.assertEqual(
+            by_kind["plan-marker-step"], {"milestone-plan.md", "apply-plan-review.md"},
+        )
+        self.assertEqual(
+            by_kind["moving-counter-step"],
+            {"milestone-implement.md", "apply-implementation-review.md",
+             "apply-functional-review.md"},
+        )
+
+    def test_the_moving_counter_derivation_still_separates_the_stages(self):
+        """`_carries_moving_counter_obligation` itself, asserted directly:
+        the two plan drivers are outside it, the three in-gate
+        implementation/post-fix drivers are inside it, and both
+        placeholder-stage drivers are inside it because a placeholder can
+        resolve to a moving stage at run time."""
+        derived = {
+            filename for filename in _GENERATION_DRIVING_COMMANDS
+            if _carries_moving_counter_obligation(
+                _declared_generation_stages(_command_text(filename))
+            )
+        }
+        self.assertEqual(
+            set(_GENERATION_DRIVING_COMMANDS) - derived,
+            {"milestone-plan.md", "apply-plan-review.md"},
+        )
+
+    def test_every_command_mentioning_the_generator_is_classified(self):
+        """The two populations must partition the mentions, so a command
+        that names the script in a way the run regex does not match cannot
+        simply fall outside the census unnoticed -- it lands in neither
+        set and fails here."""
+        mentions = _commands_matching(_GENERATOR_MENTION_RE)
+        classified = set(_GENERATION_DRIVING_COMMANDS) | set(_GENERATOR_MENTION_ONLY_COMMANDS)
+        self.assertEqual(mentions - classified, set(), "unclassified generator mention")
+        self.assertEqual(classified - mentions, set(), "classified command names no generator")
+        self.assertEqual(
+            set(_GENERATION_DRIVING_COMMANDS) & set(_GENERATOR_MENTION_ONLY_COMMANDS), set(),
+        )
+
+    def test_no_mention_only_command_instructs_its_own_generation(self):
+        """The negative half of the partition, asserted directly rather
+        than inferred from the regex that produced it: neither
+        report-only command tells *itself* to run the generator."""
+        for filename in _GENERATOR_MENTION_ONLY_COMMANDS:
+            with self.subTest(filename=filename):
+                self.assertIsNone(_GENERATOR_RUN_RE.search(_command_text(filename)))
+
+    def test_every_generation_driving_command_states_its_full_authoring_contract(self):
+        """`_generation_authoring_violations` in full, over every driver:
+        `<bundle_dir>` resolution for all eight, and -- for the three whose
+        `implementation_revision` can move between rounds -- both marker
+        lines, the assertions that enforce them, and the consequence."""
+        for filename in sorted(_GENERATION_DRIVING_COMMANDS):
+            with self.subTest(filename=filename):
+                self.assertEqual(
+                    _generation_authoring_violations(filename, _command_text(filename)), [],
+                )
+
+    def test_apply_functional_review_names_the_bounded_fix_generation_contract(self):
+        """Ledger `I19` head-on. The bounded-code-change branch drives a
+        `post-fix` generation and, before this repair, named none of its
+        author-written preconditions: no `<bundle_dir>`, no
+        `review_content_id`, no `implementation_revision`. A run following
+        it exactly died in `ReviewContentIdMismatchError`, then -- once
+        only that was corrected -- had its bundle withdrawn and
+        `current/` quarantined by `assert_stage_completeness`."""
+        text = _command_text("apply-functional-review.md")
+        self.assertIn("`workflow_fingerprint.resolve_bundle_dir`", text)
+        step4 = _extract_numbered_steps(text)["4"]
+        self.assertIn("`<bundle_dir>/IMPLEMENTATION_SUMMARY.md`", step4)
+        self.assertIn("implementation_revision: <N>", step4)
+        self.assertIn("assert_stage_completeness", step4)
+        self.assertIn("`<bundle_dir>/REVIEW_REQUEST.md`", step4)
+        self.assertIn("review_content_id: <hex>", step4)
+        self.assertIn("assert_review_request_states_review_content_id", step4)
+        # Withdrawal for the revision line, refusal for the digest -- two
+        # different failure modes, both stated, neither a silent fix-up.
+        self.assertIn("*withdraws* the bundle, quarantining `current/`", step4)
+        self.assertIn("*refuses*", step4)
+        self.assertIn("silently fixed up on the author's behalf", step4)
+        # And the resolution is the compatibility form, not the plan
+        # stage's scoped-by-construction one (convergence repair `I1`).
+        self.assertIn("`resolve_bundle_dir(repo_root, work_item_id)`", text)
+        self.assertIn('never\nthe plan stage\'s `stage="plan"` form', text)
+
+    def test_the_pinned_round_driver_states_why_it_refreshes_nothing(self):
+        """`/recover-implementation-provenance` drives a generation too,
+        but its round is pinned by contract: `apply_implementation_
+        provenance_recovery` never advances `implementation_revision`, and
+        the interval it validates is excluded-only, so the implementation-
+        stage `review_content_id` recomputes to the value the bundle
+        already states. Both author-written lines therefore stay valid
+        untouched -- which is a real precondition claim, and is stated
+        rather than left as folklore."""
+        step6 = _extract_numbered_steps(
+            _command_text("recover-implementation-provenance.md")
+        )["6"]
+        self.assertIn("recovery does not change what kind of round", step6)
+        step5 = _extract_numbered_steps(
+            _command_text("recover-implementation-provenance.md")
+        )["5"]
+        self.assertIn("never a new revision", step5)
+
+    def test_the_ad_hoc_and_bootstrap_drivers_route_authoring_through_the_protocol(self):
+        """The two drivers outside the milestone gates author their bundle
+        inputs `per docs/ai-workflow/REVIEW_PROTOCOL.md`, whose
+        "Author-written files" section states both marker-line
+        requirements."""
+        for filename in ("prepare-review.md", "bootstrap-workflow-v2.md"):
+            with self.subTest(filename=filename):
+                text = _command_text(filename)
+                self.assertIn("REVIEW_REQUEST.md", text)
+                self.assertIn("docs/ai-workflow/REVIEW_PROTOCOL.md", text)
+        protocol = (_repo_root() / "docs" / "ai-workflow" / "REVIEW_PROTOCOL.md").read_text()
+        self.assertIn("Must state `review_content_id: <hex>` as a plain labelled line", protocol)
+        self.assertIn("`implementation_revision: <N>` matching the work item", protocol)
+
+
+class TestRevertingTheAuthoringInstructionsFailsConformance(unittest.TestCase):
+    """The census above is only worth as much as its checker, and a
+    conformance assertion nobody has ever watched fail is a claim rather
+    than evidence -- exactly how ledger `I19` reached a fresh independent
+    review with this suite green.
+
+    So the repair's own two hunks are reverted mechanically, in memory,
+    out of the *current* file (never a hardcoded pre-repair copy that
+    would rot the moment the file changes again), and
+    `_generation_authoring_violations` is run against the result. The
+    mutation is asserted to have actually changed something first, so a
+    hunk that moves or is reworded can never degrade this regression into
+    a no-op that "passes"."""
+
+    @staticmethod
+    def _revert_the_authoring_instructions(text: str) -> str:
+        """`/apply-functional-review` as it stood before convergence pass
+        11: `<feedback_dir>` resolved alone, and the bounded branch going
+        straight from its durability commit to the generator run."""
+        preamble = (
+            "`<bundle_dir>`/`<feedback_dir>` below resolve per\n"
+            "`docs/ai-workflow/REVIEW_PROTOCOL.md`'s \"Bundle location\"\n"
+            "(`workflow_fingerprint.resolve_bundle_dir`/`resolve_feedback_dir`)."
+        )
+        if preamble not in text:
+            raise AssertionError(
+                "the <bundle_dir> preamble hunk this regression reverts is no longer "
+                "present verbatim -- update this mutation rather than letting it no-op"
+            )
+        start = text.index(preamble)
+        end = text.index("\n\n", start)
+        text = text[:start] + (
+            "`<feedback_dir>` below resolves per\n"
+            "`docs/ai-workflow/REVIEW_PROTOCOL.md`'s \"Bundle location\"\n"
+            "(`workflow_fingerprint.resolve_feedback_dir`)."
+        ) + text[end:]
+
+        pattern = re.compile(
+            r"     round\.\n     \*\*Then refresh .*?\n     \[work_item_id\]`\.\n",
+            re.DOTALL,
+        )
+        mutated, count = pattern.subn(
+            "     round. Then run `./scripts/prepare-ai-review.sh <base-sha> post-fix\n"
+            "     [work_item_id]`.\n",
+            text,
+        )
+        if count != 1:
+            raise AssertionError(
+                f"the bounded-branch authoring hunk this regression reverts matched "
+                f"{count} times, expected exactly 1 -- update this mutation rather "
+                f"than letting it no-op"
+            )
+        return mutated
+
+    def test_the_mutation_actually_changes_the_command(self):
+        original = _command_text("apply-functional-review.md")
+        reverted = self._revert_the_authoring_instructions(original)
+        self.assertNotEqual(original, reverted)
+        self.assertLess(len(reverted), len(original))
+        # And it is a *targeted* revert: everything else the bounded
+        # branch says survives it.
+        for kept in ("resolve_bundle_generation_outcome", "record_bundle_generation",
+                     "assert_bundle_not_rejected", "Workflow-Bundle-Generation-Record",
+                     "mark_technical_approval_stale"):
+            self.assertIn(kept, reverted, kept)
+
+    def test_the_reverted_command_fails_the_generation_authoring_conformance(self):
+        reverted = self._revert_the_authoring_instructions(
+            _command_text("apply-functional-review.md")
+        )
+        violations = _generation_authoring_violations("apply-functional-review.md", reverted)
+        joined = "\n".join(violations)
+        self.assertNotEqual(violations, [], "the reverted command must not conform")
+        # Every precondition ledger `I19` found missing is named, so this
+        # regression fails for the right reasons rather than merely
+        # failing.
+        self.assertIn("resolve_bundle_dir", joined)
+        self.assertIn("implementation_revision: <N>", joined)
+        self.assertIn("assert_stage_completeness", joined)
+        self.assertIn("review_content_id: <hex>", joined)
+        self.assertIn("assert_review_request_states_review_content_id", joined)
+        self.assertIn("withdrawal and quarantine", joined)
+
+    def test_removing_the_registry_table_re_embed_fails_conformance(self):
+        """Ledger `I22`'s control arm. `/apply-plan-review` step 5 gained
+        the `render_registry_markdown` re-embed; strip it back out of the
+        live file, in memory, and the checker must name the loss. Before
+        the repair the step regenerated the registry and said nothing
+        about the plan document's own generated table, which is how the
+        acceptance matrix's own helper -- which called it all along --
+        kept every plan-revision row green over the gap."""
+        original = _command_text("apply-plan-review.md")
+        self.assertIn("render_registry_markdown", original)
+        stripped = original.replace("render_registry_markdown", "some_other_helper")
+        self.assertNotEqual(stripped, original)
+        violations = _generation_authoring_violations("apply-plan-review.md", stripped)
+        self.assertIn("render_registry_markdown", "\n".join(violations))
+        # And the live file conforms, with the same checker.
+        self.assertEqual(
+            _generation_authoring_violations("apply-plan-review.md", original), [],
+        )
+
+    def test_removing_the_canonical_computation_pointer_fails_conformance(self):
+        """Convergence pass 12, ledger `O31`'s own control arm. The five
+        in-gate drivers each gained one reference to
+        `docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Computing
+        `review_content_id`". Strip that reference back out of the *live*
+        file, in memory, and the checker must name the loss -- for every
+        one of the five, so the check cannot be silently satisfied by some
+        other sentence that happens to mention the protocol. The pattern
+        tolerates each driver's own line wrapping rather than hardcoding
+        one of them, so a reflow can never degrade this arm into a no-op."""
+        pointer = re.compile(r'"Computing\s+`review_content_id`"')
+        checked = 0
+        for filename in sorted(_GENERATION_AUTHORING_CONTRACTS):
+            spec = _GENERATION_AUTHORING_CONTRACTS[filename]
+            if spec["kind"] not in ("plan-marker-step", "moving-counter-step"):
+                continue
+            with self.subTest(filename=filename):
+                original = _command_text(filename)
+                stripped, count = pointer.subn('"elsewhere"', original)
+                self.assertGreaterEqual(
+                    count, 1,
+                    f"{filename} no longer carries the pointer this arm removes -- "
+                    f"update the mutation rather than letting it no-op",
+                )
+                violations = _generation_authoring_violations(filename, stripped)
+                self.assertIn(
+                    '"Computing `review_content_id`"', "\n".join(violations),
+                    f"{filename}: stripping the pointer produced {violations!r}",
+                )
+                checked += 1
+        # All five in-gate drivers, never a subset that happens to be
+        # covered while another silently drops the reference.
+        self.assertEqual(checked, 5)
+
+    def test_the_live_command_conforms(self):
+        """The control: the same checker, the same command, unreverted."""
+        self.assertEqual(
+            _generation_authoring_violations(
+                "apply-functional-review.md", _command_text("apply-functional-review.md"),
+            ),
+            [],
+        )
+
+
+class TestASyntheticGenerationDriverCannotEscapeTheAuthoringContract(unittest.TestCase):
+    """Convergence pass 12's synthetic-driver control arm (ledger `O29`).
+
+    Before the repair, `_MOVING_COUNTER_DRIVERS` was a *second*
+    hand-maintained command-name list sitting behind the mechanically
+    discovered census. A new implementation/post-fix driver that entered
+    the census -- which the discovery test forces -- still escaped every
+    marker-line obligation simply by not appearing in that second list,
+    and `_generation_authoring_violations` returned `[]` for it. That is
+    exactly the class of drift the census itself was introduced to end,
+    reproduced one level down.
+
+    These arms plant synthetic command *text* (never a file in
+    `.claude/commands/`, which would perturb the live corpus every other
+    test reads) and run the real checker over it."""
+
+    # A driver that names `resolve_bundle_dir` -- the one obligation the
+    # pre-repair checker applied to every driver -- and nothing else.
+    SYNTHETIC_POST_FIX = (
+        "---\n"
+        "description: A later driver for some bounded post-fix round.\n"
+        "---\n\n"
+        "`<bundle_dir>` resolves per `workflow_fingerprint.resolve_bundle_dir`.\n\n"
+        "1. Do the bounded fix and commit it.\n"
+        "2. Then run `./scripts/prepare-ai-review.sh <base-sha> post-fix [work_item_id]`.\n"
+        "3. Report readiness and stop.\n"
+    )
+
+    def test_the_synthetic_driver_is_discovered_as_a_generation_driver(self):
+        """The premise: it really does read as a driver, at a real moving
+        stage. Without this the arms below would prove nothing."""
+        self.assertTrue(_GENERATOR_RUN_RE.search(self.SYNTHETIC_POST_FIX))
+        stages = _declared_generation_stages(self.SYNTHETIC_POST_FIX)
+        self.assertEqual(stages, {"post-fix"})
+        self.assertTrue(_carries_moving_counter_obligation(stages))
+
+    def test_a_synthetic_driver_with_no_declared_contract_fails_conformance(self):
+        """The repair itself: silence is a violation, not an exemption."""
+        violations = _generation_authoring_violations(
+            "synthetic-post-fix-driver.md", self.SYNTHETIC_POST_FIX,
+        )
+        self.assertNotEqual(violations, [])
+        joined = "\n".join(violations)
+        self.assertIn("_GENERATION_AUTHORING_CONTRACTS", joined)
+        self.assertIn("implementation_revision: <N>", joined)
+        self.assertIn("review_content_id: <hex>", joined)
+
+    def test_a_synthetic_driver_declaring_the_step_contract_is_held_to_it(self):
+        """Declaring `moving-counter-step` does not buy silence either:
+        the named step block is then checked for every marker line, so a
+        driver cannot conform by pointing at a step that says nothing."""
+        contracts = dict(_GENERATION_AUTHORING_CONTRACTS)
+        contracts["synthetic-post-fix-driver.md"] = {
+            "kind": "moving-counter-step",
+            "step": "2",
+            "review_request_contract": "explicit",
+            "states_revision_behaviour": True,
+        }
+        violations = _generation_authoring_violations(
+            "synthetic-post-fix-driver.md", self.SYNTHETIC_POST_FIX, contracts,
+        )
+        joined = "\n".join(violations)
+        self.assertIn("assert_stage_completeness", joined)
+        self.assertIn("assert_review_request_states_review_content_id", joined)
+        self.assertIn("withdrawal and quarantine", joined)
+
+    def test_a_synthetic_driver_cannot_buy_the_pinned_round_exemption_unearned(self):
+        """The exemptions carry checked evidence. Claiming the pinned
+        round without the command ever saying its revision cannot move is
+        a violation naming the missing statement."""
+        contracts = dict(_GENERATION_AUTHORING_CONTRACTS)
+        contracts["synthetic-post-fix-driver.md"] = {"kind": "pinned-round"}
+        violations = _generation_authoring_violations(
+            "synthetic-post-fix-driver.md", self.SYNTHETIC_POST_FIX, contracts,
+        )
+        joined = "\n".join(violations)
+        self.assertIn("pinned-round exemption", joined)
+        self.assertIn("never a new revision", joined)
+
+    def test_a_synthetic_driver_cannot_buy_the_protocol_exemption_unearned(self):
+        contracts = dict(_GENERATION_AUTHORING_CONTRACTS)
+        contracts["synthetic-post-fix-driver.md"] = {"kind": "protocol-reference"}
+        violations = _generation_authoring_violations(
+            "synthetic-post-fix-driver.md", self.SYNTHETIC_POST_FIX, contracts,
+        )
+        joined = "\n".join(violations)
+        self.assertIn("REVIEW_PROTOCOL.md", joined)
+
+    def test_a_synthetic_plan_stage_driver_owes_the_plan_marker_contract(self):
+        """The plan side of the same hole. Before the repair the plan
+        stage's own author-written precondition
+        (`assert_test_results_consistent_with_plan_review_request`'s two
+        marker lines) was asserted by two hand-written tests naming the
+        two live plan drivers by filename, so a *third* plan driver was
+        checked by nothing at all -- ledger row `O29` one stage over."""
+        plan_driver = self.SYNTHETIC_POST_FIX.replace(
+            "<base-sha> post-fix [work_item_id]", "<base-sha> plan <work_item_id>",
+        )
+        self.assertEqual(_declared_generation_stages(plan_driver), {"plan"})
+        self.assertFalse(_carries_moving_counter_obligation({"plan"}))
+        violations = _generation_authoring_violations(
+            "synthetic-plan-driver.md", plan_driver,
+        )
+        self.assertNotEqual(violations, [])
+        self.assertIn("_GENERATION_AUTHORING_CONTRACTS", "\n".join(violations))
+
+    def test_a_synthetic_plan_driver_declaring_the_step_contract_is_held_to_it(self):
+        plan_driver = self.SYNTHETIC_POST_FIX.replace(
+            "<base-sha> post-fix [work_item_id]", "<base-sha> plan <work_item_id>",
+        )
+        contracts = dict(_GENERATION_AUTHORING_CONTRACTS)
+        contracts["synthetic-plan-driver.md"] = {"kind": "plan-marker-step", "step": "2"}
+        joined = "\n".join(_generation_authoring_violations(
+            "synthetic-plan-driver.md", plan_driver, contracts,
+        ))
+        self.assertIn("stage: plan (revision N)", joined)
+        self.assertIn("head: <sha>", joined)
+        self.assertIn("assert_test_results_consistent_with_plan_review_request", joined)
+        self.assertIn("withdrawal and quarantine", joined)
+
+    def test_a_driver_cannot_declare_a_contract_its_stage_does_not_owe(self):
+        """Mis-declaration is refused rather than silently checking the
+        wrong marker lines -- otherwise a `post-fix` driver could conform
+        by satisfying the plan stage's contract, and vice versa."""
+        plan_driver = self.SYNTHETIC_POST_FIX.replace(
+            "<base-sha> post-fix [work_item_id]", "<base-sha> plan <work_item_id>",
+        )
+        contracts = dict(_GENERATION_AUTHORING_CONTRACTS)
+        contracts["synthetic-plan-driver.md"] = {
+            "kind": "moving-counter-step", "step": "2",
+            "review_request_contract": "explicit", "states_revision_behaviour": True,
+        }
+        joined = "\n".join(_generation_authoring_violations(
+            "synthetic-plan-driver.md", plan_driver, contracts,
+        ))
+        self.assertIn("not admissible", joined)
+
+        contracts = dict(_GENERATION_AUTHORING_CONTRACTS)
+        contracts["synthetic-post-fix-driver.md"] = {"kind": "plan-marker-step", "step": "2"}
+        joined = "\n".join(_generation_authoring_violations(
+            "synthetic-post-fix-driver.md", self.SYNTHETIC_POST_FIX, contracts,
+        ))
+        self.assertIn("not admissible", joined)
+
+    def test_a_synthetic_driver_at_a_placeholder_stage_still_owes_the_contract(self):
+        """`<stage>`/`<that stage>` resolve at run time and can resolve to
+        a moving stage, so the derivation is default-deny for them too."""
+        placeholder_driver = self.SYNTHETIC_POST_FIX.replace(
+            "<base-sha> post-fix [work_item_id]", "<base-sha> <stage> [work_item_id]",
+        )
+        self.assertEqual(_declared_generation_stages(placeholder_driver), {"<stage>"})
+        self.assertNotEqual(
+            _generation_authoring_violations(
+                "synthetic-placeholder-driver.md", placeholder_driver,
+            ),
+            [],
+        )
+
+
+# ---------------------------------------------------------------------------
+# The acceptance matrix's own helpers, audited against the commands they
+# stand in for (workflow system audit, convergence pass 12, ledger `C12`).
+#
+# `workflow_acceptance_matrix_test.py`'s `Item` class exists to drive each
+# command "exactly the way the owning `.claude/commands/*.md` file says to
+# drive it". When a helper calls a production entry point the owning command
+# never names, one of two things is true and both are bad:
+#
+# - the helper does *more* than the command, so an incomplete command looks
+#   complete (ledger `I19`: the helper refreshed both marker lines for a
+#   bounded functional fix whose documentation named neither; ledger `I22`:
+#   the helper re-embedded the plan document's registry table and the command
+#   never said to);
+# - the helper is *stricter* than the command, so a supported branch of the
+#   command is unreachable in the suite (ledger `O35`:
+#   `assert_feedback_matches_bundle` one step ahead of the basis decision made
+#   `USER_OVERRIDE` unexecutable).
+#
+# Both were found by running this audit by hand once. Running it here makes it
+# a standing property instead of a discovery.
+#
+# The owner mapping is keyed on `Item`'s own existing section comments, so a
+# new section cannot be added without being classified: the discovered set and
+# the declared set must be equal.
+# ---------------------------------------------------------------------------
+
+_MATRIX_SECTION_RE = re.compile(r"^    # -{4,} (.+?) -{4,}$", re.MULTILINE)
+
+_MATRIX_HELPER_SECTION_OWNERS = {
+    # Sections that stand in for no command at all: repository plumbing, and
+    # the reviewer's/user's own inputs, which no command authors.
+    "plumbing": (),
+    "seeding": (),
+    "review feedback": (),
+    # Sections that drive one or more commands.
+    "/milestone-plan": ("milestone-plan.md",),
+    "plan-stage bundle": ("milestone-plan.md",),
+    "/review-plan + /record-manual-plan-review": (
+        "review-plan.md", "record-manual-plan-review.md",
+    ),
+    "/approve-review plan": ("approve-review.md",),
+    "/apply-plan-review": ("apply-plan-review.md",),
+    "/milestone-implement": ("milestone-implement.md",),
+    "/milestone-implement wrap-up": ("milestone-implement.md",),
+    "bundle generation": (
+        "milestone-implement.md", "apply-implementation-review.md",
+        "apply-functional-review.md",
+    ),
+    "/apply-implementation-review": ("apply-implementation-review.md",),
+    "/recover-implementation-provenance": ("recover-implementation-provenance.md",),
+    "/approve-review implementation": ("approve-review.md",),
+    "functional review": ("prepare-functional-review.md", "apply-functional-review.md"),
+    "/accept-milestone": ("accept-milestone.md",),
+}
+
+#: Calls an owning command legitimately does not name by symbol, each with
+#: the reason. Deliberately tiny: an entry here is a claim that the command
+#: discharges the obligation some other way, and each is checked.
+_MATRIX_HELPER_DISCHARGED_BY_REFERENCE = {
+    "compute_review_content_id_plan_stage_for_work_item": (
+        "the plan-stage `review_content_id` recipe: commands reference "
+        "`REVIEW_PROTOCOL.md`'s \"Computing `review_content_id`\" rather than "
+        "restating the entry point (ledger `O31`), so the symbol lives in the "
+        "protocol, not in the command"
+    ),
+    "assert_feedback_matches_bundle": (
+        "`/approve-review` step 2 deliberately does not assert here -- a "
+        "missing or mismatched binding field is \"not fatal to reading the "
+        "file (an `EXTERNAL_APPROVE` basis simply becomes unreachable, per "
+        "step 3), but report the mismatch naming both values\". The helper "
+        "observes and reports it and lets `resolve_approval_basis` decide, "
+        "which is what makes `USER_OVERRIDE` reachable at all (ledger `O35`)"
+    ),
+}
+
+
+def _matrix_source() -> str:
+    return (_repo_root() / "scripts" / "workflow_acceptance_matrix_test.py").read_text()
+
+
+def _matrix_item_helper_calls() -> "dict[str, set[str]]":
+    """`{section title: production entry points the section's helpers call}`,
+    for `Item` only. Sections come from the class's own section comments;
+    calls come from the AST, so a rename or a reflow cannot hide one."""
+    source = _matrix_source()
+    tree = ast.parse(source)
+    item = next(
+        n for n in ast.walk(tree)
+        if isinstance(n, ast.ClassDef) and n.name == "Item"
+    )
+    boundaries = [
+        (m.start(), m.group(1)) for m in _MATRIX_SECTION_RE.finditer(source)
+        if item.lineno <= source.count("\n", 0, m.start()) + 1 <= (item.end_lineno or 10 ** 9)
+    ]
+    lines = source.splitlines(keepends=True)
+    offsets = []
+    running = 0
+    for line in lines:
+        offsets.append(running)
+        running += len(line)
+
+    def section_for(lineno: int) -> "str | None":
+        start = offsets[lineno - 1]
+        current = None
+        for pos, title in boundaries:
+            if pos < start:
+                current = title
+            else:
+                break
+        return current
+
+    calls: "dict[str, set[str]]" = {title: set() for _, title in boundaries}
+    for fn in item.body:
+        if not isinstance(fn, ast.FunctionDef):
+            continue
+        title = section_for(fn.lineno)
+        if title is None:
+            continue
+        for node in ast.walk(fn):
+            # Only actual invocations: an exception class named in an
+            # `except` clause is a *reaction* to a call, not a step the
+            # command instructs, and pulling it in would put class names
+            # into a table about behaviour.
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if (
+                isinstance(func, ast.Attribute)
+                and isinstance(func.value, ast.Name)
+                and func.value.id in ("ws", "fingerprint")
+                and not func.attr.isupper()
+                and not func.attr.startswith("_")
+            ):
+                calls[title].add(func.attr)
+    return calls
+
+
+def _matrix_helper_gaps(calls: "set[str]", owner_text: str) -> "set[str]":
+    """The calls in `calls` that `owner_text` neither names nor has a
+    recorded discharge for -- the checker as a pure function, so the
+    control arm below can run it against a deliberately mutated command
+    text instead of only against the live one."""
+    return {
+        call for call in calls
+        if call not in owner_text
+        and call not in _MATRIX_HELPER_DISCHARGED_BY_REFERENCE
+    }
+
+
+class TestMatrixHelpersDoNotOutrunTheirCommands(unittest.TestCase):
+    """Ledger `C12`. See the census note above for why this exists."""
+
+    def test_the_audit_catches_the_two_gaps_it_was_written_from(self):
+        """The control arm. Strip each repaired mention back out of the
+        *live* command text, in memory, and the checker must report the
+        call the helper performs -- for `I22`'s registry-table re-embed and
+        `I21`'s technical-approval commit validation alike. Without this,
+        the audit above is an assertion nobody has watched fail."""
+        sections = _matrix_item_helper_calls()
+        for symbol, section, command in (
+            ("render_registry_markdown", "/apply-plan-review", "apply-plan-review.md"),
+            ("validate_technical_approval_commit", "/approve-review implementation",
+             "approve-review.md"),
+        ):
+            with self.subTest(symbol=symbol):
+                calls = sections[section]
+                self.assertIn(
+                    symbol, calls,
+                    f"the helper no longer calls {symbol!r} -- update this arm "
+                    f"rather than letting it no-op",
+                )
+                live = _command_text(command)
+                self.assertIn(symbol, live)
+                self.assertEqual(_matrix_helper_gaps(calls, live), set())
+                stripped = live.replace(symbol, "some_other_helper")
+                self.assertEqual(_matrix_helper_gaps(calls, stripped), {symbol})
+
+    def test_every_helper_section_is_classified(self):
+        """The partition guard: a new `Item` section cannot slip in
+        unaudited, and a declared section that no longer exists cannot rot
+        into a dead entry."""
+        discovered = set(_matrix_item_helper_calls())
+        self.assertEqual(discovered, set(_MATRIX_HELPER_SECTION_OWNERS))
+
+    def test_every_helper_call_is_named_by_an_owning_command(self):
+        protocol = (
+            _repo_root() / "docs" / "ai-workflow" / "REVIEW_PROTOCOL.md"
+        ).read_text()
+        for title, calls in sorted(_matrix_item_helper_calls().items()):
+            owners = _MATRIX_HELPER_SECTION_OWNERS[title]
+            if not owners:
+                continue
+            owner_text = "\n".join(_command_text(name) for name in owners)
+            self.assertEqual(
+                _matrix_helper_gaps(calls, owner_text), set(),
+                f"{title}: helper calls no owning command names and no "
+                f"recorded discharge covers",
+            )
+            for call in sorted(calls):
+                with self.subTest(section=title, call=call):
+                    if call in owner_text:
+                        continue
+                    reason = _MATRIX_HELPER_DISCHARGED_BY_REFERENCE.get(call)
+                    self.assertIsNotNone(
+                        reason,
+                        f"{title}: the helper calls {call!r}, which none of "
+                        f"{list(owners)} names -- either the command is missing "
+                        f"a step the helper performs (ledger `I19`/`I22`) or the "
+                        f"helper is stricter than the command (ledger `O35`). "
+                        f"Fix the command, or record the discharge with its "
+                        f"reason in _MATRIX_HELPER_DISCHARGED_BY_REFERENCE.",
+                    )
+                    # A discharge is a claim, so check it.
+                    self.assertIn(call, protocol + owner_text)
+
+    def test_the_discharge_list_stays_minimal_and_used(self):
+        """Every recorded discharge must still be needed by some section --
+        otherwise it is a stale exemption sitting ready to excuse the next
+        genuine gap."""
+        used = set()
+        for title, calls in _matrix_item_helper_calls().items():
+            owners = _MATRIX_HELPER_SECTION_OWNERS[title]
+            if not owners:
+                continue
+            owner_text = "\n".join(_command_text(name) for name in owners)
+            used |= {c for c in calls if c not in owner_text}
+        self.assertEqual(used, set(_MATRIX_HELPER_DISCHARGED_BY_REFERENCE))
 
 
 class TestGoldenCommandFileHashes(unittest.TestCase):
@@ -1000,28 +2377,12 @@ class TestPlanApprovalCommitTrailerFinalParagraphConformance(unittest.TestCase):
         )
         self.assertIn("OPUS-R129-001", text)
 
-    def test_accept_scoped_remediation_states_the_final_paragraph_requirement(self):
-        """Baseline-portability correctness fix: `accept-scoped-remediation.md`
-        step 10 never stated this rule at all for its own
-        `Workflow-Scoped-Remediation-Acceptance`/`Workflow-Work-Item`
-        provenance commit -- unlike the other five commands that write a
-        Workflow-* trailer pair a later command re-discovers by search."""
-        text = _command_text("accept-scoped-remediation.md")
-        self.assertIn(
-            "**These two lines must be the commit message's own final\n"
-            "    paragraph** — after any `Co-Authored-By:`/`Claude-Session:` lines,\n"
-            "    never before them",
-            text,
-        )
-        self.assertIn("OPUS-R129-001", text)
-        self.assertIn("discover_scoped_remediation_commits", text)
-
     def test_prepare_functional_review_states_the_final_paragraph_requirement(self):
         """Baseline-portability correctness fix: `prepare-functional-review.md`
         step 3a never stated this rule at all for its own
         `Workflow-Functional-Checklist`/`Workflow-Work-Item` checklist-
-        evidence provenance commit -- the exact evidence
-        `/accept-scoped-remediation`'s confirmation guard requires."""
+        evidence provenance commit -- the identity step 4 reports to the
+        operator and `/review-functional` reads back."""
         text = _command_text("prepare-functional-review.md")
         self.assertIn(
             "**These two lines must be the commit message's own final\n"
@@ -1111,6 +2472,25 @@ class TestPlanApprovalCommitTrailerFinalParagraphConformance(unittest.TestCase):
         self.assertIn("OPUS-R129-001", text)
         self.assertIn("discover_current_bundle_generation_record_commit", text)
 
+    def test_approve_review_names_the_implementation_stage_post_commit_checks(self):
+        """Convergence pass 12, ledger `I21`. The plan stage has step 6a's
+        post-commit verification set; the implementation stage had none,
+        and `validate_technical_approval_commit` -- implemented,
+        documented, unit-tested -- had no production caller anywhere. The
+        command must now name both checks, say they apply to the commit
+        this invocation just created rather than to discovered history,
+        and say what to do when one fails."""
+        text = _command_text("approve-review.md")
+        self.assertIn("workflow_state.validate_technical_approval_commit(repo_root", text)
+        self.assertIn('stage="implementation", base_commit=base_commit', text)
+        self.assertIn("only to the commit this invocation just created", text)
+        self.assertIn("never retroactively to discovered history", text)
+        self.assertIn("MalformedTechnicalApprovalCommitError", text)
+        # And the two grandfathered SHAs are named, so the forward-only
+        # scope is a recorded fact rather than an unexplained choice.
+        self.assertIn("9fd3c72", text)
+        self.assertIn("ae51770", text)
+
     def test_approve_review_technical_approval_states_the_final_paragraph_requirement(self):
         """Baseline-tag verification cleanup: a fresh Opus review found
         that `approve-review.md`'s implementation-stage technical-approval
@@ -1192,20 +2572,20 @@ class TestAcceptMilestoneCompletionCommitTrailerShape(unittest.TestCase):
 class TestBaselinePortabilityCommandsCommitTrailerShape(unittest.TestCase):
     """Baseline-portability correctness fix, the same required proof
     `TestAcceptMilestoneCompletionCommitTrailerShape` establishes for
-    `accept-milestone.md`, generalized here across the three distinct
-    Workflow-* trailer families the five commands fixed in this same round
-    write (`accept-scoped-remediation.md`,
-    `prepare-functional-review.md`, `apply-functional-review.md`,
-    `apply-implementation-review.md`, `recover-implementation-provenance.md`):
+    `accept-milestone.md`, generalized here across the distinct
+    Workflow-* trailer families the commands fixed in this same round
+    write (`prepare-functional-review.md`, `apply-functional-review.md`,
+    `apply-implementation-review.md`, `recover-implementation-provenance.md`;
+    `accept-scoped-remediation.md` was a fifth until ledger `I10` retired
+    it, taking its `Workflow-Scoped-Remediation-Acceptance` family with it):
     constructs both the pre-fix layout (the trailer paragraph separated from
     `Co-Authored-By:`/`Claude-Session:` by a blank line) and the corrected
     layout (the trailer paragraph positioned after them, as the message's
     own final paragraph) against a real `ScratchRepo` commit for each
     family, and confirms via the real `git interpret-trailers --parse`
     mechanism (`workflow_state._commit_trailers`, the exact primitive
-    `discover_scoped_remediation_commits`/
     `discover_current_functional_checklist_evidence`/
-    `discover_current_bundle_generation_record_commit` all build on) which
+    `discover_current_bundle_generation_record_commit` both build on) which
     layout actually yields a recognized trailer. One trailer family is
     shared by three of the five commands
     (`Workflow-Bundle-Generation-Record`/`Workflow-Work-Item`, optionally
@@ -1259,21 +2639,6 @@ class TestBaselinePortabilityCommandsCommitTrailerShape(unittest.TestCase):
             trailers = ws._commit_trailers(repo.root, commit)
             for key, value in expected.items():
                 self.assertEqual(trailers.get(key), value)
-
-    def test_scoped_remediation_acceptance_pre_fix_layout_silently_drops_the_trailer(self):
-        """`accept-scoped-remediation.md` step 10's own trailer pair."""
-        self._assert_pre_fix_layout_silently_drops_the_trailer(
-            "Workflow-Scoped-Remediation-Acceptance: WF8b/4\n"
-            "Workflow-Work-Item: demo-item",
-            ["Workflow-Scoped-Remediation-Acceptance", "Workflow-Work-Item"],
-        )
-
-    def test_scoped_remediation_acceptance_final_paragraph_layout_is_recognized(self):
-        self._assert_final_paragraph_layout_is_recognized(
-            "Workflow-Scoped-Remediation-Acceptance: WF8b/4\n"
-            "Workflow-Work-Item: demo-item",
-            {"Workflow-Scoped-Remediation-Acceptance": "WF8b/4", "Workflow-Work-Item": "demo-item"},
-        )
 
     def test_functional_checklist_pre_fix_layout_silently_drops_the_trailer(self):
         """`prepare-functional-review.md` step 3a's own trailer pair."""
@@ -2228,6 +3593,67 @@ class TestTwoStagePlanReviewIntegration(unittest.TestCase):
                 current_review_content_id=review_content_id,
             ))
 
+    def test_local_then_manual_approve_reaches_awaiting_plan_approval_for_a_product_item(self):
+        """R5: the product-typed counterpart of
+        `test_local_then_manual_approve_reaches_awaiting_plan_approval`
+        above, computing `review_content_id` via the resolver-based
+        `compute_review_content_id_plan_stage_for_work_item` -- the same
+        function `/review-plan`'s own step 5 ("recompute fresh... the
+        plan-stage `review_content_id`") actually calls, unlike the raw
+        `compute_review_content_id_plan_stage` the process-item test above
+        uses, which never calls `resolve_plan_stage_metadata` and so would
+        not demonstrate this defect's fix. This fails with
+        `PlanStageNotApplicableError` against today's unfixed code (the
+        resolver call is reached first, before any ledger function runs)
+        and passes once `CP1`'s gate widening lands."""
+        with h.ScratchRepo() as repo:
+            (repo.root / ".gitignore").write_text(".ai-review/\n")
+            repo.write_plan_docs(work_item_id="prod-item")
+            repo.write_workflow_state(
+                active_work_item_id="prod-item",
+                **{"prod-item": ws.default_work_item(
+                    work_item_id="prod-item", work_item_type="product", work_item_kind="product",
+                    plan_path="docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+                    registry_path="docs/ai-workflow/registry/prod-item-registry.json",
+                    mapping_path="docs/ai-workflow/requirements/prod-item-mapping.json",
+                    base_commit=repo.base, governing_workflow_version="2.1",
+                    plan_revision=1, last_transition="t0",
+                )},
+            )
+            repo.commit_plan_docs_as_base()
+
+            review_content_id, _ = fingerprint.compute_review_content_id_plan_stage_for_work_item(
+                repo.root, "prod-item",
+            )
+
+            state = h.base_state(**{"prod-item": h.base_work_item(
+                work_item_id="prod-item", work_item_type="product",
+                governing_workflow_version="2.1",
+                phase="AWAITING_LOCAL_PLAN_REVIEW",
+            )})
+
+            state = ws.record_local_plan_review(
+                state, "prod-item", verdict="APPROVE", bundle_id="b1",
+                review_content_id=review_content_id, round=1, now="t1",
+            )
+            self.assertEqual(
+                state["work_items"]["prod-item"]["phase"], "AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW",
+            )
+
+            state = ws.record_manual_plan_review(
+                state, "prod-item", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
+                current_review_content_id=review_content_id,
+                feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
+                feedback_review_content_id=review_content_id,
+            )
+            item = state["work_items"]["prod-item"]
+            self.assertEqual(item["phase"], "AWAITING_PLAN_APPROVAL")
+            self.assertTrue(ws.plan_approval_gate_reachable(
+                latest_round_status="APPROVE", governing_workflow_version="2.1",
+                plan_review_stages=item["plan_review_stages"],
+                current_review_content_id=review_content_id,
+            ))
+
     def test_a_real_committed_plan_edit_after_local_approval_invalidates_the_stage(self):
         """WFR-38's integration half: an actual committed edit to a
         protected plan document -- not a dict field mutation -- changes
@@ -2699,9 +4125,9 @@ class TestPlanStageApprovalCommitMembership(unittest.TestCase):
             self.assertEqual((repo.root / state_path).read_bytes(), pre_write_bytes)
 
     def test_governing_version_does_not_change_resolution_generic_across_v1_and_v21(self):
-        """The resolver keys on `work_item_type == "process"`
-        (`resolve_plan_stage_metadata`'s own existing rule), never on
-        `governing_workflow_version` -- a `"1"` item (like
+        """The resolver keys on `work_item_type` membership in
+        `WORK_ITEM_TYPES` (`resolve_plan_stage_metadata`'s own existing
+        rule), never on `governing_workflow_version` -- a `"1"` item (like
         `workflow-v2-1-core` itself) and a `"2.1"` item both go through
         the identical conditional-fifth-member logic."""
         for governing_workflow_version in ("1", "2.1"):
@@ -2730,17 +4156,21 @@ class TestPlanApprovalFailureAtomicityTransaction(unittest.TestCase):
     `TestPlanStageApprovalCommitMembership` above exercises the
     conditional-fifth-member mechanics it composes with."""
 
-    def _setup(self, repo: h.ScratchRepo, wi: str) -> tuple[dict, dict, str, fingerprint.PlanApprovalCommitPlan]:
+    def _setup(
+        self, repo: h.ScratchRepo, wi: str, *, work_item_type: str = "process",
+    ) -> tuple[dict, dict, str, fingerprint.PlanApprovalCommitPlan]:
         """Settles a clean, already-committed four-member plan-stage
         fixture (no pending fifth member -- kept simple; the fifth-member
         interaction is `resolve_plan_stage_approval_commit_paths`'s own
         already-tested concern, not this transaction's), writes
         `AWAITING_PLAN_APPROVAL` state, and returns
-        `(pre_state, record, review_content_id, plan)`."""
+        `(pre_state, record, review_content_id, plan)`. `work_item_type`
+        defaults to `"process"` (every existing caller unaffected)."""
         repo.write_plan_docs(work_item_id=wi)
         repo.commit_plan_docs_as_base()
         work_item = h.base_work_item(
-            work_item_id=wi, governing_workflow_version="1", phase="AWAITING_PLAN_APPROVAL",
+            work_item_id=wi, work_item_type=work_item_type, work_item_kind=work_item_type,
+            governing_workflow_version="1", phase="AWAITING_PLAN_APPROVAL",
             plan_path="docs/ai-workflow/WORKFLOW_V2_PLAN.md",
             registry_path=f"docs/ai-workflow/registry/{wi}-registry.json",
             mapping_path=f"docs/ai-workflow/requirements/{wi}-mapping.json",
@@ -2756,7 +4186,7 @@ class TestPlanApprovalFailureAtomicityTransaction(unittest.TestCase):
 
         protected = h.plan_stage_protected_paths(wi)
         review_content_id, _ = fingerprint.compute_review_content_id_plan_stage(
-            repo.root, repo.base, work_item_type="process", work_item_id=wi,
+            repo.root, repo.base, work_item_type=work_item_type, work_item_id=wi,
             plan_revision=1, protected=protected,
             excluded_paths=h.plan_stage_excluded_paths(),
             excluded_prefixes=h.plan_stage_excluded_prefixes(),
@@ -3241,7 +4671,7 @@ class TestPlanApprovalMutationGuardAndTakeover(unittest.TestCase):
             old_token = journal["owner_token"]
             evidence = ws.plan_approval_takeover_evidence(repo.root)
             new_token = ws.take_over_plan_approval_transaction(
-                repo.root, now="t2", evidence=evidence,
+                repo.root, work_item_id="wi", now="t2", evidence=evidence,
                 user_authorization=ws.plan_approval_takeover_authorization_literal(evidence),
             )
             self.assertNotEqual(new_token, old_token)
@@ -3276,15 +4706,63 @@ class TestPlanApprovalMutationGuardAndTakeover(unittest.TestCase):
         with h.ScratchRepo() as repo:
             with self.assertRaises(ws.NoPlanApprovalTransactionError):
                 ws.take_over_plan_approval_transaction(
-                    repo.root, now="t1", user_authorization="whatever",
+                    repo.root, work_item_id="wi", now="t1", user_authorization="whatever",
                 )
+
+    def test_takeover_refuses_a_journal_belonging_to_a_different_work_item(self):
+        """Convergence repair, optional finding 3. The plan-approval
+        journal is a single, repository-wide object, so
+        `/approve-review B plan` observes an interrupted transaction
+        belonging to work item A exactly as readily as one of its own --
+        and every step from `6a` onward then drives A's pinned record,
+        A's paths and A's expected post-state under B's invocation. The
+        authorization literal names A, but naming A is not the same as
+        checking that the operator meant A: before this repair nothing
+        compared the two, and the takeover succeeded. It must fail closed,
+        before the claim, the guard and the rotation -- and before any
+        journal closure or materialization."""
+        with h.ScratchRepo() as repo:
+            journal = self._open(repo, wi="wi")
+            evidence = ws.plan_approval_takeover_evidence(repo.root)
+            literal = ws.plan_approval_takeover_authorization_literal(evidence)
+            with self.assertRaises(ws.PlanApprovalTakeoverWorkItemMismatchError) as ctx:
+                ws.take_over_plan_approval_transaction(
+                    repo.root, work_item_id="some-other-item", now="t2",
+                    evidence=evidence, user_authorization=literal,
+                )
+            message = str(ctx.exception)
+            self.assertIn("wi", message)
+            self.assertIn("some-other-item", message)
+            # Nothing was mutated: same owner, no rotation, no claim left
+            # behind, and the transaction is still takeable by its own
+            # rightful target.
+            unchanged = ws.read_plan_approval_journal(repo.root)
+            self.assertEqual(unchanged["owner_token"], journal["owner_token"])
+            self.assertEqual(unchanged["takeover_count"], 0)
+            runtime_dir = (repo.root / ws.PLAN_APPROVAL_JOURNAL_PATH).parent
+            self.assertEqual(
+                sorted(q.name for q in runtime_dir.glob("PLAN_APPROVAL_JOURNAL.claim.*")), [],
+            )
+            new_token = ws.take_over_plan_approval_transaction(
+                repo.root, work_item_id="wi", now="t3",
+                evidence=evidence, user_authorization=literal,
+            )
+            self.assertNotEqual(new_token, journal["owner_token"])
+
+    def test_takeover_work_item_mismatch_is_a_refusal_subclass(self):
+        """It is the same refusal, at the same point, as every other
+        takeover refusal -- not a new takeover mode -- so a caller already
+        catching `PlanApprovalTakeoverRefusedError` catches this too."""
+        self.assertTrue(issubclass(
+            ws.PlanApprovalTakeoverWorkItemMismatchError, ws.PlanApprovalTakeoverRefusedError,
+        ))
 
     def test_takeover_requires_the_exact_authorization_literal(self):
         with h.ScratchRepo() as repo:
             self._open(repo)
             with self.assertRaises(ws.PlanApprovalTakeoverRefusedError):
                 ws.take_over_plan_approval_transaction(
-                    repo.root, now="t2", user_authorization="not the right literal",
+                    repo.root, work_item_id="wi", now="t2", user_authorization="not the right literal",
                 )
             # nothing mutated -- the journal's owner_token is unchanged
             self.assertIsNotNone(ws.read_plan_approval_journal(repo.root))
@@ -3302,7 +4780,7 @@ class TestPlanApprovalMutationGuardAndTakeover(unittest.TestCase):
             self.assertIn("step_seq none", literal)
 
             new_token = ws.take_over_plan_approval_transaction(
-                repo.root, now="t2", evidence=evidence, user_authorization=literal,
+                repo.root, work_item_id="wi", now="t2", evidence=evidence, user_authorization=literal,
             )
 
             reread = ws.read_plan_approval_journal(repo.root)
@@ -3322,7 +4800,7 @@ class TestPlanApprovalMutationGuardAndTakeover(unittest.TestCase):
             old_token = journal["owner_token"]
             evidence = ws.plan_approval_takeover_evidence(repo.root)
             ws.take_over_plan_approval_transaction(
-                repo.root, now="t2", evidence=evidence,
+                repo.root, work_item_id="wi", now="t2", evidence=evidence,
                 user_authorization=ws.plan_approval_takeover_authorization_literal(evidence),
             )
             with self.assertRaises(ws.PlanApprovalOwnershipError):
@@ -3343,7 +4821,7 @@ class TestPlanApprovalMutationGuardAndTakeover(unittest.TestCase):
 
             with self.assertRaises(ws.PlanApprovalTakeoverRefusedError):
                 ws.take_over_plan_approval_transaction(
-                    repo.root, now="t3", evidence=evidence, user_authorization=literal,
+                    repo.root, work_item_id="wi", now="t3", evidence=evidence, user_authorization=literal,
                 )
             # nothing mutated -- still the original owner
             self.assertEqual(ws.read_plan_approval_journal(repo.root)["owner_token"], owner_token)
@@ -3361,7 +4839,7 @@ class TestPlanApprovalMutationGuardAndTakeover(unittest.TestCase):
 
             with self.assertRaises(ws.PlanApprovalTakeoverRefusedError):
                 ws.take_over_plan_approval_transaction(
-                    repo.root, now="t3", evidence=evidence, user_authorization=literal,
+                    repo.root, work_item_id="wi", now="t3", evidence=evidence, user_authorization=literal,
                     guard_release_authorization=ws.plan_approval_guard_release_authorization_literal(
                         evidence["guard"],
                     ),
@@ -3385,7 +4863,7 @@ class TestPlanApprovalMutationGuardAndTakeover(unittest.TestCase):
             guard_release = ws.plan_approval_guard_release_authorization_literal(abandoned)
 
             new_token = ws.take_over_plan_approval_transaction(
-                repo.root, now="t3", evidence=evidence, user_authorization=literal,
+                repo.root, work_item_id="wi", now="t3", evidence=evidence, user_authorization=literal,
                 guard_release_authorization=guard_release,
             )
 
@@ -3413,7 +4891,7 @@ class TestPlanApprovalMutationGuardAndTakeover(unittest.TestCase):
 
             with self.assertRaises(ws.PlanApprovalTakeoverRefusedError):
                 ws.take_over_plan_approval_transaction(
-                    repo.root, now="t4", evidence=evidence, user_authorization=literal,
+                    repo.root, work_item_id="wi", now="t4", evidence=evidence, user_authorization=literal,
                     guard_release_authorization=guard_release,
                 )
             self.assertEqual(ws.read_plan_approval_guard(repo.root), second)
@@ -3430,11 +4908,11 @@ class TestPlanApprovalMutationGuardAndTakeover(unittest.TestCase):
             literal = ws.plan_approval_takeover_authorization_literal(evidence)
 
             first_new_token = ws.take_over_plan_approval_transaction(
-                repo.root, now="t2", evidence=evidence, user_authorization=literal,
+                repo.root, work_item_id="wi", now="t2", evidence=evidence, user_authorization=literal,
             )
             with self.assertRaises(ws.PlanApprovalTakeoverInProgressError):
                 ws.take_over_plan_approval_transaction(
-                    repo.root, now="t3", evidence=evidence, user_authorization=literal,
+                    repo.root, work_item_id="wi", now="t3", evidence=evidence, user_authorization=literal,
                 )
             self.assertEqual(ws.read_plan_approval_journal(repo.root)["owner_token"], first_new_token)
             self.assertEqual(ws.read_plan_approval_journal(repo.root)["takeover_count"], 1)
@@ -3455,7 +4933,7 @@ class TestPlanApprovalMutationGuardAndTakeover(unittest.TestCase):
 
             evidence = ws.plan_approval_takeover_evidence(repo.root)
             new_token = ws.take_over_plan_approval_transaction(
-                repo.root, now="t2", evidence=evidence,
+                repo.root, work_item_id="wi", now="t2", evidence=evidence,
                 user_authorization=ws.plan_approval_takeover_authorization_literal(evidence),
             )
             self.assertEqual(ws.read_plan_approval_journal(repo.root)["owner_token"], new_token)
@@ -3550,9 +5028,9 @@ class TestPlanApprovalStateBlobPinAndMaterialize(unittest.TestCase):
     that commit, not before, or the classifier would see a spurious
     concurrent commit)."""
 
-    def _setup(self, repo: h.ScratchRepo, wi: str):
+    def _setup(self, repo: h.ScratchRepo, wi: str, *, work_item_type: str = "process"):
         pre_state, record, review_content_id, plan = TestPlanApprovalFailureAtomicityTransaction._setup(
-            self, repo, wi,
+            self, repo, wi, work_item_type=work_item_type,
         )
         _run(["git", "add", str(_STATE_PATH)], cwd=repo.root)
         _run(["git", "commit", "-q", "-m", "seed workflow state"], cwd=repo.root)
@@ -3688,6 +5166,41 @@ class TestPlanApprovalStateBlobPinAndMaterialize(unittest.TestCase):
             self.assertEqual((repo.root / _STATE_PATH).read_bytes(), expected_bytes)
             self.assertEqual(json.loads(expected_bytes)["work_items"][wi]["phase"], "IMPLEMENTING")
             # the working tree now matches HEAD/the index exactly for this path
+            self.assertEqual(
+                _run(["git", "status", "--porcelain", "--", str(_STATE_PATH)], cwd=repo.root), "",
+            )
+
+    def test_end_to_end_pin_commit_materialize_matches_apply_plan_approval_for_a_product_item(self):
+        """R6: the `/approve-review plan`-equivalent staging/commit/manifest
+        binding succeeds for a legitimate `work_item_type="product"` item.
+        `_setup`'s inner call
+        (`TestPlanApprovalFailureAtomicityTransaction._setup`) calls
+        `fingerprint.resolve_plan_stage_approval_commit_paths` directly --
+        the exact function this defect currently breaks for a product
+        item. Fails with `PlanStageNotApplicableError` against today's
+        code (the resolver call in the inner `_setup` is reached first)
+        and passes once the gate is widened."""
+        with h.ScratchRepo() as repo:
+            wi = "prod-item"
+            pre_state, record, review_content_id, plan = self._setup(repo, wi, work_item_type="product")
+            journal = self._open_journal(repo, wi, pre_state, record, review_content_id, plan)
+            pre_bytes = (repo.root / _STATE_PATH).read_bytes()
+
+            commit = self._commit_pinned_state(repo, wi, plan, journal, review_content_id)
+
+            self.assertEqual((repo.root / _STATE_PATH).read_bytes(), pre_bytes)
+            self.assertEqual(
+                ws.classify_plan_approval_outcome(repo.root, journal), ws.PLAN_APPROVAL_OUTCOME_COMMITTED,
+            )
+            ws.verify_committed_plan_approval_state_blob(
+                repo.root, commit, journal["expected_post_state_sha256"],
+            )
+
+            ws.materialize_plan_approval_state(repo.root, commit, journal["expected_post_state_sha256"])
+
+            expected_bytes = self._expected_bytes(journal)
+            self.assertEqual((repo.root / _STATE_PATH).read_bytes(), expected_bytes)
+            self.assertEqual(json.loads(expected_bytes)["work_items"][wi]["phase"], "IMPLEMENTING")
             self.assertEqual(
                 _run(["git", "status", "--porcelain", "--", str(_STATE_PATH)], cwd=repo.root), "",
             )
@@ -4388,6 +5901,1060 @@ class TestPlanApprovalPermanentSiteEndToEnd(unittest.TestCase):
             self.assertEqual(
                 _run(["git", "rev-parse", "HEAD"], cwd=repo.root).strip(), commit,
             )
+
+
+class TestRetiredScopedRemediationLeavesNoLiveSurface(unittest.TestCase):
+    """Ledger `I10`'s mechanical closure. `/accept-scoped-remediation` was
+    documented as part of the supported operator contract while its own
+    entry precondition -- `AWAITING_FUNCTIONAL_REVIEW` with a non-terminal
+    own registry -- had no producer in any supported lifecycle, so it could
+    only ever refuse. It is retired rather than made reachable, and this
+    class is what keeps the retirement honest: an executable contract
+    (`.claude/commands/**`) must not name it at all, no runtime message may
+    send an operator to it, no helper may survive with it as its only
+    caller, and every doc that still names it must say it was retired.
+
+    Deliberately *not* asserted: absence from the historical record.
+    `docs/ai-workflow/WORKFLOW_V2_PLAN.md`, the requirements ledgers, the
+    registry evidence files, `WORKFLOW_STATE.json`'s approval manifests and
+    the dry-run findings all record what was designed and approved at the
+    time; rewriting them would falsify provenance, and none of them is a
+    surface an operator is routed through."""
+
+    LIVE_DOCS = (
+        "CLAUDE.md",
+        "docs/ai-workflow/MILESTONE_WORKFLOW.md",
+        "docs/ai-workflow/REVIEW_PROTOCOL.md",
+        "docs/ai-workflow/WORKFLOW_V2_1_OPERATOR_REFERENCE.md",
+    )
+
+    RETIRED_SYMBOLS = (
+        "discover_scoped_remediation_commits",
+        "build_scoped_remediation_live_snapshot",
+        "verify_functional_checklist_evidence",
+        "parse_scoped_remediation_confirmation_binding_fields",
+        "resolve_scoped_remediation_round",
+        "build_scoped_remediation_live_fields",
+        "apply_scoped_remediation_acceptance",
+        "scoped_remediation_gate_reachable",
+        "SCOPED_REMEDIATION_ACCEPTANCE_FIELDS",
+        "NoExistingRound",
+        "ExactReplay",
+        "ConflictingDuplicate",
+        "MalformedAcceptanceRecord",
+        "AmbiguousHistory",
+        "AmbiguousScopedRemediationTrailerError",
+        "MissingFunctionalChecklistEvidenceError",
+        "StaleFunctionalChecklistConfirmationError",
+        "MalformedFunctionalChecklistEvidenceError",
+        "DirtyFunctionalChecklistPathError",
+        "ScopedRemediationLiveValueChangedError",
+    )
+
+    SURVIVING_SHARED_PRIMITIVES = (
+        # Reached by /prepare-functional-review and /review-functional.
+        "discover_functional_checklist_commits",
+        "discover_current_functional_checklist_evidence",
+        "NonFirstParentFunctionalChecklistEvidenceError",
+        "AmbiguousFunctionalChecklistTrailerError",
+        "FUNCTIONAL_CHECKLIST_PATH",
+        # Reached by /accept-milestone and complete_work_item.
+        "registry_completion_status",
+        "resolve_own_registry_completion_status",
+        "milestone_complete_gate_reachable",
+        "IncompleteOwnCheckpointsError",
+        # The remediation-child mechanism, untouched.
+        "create_remediation_child_work_item",
+        "incomplete_children",
+        "IncompleteChildWorkItemError",
+    )
+
+    def test_the_command_file_is_gone(self):
+        self.assertFalse(
+            (_repo_root() / ".claude" / "commands" / "accept-scoped-remediation.md").exists()
+        )
+
+    def test_no_command_file_names_the_retired_command(self):
+        """The executable contract carries no trace of it -- not even a
+        retirement note, which belongs in the docs, not in a command an
+        agent executes step by step."""
+        for path in sorted((_repo_root() / ".claude" / "commands").glob("*.md")):
+            self.assertNotIn("accept-scoped-remediation", path.read_text(), path.name)
+            self.assertNotIn("scoped_remediation", path.read_text(), path.name)
+
+    def test_live_docs_only_name_it_as_retired(self):
+        """An operator doc may still explain what happened to it -- that is
+        how someone who remembers the command finds out why it is gone --
+        but every mention must sit in a paragraph that says so."""
+        for rel_path in self.LIVE_DOCS:
+            text = (_repo_root() / rel_path).read_text()
+            for para in text.split("\n\n"):
+                if "accept-scoped-remediation" not in para:
+                    continue
+                self.assertTrue(
+                    "retire" in para.lower(),
+                    f"{rel_path}: a paragraph names /accept-scoped-remediation without "
+                    f"saying it was retired:\n{para}",
+                )
+
+    def test_the_historical_status_note_carries_a_dated_correction(self):
+        """`docs/ACTIVE_MILESTONE.md` is the exception to the paragraph
+        rule above, and deliberately so: its 2026-08-04 status note is a
+        dated record of what was true then, and rewriting it would falsify
+        the record. It is left verbatim and immediately followed by a
+        dated correction, so the two read as history plus current truth
+        rather than as stale live guidance."""
+        text = (_repo_root() / "docs/ACTIVE_MILESTONE.md").read_text()
+        paragraphs = text.split("\n\n")
+        note = next(
+            i for i, p in enumerate(paragraphs)
+            if p.startswith("**Status note (2026-08-04)**")
+        )
+        correction = paragraphs[note + 1]
+        self.assertTrue(correction.startswith("**Correction (2026-08-26)**"), correction[:80])
+        self.assertIn("retired", correction)
+        self.assertIn("/milestone-implement", correction)
+        self.assertIn("/apply-functional-review", correction)
+
+    def test_no_live_doc_routes_an_operator_to_it(self):
+        for rel_path in self.LIVE_DOCS + ("docs/ACTIVE_MILESTONE.md",):
+            text = (_repo_root() / rel_path).read_text()
+            for phrase in ("use `/accept-scoped-remediation`", "run `/accept-scoped-remediation`",
+                           "points you at\n  `/accept-scoped-remediation`",
+                           "point at `/accept-scoped-remediation`",
+                           "`/accept-scoped-remediation` is\nthe correct",
+                           "`/accept-scoped-remediation` is the correct"):
+                self.assertNotIn(phrase, text, f"{rel_path}: {phrase!r}")
+
+    def test_no_orphaned_helper_survives(self):
+        for symbol in self.RETIRED_SYMBOLS:
+            self.assertFalse(hasattr(ws, symbol), f"workflow_state.{symbol} still exists")
+        self.assertNotIn("scoped_remediation", ws.APPROVAL_STAGES)
+
+    def test_shared_primitives_are_untouched(self):
+        """The retirement is surgical: everything the supported bounded
+        functional-fix and remediation-child paths reach is still here."""
+        for symbol in self.SURVIVING_SHARED_PRIMITIVES:
+            self.assertTrue(hasattr(ws, symbol), f"workflow_state.{symbol} was removed")
+
+    def test_prepare_functional_review_still_writes_checklist_evidence(self):
+        """`I7`'s unchanged-checklist branch and the evidence commit it
+        guards are supported machinery, not scoped-remediation machinery,
+        and survive the retirement intact."""
+        text = _command_text("prepare-functional-review.md")
+        self.assertIn("Workflow-Functional-Checklist:", text)
+        self.assertIn("discover_current_functional_checklist_evidence", text)
+        self.assertIn("--allow-empty", text)
+
+    def test_accept_milestone_names_only_supported_ways_forward(self):
+        text = _command_text("accept-milestone.md")
+        self.assertIn("/milestone-implement", text)
+        self.assertIn("/apply-functional-review", text)
+        self.assertIn("remediation-<n>", text)
+
+    def test_the_operator_reference_command_count_matches_reality(self):
+        """The reference sectioned 14 commands and said so; one of them was
+        `/accept-scoped-remediation`. Removing that section left 13, plus a
+        second, older gap: `workflow-v2-3` added `/review-implementation`
+        and `/review-functional` without ever sectioning them here. Both
+        gaps are now closed -- the reference sections all 15 live commands
+        -- and this test derives the expected count from the real files
+        rather than hand-maintaining a number that can go stale again."""
+        text = (_repo_root() / "docs/ai-workflow/WORKFLOW_V2_1_OPERATOR_REFERENCE.md").read_text()
+        sections = re.findall(r"(?m)^### `/([a-z0-9-]+)", text)
+        on_disk = sorted(p.stem for p in (_repo_root() / ".claude" / "commands").glob("*.md"))
+        self.assertEqual(len(on_disk), 15)
+        self.assertNotIn("accept-scoped-remediation", sections)
+        self.assertNotIn("accept-scoped-remediation", on_disk)
+        # Every live command has exactly one section, and vice versa.
+        self.assertEqual(sorted(sections), on_disk)
+        self.assertIn("review-functional", sections)
+        self.assertIn("review-implementation", sections)
+
+
+# ---------------------------------------------------------------------------
+# Work-item targeting contract (Workflow v2.x convergence campaign, ledger
+# row `B9`, independent-review finding `A9`).
+#
+# `D1` calls `active_work_item_id` "a resume-focus pointer, not an execution
+# lock" and treats several live non-terminal work items as the normal case.
+# `create_remediation_child_work_item` relies on exactly that: it
+# deliberately does *not* repoint the pointer, so a
+# `<parent-id>-remediation-<n>` child is **never** the active item while its
+# parent is open. Every command on that child's lifecycle therefore has to
+# accept an explicit work-item id, or the child cannot be planned, reviewed
+# or closed at all -- and since `complete_work_item` refuses a parent with an
+# incomplete child, the parent would then be permanently unacceptable too.
+#
+# Before this campaign, `/milestone-plan` (`[base-sha]` only),
+# `/apply-plan-review`, `/apply-implementation-review` and
+# `/accept-milestone` accepted no work-item id, while
+# `/apply-functional-review`'s broad branch nonetheless told the operator to
+# run `/milestone-plan <child-id>`. The tests below are what keep that from
+# regressing.
+# ---------------------------------------------------------------------------
+
+
+def _phase_writing_state_functions() -> set[str]:
+    """Every `workflow_state.py` function that persists a `phase` value,
+    found by scanning the module source for `def` boundaries and phase
+    assignments. Deliberately a plain line scan rather than
+    `workflow_state_test.py`'s AST census of the same fact: two
+    independent derivations catch a mistake in either one, where a single
+    shared helper would be silently wrong in both."""
+    functions: set[str] = set()
+    current: str | None = None
+    for line in (_repo_root() / "scripts" / "workflow_state.py").read_text().splitlines():
+        match = re.match(r"^def (\w+)", line)
+        if match:
+            current = match.group(1)
+        if current and (re.search(r'\["phase"\]\s*=', line)
+                        or re.search(r'^\s*"phase":\s*"', line)):
+            functions.add(current)
+    return functions
+
+
+def _argument_hint(filename: str) -> str | None:
+    """The `argument-hint:` frontmatter value of a command file, or `None`
+    when it declares none."""
+    text = _command_text(filename)
+    if not text.startswith("---"):
+        return None
+    frontmatter = text.split("---", 2)[1]
+    for line in frontmatter.splitlines():
+        if line.startswith("argument-hint:"):
+            return line.split(":", 1)[1].strip().strip('"')
+    return None
+
+
+def _commands_naming_a_phase_writer() -> set[str]:
+    writers = _phase_writing_state_functions()
+    named = set()
+    for path in sorted((_repo_root() / ".claude" / "commands").glob("*.md")):
+        text = path.read_text()
+        if any(re.search(r"\b" + writer + r"\b", text) for writer in writers):
+            named.add(path.name)
+    return named
+
+
+#: `/bootstrap-workflow-v2` is the one phase-advancing command that must
+#: *not* take a work-item id: its own file states the target is hardcoded to
+#: `workflow-v2-1-core` and the command is deleted when that item completes.
+#: Asserted rather than assumed by
+#: `test_the_single_exempt_command_says_why_it_is_exempt` below.
+_TARGETING_EXEMPT_COMMANDS = frozenset({"bootstrap-workflow-v2.md"})
+
+
+class TestWorkItemTargetingContract(unittest.TestCase):
+
+    def test_every_command_naming_a_phase_writer_accepts_a_work_item_id(self):
+        """The derived rule: if a command's own steps name a function that
+        persists `phase`, that command drives a specific work item, so it
+        must be able to be pointed at one that is not the active item."""
+        offenders = []
+        for filename in sorted(_commands_naming_a_phase_writer() - _TARGETING_EXEMPT_COMMANDS):
+            hint = _argument_hint(filename)
+            if hint is None or "work-item-id" not in hint:
+                offenders.append((filename, hint))
+        self.assertEqual(offenders, [], f"phase-advancing commands with no work-item-id argument: {offenders}")
+
+    def test_the_derivation_actually_finds_the_lifecycle_commands(self):
+        """A guard on the guard: if the derivation above silently stopped
+        matching (a renamed writer, a reworded command file), the test
+        above would pass vacuously. These five are the ones the campaign
+        repaired, so their presence in the derived set is what makes that
+        test meaningful."""
+        derived = _commands_naming_a_phase_writer()
+        for filename in ("milestone-plan.md", "apply-plan-review.md",
+                         "apply-implementation-review.md",
+                         "apply-functional-review.md", "accept-milestone.md"):
+            self.assertIn(filename, derived)
+        self.assertGreaterEqual(len(_phase_writing_state_functions()), 10)
+
+    def test_the_single_exempt_command_says_why_it_is_exempt(self):
+        for filename in _TARGETING_EXEMPT_COMMANDS:
+            text = _command_text(filename)
+            self.assertIn("hardcoded", text, filename)
+            self.assertIsNone(_argument_hint(filename), filename)
+
+    def test_milestone_plan_states_the_work_item_and_base_sha_resolution_rule(self):
+        text = _command_text("milestone-plan.md")
+        self.assertEqual(_argument_hint("milestone-plan.md"), "[work-item-id] [base-sha]")
+        # Resolution is by lookup against real state, never by token shape,
+        # and the historical single-base-sha form still works.
+        self.assertIn("a key of `work_items` selects that work item", text)
+        self.assertIn("`/milestone-plan <base-sha>` form working", text)
+        self.assertIn("`<work-item-id> <base-sha>`, in that order", text)
+        # The explicit-target branch lives in step 0, alongside the other
+        # target/version resolution, so steps 1-5's v1-comparable text is
+        # untouched (TestGoldenV1BehaviorAgainstPreV21BaseCommit).
+        steps = _extract_numbered_steps(text)
+        self.assertIn("Explicitly selected target", steps["0"])
+        self.assertNotIn("Explicitly selected target", steps["1"])
+        self.assertIn("remediation child", steps["0"])
+        # It must not silently steal focus from the parent.
+        self.assertIn("is **not** repointed here", steps["0"])
+
+    def test_the_broad_remediation_branch_only_names_targetable_commands(self):
+        """The instruction an operator actually receives. Every command it
+        names with `<child-id>` must be able to accept one -- this is the
+        exact contradiction `A9` found (`/milestone-plan <child-id>` against
+        a `[base-sha]`-only contract)."""
+        named = _broad_branch_child_commands()
+        self.assertNotEqual(named, set())
+        for command in sorted(named):
+            filename = f"{command}.md"
+            self.assertTrue(
+                (_repo_root() / ".claude" / "commands" / filename).exists(),
+                f"the broad branch names /{command}, which does not exist",
+            )
+            hint = _argument_hint(filename)
+            self.assertIsNotNone(hint, f"/{command} takes no arguments at all")
+            self.assertIn("work-item-id", hint, f"/{command}: {hint!r}")
+
+    def test_the_broad_remediation_branch_covers_the_whole_child_lifecycle(self):
+        """Completeness, derived rather than listed: a child runs the
+        ordinary cycle, so every phase-advancing command except the
+        exempt bootstrap driver has to appear in the sequence the broad
+        branch hands the operator."""
+        expected = {
+            filename[:-3] for filename in
+            _commands_naming_a_phase_writer() - _TARGETING_EXEMPT_COMMANDS
+        }
+        missing = expected - _broad_branch_child_commands()
+        self.assertEqual(missing, set(), f"child sequence omits: {sorted(missing)}")
+
+    def test_the_broad_branch_states_the_real_child_entry_phase(self):
+        """Diagram finding `B1`: the child does *not* enter at
+        `AWAITING_EXTERNAL_PLAN_REVIEW` under the current default. That is
+        `publish_plan_revision`'s `"1"` branch; a `"2.1"`-governed child --
+        which is what `create_remediation_child_work_item` produces under
+        this repository's own config default -- enters at
+        `AWAITING_LOCAL_PLAN_REVIEW`."""
+        text = _command_text("apply-functional-review.md")
+        self.assertIn("enters review at\n     `AWAITING_LOCAL_PLAN_REVIEW` when its\n"
+                      "     `governing_workflow_version` is `\"2.1\"`", text.replace(
+                          "The child enters review at", "enters review at"))
+        self.assertIn("`AWAITING_EXTERNAL_PLAN_REVIEW` when it is `\"1\"`", text)
+        self.assertIn("publish_plan_revision", text)
+
+    def test_accept_milestone_documents_the_completion_obligation_refusal(self):
+        """Finding `A6`: `complete_work_item` raises
+        `UnsatisfiedCompletionObligationError` independently of the child
+        and own-checkpoint blocks, and the command that calls it never
+        said so."""
+        text = _command_text("accept-milestone.md")
+        self.assertIn("UnsatisfiedCompletionObligationError", text)
+        self.assertIn("D-Completion-Obligations", text)
+        self.assertIn("None of these four stops", text)
+        self.assertNotIn("None of these three stops", text)
+
+    def test_accept_milestone_has_a_remediation_child_bookkeeping_branch(self):
+        """A remediation child is not a roadmap milestone: it was never
+        listed there and has no milestone summary to archive, so the
+        roadmap/archive steps cannot apply to it verbatim."""
+        text = _command_text("accept-milestone.md")
+        self.assertIn("Remediation-child bookkeeping branch", text)
+        self.assertIn("skip steps 3, 5 and 7", text)
+        self.assertIn("`parent_work_item_id` is non-null", text)
+
+    def test_accept_milestone_never_derives_the_target_from_its_own_confirmation(self):
+        """The user-only guard checks the confirmation *against* a resolved
+        id; deriving the id from the confirmation would make it
+        self-satisfying."""
+        text = _command_text("accept-milestone.md")
+        self.assertIn("never infer the id\n   from step 1's confirmation text", text)
+
+
+def _broad_branch_child_commands() -> set[str]:
+    """The command names `/apply-functional-review`'s broad branch tells an
+    operator to run against `<child-id>`, parsed out of the instruction
+    itself rather than restated here."""
+    text = _command_text("apply-functional-review.md")
+    branch = text.split("**Broad/multi-finding remediation**", 1)[1]
+    collapsed = re.sub(r"\s+", " ", branch)
+    return set(re.findall(r"/([a-z0-9-]+)(?: plan| implementation)? <child-id>", collapsed))
+
+
+# ---------------------------------------------------------------------------
+# The operator reference, checked against the code it describes rather than
+# against itself (convergence campaign, ledger rows `I11`-`I13`). Every
+# claim below was wrong in `b0b5ba2` and is now derived.
+# ---------------------------------------------------------------------------
+
+
+_OPERATOR_REFERENCE = "docs/ai-workflow/WORKFLOW_V2_1_OPERATOR_REFERENCE.md"
+
+
+def _operator_reference_text() -> str:
+    return (_repo_root() / _OPERATOR_REFERENCE).read_text()
+
+
+def _reference_phase_table(heading: str) -> dict[str, str]:
+    r"""The `| \`PHASE\` | ... |` rows of one of the two phase tables in the
+    reference's "Phases" section, as `{phase: rest-of-row}`."""
+    text = _operator_reference_text().split(heading, 1)[1]
+    rows: dict[str, str] = {}
+    for line in text.splitlines():
+        if not line.startswith("|"):
+            if rows:
+                break
+            continue
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        match = re.match(r"^`([A-Z_]+)`", cells[0])
+        if match:
+            rows[match.group(1)] = " | ".join(cells[1:])
+    return rows
+
+
+def _declared_state_writer_false() -> set[str]:
+    """Command stems whose frontmatter declares `state_writer: false`."""
+    stems = set()
+    for path in sorted((_repo_root() / ".claude" / "commands").glob("*.md")):
+        frontmatter = path.read_text().split("---", 2)[1]
+        for line in frontmatter.splitlines():
+            if line.strip() == "state_writer: false":
+                stems.add(path.stem)
+    return stems
+
+
+class TestOperatorReferenceMatchesReality(unittest.TestCase):
+
+    def test_the_persisted_phase_table_is_exactly_the_writer_census(self):
+        """Finding `A1`: the reference listed all 17 `KNOWN_PHASES` as one
+        undifferentiated set and presented `AWAITING_TECHNICAL_APPROVAL` as
+        a live persisted gate. Both tables are now derived facts and are
+        checked as such."""
+        writers = _phase_writing_state_functions()
+        written = set()
+        for line in (_repo_root() / "scripts" / "workflow_state.py").read_text().splitlines():
+            for match in re.finditer(r'\["phase"\]\s*=\s*"([A-Z_]+)"', line):
+                written.add(match.group(1))
+            for match in re.finditer(r'^\s*"phase":\s*"([A-Z_]+)"', line):
+                written.add(match.group(1))
+        # `publish_plan_revision` writes through a local name; its two
+        # version-keyed constants are the only such case (asserted by
+        # workflow_state_test.TestPersistedPhaseWriterCensus).
+        written |= {"AWAITING_LOCAL_PLAN_REVIEW", "AWAITING_EXTERNAL_PLAN_REVIEW"}
+        self.assertEqual(set(_reference_phase_table("**Persisted phases**")), written)
+        self.assertEqual(
+            set(_reference_phase_table("**Declared but never written**")),
+            ws.KNOWN_PHASES - written,
+        )
+        self.assertGreater(len(writers), 10)
+
+    def test_every_persisted_phase_row_names_its_real_writer(self):
+        rows = _reference_phase_table("**Persisted phases**")
+        expected = {
+            "PLANNING": ["default_work_item"],
+            "AWAITING_EXTERNAL_PLAN_REVIEW": ["publish_plan_revision"],
+            "AWAITING_LOCAL_PLAN_REVIEW": ["publish_plan_revision",
+                                           "transition_to_awaiting_local_plan_review"],
+            "AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW": ["record_local_plan_review"],
+            "REVISING_PLAN": ["record_local_plan_review", "record_manual_plan_review"],
+            "AWAITING_PLAN_APPROVAL": ["record_manual_plan_review"],
+            "IMPLEMENTING": ["apply_plan_approval"],
+            "SELF_REVIEWING_IMPLEMENTATION": ["complete_checkpoint",
+                                              "enter_self_reviewing_implementation"],
+            "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW": ["record_bundle_generation"],
+            "APPLYING_REVIEW_FEEDBACK": ["enter_applying_review_feedback"],
+            "AWAITING_FUNCTIONAL_REVIEW": ["apply_technical_approval",
+                                           "promote_legacy_work_item"],
+            "MILESTONE_COMPLETE": ["complete_work_item"],
+            "LEGACY_READY": ["import_legacy_work_item"],
+        }
+        for phase, names in expected.items():
+            for name in names:
+                self.assertIn(name, rows[phase], f"{phase} row omits {name}")
+
+    def test_the_happy_path_does_not_route_an_approve_through_the_revise_command(self):
+        """Finding `A2`: the happy path had implementation-review `APPROVE`
+        go through `/apply-implementation-review`, whose step 7 republishes
+        the bundle and invalidates the very `APPROVE` being acted on."""
+        text = _operator_reference_text()
+        section = text.split("## Typical workflow", 1)[1].split("\n## ", 1)[0]
+        happy = section.split("```", 2)[1]
+        self.assertNotIn("/apply-implementation-review", happy)
+        self.assertIn("/approve-review implementation (you)→ AWAITING_FUNCTIONAL_REVIEW", happy)
+        self.assertNotIn("AWAITING_TECHNICAL_APPROVAL", happy)
+        # ...and the prose right after it says why, rather than leaving the
+        # omission to be read as an oversight.
+        self.assertIn("is the `REVISE` path, not the `APPROVE` path", section)
+        # And the harm is stated where the command is described.
+        self.assertIn("FeedbackBundleMismatchError", text)
+        self.assertIn("USER_OVERRIDE", text)
+
+    def test_the_state_writer_false_claim_matches_the_frontmatter(self):
+        """Finding `A3`: `/prepare-review` was called "the only command with
+        `state_writer: false`". There are three."""
+        stems = _declared_state_writer_false()
+        self.assertEqual(stems, {"prepare-review", "review-implementation", "review-functional"})
+        text = _operator_reference_text()
+        self.assertNotIn("The only command with\n  `state_writer: false`", text)
+        self.assertIn("One of the three commands\n  declaring `state_writer: false`", text)
+        for stem in sorted(stems - {"prepare-review"}):
+            self.assertIn(f"`/{stem}`", text)
+
+    def test_the_canonical_reviewer_roles_are_presented_as_canonical(self):
+        """Finding `A4`: the lowercase spellings are legacy compatibility
+        values `_normalize_plan_review_stage_key` maps *to* the canonical
+        ones -- never what a reviewer should write."""
+        self.assertEqual(ws.LOCAL_MODEL_PLAN_REVIEW, "LOCAL_MODEL_PLAN_REVIEW")
+        self.assertEqual(ws.MANUAL_EXTERNAL_PLAN_REVIEW, "MANUAL_EXTERNAL_PLAN_REVIEW")
+        self.assertEqual(
+            ws._normalize_plan_review_stage_key("manual_external_plan_review"),
+            ws.MANUAL_EXTERNAL_PLAN_REVIEW,
+        )
+        text = _operator_reference_text()
+        self.assertNotIn("`Reviewer role: manual_external_plan_review` **exactly**", text)
+        self.assertIn("`Reviewer role: MANUAL_EXTERNAL_PLAN_REVIEW`", text)
+        self.assertIn("`Reviewer role:\n  LOCAL_MODEL_PLAN_REVIEW`", text)
+        self.assertIn("legacy compatibility values", text)
+        # Every remaining lowercase mention must sit in a paragraph that
+        # says it is legacy, exactly like the retirement-note rule.
+        for para in text.split("\n\n"):
+            if "manual_external_plan_review" not in para and "local_model_plan_review" not in para:
+                continue
+            self.assertTrue(
+                "legacy" in para.lower(),
+                f"a paragraph uses a lowercase reviewer role without calling it legacy:\n{para}",
+            )
+
+    def test_apply_functional_review_is_not_documented_as_entering_an_unwritten_phase(self):
+        """Finding `A5`: `FIXING_FUNCTIONAL_FINDINGS` is declared and never
+        written, so "enters `FIXING_FUNCTIONAL_FINDINGS`" was a phase an
+        operator could never observe."""
+        text = _operator_reference_text()
+        self.assertNotIn("enters\n  `FIXING_FUNCTIONAL_FINDINGS`", text)
+        self.assertIn("nothing writes that phase", text)
+        self.assertIn("BundleGenerationRequiresStaleTechnicalApprovalError", text)
+
+    def test_accept_milestone_refusals_include_the_completion_obligations(self):
+        """Finding `A6`, from the reference's side."""
+        text = _operator_reference_text()
+        section = text.split("### `/accept-milestone", 1)[1].split("\n### ", 1)[0]
+        self.assertIn("UnsatisfiedCompletionObligationError", section)
+        for obligation_id in sorted(ws.COMPLETION_OBLIGATION_CONFORMANCE):
+            self.assertIn(obligation_id, section)
+
+    def test_the_plan_review_workflow_provenance_claim_is_true(self):
+        """Finding `A7`: the discrepancy list asserted that
+        `PLAN_REVIEW_WORKFLOW.md` documents `Reviewer role:`. It does not
+        mention it at all."""
+        plan_review = (_repo_root() / "docs/ai-workflow/PLAN_REVIEW_WORKFLOW.md").read_text()
+        milestone = (_repo_root() / "docs/ai-workflow/MILESTONE_WORKFLOW.md").read_text()
+        self.assertNotIn("Reviewer role", plan_review)
+        self.assertIn("Reviewer role", milestone)
+        text = _operator_reference_text()
+        self.assertIn("`PLAN_REVIEW_WORKFLOW.md` does **not**", text)
+
+    def test_the_command_inventory_claim_states_the_real_guarantee(self):
+        """Finding `A8`: "not hand-maintained" was too strong. The set
+        equality is derived; the count is a hardcoded tripwire."""
+        text = _operator_reference_text()
+        self.assertNotIn("not\nhand-maintained", text)
+        self.assertIn("assertEqual(len(on_disk), 15)", text)
+        self.assertIn("hardcoded tripwire", text)
+        # And the claim it makes about the derivation is itself true.
+        sections = re.findall(r"(?m)^### `/([a-z0-9-]+)", text)
+        on_disk = sorted(p.stem for p in (_repo_root() / ".claude" / "commands").glob("*.md"))
+        self.assertEqual(sorted(sections), on_disk)
+
+    def test_every_command_section_heading_states_the_declared_arguments(self):
+        """The reference's `### /<name> <args>` heading and the command's own
+        `argument-hint` are two statements of the same contract, and `A9`
+        was a case of them disagreeing silently."""
+        headings = dict(re.findall(r"(?m)^### `/([a-z0-9-]+)([^`]*)`",
+                                   _operator_reference_text()))
+        mismatched = []
+        for path in sorted((_repo_root() / ".claude" / "commands").glob("*.md")):
+            hint = _argument_hint(path.name) or ""
+            heading = headings.get(path.stem, "<<no section>>").strip()
+            if heading != hint:
+                mismatched.append((path.stem, hint, heading))
+        self.assertEqual(mismatched, [])
+
+    def test_the_v1_plan_approval_gate_is_not_described_as_a_phase(self):
+        """Re-audit finding `O20`: `record_manual_plan_review` is the only
+        writer of `AWAITING_PLAN_APPROVAL` and refuses a `"1"` item
+        outright, so a `"1"` item never occupies that phase -- yet the
+        reference showed it as that version's next state."""
+        source = inspect.getsource(ws.record_manual_plan_review)
+        self.assertIn("validate_manual_plan_review_preconditions", source)
+        self.assertIn('!= "2.1"', inspect.getsource(ws._require_v2_1_plan_review))
+        text = _operator_reference_text()
+        self.assertNotIn("`/apply-plan-review` → `AWAITING_PLAN_APPROVAL`", text)
+        self.assertIn("a `\"1\"` item never occupies that phase", text)
+
+    def test_prepare_functional_review_is_not_credited_with_guards_it_lacks(self):
+        """Re-audit finding `O19`."""
+        command = _command_text("prepare-functional-review.md")
+        self.assertNotIn("technical_approval.status", command)
+        text = _operator_reference_text()
+        self.assertNotIn("**Expects**: `technical_approval.status == CURRENT`", text)
+        self.assertIn("It has **no** phase\n  guard and **no** `technical_approval` "
+                      "precondition of its own", text)
+
+    #: Names the reference uses that are `WORKFLOW_STATE.json`/registry
+    #: fields, config keys, bundle-identity values or literal enum values
+    #: -- data, not callables, so they resolve nowhere in the two modules.
+    #: Anything else in backticks that looks like an identifier has to be a
+    #: real symbol.
+    NON_SYMBOL_NAMES = frozenset({
+        "active_work_item_id", "base_commit", "bundle_id",
+        "default_workflow_version", "generation_head",
+        "governing_workflow_version", "implementation_revision",
+        "last_transition", "local_model_plan_review",
+        "manual_external_plan_review", "mapping_path", "parent_work_item_id",
+        "plan_approval", "plan_path", "plan_review_stages", "registry_path",
+        "review_content_id", "reviewed_implementation_head", "same_content",
+        "state_revision", "technical_approval", "work_item_id",
+        "work_item_kind", "work_item_type", "work_items", "worktree_root",
+        "test_the_operator_reference_command_count_matches_reality",
+    })
+
+    def test_every_code_symbol_the_reference_names_actually_exists(self):
+        """A reference that names a helper which does not exist sends an
+        operator (or an agent) looking for it. This caught
+        `normalize_plan_review_stage_keys`, which is not a function --
+        `normalize_plan_review_stages` is the read-site helper and
+        `migrate_plan_review_stage_keys` is the one-time migration."""
+        text = _operator_reference_text()
+        names = set(re.findall(r"`([A-Za-z_][A-Za-z0-9_]*(?:Error|_[a-z0-9_]+))`", text))
+        names |= set(re.findall(r"`([A-Z][A-Za-z0-9]*Error)`", text))
+        names |= set(re.findall(r"`([a-z_][a-z0-9_]{4,})\(", text))
+        unresolved = sorted(
+            name for name in names
+            if name not in self.NON_SYMBOL_NAMES
+            and not hasattr(ws, name) and not hasattr(fingerprint, name)
+        )
+        self.assertEqual(unresolved, [])
+        # And the allowlist stays honest: nothing in it may become a symbol
+        # without being reclassified.
+        shadowed = sorted(n for n in self.NON_SYMBOL_NAMES
+                          if hasattr(ws, n) or hasattr(fingerprint, n))
+        self.assertEqual(shadowed, [])
+
+    def test_the_enter_the_state_preamble_convention_is_documented_correctly(self):
+        """Re-audit finding `O22`: ten command files open with an `Enter ...`
+        line naming a phase -- inherited v1 wording that
+        does not mean the command writes `X` -- which is the root of the
+        `FIXING_FUNCTIONAL_FINDINGS` and `AWAITING_TECHNICAL_APPROVAL`
+        confusion. The reference's three-way table is checked here against
+        what each file actually calls."""
+        writers = {}
+        for line in (_repo_root() / "scripts" / "workflow_state.py").read_text().splitlines():
+            match = re.match(r"^def (\w+)", line)
+            if match:
+                current = match.group(1)
+            for m in re.finditer(r'\["phase"\]\s*=\s*"([A-Z_]+)"', line):
+                writers.setdefault(m.group(1), set()).add(current)
+            for m in re.finditer(r'^\s*"phase":\s*"([A-Z_]+)"', line):
+                writers.setdefault(m.group(1), set()).add(current)
+
+        # Every `Enter ...` preamble, in all three phrasings the command
+        # files use -- matching only the narrow "Enter the `X` state" form
+        # silently missed `/approve-review` and `/record-manual-plan-review`.
+        preambles = {}
+        for path in sorted((_repo_root() / ".claude" / "commands").glob("*.md")):
+            for line in path.read_text().splitlines():
+                if line.startswith("Enter "):
+                    preambles[path.stem] = re.findall(r"`([A-Z_]+)`", line)
+                    break
+        self.assertEqual(sorted(preambles), [
+            "accept-milestone", "apply-functional-review",
+            "apply-implementation-review", "apply-plan-review",
+            "approve-review", "milestone-implement", "milestone-plan",
+            "prepare-functional-review", "record-manual-plan-review",
+            "review-plan",
+        ])
+        # Every command with such a preamble appears in the reference's table.
+        table = _operator_reference_text().split(
+            '### "Enter the `X` state" in a command file', 1)[1].split("\n\nIf you", 1)[0]
+        for stem in preambles:
+            self.assertIn(f"`/{stem}`", table, stem)
+        # `/approve-review`'s preamble names a phase nothing writes.
+        self.assertIn("AWAITING_TECHNICAL_APPROVAL", preambles["approve-review"])
+        # The one that names a phase nothing writes.
+        self.assertEqual(preambles["apply-functional-review"], ["FIXING_FUNCTIONAL_FINDINGS"])
+        self.assertNotIn("FIXING_FUNCTIONAL_FINDINGS", writers)
+        text = _operator_reference_text()
+        self.assertIn('### "Enter the `X` state" in a command file', text)
+        self.assertIn("does **not** mean the command writes\nthat phase", text)
+        self.assertIn("It names a **gate**, not a phase", text)
+        self.assertIn("which nothing writes at all", text)
+        self.assertIn("never a command's opening line", text)
+
+    def test_the_v1_plan_lane_persists_only_three_phases(self):
+        """Re-audit finding `O22`'s second half: `REVISING_PLAN` shares
+        `AWAITING_PLAN_APPROVAL`'s version scoping -- both are written only
+        by the two-stage verdict commands, which refuse a `"1"` item."""
+        for name in ("record_local_plan_review", "record_manual_plan_review"):
+            source = inspect.getsource(getattr(ws, name))
+            self.assertIn("validate_", source)
+        for name in ("validate_local_plan_review_preconditions",
+                     "validate_manual_plan_review_preconditions"):
+            self.assertIn("_require_v2_1_plan_review", inspect.getsource(getattr(ws, name)))
+        text = _operator_reference_text()
+        self.assertIn("| `REVISING_PLAN` (2.1) |", text)
+        self.assertIn("whole plan lane persists exactly three phases", text)
+
+    def test_the_remediation_child_section_names_every_lifecycle_command(self):
+        """The operator-facing counterpart of
+        `TestWorkItemTargetingContract`: the reference's own child sequence
+        must cover the same derived command set the runtime instruction
+        does."""
+        text = _operator_reference_text()
+        section = text.split("## Remediation children", 1)[1]
+        named = set(re.findall(r"/([a-z0-9-]+)(?: plan| implementation)? <child-id>", section))
+        expected = {
+            filename[:-3] for filename in
+            _commands_naming_a_phase_writer() - _TARGETING_EXEMPT_COMMANDS
+        }
+        self.assertEqual(expected - named, set())
+        self.assertIn("never `active_work_item_id`", section)
+        self.assertIn("IncompleteChildWorkItemError", section)
+
+
+# ---------------------------------------------------------------------------
+# The lifecycle diagram, checked against the code and against itself
+# (convergence campaign, ledger rows `B12`/`O18`).
+#
+# `docs/ai-workflow/diagrams/workflow-v2-1-lifecycle.drawio.svg` carries the
+# diagram twice: as the drawio `mxfile` in the `<svg content="...">`
+# attribute, and as hand-authored SVG primitives in the body. Nothing kept
+# the two in agreement, and nothing kept either in agreement with
+# `workflow_state.py` -- which is how the diagram came to show
+# `AWAITING_TECHNICAL_APPROVAL` as a live persisted gate, `recovered` as a
+# `record_bundle_generation` outcome, a duplicated edge, two missing edges,
+# and a note painted over a live box.
+# ---------------------------------------------------------------------------
+
+
+_DIAGRAM = "docs/ai-workflow/diagrams/workflow-v2-1-lifecycle.drawio.svg"
+
+
+def _diagram_source() -> str:
+    return (_repo_root() / _DIAGRAM).read_text()
+
+
+def _diagram_model():
+    """`{id: (x, y, w, h, value)}` for vertices and `{id: [(x, y), ...]}` for
+    edges, read from the embedded drawio model."""
+    source = _diagram_source()
+    content = html.unescape(re.search(r'\scontent="([^"]*)"', source).group(1))
+    root = ET.fromstring(content)
+    vertices, edges = {}, {}
+    for cell in root.findall(".//mxCell"):
+        geometry = cell.find("mxGeometry")
+        if cell.get("vertex") == "1":
+            vertices[cell.get("id")] = (
+                float(geometry.get("x")), float(geometry.get("y")),
+                float(geometry.get("width")), float(geometry.get("height")),
+                cell.get("value") or "", cell.get("style") or "",
+            )
+        elif cell.get("edge") == "1":
+            points = []
+            source_point = geometry.find('mxPoint[@as="sourcePoint"]')
+            target_point = geometry.find('mxPoint[@as="targetPoint"]')
+            waypoints = geometry.find('Array[@as="points"]')
+            points.append((float(source_point.get("x")), float(source_point.get("y"))))
+            if waypoints is not None:
+                points += [(float(p.get("x")), float(p.get("y")))
+                           for p in waypoints.findall("mxPoint")]
+            points.append((float(target_point.get("x")), float(target_point.get("y"))))
+            edges[cell.get("id")] = (points, cell.get("value") or "")
+    return vertices, edges
+
+
+def _diagram_body_shapes():
+    """`(x, y, w, h)` for every `<rect>`/`<polygon>` drawn in the SVG body,
+    excluding the page background and the white label backings."""
+    source = _diagram_source()
+    body = source[source.index('">', source.index('content="')) + 2:]
+    shapes = []
+    for m in re.finditer(r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" '
+                         r'height="([\d.]+)"([^>]*)/>', body):
+        if 'opacity="0.92"' in m.group(5) or m.group(1) == "0":
+            continue
+        shapes.append(tuple(float(m.group(i)) for i in (1, 2, 3, 4)))
+    for m in re.finditer(r'<polygon points="([^"]+)"', body):
+        pts = [(float(a), float(b)) for a, b in
+               re.findall(r'([-\d.]+),([-\d.]+)', m.group(1))]
+        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+        shapes.append((min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys)))
+    return shapes
+
+
+def _diagram_body_paths():
+    source = _diagram_source()
+    body = source[source.index('">', source.index('content="')) + 2:]
+    paths = []
+    for m in re.finditer(r'<path d="(M [^"]+)" fill="none"', body):
+        paths.append([(float(a), float(b)) for a, b in
+                      re.findall(r'([-\d.]+),([-\d.]+)', m.group(1))])
+    return paths
+
+
+def _diagram_text() -> str:
+    """All rendered text in the diagram body, whitespace-normalized. A line
+    that ends mid-word at a wrap (`/review-` + `implementation`) is rejoined,
+    so a command name split across two `<text>` elements still reads as one
+    token."""
+    source = _diagram_source()
+    body = source[source.index('">', source.index('content="')) + 2:]
+    chunks = [html.unescape(c) for c in re.findall(r'<text[^>]*>(.*?)</text>', body, re.S)]
+    out = ""
+    for chunk in chunks:
+        if out.endswith("-") and chunk[:1].islower():
+            out += chunk
+        else:
+            out = (out + " " + chunk) if out else chunk
+    return out
+
+
+class TestLifecycleDiagramMatchesTheModelItCarries(unittest.TestCase):
+
+    def test_every_model_vertex_is_drawn_at_the_same_geometry(self):
+        vertices, _ = _diagram_model()
+        drawn = {tuple(round(v, 1) for v in s) for s in _diagram_body_shapes()}
+        missing = []
+        for vid, (x, y, w, h, _value, style) in sorted(vertices.items()):
+            if style.startswith("text;"):
+                continue           # caption vertices draw a <text>, no box
+            if (round(x, 1), round(y, 1), round(w, 1), round(h, 1)) not in drawn:
+                missing.append(vid)
+        self.assertEqual(missing, [])
+
+    def test_every_model_edge_is_drawn_with_the_same_polyline(self):
+        _, edges = _diagram_model()
+        drawn = {tuple(tuple(round(v, 1) for v in p) for p in path)
+                 for path in _diagram_body_paths()}
+        missing = [eid for eid, (points, _) in sorted(edges.items())
+                   if tuple(tuple(round(v, 1) for v in p) for p in points) not in drawn]
+        self.assertEqual(missing, [])
+
+    def test_the_body_draws_nothing_the_model_does_not_declare(self):
+        vertices, edges = _diagram_model()
+        declared_boxes = {(round(x, 1), round(y, 1), round(w, 1), round(h, 1))
+                          for x, y, w, h, _v, style in vertices.values()
+                          if not style.startswith("text;")}
+        extra = [s for s in _diagram_body_shapes()
+                 if tuple(round(v, 1) for v in s) not in declared_boxes]
+        self.assertEqual(extra, [])
+        self.assertEqual(len(_diagram_body_paths()), len(edges))
+
+    def test_no_duplicate_edges(self):
+        """`C3`: the all-checkpoints-complete transition was drawn twice,
+        once unlabelled, so the same arrow rendered on top of itself."""
+        _, edges = _diagram_model()
+        seen = {}
+        for eid, (points, _label) in edges.items():
+            key = tuple(points)
+            self.assertNotIn(key, seen, f"{eid} duplicates {seen.get(key)}")
+            seen[key] = eid
+
+
+class TestLifecycleDiagramLayout(unittest.TestCase):
+    """`C1`, `C2`, `C5`: what the diagram *looks like* is part of what it
+    says. A note painted over a live box, an arrow running underneath the
+    note column, or a label sitting on top of a box are all defects, and
+    all three were present."""
+
+    #: The only edge crossings the layout accepts, each between a solid grey
+    #: edge and a dashed red one, so the two are never confusable. Both are
+    #: topologically forced: three edges leave lane 2 leftwards at
+    #: interleaved heights.
+    ALLOWED_CROSSINGS = {("e31", "e35"), ("e33", "e35")}
+
+    def _boxes(self):
+        vertices, _ = _diagram_model()
+        return {vid: (x, y, x + w, y + h)
+                for vid, (x, y, w, h, _v, style) in vertices.items()
+                if not style.startswith("text;")}
+
+    def test_no_box_overlaps_another(self):
+        boxes = self._boxes()
+        overlaps = []
+        for (a, ra), (b, rb) in itertools.combinations(sorted(boxes.items()), 2):
+            if (min(ra[2], rb[2]) - max(ra[0], rb[0]) > 0
+                    and min(ra[3], rb[3]) - max(ra[1], rb[1]) > 0):
+                overlaps.append((a, b))
+        self.assertEqual(overlaps, [])
+
+    def test_no_edge_segment_runs_underneath_a_box(self):
+        boxes = self._boxes()
+        _, edges = _diagram_model()
+        hidden = []
+        for eid, (points, _label) in sorted(edges.items()):
+            for (x0, y0), (x1, y1) in zip(points, points[1:]):
+                for bid, (bx0, by0, bx1, by1) in boxes.items():
+                    if x0 == x1 and bx0 + 1 < x0 < bx1 - 1:
+                        lo, hi = sorted((y0, y1))
+                        if lo < by1 - 1 and hi > by0 + 1:
+                            hidden.append((eid, bid))
+                    elif y0 == y1 and by0 + 1 < y0 < by1 - 1:
+                        lo, hi = sorted((x0, x1))
+                        if lo < bx1 - 1 and hi > bx0 + 1:
+                            hidden.append((eid, bid))
+        self.assertEqual(hidden, [])
+
+    def test_no_edge_label_sits_on_top_of_a_box(self):
+        source = _diagram_source()
+        body = source[source.index('">', source.index('content="')) + 2:]
+        boxes = self._boxes()
+        collisions = []
+        for m in re.finditer(r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" '
+                             r'height="13.0" fill="#ffffff" opacity="0.92"/>'
+                             r'<text[^>]*>([^<]*)</text>', body):
+            lx0, ly0, lw = (float(m.group(i)) for i in (1, 2, 3))
+            lx1, ly1 = lx0 + lw, ly0 + 13
+            for bid, (bx0, by0, bx1, by1) in boxes.items():
+                if lx0 < bx1 - 1 and lx1 > bx0 + 1 and ly0 < by1 - 1 and ly1 > by0 + 1:
+                    collisions.append((m.group(4), bid))
+        self.assertEqual(collisions, [])
+
+    def test_edge_crossings_are_limited_to_the_documented_set(self):
+        _, edges = _diagram_model()
+
+        def crosses(s1, s2):
+            (ax0, ay0), (ax1, ay1) = s1
+            (bx0, by0), (bx1, by1) = s2
+            if ax0 == ax1 and by0 == by1:
+                return (min(bx0, bx1) < ax0 < max(bx0, bx1)
+                        and min(ay0, ay1) < by0 < max(ay0, ay1))
+            if ay0 == ay1 and bx0 == bx1:
+                return crosses(s2, s1)
+            return False
+
+        found = set()
+        for (e1, (p1, _)), (e2, (p2, _)) in itertools.combinations(sorted(edges.items()), 2):
+            for s1 in zip(p1, p1[1:]):
+                for s2 in zip(p2, p2[1:]):
+                    if crosses(s1, s2):
+                        found.add(tuple(sorted((e1, e2))))
+        self.assertEqual(found, self.ALLOWED_CROSSINGS)
+
+    def test_nothing_is_drawn_outside_the_canvas(self):
+        source = _diagram_source()
+        m = re.search(r'<svg [^>]*width="([\d.]+)" height="([\d.]+)"', source)
+        width, height = float(m.group(1)), float(m.group(2))
+        for x, y, w, h in _diagram_body_shapes():
+            self.assertTrue(0 <= x and 0 <= y and x + w <= width and y + h <= height,
+                            f"box {(x, y, w, h)} outside {width}x{height}")
+        for path in _diagram_body_paths():
+            for x, y in path:
+                self.assertTrue(0 <= x <= width and 0 <= y <= height, f"point {(x, y)}")
+
+
+class TestLifecycleDiagramMatchesTheCode(unittest.TestCase):
+
+    def test_every_phase_the_diagram_draws_as_a_box_has_a_writer(self):
+        """`B4`/`B5`: a solid box in this diagram is a place a work item
+        really sits. The four phases nothing writes must not be drawn as
+        boxes at all."""
+        vertices, _ = _diagram_model()
+        writers = _phase_writing_state_functions()
+        self.assertGreater(len(writers), 10)
+        written = set()
+        for line in (_repo_root() / "scripts" / "workflow_state.py").read_text().splitlines():
+            written |= set(re.findall(r'\["phase"\]\s*=\s*"([A-Z_]+)"', line))
+            written |= set(re.findall(r'^\s*"phase":\s*"([A-Z_]+)"', line))
+        written |= {"AWAITING_LOCAL_PLAN_REVIEW", "AWAITING_EXTERNAL_PLAN_REVIEW"}
+        drawn_as_box = set()
+        for _vid, (_x, _y, _w, _h, value, style) in vertices.items():
+            if style.startswith("text;") or "dashed=1" in style:
+                continue           # notes are not phase boxes
+            drawn_as_box |= {p for p in ws.KNOWN_PHASES if p in value}
+        self.assertTrue(drawn_as_box)
+        self.assertEqual(drawn_as_box - written, set())
+
+    def test_the_unwritten_phases_are_named_only_in_their_own_marked_note(self):
+        vertices, _ = _diagram_model()
+        unwritten = {"SELF_REVIEWING_PLAN", "AWAITING_TECHNICAL_APPROVAL",
+                     "FIXING_FUNCTIONAL_FINDINGS", "AWAITING_USER_ACCEPTANCE"}
+        marker_note = next(v for v in vertices.values() if "DECLARED, NEVER WRITTEN" in v[4])
+        for phase in unwritten:
+            self.assertIn(phase, marker_note[4], phase)
+        # The marker note is visually distinct from every ordinary note.
+        self.assertIn("dashPattern=2 3", marker_note[5])
+        others = [vid for vid, v in vertices.items()
+                  if "DECLARED, NEVER WRITTEN" not in v[4]
+                  and any(p in v[4] for p in unwritten)]
+        self.assertEqual(others, [])
+
+    def test_the_diagram_states_the_real_bundle_generation_outcomes(self):
+        """`B3`: `recovered` was drawn as a third
+        `record_bundle_generation` outcome. The function takes two, and
+        recovery is a separate operation."""
+        source = inspect.getsource(ws.record_bundle_generation)
+        self.assertIn('outcome not in ("ordinary", "same_content")', source)
+        text = _diagram_text()
+        self.assertIn("record_bundle_generation takes exactly two", text)
+        self.assertIn("Recovery is a different operation, not a third outcome", text)
+        self.assertIn("apply_implementation_provenance_recovery", text)
+
+    def test_the_diagram_attributes_both_self_review_writers_correctly(self):
+        """`B2`: the note credited the wrap-up writer with the ordinary
+        last-checkpoint case, which `complete_checkpoint` owns."""
+        text = _diagram_text()
+        self.assertIn("SELF_REVIEWING_IMPLEMENTATION has two sanctioned writers", text)
+        self.assertIn("complete_checkpoint, when the checkpoint it completes is the last one",
+                      text)
+        self.assertIn("enter_self_reviewing_implementation", text)
+
+    def test_the_diagram_states_the_real_remediation_child_entry_phase(self):
+        """`B1`."""
+        text = _diagram_text()
+        self.assertIn("AWAITING_LOCAL_PLAN_REVIEW for a “2.1” child", text)
+        self.assertIn("AWAITING_EXTERNAL_PLAN_REVIEW for a “1” one", text)
+        self.assertIn("never active_work_item_id", text)
+
+    def test_the_diagram_represents_implementation_review_block(self):
+        """`B6`: the plan lane showed `BLOCK`, the implementation lane did
+        not, although it is supported, durable, and consequential."""
+        text = _diagram_text()
+        self.assertIn("BLOCK at implementation review", text)
+        self.assertIn("record_technical_review_block_pin", text)
+        self.assertTrue(hasattr(ws, "record_technical_review_block_pin"))
+        self.assertIn("not a phase transition", text)
+
+    #: Diagram tokens that are `WORKFLOW_STATE.json`/config fields or
+    #: literal values rather than callables (same rule as the operator
+    #: reference's own allowlist).
+    NON_SYMBOL_TOKENS = frozenset({
+        "work_item_id", "work_items", "base_commit", "bundle_id",
+        "review_content_id", "reviewed_implementation_head",
+        "implementation_revision", "generation_head", "active_work_item_id",
+        "parent_work_item_id", "technical_approval", "plan_approval",
+        "governing_workflow_version", "same_content", "plan_revision",
+        "registry_path", "state_revision", "default_workflow_version",
+        "workflow_acceptance_matrix_test",
+    })
+
+    def test_every_identifier_the_diagram_names_actually_exists(self):
+        """The same resolution guard the operator reference gets: a
+        diagram naming a helper that does not exist is as misleading as a
+        document doing it."""
+        text = _diagram_text()
+        names = set(re.findall(r"\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b", text))
+        names |= set(re.findall(r"\b([A-Z][A-Za-z0-9]*Error)\b", text))
+        unresolved = sorted(
+            name for name in names
+            if name not in self.NON_SYMBOL_TOKENS and name not in ws.KNOWN_PHASES
+            and not hasattr(ws, name) and not hasattr(fingerprint, name)
+        )
+        self.assertEqual(unresolved, [])
+        self.assertGreater(len(names), 10)
+
+    def test_every_command_the_diagram_names_exists(self):
+        on_disk = {p.stem for p in (_repo_root() / ".claude" / "commands").glob("*.md")}
+        named = set(re.findall(r"/([a-z][a-z0-9-]{4,})", _diagram_text()))
+        unknown = {c for c in named if c not in on_disk}
+        # Only the retired command may be named, and only in the retired banner.
+        self.assertEqual(unknown, {"accept-scoped-remediation"})
+        self.assertIn("HISTORICAL / RETIRED", _diagram_text())
+        self.assertTrue(named & on_disk)
 
 
 if __name__ == "__main__":

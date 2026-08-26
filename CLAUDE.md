@@ -81,6 +81,6 @@ diff looks small.
   `milestone-implement`, `apply-implementation-review`, `approve-review`,
   `prepare-functional-review`, `apply-functional-review`,
   `accept-milestone`, `prepare-review`, `bootstrap-workflow-v2`,
-  `record-manual-plan-review`, `review-plan`, `accept-scoped-remediation`,
+  `record-manual-plan-review`, `review-plan`,
   `recover-implementation-provenance`, `review-implementation`,
   `review-functional`).

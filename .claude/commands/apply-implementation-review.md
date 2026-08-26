@@ -1,5 +1,6 @@
 ---
 description: Apply external implementation-review feedback and prepare for another review round if needed.
+argument-hint: "[work-item-id]"
 state_writer: true
 review-subject: verdict
 ---
@@ -20,8 +21,16 @@ no `docs/ai-workflow/WORKFLOW_STATE.json` entry.
 `docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Bundle location"
 (`workflow_fingerprint.resolve_bundle_dir`/`resolve_feedback_dir`).
 
-0. **Dual-mode branch** (Workflow v2.1, `WF4a-ii`): read the target work
-   item's `governing_workflow_version` from
+0. **Dual-mode branch** (Workflow v2.1, `WF4a-ii`): resolve the target work
+   item first -- the id named in `$ARGUMENTS`, or `active_work_item_id` from
+   `docs/ai-workflow/WORKFLOW_STATE.json` if omitted. Refuse with a named
+   error if neither resolves to an existing, non-terminal `work_items`
+   entry -- never guess. The explicit id is what makes a work item that is
+   *not* `active_work_item_id` drivable at all (`D1`: the pointer is resume
+   focus, not an execution lock), which is the only way a
+   `<parent-id>-remediation-<n>` child's own `REVISE` round can be applied
+   while its parent holds the pointer. Then read that work item's
+   `governing_workflow_version` from
    `docs/ai-workflow/WORKFLOW_STATE.json`. Both `"1"` and `"2.1"` items run
    steps 1-8 identically — this command's exit target
    (`AWAITING_TECHNICAL_APPROVAL`) is amended only in its naming, per
@@ -115,7 +124,20 @@ no `docs/ai-workflow/WORKFLOW_STATE.json` entry.
    durability commit made after generation is by definition one commit
    ahead of the value it just wrote, permanently re-breaking
    `/approve-review implementation`'s provenance-interval check on every
-   round; skip this whole step for a work item with no state entry. Then
+   round; skip this whole step for a work item with no state entry.
+   **Then refresh `<bundle_dir>/IMPLEMENTATION_SUMMARY.md`'s own
+   `implementation_revision: <N>` line** to whatever the counter now
+   reads -- advanced by one for `"ordinary"`, deliberately *unchanged*
+   for `"same_content"`. This is a hard generator precondition
+   (`assert_stage_completeness`, run from `finalize_bundle_generation`);
+   a line left at the previous round's value does not warn, it
+   *withdraws* the bundle, quarantining `current/` and deleting the
+   archive. Refresh `<bundle_dir>/REVIEW_REQUEST.md`'s own
+   `review_content_id: <hex>` line for this round too
+   (`assert_review_request_states_review_content_id`), obtained from the
+   single canonical entry point `docs/ai-workflow/REVIEW_PROTOCOL.md`'s
+   "Computing `review_content_id`" names for this stage -- never a second,
+   ad hoc computation. Then
    run `./scripts/prepare-ai-review.sh <base-sha> post-fix [work_item_id]`
    — required before `AWAITING_TECHNICAL_APPROVAL` can be reachable again.
 8. If any Blocking finding remains unresolved, or the fix was structurally

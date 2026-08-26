@@ -250,7 +250,9 @@ class TestAgainstRealRepository(unittest.TestCase):
             )
         elif stage == "implementation":
             protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
-                wf.load_implementation_stage_classification(repo_root)
+                wf.load_implementation_stage_classification(
+                repo_root, wf.artifacts_path_for_work_item("workflow-v2-1-core"),
+            )
             )
             recomputed, _ = wf.compute_review_content_id_implementation_stage(
                 repo_root, base_commit,
@@ -404,7 +406,9 @@ class TestImplementationStageAgainstRealRepository(unittest.TestCase):
     def test_real_diff_since_base_commit_classifies_exhaustively(self):
         repo_root = _repo_root()
         protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
-            wf.load_implementation_stage_classification(repo_root)
+            wf.load_implementation_stage_classification(
+                repo_root, wf.artifacts_path_for_work_item("workflow-v2-1-core"),
+            )
         )
         changed = sorted(
             wf._changed_tracked_paths_between(repo_root, BASE_COMMIT, WORKFLOW_V2_1_CORE_COMPLETION_COMMIT)
@@ -429,7 +433,9 @@ class TestImplementationStageAgainstRealRepository(unittest.TestCase):
         'workflow-command file' content D-Commit-Provenance names."""
         repo_root = _repo_root()
         protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
-            wf.load_implementation_stage_classification(repo_root)
+            wf.load_implementation_stage_classification(
+                repo_root, wf.artifacts_path_for_work_item("workflow-v2-1-core"),
+            )
         )
         changed = wf._changed_tracked_paths(repo_root, BASE_COMMIT) | wf._untracked_paths(repo_root)
         tooling_paths = {
@@ -448,7 +454,9 @@ class TestImplementationStageAgainstRealRepository(unittest.TestCase):
     def test_real_implementation_stage_manifest_is_nonempty_with_real_blob_shas(self):
         repo_root = _repo_root()
         protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
-            wf.load_implementation_stage_classification(repo_root)
+            wf.load_implementation_stage_classification(
+                repo_root, wf.artifacts_path_for_work_item("workflow-v2-1-core"),
+            )
         )
         digest, projection = wf.compute_review_content_id_implementation_stage_at_commit(
             repo_root, BASE_COMMIT, WORKFLOW_V2_1_CORE_COMPLETION_COMMIT,
@@ -509,7 +517,9 @@ class TestImplementationStageAgainstRealRepository(unittest.TestCase):
         `scripts/` prefix control (`scripts/workflow_state.py`)."""
         repo_root = _repo_root()
         protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
-            wf.load_implementation_stage_classification(repo_root)
+            wf.load_implementation_stage_classification(
+                repo_root, wf.artifacts_path_for_work_item("workflow-v2-1-core"),
+            )
         )
         self.assertEqual(
             wf.classify_path_implementation_stage(
@@ -555,7 +565,9 @@ class TestImplementationStageAgainstRealRepository(unittest.TestCase):
         classification."""
         repo_root = _repo_root()
         protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
-            wf.load_implementation_stage_classification(repo_root)
+            wf.load_implementation_stage_classification(
+                repo_root, wf.artifacts_path_for_work_item("workflow-v2-1-core"),
+            )
         )
         for path in (
             "docs/ai-workflow/dry-run/verify_372h_lock_primitive_predicate.py",

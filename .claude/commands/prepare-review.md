@@ -1,5 +1,6 @@
 ---
 description: Ad-hoc review bundle for work outside the milestone workflow gates.
+argument-hint: "<base-sha> <stage> [work-item-id]"
 state_writer: false
 review-subject: bundle
 ---
@@ -16,10 +17,15 @@ tracked milestone checkpoint.
 item ID applies and that layout already exists, else the flat
 compatibility path `.ai-review/current/`
 (`docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Bundle location";
-`workflow_fingerprint.resolve_bundle_dir`). Ad-hoc reviews commonly have
-no tracked work item at all — omit the script's `[work-item-id]` argument
-in that case and use the flat path throughout, for any stage **other
-than** `plan` (see step 3).
+`workflow_fingerprint.resolve_bundle_dir(repo_root, work_item_id)`).
+Ad-hoc reviews commonly have no tracked work item at all — omit the
+script's `[work-item-id]` argument in that case and use the flat path
+throughout, for any stage **other than** `plan` (see step 3). When
+`<stage>` *is* `plan`, a work item ID is required, and `<bundle_dir>` is
+resolved as `resolve_bundle_dir(repo_root, work_item_id, stage="plan")` —
+always `.ai-review/<work_item_id>/current/`, with no existence gate and no
+flat branch, matching what the generator writes for that stage even on a
+work item that has no scoped directory yet.
 
 1. Determine the correct base commit for what's being reviewed (usually the
    commit before this work started).

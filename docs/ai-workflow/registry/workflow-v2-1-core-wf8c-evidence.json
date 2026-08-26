@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "work_item_id": "workflow-v2-1-core",
-  "_comment": "WFR-68's companion evidence-binding artifact (WFO-LEDGER-COVERAGE property (ii)): binds a reconciliation-table item to the exact dotted unittest test id that discharges it, read by scripts/workflow_state.py's _reconciliation_evidence_by_item() alongside <work_item_id>-ledger-status.json's own per-entry evidence field. Populated incrementally, WF8c session by session (session_target: 'multiple sessions, deliberately not 1') -- this is the first evidence-backfill increment, covering items with an unambiguous, single-purpose test already naming that item number in its own docstring. Every entry below was independently verified (python3 -m unittest <evidence>) to resolve and pass before being recorded here. Items not yet listed here remain unresolved by _pre_flight_wfo_ledger_coverage until a later session adds their evidence -- expected and correct for a checkpoint whose own session_target is multiple sessions.",
+  "_comment": "WFR-68's companion evidence-binding artifact (WFO-LEDGER-COVERAGE property (ii)): binds a reconciliation-table item to the exact dotted unittest test id that discharges it, read by scripts/workflow_state.py's _reconciliation_evidence_by_item() alongside <work_item_id>-ledger-status.json's own per-entry evidence field. Populated incrementally, WF8c session by session (session_target: 'multiple sessions, deliberately not 1') -- this is the first evidence-backfill increment, covering items with an unambiguous, single-purpose test already naming that item number in its own docstring. Every entry below was independently verified (python3 -m unittest <evidence>) to resolve and pass before being recorded here. Items not yet listed here remain unresolved by _pre_flight_wfo_ledger_coverage until a later session adds their evidence -- expected and correct for a checkpoint whose own session_target is multiple sessions. Convergence pass 8 (ledger I10) re-pointed 37 entries (items 171-218 that named a scoped-remediation test) to workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface: /accept-scoped-remediation was retired as an unreachable dead contract and the tests that only proved it were deleted with it, so those items are now evidenced by the retirement's closure rather than by behaviour that no longer exists. Each re-pointed entry's note quotes the test id it named before. The reconciliation table's own (status, owner) pairs are deliberately unchanged -- those requirements were genuinely IMPLEMENTED under WF8b at the time, and the approved plan table is not rewritten after the fact.",
   "generated_at_commit": "e3be7321a7ca06a8cda55f9fa667551dc1001a0f",
   "entries": [
     {
@@ -196,28 +196,28 @@
     },
     {
       "item": 171,
-      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd.test_first_scoped_acceptance_mirrors_wf8b_shape",
-      "note": "/accept-scoped-remediation happy path: appends exactly one scoped_remediation_acceptance entry, sets phase to IMPLEMENTING, worktree clean after success"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestScopedRemediationEndToEnd.test_first_scoped_acceptance_mirrors_wf8b_shape` -- /accept-scoped-remediation happy path: appends exactly one scoped_remediation_acceptance entry, sets phase to IMPLEMENTING, worktree clean after success"
     },
     {
       "item": 191,
-      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd.test_first_scoped_acceptance_mirrors_wf8b_shape",
-      "note": "End to end: the checklist-evidence-commit flow followed by scoped acceptance reaches scoped acceptance from a clean tree, with no manual out-of-contract commit (same test as item 171, which asserts the resulting record shape; this item's own claim is the clean-worktree/no-manual-commit property the same test also asserts)"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestScopedRemediationEndToEnd.test_first_scoped_acceptance_mirrors_wf8b_shape` -- End to end: the checklist-evidence-commit flow followed by scoped acceptance reaches scoped acceptance from a clean tree, with no manual out-of-contract commit (same test as item 171, which asserts the resulting record shape; this item's own claim is the clean-worktree/no-manual-commit property the same test also asserts)"
     },
     {
       "item": 173,
-      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd.test_terminal_registry_refuses_scoped_gate",
-      "note": "/accept-scoped-remediation refuses when the registry is actually terminal, naming /accept-milestone as the correct command instead -- scoped_remediation_gate_reachable is False, milestone_complete_gate_reachable is True, and complete_work_item succeeds directly"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestScopedRemediationEndToEnd.test_terminal_registry_refuses_scoped_gate` -- /accept-scoped-remediation refuses when the registry is actually terminal, naming /accept-milestone as the correct command instead -- scoped_remediation_gate_reachable is False, milestone_complete_gate_reachable is True, and complete_work_item succeeds directly"
     },
     {
       "item": 176,
-      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd.test_exact_replay_on_second_invocation",
-      "note": "A second invocation naming the identical round is recognized as an exact-round replay (via resolve_scoped_remediation_round's load-and-compare) and idempotently reports the existing acceptance commit"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestScopedRemediationEndToEnd.test_exact_replay_on_second_invocation` -- A second invocation naming the identical round is recognized as an exact-round replay (via resolve_scoped_remediation_round's load-and-compare) and idempotently reports the existing acceptance commit"
     },
     {
       "item": 186,
-      "evidence": "workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_cross_invocation_reviewed_implementation_head_changed",
-      "note": "/accept-scoped-remediation refuses when the live reviewed_implementation_head disagrees with the value about to be recorded (one of the item's two OR'd conditions; the sibling test_cross_invocation_checklist_blob_changed covers the checklist-digest half, not separately bound here)"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_cross_invocation_reviewed_implementation_head_changed` -- /accept-scoped-remediation refuses when the live reviewed_implementation_head disagrees with the value about to be recorded (one of the item's two OR'd conditions; the sibling test_cross_invocation_checklist_blob_changed covers the checklist-digest half, not separately bound here)"
     },
     {
       "item": 187,
@@ -226,18 +226,18 @@
     },
     {
       "item": 190,
-      "evidence": "workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_dirty_checklist_path_refused",
-      "note": "/accept-scoped-remediation refuses outright, before computing or recording any blob, when the functional-review checklist path has an uncommitted working-tree change"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_dirty_checklist_path_refused` -- /accept-scoped-remediation refuses outright, before computing or recording any blob, when the functional-review checklist path has an uncommitted working-tree change"
     },
     {
       "item": 192,
-      "evidence": "workflow_state_test.TestResolveScopedRemediationRound",
-      "note": "resolve_scoped_remediation_round reports ExactReplay only after loading and comparing recorded fields (test_exact_replay) -- a matching trailer whose recorded fields disagree is refused as ConflictingDuplicate instead (the test_conflicting_duplicate_* methods in the same class), never silently treated as a replay"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestResolveScopedRemediationRound` -- resolve_scoped_remediation_round reports ExactReplay only after loading and comparing recorded fields (test_exact_replay) -- a matching trailer whose recorded fields disagree is refused as ConflictingDuplicate instead (the test_conflicting_duplicate_* methods in the same class), never silently treated as a replay"
     },
     {
       "item": 194,
-      "evidence": "workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_missing_evidence",
-      "note": "/accept-scoped-remediation refuses outright, naming the missing round key, when no Workflow-Functional-Checklist evidence commit is discoverable for the exact live round (MissingFunctionalChecklistEvidenceError)"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_missing_evidence` -- /accept-scoped-remediation refuses outright, naming the missing round key, when no Workflow-Functional-Checklist evidence commit is discoverable for the exact live round (MissingFunctionalChecklistEvidenceError)"
     },
     {
       "item": 197,
@@ -251,38 +251,38 @@
     },
     {
       "item": 201,
-      "evidence": "workflow_state_test.TestResolveScopedRemediationRound.test_conflicting_duplicate_wrong_active_pointer",
-      "note": "resolve_scoped_remediation_round refuses as ConflictingDuplicate when the recorded active_work_item_id_at_acceptance disagrees with the live global active_work_item_id -- the changed-active-pointer case"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestResolveScopedRemediationRound.test_conflicting_duplicate_wrong_active_pointer` -- resolve_scoped_remediation_round refuses as ConflictingDuplicate when the recorded active_work_item_id_at_acceptance disagrees with the live global active_work_item_id -- the changed-active-pointer case"
     },
     {
       "item": 202,
-      "evidence": "workflow_state_test.TestResolveScopedRemediationRound.test_conflicting_duplicate_wrong_checklist_path",
-      "note": "resolve_scoped_remediation_round refuses as ConflictingDuplicate when the recorded functional_checklist_path disagrees with the live fixed constant -- the wrong-checklist-path case"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestResolveScopedRemediationRound.test_conflicting_duplicate_wrong_checklist_path` -- resolve_scoped_remediation_round refuses as ConflictingDuplicate when the recorded functional_checklist_path disagrees with the live fixed constant -- the wrong-checklist-path case"
     },
     {
       "item": 205,
-      "evidence": "workflow_state_test.TestResolveScopedRemediationRound.test_exact_replay",
-      "note": "An exact replay with every one of the eight canonically compared fields matching the live values is still reported ExactReplay -- regression guard proving the widened comparison does not turn a genuine replay into a false ConflictingDuplicate refusal"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestResolveScopedRemediationRound.test_exact_replay` -- An exact replay with every one of the eight canonically compared fields matching the live values is still reported ExactReplay -- regression guard proving the widened comparison does not turn a genuine replay into a false ConflictingDuplicate refusal"
     },
     {
       "item": 210,
-      "evidence": "workflow_state_test.TestScopedRemediationConfirmationParsing",
-      "note": "parse_scoped_remediation_confirmation_binding_fields refuses a confirmation missing either required field, or carrying a malformed (non-40-hex) value for either, naming which field failed (docstring-confirmed: UserConfirmationRejectedError, naming which field is missing or malformed)"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestScopedRemediationConfirmationParsing` -- parse_scoped_remediation_confirmation_binding_fields refuses a confirmation missing either required field, or carrying a malformed (non-40-hex) value for either, naming which field failed (docstring-confirmed: UserConfirmationRejectedError, naming which field is missing or malformed)"
     },
     {
       "item": 211,
-      "evidence": "workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_malformed_evidence_trailer_blob_disagrees_with_actual_commit",
-      "note": "The pre-commit evidence guard refuses when a confirmation names a discoverable commit whose actual committed content disagrees with both the confirmed blob and the trailer's own embedded blob component -- the hand-crafted-trailer case (MalformedFunctionalChecklistEvidenceError)"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_malformed_evidence_trailer_blob_disagrees_with_actual_commit` -- The pre-commit evidence guard refuses when a confirmation names a discoverable commit whose actual committed content disagrees with both the confirmed blob and the trailer's own embedded blob component -- the hand-crafted-trailer case (MalformedFunctionalChecklistEvidenceError)"
     },
     {
       "item": 212,
-      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd.test_wrong_work_item_confirmation_never_finds_evidence",
-      "note": "The pre-commit evidence guard refuses when a confirmation names an evidence commit that does not belong to the exact live round (wrong work_item_id sub-case), refused identically to the missing-evidence case (MissingFunctionalChecklistEvidenceError)"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestScopedRemediationEndToEnd.test_wrong_work_item_confirmation_never_finds_evidence` -- The pre-commit evidence guard refuses when a confirmation names an evidence commit that does not belong to the exact live round (wrong work_item_id sub-case), refused identically to the missing-evidence case (MissingFunctionalChecklistEvidenceError)"
     },
     {
       "item": 213,
-      "evidence": "workflow_state_test.TestResolveScopedRemediationRound.test_conflicting_duplicate_wrong_evidence_commit",
-      "note": "resolve_scoped_remediation_round's exact-replay comparison validates functional_checklist_evidence_commit as one of the eight canonical fields -- a disagreement here is refused as ConflictingDuplicate, not reported ExactReplay"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestResolveScopedRemediationRound.test_conflicting_duplicate_wrong_evidence_commit` -- resolve_scoped_remediation_round's exact-replay comparison validates functional_checklist_evidence_commit as one of the eight canonical fields -- a disagreement here is refused as ConflictingDuplicate, not reported ExactReplay"
     },
     {
       "item": 221,
@@ -341,8 +341,8 @@
     },
     {
       "item": 172,
-      "evidence": "workflow_state_test.TestRegistryCompletionStatusAndGates.test_scoped_remediation_gate_reachable_truth_table",
-      "note": "/accept-scoped-remediation's phase gate refuses whenever phase != AWAITING_FUNCTIONAL_REVIEW (single boolean-equality code path; phase='IMPLEMENTING' is the truth table's exercised negative case, the same branch AWAITING_TECHNICAL_APPROVAL/MILESTONE_COMPLETE would take)"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestRegistryCompletionStatusAndGates.test_scoped_remediation_gate_reachable_truth_table` -- /accept-scoped-remediation's phase gate refuses whenever phase != AWAITING_FUNCTIONAL_REVIEW (single boolean-equality code path; phase='IMPLEMENTING' is the truth table's exercised negative case, the same branch AWAITING_TECHNICAL_APPROVAL/MILESTONE_COMPLETE would take)"
     },
     {
       "item": 179,
@@ -351,8 +351,8 @@
     },
     {
       "item": 180,
-      "evidence": "workflow_state_test.TestApplyScopedRemediationAcceptance.test_is_pure_no_side_effects_until_caller_persists_and_commits",
-      "note": "apply_scoped_remediation_acceptance is a pure in-memory transform; a simulated interruption between the state write and the caller's own commit step leaves neither in effect (item 180's state-write/commit atomicity claim)"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestApplyScopedRemediationAcceptance.test_is_pure_no_side_effects_until_caller_persists_and_commits` -- apply_scoped_remediation_acceptance is a pure in-memory transform; a simulated interruption between the state write and the caller's own commit step leaves neither in effect (item 180's state-write/commit atomicity claim)"
     },
     {
       "item": 183,
@@ -366,23 +366,23 @@
     },
     {
       "item": 185,
-      "evidence": "workflow_state_test.TestApplyScopedRemediationAcceptance.test_entry_has_exactly_eleven_documented_fields",
-      "note": "scoped_remediation_acceptance entry schema asserted against SCOPED_REMEDIATION_ACCEPTANCE_FIELDS, exactly eleven fields"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestApplyScopedRemediationAcceptance.test_entry_has_exactly_eleven_documented_fields` -- scoped_remediation_acceptance entry schema asserted against SCOPED_REMEDIATION_ACCEPTANCE_FIELDS, exactly eleven fields"
     },
     {
       "item": 188,
-      "evidence": "workflow_state_test.TestResolveScopedRemediationRound.test_distinct_implementation_revision_is_a_new_round_not_a_replay",
-      "note": "A genuinely new remediation round (distinct implementation_revision) against a checkpoint already scoped-accepted once resolves NoExistingRound, never a conflicting duplicate"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestResolveScopedRemediationRound.test_distinct_implementation_revision_is_a_new_round_not_a_replay` -- A genuinely new remediation round (distinct implementation_revision) against a checkpoint already scoped-accepted once resolves NoExistingRound, never a conflicting duplicate"
     },
     {
       "item": 189,
-      "evidence": "workflow_state_test.TestResolveScopedRemediationRound",
-      "note": "Same-round collision refused as ConflictingDuplicate, naming the disagreeing field, across every documented field: active_work_item_id_at_acceptance, functional_checklist_evidence_commit, functional_checklist_path (revision 26 widened set)"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestResolveScopedRemediationRound` -- Same-round collision refused as ConflictingDuplicate, naming the disagreeing field, across every documented field: active_work_item_id_at_acceptance, functional_checklist_evidence_commit, functional_checklist_path (revision 26 widened set)"
     },
     {
       "item": 193,
-      "evidence": "workflow_state_test.TestResolveScopedRemediationRound.test_ambiguous_history",
-      "note": "resolve_scoped_remediation_round reports AmbiguousHistory when discover_scoped_remediation_commits raises AmbiguousScopedRemediationTrailerError, from trailer matching alone before WORKFLOW_STATE.json content is read"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestResolveScopedRemediationRound.test_ambiguous_history` -- resolve_scoped_remediation_round reports AmbiguousHistory when discover_scoped_remediation_commits raises AmbiguousScopedRemediationTrailerError, from trailer matching alone before WORKFLOW_STATE.json content is read"
     },
     {
       "item": 195,
@@ -391,28 +391,28 @@
     },
     {
       "item": 199,
-      "evidence": "workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_fresh_confirmation_for_corrected_evidence_succeeds",
-      "note": "Pre-commit evidence guard binds to the round's current checklist-evidence commit only when the current-turn confirmation itself names that current commit -- positive half of item 199's narrowing claim (revision 27, GPT-R40-001)"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_fresh_confirmation_for_corrected_evidence_succeeds` -- Pre-commit evidence guard binds to the round's current checklist-evidence commit only when the current-turn confirmation itself names that current commit -- positive half of item 199's narrowing claim (revision 27, GPT-R40-001)"
     },
     {
       "item": 200,
-      "evidence": "workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_stale_confirmation_after_correction_wrong_commit",
-      "note": "A confirmation naming a stale, superseded evidence commit is refused rather than silently upgraded to the newer current evidence -- discovery identifying the newer commit as current never alone authorizes an existing confirmation to it"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_stale_confirmation_after_correction_wrong_commit` -- A confirmation naming a stale, superseded evidence commit is refused rather than silently upgraded to the newer current evidence -- discovery identifying the newer commit as current never alone authorizes an existing confirmation to it"
     },
     {
       "item": 207,
-      "evidence": "workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_happy_path_returns_current_evidence",
-      "note": "Ordinary happy path: confirmation names evidence commit A, A remains the round's current (only) checklist-evidence commit, verification succeeds"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_happy_path_returns_current_evidence` -- Ordinary happy path: confirmation names evidence commit A, A remains the round's current (only) checklist-evidence commit, verification succeeds"
     },
     {
       "item": 208,
-      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd.test_wrong_evidence_commit_is_refused_as_stale",
-      "note": "A second, distinct evidence commit created after the user's confirmation named the first makes that confirmation stale; /accept-scoped-remediation's own orchestration (not just the unit-level guard) refuses via StaleFunctionalChecklistConfirmationError"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestScopedRemediationEndToEnd.test_wrong_evidence_commit_is_refused_as_stale` -- A second, distinct evidence commit created after the user's confirmation named the first makes that confirmation stale; /accept-scoped-remediation's own orchestration (not just the unit-level guard) refuses via StaleFunctionalChecklistConfirmationError"
     },
     {
       "item": 209,
-      "evidence": "workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_fresh_confirmation_for_corrected_evidence_succeeds",
-      "note": "After a fresh confirmation naming the corrected (current) evidence commit, verification succeeds and binds to it -- proving the prior refusal (item 208) is not a permanent block"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestFunctionalChecklistEvidenceGuard.test_fresh_confirmation_for_corrected_evidence_succeeds` -- After a fresh confirmation naming the corrected (current) evidence commit, verification succeeds and binds to it -- proving the prior refusal (item 208) is not a permanent block"
     },
     {
       "item": 273,
@@ -471,8 +471,8 @@
     },
     {
       "item": 175,
-      "evidence": "workflow_state_test.TestUserConfirmationGuard.test_scoped_remediation_stage_confirmation_not_accepted_for_acceptance",
-      "note": "New test (no prior coverage existed): extends the existing plan-vs-implementation non-interchangeability property to the fourth APPROVAL_STAGES member, scoped_remediation vs acceptance, in both directions"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestUserConfirmationGuard.test_scoped_remediation_stage_confirmation_not_accepted_for_acceptance` -- New test (no prior coverage existed): extends the existing plan-vs-implementation non-interchangeability property to the fourth APPROVAL_STAGES member, scoped_remediation vs acceptance, in both directions"
     },
     {
       "item": 178,
@@ -481,18 +481,18 @@
     },
     {
       "item": 182,
-      "evidence": "workflow_state_test.TestResolveScopedRemediationRound.test_exact_replay",
-      "note": "resolve_scoped_remediation_round's own signature carries no phase parameter at all, so its ExactReplay classification is structurally phase-independent by construction; this test exercises the exact-round-replay path (keyed by outstanding_checkpoint_id/implementation_revision, no new commit, existing commit reported) that item 182 requires 'regardless of the current phase'"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestResolveScopedRemediationRound.test_exact_replay` -- resolve_scoped_remediation_round's own signature carries no phase parameter at all, so its ExactReplay classification is structurally phase-independent by construction; this test exercises the exact-round-replay path (keyed by outstanding_checkpoint_id/implementation_revision, no new commit, existing commit reported) that item 182 requires 'regardless of the current phase'"
     },
     {
       "item": 196,
-      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd.test_confirmation_validated_before_replay_classification_runs",
-      "note": "New test (no prior coverage existed): a confirmation naming neither the work item nor the stage is refused identically whether a live round already exists (would otherwise resolve ExactReplay) or not (would otherwise proceed as a new acceptance), proving validate_user_confirmation's call site precedes resolve_scoped_remediation_round in both cases"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestScopedRemediationEndToEnd.test_confirmation_validated_before_replay_classification_runs` -- New test (no prior coverage existed): a confirmation naming neither the work item nor the stage is refused identically whether a live round already exists (would otherwise resolve ExactReplay) or not (would otherwise proceed as a new acceptance), proving validate_user_confirmation's call site precedes resolve_scoped_remediation_round in both cases"
     },
     {
       "item": 203,
-      "evidence": "workflow_state_test.TestResolveScopedRemediationRound.test_malformed_unsupported_schema_version",
-      "note": "An entry with acceptance_record_version=1 (any value other than 2) resolves to MalformedAcceptanceRecord naming acceptance_record_version in its reason, exact match to item 203's claim"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestResolveScopedRemediationRound.test_malformed_unsupported_schema_version` -- An entry with acceptance_record_version=1 (any value other than 2) resolves to MalformedAcceptanceRecord naming acceptance_record_version in its reason, exact match to item 203's claim"
     },
     {
       "item": 359,
@@ -501,18 +501,18 @@
     },
     {
       "item": 177,
-      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd.test_fresh_session_reselects_same_outstanding_checkpoint",
-      "note": "New test (no prior coverage existed): after a real /accept-scoped-remediation acceptance, state and registry are both re-read from disk/Git alone (git show HEAD:<path>, no in-memory carryover) and select_next_checkpoint re-selects the same outstanding checkpoint -- no new pointer or marker file exists to read"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestScopedRemediationEndToEnd.test_fresh_session_reselects_same_outstanding_checkpoint` -- New test (no prior coverage existed): after a real /accept-scoped-remediation acceptance, state and registry are both re-read from disk/Git alone (git show HEAD:<path>, no in-memory carryover) and select_next_checkpoint re-selects the same outstanding checkpoint -- no new pointer or marker file exists to read"
     },
     {
       "item": 206,
-      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd.test_checklist_correction_first_confirmation_refused_second_succeeds",
-      "note": "New test (no prior coverage existed): two distinct Workflow-Functional-Checklist evidence commits for the same round (a checklist correction); confirming the original, now-superseded evidence is refused as stale, and only a second confirmation naming the corrected evidence reaches scoped acceptance, bound to the corrected commit/blob"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestScopedRemediationEndToEnd.test_checklist_correction_first_confirmation_refused_second_succeeds` -- New test (no prior coverage existed): two distinct Workflow-Functional-Checklist evidence commits for the same round (a checklist correction); confirming the original, now-superseded evidence is refused as stale, and only a second confirmation naming the corrected evidence reaches scoped acceptance, bound to the corrected commit/blob"
     },
     {
       "item": 214,
-      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd.test_checklist_correction_first_confirmation_refused_second_succeeds",
-      "note": "Same test as item 206 (restates the identical GPT-R40-001 failure scenario as its own end-to-end reproduction) -- the checklist-correction-between-review-and-acceptance flow is refused on the stale confirmation and succeeds only on the corrected one"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestScopedRemediationEndToEnd.test_checklist_correction_first_confirmation_refused_second_succeeds` -- Same test as item 206 (restates the identical GPT-R40-001 failure scenario as its own end-to-end reproduction) -- the checklist-correction-between-review-and-acceptance flow is refused on the stale confirmation and succeeds only on the corrected one"
     },
     {
       "item": 229,
@@ -551,8 +551,8 @@
     },
     {
       "item": 181,
-      "evidence": "workflow_state_test.TestApplyScopedRemediationAcceptance.test_is_pure_no_side_effects_until_caller_persists_and_commits",
-      "note": "New this round (batch 12): the same interrupted-acceptance atomicity property item 180 is already bound to, read from item 181's own resume-side framing -- apply_scoped_remediation_acceptance never mutates its input and produces no commit by itself, so a crash between the state write and the caller's own commit step leaves nothing persisted; a fresh session's checkpoint selection, which discovers acceptance only via a committed Workflow-Scoped-Remediation-Acceptance trailer, therefore treats the interrupted attempt exactly as if it never happened"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestApplyScopedRemediationAcceptance.test_is_pure_no_side_effects_until_caller_persists_and_commits` -- New this round (batch 12): the same interrupted-acceptance atomicity property item 180 is already bound to, read from item 181's own resume-side framing -- apply_scoped_remediation_acceptance never mutates its input and produces no commit by itself, so a crash between the state write and the caller's own commit step leaves nothing persisted; a fresh session's checkpoint selection, which discovers acceptance only via a committed Workflow-Scoped-Remediation-Acceptance trailer, therefore treats the interrupted attempt exactly as if it never happened"
     },
     {
       "item": 240,
@@ -576,8 +576,8 @@
     },
     {
       "item": 174,
-      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd.test_stale_technical_approval_is_the_sole_remaining_blocker",
-      "note": "New this round (batch 14): item 174's own refusal condition (technical_approval.status != \"CURRENT\") is checked only in accept-scoped-remediation.md's own step 6 prose, never through a named production function, so there is no call site to assert raises. The new test proves the condition is not vacuous: a fixture with every dedicated Python-level gate green (non-terminal registry, scoped_remediation_gate_reachable true, resolve_scoped_remediation_round == NoExistingRound) still has technical_approval.status == \"STALE\", confirming this prose condition is the sole remaining blocker in an otherwise fully-green state -- the superseded-implementation-revision case the item describes"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestScopedRemediationEndToEnd.test_stale_technical_approval_is_the_sole_remaining_blocker` -- New this round (batch 14): item 174's own refusal condition (technical_approval.status != \"CURRENT\") is checked only in accept-scoped-remediation.md's own step 6 prose, never through a named production function, so there is no call site to assert raises. The new test proves the condition is not vacuous: a fixture with every dedicated Python-level gate green (non-terminal registry, scoped_remediation_gate_reachable true, resolve_scoped_remediation_round == NoExistingRound) still has technical_approval.status == \"STALE\", confirming this prose condition is the sole remaining blocker in an otherwise fully-green state -- the superseded-implementation-revision case the item describes"
     },
     {
       "item": 219,
@@ -651,8 +651,8 @@
     },
     {
       "item": 204,
-      "evidence": "workflow_state_test.TestResolveScopedRemediationRound.test_conflicting_duplicate_entry_implementation_revision_disagrees_with_live",
-      "note": "New this round (batch 17): the hand-edited-entry-vs-round-key mismatch case -- an entry matching round key B/1 exactly, but live_fields' own current implementation_revision has since diverged, refuses as ConflictingDuplicate naming implementation_revision, rather than being accepted as a valid replay of a round live state has already moved past"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestResolveScopedRemediationRound.test_conflicting_duplicate_entry_implementation_revision_disagrees_with_live` -- New this round (batch 17): the hand-edited-entry-vs-round-key mismatch case -- an entry matching round key B/1 exactly, but live_fields' own current implementation_revision has since diverged, refuses as ConflictingDuplicate naming implementation_revision, rather than being accepted as a valid replay of a round live state has already moved past"
     },
     {
       "item": 230,
@@ -726,8 +726,8 @@
     },
     {
       "item": 218,
-      "evidence": "workflow_state_test.TestScopedRemediationEndToEnd",
-      "note": "New this round (batch 19): full /accept-scoped-remediation orchestration exercised end to end -- confirmation parsing, functional-checklist evidence binding against the live snapshot, registry-derived non-terminal resolution, and the resulting provenance commit"
+      "evidence": "workflow_integration_test.TestRetiredScopedRemediationLeavesNoLiveSurface",
+      "note": "Retired with `/accept-scoped-remediation` (convergence pass 8, ledger `I10`): this item's subject no longer exists, so it is discharged by the retirement's own closure test rather than by behaviour that is gone -- the command, its gate and its single-caller helpers are absent, no live command or operator doc routes anyone to them, and the shared primitives the supported paths reach are asserted present. Original evidence, kept for the record: `workflow_state_test.TestScopedRemediationEndToEnd` -- New this round (batch 19): full /accept-scoped-remediation orchestration exercised end to end -- confirmation parsing, functional-checklist evidence binding against the live snapshot, registry-derived non-terminal resolution, and the resulting provenance commit"
     },
     {
       "item": 370,

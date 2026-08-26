@@ -291,6 +291,58 @@ def _workflow_trailer_lookalike_violations(repo_root: Path, commits: list[str]) 
 
 
 class TestAgainstRealRepository(unittest.TestCase):
+    def test_the_bootstrap_driver_is_unreachable_and_fail_closed_at_live_head(self):
+        """Convergence pass 12, ledger `O33` (external Optional `N5`).
+
+        `/bootstrap-workflow-v2` is past its own stated retirement
+        condition -- "retired -- deleted -- only at this work item's own
+        `MILESTONE_COMPLETE`" -- and `workflow-v2-1-core` reached
+        `MILESTONE_COMPLETE`. The disposition is to leave it in place
+        rather than revive or redesign it, which is only defensible if
+        it is genuinely unreachable *and* fail-closed. Until this pass
+        that was asserted in a source comment in
+        `workflow_integration_test.py`'s census and executed nowhere -- a
+        claim, not evidence, which is precisely the substitution class
+        this campaign is auditing for.
+
+        So: run it. The command's hardcoded target work item is read from
+        the live state file, and every writer its two branches would need
+        is called against that live entry."""
+        repo_root = _repo_root()
+        state = json.loads((repo_root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
+        work_item = state["work_items"][WORK_ITEM_ID]
+        registry = json.loads(
+            (repo_root / "docs/ai-workflow/registry/workflow-v2-1-core-registry.json").read_text()
+        )
+
+        # The command file still exists and is still hardcoded to this item
+        # -- so "unreachable" has to be about behaviour, not absence.
+        command = (repo_root / ".claude" / "commands" / "bootstrap-workflow-v2.md").read_text()
+        self.assertIn("Work item: `workflow-v2-1-core` (hardcoded, never an argument)", command)
+        self.assertIn("It is retired — deleted — only at this work item's own", command)
+
+        # 1. Terminal, by its own registry as well as by its phase field.
+        self.assertEqual(work_item["phase"], "MILESTONE_COMPLETE")
+        is_terminal, outstanding = ws.resolve_own_registry_completion_status(repo_root, work_item)
+        self.assertTrue(is_terminal)
+        self.assertIsNone(outstanding)
+
+        # 2. Its per-invocation branch ("implements exactly one checkpoint")
+        #    can select nothing.
+        self.assertIsNone(ws.select_next_checkpoint(work_item, registry))
+
+        # 3. And its terminal wrap-up branch is refused, not merely idle:
+        #    both writers that branch would call reject this phase by name.
+        with self.assertRaises(ws.IllegalSelfReviewEntryPhaseError):
+            ws.enter_self_reviewing_implementation(
+                state, WORK_ITEM_ID, registry, "2026-01-01T00:00:00Z",
+            )
+        with self.assertRaises(ws.IllegalBundleGenerationSourcePhaseError):
+            ws.record_bundle_generation(
+                state, WORK_ITEM_ID, stage="implementation", head="0" * 40,
+                now="2026-01-01T00:00:00Z", outcome="ordinary",
+            )
+
     def test_no_new_workflow_trailer_lookalike_violations_beyond_the_grandfathered_set(self):
         """OPUS-R129-001's own mechanical guard, required acceptance
         criterion 2: every commit in `base..HEAD` whose message text
@@ -650,7 +702,9 @@ class TestAgainstRealRepository(unittest.TestCase):
         TestProtectedPathDirty in workflow_state_test.py)."""
         repo_root = _repo_root()
         protected_paths, protected_prefixes, excluded_paths, excluded_prefixes = (
-            ws.fingerprint.load_implementation_stage_classification(repo_root)
+            ws.fingerprint.load_implementation_stage_classification(
+                repo_root, fingerprint.artifacts_path_for_work_item("workflow-v2-1-core"),
+            )
         )
         ws.any_protected_path_dirty(
             repo_root, protected_paths, protected_prefixes, excluded_paths, excluded_prefixes
@@ -1336,26 +1390,28 @@ class TestCheckpointReachabilityConformanceLive(unittest.TestCase):
 
 class TestReviewSubjectDeclarationsLive(unittest.TestCase):
     """`WFR-67`'s `review-subject:` header conformance (`WF8c` item (h),
-    part 1), run against this repository's real fifteen command files at
+    part 1), run against this repository's real fourteen command files at
     live `HEAD` -- proves the declaration half actually landed on every
     file the plan's own revision-80 text names, not only against synthetic
-    fixtures. As documented at `discover_review_subject_declarations`'s own
+    fixtures. The roster was fifteen files until ledger `I10` deleted
+    `.claude/commands/accept-scoped-remediation.md` (an exempt, `"none"`
+    entry) with the retired command itself. As documented at
+    `discover_review_subject_declarations`'s own
     docstring, the *value* each file carries here is a recorded,
-    known-correct table (the eleven-consumer/four-exempt split:
+    known-correct table (the eleven-consumer/three-exempt split:
     `workflow-v2-3`'s own `/review-implementation`, landed at that item's
     own CP1, is the seventh `bundle` consumer, and `/review-functional`,
     landed at CP2, is the eighth), not yet re-derived from each file's
     own prose against the three semantic disjuncts -- that derivation is
     separate, deferred `WF8c` scope. `recover-implementation-provenance.md`
     (added after `WFR-67`'s design was finalized, `WF8c` item (b)) is
-    outside the named "all fifteen" and carries no declaration at all; its
+    outside the roster and carries no declaration at all; its
     classification against `WFR-67`'s roster is deliberately left
     unassigned rather than resolved (see the roster comment above
     `REVIEW_SUBJECT_ROSTER` for why)."""
 
     EXPECTED = {
         ".claude/commands/accept-milestone.md": "none",
-        ".claude/commands/accept-scoped-remediation.md": "none",
         ".claude/commands/apply-functional-review.md": "bundle",
         ".claude/commands/apply-implementation-review.md": "verdict",
         ".claude/commands/apply-plan-review.md": "verdict",
@@ -1396,7 +1452,7 @@ class TestReviewSubjectDeclarationsLive(unittest.TestCase):
         ".claude/commands/review-functional.md": 1,
     }
 
-    def test_all_fifteen_command_files_declare_the_expected_value(self):
+    def test_all_roster_command_files_declare_the_expected_value(self):
         repo_root = _repo_root()
         head = subprocess.run(
             ["git", "rev-parse", "HEAD"], cwd=repo_root, check=True,
@@ -1428,7 +1484,9 @@ class TestReviewSubjectDeclarationsLive(unittest.TestCase):
     def test_every_exempt_file_never_calls_the_assertion(self):
         repo_root = _repo_root()
         exempt = [p for p, v in self.EXPECTED.items() if v == "none"]
-        self.assertEqual(len(exempt), 4)
+        # Three, not four, since ledger `I10` deleted the exempt
+        # `.claude/commands/accept-scoped-remediation.md` with its command.
+        self.assertEqual(len(exempt), 3)
         for rel_path in exempt:
             text = (repo_root / rel_path).read_text()
             self.assertNotIn("assert_bundle_not_rejected", text)

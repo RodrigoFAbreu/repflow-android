@@ -24,12 +24,18 @@ Requires an approved plan (from `/milestone-plan` + `/apply-plan-review`).
      by the resumable, one-checkpoint-per-invocation sequence marked
      **[2.1 step 1]** below -- Workflow v2.1 core's own
      "one-resumable-checkpoint session model", the same discipline the
-     bootstrap command uses for its own one work item. Steps 2-5 execute
-     unchanged, entered only on whichever invocation first observes every
-     registry checkpoint `COMPLETE` -- never in the same invocation that
-     completed the last checkpoint (this command never loops across a
+     bootstrap command uses for its own one work item. Steps 2-5 are
+     entered only on whichever invocation first observes every registry
+     checkpoint `COMPLETE` -- never in the same invocation that completed
+     the last checkpoint (this command never loops across a
      checkpoint-vs-wrap-up boundary any more than it loops across
-     checkpoints).
+     checkpoints). Steps 3-5 execute unchanged; **step 2 additionally
+     performs one `[2.1]`-marked state write**
+     (`enter_self_reviewing_implementation`, salvage audit `B8`) -- the
+     only difference between the branches after step 1, marked `[2.1]`
+     inline exactly as step 1's own replacement is. The `"1"` branch stays
+     v1-inert: it performs no `WORKFLOW_STATE.json` read or write beyond
+     step 0's own.
 
 1. For each checkpoint in the approved plan, in order:
    - implement it, following `CLAUDE.md`/`AGENTS.md`/`.github/copilot-instructions.md`/
@@ -83,7 +89,14 @@ dirty-resume rule, `WF2`):
     mutation-capable outcome ever carries a `None` checkpoint id.
     - `NO_CHECKPOINT`: nothing to implement this invocation -- skip
       straight to step 2 below (do not re-implement anything, do not
-      re-select).
+      re-select). Step 2's own
+      `enter_self_reviewing_implementation` call is what makes the phase
+      match: this branch is reached both on the ordinary invocation after
+      the last checkpoint completed (phase already
+      `SELF_REVIEWING_IMPLEMENTATION`, a no-op) and on the first
+      invocation after a plan re-approval on an already-complete registry
+      (phase `IMPLEMENTING`, a real transition). Never assume the phase is
+      already correct here (salvage audit `B8`).
     - `RESUME`: this worktree's own claim already covers `checkpoint_id`
       and the local state already records it `IN_PROGRESS`. Skip 1d
       entirely and go straight to 1e.
@@ -199,9 +212,59 @@ dirty-resume rule, `WF2`):
     resulting phase. Continuing requires invoking this command again.
 
 2. When all checkpoints are implemented, enter
-   `SELF_REVIEWING_IMPLEMENTATION`: review the full milestone diff for
-   correctness, layer-boundary violations, missing tests, and
-   maintainability. Fix all blocking and important findings.
+   `SELF_REVIEWING_IMPLEMENTATION`.
+
+   **[2.1] The phase transition is a state write, not narrative**
+   (salvage audit `B8`): call
+   `workflow_state.enter_self_reviewing_implementation(state,
+   work_item_id, registry, now=<now>)` and persist the returned state to
+   `docs/ai-workflow/WORKFLOW_STATE.json`, through
+   `state_transaction` like every other write this command performs.
+   `registry` is the same
+   `docs/ai-workflow/registry/<work_item_id>-registry.json` step 1b
+   loaded. Behaviour:
+   - already `SELF_REVIEWING_IMPLEMENTATION` — the ordinary case, since
+     step 1f's own `complete_checkpoint` wrote it when the last
+     checkpoint completed — it is a **true no-op**: the returned state is
+     the input state, with no `state_revision` bump, so re-entering this
+     step on a later invocation costs nothing and writes nothing;
+   - `IMPLEMENTING` with every registry checkpoint `COMPLETE` — the case
+     that used to wedge the item permanently, reached whenever
+     `/approve-review plan` re-approves a revised plan for an item whose
+     checkpoints are all already done (`apply_plan_approval` sets
+     `IMPLEMENTING` unconditionally, and correctly) — it performs the
+     transition, and this step is the only place that transition happens;
+   - `IMPLEMENTING` with an outstanding checkpoint —
+     `IncompleteCheckpointsForSelfReviewError`, naming it. Stop and
+     report: there is real work left, and step 1 is where it happens.
+     Never hand-write the phase to get past this;
+   - any other phase — `IllegalSelfReviewEntryPhaseError`. Stop.
+
+   **When (and only when) the call actually transitioned the phase**,
+   commit `docs/ai-workflow/WORKFLOW_STATE.json` **alone** — stage exactly
+   that one path, never a broader `git add` — carrying a single
+   `Workflow-Work-Item: <work_item_id>` trailer as the message's final
+   paragraph, and **no** `Workflow-Bundle-Generation-Record`,
+   `Workflow-Supersedes` or `Workflow-Checkpoint` trailer (this is not a
+   generation-record commit). A no-op call commits nothing.
+
+   The durability is load-bearing, for the same reason step 1f commits
+   `complete_checkpoint`'s own write with the checkpoint commit: step 4's
+   generation-record commit is validated against **its parent's committed
+   phase** whenever the round resolves `same_content`
+   (`_classify_generation_record_interval`'s recovered-role clause
+   requires the parent to record one of
+   `RECOVERED_BUNDLE_GENERATION_RECORD_LEGAL_SOURCE_PHASES`). Left
+   uncommitted, the source phase would only ever exist in the working
+   tree, the parent would still record `IMPLEMENTING`, and the whole
+   recovery this step exists to enable would refuse one step later — and
+   `same_content` is the *ordinary* outcome after a plan-only re-approval,
+   whose protected implementation content is by definition unchanged
+   (salvage audit `B8`).
+
+   Then review the full milestone diff for correctness, layer-boundary
+   violations, missing tests, and maintainability. Fix all blocking and
+   important findings.
 3. Run the full required verification for the milestone (narrow checks are
    not sufficient at this point): `./gradlew spotlessCheck detekt lintDebug
    testDebugUnitTest`, plus `connectedDebugAndroidTest` if a device/emulator
@@ -244,12 +307,21 @@ dirty-resume rule, `WF2`):
      round. Skip this whole step for a work item with no state entry
      (nothing to track);
    - write `<bundle_dir>/IMPLEMENTATION_SUMMARY.md` (what was built,
-     per checkpoint, and why);
+     per checkpoint, and why). It must state
+     `implementation_revision: <N>` as a plain labelled line, `N` equal
+     to the counter `record_bundle_generation` just wrote -- this is a
+     hard generator precondition (`assert_stage_completeness`, run from
+     `finalize_bundle_generation`), and a missing or stale line does not
+     warn: it *withdraws* the bundle, quarantining `current/` and
+     deleting the archive;
    - write `<bundle_dir>/TEST_RESULTS.md` (exact commands + results);
    - write `<bundle_dir>/CONTEXT_FILES.txt` with only the unchanged
      docs a reviewer needs;
    - write `<bundle_dir>/REVIEW_REQUEST.md` per
-     `docs/ai-workflow/REVIEW_PROTOCOL.md` (stage: `implementation`);
+     `docs/ai-workflow/REVIEW_PROTOCOL.md` (stage: `implementation`),
+     whose `review_content_id: <hex>` line is obtained from the single
+     canonical entry point that document's "Computing `review_content_id`"
+     names for this stage -- never a second, ad hoc computation;
    - run `./scripts/prepare-ai-review.sh <base-sha> implementation
      [work_item_id]`, where `<base-sha>` is the milestone's starting
      commit; `<bundle_dir>` here resolves per

@@ -69,9 +69,13 @@ Enter the `AWAITING_FUNCTIONAL_REVIEW` state of
     trailer value revision 26 `GPT-R39-001`): if this work item has a
     `docs/ai-workflow/WORKFLOW_STATE.json` entry, create or reuse a
     dedicated, content-idempotent provenance commit for the checklist just
-    written — the evidence `/accept-scoped-remediation`'s confirmation
-    guard requires, closing the gap that would otherwise make that guard
-    permanently unsatisfiable.
+    written. This pins an immutable identity for the exact checklist
+    content the user is about to test against — step 4 reports it, and
+    `/review-functional` reads it back through the same round-scoped
+    lookup. (The confirmation guard that originally consumed this evidence
+    was retired with its command; see ledger `I10` of the Workflow v2.x
+    defect ledger. The evidence commit itself is reached by supported
+    commands and stays.)
     1. Compute the checklist file's intended committed blob:
        `git hash-object docs/ACTIVE_MILESTONE.md` (the content just written
        in step 3, not yet committed).
@@ -104,7 +108,35 @@ Enter the `AWAITING_FUNCTIONAL_REVIEW` state of
          commit that didn't happen yet — never a duplicate.
        - The result's `"blob"` already equals step 1's freshly computed
          blob exactly: nothing to commit — this is the existing, current
-         evidence commit; do not create an empty commit.
+         evidence commit; do not create a second one.
+       - **Unchanged checklist, new round** (salvage audit `I7`): the two
+         branches above are decided by the *round-scoped* lookup, so a
+         round that legitimately needs no checklist change still has no
+         evidence of its own — `discover_current_functional_checklist_evidence`
+         is keyed by `<work_item_id>/<implementation_revision>/`, and a
+         bounded functional fix advances that revision. In that case
+         `docs/ACTIVE_MILESTONE.md` is byte-identical to `HEAD` and a
+         plain `git commit -- docs/ACTIVE_MILESTONE.md` fails with
+         `nothing to commit, working tree clean`, leaving this round with
+         no discoverable evidence at all: step 4 below would have no commit
+         SHA/blob to report, and `/review-functional` step 3 would refuse
+         for the round, naming this command as the thing that never
+         completed its evidence commit. Create the commit
+         with `git commit --allow-empty` in exactly this case, and only
+         this one: the commit's payload **is** the round-scoped trailer,
+         whose value (`<work_item_id>/<implementation_revision>/<blob>`)
+         differs from the previous round's even at the identical blob, so
+         it records genuinely new information rather than a duplicate.
+         Every downstream check accepts it unchanged —
+         `discover_current_functional_checklist_evidence` finds it by
+         trailer, `git rev-parse <commit>:docs/ACTIVE_MILESTONE.md`
+         resolves to the inherited blob the trailer names, and
+         `/review-functional`'s live-blob comparison matches it exactly
+         because the working tree is clean at that path. Never use
+         `--allow-empty` for any other commit in this
+         workflow: every other metadata-only commit here carries a real
+         `docs/ai-workflow/WORKFLOW_STATE.json` change and an empty one
+         would mean the state write never happened.
     4. Record the resulting (existing or newly created) commit SHA and its
        committed blob as this invocation's checklist-evidence identity.
 4. State clearly that findings should be placed at
@@ -112,14 +144,16 @@ Enter the `AWAITING_FUNCTIONAL_REVIEW` state of
    evidence commit SHA and blob from step 3a to the user, so they know
    precisely which committed content they are reviewing (never merely "the
    current file," which could otherwise drift before or after this
-   message is read). **Instruct the user explicitly**: if this work item's
-   own registry still has an incomplete checkpoint (a continued-scope
-   remediation round), their `scoped_remediation` confirmation to
-   `/accept-scoped-remediation` must name this exact commit SHA and blob
-   verbatim (`Functional checklist evidence commit: <sha>` /
-   `Functional checklist evidence blob: <blob>`) — a confirmation naming
-   an earlier, superseded evidence identity is refused as stale, even
-   though that earlier commit remains independently discoverable; there is
-   no automatic migration of an existing confirmation onto newer evidence.
+   message is read). **Also state the supported next steps explicitly**:
+   once testing is clean, `/accept-milestone` is the only acceptance
+   command, and it requires every checkpoint in this item's own registry to
+   be `COMPLETE`. If a checkpoint is still outstanding, the way forward is
+   `/milestone-implement` — finish it, then return to this gate. There is
+   no command that records acceptance of a partial round; do not promise
+   the user one. If testing produces findings, they go to
+   `<feedback_dir>/FUNCTIONAL_REVIEW.md` and `/apply-functional-review`
+   routes each one: its bounded branch for a same-scope fix, its broad
+   branch (a `<parent-id>-remediation-<n>` child work item) for new or
+   wider scope.
 5. Report and **stop**. This is a hard gate for the user to perform manual
    testing.

@@ -189,15 +189,51 @@ fi
 #    generation run is for (GPT-R42-001) -- record_bundle_generation must
 #    already have been called and persisted to the working tree
 #    (committed or not) BEFORE this script runs, never after;
-# 2. implementation_revision advanced exactly the way a fresh round
-#    requires relative to the PREVIOUS bundle already at
-#    $BUNDLE_DIR/MANIFEST.md, read here before anything below can
-#    overwrite it (GPT-R43-001): regenerating for the *same* head the
-#    previous manifest already named must leave the revision unchanged
-#    (idempotent re-generation, no bump expected); regenerating for a
-#    *new* head must advance the revision by exactly one. A first-ever
-#    generation (no prior implementation-stage manifest to compare
-#    against) skips this half, same skip condition as below.
+# 2. implementation_revision moved monotonically relative to the
+#    PREVIOUS bundle already at $BUNDLE_DIR/MANIFEST.md, read here
+#    before anything below can overwrite it (GPT-R43-001, corrected by
+#    the salvage audit's ledger rows B1/B2/B3): regenerating for the
+#    *same* generation head the previous manifest already named must
+#    leave the revision unchanged (idempotent re-generation); at a *new*
+#    generation head the revision must be either unchanged or exactly
+#    one greater.
+#
+#    The original rule demanded "exactly one greater" at every new head.
+#    That inference -- "a new generation head means a new reviewed
+#    round" -- is false for both of this design's non-ordinary
+#    generation modes, which exist precisely to move the generation head
+#    while pinning the round: record_bundle_generation(...,
+#    outcome="same_content") (WF8c (c)) and
+#    /recover-implementation-provenance's own S2 commit (WF8c (b)) both
+#    leave reviewed_implementation_head/implementation_revision
+#    byte-identical by contract. Under the original rule neither could
+#    ever publish its bundle, so both commands were unreachable end to
+#    end.
+#
+#    The unchanged-revision case at a new head is admitted *only* when
+#    check 1 above actually verified the provenance interval -- a
+#    strictly stronger statement of round identity than any revision
+#    delta: it proves live HEAD is exactly the current
+#    Workflow-Bundle-Generation-Record commit T for the live
+#    implementation_revision, that reviewed_implementation_head is
+#    first-parent-reachable from T, that every non-record commit between
+#    them classifies implementation-stage `excluded`, and that the
+#    supersession chain is continuous. A round whose protected content
+#    genuinely changed can never satisfy it
+#    (ProtectedPathInProvenanceIntervalError), so nothing that the
+#    original rule refused becomes reachable here.
+#
+#    `prev_head` is read from the previous manifest's `generation_head:`
+#    line, not its `reviewed_implementation_head:` line: since the
+#    salvage audit's ledger row I1 those are different values, and only
+#    `generation_head` means "the commit that generation ran at" under
+#    both the old and the new manifest semantics. The
+#    `reviewed_implementation_head:` fallback below covers a manifest
+#    predating `generation_head:` entirely, where the two were the same
+#    value anyway.
+#
+#    A first-ever generation (no prior implementation-stage manifest to
+#    compare against) skips this half, same skip condition as below.
 #
 # Skipped entirely for a work item with no WORKFLOW_STATE.json entry, same
 # skip condition as the "record_bundle_generation" step this bundle
@@ -209,7 +245,12 @@ if [[ ( "$STAGE" == "implementation" || "$STAGE" == "post-fix" ) && -n "$WORK_IT
   PREV_HEAD=""
   PREV_REVISION=""
   if [[ -f "$PREV_MANIFEST" ]]; then
-    PREV_HEAD=$(sed -n 's/^reviewed_implementation_head: //p' "$PREV_MANIFEST")
+    PREV_HEAD=$(sed -n 's/^generation_head: //p' "$PREV_MANIFEST")
+    if [[ -z "$PREV_HEAD" ]]; then
+      # A manifest predating the generation_head: line records the same
+      # value under reviewed_implementation_head: -- see the note above.
+      PREV_HEAD=$(sed -n 's/^reviewed_implementation_head: //p' "$PREV_MANIFEST")
+    fi
     PREV_REVISION=$(sed -n 's/^implementation_revision: //p' "$PREV_MANIFEST")
   fi
 
@@ -227,6 +268,7 @@ if work_item is None:
     print("status: skip")
     sys.exit(0)
 
+interval_verified = False
 recorded_head = work_item.get("reviewed_implementation_head")
 if recorded_head != head_sha:
     # Not bare equality -- WF8B-003's remediation (D-Commit-Provenance)
@@ -263,6 +305,7 @@ if recorded_head != head_sha:
             + (f": {interval_reason}" if interval_reason else "")
         )
         sys.exit(0)
+    interval_verified = True
 
 live_revision = work_item.get("implementation_revision")
 if prev_head and prev_revision:
@@ -277,13 +320,31 @@ if prev_head and prev_revision:
                 f"got {live_revision} (GPT-R43-001)"
             )
             sys.exit(0)
+    elif live_revision == prev_revision_int:
+        # A new generation head at an unchanged revision is exactly the
+        # same-content republication / provenance-recovery shape (WF8c
+        # (c)/(b)) -- legitimate only when check 1 above actually proved
+        # the provenance interval for this head. Without that proof this
+        # is an unrecorded regeneration and must still be refused.
+        if not interval_verified:
+            print("status: mismatch")
+            print(
+                f"reason: new generation head {head_sha!r} (previous bundle was "
+                f"{prev_head!r}) left implementation_revision at "
+                f"{prev_revision_int}, but no provenance interval was verified "
+                f"for this head -- a same-content republication or provenance "
+                f"recovery must first record its own "
+                f"Workflow-Bundle-Generation-Record commit (GPT-R43-001)"
+            )
+            sys.exit(0)
     elif live_revision != prev_revision_int + 1:
         print("status: mismatch")
         print(
-            f"reason: new head {head_sha!r} (previous bundle was "
-            f"{prev_head!r}) requires implementation_revision to advance "
-            f"by exactly one, from {prev_revision_int} to "
-            f"{prev_revision_int + 1}, got {live_revision} (GPT-R43-001)"
+            f"reason: new generation head {head_sha!r} (previous bundle was "
+            f"{prev_head!r}) requires implementation_revision to stay at "
+            f"{prev_revision_int} (a same-content republication or provenance "
+            f"recovery) or advance by exactly one to {prev_revision_int + 1} "
+            f"(a fresh round), got {live_revision} (GPT-R43-001)"
         )
         sys.exit(0)
 print("status: ok")
@@ -437,12 +498,21 @@ fi
 # (the final reviewed implementation HEAD, recorded as
 # reviewed_implementation_head), computed fresh every run, exactly like
 # the plan stage's own manifest.
+#
+# `MANIFEST_WRITTEN` is this run's own producer state, set only on the far
+# side of a `--write-manifest` call that actually returned 0 (under
+# `set -e` a failed call never reaches its assignment). The closing check
+# below is gated on it, never on whether a `MANIFEST.md` file happens to
+# exist under $BUNDLE_DIR -- see that block's own note for why.
+MANIFEST_WRITTEN=0
 if [[ "$STAGE" == "plan" ]]; then
   python3 "$REPO_ROOT/scripts/workflow_fingerprint.py" "$BASE_SHA" \
     --work-item-id "$WORK_ITEM_ID" --write-manifest
+  MANIFEST_WRITTEN=1
 elif [[ ( "$STAGE" == "implementation" || "$STAGE" == "post-fix" ) && -n "$WORK_ITEM_ID" ]]; then
   python3 "$REPO_ROOT/scripts/workflow_fingerprint.py" "$BASE_SHA" \
     --work-item-id "$WORK_ITEM_ID" --stage implementation --write-manifest
+  MANIFEST_WRITTEN=1
 fi
 
 # --- archive ---
@@ -468,7 +538,34 @@ mv -f "$ARCHIVE_TMP" "$ARCHIVE"
 # withdraws the bundle (REJECTED marker, ordered removal, quarantine)
 # rather than leaving a stale-but-self-verifying current/ and archive in
 # place; on success, it clears any pre-existing REJECTED marker.
-if [[ -f "$BUNDLE_DIR/MANIFEST.md" ]]; then
+#
+# Gated on $MANIFEST_WRITTEN -- this invocation's own producer state --
+# never on `-f "$BUNDLE_DIR/MANIFEST.md"` (convergence pass 12, ledger
+# I20). Two of this script's four stages write no manifest at all
+# (`functional-review` at either layout, and `implementation`/`post-fix`
+# with the work-item-id omitted), and $BUNDLE_DIR is a directory reused
+# across stages by design: a `functional-review` generation over a work
+# item whose plan- or implementation-stage round already published there
+# found that round's MANIFEST.md still sitting in the directory, ran the
+# three-way check against it, and could only ever fail -- CHANGED_FILES.txt
+# alone carries a `stage:` line this run has just rewritten, so the
+# recomputed bundle_id disagrees with the recorded one by construction.
+# The failure path is `withdraw_bundle`, so a *valid, published, already-
+# approved* bundle was quarantined and its archive deleted by a generation
+# that never claimed the bundle's identity in the first place -- with
+# WORKFLOW_STATE.json left untouched (this script is not a state writer),
+# so `technical_approval` stayed CURRENT over a bundle that no longer
+# existed, and the completed withdrawal removed its own REJECTED marker on
+# the way out, leaving `assert_bundle_not_rejected` with nothing to see.
+#
+# The invariant this restores: finalization is a *producer's* obligation.
+# A run that generated an identity must prove that identity reproduces; a
+# run that generated none has nothing to prove, and no standing to
+# withdraw another round's artifact. Deleting the stale manifest to
+# suppress the check would be the same filesystem-state reasoning
+# inverted, and would additionally destroy the published round's own
+# identity record; the flag is the producer state itself.
+if (( MANIFEST_WRITTEN )); then
   FINALIZE_ARGS=("$BASE_SHA" --finalize-bundle "$BUNDLE_DIR" "$ARCHIVE" --generation-stage "$STAGE")
   if [[ -n "$WORK_ITEM_ID" ]]; then
     FINALIZE_ARGS+=(--work-item-id "$WORK_ITEM_ID")
@@ -483,6 +580,24 @@ if [[ -f "$BUNDLE_DIR/MANIFEST.md" ]]; then
     printf '%s\n' "$FINALIZE_CHECK" >&2
     exit 1
   fi
+fi
+
+# A stage that wrote no manifest of its own does not silently inherit the
+# previous round's (convergence pass 12, ledger I20/O30). The file stays --
+# it is the published round's identity record, and this run has no standing
+# to delete it -- but its bundle_id no longer describes what is now in
+# $BUNDLE_DIR or in the archive just written, so say so rather than leaving
+# an operator to discover it when a reviewer's own recomputation disagrees.
+# Every live consumer recomputes bundle_id fresh (/approve-review step 2,
+# /review-plan step 5, /review-implementation step 4), so this is a
+# reporting gap, not an approval gap -- but it is still the operator's to
+# know before handing the archive over.
+if (( ! MANIFEST_WRITTEN )) && [[ -f "$BUNDLE_DIR/MANIFEST.md" ]]; then
+  echo "note: stage '$STAGE' writes no MANIFEST.md. The one in $BUNDLE_DIR belongs" >&2
+  echo "      to a previous round; its bundle_id no longer describes this directory" >&2
+  echo "      or this archive. Regenerate at a manifest-writing stage (plan, or" >&2
+  echo "      implementation/post-fix with a work-item-id) before sending either" >&2
+  echo "      out for identity-bound review." >&2
 fi
 
 echo "Bundle ready:"

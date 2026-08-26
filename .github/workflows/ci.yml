@@ -85,6 +85,33 @@ jobs:
         # default shallow clone would not have that historical commit
         # reachable.
 
+      - name: Workflow acceptance matrix (salvage audit, hermetic, stdlib-only)
+        working-directory: scripts
+        run: python3 workflow_acceptance_matrix_test.py
+        # docs/ai-workflow/audit/WORKFLOW_ACCEPTANCE_MATRIX.md's every row,
+        # executed against disposable scratch repositories that carry a real
+        # copy of the tooling and drive the real prepare-ai-review.sh -- for
+        # both a process and a product work item. No fixed historical base
+        # commit and no dependence on this repository's own live
+        # WORKFLOW_STATE.json, so GPT-R9-002 does not apply and this is safe
+        # on every PR.
+
+      - name: Completion-obligations and state-serialization suite (D-Completion-Obligations, hermetic, stdlib-only)
+        working-directory: scripts
+        run: python3 workflow_state_completion_obligations_test.py
+        # Salvage audit `O4`: `D1`'s `state_lock`/`state_transaction`
+        # serialization primitive and `D-Completion-Obligations`
+        # (`discover_state_writers`, `verify_wfo_state_serialization`,
+        # `resolve_completion_obligations`, `complete_work_item`'s
+        # `UnsatisfiedCompletionObligationError` gate, and
+        # `verify_wfo_ledger_coverage`) -- i.e. the release gate itself.
+        # It ran only on demand until this round, which meant a change
+        # breaking `/accept-milestone`'s own obligation verdict reached
+        # main with every other suite green. Disposable scratch Git
+        # repositories only: no fixed historical base commit and no
+        # dependence on this repository's own live WORKFLOW_STATE.json, so
+        # GPT-R9-002 does not apply and this is safe on every PR.
+
       - name: Fingerprint generalization conformance suite (D-Fingerprint-Generalization, hermetic, stdlib-only)
         working-directory: scripts
         run: python3 workflow_fingerprint_generalization_test.py

@@ -1,5 +1,6 @@
 ---
 description: Plan the next incomplete milestone/checkpoint and stop for external plan review.
+argument-hint: "[work-item-id] [base-sha]"
 state_writer: true
 review-subject: bundle
 ---
@@ -8,15 +9,43 @@ review-subject: bundle
 
 Enter the `PLANNING` state of `docs/ai-workflow/MILESTONE_WORKFLOW.md`.
 
-Optional argument: `$ARGUMENTS` may name a base commit SHA to diff from. If
-omitted, use the milestone's starting commit (the completion commit of the
-previous milestone, from `docs/ACTIVE_MILESTONE.md`/`git log`).
+Optional arguments: `$ARGUMENTS` may name an **existing work item to plan**
+and/or a **base commit SHA** to diff from, work-item id first. Resolution is
+by lookup against `docs/ai-workflow/WORKFLOW_STATE.json`, never by shape, and
+never a guess:
+
+- **no argument** -- identify the milestone from
+  `docs/ACTIVE_MILESTONE.md`/`docs/ROADMAP.md` (step 1) and use the
+  milestone's starting commit (the completion commit of the previous
+  milestone, from `docs/ACTIVE_MILESTONE.md`/`git log`) as the base;
+- **one argument** -- a key of `work_items` selects that work item (base
+  commit resolved as in the no-argument case); anything else is the base
+  commit SHA and must resolve via `git rev-parse --verify <arg>^{commit}`.
+  This keeps the historical `/milestone-plan <base-sha>` form working
+  unchanged, since a base SHA is never a `work_items` key;
+- **two arguments** -- `<work-item-id> <base-sha>`, in that order, nothing
+  inferred.
+
+An argument that is neither a `work_items` key nor a resolvable commit is a
+refusal naming both attempted resolutions -- never a guess, and never a
+silently created work item: the id argument selects an **existing** entry
+only, exactly like `[work-item-id]` on every other command. A brand-new
+milestone's id is still derived in step 1, not passed here.
 
 `<bundle_dir>`/`<feedback_dir>` below resolve per
 `docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Bundle location"
-(`workflow_fingerprint.resolve_bundle_dir`/`resolve_feedback_dir`): the
-per-work-item layout once it exists for this `work_item_id`, else the flat
-compatibility path.
+(`workflow_fingerprint.resolve_bundle_dir(repo_root, work_item_id,
+stage="plan")`/`resolve_feedback_dir(repo_root, work_item_id)`). This is a
+plan-stage command, so `<bundle_dir>` is **always**
+`.ai-review/<work_item_id>/current/` -- the `stage="plan"` argument is
+required and load-bearing, never decorative: without it the resolver takes
+its compatibility branch and answers the flat `.ai-review/current/` for a
+work item with nothing under `.ai-review/<work_item_id>/` yet (a
+brand-new milestone's first plan bundle, or the first
+`/milestone-plan <child-id>` on a remediation child), while the generator
+writes and validates the scoped one. `<feedback_dir>` takes no stage
+argument: `feedback/` is stage-agnostic and keeps the scoped-else-flat
+rule for every stage alike.
 
 0. **Dual-mode branch** (Workflow v2.1, WF1b): read
    `docs/ai-workflow/WORKFLOW_CONFIG.json` (missing/corrupt before
@@ -36,6 +65,29 @@ compatibility path.
      execute (the plan-production/self-review/gate mechanics are
      version-independent), plus the additional sub-steps marked **[2.1]**
      interleaved below.
+   - **Explicitly selected target** (version-independent): when
+     `$ARGUMENTS` named a `work_items` key, **that entry is the target** --
+     step 1 does not re-derive one from
+     `docs/ACTIVE_MILESTONE.md`/`docs/ROADMAP.md`, and its own stored
+     `governing_workflow_version` governs this run. Refuse, naming the id,
+     if that entry is at a terminal phase. This is the only way to plan a
+     work item that is not `active_work_item_id`, and
+     `route_work_item(...)` deliberately leaves an unrelated active item
+     alone (`D1`: `active_work_item_id` is a resume-focus pointer, not an
+     execution lock), so the pointer is **not** repointed here and every
+     later command for this item must be given the same id explicitly.
+     The case this exists for is a **remediation child**
+     (`<parent-id>-remediation-<n>`, `parent_work_item_id` non-null,
+     created by `/apply-functional-review`'s broad branch): its scope is
+     the parent's own functional-review deferral note, not a roadmap
+     milestone; its `plan_path`/`registry_path`/`base_commit` were fixed
+     at creation, so step 1 `[2.1]` re-declares exactly those values and
+     supplies only the still-`null` `mapping_path`
+     (`route_work_item`'s resume branch accepts a null-to-value fill and
+     refuses a genuine conflict with
+     `ws.WorkItemDeclarationFactConflictError`). Do not pass a `<base-sha>`
+     that differs from such an entry's own `base_commit`; the same refusal
+     catches it.
 1. Inspect Git state (`git status --short`, `git log --oneline -10`) and read
    `docs/ACTIVE_MILESTONE.md` and `docs/ROADMAP.md` to identify the next
    incomplete milestone/checkpoint.
@@ -101,13 +153,52 @@ compatibility path.
      plan document's own generated, human-readable checkpoint table —
      never hand-edited, never itself hashed. In the same pass, call
      `workflow_state.generate_artifacts_declarations(work_item_id, plan_path,
-     registry_path, mapping_path)` and write its result to
+     registry_path, mapping_path, work_item_type=<this item's own
+     work_item_type>)` and write its result to
      `docs/ai-workflow/registry/<work_item_id>-artifacts.json` — the
-     default `plan_stage` classification template
-     (`D-Fingerprint-Generalization`), never left for a later approval
-     command to invent. `SELF_REVIEWING_PLAN` (step 4) must confirm the
-     inherited `excluded_paths`/`excluded_prefixes` actually fit this
-     item's own plan footprint before the bundle is generated. Then, in
+     default `plan_stage` **and** `implementation_stage` classification
+     template (`D-Fingerprint-Generalization`), never left for a later
+     approval command to invent. `work_item_type` is required and is
+     never defaulted: the implementation-stage half is type-specific (a
+     `process` item's deliverable tree is this repository's own workflow
+     tooling, a `product` item's is the application source), and a
+     generator that never saw the type emitted an implementation-stage
+     classification naming nothing but its own file — which then failed
+     closed on the item's own deliverable at the first implementation
+     bundle, after the plan-approval gate (salvage audit `B4`).
+     `SELF_REVIEWING_PLAN` (step 4) must confirm the inherited
+     `excluded_paths`/`excluded_prefixes` actually fit this item's own
+     plan footprint, **at both stages**, before the bundle is generated.
+     The template leaves a path under any directory it does not name at
+     all unclassified (fail-closed) rather than guessing. It makes exactly
+     one judgment rather than deferring it: `docs/ai-workflow/` is
+     excluded at both stages, since everything under it is either this
+     workflow's own bookkeeping or *another* work item's plan-stage
+     content (salvage audit `B7` — two concurrent work items are `D1`'s
+     normal case, and hand-enumerating every sibling's plan document in
+     every new declaration is what previously got missed at review time).
+     A work item whose deliverable genuinely **is** a workflow design
+     document under that prefix must move that exact path into
+     `implementation_stage.protected_paths` here, the way
+     `workflow-v2-1-core-artifacts.json` does for
+     `docs/ai-workflow/MILESTONE_WORKFLOW.md` and
+     `docs/ai-workflow/REVIEW_PROTOCOL.md`.
+
+     **The declaration is not identity-neutral** (salvage audit `I9`).
+     Its own bytes are excluded from both projections, but each stage's
+     `review_content_id` hashes that stage's classification *sets*
+     alongside the protected content, and those sets are read out of this
+     file: editing `plan_stage.*` moves the plan-stage digest and stales
+     `plan_approval`; editing `implementation_stage.*` moves the
+     implementation-stage digest and stales `technical_approval`. That is
+     the intended contract — what is excluded is a reviewed fact — which
+     is exactly why step 4 must get this right **now**, before any
+     approval exists. A declaration repaired after an approval must be
+     carried back through that stage's own review/approval gate: see
+     `docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Repairing an artifact
+     declaration after an approval". Never widen an exclusion to avoid a
+     re-review — widening is itself a reviewed-fact change, and it moves
+     the digest anyway. Then, in
      the same operation, call `workflow_state.publish_plan_revision(state,
      work_item_id, plan_revision, now)` and persist the returned state to
      `docs/ai-workflow/WORKFLOW_STATE.json` — the sole point that mirrors
@@ -115,6 +206,37 @@ compatibility path.
      `D-Plan-Review-Stages`' phase transition into
      `AWAITING_LOCAL_PLAN_REVIEW`, before this revision's bundle is ever
      generated (`D-Plan-Revision-Publication`, `WFR-65`).
+   - **[2.1]** **Staging step, required before any bundle is generated**
+     (salvage audit `B6`): mark this item's own `plan_path`,
+     `registry_path`, `mapping_path` and
+     `docs/ai-workflow/registry/<work_item_id>-artifacts.json`
+     **intent-to-add** — `git add -N -- <those four paths>` — and leave
+     them that way. Do **not** commit them: the plan-approval commit
+     `/approve-review plan` creates is what commits all four, together
+     with `WORKFLOW_STATE.json`, as its own four-or-five-member set
+     (`resolve_plan_stage_approval_commit_paths`).
+
+     This step is load-bearing, not housekeeping.
+     `workflow_fingerprint.resolve_plan_stage_metadata` — the resolver
+     every plan-stage read goes through, including
+     `scripts/prepare-ai-review.sh`'s own plan-stage preflight — requires
+     each of the three declared paths to be **in the Git index**
+     (`_validate_plan_stage_metadata_path`'s tracked-path check,
+     `GPT-R32-001`/`GPT-R33-002`: an untracked file dropped anywhere in
+     the worktree must never become authoritative metadata). A freshly
+     created work item's four files are new and untracked, so without
+     this step the very next step's generator refuses with
+     `InvalidPlanStageMetadataPathError: plan_path '<path>' is not a
+     tracked path` before writing any bundle content at all.
+     Intent-to-add is the right form: it makes the paths index-visible
+     without staging content, and
+     `workflow_state.stage_plan_approval_commit_paths`' own pre-staging
+     index-isolation check provably ignores an unstaged intent-to-add
+     marker (`git diff --name-only --cached HEAD` does not report one),
+     so `/approve-review plan` step 5 still starts from a clean index.
+     `prepare-ai-review.sh`'s own internal `git add -N` does not
+     substitute for this: it runs *after* the plan-stage preflight that
+     needs it, and its exit trap resets every path it marked.
 4. Enter `SELF_REVIEWING_PLAN`: critically check the plan for missing
    requirements, migration risk, usability gaps, unnecessary complexity, and
    missing tests. Revise the plan in place — do not write a separate
@@ -122,12 +244,36 @@ compatibility path.
 5. Check the plan against every "Open decision" row in
    `docs/TECHNICAL_DECISIONS.md` it touches — flag any it would silently
    finalize instead of deciding for the user.
-6. Enter `AWAITING_EXTERNAL_PLAN_REVIEW`:
-   - write/refresh `<bundle_dir>/PLAN.md` with the actual plan;
+6. Enter `AWAITING_EXTERNAL_PLAN_REVIEW`. This is the complete
+   author-written input set the generator hard-requires; a missing or
+   stale entry is not a warning, it *withdraws* the bundle
+   (`finalize_bundle_generation` quarantines `current/` and deletes the
+   archive):
+   - do **not** write `<bundle_dir>/PLAN.md` — since `WFR-67` the
+     generator derives it, unconditionally, from a private pinned
+     snapshot of every plan-stage protected path, and
+     `prepare-ai-review.sh` deliberately leaves it out of its
+     author-stub list at this stage. Apply plan edits to the
+     authoritative plan document (`plan_path`) only; an edit made to the
+     bundle copy is silently overwritten;
    - write `<bundle_dir>/CONTEXT_FILES.txt` listing only the docs a
      reviewer genuinely needs beyond the plan itself;
    - write `<bundle_dir>/REVIEW_REQUEST.md` per the format in
-     `docs/ai-workflow/REVIEW_PROTOCOL.md` (stage: `plan`);
+     `docs/ai-workflow/REVIEW_PROTOCOL.md` (stage: `plan`), stating this
+     round's `review_content_id: <hex>` as a plain labelled line
+     (`assert_review_request_states_review_content_id`). Obtain the value
+     from the single canonical entry point
+     `docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Computing
+     `review_content_id`" names for this stage -- never a second, ad hoc
+     computation, and never a value carried over from a previous round;
+   - write `<bundle_dir>/TEST_RESULTS.md` **fresh for this round**,
+     opening with the two labelled lines
+     `assert_test_results_consistent_with_plan_review_request` requires:
+     `stage: plan (revision N)` with `N` equal to this round's
+     `plan_revision`, and `head: <sha>` equal to this generation's own
+     HEAD. An empty stub (the file `prepare-ai-review.sh` creates when it
+     is missing) or a copy carried forward from an earlier round fails
+     this check and withdraws the bundle;
    - run `./scripts/prepare-ai-review.sh <base-sha> plan <work_item_id>`
      (`work_item_id` is **required** for the plan stage, never resolved
      from the live `active_work_item_id` -- `D-Fingerprint-Generalization`).

@@ -1,5 +1,6 @@
 ---
 description: Classify and fix user functional-testing findings, then return to the functional-review gate.
+argument-hint: "[work-item-id]"
 state_writer: true
 review-subject: bundle
 ---
@@ -9,9 +10,15 @@ review-subject: bundle
 Enter the `FIXING_FUNCTIONAL_FINDINGS` state of
 `docs/ai-workflow/MILESTONE_WORKFLOW.md`.
 
-`<feedback_dir>` below resolves per
+`<bundle_dir>`/`<feedback_dir>` below resolve per
 `docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Bundle location"
-(`workflow_fingerprint.resolve_feedback_dir`).
+(`workflow_fingerprint.resolve_bundle_dir`/`resolve_feedback_dir`). The
+only generation this command drives is the bounded branch's `post-fix`
+round, so `<bundle_dir>` is resolved with **no** `stage` argument --
+`resolve_bundle_dir(repo_root, work_item_id)`, the scoped-else-flat
+compatibility rule -- exactly as `/milestone-implement` and
+`/apply-implementation-review` resolve it for the same two stages, never
+the plan stage's `stage="plan"` form.
 
 0. **Dual-mode branch** (Workflow v2.1, `WF4c`, `D-Functional-Remediation`):
    resolve the target work item — the id named in `$ARGUMENTS`, or
@@ -129,7 +136,31 @@ all in the same invocation.
      durability commit made after generation is by definition one commit
      ahead of the value it just wrote, permanently re-breaking
      `/approve-review implementation`'s provenance-interval check on every
-     round. Then run `./scripts/prepare-ai-review.sh <base-sha> post-fix
+     round.
+     **Then refresh `<bundle_dir>/IMPLEMENTATION_SUMMARY.md`'s own
+     `implementation_revision: <N>` line** to whatever the counter now
+     reads — advanced by one for `"ordinary"`, deliberately *unchanged*
+     for `"same_content"`, whose whole purpose is to pin the round while
+     the generation head moves. This is a hard generator precondition
+     (`assert_stage_completeness`, run from `finalize_bundle_generation`);
+     a line left at the previous round's value does not warn, it
+     *withdraws* the bundle, quarantining `current/` and deleting the
+     archive. Refresh `<bundle_dir>/REVIEW_REQUEST.md`'s own
+     `review_content_id: <hex>` line for this round too
+     (`assert_review_request_states_review_content_id`), obtained from the
+     single canonical entry point `docs/ai-workflow/REVIEW_PROTOCOL.md`'s
+     "Computing `review_content_id`" names for this stage -- never a
+     second, ad hoc computation: an `"ordinary"`
+     round's fix changed protected implementation-stage content, so the
+     digest moved with it, while a `"same_content"` round recomputes the
+     same value the file already states. That check runs earlier still,
+     from `--write-manifest`, and *refuses* the whole generation (nothing
+     published, nothing withdrawn) rather than correcting the stale line.
+     Neither input is ever silently fixed up on the author's behalf: a
+     bounded fix regenerated without refreshing either one stops at
+     `ReviewContentIdMismatchError` first and, once only that is
+     corrected, at the `assert_stage_completeness` withdrawal above. Then
+     run `./scripts/prepare-ai-review.sh <base-sha> post-fix
      [work_item_id]`.
   5. **Mark this round's `FUNCTIONAL_REVIEW.md` consumed** (O3): call
      `workflow_fingerprint.mark_functional_review_consumed(repo_root,
@@ -174,6 +205,33 @@ all in the same invocation.
      full independent review cycle — never implemented inline in this
      command. The parent's own registry, mapping, and completed-checkpoint
      history are never touched by this branch.
+
+     **Name the child id on every command in that cycle, not just the
+     first.** `create_remediation_child_work_item` deliberately does not
+     repoint `active_work_item_id` (the parent keeps it), so every command
+     that defaults to the active item would otherwise drive the *parent*.
+     The sanctioned child sequence is therefore, in full:
+     `/milestone-plan <child-id>` → `/review-plan <child-id>` →
+     `/record-manual-plan-review <child-id>` (a `"1"`-governed child uses
+     `/apply-plan-review <child-id>` instead of those two) →
+     `/approve-review plan <child-id>` → `/milestone-implement <child-id>`
+     (× N) → `/review-implementation <child-id>` (optional) →
+     `/approve-review implementation <child-id>` →
+     `/prepare-functional-review <child-id>` → `/review-functional
+     <child-id>` (optional) → `/apply-functional-review <child-id>` (only
+     if the child's own functional pass produces findings; its own three
+     branches apply recursively) → `/accept-milestone <child-id>`. A
+     `REVISE` at either review stage diverts through `/apply-plan-review
+     <child-id>` or `/apply-implementation-review <child-id>`
+     respectively, and `/recover-implementation-provenance <child-id>`
+     repairs a stale generation head without starting a new round. The child enters review at
+     `AWAITING_LOCAL_PLAN_REVIEW` when its
+     `governing_workflow_version` is `"2.1"` (the config default at
+     creation) and at `AWAITING_EXTERNAL_PLAN_REVIEW` when it is `"1"` --
+     `publish_plan_revision`'s own version branch, not a special
+     remediation rule. Only `/accept-milestone <child-id>` clears the
+     parent's `IncompleteChildWorkItemError` block, so the parent cannot
+     complete until the child does.
 
 5. Commit coherent fixes for any "no code change"/narrative-only findings
    resolved in step 4 (the bounded branch already committed its own fix

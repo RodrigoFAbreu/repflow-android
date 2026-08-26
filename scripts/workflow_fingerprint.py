@@ -183,8 +183,20 @@ additions, all previously recorded as forward-looking obligations:
     than a second hardcoded Python constant -- the generalization
     `D-Registry`'s and `D-Fingerprint`'s future-work notes named as this
     checkpoint's own scope (`GPT-R9-011`). That file lives under
-    `docs/ai-workflow/registry/`, already excluded at the plan stage, so
-    declaring or editing it never stales the plan approval. Exercised
+    `docs/ai-workflow/registry/`, which is excluded at the plan stage --
+    so its own *bytes* are never a member of the plan-stage content
+    projection. That is **not** the same as "editing it never stales the
+    plan approval", which is what this docstring used to claim (salvage
+    audit `I9`): the plan-stage projection also hashes the classification
+    sets themselves (`sorted(protected_paths)`, `sorted(excluded_paths)`,
+    `sorted(excluded_prefixes)` -- see
+    `compute_review_content_id_plan_stage`), and those sets are read out
+    of this very file. Editing the `plan_stage` half therefore *does*
+    change `review_content_id` and *does* stale the plan approval, by
+    design: what is excluded is a reviewed fact, not silently mutable.
+    Editing only the `implementation_stage` half leaves the plan-stage
+    digest untouched and stales `technical_approval` instead, once one
+    exists. Exercised
     against this milestone's own real `WF0`/`WF1a`/`WF1b` commits in
     `workflow_fingerprint_demo_test.py` -- the real implementation-stage
     fixture this docstring previously said did not exist yet.
@@ -250,6 +262,15 @@ class InvalidWorkItemIdError(Exception):
 class InvalidWorkItemTypeError(Exception):
     """Raised when work_item_type is not one of the controlled values
     `{"process", "product"}` — resolves GPT-R9-014."""
+
+
+class InvalidBundleStageError(Exception):
+    """Raised when a `stage` argument to `resolve_bundle_dir` is neither
+    `None` nor one of the four controlled generation stages
+    `prepare-ai-review.sh` itself accepts. Fails closed rather than
+    falling through to the flat-compatibility branch, so a typo
+    (`"Plan"`, `"plan-stage"`) can never silently reintroduce the
+    first-generation misresolution this argument exists to close."""
 
 
 class ForeignBundleIdFieldError(Exception):
@@ -401,11 +422,11 @@ class UnknownWorkItemError(Exception):
 
 
 class PlanStageNotApplicableError(Exception):
-    """Raised when the resolved work item's `work_item_type` is not
-    `"process"` — only a process work item has plan-stage content of its
-    own to fingerprint; `work_item_kind` is not consulted, so a
-    `"synthetic"`-kind process item resolves exactly like any other
-    process item — condition 2."""
+    """Raised when the resolved work item's `work_item_type` is not one of
+    the plan-stage-applicable types (`"process"`, `"product"`) —
+    `work_item_kind` is not consulted, so a `"synthetic"`-kind item
+    (whichever `work_item_type` it carries) resolves exactly like any
+    other item of that same type — condition 2."""
 
 
 class MissingPlanStageMetadataError(Exception):
@@ -526,19 +547,30 @@ WORK_ITEM_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 # D1's controlled vocabulary. "synthetic" (WF8b's dry-run item) is a
 # work_item_kind, not a work_item_type -- a "synthetic"-kind item whose
 # work_item_type is "process" (e.g. v2-1-dry-run) resolves and fingerprints
-# its own plan-stage content exactly like any other process item, once it
-# has plan_path/registry_path/mapping_path/base_commit declared
+# its own plan-stage content exactly like any other process or product item,
+# once it has plan_path/registry_path/mapping_path/base_commit declared
 # (D-Fingerprint-Generalization, OPUS-R25-011).
 WORK_ITEM_TYPES = frozenset({"process", "product"})
 
 
 def validate_work_item_id(work_item_id: str) -> None:
-    if not WORK_ITEM_ID_RE.match(work_item_id):
+    """Fails closed on a non-`str` before the regex match (salvage audit
+    `I2`): both validators below are reached with values read straight out
+    of an unvalidated `WORKFLOW_STATE.json`, so a corrupt or hand-edited
+    JSON value (a list, a dict, a number) must produce this module's own
+    documented error rather than a raw `TypeError` from `re`/`frozenset`.
+    `workflow-v2-3-1` CP1's round-1 remediation added exactly this guard
+    to `resolve_plan_stage_metadata`'s own inline condition-2 check; it
+    belongs at the shared validator too, which every implementation-stage
+    reader goes through."""
+    if not isinstance(work_item_id, str) or not WORK_ITEM_ID_RE.match(work_item_id):
         raise InvalidWorkItemIdError(work_item_id)
 
 
 def validate_work_item_type(work_item_type: str) -> None:
-    if work_item_type not in WORK_ITEM_TYPES:
+    """See `validate_work_item_id` -- same fail-closed rule, same reason
+    (salvage audit `I2`)."""
+    if not isinstance(work_item_type, str) or work_item_type not in WORK_ITEM_TYPES:
         raise InvalidWorkItemTypeError(work_item_type)
 
 
@@ -900,9 +932,10 @@ def resolve_plan_stage_metadata(
             f"work_items[{work_item_id!r}].work_item_id == {entry.get('work_item_id')!r}"
         )
     work_item_type = entry.get("work_item_type")
-    if work_item_type != "process":
+    if not isinstance(work_item_type, str) or work_item_type not in WORK_ITEM_TYPES:
         raise PlanStageNotApplicableError(
-            f"{work_item_id!r} has work_item_type {work_item_type!r}, not 'process'"
+            f"{work_item_id!r} has work_item_type {work_item_type!r}, "
+            f"not one of {sorted(WORK_ITEM_TYPES)!r}"
         )
 
     declared = {
@@ -1010,8 +1043,8 @@ def resolve_plan_stage_approval_commit_paths(
 ) -> PlanApprovalCommitPlan:
     """`D-Approval-Commits`' "Conditional fifth commit member" contract
     (`GPT-R67-001`, `WORKFLOW_V2_PLAN.md` revision 50), generalized to
-    every `"process"` work item's own plan-stage approval commit — never a
-    literal naming any specific work item (missing-test item 347's
+    every `"process"` or `"product"` work item's own plan-stage approval
+    commit — never a literal naming any specific work item (missing-test item 347's
     "permanent `/approve-review`" obligation). Resolves the *complete*
     member set a plan-stage approval commit must contain, so a caller can
     check it — and refuse cleanly — **before its first durable mutation**
@@ -1045,8 +1078,8 @@ def resolve_plan_stage_approval_commit_paths(
        member.
 
     Callers needing this work item's own bundle-captured copy to exist at
-    all (i.e. every "2.1" or `"1"` `"process"` work item plan-stage
-    approval) already got a hard failure earlier, at step (1)'s worktree-
+    all (i.e. every "2.1" or `"1"` `"process"` or `"product"` work item
+    plan-stage approval) already got a hard failure earlier, at step (1)'s worktree-
     source `resolve_plan_stage_metadata` call, if the declaration is
     missing from the working tree entirely — `MissingWorkItemArtifactsDeclarationError`,
     unchanged by this function, which never re-raises it: by the time this
@@ -1065,7 +1098,7 @@ def resolve_plan_stage_approval_commit_paths(
         # Condition 1 fails: unchanged since HEAD, no fifth member.
         return PlanApprovalCommitPlan(base_paths, None, None)
 
-    bundle_dir = resolve_bundle_dir(repo_root, work_item_id)
+    bundle_dir = resolve_bundle_dir(repo_root, work_item_id, stage="plan")
     captured_path = repo_root / bundle_dir / "files" / artifacts_rel
     captured_bytes = captured_path.read_bytes() if captured_path.is_file() else None
     if captured_bytes != worktree_bytes:
@@ -1533,7 +1566,7 @@ DEFAULT_ARTIFACTS_PATH = Path("docs/ai-workflow/registry/workflow-v2-1-core-arti
 
 
 def load_implementation_stage_classification(
-    repo_root: Path, artifacts_path: Path = DEFAULT_ARTIFACTS_PATH,
+    repo_root: Path, artifacts_path: Path,
 ) -> tuple[Mapping[str, str], Mapping[str, str], Mapping[str, str], Mapping[str, str]]:
     """Load the implementation-stage protected/excluded path and prefix
     sets from a tracked, machine-readable artifact-declarations file,
@@ -1547,9 +1580,30 @@ def load_implementation_stage_classification(
     The declarations file lives under `docs/ai-workflow/registry/`, which
     is already a `PLAN_STAGE_EXCLUDED_PREFIXES` entry ("any future
     non-immutable registry artifact -- the immutable registry file itself
-    is separately protected by exact path, checked first"), so creating
-    or editing it never touches `review_content_id` and never stales the
-    plan approval.
+    is separately protected by exact path, checked first"), so the file's
+    own bytes never enter either stage's content projection.
+
+    **That does not mean editing it is identity-neutral** (salvage audit
+    `I9`, which reproduced the opposite against this repository's own
+    history). Both stages hash their classification *sets* alongside the
+    protected content, and both sets are read out of this file:
+
+    - editing `implementation_stage` changes
+      `compute_review_content_id_implementation_stage*`'s digest and so
+      stales an existing `technical_approval`; it leaves the plan-stage
+      digest alone;
+    - editing `plan_stage.protected_paths`/`excluded_paths`/
+      `excluded_prefixes` changes
+      `compute_review_content_id_plan_stage*`'s digest and so stales an
+      existing `plan_approval`; it leaves the implementation-stage digest
+      alone.
+
+    Both are the intended cryptographic contract, not a defect: a
+    classification change is a change to what was reviewed. A declaration
+    repair made after an approval must therefore be carried back through
+    that stage's own review/approval gate, exactly like any other change
+    to reviewed content -- see `docs/ai-workflow/REVIEW_PROTOCOL.md`'s
+    "Repairing an artifact declaration after an approval".
 
     Returns `(protected_paths, protected_prefixes, excluded_paths,
     excluded_prefixes)`, each a path/prefix -> category-or-justification
@@ -1567,7 +1621,24 @@ def load_implementation_stage_classification(
     same `MissingWorkItemArtifactsDeclarationError` its plan-stage
     sibling (`load_plan_stage_classification`) already does for the
     equivalent absent-file case -- never a raw, undocumented
-    `FileNotFoundError` leaking past this function's own contract."""
+    `FileNotFoundError` leaking past this function's own contract.
+
+    **`artifacts_path` has no default** (salvage audit `I6`, the same
+    `GPT-R30-005` reasoning that retired `compute_review_content_id_plan_stage`'s
+    own `PLAN_STAGE_*` defaults, and the same treatment
+    `workflow_state.approval_review_content_id` already applies to its own
+    `artifacts_path` per `OPUS-R27-002`): it used to default to
+    `DEFAULT_ARTIFACTS_PATH`, `workflow-v2-1-core`'s own file, so a
+    generic caller that omitted it silently computed a *different* work
+    item's classification instead of failing loudly. That was not
+    hypothetical -- `workflow_state.promote_legacy_work_item` carried the
+    same default through into its own signature, and a legacy *product*
+    item adopted without an explicit path had its `technical_approval`
+    freshness evaluated against a *process* item's sets, in which `app/`
+    is `excluded`: a real product commit landing after the reviewed
+    content read as "not stale" and adoption proceeded. Every caller now
+    names the work item whose classification it means, via
+    `artifacts_path_for_work_item(work_item_id)`."""
     full = repo_root / artifacts_path
     if not full.is_file():
         raise MissingWorkItemArtifactsDeclarationError(_to_posix(artifacts_path))
@@ -1787,16 +1858,81 @@ def compute_review_content_id_implementation_stage_at_commit(
 # exists, it is authoritative; the flat legacy layout is read only for a
 # work item that has never had the new layout created yet -- this
 # milestone's own in-flight bundle during WF5's own landing, in practice.
+#
+# The compatibility fallback is correct only where the flat layout is a
+# *reachable* generation target. It is, for the three stages whose
+# `work-item-id` argument to `prepare-ai-review.sh` is optional
+# (`implementation`, `post-fix`, `functional-review`): omitting it is a
+# documented, supported invocation that really does write
+# `.ai-review/current/`, so a work item with no scoped layout yet may
+# genuinely be on the flat one. It is *not* reachable for the plan stage,
+# whose `work-item-id` argument is required (`D-Fingerprint-
+# Generalization`, `OPUS-R27-003`) -- `prepare-ai-review.sh`'s own
+# `ROOT_DIR` and `write_manifest_with_verified_identifiers_for_work_item`
+# both template `.ai-review/<work_item_id>/` directly there, and
+# `REVIEW_PROTOCOL.md` states the same rule ("For the plan stage
+# specifically, the bundle directory is never the flat fallback").
 # ---------------------------------------------------------------------------
 
+GENERATION_STAGES: frozenset[str] = frozenset(
+    {"plan", "implementation", "post-fix", "functional-review"}
+)
 
-def resolve_bundle_dir(repo_root: Path, work_item_id: str) -> Path:
-    """The current bundle directory for `work_item_id`, repo-root-relative:
-    `.ai-review/<work_item_id>/current` if that directory already exists,
-    else the flat compatibility path `.ai-review/current`."""
+#: The stages whose bundle directory is per-work-item scoped by
+#: construction rather than by existence -- today just the plan stage, the
+#: one stage `prepare-ai-review.sh` requires a `work-item-id` for.
+SCOPED_BY_CONSTRUCTION_STAGES: frozenset[str] = frozenset({"plan"})
+
+
+def resolve_bundle_dir(repo_root: Path, work_item_id: str, *, stage: str | None = None) -> Path:
+    """The current bundle directory for `work_item_id`, repo-root-relative.
+
+    For a stage whose bundle directory is scoped by construction (today
+    `stage="plan"`), this is always `.ai-review/<work_item_id>/current`,
+    with no existence gate at all: that stage's generator has no flat
+    branch to fall back to, so a gated answer would send the *authoring*
+    half of `/milestone-plan` to `.ai-review/current/` on a work item's
+    very first plan bundle while the generator wrote and validated the
+    scoped directory -- the first-generation split this argument closes.
+
+    For every other stage, and for a caller that names no stage at all,
+    the compatibility rule still applies: the scoped layout once this work
+    item is on it, else the flat compatibility path `.ai-review/current`.
+    Those stages' `work-item-id` argument to `prepare-ai-review.sh` is
+    optional, so the flat layout remains a reachable generation target for
+    them and cannot simply be dropped.
+
+    "Is on the scoped layout" is decided from the work item's **own root
+    directory** (`.ai-review/<work_item_id>/`), never from the transient
+    existence of the `current/` inside it. `withdraw_bundle` renames
+    `current/` to a `current.rejected-<token>/` sibling, so gating on
+    `current/` flipped an item that had demonstrably been generating
+    scoped bundles back onto the flat path for its next round -- while
+    `prepare-ai-review.sh`, given the same `[work-item-id]` argument the
+    round before, still wrote `.ai-review/<work_item_id>/current/`. That
+    is the plan stage's own first-generation split reappearing at the
+    implementation/post-fix stages after any withdrawal, and it withdrew
+    the regenerated bundle too (the author-written
+    `IMPLEMENTATION_SUMMARY.md` landing at the flat path, leaving
+    `assert_stage_completeness` reading the generator's own empty stub).
+    A work item that has never had a scoped directory created still
+    resolves flat, exactly as before, so nothing about the genuinely
+    flat-generated legacy layout changes.
+
+    An unrecognized `stage` is refused (`InvalidBundleStageError`) rather
+    than treated as "no stage": silently taking the compatibility branch
+    on a typo would reintroduce exactly the defect this argument closes.
+    """
     validate_work_item_id(work_item_id)
-    scoped = Path(".ai-review") / work_item_id / "current"
-    if (repo_root / scoped).is_dir():
+    if stage is not None and stage not in GENERATION_STAGES:
+        raise InvalidBundleStageError(
+            f"unknown bundle stage {stage!r} -- expected one of {sorted(GENERATION_STAGES)} or None"
+        )
+    scoped_root = Path(".ai-review") / work_item_id
+    scoped = scoped_root / "current"
+    if stage in SCOPED_BY_CONSTRUCTION_STAGES:
+        return scoped
+    if (repo_root / scoped_root).is_dir():
         return scoped
     return Path(".ai-review/current")
 
@@ -1978,7 +2114,24 @@ def resolve_rejected_marker_path(repo_root: Path, work_item_id: str) -> Path:
     sibling to `resolve_bundle_dir`'s own `current/` (`.ai-review/
     <work_item_id>/REJECTED`, or the flat `.ai-review/REJECTED` under the
     same compatibility rule `resolve_bundle_dir` itself uses), so the two
-    resolvers can never disagree about which layout a work item is on."""
+    resolvers can never disagree about which layout a work item is on.
+
+    Agreement stays **by derivation** -- this is still literally
+    `resolve_bundle_dir`'s own answer's parent, never a second copy of the
+    layout rule that could drift from it. What changed is the rule both
+    now share: `resolve_bundle_dir` decides a work item's layout from its
+    own root directory rather than from the transient `current/` inside
+    it, which is what makes this marker path stable through a withdrawal.
+    `withdraw_bundle` renames `current/` away and only then removes the
+    marker it wrote before the first removal; while the layout was keyed
+    on `current/`, that rename moved this resolved path, mid-withdrawal,
+    from the scoped location the marker had just been written at to the
+    flat one -- so a crash in the window between the successful rename and
+    the marker's removal left a scoped marker that every later
+    `assert_bundle_not_rejected` resolved past, failing **open** on
+    exactly the residue the marker exists to refuse. No transaction
+    machinery is involved; the shared resolver simply stopped tracking a
+    directory that a withdrawal is defined to remove."""
     return resolve_bundle_dir(repo_root, work_item_id).parent / "REJECTED"
 
 
@@ -3318,10 +3471,21 @@ def render_manifest_md_implementation_stage(
     justification, and there is a "Protected prefixes" section the plan
     stage has no counterpart for. Always states `stage: implementation`
     (`GPT-R30-002`) — this function has no other caller. `
-    reviewed_implementation_head`, if supplied, is the exact commit
-    `review_content_id` was computed against (`compute_review_content_id_
-    implementation_stage_at_commit`'s own `commit` argument) — a plain
-    header line, never part of the hashed projection itself, same
+    reviewed_implementation_head`, if supplied, is
+    `WORKFLOW_STATE.json`'s own
+    `work_items[work_item_id].reviewed_implementation_head` at generation
+    time: the commit whose protected implementation-stage content this
+    round reviews, and the exact value `/approve-review implementation`
+    writes into `technical_approval.reviewed_content_commit` (salvage
+    audit `I1`). It is deliberately **not** the commit `review_content_id`
+    was measured at — under `D-Approval-Commits`' own ordering the
+    durability commit always lands *before* generation, so the measured
+    commit is at least one commit ahead of the reviewed round's head, and
+    further ahead after a same-content republication. The measured commit
+    is `generation_head`, which already carried exactly that value, so
+    this field previously duplicated it under a name that contradicted
+    `WORKFLOW_STATE.json`'s field of the same name. Still a plain header
+    line, never part of the hashed projection itself, same
     diagnostic-only discipline as `worktree_root`/`generation_head`
     (`WFR-17`). `implementation_revision`, if supplied, is
     `work_items[work_item_id].implementation_revision` at generation time
@@ -3395,6 +3559,7 @@ def write_manifest_with_verified_identifiers_implementation_stage(
     *,
     allow_rebind: bool = False,
     implementation_revision: int | None = None,
+    reviewed_implementation_head: str | None = None,
 ) -> tuple[str, str]:
     """Implementation-stage counterpart of `write_manifest_with_verified_
     identifiers` (`GPT-R30-001`/`-002`) — the only code path allowed to
@@ -3408,10 +3573,13 @@ def write_manifest_with_verified_identifiers_implementation_stage(
     implementation bundle) cannot recur, since this is the only writer
     and it always recomputes both identifiers fresh, in memory, before
     any write, exactly mirroring the plan-stage writer's own write
-    sequence (idempotence-checked, atomic replace). `head` becomes the
-    written `reviewed_implementation_head` field and the diagnostic-only
-    `generation_head` alike, so both agree by construction rather than by
-    convention. Returns `(review_content_id, bundle_id)`."""
+    sequence (idempotence-checked, atomic replace). `head` is the commit
+    the digest is measured at and becomes the diagnostic-only
+    `generation_head`; the separate `reviewed_implementation_head`
+    keyword carries `WORKFLOW_STATE.json`'s own field of that name, a
+    *different* commit under `D-Approval-Commits`' own ordering (salvage
+    audit `I1`) — passing `None` omits the line rather than guessing a
+    value. Returns `(review_content_id, bundle_id)`."""
     manifest_path = bundle_dir / MANIFEST_FILENAME
     base_full = resolve_base(repo_root, base)
     head_full = resolve_base(repo_root, head)
@@ -3431,7 +3599,8 @@ def write_manifest_with_verified_identifiers_implementation_stage(
         review_content_id=digest, protected_paths=protected_paths, protected_prefixes=protected_prefixes,
         excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,
         work_item_id=work_item_id, work_item_type=work_item_type, base_commit=base_full,
-        reviewed_implementation_head=head_full, implementation_revision=implementation_revision,
+        reviewed_implementation_head=reviewed_implementation_head,
+        implementation_revision=implementation_revision,
         worktree_root=worktree_root, generation_head=generation_head,
     ).encode()
     bundle_id, _entries = compute_bundle_id(
@@ -3443,7 +3612,8 @@ def write_manifest_with_verified_identifiers_implementation_stage(
         excluded_paths=excluded_paths, excluded_prefixes=excluded_prefixes,
         bundle_id=bundle_id,
         work_item_id=work_item_id, work_item_type=work_item_type, base_commit=base_full,
-        reviewed_implementation_head=head_full, implementation_revision=implementation_revision,
+        reviewed_implementation_head=reviewed_implementation_head,
+        implementation_revision=implementation_revision,
         worktree_root=worktree_root, generation_head=generation_head,
     )
 
@@ -3505,6 +3675,7 @@ def write_manifest_with_verified_identifiers_implementation_stage_for_work_item(
         repo_root, resolved_bundle_dir, base, head, work_item_type, work_item_id,
         protected_paths, protected_prefixes, excluded_paths, excluded_prefixes,
         allow_rebind=allow_rebind, implementation_revision=entry.get("implementation_revision"),
+        reviewed_implementation_head=entry.get("reviewed_implementation_head"),
     )
 
 
@@ -3678,7 +3849,7 @@ if __name__ == "__main__":
     for entry in projection["review_content_manifest"]:
         print(f"  {entry}")
 
-    bundle_dir = repo_root / resolve_bundle_dir(repo_root, work_item_id)
+    bundle_dir = repo_root / resolve_bundle_dir(repo_root, work_item_id, stage="plan")
     manifest_path = bundle_dir / "MANIFEST.md"
     print()
 

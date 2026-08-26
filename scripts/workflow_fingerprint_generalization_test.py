@@ -39,22 +39,29 @@ import workflow_test_harness as h
 _REAL_SCRIPTS_DIR = Path(__file__).resolve().parent
 
 
-def _write_second_item(repo, work_item_id="second-item", *, plan_revision=1, base_commit=None):
-    """Seeds a second, fully-declared process work item's plan-stage
+def _write_second_item(
+    repo, work_item_id="second-item", *, plan_revision=1, base_commit=None,
+    work_item_type="process", work_item_kind=None,
+):
+    """Seeds a second, fully-declared work item's plan-stage
     fixture (its own five protected files, its own `<id>-artifacts.json`,
     its own `WORKFLOW_STATE.json` entry) alongside `workflow-test-harness`'s
     default `"wi"` item is never written here -- this is the *only* item in
     the scratch repo unless the caller writes another. Also seeds a
     `.gitignore` excluding `.ai-review/`, mirroring the real repository, so
     a later bundle-directory write is invisible to plan-stage
-    classification the same way it is for real."""
+    classification the same way it is for real. `work_item_type` defaults
+    to `"process"` (every existing call site unchanged); `work_item_kind`
+    defaults to mirroring `work_item_type`, matching what `/milestone-plan`
+    actually produces for a `"product"`-typed item."""
     (repo.root / ".gitignore").write_text(".ai-review/\n")
     repo.write_plan_docs(work_item_id=work_item_id, plan_revision=plan_revision)
     repo.write_workflow_state(
         active_work_item_id=work_item_id,
         **{
             work_item_id: ws.default_work_item(
-                work_item_id=work_item_id, work_item_type="process", work_item_kind="process",
+                work_item_id=work_item_id, work_item_type=work_item_type,
+                work_item_kind=work_item_kind or work_item_type,
                 plan_path="docs/ai-workflow/WORKFLOW_V2_PLAN.md",
                 registry_path=f"docs/ai-workflow/registry/{work_item_id}-registry.json",
                 mapping_path=f"docs/ai-workflow/requirements/{work_item_id}-mapping.json",
@@ -313,19 +320,82 @@ class TestFailClosedMatrix(unittest.TestCase):
             with self.assertRaises(fingerprint.UnknownWorkItemError):
                 fingerprint.resolve_plan_stage_metadata(repo.root, "nonexistent")
 
-    def test_condition_2_non_process_type_not_applicable(self):
+    def test_condition_2_unsupported_type_not_applicable(self):
+        """`R7`: condition 2 still fails closed for a genuinely unsupported
+        `work_item_type` -- (a) an invalid string value, (b) the field
+        missing entirely (`None` via `entry.get`), and (c) an unhashable
+        value (a corrupted/hand-edited state file) -- while `"product"` (a
+        real `WORK_ITEM_TYPES` member) is no longer such a type. `registry_path`/
+        `mapping_path`/`base_commit` stay non-null in all subcases so the
+        rejection is provably condition 2's, not condition 3's."""
+        base_work_item = ws.default_work_item(
+            work_item_id="prod-item", work_item_type="process", work_item_kind="product",
+            plan_path="docs/milestones/x.md",
+            registry_path="docs/ai-workflow/registry/prod-item-registry.json",
+            mapping_path="docs/ai-workflow/requirements/prod-item-mapping.json",
+            governing_workflow_version="1", plan_revision=1, last_transition="t0",
+            base_commit="deadbeef",
+        )
+        cases = {
+            "unsupported string value": {**base_work_item, "work_item_type": "milestone"},
+            "missing field": {k: v for k, v in base_work_item.items() if k != "work_item_type"},
+            "unhashable value": {**base_work_item, "work_item_type": ["process"]},
+        }
+        for label, work_item in cases.items():
+            with self.subTest(label):
+                with h.ScratchRepo() as repo:
+                    repo.write_workflow_state(
+                        active_work_item_id="prod-item", **{"prod-item": work_item},
+                    )
+                    repo.commit_plan_docs_as_base()
+                    with self.assertRaises(fingerprint.PlanStageNotApplicableError):
+                        fingerprint.resolve_plan_stage_metadata(repo.root, "prod-item")
+
+    def test_product_work_item_resolves_like_a_process_item(self):
+        """R1/R3: a legitimate `work_item_type="product"` item resolves
+        through `resolve_plan_stage_metadata` exactly like a process item
+        -- the direct counterpart of the existing process-item resolution
+        tests (items 143/144/149/151)."""
         with h.ScratchRepo() as repo:
-            repo.write_workflow_state(
-                active_work_item_id="prod-item",
-                **{"prod-item": ws.default_work_item(
-                    work_item_id="prod-item", work_item_type="product", work_item_kind="product",
-                    plan_path="docs/milestones/x.md", registry_path=None,
-                    governing_workflow_version="1", plan_revision=1, last_transition="t0",
-                )},
-            )
+            declared_base_commit = repo.base
+            _write_second_item(repo, "prod-item", work_item_type="product")
             repo.commit_plan_docs_as_base()
-            with self.assertRaises(fingerprint.PlanStageNotApplicableError):
-                fingerprint.resolve_plan_stage_metadata(repo.root, "prod-item")
+            metadata = fingerprint.resolve_plan_stage_metadata(repo.root, "prod-item")
+            self.assertEqual(metadata.work_item_id, "prod-item")
+            self.assertEqual(metadata.work_item_type, "product")
+            self.assertEqual(metadata.plan_path, "docs/ai-workflow/WORKFLOW_V2_PLAN.md")
+            self.assertEqual(
+                metadata.registry_path, "docs/ai-workflow/registry/prod-item-registry.json",
+            )
+            self.assertEqual(
+                metadata.mapping_path, "docs/ai-workflow/requirements/prod-item-mapping.json",
+            )
+            self.assertEqual(metadata.base_commit, declared_base_commit)
+            self.assertEqual(metadata.plan_revision, 1)
+
+    def test_product_work_item_computes_review_content_id(self):
+        """R3: fingerprinting completes for a product item -- the
+        product-typed counterpart of
+        `test_143_second_item_computes_distinct_id_with_own_manifest`."""
+        with h.ScratchRepo() as repo:
+            _write_second_item(repo, "prod-item", work_item_type="product")
+            repo.commit_plan_docs_as_base()
+            digest, projection = fingerprint.compute_review_content_id_plan_stage_for_work_item(
+                repo.root, "prod-item",
+            )
+            self.assertNotEqual(digest, "")
+            self.assertEqual(projection["work_item_id"], "prod-item")
+            paths = {e["path"] for e in projection["review_content_manifest"]}
+            self.assertEqual(
+                paths,
+                {
+                    "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
+                    "docs/ai-workflow/WORKFLOW_V2_AUDIT.md",
+                    "docs/TECHNICAL_DECISIONS.md",
+                    "docs/ai-workflow/registry/prod-item-registry.json",
+                    "docs/ai-workflow/requirements/prod-item-mapping.json",
+                },
+            )
 
     def test_condition_3_missing_metadata_field_named(self):
         with h.ScratchRepo() as repo:
@@ -818,6 +888,7 @@ class TestArtifactsDeclarationsGenerator(unittest.TestCase):
             "new-item", "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
             "docs/ai-workflow/registry/new-item-registry.json",
             "docs/ai-workflow/requirements/new-item-mapping.json",
+            work_item_type="process",
         )
         protected = set(declarations["plan_stage"]["protected_paths"])
         self.assertEqual(
@@ -834,6 +905,7 @@ class TestArtifactsDeclarationsGenerator(unittest.TestCase):
             "new-item", "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
             "docs/ai-workflow/registry/new-item-registry.json",
             "docs/ai-workflow/requirements/new-item-mapping.json",
+            work_item_type="process",
         )
         own_path = "docs/ai-workflow/registry/new-item-artifacts.json"
         self.assertIn(own_path, declarations["implementation_stage"]["protected_paths"])
@@ -845,6 +917,183 @@ class TestArtifactsDeclarationsGenerator(unittest.TestCase):
             declarations["implementation_stage"]["excluded_prefixes"],
         )
         self.assertEqual(classification, "protected")
+
+
+class TestArtifactsDeclarationsGeneratorIsUsableAtBothStages(unittest.TestCase):
+    """Salvage audit `B4`/`B5`: `/milestone-plan` step 3 is the sole
+    sanctioned writer of `<work_item_id>-artifacts.json`, so whatever this
+    generator emits is what a work item actually lives with. The
+    implementation-stage half used to name nothing but the declarations
+    file protecting itself, and the plan-stage half inherited an exclusion
+    set authored as the complement of a *different*, larger protected set,
+    so both halves failed closed on ordinary content: the first
+    implementation bundle raised `UnclassifiedPathError` on the item's own
+    deliverable, and a plan-stage edit to `docs/TECHNICAL_DECISIONS.md` --
+    which `/milestone-plan` step 5 explicitly directs the planner to
+    engage with -- raised it too."""
+
+    def _declarations(self, work_item_type, plan_path):
+        return ws.generate_artifacts_declarations(
+            "new-item", plan_path,
+            "docs/ai-workflow/registry/new-item-registry.json",
+            "docs/ai-workflow/requirements/new-item-mapping.json",
+            work_item_type=work_item_type,
+        )
+
+    def _classify_impl(self, declarations, path):
+        stage = declarations["implementation_stage"]
+        return fingerprint.classify_path_implementation_stage(
+            path, stage["protected_paths"], stage["protected_prefixes"],
+            stage["excluded_paths"], stage["excluded_prefixes"],
+        )
+
+    def _classify_plan(self, declarations, path):
+        stage = declarations["plan_stage"]
+        return fingerprint.classify_path(
+            path, frozenset(stage["protected_paths"]),
+            stage["excluded_paths"], stage["excluded_prefixes"],
+        )
+
+    def test_work_item_type_is_required(self):
+        with self.assertRaises(TypeError):
+            ws.generate_artifacts_declarations(
+                "new-item", "docs/ai-workflow/new-item-plan.md",
+                "docs/ai-workflow/registry/new-item-registry.json",
+                "docs/ai-workflow/requirements/new-item-mapping.json",
+            )
+        with self.assertRaises(ws.InvalidWorkItemTypeError):
+            self._declarations("widget", "docs/ai-workflow/new-item-plan.md")
+
+    def test_process_deliverable_tree_is_protected_product_tree_is_excluded(self):
+        declarations = self._declarations("process", "docs/ai-workflow/new-item-plan.md")
+        for path in ("scripts/workflow_state.py", ".claude/commands/milestone-plan.md"):
+            self.assertEqual(self._classify_impl(declarations, path), "protected", path)
+        for path in ("app/src/main/kotlin/Feature.kt", "gradle/libs.versions.toml"):
+            self.assertEqual(self._classify_impl(declarations, path), "excluded", path)
+
+    def test_product_deliverable_tree_is_protected_process_tree_is_excluded(self):
+        declarations = self._declarations("product", "docs/milestones/new-item-plan.md")
+        for path in ("app/src/main/kotlin/Feature.kt", "gradle/libs.versions.toml",
+                     "config/detekt/detekt.yml"):
+            self.assertEqual(self._classify_impl(declarations, path), "protected", path)
+        for path in ("scripts/workflow_state.py", ".claude/commands/milestone-plan.md",
+                     "docs/ai-workflow/MILESTONE_WORKFLOW.md"):
+            self.assertEqual(self._classify_impl(declarations, path), "excluded", path)
+
+    def test_every_path_this_workflow_itself_writes_is_classified(self):
+        """The machinery's own writes must never be the thing that fails a
+        work item closed: `WORKFLOW_STATE.json`/`WORKFLOW_CONFIG.json`
+        (every state writer), `FUNCTIONAL_CHECKLIST_PATH`
+        (`/prepare-functional-review`'s mandatory evidence commit),
+        `docs/ROADMAP.md` (`/accept-milestone` step 3), the registry and
+        requirements trees (`/milestone-plan`, `/milestone-implement`'s
+        ledger), and the item's own three declaration paths."""
+        for work_item_type, plan_path in (
+            ("process", "docs/ai-workflow/new-item-plan.md"),
+            ("product", "docs/milestones/new-item-plan.md"),
+        ):
+            declarations = self._declarations(work_item_type, plan_path)
+            for path in (
+                "docs/ai-workflow/WORKFLOW_STATE.json",
+                "docs/ai-workflow/WORKFLOW_CONFIG.json",
+                ws.FUNCTIONAL_CHECKLIST_PATH,
+                "docs/ROADMAP.md",
+                "docs/ai-workflow/registry/new-item-registry.json",
+                "docs/ai-workflow/requirements/new-item-mapping.json",
+                "docs/ai-workflow/requirements/new-item-ledger.md",
+                plan_path,
+            ):
+                with self.subTest(work_item_type=work_item_type, path=path):
+                    self.assertEqual(self._classify_impl(declarations, path), "excluded")
+
+    def test_own_declarations_file_stays_protected_despite_the_registry_exclusion(self):
+        for work_item_type, plan_path in (
+            ("process", "docs/ai-workflow/new-item-plan.md"),
+            ("product", "docs/milestones/new-item-plan.md"),
+        ):
+            declarations = self._declarations(work_item_type, plan_path)
+            self.assertEqual(
+                self._classify_impl(
+                    declarations, "docs/ai-workflow/registry/new-item-artifacts.json",
+                ),
+                "protected",
+                work_item_type,
+            )
+
+    def test_implementation_stage_default_still_fails_closed_on_a_novel_path(self):
+        declarations = self._declarations("process", "docs/ai-workflow/new-item-plan.md")
+        for path in ("some/unheard/of/place.txt", "vendor/thing.kt", "tools/build.sh"):
+            with self.subTest(path=path):
+                with self.assertRaises(fingerprint.UnclassifiedPathError):
+                    self._classify_impl(declarations, path)
+
+    def test_a_new_workflow_design_document_is_excluded_not_unclassified(self):
+        """Salvage audit `B7`: the one judgment the template makes rather
+        than defers. Everything under `docs/ai-workflow/` is either this
+        workflow's own bookkeeping or another work item's plan-stage
+        content, so it is excluded at both stages; a `process` item whose
+        deliverable genuinely is such a document must move that exact path
+        into `implementation_stage.protected_paths` during
+        `SELF_REVIEWING_PLAN`, and doing so wins, protected-first."""
+        declarations = self._declarations("process", "docs/ai-workflow/new-item-plan.md")
+        doc = "docs/ai-workflow/A_NEW_DESIGN_DOC.md"
+        self.assertEqual(self._classify_impl(declarations, doc), "excluded")
+        declarations["implementation_stage"]["protected_paths"][doc] = (
+            "this item's own deliverable, promoted during SELF_REVIEWING_PLAN"
+        )
+        self.assertEqual(self._classify_impl(declarations, doc), "protected")
+
+    def test_plan_stage_default_classifies_the_frozen_protected_documents(self):
+        """`B5`: `PLAN_STAGE_EXCLUDED_PATHS` is the complement of
+        `PLAN_STAGE_PROTECTED`, but this template's own protected set is
+        the item's own three declaration paths, so those three documents
+        used to land in neither set."""
+        declarations = self._declarations("process", "docs/ai-workflow/new-item-plan.md")
+        for path in sorted(fingerprint.PLAN_STAGE_PROTECTED):
+            with self.subTest(path=path):
+                self.assertEqual(self._classify_plan(declarations, path), "excluded")
+
+    def test_plan_stage_default_keeps_an_own_declaration_path_protected(self):
+        """Protected-first ordering: an item whose own `plan_path` happens
+        to be one of the frozen documents keeps it protected, not
+        excluded."""
+        declarations = self._declarations("process", "docs/ai-workflow/WORKFLOW_V2_PLAN.md")
+        self.assertEqual(
+            self._classify_plan(declarations, "docs/ai-workflow/WORKFLOW_V2_PLAN.md"), "protected",
+        )
+        self.assertNotIn(
+            "docs/ai-workflow/WORKFLOW_V2_PLAN.md", declarations["plan_stage"]["excluded_paths"],
+        )
+
+    def test_a_sibling_work_items_plan_document_is_classified_at_both_stages(self):
+        """Salvage audit `B7`: two work items in one repository is `D1`'s
+        normal case, not an exception, and every real work item in this
+        repository ended up hand-enumerating every sibling's plan
+        document -- one of them missing a sibling, caught only at plan
+        review. The template classifies the whole `docs/ai-workflow/`
+        prefix at both stages instead."""
+        sibling = "docs/ai-workflow/some-other-item-plan.md"
+        for work_item_type, plan_path in (
+            ("process", "docs/ai-workflow/new-item-plan.md"),
+            ("product", "docs/milestones/new-item-plan.md"),
+        ):
+            declarations = self._declarations(work_item_type, plan_path)
+            with self.subTest(work_item_type=work_item_type):
+                self.assertEqual(self._classify_plan(declarations, sibling), "excluded")
+                self.assertEqual(self._classify_impl(declarations, sibling), "excluded")
+                # The item's own declared paths still win, protected-first.
+                self.assertEqual(self._classify_plan(declarations, plan_path), "protected")
+                self.assertEqual(
+                    self._classify_impl(
+                        declarations, "docs/ai-workflow/registry/new-item-artifacts.json",
+                    ),
+                    "protected",
+                )
+
+    def test_plan_stage_default_still_fails_closed_on_a_novel_path(self):
+        declarations = self._declarations("process", "docs/ai-workflow/new-item-plan.md")
+        with self.assertRaises(fingerprint.UnclassifiedPathError):
+            self._classify_plan(declarations, "some/unheard/of/place.txt")
 
 
 class TestValidateStateDuplicatePathDetection(unittest.TestCase):
@@ -1039,6 +1288,49 @@ class TestPrepareAiReviewShPlanStageRequiredArgument(unittest.TestCase):
             self.assertIn(f"base_commit: {repo.base}", manifest_text)
             self.assertTrue((repo.root / ".ai-review" / "second-item" / "review-bundle.tar.gz").is_file())
 
+    def test_product_item_successful_run_writes_a_bound_manifest(self):
+        """R4: the product-typed counterpart of
+        `test_153_successful_run_writes_a_bound_manifest` -- real,
+        real-subprocess coverage that a legitimate `"product"` work item
+        can generate a plan review bundle through the actual, unmodified
+        `prepare-ai-review.sh`, not only through direct function calls."""
+        with h.ScratchRepo() as repo:
+            script_path = self._install_scripts(repo)
+            _write_second_item(repo, "prod-item", work_item_type="product")
+            repo.commit_plan_docs_as_base()
+            # The item's own declared base_commit must equal the commit
+            # these files were actually settled at -- correct it in a
+            # small follow-up commit (WORKFLOW_STATE.json is excluded, so
+            # this never touches plan-stage identity).
+            state_path = repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json"
+            state = json.loads(state_path.read_text())
+            state["work_items"]["prod-item"]["base_commit"] = repo.base
+            state_path.write_text(json.dumps(state))
+            subprocess.run(["git", "add", "-A"], cwd=repo.root, check=True, capture_output=True)
+            subprocess.run(
+                ["git", "commit", "-q", "-m", "fix declared base_commit"],
+                cwd=repo.root, check=True, capture_output=True,
+            )
+            digest, _ = fingerprint.compute_review_content_id_plan_stage_for_work_item(
+                repo.root, "prod-item",
+            )
+            bundle_dir = repo.root / ".ai-review" / "prod-item" / "current"
+            bundle_dir.mkdir(parents=True)
+            (bundle_dir / "REVIEW_REQUEST.md").write_text(f"stage: plan\nreview_content_id: {digest}\n")
+            _, current_head = fingerprint.current_worktree_root_and_head(repo.root)
+            (bundle_dir / "TEST_RESULTS.md").write_text(f"stage: plan (revision 1)\nhead: {current_head}\n")
+            result = subprocess.run(
+                ["bash", str(script_path), repo.base, "plan", "prod-item"],
+                cwd=repo.root, capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            manifest_text = (bundle_dir / "MANIFEST.md").read_text()
+            self.assertIn("work_item_id: prod-item", manifest_text)
+            self.assertIn(f"review_content_id: {digest}", manifest_text)
+            self.assertIn(f"base_commit: {repo.base}", manifest_text)
+            self.assertIn("work_item_type: product", manifest_text)
+            self.assertTrue((repo.root / ".ai-review" / "prod-item" / "review-bundle.tar.gz").is_file())
+
 
 class TestPrepareAiReviewShImplementationStageHeadGuard(unittest.TestCase):
     """GPT-R42-001: an implementation/post-fix bundle must not be
@@ -1080,6 +1372,7 @@ class TestPrepareAiReviewShImplementationStageHeadGuard(unittest.TestCase):
             work_item_id, "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
             f"docs/ai-workflow/registry/{work_item_id}-registry.json",
             f"docs/ai-workflow/requirements/{work_item_id}-mapping.json",
+            work_item_type="process",
         )
         declarations["implementation_stage"]["protected_paths"]["impl.txt"] = "test fixture content"
         artifacts_path = repo.root / "docs" / "ai-workflow" / "registry" / f"{work_item_id}-artifacts.json"
@@ -1241,6 +1534,7 @@ class TestPrepareAiReviewShImplementationStageHeadGuard(unittest.TestCase):
                 work_item_id, "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
                 f"docs/ai-workflow/registry/{work_item_id}-registry.json",
                 f"docs/ai-workflow/requirements/{work_item_id}-mapping.json",
+                work_item_type="process",
             )
             declarations["implementation_stage"]["protected_paths"]["impl.txt"] = "test fixture content"
             declarations["implementation_stage"]["excluded_paths"]["docs/ai-workflow/WORKFLOW_STATE.json"] = (
@@ -1291,25 +1585,29 @@ class TestPrepareAiReviewShImplementationStageHeadGuard(unittest.TestCase):
             # No second durability commit: live HEAD is byte-identical to S.
             self.assertEqual(repo.head(), s_sha)
 
-            # The manifest's own reviewed_implementation_head/generation_head
-            # fields both name S itself, not the earlier content commit
-            # impl_head -- write_manifest_...for_work_item's `head`
-            # defaults to (and this script never overrides it away from)
-            # live git HEAD, which is S once S is committed; item 227's
-            # own "reusing the same generation_head and reviewed_
-            # implementation_head" is this identity, not a copy of
-            # WORKFLOW_STATE.json's field of the same name. review_content_id
-            # is unaffected either way -- S touches only the excluded
-            # WORKFLOW_STATE.json path, contributing nothing to the diffed
-            # content between impl_head and S -- confirmed by this same
-            # assertion succeeding: REVIEW_REQUEST.md's review_content_id
-            # (computed against base..impl_head by _write_review_request)
-            # was independently reproduced by the script computing at
-            # base..S, or assert_review_request_states_review_content_id
-            # above would itself have refused.
+            # The manifest's two head fields now name two different
+            # commits, as they must (salvage audit `I1`): `generation_head`
+            # is S itself -- the commit this generation ran at, and the
+            # commit `review_content_id` was measured at -- while
+            # `reviewed_implementation_head` is WORKFLOW_STATE.json's own
+            # field of that name, still pointing at the content commit
+            # impl_head that S's durability write recorded. Before the
+            # salvage repair both lines carried S, so the manifest
+            # contradicted the state file (and the approval record
+            # /approve-review implementation derives from it) under one
+            # name. review_content_id is unaffected by the distinction --
+            # S touches only the excluded WORKFLOW_STATE.json path,
+            # contributing nothing to the diffed content between impl_head
+            # and S -- confirmed by this same assertion succeeding:
+            # REVIEW_REQUEST.md's review_content_id (computed against
+            # base..impl_head by _write_review_request) was independently
+            # reproduced by the script computing at base..S, or
+            # assert_review_request_states_review_content_id above would
+            # itself have refused.
             manifest_text = (bundle_dir / "MANIFEST.md").read_text()
-            self.assertIn(f"reviewed_implementation_head: {s_sha}", manifest_text)
             self.assertIn(f"generation_head: {s_sha}", manifest_text)
+            self.assertIn(f"reviewed_implementation_head: {impl_head}", manifest_text)
+            self.assertNotIn(f"reviewed_implementation_head: {s_sha}", manifest_text)
             self.assertIn("implementation_revision: 1", manifest_text)
 
             # No phase rewrite, no implementation_revision change: the
@@ -1340,6 +1638,7 @@ class TestPrepareAiReviewShImplementationStageHeadGuard(unittest.TestCase):
                 work_item_id, "docs/ai-workflow/WORKFLOW_V2_PLAN.md",
                 f"docs/ai-workflow/registry/{work_item_id}-registry.json",
                 f"docs/ai-workflow/requirements/{work_item_id}-mapping.json",
+                work_item_type="process",
             )
             declarations["implementation_stage"]["protected_paths"]["impl.txt"] = "test fixture content"
             declarations["implementation_stage"]["excluded_paths"]["notes.txt"] = "test fixture, excluded"
@@ -1405,16 +1704,16 @@ class TestPrepareAiReviewShImplementationStageHeadGuard(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             manifest_text = (bundle_dir / "MANIFEST.md").read_text()
-            # write_manifest_with_verified_identifiers_implementation_stage
-            # writes the live generation head as both MANIFEST.md fields "by
-            # construction" (its own docstring) -- unrelated to and unchanged
-            # by this fix, which only widens the *preflight*'s notion of
-            # in-agreement. WORKFLOW_STATE.json's own on-disk
-            # reviewed_implementation_head (impl_head, not record_commit) is
-            # what the preflight actually validated via the new interval
-            # check -- confirmed directly, not inferred from the manifest.
+            # The two head fields name two different commits (salvage audit
+            # `I1`): `generation_head` is the durability commit this
+            # generation ran at, `reviewed_implementation_head` is
+            # WORKFLOW_STATE.json's own on-disk value (impl_head) -- exactly
+            # the value the preflight validated via the interval check, and
+            # exactly the value /approve-review implementation records as
+            # technical_approval.reviewed_content_commit.
             self.assertIn(f"generation_head: {record_commit}", manifest_text)
-            self.assertIn(f"reviewed_implementation_head: {record_commit}", manifest_text)
+            self.assertIn(f"reviewed_implementation_head: {impl_head}", manifest_text)
+            self.assertNotIn(f"reviewed_implementation_head: {record_commit}", manifest_text)
             live_state = json.loads((repo.root / "docs/ai-workflow/WORKFLOW_STATE.json").read_text())
             self.assertEqual(
                 live_state["work_items"][work_item_id]["reviewed_implementation_head"], impl_head,
@@ -1453,7 +1752,23 @@ class TestPrepareAiReviewShImplementationStageHeadGuard(unittest.TestCase):
         """GPT-R43-001: the head-only guard from GPT-R42-001 is satisfied
         (state's reviewed_implementation_head matches the new commit), but
         implementation_revision was left at the previous round's value --
-        must still refuse."""
+        must still refuse.
+
+        Salvage-audit note (ledger `B1`, repair `R1`): an unchanged
+        revision at a new generation head is *not* refused categorically
+        any more -- that over-broad reading is exactly what made
+        `record_bundle_generation(..., outcome="same_content")` and
+        `/recover-implementation-provenance` unable to publish. It is
+        refused *here* because this fixture records no
+        `Workflow-Bundle-Generation-Record` commit for the new head at
+        all, so the preflight's provenance-interval half never verified
+        it. The legitimate counterpart -- a real recovered-role commit,
+        built through `record_bundle_generation` rather than by writing
+        `WORKFLOW_STATE.json` directly -- is proven end to end by
+        `workflow_acceptance_matrix_test.py` rows B3/B4/B5/C3/D1/G1, and
+        this class's own
+        `test_valid_provenance_interval_with_excluded_only_commit_succeeds`
+        already covers the interval half."""
         with h.ScratchRepo() as repo:
             work_item_id = "wi"
             script_path = self._install_scripts(repo)

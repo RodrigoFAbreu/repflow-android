@@ -30,9 +30,9 @@ an uncovered code path before the user spends time on the manual pass.
 `docs/ACTIVE_MILESTONE.md`, `<feedback_dir>/FUNCTIONAL_REVIEW.md`, or
 `docs/ai-workflow/WORKFLOW_STATE.json`, never fixes findings, and never
 advances `phase`. `/apply-functional-review` remains the sole authoritative
-remediation path, and `/accept-milestone`/`/accept-scoped-remediation`
-remain the sole, user-only acceptance gates — all entirely unchanged and
-unaffected by this command's existence.
+remediation path, and `/accept-milestone` remains the sole, user-only
+acceptance gate — all entirely unchanged and unaffected by this command's
+existence.
 
 There is no bundle, `bundle_id`, or `MANIFEST.md` at this stage in the
 normal milestone-gated flow, so this command never calls
@@ -126,7 +126,7 @@ a required consumer of the same guard.
    findings, never transition `phase`, never auto-continue to any other
    command — `/apply-functional-review` is the only command that ever acts
    on a real `FUNCTIONAL_REVIEW.md`, and only the user can invoke
-   `/accept-milestone`/`/accept-scoped-remediation`.
+   `/accept-milestone`.
 
 Do not implement product or test code in this command. Do not edit the
 plan/registry/mapping/artifacts files or any other command file.

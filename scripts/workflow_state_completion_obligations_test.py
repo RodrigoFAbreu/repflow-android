@@ -24,9 +24,11 @@ Stdlib-only. Run: python3 scripts/workflow_state_completion_obligations_test.py
 
 from __future__ import annotations
 
+import ast
 import json
 import multiprocessing
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -37,6 +39,13 @@ from pathlib import Path
 
 import workflow_fingerprint as fingerprint
 import workflow_state as ws
+
+
+def _repo_root() -> Path:
+    """This repository's root, for the few rows that make a claim
+    about the real checked-in documents rather than a scratch
+    fixture."""
+    return Path(__file__).resolve().parent.parent
 
 
 def _run(args, cwd):
@@ -288,6 +297,129 @@ def _seed_writer_surface(repo, *, publisher_body: str | None = None):
     _run(["git", "add", "-A"], cwd=repo.root)
     _run(["git", "commit", "-q", "-m", "seed writer surface"], cwd=repo.root)
     return repo.head()
+
+
+class TestNeverPersistedPhaseVocabulary(unittest.TestCase):
+    """Convergence pass 12, ledger `O34` (external Optional `N6`).
+
+    `docs/ai-workflow/MILESTONE_WORKFLOW.md` carries a full state-reference
+    section for four phases no writer ever persists as a `phase` value:
+    `SELF_REVIEWING_PLAN`, `AWAITING_TECHNICAL_APPROVAL`,
+    `FIXING_FUNCTIONAL_FINDINGS` and `AWAITING_USER_ACCEPTANCE`. They read
+    exactly like the twelve that *are* persisted, so the document promised
+    resumable states that no live state file can ever contain.
+
+    That is now marked in the document. A prose marker is only worth what
+    holds it true, so this derives the never-written set mechanically from
+    `workflow_state.py`'s own phase writes and requires it to be exactly
+    those four -- a phase that gains a writer, or a fifth that loses one,
+    fails here instead of leaving the note quietly wrong."""
+
+    NEVER_PERSISTED = frozenset({
+        "SELF_REVIEWING_PLAN",
+        "AWAITING_TECHNICAL_APPROVAL",
+        "FIXING_FUNCTIONAL_FINDINGS",
+        "AWAITING_USER_ACCEPTANCE",
+    })
+
+    @staticmethod
+    def _phases_the_writer_persists() -> "frozenset[str]":
+        """Every phase literal `workflow_state.py` assigns, read out of its
+        own AST rather than by regex, so a rename or a reflow cannot make
+        this silently under-count. Both shapes are collected: a subscript
+        assignment (`work_item["phase"] = "..."`) and a dict literal entry
+        (`"phase": "..."`), which is how `default_work_item` seeds
+        `PLANNING`."""
+        tree = ast.parse((Path(ws.__file__)).read_text())
+        found: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if (
+                        isinstance(target, ast.Subscript)
+                        and isinstance(target.slice, ast.Constant)
+                        and target.slice.value == "phase"
+                        and isinstance(node.value, ast.Constant)
+                        and isinstance(node.value.value, str)
+                    ):
+                        found.add(node.value.value)
+                    # `work_item["phase"] = target_phase`, where the name is
+                    # bound to one of several literals nearby.
+                    elif (
+                        isinstance(target, ast.Subscript)
+                        and isinstance(target.slice, ast.Constant)
+                        and target.slice.value == "phase"
+                        and isinstance(node.value, ast.Name)
+                    ):
+                        found.update(
+                            n.value.value
+                            for n in ast.walk(tree)
+                            if isinstance(n, ast.Assign)
+                            and any(
+                                isinstance(t, ast.Name) and t.id == node.value.id
+                                for t in n.targets
+                            )
+                            and isinstance(n.value, ast.Constant)
+                            and isinstance(n.value.value, str)
+                        )
+            elif isinstance(node, ast.Dict):
+                for key, value in zip(node.keys, node.values):
+                    if (
+                        isinstance(key, ast.Constant) and key.value == "phase"
+                        and isinstance(value, ast.Constant)
+                        and isinstance(value.value, str)
+                    ):
+                        found.add(value.value)
+        return frozenset(found & ws.KNOWN_PHASES)
+
+    #: The thirteen `KNOWN_PHASES` some writer really does persist. Stated
+    #: as well as derived, so an under-counting helper cannot quietly grow
+    #: the never-persisted set: `AWAITING_EXTERNAL_PLAN_REVIEW` in
+    #: particular is only reachable through `publish_plan_revision`'s
+    #: `target_phase` indirection, so it is present here exactly when the
+    #: helper's indirect branch works.
+    PERSISTED = frozenset({
+        "PLANNING", "AWAITING_EXTERNAL_PLAN_REVIEW", "REVISING_PLAN",
+        "AWAITING_LOCAL_PLAN_REVIEW", "AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW",
+        "AWAITING_PLAN_APPROVAL", "IMPLEMENTING", "SELF_REVIEWING_IMPLEMENTATION",
+        "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW", "APPLYING_REVIEW_FEEDBACK",
+        "AWAITING_FUNCTIONAL_REVIEW", "MILESTONE_COMPLETE", "LEGACY_READY",
+    })
+
+    def test_exactly_four_known_phases_are_never_persisted(self):
+        persisted = self._phases_the_writer_persists()
+        self.assertEqual(persisted, self.PERSISTED)
+        self.assertEqual(ws.KNOWN_PHASES - persisted, self.NEVER_PERSISTED)
+        # The two halves partition the vocabulary, so a phase added to
+        # `KNOWN_PHASES` lands in neither and fails here.
+        self.assertEqual(persisted | self.NEVER_PERSISTED, ws.KNOWN_PHASES)
+
+    def test_all_four_remain_in_the_validator_allowlist(self):
+        """Never-persisted is not the same as rejected: `KNOWN_PHASES` is a
+        union of the v1 and v2.1 vocabularies, so a hand-written or
+        historical state file carrying one of these still validates. The
+        marker says "never persisted", not "invalid", and this is the half
+        that keeps that distinction true."""
+        for phase in sorted(self.NEVER_PERSISTED):
+            with self.subTest(phase=phase):
+                self.assertIn(phase, ws.KNOWN_PHASES)
+
+    def test_the_document_marks_every_one_of_them_and_no_other(self):
+        """The prose half, bound to the derived set: each of the four
+        sections carries the marker, no persisted phase's section does,
+        and the summary paragraph names all four."""
+        text = (_repo_root() / "docs" / "ai-workflow" / "MILESTONE_WORKFLOW.md").read_text()
+        sections = re.split(r"^### ", text, flags=re.MULTILINE)[1:]
+        marked = {
+            section.splitlines()[0].split(" ")[0]
+            for section in sections
+            if "*Vocabulary state — never persisted" in section
+        }
+        self.assertEqual(marked, set(self.NEVER_PERSISTED))
+        summary = text.split("## State reference", 1)[1].split("### ", 1)[0]
+        for phase in sorted(self.NEVER_PERSISTED):
+            with self.subTest(phase=phase):
+                self.assertIn(phase, summary)
 
 
 class TestDiscoverStateWriters(unittest.TestCase):

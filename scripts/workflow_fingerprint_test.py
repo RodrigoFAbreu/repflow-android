@@ -948,6 +948,44 @@ class TestWF8bSyntheticWorkItemIdCanonicalization(unittest.TestCase):
             wf.validate_work_item_id("v2.1-dry-run")
 
 
+class TestNonStringIdentityValuesFailClosed(unittest.TestCase):
+    """Salvage audit `I2`: `validate_work_item_id`/`validate_work_item_type`
+    are reached with values read straight out of an unvalidated
+    `WORKFLOW_STATE.json` by every implementation-stage reader
+    (`write_manifest_with_verified_identifiers_implementation_stage_for_work_item`,
+    `workflow_state.approval_review_content_id`,
+    `workflow_state.resolve_bundle_generation_outcome`, and therefore
+    `scripts/prepare-ai-review.sh`). A corrupt, hand-edited or badly
+    merged JSON value that is not a string used to escape as a raw
+    `TypeError` from `re.match`/`frozenset.__contains__` instead of this
+    module's own documented error -- the exact class `workflow-v2-3-1`
+    CP1's round-1 remediation closed for `resolve_plan_stage_metadata`'s
+    own inline check but not for the shared validators behind it."""
+
+    UNHASHABLE_AND_WRONG_TYPE_VALUES = (["process"], {"type": "process"}, 3, None, True)
+
+    def test_non_string_work_item_type_raises_the_documented_error(self):
+        for value in self.UNHASHABLE_AND_WRONG_TYPE_VALUES:
+            with self.subTest(value=value):
+                with self.assertRaises(wf.InvalidWorkItemTypeError):
+                    wf.validate_work_item_type(value)
+
+    def test_non_string_work_item_id_raises_the_documented_error(self):
+        for value in self.UNHASHABLE_AND_WRONG_TYPE_VALUES:
+            with self.subTest(value=value):
+                with self.assertRaises(wf.InvalidWorkItemIdError):
+                    wf.validate_work_item_id(value)
+
+    def test_valid_string_values_are_unaffected(self):
+        wf.validate_work_item_type("process")
+        wf.validate_work_item_type("product")
+        wf.validate_work_item_id("wi")
+        with self.assertRaises(wf.InvalidWorkItemTypeError):
+            wf.validate_work_item_type("widget")
+        with self.assertRaises(wf.InvalidWorkItemIdError):
+            wf.validate_work_item_id("Not A Slug")
+
+
 class TestProtectedAndExclusionSetsInProjection(unittest.TestCase):
     """OPUS-R8-014: the protected and exclusion sets are themselves part of
     the hashed projection."""
@@ -2056,6 +2094,143 @@ class TestBundleLayoutResolver(unittest.TestCase):
                 wf.resolve_bundle_dir(repo.root, "Not_A_Valid_Slug!")
 
 
+class TestBundleLayoutResolverStageAwareness(unittest.TestCase):
+    """Convergence repair `I1`: `resolve_bundle_dir`'s existence gate is
+    correct only where the flat layout is a reachable generation target.
+    It is for the three stages whose `work-item-id` argument to
+    `prepare-ai-review.sh` is optional; it is not for the plan stage,
+    whose argument is required and whose generator templates
+    `.ai-review/<work_item_id>/` directly. Passing `stage="plan"` makes
+    the resolver answer scoped by construction, closing the split that
+    sent the authoring half of every plan-stage command to the flat path
+    on a work item's first bundle while the generator wrote the scoped
+    one."""
+
+    def test_plan_stage_is_scoped_by_construction_with_no_directory_on_disk(self):
+        with ScratchRepo() as repo:
+            self.assertFalse((repo.root / ".ai-review").exists())
+            self.assertEqual(
+                wf.resolve_bundle_dir(repo.root, "workflow-v2-1-core", stage="plan"),
+                Path(".ai-review/workflow-v2-1-core/current"),
+            )
+
+    def test_plan_stage_ignores_an_existing_flat_layout(self):
+        """A flat `.ai-review/current/` belonging to some other work item
+        must never capture a plan-stage resolution -- the pre-repair
+        resolver would have authored this item's plan bundle straight over
+        it."""
+        with ScratchRepo() as repo:
+            (repo.root / ".ai-review" / "current").mkdir(parents=True)
+            self.assertEqual(
+                wf.resolve_bundle_dir(repo.root, "milestone-9", stage="plan"),
+                Path(".ai-review/milestone-9/current"),
+            )
+            # ... while a stageless resolution still takes it, unchanged.
+            self.assertEqual(
+                wf.resolve_bundle_dir(repo.root, "milestone-9"), Path(".ai-review/current"),
+            )
+
+    def test_plan_stage_answer_survives_the_scoped_current_being_withdrawn(self):
+        """`withdraw_bundle` renames `current/` to a quarantine sibling,
+        which is what made the same defect recur on every regeneration
+        after a withdrawal, not just on a work item's very first bundle."""
+        with ScratchRepo() as repo:
+            scoped = repo.root / ".ai-review" / "milestone-9" / "current"
+            scoped.mkdir(parents=True)
+            scoped.rename(scoped.parent / "current.rejected-deadbeef")
+            self.assertEqual(
+                wf.resolve_bundle_dir(repo.root, "milestone-9", stage="plan"),
+                Path(".ai-review/milestone-9/current"),
+            )
+
+    def test_non_plan_stages_keep_the_flat_compatibility_rule(self):
+        with ScratchRepo() as repo:
+            for stage in ("implementation", "post-fix", "functional-review", None):
+                with self.subTest(stage=stage):
+                    self.assertEqual(
+                        wf.resolve_bundle_dir(repo.root, "milestone-9", stage=stage),
+                        Path(".ai-review/current"),
+                    )
+            (repo.root / ".ai-review" / "milestone-9" / "current").mkdir(parents=True)
+            for stage in ("implementation", "post-fix", "functional-review", None):
+                with self.subTest(stage=stage, scoped=True):
+                    self.assertEqual(
+                        wf.resolve_bundle_dir(repo.root, "milestone-9", stage=stage),
+                        Path(".ai-review/milestone-9/current"),
+                    )
+
+    def test_non_plan_stages_stay_scoped_while_current_is_quarantined(self):
+        """The re-audit's own finding, the same defect one stage over:
+        `withdraw_bundle` renames `current/` away, and a `current/`-gated
+        answer flipped an item that had demonstrably been generating
+        scoped bundles back onto the flat path for its next round -- while
+        `prepare-ai-review.sh`, given the same `[work-item-id]` argument
+        the round before, still wrote the scoped directory. Deciding from
+        the work item's own root directory is stable across the rename."""
+        with ScratchRepo() as repo:
+            scoped_root = repo.root / ".ai-review" / "milestone-9"
+            (scoped_root / "current").mkdir(parents=True)
+            (scoped_root / "current").rename(scoped_root / "current.rejected-deadbeef")
+            for stage in ("implementation", "post-fix", "functional-review", None):
+                with self.subTest(stage=stage):
+                    self.assertEqual(
+                        wf.resolve_bundle_dir(repo.root, "milestone-9", stage=stage),
+                        Path(".ai-review/milestone-9/current"),
+                    )
+
+    def test_a_never_scoped_work_item_still_resolves_flat_at_non_plan_stages(self):
+        """The genuinely flat-generated layout is untouched: omitting
+        `prepare-ai-review.sh`'s optional `[work-item-id]` argument is a
+        documented, supported invocation that really does write
+        `.ai-review/current/`, and an item that has never had a
+        `.ai-review/<id>/` directory created still resolves there."""
+        with ScratchRepo() as repo:
+            (repo.root / ".ai-review" / "current").mkdir(parents=True)
+            (repo.root / ".ai-review" / "feedback").mkdir(parents=True)
+            for stage in ("implementation", "post-fix", "functional-review", None):
+                with self.subTest(stage=stage):
+                    self.assertEqual(
+                        wf.resolve_bundle_dir(repo.root, "milestone-9", stage=stage),
+                        Path(".ai-review/current"),
+                    )
+
+    def test_unknown_stage_is_refused_rather_than_treated_as_no_stage(self):
+        """Falling through to the compatibility branch on a typo would
+        reintroduce exactly the defect the argument closes, silently."""
+        with ScratchRepo() as repo:
+            for bad in ("Plan", "plan-stage", "PLAN", "", "post_fix"):
+                with self.subTest(stage=bad):
+                    with self.assertRaises(wf.InvalidBundleStageError):
+                        wf.resolve_bundle_dir(repo.root, "milestone-9", stage=bad)
+
+    def test_stage_vocabulary_matches_the_generation_script(self):
+        """The same four stages `scripts/prepare-ai-review.sh` accepts,
+        read out of the script itself rather than restated here."""
+        script = (Path(__file__).resolve().parent / "prepare-ai-review.sh").read_text()
+        self.assertIn("plan | implementation | post-fix | functional-review", script)
+        self.assertEqual(
+            wf.GENERATION_STAGES,
+            frozenset({"plan", "implementation", "post-fix", "functional-review"}),
+        )
+        self.assertTrue(wf.SCOPED_BY_CONSTRUCTION_STAGES <= wf.GENERATION_STAGES)
+        self.assertEqual(wf.SCOPED_BY_CONSTRUCTION_STAGES, frozenset({"plan"}))
+
+    def test_work_item_id_is_still_validated_before_the_stage(self):
+        with ScratchRepo() as repo:
+            with self.assertRaises(wf.InvalidWorkItemIdError):
+                wf.resolve_bundle_dir(repo.root, "Not_A_Valid_Slug!", stage="plan")
+
+    def test_resolve_feedback_dir_is_deliberately_not_stage_aware(self):
+        """`feedback/` is stage-agnostic by contract (`REVIEW_PROTOCOL.md`,
+        `REQ-21`); this repair leaves it completely untouched."""
+        with ScratchRepo() as repo:
+            self.assertEqual(
+                wf.resolve_feedback_dir(repo.root, "milestone-9"), Path(".ai-review/feedback"),
+            )
+            with self.assertRaises(TypeError):
+                wf.resolve_feedback_dir(repo.root, "milestone-9", stage="plan")
+
+
 class TestRejectedBundleMarker(unittest.TestCase):
     """`WFR-67`'s shared `REJECTED`-marker resolver/assertion (`WF8c`
     item (h), part 1: the consumer-side read half). The generator-side
@@ -2126,6 +2301,76 @@ class TestRejectedBundleMarker(unittest.TestCase):
             wf.assert_bundle_not_rejected(repo.root, "workflow-v2-1-core")
             with self.assertRaises(wf.BundleRejectedError):
                 wf.assert_bundle_not_rejected(repo.root, "milestone-8")
+
+    def test_marker_resolves_scoped_while_current_is_quarantined(self):
+        """Convergence repair, Optional finding 4. `withdraw_bundle`
+        writes the marker first, renames `current/` away, and only then
+        removes the marker. While the marker path was derived from
+        `resolve_bundle_dir`'s own answer, and that answer was keyed on
+        `current/`'s existence, the rename moved the *resolved* marker
+        path from the scoped location it had just been written at to the
+        flat one -- so a crash in the window between the successful rename
+        and the marker's removal left a scoped marker that every later
+        `assert_bundle_not_rejected` resolved past, failing **open** on
+        exactly the residue the marker exists to refuse. The shared
+        resolver now decides the layout from the work item's own root
+        directory, which a withdrawal does not remove."""
+        with ScratchRepo() as repo:
+            scoped_root = repo.root / ".ai-review" / "milestone-8"
+            (scoped_root / "current").mkdir(parents=True)
+            marker = scoped_root / "REJECTED"
+            marker.write_text("REJECTED: withdrawal in progress\nstep: MANIFEST.md removed\n")
+            # The exact crash window: the rename landed, the unlink did not.
+            (scoped_root / "current").rename(scoped_root / "current.rejected-deadbeef")
+            self.assertEqual(
+                wf.resolve_rejected_marker_path(repo.root, "milestone-8"),
+                Path(".ai-review/milestone-8/REJECTED"),
+            )
+            with self.assertRaises(wf.BundleRejectedError) as ctx:
+                wf.assert_bundle_not_rejected(repo.root, "milestone-8")
+            self.assertIn("MANIFEST.md removed", str(ctx.exception))
+
+    def test_clearing_the_marker_targets_the_same_resolved_path(self):
+        """`clear_rejected_marker_if_present` resolves through the same
+        function, so the residue above is cleared by the next successful
+        generation rather than becoming permanently sticky."""
+        with ScratchRepo() as repo:
+            scoped_root = repo.root / ".ai-review" / "milestone-8"
+            (scoped_root / "current").mkdir(parents=True)
+            (scoped_root / "REJECTED").write_text("blocked\n")
+            (scoped_root / "current").rename(scoped_root / "current.rejected-deadbeef")
+            wf.clear_rejected_marker_if_present(repo.root, "milestone-8")
+            self.assertFalse((scoped_root / "REJECTED").exists())
+            wf.assert_bundle_not_rejected(repo.root, "milestone-8")
+
+    def test_a_work_item_with_no_scoped_root_still_resolves_flat(self):
+        """The flat compatibility layout is untouched by the change above:
+        a work item that has never had a `.ai-review/<id>/` directory
+        created is still on the flat marker path, exactly as before."""
+        with ScratchRepo() as repo:
+            (repo.root / ".ai-review" / "current").mkdir(parents=True)
+            self.assertEqual(
+                wf.resolve_rejected_marker_path(repo.root, "workflow-v2-1-core"),
+                Path(".ai-review/REJECTED"),
+            )
+
+    def test_marker_resolver_rejects_invalid_work_item_id(self):
+        with ScratchRepo() as repo:
+            with self.assertRaises(wf.InvalidWorkItemIdError):
+                wf.resolve_rejected_marker_path(repo.root, "Not_A_Valid_Slug!")
+
+    def test_marker_path_is_derived_from_the_bundle_resolver_not_a_second_copy(self):
+        """The two resolvers agree by derivation, not by restating the
+        layout rule twice -- so a future change to one cannot leave the
+        other behind."""
+        with ScratchRepo() as repo:
+            for setup in (lambda: None,
+                          lambda: (repo.root / ".ai-review" / "milestone-8" / "current").mkdir(parents=True)):
+                setup()
+                self.assertEqual(
+                    wf.resolve_rejected_marker_path(repo.root, "milestone-8"),
+                    wf.resolve_bundle_dir(repo.root, "milestone-8").parent / "REJECTED",
+                )
 
 
 class TestFunctionalReviewConsumedMarker(unittest.TestCase):

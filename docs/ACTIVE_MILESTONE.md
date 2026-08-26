@@ -108,8 +108,19 @@ implementation review — `phase` remains `IMPLEMENTING` until that review
 and `/approve-review implementation` complete; `AWAITING_FUNCTIONAL_REVIEW`
 is not yet re-entered. The checklist below is preserved unchanged; the
 user's acceptance of it has **not** been recorded anywhere yet
-(deliberately) and will be, via `/accept-scoped-remediation`, once this
-round's technical approval lands.
+(deliberately).
+
+**Correction (2026-08-26)**: the status note above is preserved as the
+historical record of what was true on 2026-08-04. It is no longer live
+guidance. `workflow-v2-1-core` subsequently reached `MILESTONE_COMPLETE`
+through `/accept-milestone` (see `docs/ai-workflow/WORKFLOW_STATE.json`),
+and `/accept-scoped-remediation` has since been **retired** — its entry
+precondition had no producer in any supported lifecycle, so it could only
+ever refuse (ledger `I10` in
+`docs/ai-workflow/audit/WORKFLOW_DEFECT_LEDGER.md`). Do not look for that
+command; the supported ways forward from a non-terminal registry are
+`/milestone-implement`, or `/apply-functional-review`'s bounded/broad
+branches.
 
 **Context**: checkpoint `WF8b` (manual multi-session dry run) began
 against the synthetic work item `v2-1-dry-run`, but its first scenario
@@ -799,8 +810,9 @@ stage, applies a finding, or advances `phase`; the hard-gate count stays
 exactly 6 (`docs/ai-workflow/MILESTONE_WORKFLOW.md`'s "Hard gates
 summary"). Two checkpoints (`CP1`, `CP2`), both `COMPLETE` — no
 continued-scope remediation round is open, so this item's eventual
-acceptance goes through `/accept-milestone`, not
-`/accept-scoped-remediation`.
+acceptance goes through `/accept-milestone` — which, since ledger `I10`
+retired `/accept-scoped-remediation`, is the only acceptance command
+there is.
 
 Four implementation-review rounds ran before technical approval:
 `GPT-IR1` (`REVISE`, 2 Important — both fixed), a second round whose

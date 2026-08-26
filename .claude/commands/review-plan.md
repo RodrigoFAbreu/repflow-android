@@ -19,7 +19,18 @@ not a verified precondition; no check here depends on session freshness.
 
 `<bundle_dir>`/`<feedback_dir>` below resolve per
 `docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Bundle location"
-(`workflow_fingerprint.resolve_bundle_dir`/`resolve_feedback_dir`).
+(`workflow_fingerprint.resolve_bundle_dir(repo_root, work_item_id,
+stage="plan")`/`resolve_feedback_dir(repo_root, work_item_id)`). This is a
+plan-stage command, so `<bundle_dir>` is **always**
+`.ai-review/<work_item_id>/current/` -- the `stage="plan"` argument is
+required and load-bearing, never decorative: without it the resolver takes
+its compatibility branch and answers the flat `.ai-review/current/` for a
+work item with nothing under `.ai-review/<work_item_id>/` yet (a
+brand-new milestone's first plan bundle, or the first
+`/milestone-plan <child-id>` on a remediation child), while the generator
+writes and validates the scoped one. `<feedback_dir>` takes no stage
+argument: `feedback/` is stage-agnostic and keeps the scoped-else-flat
+rule for every stage alike.
 
 1. **Resolve the work item**: `$ARGUMENTS`, if given, names the
    `work_item_id`; otherwise use `active_work_item_id`
@@ -40,8 +51,12 @@ not a verified precondition; no check here depends on session freshness.
    rounds), and `docs/ai-workflow/REVIEW_PROTOCOL.md`'s feedback-structure
    contract.
 5. **Recompute fresh, before writing anything**: the current `bundle_id`
-   and the plan-stage `review_content_id`
-   (`scripts/workflow_fingerprint.py`). Refuse, naming both a recomputed
+   and the plan-stage `review_content_id`, the latter through the single
+   canonical entry point `docs/ai-workflow/REVIEW_PROTOCOL.md`'s
+   "Computing `review_content_id`" names for this stage — never a second,
+   ad hoc computation, and never the value `MANIFEST.md` already states
+   (that is the value being checked, not the value to check it with).
+   Refuse, naming both a recomputed
    and a stale value, if the bundle directory does not match what
    `MANIFEST.md`/`REVIEW_REQUEST.md` claim (the same staleness discipline
    `/approve-review` applies, run one stage earlier) — a missing/unreadable

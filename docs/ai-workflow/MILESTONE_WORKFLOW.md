@@ -15,6 +15,23 @@ owned by `docs/ai-workflow/REVIEW_PROTOCOL.md` and
 For every state: entry condition, allowed actions, required artifacts, exit
 condition, and whether Claude stops.
 
+**Vocabulary states.** Four of the sections below describe a *phase of the
+work* that no writer ever persists as a `phase` value in
+`docs/ai-workflow/WORKFLOW_STATE.json`: `SELF_REVIEWING_PLAN`,
+`AWAITING_TECHNICAL_APPROVAL`, `FIXING_FUNCTIONAL_FINDINGS` and
+`AWAITING_USER_ACCEPTANCE`. They are accepted by `workflow_state.py`'s
+`KNOWN_PHASES` allowlist — which is deliberately a union of the v1 and v2.1
+vocabularies, not a transition graph — so a hand-written or historical
+state file carrying one still validates. But every command that passes
+through the described work writes the *next* persisted phase directly, so
+none of the four is ever a value you will find in a live state file, and
+none of them is a state a command can be resumed from. Each section is
+marked accordingly, and
+`scripts/workflow_state_completion_obligations_test.py` holds that list to
+exactly these four: a phase that gains a writer, or a fifth that loses
+one, fails there rather than leaving this note quietly wrong (workflow
+system audit, convergence pass 12, ledger row `O34`).
+
 ### PLANNING
 
 - **Entry**: `docs/ACTIVE_MILESTONE.md` names an incomplete milestone/checkpoint,
@@ -28,6 +45,11 @@ condition, and whether Claude stops.
 - **Stop for user/reviewer?** No.
 
 ### SELF_REVIEWING_PLAN
+
+*Vocabulary state — never persisted (see "Vocabulary states" above).*
+`/milestone-plan` does this work inside its own step 4 and then writes
+`AWAITING_LOCAL_PLAN_REVIEW` (`"2.1"`) or `AWAITING_EXTERNAL_PLAN_REVIEW`
+(`"1"`) directly, through `publish_plan_revision`.
 
 - **Entry**: a draft plan exists.
 - **Allowed actions**: critically review the plan for missing requirements,
@@ -239,6 +261,13 @@ re-enters manual-external review without a fresh local pass first.
 
 ### AWAITING_TECHNICAL_APPROVAL
 
+*Vocabulary state — never persisted (see "Vocabulary states" above).*
+It names the gate, not a stored value: the item sits at
+`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` until
+`apply_technical_approval` writes `AWAITING_FUNCTIONAL_REVIEW` in one
+step. `technical_approval_gate_reachable` is what actually decides
+whether the gate is open.
+
 - **Entry**: `APPLYING_REVIEW_FEEDBACK`'s exit condition is met, no
   protected path is dirty (`WORKFLOW_STATE.json`/`WORKFLOW_CONFIG.json`
   dirtiness never blocks this), and current committed content matches
@@ -269,33 +298,46 @@ re-enters manual-external review without a fresh local pass first.
 - **Exit**: user performs functional testing and places findings at
   `.ai-review/feedback/FUNCTIONAL_REVIEW.md`.
 - **Stop for user/reviewer?** Yes — hard gate. Claude must stop here.
-- **Two distinct next commands once functional review is clean**
-  (`D-Scoped-Remediation-Acceptance`, resolves `WF8B-002`): for a work item
-  with a `docs/ai-workflow/WORKFLOW_STATE.json` entry, which command is
-  reachable next depends on whether the item's own registry still has an
-  incomplete checkpoint — `workflow_state.select_next_checkpoint(work_item,
-  registry)`, recomputed fresh, never a phase value written earlier. If
-  every checkpoint is `COMPLETE` (terminal), `/accept-milestone` is the
-  correct next command, exactly as before. If a checkpoint remains
-  incomplete (a continued-scope implementation round, e.g. a fix landed
-  as extra scope on an already-approved checkpoint while the item's own
-  last checkpoint is still outstanding), `/accept-scoped-remediation` is
-  the correct next command instead — it records the user's functional
-  acceptance of this round specifically via its own dedicated,
-  metadata-only provenance commit (required before success is reported,
-  `D-Scoped-Remediation-Acceptance`'s revision-23 hardening,
-  `GPT-R36-002`), then returns `phase` to `IMPLEMENTING` so the outstanding
-  checkpoint can be resumed, without ever marking the whole item
-  `MILESTONE_COMPLETE`. Both commands are
-  user-only (`disable-model-invocation: true`, a literal confirmation
-  naming the work item and a stage keyword unique to each), and both now
-  carry a code-level gate-reachability guard
-  (`milestone_complete_gate_reachable`/`scoped_remediation_gate_reachable`)
-  refusing the wrong one for the wrong item. A work item with no state
-  entry (an ordinary `"1"` item that never got one) has no registry to
-  check — `/accept-milestone` is the only reachable command, unchanged.
+- **One acceptance command, and what to do when it refuses.** Once
+  functional review is clean, `/accept-milestone` is the only acceptance
+  command. For a work item with a `docs/ai-workflow/WORKFLOW_STATE.json`
+  entry it additionally requires the item's own registry to be terminal —
+  every checkpoint `COMPLETE`, recomputed fresh from
+  `workflow_state.select_next_checkpoint(work_item, registry)`, never read
+  from a phase value written earlier — and refuses by name
+  (`IncompleteOwnCheckpointsError`, and the advisory pre-flight
+  `milestone_complete_gate_reachable`) when it is not. The refusal is not a
+  dead end; it names the outstanding checkpoint, and there are exactly
+  three supported ways forward:
+  - the checkpoint is still part of this milestone's scope → finish it
+    with `/milestone-implement`, then come back to this gate;
+  - functional testing produced a finding fixable inside the approved
+    scope → `/apply-functional-review`'s **bounded** branch, which marks
+    `technical_approval` `STALE`, lands the fix, regenerates the `post-fix`
+    bundle and returns the item to a fresh
+    `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`;
+  - the finding is new or wider scope → `/apply-functional-review`'s
+    **broad** branch, which creates a `<parent-id>-remediation-<n>` child
+    work item that runs its own full cycle, and blocks the parent's
+    acceptance until it is itself `MILESTONE_COMPLETE`.
+
+  There is deliberately **no** command that records functional acceptance
+  of a partial round. `D-Scoped-Remediation-Acceptance` (resolves
+  `WF8B-002`) once added a second, mutually exclusive command here,
+  `/accept-scoped-remediation`, for exactly that case; it was retired
+  (ledger `I10` in `docs/ai-workflow/audit/WORKFLOW_DEFECT_LEDGER.md`)
+  because its entry precondition — `AWAITING_FUNCTIONAL_REVIEW` with a
+  non-terminal own registry — has no producer in any supported lifecycle,
+  so the command could only ever refuse. A work item with no state entry
+  (an ordinary `"1"` item that never got one) has no registry to check —
+  `/accept-milestone` is the only reachable command, unchanged.
 
 ### FIXING_FUNCTIONAL_FINDINGS
+
+*Vocabulary state — never persisted (see "Vocabulary states" above).*
+`/apply-functional-review` runs from `AWAITING_FUNCTIONAL_REVIEW`; its
+bounded branch's own `record_bundle_generation` is what moves the item,
+to `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`.
 
 - **Entry**: `.ai-review/feedback/FUNCTIONAL_REVIEW.md` exists.
 - **Allowed actions**: classify each finding (defect, usability issue,
@@ -348,6 +390,12 @@ re-enters manual-external review without a fresh local pass first.
 
 ### AWAITING_USER_ACCEPTANCE
 
+*Vocabulary state — never persisted (see "Vocabulary states" above).*
+`/accept-milestone` runs from `AWAITING_FUNCTIONAL_REVIEW` and writes
+`MILESTONE_COMPLETE` in one step. The acceptance gate's own reachability
+check accepts either phase name, so a historical state file carrying
+this value is still honoured — nothing writes it.
+
 - **Entry**: functional review is clean (or remaining items are explicitly
   deferred/waived by the user).
 - **Allowed actions**: none besides answering questions — no further code
@@ -385,9 +433,11 @@ re-enters manual-external review without a fresh local pass first.
   completing an item whose own last checkpoint has never been attempted.
   This is the same defect class the parent-completion block already
   resolves, applied to the item's own registry instead of a child work
-  item's: see `D-Scoped-Remediation-Acceptance` for the full design and
-  `/accept-scoped-remediation` for the non-terminal acceptance path this
-  block exists alongside.
+  item's: see `D-Scoped-Remediation-Acceptance` for the full design of
+  this block. The non-terminal acceptance path that decision paired it
+  with, `/accept-scoped-remediation`, has been retired (ledger `I10`); the
+  block itself stays, and the `AWAITING_FUNCTIONAL_REVIEW` section above
+  lists the supported ways forward when it fires.
 - **Allowed actions**: final verification confirmation; update
   `docs/ROADMAP.md` and `docs/ACTIVE_MILESTONE.md`; archive the milestone's
   plans to `docs/milestones/completed/`; create the final completion commit
@@ -417,12 +467,23 @@ by `/approve-review`'s mechanism-independent user-only guard
 autonomously. `/accept-milestone` carries the same guard for
 `AWAITING_USER_ACCEPTANCE`.
 
+Two of the six — `AWAITING_TECHNICAL_APPROVAL` and
+`AWAITING_USER_ACCEPTANCE` — are **vocabulary states** ("Vocabulary
+states" above): a gate is a point where Claude must stop, not a value a
+writer persists. Both are enforced by the guards named in the paragraph
+above and by `technical_approval_gate_reachable` /
+`milestone_complete_gate_reachable`, which read the phase the item is
+*actually* at (`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` and
+`AWAITING_FUNCTIONAL_REVIEW` respectively). Nothing about the gates
+depends on those two names ever being written, and ledger `D3` records
+the disproven claim that it did.
+
 `/accept-scoped-remediation` (`D-Scoped-Remediation-Acceptance`, resolves
-`WF8B-002`) is not a seventh hard gate: it is a second, mutually exclusive
-user-only command reachable from the same `AWAITING_FUNCTIONAL_REVIEW`
-gate as `/accept-milestone`, discriminated by whether the item's own
-registry still has an incomplete checkpoint — never a new phase. The hard
-gate count stays exactly **6**.
+`WF8B-002`) was a second, mutually exclusive user-only command reachable
+from the same `AWAITING_FUNCTIONAL_REVIEW` gate as `/accept-milestone`. It
+never added a gate, and it has since been retired outright (ledger `I10`):
+its entry precondition had no producer in any supported lifecycle. The
+hard gate count was **6** with it and is **6** without it.
 
 `/review-implementation` and `/review-functional` (`workflow-v2-3`) add no
 gate either: both are optional, non-gating actions reachable from inside an

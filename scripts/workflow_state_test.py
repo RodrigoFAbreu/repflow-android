@@ -21,6 +21,7 @@ Stdlib-only. Run: python3 scripts/workflow_state_test.py
 
 from __future__ import annotations
 
+import ast
 import copy
 import json
 import os
@@ -2158,6 +2159,57 @@ class TestRegistryMappingGenerator(unittest.TestCase):
                 ws.write_registry_and_mapping(root, Path("reg.json"), Path("map.json"), registry, mapping)
             self.assertFalse((root / "reg.json").exists())
 
+    def test_write_registry_and_mapping_creates_missing_parent_directories(self):
+        """Salvage audit `O3`: `/milestone-plan` step 3 calls this writer
+        before anything has necessarily created
+        `docs/ai-workflow/registry/` or `docs/ai-workflow/requirements/`.
+        A repository adopting the workflow for the first time used to get
+        a bare `FileNotFoundError` out of the one step that is supposed to
+        create these artifacts."""
+        with ScratchRepo() as repo:
+            registry_rel = Path("docs/ai-workflow/registry/wi-registry.json")
+            mapping_rel = Path("docs/ai-workflow/requirements/wi-mapping.json")
+            self.assertFalse((repo.root / registry_rel.parent).exists())
+            self.assertFalse((repo.root / mapping_rel.parent).exists())
+            registry = ws.generate_registry("wi", 1, [
+                {"id": "A", "name": "a", "depends_on": [], "complexity": 1, "session_target": "1"},
+            ])
+            mapping = ws.generate_mapping(
+                "wi", {"R1": {"description": "d", "checkpoint_ids": ["A"]}}, registry=registry,
+            )
+            ws.write_registry_and_mapping(repo.root, registry_rel, mapping_rel, registry, mapping)
+            self.assertEqual(json.loads((repo.root / registry_rel).read_text()), registry)
+            self.assertEqual(json.loads((repo.root / mapping_rel).read_text()), mapping)
+
+    def test_non_string_work_item_kind_raises_the_documented_error(self):
+        """Salvage audit `I2`, `work_item_kind` half: the three membership
+        checks that used to be written inline (`default_work_item`,
+        `route_work_item`, `_validate_work_item`) all read this value from
+        an unvalidated source, so an unhashable JSON value produced a raw
+        `TypeError` instead of `InvalidWorkItemTypeError`."""
+        for value in (["process"], {"kind": "process"}, 3, True):
+            with self.subTest(value=value):
+                with self.assertRaises(ws.InvalidWorkItemTypeError):
+                    ws.validate_work_item_kind(value)
+        for value in ("process", "product", "synthetic"):
+            ws.validate_work_item_kind(value)
+        with self.assertRaises(ws.InvalidWorkItemTypeError):
+            ws.validate_work_item_kind("gadget")
+
+    def test_validate_state_refuses_a_non_string_work_item_kind(self):
+        """The same guard reached through the real consumer: a persisted
+        entry whose `work_item_kind` is not a string must be refused by
+        name, never crash the validator."""
+        work_item = ws.default_work_item(
+            work_item_id="wi", work_item_type="process", work_item_kind="process",
+            plan_path="docs/ai-workflow/WORKFLOW_V2_PLAN.md", registry_path=None,
+            governing_workflow_version="1", plan_revision=1, last_transition="t0",
+        )
+        work_item["work_item_kind"] = ["process"]
+        state = {"schema_version": 1, "active_work_item_id": None, "work_items": {"wi": work_item}}
+        with self.assertRaises(ws.InvalidWorkItemTypeError):
+            ws.validate_state(state)
+
     def test_render_registry_markdown_is_a_pure_function_of_the_json(self):
         registry = ws.generate_registry("wi", 1, [
             {"id": "A", "name": "a", "depends_on": [], "complexity": 1, "session_target": "1"},
@@ -2394,20 +2446,26 @@ class TestUserConfirmationGuard(unittest.TestCase):
     def test_acceptance_stage_supported_for_accept_milestone(self):
         ws.validate_user_confirmation("I accept the wi milestone acceptance", work_item_id="wi", stage="acceptance")
 
-    def test_scoped_remediation_stage_confirmation_not_accepted_for_acceptance(self):
-        """Missing-test item 175: extends test_confirmation_naming_wrong_
-        stage_rejected's non-interchangeability property to the fourth
-        APPROVAL_STAGES member -- a scoped_remediation confirmation never
-        satisfies stage="acceptance" for the same work item, and vice
-        versa, since neither stage keyword is a substring of the other."""
-        scoped_text = "I confirm scoped_remediation for wi"
-        acceptance_text = "I confirm acceptance for wi"
-        ws.validate_user_confirmation(scoped_text, work_item_id="wi", stage="scoped_remediation")  # no raise
-        ws.validate_user_confirmation(acceptance_text, work_item_id="wi", stage="acceptance")  # no raise
-        with self.assertRaises(ws.UserConfirmationRejectedError):
-            ws.validate_user_confirmation(scoped_text, work_item_id="wi", stage="acceptance")
-        with self.assertRaises(ws.UserConfirmationRejectedError):
-            ws.validate_user_confirmation(acceptance_text, work_item_id="wi", stage="scoped_remediation")
+    def test_retired_scoped_remediation_stage_is_not_a_known_stage(self):
+        """Ledger `I10`: `"scoped_remediation"` was `APPROVAL_STAGES`'
+        fourth member, for `/accept-scoped-remediation` only. Retiring that
+        command retires the stage keyword with it -- an operator can never
+        be asked to type a confirmation for a stage no command consumes.
+        `validate_user_confirmation` refuses the unknown stage outright,
+        and the three surviving stages stay mutually non-interchangeable
+        (`test_confirmation_naming_wrong_stage_rejected`'s property)."""
+        self.assertEqual(ws.APPROVAL_STAGES, frozenset({"plan", "implementation", "acceptance"}))
+        with self.assertRaises(ws.InvalidApprovalRecordError) as ctx:
+            ws.validate_user_confirmation(
+                "I confirm scoped_remediation for wi", work_item_id="wi", stage="scoped_remediation",
+            )
+        self.assertIn("unknown approval stage", str(ctx.exception))
+        # The three surviving keywords remain pairwise non-interchangeable.
+        for stage, other in (("acceptance", "plan"), ("plan", "implementation"),
+                             ("implementation", "acceptance")):
+            ws.validate_user_confirmation(f"I confirm {stage} for wi", work_item_id="wi", stage=stage)
+            with self.assertRaises(ws.UserConfirmationRejectedError):
+                ws.validate_user_confirmation(f"I confirm {stage} for wi", work_item_id="wi", stage=other)
 
 
 class TestApprovalBasisResolution(unittest.TestCase):
@@ -4232,6 +4290,129 @@ class TestCheckpointStateTransitions(unittest.TestCase):
         new_state = ws.complete_checkpoint(state, "wi", "A", registry, now="t2", repo_root=Path("."))
         item = new_state["work_items"]["wi"]
         self.assertEqual(item["phase"], "SELF_REVIEWING_IMPLEMENTATION")
+
+
+class TestEnterSelfReviewingImplementation(unittest.TestCase):
+    """Salvage audit `B8`: `SELF_REVIEWING_IMPLEMENTATION`'s second writer,
+    the one `/milestone-implement` step 2 and `/bootstrap-workflow-v2`'s
+    `NO_CHECKPOINT` wrap-up branch call. Before it existed,
+    `complete_checkpoint` was the phase's sole writer and could only fire
+    as a side effect of a checkpoint *transitioning* to `COMPLETE`, so a
+    work item whose checkpoints were all already `COMPLETE` when
+    `apply_plan_approval` wrote `IMPLEMENTING` had no way out."""
+
+    REGISTRY = {"checkpoints": [{"id": "A", "depends_on": []},
+                                {"id": "B", "depends_on": ["A"]}]}
+
+    def _state(self, *, phase, a="COMPLETE", b="COMPLETE", state_revision=7):
+        return _base_state(wi=_base_work_item(
+            phase=phase, state_revision=state_revision,
+            checkpoints={"A": {"status": a}, "B": {"status": b}},
+        ))
+
+    def test_transitions_from_implementing_when_every_checkpoint_is_complete(self):
+        state = self._state(phase="IMPLEMENTING")
+        new_state = ws.enter_self_reviewing_implementation(state, "wi", self.REGISTRY, "t9")
+        item = new_state["work_items"]["wi"]
+        self.assertEqual(item["phase"], "SELF_REVIEWING_IMPLEMENTATION")
+        self.assertEqual(item["state_revision"], 8)
+        self.assertEqual(item["last_transition"], "t9")
+        # The input is never mutated -- same contract as every sibling writer.
+        self.assertEqual(state["work_items"]["wi"]["phase"], "IMPLEMENTING")
+        self.assertEqual(state["work_items"]["wi"]["state_revision"], 7)
+
+    def test_already_self_reviewing_is_a_true_no_op(self):
+        """The ordinary path re-enters the wrap-up branch on every
+        invocation until the bundle is generated. A writer that bumped
+        `state_revision` each time would manufacture a state change out of
+        a read-only re-check."""
+        state = self._state(phase="SELF_REVIEWING_IMPLEMENTATION")
+        new_state = ws.enter_self_reviewing_implementation(state, "wi", self.REGISTRY, "t9")
+        self.assertIs(new_state, state)
+        self.assertEqual(new_state["work_items"]["wi"]["state_revision"], 7)
+        self.assertNotEqual(new_state["work_items"]["wi"].get("last_transition"), "t9")
+
+    def test_outstanding_checkpoint_refuses_and_names_it(self):
+        state = self._state(phase="IMPLEMENTING", b="IN_PROGRESS")
+        with self.assertRaises(ws.IncompleteCheckpointsForSelfReviewError) as ctx:
+            ws.enter_self_reviewing_implementation(state, "wi", self.REGISTRY, "t9")
+        self.assertEqual(ctx.exception.outstanding_checkpoint_id, "B")
+        self.assertIn("'B'", str(ctx.exception))
+
+    def test_untracked_checkpoint_refuses(self):
+        """A registry entry the work item has never recorded at all is
+        outstanding exactly like an `IN_PROGRESS` one."""
+        state = _base_state(wi=_base_work_item(
+            phase="IMPLEMENTING", checkpoints={"A": {"status": "COMPLETE"}},
+        ))
+        with self.assertRaises(ws.IncompleteCheckpointsForSelfReviewError) as ctx:
+            ws.enter_self_reviewing_implementation(state, "wi", self.REGISTRY, "t9")
+        self.assertEqual(ctx.exception.outstanding_checkpoint_id, "B")
+
+    def test_blocked_checkpoint_refuses_rather_than_raising_selection_rule_4(self):
+        """`registry_completion_status` absorbs `NoCheckpointReadyError`
+        and reports the blocked checkpoint, so this writer's own refusal
+        is the one the caller sees."""
+        registry = {"checkpoints": [{"id": "A", "depends_on": ["Z"]}]}
+        state = _base_state(wi=_base_work_item(phase="IMPLEMENTING", checkpoints={}))
+        with self.assertRaises(ws.IncompleteCheckpointsForSelfReviewError) as ctx:
+            ws.enter_self_reviewing_implementation(state, "wi", registry, "t9")
+        self.assertEqual(ctx.exception.outstanding_checkpoint_id, "A")
+
+    def test_every_other_phase_refuses_by_name(self):
+        for phase in (
+            "PLANNING", "AWAITING_LOCAL_PLAN_REVIEW", "AWAITING_PLAN_APPROVAL",
+            "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW", "APPLYING_REVIEW_FEEDBACK",
+            "AWAITING_FUNCTIONAL_REVIEW", "MILESTONE_COMPLETE", "LEGACY_READY",
+        ):
+            with self.subTest(phase=phase):
+                state = self._state(phase=phase)
+                with self.assertRaises(ws.IllegalSelfReviewEntryPhaseError) as ctx:
+                    ws.enter_self_reviewing_implementation(state, "wi", self.REGISTRY, "t9")
+                self.assertIn(repr(phase), str(ctx.exception))
+                self.assertIn("IMPLEMENTING", str(ctx.exception))
+
+    def test_agrees_with_complete_checkpoints_own_all_complete_predicate(self):
+        """The two writers of this phase must never disagree about when it
+        is legal: whatever `complete_checkpoint` would have transitioned
+        on, this writer accepts, and nothing else."""
+        for a, b in (("COMPLETE", "COMPLETE"), ("COMPLETE", "IN_PROGRESS"),
+                     ("IN_PROGRESS", "COMPLETE")):
+            with self.subTest(a=a, b=b):
+                all_complete = a == "COMPLETE" and b == "COMPLETE"
+                state = self._state(phase="IMPLEMENTING", a=a, b=b)
+                if all_complete:
+                    result = ws.enter_self_reviewing_implementation(
+                        state, "wi", self.REGISTRY, "t9",
+                    )
+                    self.assertEqual(
+                        result["work_items"]["wi"]["phase"], "SELF_REVIEWING_IMPLEMENTATION",
+                    )
+                else:
+                    with self.assertRaises(ws.IncompleteCheckpointsForSelfReviewError):
+                        ws.enter_self_reviewing_implementation(
+                            state, "wi", self.REGISTRY, "t9",
+                        )
+
+    def test_the_phase_it_writes_is_a_legal_bundle_generation_source(self):
+        """The whole point of the transition: `record_bundle_generation(
+        stage="implementation")` must accept the resulting state, and must
+        have refused the one it started from."""
+        state = self._state(phase="IMPLEMENTING")
+        with self.assertRaises(ws.IllegalBundleGenerationSourcePhaseError):
+            ws.record_bundle_generation(
+                state, "wi", stage="implementation", head="h", now="t",
+            )
+        transitioned = ws.enter_self_reviewing_implementation(
+            state, "wi", self.REGISTRY, "t9",
+        )
+        published = ws.record_bundle_generation(
+            transitioned, "wi", stage="implementation", head="h", now="t10",
+        )
+        self.assertEqual(
+            published["work_items"]["wi"]["phase"],
+            "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+        )
 
 
 _RECONCILIATION_TABLE_FIXTURE = """### Reconciliation table
@@ -7141,6 +7322,38 @@ class TestRemediationChildWorkItem(unittest.TestCase):
         )
         ws.validate_state(new_state)  # must not raise -- parent_work_item_id resolves
 
+    def test_child_enters_the_plan_review_stage_its_own_governing_version_selects(self):
+        """Diagram finding `B1`: the lifecycle diagram claimed a remediation
+        child "runs the full lifecycle beginning at
+        `AWAITING_EXTERNAL_PLAN_REVIEW`". There is no remediation-specific
+        entry rule at all -- the child is an ordinary work item, so
+        `publish_plan_revision`'s own version branch decides, against the
+        version `create_remediation_child_work_item` fixed from the config
+        default at creation. Under this repository's own default (`"2.1"`)
+        that is `AWAITING_LOCAL_PLAN_REVIEW`; only a `"1"` default produces
+        the phase the diagram named."""
+        for default_version, expected_phase in (
+            ("2.1", "AWAITING_LOCAL_PLAN_REVIEW"),
+            ("1", "AWAITING_EXTERNAL_PLAN_REVIEW"),
+        ):
+            with self.subTest(default_version=default_version):
+                config = dict(ws.default_config(), default_workflow_version=default_version)
+                state = _base_state(parent=_base_work_item(work_item_id="parent"))
+                state["active_work_item_id"] = "parent"
+                created, child_id = ws.create_remediation_child_work_item(
+                    state, config, parent_work_item_id="parent", plan_path="p",
+                    registry_path="r", base_commit="feedcafe", now="t1",
+                )
+                child = created["work_items"][child_id]
+                self.assertEqual(child["governing_workflow_version"], default_version)
+                self.assertEqual(child["phase"], "PLANNING")
+                planned = ws.publish_plan_revision(created, child_id, 1, "t2")
+                self.assertEqual(planned["work_items"][child_id]["phase"], expected_phase)
+                # And planning the child never repoints focus away from the
+                # parent, which is why every command driving it needs an
+                # explicit work-item id.
+                self.assertEqual(planned["active_work_item_id"], "parent")
+
 
 class TestParentCompletionBlocksOnIncompleteChild(unittest.TestCase):
     def test_incomplete_children_lists_only_non_terminal_children(self):
@@ -7204,11 +7417,17 @@ class TestDanglingParentWorkItem(unittest.TestCase):
 
 
 # =============================================================================
-# D-Scoped-Remediation-Acceptance (revision 27, GPT-R40-001/-002; resolves
-# WF8B-002): registry_completion_status/gate functions, complete_work_item's
-# authoritative own-registry guard, the functional-checklist evidence
-# trailer/guard machinery, the confirmation binding-field parser, replay/
-# duplicate classification, and the acceptance record writer.
+# D-Scoped-Remediation-Acceptance's surviving half (revision 27,
+# GPT-R40-001/-002; resolves WF8B-002): registry_completion_status,
+# milestone_complete_gate_reachable, complete_work_item's authoritative
+# own-registry guard, and the functional-checklist evidence trailer
+# discovery /prepare-functional-review writes and /review-functional reads.
+#
+# The other half -- /accept-scoped-remediation, its gate function, the
+# pre-commit evidence guard, the confirmation binding-field parser, replay/
+# duplicate classification and the acceptance record writer -- was retired
+# with the command itself (ledger I10), together with every test that only
+# proved that dead path.
 # =============================================================================
 
 
@@ -7304,18 +7523,17 @@ class TestRegistryCompletionStatusAndGates(unittest.TestCase):
         self.assertFalse(ws.milestone_complete_gate_reachable(phase="AWAITING_FUNCTIONAL_REVIEW", is_terminal=False))
         self.assertFalse(ws.milestone_complete_gate_reachable(phase="IMPLEMENTING", is_terminal=True))
 
-    def test_scoped_remediation_gate_reachable_truth_table(self):
-        self.assertTrue(ws.scoped_remediation_gate_reachable(phase="AWAITING_FUNCTIONAL_REVIEW", is_terminal=False))
-        self.assertFalse(ws.scoped_remediation_gate_reachable(phase="AWAITING_FUNCTIONAL_REVIEW", is_terminal=True))
-        self.assertFalse(ws.scoped_remediation_gate_reachable(phase="IMPLEMENTING", is_terminal=False))
-
-    def test_gates_are_mutually_exclusive(self):
+    def test_no_second_gate_function_survives_the_retirement(self):
+        """Ledger `I10`: `scoped_remediation_gate_reachable` was the second
+        of a mutually exclusive pair, and existed only to admit
+        `/accept-scoped-remediation`. Retiring the command retires the
+        gate: `milestone_complete_gate_reachable` is now the only
+        registry-terminality gate, and a non-terminal registry reaches no
+        acceptance gate at all -- exactly the fail-closed shape the
+        retirement is meant to preserve."""
+        self.assertFalse(hasattr(ws, "scoped_remediation_gate_reachable"))
         for phase in ("AWAITING_FUNCTIONAL_REVIEW", "AWAITING_USER_ACCEPTANCE", "IMPLEMENTING"):
-            for is_terminal in (True, False):
-                self.assertFalse(
-                    ws.milestone_complete_gate_reachable(phase=phase, is_terminal=is_terminal)
-                    and ws.scoped_remediation_gate_reachable(phase=phase, is_terminal=is_terminal)
-                )
+            self.assertFalse(ws.milestone_complete_gate_reachable(phase=phase, is_terminal=False))
 
 
 class TestCompleteWorkItemOwnRegistryGuard(unittest.TestCase):
@@ -7354,18 +7572,19 @@ class TestCompleteWorkItemOwnRegistryGuard(unittest.TestCase):
             self.assertEqual(new_state["work_items"]["wi"]["phase"], "MILESTONE_COMPLETE")
 
     def test_raises_incomplete_own_checkpoints_when_own_registry_non_terminal(self):
-        """Direct complete_work_item bypass attempt: skipping
-        /accept-scoped-remediation and calling straight through must still
-        fail closed -- the same guard /accept-milestone's own pre-flight
-        relies on."""
+        """Direct complete_work_item bypass attempt: calling straight
+        through, past /accept-milestone's own advisory pre-flight, must
+        still fail closed -- this is the authoritative guard, the pre-flight
+        is only a clearer early message."""
         with ScratchRepo() as repo:
             _write(repo, self.REGISTRY_PATH, json.dumps(self._registry()))
             _commit_paths(repo, [self.REGISTRY_PATH], "registry")
             state = self._state(
                 b_complete=False, plan_approval=_current_plan_approval_covering(repo, self.REGISTRY_PATH),
             )
-            with self.assertRaises(ws.IncompleteOwnCheckpointsError):
+            with self.assertRaises(ws.IncompleteOwnCheckpointsError) as ctx:
                 ws.complete_work_item(state, "wi", now="t", repo_root=repo.root)
+            self.assertIn("'B'", str(ctx.exception))
             is_terminal, outstanding = ws.resolve_own_registry_completion_status(
                 repo.root, state["work_items"]["wi"],
             )
@@ -7374,6 +7593,32 @@ class TestCompleteWorkItemOwnRegistryGuard(unittest.TestCase):
             self.assertFalse(
                 ws.milestone_complete_gate_reachable(phase="AWAITING_USER_ACCEPTANCE", is_terminal=is_terminal)
             )
+
+    def test_refusal_message_names_only_supported_ways_forward(self):
+        """Ledger `I10`: this refusal used to read "use
+        /accept-scoped-remediation if this is a continued-scope remediation
+        round" -- a command whose own gate no supported lifecycle can
+        reach, so the operator following that instruction hit a second,
+        unrelated refusal. The message now names the three paths that do
+        exist: finish the checkpoint, or route a functional-review finding
+        through the bounded or the broad branch."""
+        with ScratchRepo() as repo:
+            _write(repo, self.REGISTRY_PATH, json.dumps(self._registry()))
+            _commit_paths(repo, [self.REGISTRY_PATH], "registry")
+            state = self._state(
+                b_complete=False, plan_approval=_current_plan_approval_covering(repo, self.REGISTRY_PATH),
+            )
+            with self.assertRaises(ws.IncompleteOwnCheckpointsError) as ctx:
+                ws.complete_work_item(state, "wi", now="t", repo_root=repo.root)
+            message = str(ctx.exception)
+            self.assertNotIn("accept-scoped-remediation", message)
+            self.assertNotIn("scoped_remediation", message)
+            self.assertIn("/milestone-implement", message)
+            self.assertIn("/apply-functional-review", message)
+            self.assertIn("bounded", message)
+            self.assertIn("remediation child work item", message)
+            # And it still names the checkpoint that actually blocks.
+            self.assertIn("'B'", message)
 
     def test_registry_coverage_missing_file(self):
         with ScratchRepo() as repo:
@@ -7488,8 +7733,8 @@ class TestRegistryReadBoundToCurrentPlanApproval(unittest.TestCase):
     def test_malformed_live_plan_approval_manifest_rejected_cleanly(self):
         """I2's live-state half (`workflow-v2-3-followups` continued
         scope, external cross-model review round 4): the exact
-        `/accept-milestone` step 2a / `/accept-scoped-remediation` entry
-        point, `resolve_own_registry_completion_status`, must reject a
+        `/accept-milestone` step 2a entry point,
+        `resolve_own_registry_completion_status`, must reject a
         malformed `plan_approval.review_content_manifest` -- the whole
         `workflow_fingerprint.compute_review_content_id_plan_stage*`
         projection object substituted for its own inner manifest list,
@@ -7588,12 +7833,12 @@ class TestRegistryReadBoundToCurrentPlanApproval(unittest.TestCase):
                 ws.complete_work_item(state, "wi", now="t", repo_root=repo.root)
 
     def test_non_terminal_routing_refuses_stale_plan_metadata(self):
-        """`resolve_own_registry_completion_status` -- the same function
-        `/accept-scoped-remediation`'s own pre-flight calls (per
-        `TestScopedRemediationEndToEnd._accept`'s orchestration above) --
-        must refuse for the non-terminal path too, not only the terminal
-        one; staleness is about the bytes, not about which routing
-        outcome the tampered registry happens to produce."""
+        """`resolve_own_registry_completion_status` must refuse for the
+        non-terminal path too, not only the terminal one; staleness is
+        about the bytes, not about which routing outcome the tampered
+        registry happens to produce. The non-terminal result is still read
+        by `/accept-milestone`'s own advisory pre-flight, which reports the
+        outstanding checkpoint to the operator."""
         with ScratchRepo() as repo:
             self._write_registry(repo)
             _commit_paths(repo, [self.REGISTRY_PATH], "registry")
@@ -7814,819 +8059,8 @@ class TestFunctionalChecklistTrailerDiscovery(unittest.TestCase):
             result = ws.discover_current_functional_checklist_evidence(repo.root, self.WI, repo.base, "HEAD", 1)
             self.assertEqual(result, {"commit_sha": main_sha, "blob": main_blob})
 
-    def test_ambiguous_scoped_remediation_trailer_raises(self):
-        with ScratchRepo() as repo:
-            _commit_empty(repo, "round a", trailers={
-                "Workflow-Scoped-Remediation-Acceptance": "B/1", "Workflow-Work-Item": self.WI,
-            })
-            _commit_empty(repo, "round b", trailers={
-                "Workflow-Scoped-Remediation-Acceptance": "B/1", "Workflow-Work-Item": self.WI,
-            })
-            with self.assertRaises(ws.AmbiguousScopedRemediationTrailerError):
-                ws.discover_scoped_remediation_commits(repo.root, self.WI, repo.base, "HEAD")
 
 
-class TestFunctionalChecklistEvidenceGuard(unittest.TestCase):
-    WI = "swi"
-    CHECKLIST_PATH = ws.FUNCTIONAL_CHECKLIST_PATH
-
-    def _work_item(self, *, implementation_revision=1, reviewed_implementation_head):
-        return {
-            "work_item_id": self.WI,
-            "implementation_revision": implementation_revision,
-            "reviewed_implementation_head": reviewed_implementation_head,
-        }
-
-    def _seed(self, repo, content="checklist v1\n"):
-        _write(repo, self.CHECKLIST_PATH, content)
-        return _commit_paths(repo, [self.CHECKLIST_PATH], "seed checklist")
-
-    def _blob(self, repo, ref="HEAD"):
-        return subprocess.run(
-            ["git", "rev-parse", f"{ref}:{self.CHECKLIST_PATH}"],
-            cwd=repo.root, check=True, capture_output=True, text=True,
-        ).stdout.strip()
-
-    def _evidence_commit(self, repo, *, implementation_revision, blob=None):
-        blob = blob or self._blob(repo)
-        sha = _commit_empty(repo, "checklist evidence", trailers={
-            "Workflow-Functional-Checklist": f"{self.WI}/{implementation_revision}/{blob}",
-            "Workflow-Work-Item": self.WI,
-        })
-        return sha, blob
-
-    def test_happy_path_returns_current_evidence(self):
-        with ScratchRepo() as repo:
-            seed_sha = self._seed(repo)
-            sha, blob = self._evidence_commit(repo, implementation_revision=1)
-            work_item = self._work_item(reviewed_implementation_head=seed_sha)
-            snapshot = ws.build_scoped_remediation_live_snapshot(repo.root, work_item)
-            result = ws.verify_functional_checklist_evidence(
-                repo.root, work_item, base_commit=repo.base, head="HEAD",
-                confirmed_commit=sha, confirmed_blob=blob, expected_live_snapshot=snapshot,
-            )
-            self.assertEqual(result, {"commit_sha": sha, "blob": blob})
-
-    def test_missing_evidence(self):
-        with ScratchRepo() as repo:
-            seed_sha = self._seed(repo)
-            work_item = self._work_item(reviewed_implementation_head=seed_sha)
-            snapshot = ws.build_scoped_remediation_live_snapshot(repo.root, work_item)
-            with self.assertRaises(ws.MissingFunctionalChecklistEvidenceError):
-                ws.verify_functional_checklist_evidence(
-                    repo.root, work_item, base_commit=repo.base, head="HEAD",
-                    confirmed_commit="a" * 40, confirmed_blob="b" * 40, expected_live_snapshot=snapshot,
-                )
-
-    def test_stale_confirmation_after_correction_wrong_commit(self):
-        """A checklist corrected after the user's confirmation was drafted:
-        the confirmation still names the earlier evidence commit, which
-        must be refused as stale even though it remains independently
-        discoverable."""
-        with ScratchRepo() as repo:
-            self._seed(repo)
-            old_sha, old_blob = self._evidence_commit(repo, implementation_revision=1)
-            self._seed(repo, content="checklist v2 -- corrected\n")
-            new_sha, _ = self._evidence_commit(repo, implementation_revision=1)
-            work_item = self._work_item(reviewed_implementation_head=new_sha)
-            snapshot = ws.build_scoped_remediation_live_snapshot(repo.root, work_item)
-            with self.assertRaises(ws.StaleFunctionalChecklistConfirmationError):
-                ws.verify_functional_checklist_evidence(
-                    repo.root, work_item, base_commit=repo.base, head="HEAD",
-                    confirmed_commit=old_sha, confirmed_blob=old_blob, expected_live_snapshot=snapshot,
-                )
-
-    def test_fresh_confirmation_for_corrected_evidence_succeeds(self):
-        with ScratchRepo() as repo:
-            self._seed(repo)
-            self._evidence_commit(repo, implementation_revision=1)
-            self._seed(repo, content="checklist v2 -- corrected\n")
-            new_sha, new_blob = self._evidence_commit(repo, implementation_revision=1)
-            work_item = self._work_item(reviewed_implementation_head=new_sha)
-            snapshot = ws.build_scoped_remediation_live_snapshot(repo.root, work_item)
-            result = ws.verify_functional_checklist_evidence(
-                repo.root, work_item, base_commit=repo.base, head="HEAD",
-                confirmed_commit=new_sha, confirmed_blob=new_blob, expected_live_snapshot=snapshot,
-            )
-            self.assertEqual(result, {"commit_sha": new_sha, "blob": new_blob})
-
-    def test_stale_confirmation_wrong_blob_same_commit(self):
-        with ScratchRepo() as repo:
-            self._seed(repo)
-            sha, blob = self._evidence_commit(repo, implementation_revision=1)
-            work_item = self._work_item(reviewed_implementation_head=sha)
-            snapshot = ws.build_scoped_remediation_live_snapshot(repo.root, work_item)
-            with self.assertRaises(ws.StaleFunctionalChecklistConfirmationError):
-                ws.verify_functional_checklist_evidence(
-                    repo.root, work_item, base_commit=repo.base, head="HEAD",
-                    confirmed_commit=sha, confirmed_blob="f" * 40, expected_live_snapshot=snapshot,
-                )
-
-    def test_malformed_evidence_trailer_blob_disagrees_with_actual_commit(self):
-        """A hand-crafted or corrupted trailer whose embedded blob
-        component disagrees with what the commit actually committed."""
-        with ScratchRepo() as repo:
-            seed_sha = self._seed(repo)
-            real_blob = self._blob(repo)
-            fake_blob = "0" * 40
-            sha = _commit_empty(repo, "checklist evidence", trailers={
-                "Workflow-Functional-Checklist": f"{self.WI}/1/{fake_blob}",
-                "Workflow-Work-Item": self.WI,
-            })
-            work_item = self._work_item(reviewed_implementation_head=seed_sha)
-            snapshot = ws.build_scoped_remediation_live_snapshot(repo.root, work_item)
-            with self.assertRaises(ws.MalformedFunctionalChecklistEvidenceError):
-                ws.verify_functional_checklist_evidence(
-                    repo.root, work_item, base_commit=repo.base, head="HEAD",
-                    confirmed_commit=sha, confirmed_blob=fake_blob, expected_live_snapshot=snapshot,
-                )
-            self.assertNotEqual(fake_blob, real_blob)
-
-    def test_dirty_checklist_path_refused(self):
-        with ScratchRepo() as repo:
-            seed_sha = self._seed(repo)
-            sha, blob = self._evidence_commit(repo, implementation_revision=1)
-            (repo.root / self.CHECKLIST_PATH).write_text("uncommitted local edit\n")
-            work_item = self._work_item(reviewed_implementation_head=seed_sha)
-            snapshot = ws.build_scoped_remediation_live_snapshot(repo.root, work_item)
-            with self.assertRaises(ws.DirtyFunctionalChecklistPathError):
-                ws.verify_functional_checklist_evidence(
-                    repo.root, work_item, base_commit=repo.base, head="HEAD",
-                    confirmed_commit=sha, confirmed_blob=blob, expected_live_snapshot=snapshot,
-                )
-
-    def test_cross_invocation_reviewed_implementation_head_changed(self):
-        with ScratchRepo() as repo:
-            seed_sha = self._seed(repo)
-            sha, blob = self._evidence_commit(repo, implementation_revision=1)
-            work_item = self._work_item(reviewed_implementation_head=seed_sha)
-            snapshot = ws.build_scoped_remediation_live_snapshot(repo.root, work_item)
-            # simulate reviewed_implementation_head advancing mid-invocation
-            work_item["reviewed_implementation_head"] = "deadbeef" * 5
-            with self.assertRaises(ws.ScopedRemediationLiveValueChangedError):
-                ws.verify_functional_checklist_evidence(
-                    repo.root, work_item, base_commit=repo.base, head="HEAD",
-                    confirmed_commit=sha, confirmed_blob=blob, expected_live_snapshot=snapshot,
-                )
-
-    def test_cross_invocation_checklist_blob_changed(self):
-        with ScratchRepo() as repo:
-            seed_sha = self._seed(repo)
-            sha, blob = self._evidence_commit(repo, implementation_revision=1)
-            work_item = self._work_item(reviewed_implementation_head=seed_sha)
-            snapshot = ws.build_scoped_remediation_live_snapshot(repo.root, work_item)
-            self._seed(repo, content="a superseding commit landed mid-invocation\n")
-            new_sha, new_blob = self._evidence_commit(repo, implementation_revision=1)
-            with self.assertRaises(ws.ScopedRemediationLiveValueChangedError):
-                ws.verify_functional_checklist_evidence(
-                    repo.root, work_item, base_commit=repo.base, head="HEAD",
-                    confirmed_commit=new_sha, confirmed_blob=new_blob, expected_live_snapshot=snapshot,
-                )
-
-
-class TestScopedRemediationConfirmationParsing(unittest.TestCase):
-    COMMIT = "a" * 40
-    BLOB = "b" * 40
-
-    def test_success(self):
-        text = (
-            f"scoped_remediation confirmed for swi\n"
-            f"Functional checklist evidence commit: {self.COMMIT}\n"
-            f"Functional checklist evidence blob: {self.BLOB}\n"
-        )
-        fields = ws.parse_scoped_remediation_confirmation_binding_fields(text)
-        self.assertEqual(fields, {
-            "functional_checklist_evidence_commit": self.COMMIT,
-            "functional_checklist_evidence_blob": self.BLOB,
-        })
-
-    def test_missing_commit_field(self):
-        text = f"Functional checklist evidence blob: {self.BLOB}\n"
-        with self.assertRaises(ws.UserConfirmationRejectedError):
-            ws.parse_scoped_remediation_confirmation_binding_fields(text)
-
-    def test_missing_blob_field(self):
-        text = f"Functional checklist evidence commit: {self.COMMIT}\n"
-        with self.assertRaises(ws.UserConfirmationRejectedError):
-            ws.parse_scoped_remediation_confirmation_binding_fields(text)
-
-    def test_malformed_commit_not_hex(self):
-        text = (
-            f"Functional checklist evidence commit: not-a-real-sha\n"
-            f"Functional checklist evidence blob: {self.BLOB}\n"
-        )
-        with self.assertRaises(ws.UserConfirmationRejectedError):
-            ws.parse_scoped_remediation_confirmation_binding_fields(text)
-
-    def test_malformed_blob_wrong_length(self):
-        text = (
-            f"Functional checklist evidence commit: {self.COMMIT}\n"
-            f"Functional checklist evidence blob: abc123\n"
-        )
-        with self.assertRaises(ws.UserConfirmationRejectedError):
-            ws.parse_scoped_remediation_confirmation_binding_fields(text)
-
-
-class TestResolveScopedRemediationRound(unittest.TestCase):
-    WI = "swi"
-    STATE_PATH = ws.DEFAULT_STATE_PATH.as_posix()
-
-    def _live_fields(self, **overrides):
-        base = {
-            "outstanding_checkpoint_id": "B",
-            "implementation_revision": 1,
-            "reviewed_implementation_head": "r" * 40,
-            "technical_approval_review_content_id": "t" * 40,
-            "functional_checklist_path": ws.FUNCTIONAL_CHECKLIST_PATH,
-            "functional_checklist_blob": "c" * 40,
-            "functional_checklist_evidence_commit": "e" * 40,
-            "active_work_item_id": self.WI,
-        }
-        base.update(overrides)
-        return base
-
-    def _entry(self, **overrides):
-        live = self._live_fields()
-        entry = {
-            "outstanding_checkpoint_id": live["outstanding_checkpoint_id"],
-            "active_work_item_id_at_acceptance": live["active_work_item_id"],
-            "implementation_revision": live["implementation_revision"],
-            "reviewed_implementation_head": live["reviewed_implementation_head"],
-            "technical_approval_review_content_id": live["technical_approval_review_content_id"],
-            "functional_checklist_path": live["functional_checklist_path"],
-            "functional_checklist_blob": live["functional_checklist_blob"],
-            "functional_checklist_evidence_commit": live["functional_checklist_evidence_commit"],
-            "user_confirmation": "I confirm scoped_remediation for swi",
-            "recorded_at": "2026-01-01T00:00:00+00:00",
-            "acceptance_record_version": 2,
-        }
-        entry.update(overrides)
-        return entry
-
-    def _commit_round(self, repo, entry, *, round_key="B/1"):
-        state = {
-            "schema_version": 1, "active_work_item_id": self.WI,
-            "work_items": {self.WI: {"scoped_remediation_acceptance": [entry]}},
-        }
-        _write(repo, self.STATE_PATH, json.dumps(state))
-        return _commit_paths(repo, [self.STATE_PATH], "scoped remediation acceptance", trailers={
-            "Workflow-Scoped-Remediation-Acceptance": round_key, "Workflow-Work-Item": self.WI,
-        })
-
-    def test_no_existing_round(self):
-        with ScratchRepo() as repo:
-            result = ws.resolve_scoped_remediation_round(
-                repo.root, self.WI, repo.base, "HEAD", "B", 1, self._live_fields(),
-            )
-            self.assertEqual(result, ws.NoExistingRound())
-
-    def test_exact_replay(self):
-        with ScratchRepo() as repo:
-            self._commit_round(repo, self._entry())
-            result = ws.resolve_scoped_remediation_round(
-                repo.root, self.WI, repo.base, "HEAD", "B", 1, self._live_fields(),
-            )
-            self.assertIsInstance(result, ws.ExactReplay)
-            self.assertEqual(result.commit_sha, repo.head())
-
-    def test_conflicting_duplicate_wrong_active_pointer(self):
-        with ScratchRepo() as repo:
-            self._commit_round(repo, self._entry())
-            live = self._live_fields(active_work_item_id="a-different-item")
-            result = ws.resolve_scoped_remediation_round(repo.root, self.WI, repo.base, "HEAD", "B", 1, live)
-            self.assertIsInstance(result, ws.ConflictingDuplicate)
-            self.assertIn("active_work_item_id_at_acceptance", result.differing_fields)
-
-    def test_conflicting_duplicate_wrong_evidence_commit(self):
-        with ScratchRepo() as repo:
-            self._commit_round(repo, self._entry())
-            live = self._live_fields(functional_checklist_evidence_commit="f" * 40)
-            result = ws.resolve_scoped_remediation_round(repo.root, self.WI, repo.base, "HEAD", "B", 1, live)
-            self.assertIsInstance(result, ws.ConflictingDuplicate)
-            self.assertIn("functional_checklist_evidence_commit", result.differing_fields)
-
-    def test_conflicting_duplicate_wrong_checklist_path(self):
-        with ScratchRepo() as repo:
-            self._commit_round(repo, self._entry(functional_checklist_path="some/other/path.md"))
-            result = ws.resolve_scoped_remediation_round(
-                repo.root, self.WI, repo.base, "HEAD", "B", 1, self._live_fields(),
-            )
-            self.assertIsInstance(result, ws.ConflictingDuplicate)
-            self.assertIn("functional_checklist_path", result.differing_fields)
-
-    def test_conflicting_duplicate_entry_implementation_revision_disagrees_with_live(self):
-        """Item 204 (`WF8c`): the hand-edited-entry-vs-trailer-key mismatch
-        case -- the discovered entry's own recorded `outstanding_checkpoint_id`/
-        `implementation_revision` fields match the `B/1` round key exactly
-        (that is how it was found at all), but *live* state's own current
-        `implementation_revision` has since diverged to `2` -- e.g. a
-        caller re-invoking round `B/1`'s lookup against `live_fields`
-        already reflecting a newer round. `resolve_scoped_remediation_round`
-        refuses as `ConflictingDuplicate`, naming `implementation_revision`,
-        rather than treating the entry as a valid replay of a round that
-        live state has already moved past."""
-        with ScratchRepo() as repo:
-            self._commit_round(repo, self._entry(), round_key="B/1")
-            live = self._live_fields(implementation_revision=2)
-            result = ws.resolve_scoped_remediation_round(repo.root, self.WI, repo.base, "HEAD", "B", 1, live)
-            self.assertIsInstance(result, ws.ConflictingDuplicate)
-            self.assertIn("implementation_revision", result.differing_fields)
-
-    def test_malformed_unsupported_schema_version(self):
-        with ScratchRepo() as repo:
-            self._commit_round(repo, self._entry(acceptance_record_version=1))
-            result = ws.resolve_scoped_remediation_round(
-                repo.root, self.WI, repo.base, "HEAD", "B", 1, self._live_fields(),
-            )
-            self.assertIsInstance(result, ws.MalformedAcceptanceRecord)
-            self.assertIn("acceptance_record_version", result.reason)
-
-    def test_malformed_wrong_field_set(self):
-        with ScratchRepo() as repo:
-            bad_entry = self._entry()
-            del bad_entry["recorded_at"]
-            self._commit_round(repo, bad_entry)
-            result = ws.resolve_scoped_remediation_round(
-                repo.root, self.WI, repo.base, "HEAD", "B", 1, self._live_fields(),
-            )
-            self.assertIsInstance(result, ws.MalformedAcceptanceRecord)
-
-    def test_malformed_missing_recorded_at(self):
-        with ScratchRepo() as repo:
-            bad_entry = self._entry(recorded_at="")
-            # keep the field present (empty string) so the field-set check
-            # passes and the well-formedness check is what actually fires
-            bad_entry["recorded_at"] = ""
-            self._commit_round(repo, bad_entry)
-            result = ws.resolve_scoped_remediation_round(
-                repo.root, self.WI, repo.base, "HEAD", "B", 1, self._live_fields(),
-            )
-            self.assertIsInstance(result, ws.MalformedAcceptanceRecord)
-            self.assertIn("recorded_at", result.reason)
-
-    def test_malformed_no_matching_entry_for_round_key(self):
-        with ScratchRepo() as repo:
-            other_entry = self._entry(outstanding_checkpoint_id="A", implementation_revision=1)
-            self._commit_round(repo, other_entry, round_key="B/1")  # trailer/entry desync
-            result = ws.resolve_scoped_remediation_round(
-                repo.root, self.WI, repo.base, "HEAD", "B", 1, self._live_fields(),
-            )
-            self.assertIsInstance(result, ws.MalformedAcceptanceRecord)
-
-    def test_ambiguous_history(self):
-        with ScratchRepo() as repo:
-            # Two commits on the same linear branch, same round key: both
-            # are first-parent ancestors of HEAD by construction, so the
-            # tie-break cannot narrow to one (mirrors
-            # TestCheckpointTrailerDiscovery.test_genuine_ambiguity_raises).
-            # Ambiguity is raised purely from trailer matching, before
-            # WORKFLOW_STATE.json content is ever read, so --allow-empty
-            # commits suffice here.
-            _commit_empty(repo, "round a", trailers={
-                "Workflow-Scoped-Remediation-Acceptance": "B/1", "Workflow-Work-Item": self.WI,
-            })
-            _commit_empty(repo, "round b", trailers={
-                "Workflow-Scoped-Remediation-Acceptance": "B/1", "Workflow-Work-Item": self.WI,
-            })
-            result = ws.resolve_scoped_remediation_round(
-                repo.root, self.WI, repo.base, "HEAD", "B", 1, self._live_fields(),
-            )
-            self.assertIsInstance(result, ws.AmbiguousHistory)
-            self.assertEqual(result.round_key, "B/1")
-
-    def test_distinct_implementation_revision_is_a_new_round_not_a_replay(self):
-        """A genuinely new round for a checkpoint scoped-accepted before
-        under a different implementation_revision is NoExistingRound for
-        the new round key, never confused with the earlier one."""
-        with ScratchRepo() as repo:
-            self._commit_round(repo, self._entry(), round_key="B/1")
-            result = ws.resolve_scoped_remediation_round(
-                repo.root, self.WI, repo.base, "HEAD", "B", 2, self._live_fields(implementation_revision=2),
-            )
-            self.assertEqual(result, ws.NoExistingRound())
-
-
-class TestApplyScopedRemediationAcceptance(unittest.TestCase):
-    WI = "swi"
-
-    def _state(self):
-        work_item = _base_work_item(
-            work_item_id=self.WI, phase="AWAITING_FUNCTIONAL_REVIEW",
-            implementation_revision=3, reviewed_implementation_head="r" * 40,
-            technical_approval={"status": "CURRENT", "approved_review_content_id": "t" * 40},
-            plan_approval={"status": "CURRENT", "approved_review_content_id": "p" * 40},
-            functional_acceptance_status=None,
-            current_checkpoint_id=None,
-            checkpoints={"A": {"status": "COMPLETE"}, "B": {"status": "IN_PROGRESS"}},
-        )
-        state = _base_state(**{self.WI: work_item})
-        state["active_work_item_id"] = self.WI
-        return state
-
-    def test_entry_has_exactly_eleven_documented_fields(self):
-        state = self._state()
-        new_state = ws.apply_scoped_remediation_acceptance(
-            state, self.WI, outstanding_checkpoint_id="B",
-            functional_checklist_evidence_commit="e" * 40, functional_checklist_blob="c" * 40,
-            user_confirmation="I confirm scoped_remediation for swi", now="2026-01-01T00:00:00+00:00",
-        )
-        entries = new_state["work_items"][self.WI]["scoped_remediation_acceptance"]
-        self.assertEqual(len(entries), 1)
-        self.assertEqual(set(entries[0].keys()), ws.SCOPED_REMEDIATION_ACCEPTANCE_FIELDS)
-        self.assertEqual(len(entries[0]), 11)
-        self.assertEqual(entries[0]["acceptance_record_version"], 2)
-        self.assertEqual(entries[0]["outstanding_checkpoint_id"], "B")
-        self.assertEqual(entries[0]["active_work_item_id_at_acceptance"], self.WI)
-
-    def test_sets_phase_implementing(self):
-        state = self._state()
-        new_state = ws.apply_scoped_remediation_acceptance(
-            state, self.WI, outstanding_checkpoint_id="B",
-            functional_checklist_evidence_commit="e" * 40, functional_checklist_blob="c" * 40,
-            user_confirmation="I confirm scoped_remediation for swi", now="t",
-        )
-        self.assertEqual(new_state["work_items"][self.WI]["phase"], "IMPLEMENTING")
-
-    def test_leaves_checkpoints_and_approvals_untouched(self):
-        state = self._state()
-        new_state = ws.apply_scoped_remediation_acceptance(
-            state, self.WI, outstanding_checkpoint_id="B",
-            functional_checklist_evidence_commit="e" * 40, functional_checklist_blob="c" * 40,
-            user_confirmation="I confirm scoped_remediation for swi", now="t",
-        )
-        old_wi = state["work_items"][self.WI]
-        new_wi = new_state["work_items"][self.WI]
-        self.assertEqual(new_wi["checkpoints"], old_wi["checkpoints"])
-        self.assertEqual(new_wi["current_checkpoint_id"], old_wi["current_checkpoint_id"])
-        self.assertEqual(new_wi["plan_approval"], old_wi["plan_approval"])
-        self.assertEqual(new_wi["technical_approval"], old_wi["technical_approval"])
-        self.assertEqual(new_wi["functional_acceptance_status"], old_wi["functional_acceptance_status"])
-        self.assertEqual(new_state["active_work_item_id"], state["active_work_item_id"])
-
-    def test_does_not_mark_any_checkpoint_complete(self):
-        state = self._state()
-        new_state = ws.apply_scoped_remediation_acceptance(
-            state, self.WI, outstanding_checkpoint_id="B",
-            functional_checklist_evidence_commit="e" * 40, functional_checklist_blob="c" * 40,
-            user_confirmation="I confirm scoped_remediation for swi", now="t",
-        )
-        self.assertEqual(new_state["work_items"][self.WI]["checkpoints"]["B"]["status"], "IN_PROGRESS")
-
-    def test_is_pure_no_side_effects_until_caller_persists_and_commits(self):
-        """Interrupted acceptance commit: the state write is a pure
-        in-memory transform. If the caller's own commit step never runs
-        (an interruption between the two), nothing at all was persisted --
-        neither the original nor the returned state dict is mutated as a
-        side effect, and no git commit exists until the caller creates
-        one."""
-        state = self._state()
-        original = copy.deepcopy(state)
-        ws.apply_scoped_remediation_acceptance(
-            state, self.WI, outstanding_checkpoint_id="B",
-            functional_checklist_evidence_commit="e" * 40, functional_checklist_blob="c" * 40,
-            user_confirmation="I confirm scoped_remediation for swi", now="t",
-        )
-        self.assertEqual(state, original)  # input untouched
-
-
-class TestScopedRemediationEndToEnd(unittest.TestCase):
-    """Full-flow scenarios exercising the entry guard (confirmation ->
-    evidence-binding -> registry load -> replay classification) and the
-    pre-commit evidence guard together, mirroring the exact WF8b shape:
-    checkpoint A complete, checkpoint B (the item's own last checkpoint)
-    outstanding while continued-scope work landed as extra scope on A."""
-
-    WI = "swi"
-    REGISTRY_PATH = "registry.json"
-    STATE_PATH = ws.DEFAULT_STATE_PATH.as_posix()
-    CHECKLIST_PATH = ws.FUNCTIONAL_CHECKLIST_PATH
-
-    def _registry(self):
-        return {
-            "work_item_id": self.WI, "plan_revision": 1,
-            "checkpoints": [{"id": "A", "depends_on": []}, {"id": "B", "depends_on": ["A"]}],
-        }
-
-    def _blob(self, repo, ref="HEAD"):
-        return subprocess.run(
-            ["git", "rev-parse", f"{ref}:{self.CHECKLIST_PATH}"],
-            cwd=repo.root, check=True, capture_output=True, text=True,
-        ).stdout.strip()
-
-    def _seed(self, repo, *, implementation_revision=1, checklist_content="checklist v1\n"):
-        _write(repo, self.REGISTRY_PATH, json.dumps(self._registry()))
-        _write(repo, self.CHECKLIST_PATH, checklist_content)
-        base_sha = _commit_paths(repo, [self.REGISTRY_PATH, self.CHECKLIST_PATH], "seed")
-        blob = self._blob(repo)
-        evidence_sha = _commit_empty(repo, "checklist evidence", trailers={
-            "Workflow-Functional-Checklist": f"{self.WI}/{implementation_revision}/{blob}",
-            "Workflow-Work-Item": self.WI,
-        })
-        work_item = {
-            "work_item_id": self.WI, "work_item_type": "process",
-            "registry_path": self.REGISTRY_PATH,
-            "base_commit": repo.base,
-            "implementation_revision": implementation_revision,
-            "reviewed_implementation_head": evidence_sha,
-            "technical_approval": {"status": "CURRENT", "approved_review_content_id": "t" * 40},
-            "plan_approval": _current_plan_approval_covering(repo, self.REGISTRY_PATH),
-            "phase": "AWAITING_FUNCTIONAL_REVIEW",
-            "checkpoints": {"A": {"status": "COMPLETE"}},
-        }
-        state = {"schema_version": 1, "active_work_item_id": self.WI, "work_items": {self.WI: work_item}}
-        return state, evidence_sha, blob
-
-    def _accept(
-        self, repo, state, *, confirmed_commit, confirmed_blob,
-        now="2026-01-01T00:00:00+00:00", confirmation_text_override=None,
-    ):
-        """Simulates /accept-scoped-remediation's own orchestration
-        end-to-end, calling exactly the functions the command doc
-        specifies, in order."""
-        work_item = state["work_items"][self.WI]
-        confirmation_text = confirmation_text_override or (
-            "I confirm scoped_remediation for swi\n"
-            f"Functional checklist evidence commit: {confirmed_commit}\n"
-            f"Functional checklist evidence blob: {confirmed_blob}\n"
-        )
-        ws.validate_user_confirmation(confirmation_text, work_item_id=self.WI, stage="scoped_remediation")
-        fields = ws.parse_scoped_remediation_confirmation_binding_fields(confirmation_text)
-        snapshot = ws.build_scoped_remediation_live_snapshot(repo.root, work_item)
-        current = ws.verify_functional_checklist_evidence(
-            repo.root, work_item, base_commit=work_item["base_commit"], head="HEAD",
-            confirmed_commit=fields["functional_checklist_evidence_commit"],
-            confirmed_blob=fields["functional_checklist_evidence_blob"],
-            expected_live_snapshot=snapshot,
-        )
-        is_terminal, outstanding = ws.resolve_own_registry_completion_status(repo.root, work_item)
-        self.assertFalse(is_terminal)
-        live_fields = ws.build_scoped_remediation_live_fields(
-            state, self.WI, outstanding_checkpoint_id=outstanding,
-            functional_checklist_evidence_commit=current["commit_sha"],
-            functional_checklist_blob=current["blob"],
-        )
-        resolution = ws.resolve_scoped_remediation_round(
-            repo.root, self.WI, work_item["base_commit"], "HEAD", outstanding,
-            work_item["implementation_revision"], live_fields,
-        )
-        if isinstance(resolution, ws.ExactReplay):
-            return resolution
-        if not isinstance(resolution, ws.NoExistingRound):
-            return resolution
-        self.assertTrue(
-            ws.scoped_remediation_gate_reachable(phase=work_item["phase"], is_terminal=is_terminal)
-        )
-        self.assertEqual(work_item["technical_approval"]["status"], "CURRENT")
-        ws.verify_functional_checklist_evidence(
-            repo.root, work_item, base_commit=work_item["base_commit"], head="HEAD",
-            confirmed_commit=fields["functional_checklist_evidence_commit"],
-            confirmed_blob=fields["functional_checklist_evidence_blob"],
-            expected_live_snapshot=snapshot,
-        )
-        new_state = ws.apply_scoped_remediation_acceptance(
-            state, self.WI, outstanding_checkpoint_id=outstanding,
-            functional_checklist_evidence_commit=current["commit_sha"],
-            functional_checklist_blob=current["blob"],
-            user_confirmation=confirmation_text, now=now,
-        )
-        ws.verify_functional_checklist_evidence(
-            repo.root, work_item, base_commit=work_item["base_commit"], head="HEAD",
-            confirmed_commit=fields["functional_checklist_evidence_commit"],
-            confirmed_blob=fields["functional_checklist_evidence_blob"],
-            expected_live_snapshot=snapshot,
-        )
-        _write(repo, self.STATE_PATH, json.dumps(new_state))
-        commit_sha = _commit_paths(repo, [self.STATE_PATH], "scoped remediation acceptance", trailers={
-            "Workflow-Scoped-Remediation-Acceptance": f"{outstanding}/{work_item['implementation_revision']}",
-            "Workflow-Work-Item": self.WI,
-        })
-        return new_state, commit_sha
-
-    def test_first_scoped_acceptance_mirrors_wf8b_shape(self):
-        with ScratchRepo() as repo:
-            state, evidence_sha, blob = self._seed(repo)
-            new_state, commit_sha = self._accept(
-                repo, state, confirmed_commit=evidence_sha, confirmed_blob=blob,
-            )
-            self.assertEqual(new_state["work_items"][self.WI]["phase"], "IMPLEMENTING")
-            entry = new_state["work_items"][self.WI]["scoped_remediation_acceptance"][0]
-            self.assertEqual(entry["outstanding_checkpoint_id"], "B")
-            self.assertEqual(entry["functional_checklist_evidence_commit"], evidence_sha)
-            status = subprocess.run(
-                ["git", "status", "--porcelain"], cwd=repo.root, check=True, capture_output=True, text=True,
-            ).stdout
-            self.assertEqual(status.strip(), "")  # worktree clean after success
-
-    def test_exact_replay_on_second_invocation(self):
-        with ScratchRepo() as repo:
-            state, evidence_sha, blob = self._seed(repo)
-            _new_state, first_commit = self._accept(
-                repo, state, confirmed_commit=evidence_sha, confirmed_blob=blob,
-            )
-            # Fresh-session resume: reload state from git-committed content
-            # (never carried over in-memory) and re-run the same confirmation.
-            resumed_state = json.loads(_run_capture(
-                ["git", "show", f"HEAD:{self.STATE_PATH}"], repo.root,
-            ))
-            result = self._accept(repo, resumed_state, confirmed_commit=evidence_sha, confirmed_blob=blob)
-            self.assertIsInstance(result, ws.ExactReplay)
-            self.assertEqual(result.commit_sha, first_commit)
-
-    def test_conflicting_duplicate_when_active_pointer_moved(self):
-        with ScratchRepo() as repo:
-            state, evidence_sha, blob = self._seed(repo)
-            self._accept(repo, state, confirmed_commit=evidence_sha, confirmed_blob=blob)
-            resumed_state = json.loads(_run_capture(["git", "show", f"HEAD:{self.STATE_PATH}"], repo.root))
-            resumed_state["active_work_item_id"] = "some-other-item"
-            result = self._accept(repo, resumed_state, confirmed_commit=evidence_sha, confirmed_blob=blob)
-            self.assertIsInstance(result, ws.ConflictingDuplicate)
-            self.assertIn("active_work_item_id_at_acceptance", result.differing_fields)
-
-    def test_wrong_evidence_commit_is_refused_as_stale(self):
-        with ScratchRepo() as repo:
-            state, evidence_sha, blob = self._seed(repo)
-            with self.assertRaises(ws.StaleFunctionalChecklistConfirmationError):
-                self._accept(repo, state, confirmed_commit="f" * 40, confirmed_blob=blob)
-
-    def test_wrong_evidence_blob_is_refused_as_stale(self):
-        with ScratchRepo() as repo:
-            state, evidence_sha, blob = self._seed(repo)
-            with self.assertRaises(ws.StaleFunctionalChecklistConfirmationError):
-                self._accept(repo, state, confirmed_commit=evidence_sha, confirmed_blob="f" * 40)
-
-    def test_wrong_work_item_confirmation_never_finds_evidence(self):
-        with ScratchRepo() as repo:
-            state, evidence_sha, blob = self._seed(repo)
-            other_work_item = {**state["work_items"][self.WI], "work_item_id": "other-item"}
-            with self.assertRaises(ws.MissingFunctionalChecklistEvidenceError):
-                ws.verify_functional_checklist_evidence(
-                    repo.root, other_work_item, base_commit=other_work_item["base_commit"], head="HEAD",
-                    confirmed_commit=evidence_sha, confirmed_blob=blob,
-                    expected_live_snapshot=ws.build_scoped_remediation_live_snapshot(repo.root, other_work_item),
-                )
-
-    def test_terminal_registry_refuses_scoped_gate(self):
-        """Once every checkpoint is COMPLETE, the scoped-remediation gate
-        is unreachable -- /accept-milestone is the correct command instead
-        (mutually exclusive with the non-terminal path this class
-        otherwise exercises)."""
-        with ScratchRepo() as repo:
-            state, evidence_sha, blob = self._seed(repo)
-            state["work_items"][self.WI]["checkpoints"]["B"] = {"status": "COMPLETE"}
-            work_item = state["work_items"][self.WI]
-            is_terminal, outstanding = ws.resolve_own_registry_completion_status(repo.root, work_item)
-            self.assertTrue(is_terminal)
-            self.assertIsNone(outstanding)
-            self.assertFalse(
-                ws.scoped_remediation_gate_reachable(phase=work_item["phase"], is_terminal=is_terminal)
-            )
-            self.assertTrue(
-                ws.milestone_complete_gate_reachable(phase=work_item["phase"], is_terminal=is_terminal)
-            )
-            # and /accept-milestone now succeeds via complete_work_item directly
-            new_state = ws.complete_work_item(state, self.WI, now="t", repo_root=repo.root)
-            self.assertEqual(new_state["work_items"][self.WI]["phase"], "MILESTONE_COMPLETE")
-
-    def test_stale_technical_approval_is_the_sole_remaining_blocker(self):
-        """Item 174 (`WF8c`): a bounded-fix round landing after technical
-        approval but before `/accept-scoped-remediation` runs leaves
-        `technical_approval.status != "CURRENT"` -- the superseded-
-        implementation-revision case. Unlike every other scoped-
-        remediation gate (registry non-terminality, `scoped_remediation_
-        gate_reachable`, replay classification), this one is checked
-        directly against `work_item["technical_approval"]["status"]` in
-        the command doc's own step 6 prose
-        (`.claude/commands/accept-scoped-remediation.md`), never through a
-        named production function -- so there is nothing to call and
-        assert raises. What is provable in Python is that this condition
-        is the *only* thing separating an otherwise fully green fixture
-        (non-terminal registry, reachable gate, `NoExistingRound`) from
-        acceptance: every dedicated gate this command checks before it is
-        proven to pass, and the STALE status is proven live, confirming
-        the prose condition does real, non-vacuous work rather than being
-        unreachable dead code."""
-        with ScratchRepo() as repo:
-            state, evidence_sha, blob = self._seed(repo)
-            state["work_items"][self.WI]["technical_approval"]["status"] = "STALE"
-            work_item = state["work_items"][self.WI]
-            is_terminal, outstanding = ws.resolve_own_registry_completion_status(repo.root, work_item)
-            self.assertFalse(is_terminal)
-            self.assertEqual(outstanding, "B")
-            self.assertTrue(
-                ws.scoped_remediation_gate_reachable(phase=work_item["phase"], is_terminal=is_terminal)
-            )
-            live_fields = ws.build_scoped_remediation_live_fields(
-                state, self.WI, outstanding_checkpoint_id=outstanding,
-                functional_checklist_evidence_commit=evidence_sha, functional_checklist_blob=blob,
-            )
-            resolution = ws.resolve_scoped_remediation_round(
-                repo.root, self.WI, work_item["base_commit"], "HEAD", outstanding,
-                work_item["implementation_revision"], live_fields,
-            )
-            self.assertEqual(resolution, ws.NoExistingRound())
-            # Every gate up to this point is green; step 6's remaining,
-            # prose-only condition is the sole blocker left.
-            self.assertNotEqual(work_item["technical_approval"]["status"], "CURRENT")
-
-    def test_confirmation_validated_before_replay_classification_runs(self):
-        """Item 196: current-turn user confirmation for stage=
-        "scoped_remediation" is validated before resolve_scoped_
-        remediation_round ever runs -- refused identically whether a live
-        round already exists (which would otherwise resolve ExactReplay)
-        or not (which would otherwise proceed as a new acceptance),
-        proving validate_user_confirmation's call site in _accept's own
-        step order precedes both outcomes rather than being reachable
-        only on one of them."""
-        with ScratchRepo() as repo:
-            state, evidence_sha, blob = self._seed(repo)
-            bad_text = (
-                f"Functional checklist evidence commit: {evidence_sha}\n"
-                f"Functional checklist evidence blob: {blob}\n"
-            )  # names neither the work item nor the stage
-            # No existing round yet -- would otherwise be NoExistingRound.
-            with self.assertRaises(ws.UserConfirmationRejectedError):
-                self._accept(
-                    repo, state, confirmed_commit=evidence_sha, confirmed_blob=blob,
-                    confirmation_text_override=bad_text,
-                )
-            # Accept for real, so a matching round now exists.
-            self._accept(repo, state, confirmed_commit=evidence_sha, confirmed_blob=blob)
-            resumed_state = json.loads(_run_capture(["git", "show", f"HEAD:{self.STATE_PATH}"], repo.root))
-            # A round now exists for this exact key -- would otherwise be
-            # ExactReplay -- but the same bad confirmation is refused
-            # identically, before that classification ever runs.
-            with self.assertRaises(ws.UserConfirmationRejectedError):
-                self._accept(
-                    repo, resumed_state, confirmed_commit=evidence_sha, confirmed_blob=blob,
-                    confirmation_text_override=bad_text,
-                )
-
-    def test_fresh_session_reselects_same_outstanding_checkpoint(self):
-        """Item 177: after `/accept-scoped-remediation`, a brand-new
-        process re-reading `WORKFLOW_STATE.json`/the registry from disk
-        alone (no in-memory carryover) re-selects the same outstanding
-        checkpoint via `select_next_checkpoint`/`/bootstrap-workflow-v2`'s
-        own step 3 -- no new pointer or marker file exists to read."""
-        with ScratchRepo() as repo:
-            state, evidence_sha, blob = self._seed(repo)
-            self._accept(repo, state, confirmed_commit=evidence_sha, confirmed_blob=blob)
-            # Fresh session: both state and registry re-read from disk/Git
-            # alone, never carried over from this process's own memory.
-            resumed_state = json.loads(_run_capture(["git", "show", f"HEAD:{self.STATE_PATH}"], repo.root))
-            resumed_registry = json.loads(_run_capture(["git", "show", f"HEAD:{self.REGISTRY_PATH}"], repo.root))
-            work_item = resumed_state["work_items"][self.WI]
-            self.assertEqual(work_item["phase"], "IMPLEMENTING")
-            self.assertEqual(ws.select_next_checkpoint(work_item, resumed_registry), "B")
-
-    def test_checklist_correction_first_confirmation_refused_second_succeeds(self):
-        """Items 206/214: a checklist correction landing between the
-        user's review and `/accept-scoped-remediation`'s invocation (two
-        distinct `/prepare-functional-review` evidence commits for the
-        same round) is refused rather than silently accepted when
-        confirmed against the original, now-superseded evidence; only a
-        second, fresh confirmation naming the corrected evidence reaches
-        scoped acceptance, bound to the corrected evidence -- no manual
-        out-of-contract commit, no false ambiguity, no false replay, and
-        no silent binding to unreviewed evidence -- the full `GPT-R40-001`
-        failure scenario, defeated."""
-        with ScratchRepo() as repo:
-            state, original_sha, original_blob = self._seed(repo)
-            # A checklist correction: a second /prepare-functional-review
-            # pass, producing a second, distinct evidence commit for the
-            # exact same round.
-            _write(repo, self.CHECKLIST_PATH, "checklist v2 -- corrected\n")
-            _commit_paths(repo, [self.CHECKLIST_PATH], "checklist corrected")
-            corrected_blob = self._blob(repo)
-            corrected_sha = _commit_empty(repo, "checklist evidence (corrected)", trailers={
-                "Workflow-Functional-Checklist": f"{self.WI}/1/{corrected_blob}",
-                "Workflow-Work-Item": self.WI,
-            })
-            self.assertNotEqual(corrected_sha, original_sha)
-            self.assertNotEqual(corrected_blob, original_blob)
-
-            # First confirmation names the *original* evidence -- refused,
-            # since the round's current evidence has already moved on.
-            with self.assertRaises(ws.StaleFunctionalChecklistConfirmationError):
-                self._accept(repo, state, confirmed_commit=original_sha, confirmed_blob=original_blob)
-
-            # Second, explicit confirmation naming the *corrected* evidence
-            # succeeds, bound to the corrected commit/blob.
-            new_state, _commit_sha = self._accept(
-                repo, state, confirmed_commit=corrected_sha, confirmed_blob=corrected_blob,
-            )
-            entry = new_state["work_items"][self.WI]["scoped_remediation_acceptance"][0]
-            self.assertEqual(entry["functional_checklist_evidence_commit"], corrected_sha)
-            self.assertEqual(entry["functional_checklist_blob"], corrected_blob)
-
-
-def _run_capture(args, cwd):
-    return subprocess.run(args, cwd=cwd, check=True, capture_output=True, text=True).stdout
-
-
-# ---------------------------------------------------------------------------
-# WF8b: D-Checkpoint-Ownership -- the shared claim record, the mutation/
-# handoff guard, the explicit takeover, and the abandoned-guard recovery.
-# ---------------------------------------------------------------------------
 
 
 class TestCheckpointClaimRecord(unittest.TestCase):
@@ -10662,6 +10096,170 @@ class TestCheckpointReachabilityConformance(unittest.TestCase):
             (repo.root / "docs" / "ai-workflow" / "WORKFLOW_V2_PLAN.md").write_text("garbage")
             result = ws.verify_checkpoint_reachability_conformance(repo.root, commit, "wi")
             self.assertEqual(result["status"], "PASS", result["detail"])
+
+
+# ---------------------------------------------------------------------------
+# Persisted-phase writer census, derived mechanically from this module's own
+# source (Workflow v2.x convergence campaign, ledger rows `B10`/`B11`).
+# ---------------------------------------------------------------------------
+
+
+def _persisted_phase_writers() -> dict[str, set[str]]:
+    """Every `KNOWN_PHASES` value this module actually persists, mapped to
+    the function(s) that write it -- derived by walking
+    `workflow_state.py`'s own AST, never from a hand-maintained list, so a
+    new writer (or a removed one) moves this census by construction.
+
+    Recognizes the two shapes the module uses: a direct
+    `<subject>["phase"] = "<CONST>"` assignment, and a `"phase": "<CONST>"`
+    entry in a dict literal (`default_work_item`'s fresh-item shape). A
+    constant bound to a local name first (`publish_plan_revision`'s
+    `target_phase`) is resolved through that binding, so its two
+    version-keyed targets are counted rather than lost as "dynamic"."""
+    tree = ast.parse(Path(ws.__file__).read_text())
+    writers: dict[str, set[str]] = {}
+
+    def record(phase: str, fn: str) -> None:
+        writers.setdefault(phase, set()).add(fn)
+
+    def const_str(node) -> str | None:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return node.value
+        return None
+
+    for fn in ast.walk(tree):
+        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        local_consts: dict[str, set[str]] = {}
+        for node in ast.walk(fn):
+            if not isinstance(node, ast.Assign):
+                continue
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    value = const_str(node.value)
+                    if value is not None:
+                        local_consts.setdefault(target.id, set()).add(value)
+        for node in ast.walk(fn):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if not (isinstance(target, ast.Subscript)
+                            and const_str(target.slice) == "phase"):
+                        continue
+                    value = const_str(node.value)
+                    if value is not None:
+                        record(value, fn.name)
+                    elif isinstance(node.value, ast.Name):
+                        for candidate in local_consts.get(node.value.id, ()):
+                            record(candidate, fn.name)
+                    else:  # pragma: no cover -- guarded by the test below
+                        record(f"<unresolved:{ast.unparse(node.value)}>", fn.name)
+            elif isinstance(node, ast.Dict):
+                for key, value in zip(node.keys, node.values):
+                    if const_str(key) == "phase":
+                        literal = const_str(value)
+                        if literal is not None:
+                            record(literal, fn.name)
+    return writers
+
+
+class TestPersistedPhaseWriterCensus(unittest.TestCase):
+    """`KNOWN_PHASES` is an allowlist, not a transition graph
+    (`workflow_state.py`'s own words), so "declared" and "persisted" are
+    different sets and only the second one is a live gate. Both the
+    lifecycle diagram and `WORKFLOW_V2_1_OPERATOR_REFERENCE.md` have to
+    represent that distinction, and both got it wrong before this
+    campaign: `AWAITING_TECHNICAL_APPROVAL` was drawn and documented as a
+    live persisted gate `/apply-implementation-review` transitions into,
+    and `FIXING_FUNCTIONAL_FINDINGS` as the state
+    `/apply-functional-review` enters. Neither is ever written.
+
+    This census is the mechanical ground truth both of those documents
+    are now checked against. It fails if a phase gains or loses a writer,
+    which is exactly when those documents need re-checking."""
+
+    #: The four phases `KNOWN_PHASES` declares that nothing persists.
+    #: Narrative/compatibility vocabulary only -- three of them are named
+    #: by `MILESTONE_WORKFLOW.md`'s v1 state list, and
+    #: `AWAITING_TECHNICAL_APPROVAL`/`AWAITING_PLAN_APPROVAL` have
+    #: *computed reachability* predicates
+    #: (`technical_approval_gate_reachable`/`plan_approval_gate_reachable`)
+    #: instead; `AWAITING_PLAN_APPROVAL` happens to also be persisted (by
+    #: `record_manual_plan_review`) and `AWAITING_TECHNICAL_APPROVAL` is
+    #: not, which is precisely the asymmetry the documents flattened.
+    DECLARED_BUT_UNWRITTEN = frozenset({
+        "SELF_REVIEWING_PLAN",
+        "AWAITING_TECHNICAL_APPROVAL",
+        "FIXING_FUNCTIONAL_FINDINGS",
+        "AWAITING_USER_ACCEPTANCE",
+    })
+
+    EXPECTED_WRITERS = {
+        "PLANNING": {"default_work_item"},
+        "AWAITING_EXTERNAL_PLAN_REVIEW": {"publish_plan_revision"},
+        "AWAITING_LOCAL_PLAN_REVIEW": {
+            "publish_plan_revision", "transition_to_awaiting_local_plan_review",
+        },
+        "AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW": {"record_local_plan_review"},
+        "REVISING_PLAN": {"record_local_plan_review", "record_manual_plan_review"},
+        "AWAITING_PLAN_APPROVAL": {"record_manual_plan_review"},
+        "IMPLEMENTING": {"apply_plan_approval"},
+        "SELF_REVIEWING_IMPLEMENTATION": {
+            "complete_checkpoint", "enter_self_reviewing_implementation",
+        },
+        "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW": {"record_bundle_generation"},
+        "APPLYING_REVIEW_FEEDBACK": {"enter_applying_review_feedback"},
+        "AWAITING_FUNCTIONAL_REVIEW": {"apply_technical_approval", "promote_legacy_work_item"},
+        "MILESTONE_COMPLETE": {"complete_work_item"},
+        "LEGACY_READY": {"import_legacy_work_item"},
+    }
+
+    def test_every_write_site_resolves_to_a_named_phase(self):
+        """No `<unresolved:...>` pseudo-phase: if a new write site computes
+        its target some way this census cannot follow, the census is blind
+        there and must be taught the shape rather than silently under-
+        reporting."""
+        unresolved = sorted(p for p in _persisted_phase_writers() if p.startswith("<unresolved:"))
+        self.assertEqual(unresolved, [])
+
+    def test_the_persisted_phase_writers_are_exactly_these(self):
+        census = {phase: writers for phase, writers in _persisted_phase_writers().items()}
+        self.assertEqual(census, self.EXPECTED_WRITERS)
+
+    def test_every_written_phase_is_a_known_phase(self):
+        self.assertTrue(set(_persisted_phase_writers()).issubset(ws.KNOWN_PHASES))
+
+    def test_exactly_four_known_phases_are_declared_but_never_written(self):
+        unwritten = ws.KNOWN_PHASES - set(_persisted_phase_writers())
+        self.assertEqual(unwritten, self.DECLARED_BUT_UNWRITTEN)
+
+    def test_apply_technical_approval_goes_straight_to_the_functional_gate(self):
+        """`AWAITING_TECHNICAL_APPROVAL` is computed reachability, never a
+        persisted stop: the single writer on that edge moves the item from
+        `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` directly to
+        `AWAITING_FUNCTIONAL_REVIEW`."""
+        work_item = ws.default_work_item(
+            work_item_id="wi", work_item_type="process", work_item_kind="process",
+            plan_path="docs/plan.md", registry_path="docs/registry.json",
+            governing_workflow_version="2.1", plan_revision=1,
+            last_transition="2026-01-01T00:00:00Z",
+        )
+        work_item["phase"] = "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW"
+        work_item["reviewed_implementation_head"] = "a" * 40
+        state = {"schema_version": 1, "active_work_item_id": "wi",
+                 "work_items": {"wi": work_item}}
+        record = ws.build_approval_record(
+            basis="EXTERNAL_APPROVE", stage="implementation",
+            user_confirmation="implementation wi", now="2026-01-01T00:00:00Z",
+            reviewed_bundle_id="b" * 64, approved_review_content_id="c" * 64,
+            review_content_manifest=[{"path": "docs/plan.md", "sha256": "d" * 64}],
+            reviewed_content_commit="a" * 40,
+        )
+        new_state = ws.apply_technical_approval(state, "wi", record, "2026-01-01T00:00:01Z")
+        self.assertEqual(new_state["work_items"]["wi"]["phase"], "AWAITING_FUNCTIONAL_REVIEW")
+        self.assertNotIn(
+            "AWAITING_TECHNICAL_APPROVAL",
+            {wi["phase"] for wi in new_state["work_items"].values()},
+        )
 
 
 if __name__ == "__main__":

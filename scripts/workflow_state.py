@@ -187,6 +187,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from types import MappingProxyType
 from typing import Callable, Mapping, NamedTuple
 
 import workflow_fingerprint as fingerprint
@@ -221,6 +222,17 @@ WORK_ITEM_TYPES = frozenset({"process", "product"})
 # (resolves GPT-R9-013); "synthetic" is WF8b's isolated dry-run item.
 WORK_ITEM_KINDS = frozenset({"process", "product", "synthetic"})
 
+
+def validate_work_item_kind(work_item_kind: str) -> None:
+    """`work_item_kind`'s counterpart of `fingerprint.validate_work_item_type`,
+    with the same fail-closed non-`str` guard (salvage audit `I2`): the
+    three call sites below all read this value straight out of an
+    unvalidated `WORKFLOW_STATE.json` or a caller argument, so a corrupt
+    JSON value must raise this module's own documented error rather than
+    a raw `TypeError` from the set-membership test."""
+    if not isinstance(work_item_kind, str) or work_item_kind not in WORK_ITEM_KINDS:
+        raise InvalidWorkItemTypeError(f"unknown work_item_kind: {work_item_kind!r}")
+
 CHECKPOINT_STATUSES = frozenset({"IN_PROGRESS", "COMPLETE"})
 
 # D2's unified plan_approval/technical_approval record shape.
@@ -236,53 +248,20 @@ WAIVED_GUARANTEES = frozenset({"no_bundle_id", "no_telemetry"})
 # sentence names in the same breath without itself enumerating a third
 # stage keyword (a real gap in the plan text, resolved here rather than
 # left unimplemented -- flagged to the user in this checkpoint's report).
-# "scoped_remediation" (D-Scoped-Remediation-Acceptance, resolves
-# WF8B-002) is a fourth stage keyword, textually non-interchangeable with
-# "acceptance" in validate_user_confirmation's existing exact-substring
-# check -- this alone makes reuse of terminal milestone acceptance as
-# scoped acceptance structurally impossible.
-APPROVAL_STAGES = frozenset({"plan", "implementation", "acceptance", "scoped_remediation"})
+# A fourth stage keyword, "scoped_remediation", existed for
+# `/accept-scoped-remediation` until that command was retired (ledger
+# `I10`): its gate was unreachable through every supported lifecycle, so
+# the stage it named could never be confirmed. It is deliberately *not*
+# kept as a vestigial vocabulary entry -- an unreachable stage keyword an
+# operator could still be asked to type is exactly the dead contract the
+# retirement removes.
+APPROVAL_STAGES = frozenset({"plan", "implementation", "acceptance"})
 
 # The functional-review checklist's fixed location (MILESTONE_WORKFLOW.md's
 # AWAITING_FUNCTIONAL_REVIEW section names this path) -- never read from
 # any work item's own fields, so a hand-edited or foreign path can never
 # substitute for it.
 FUNCTIONAL_CHECKLIST_PATH = "docs/ACTIVE_MILESTONE.md"
-
-# D-Scoped-Remediation-Acceptance's eleven documented fields for a
-# scoped_remediation_acceptance list entry (revision 27, GPT-R40-002: five
-# revision 22 originally defined, plus four revision 23 added, plus
-# acceptance_record_version, plus functional_checklist_evidence_commit).
-SCOPED_REMEDIATION_ACCEPTANCE_FIELDS = frozenset({
-    "outstanding_checkpoint_id",
-    "active_work_item_id_at_acceptance",
-    "implementation_revision",
-    "reviewed_implementation_head",
-    "technical_approval_review_content_id",
-    "functional_checklist_path",
-    "functional_checklist_blob",
-    "functional_checklist_evidence_commit",
-    "user_confirmation",
-    "recorded_at",
-    "acceptance_record_version",
-})
-
-# resolve_scoped_remediation_round's full canonical comparison set (revision
-# 27, GPT-R40-002, widened from six to eight fields): maps each compared
-# entry field to the live_fields key it is compared against -- the two
-# differ in name for exactly one field, since a committed entry's own
-# active_work_item_id_at_acceptance is compared against the *current* live
-# active_work_item_id, not a field of the same name.
-_SCOPED_REMEDIATION_COMPARISON_FIELD_MAP = {
-    "outstanding_checkpoint_id": "outstanding_checkpoint_id",
-    "implementation_revision": "implementation_revision",
-    "reviewed_implementation_head": "reviewed_implementation_head",
-    "technical_approval_review_content_id": "technical_approval_review_content_id",
-    "functional_checklist_path": "functional_checklist_path",
-    "functional_checklist_blob": "functional_checklist_blob",
-    "functional_checklist_evidence_commit": "functional_checklist_evidence_commit",
-    "active_work_item_id_at_acceptance": "active_work_item_id",
-}
 
 _GIT_OBJECT_ID_RE = re.compile(r"^[0-9a-f]{40}$")
 
@@ -805,6 +784,35 @@ class IllegalBundleGenerationSourcePhaseError(Exception):
     that stage."""
 
 
+class IllegalSelfReviewEntryPhaseError(Exception):
+    """Raised when `enter_self_reviewing_implementation` is called from a
+    phase that is neither `IMPLEMENTING` (the one legal source) nor
+    `SELF_REVIEWING_IMPLEMENTATION` (the already-there no-op) -- salvage
+    audit `B8`, convergence pass 7. Names the actual phase and the legal
+    source, the same behavioural-refusal shape
+    `IllegalBundleGenerationSourcePhaseError` uses one transition later."""
+
+
+class IncompleteCheckpointsForSelfReviewError(Exception):
+    """Raised when `enter_self_reviewing_implementation` is called from
+    `IMPLEMENTING` while at least one registry checkpoint is not yet
+    `COMPLETE` -- salvage audit `B8`, convergence pass 7.
+
+    `SELF_REVIEWING_IMPLEMENTATION`'s documented entry condition
+    (`docs/ai-workflow/MILESTONE_WORKFLOW.md`) is "all checkpoints
+    implemented", and this is the same all-complete predicate
+    `complete_checkpoint` applies on the ordinary path -- so this writer
+    can never be used to skip outstanding work, which is exactly what the
+    acceptance matrix's own pre-repair `C5` fixture did by hand-writing
+    the phase (salvage audit `O6`). Carries a structured
+    `outstanding_checkpoint_id` attribute so a caller reports the blocked
+    checkpoint without parsing this exception's message text."""
+
+    def __init__(self, message: str, outstanding_checkpoint_id: str | None = None) -> None:
+        super().__init__(message)
+        self.outstanding_checkpoint_id = outstanding_checkpoint_id
+
+
 class BundleGenerationRequiresStaleTechnicalApprovalError(Exception):
     """Raised when `record_bundle_generation(stage="post-fix", ...)` is
     called from `AWAITING_FUNCTIONAL_REVIEW` while `technical_approval.status`
@@ -971,9 +979,8 @@ class StalePlanApprovalRegistryReadError(Exception):
     committed-but-unapproved registry mutation alike, since `git
     hash-object` always reads the working tree's current bytes regardless
     of commit status. Registry-derived terminality (`complete_work_item`,
-    and the advisory pre-flight `/accept-milestone`/
-    `/accept-scoped-remediation` both name) must never be trusted while
-    this would raise."""
+    and the advisory pre-flight `/accept-milestone` names) must never be
+    trusted while this would raise."""
 
 
 class IncompleteOwnCheckpointsError(Exception):
@@ -983,15 +990,12 @@ class IncompleteOwnCheckpointsError(Exception):
     `MILESTONE_COMPLETE` is unreachable until every one of the item's own
     checkpoints is `COMPLETE`, independent of, and in addition to, the
     pre-existing `incomplete_children` check. Names the outstanding
-    checkpoint."""
-
-
-class AmbiguousScopedRemediationTrailerError(Exception):
-    """Raised when more than one commit in range carries the same
-    `Workflow-Scoped-Remediation-Acceptance`/`Workflow-Work-Item` trailer
-    pair and the first-parent-ancestor tie-break does not resolve to
-    exactly one -- the same genuine-ambiguity recovery every other trailer
-    scheme in this module already has."""
+    checkpoint, and the supported ways forward: `/milestone-implement` for
+    a checkpoint still in this milestone's scope, or
+    `/apply-functional-review`'s bounded branch (same scope) / broad branch
+    (a remediation child work item) for a functional-review finding. It
+    deliberately does **not** name `/accept-scoped-remediation`, which was
+    retired as an unreachable dead contract (ledger `I10`)."""
 
 
 class AmbiguousFunctionalChecklistTrailerError(Exception):
@@ -1005,61 +1009,21 @@ class AmbiguousFunctionalChecklistTrailerError(Exception):
     content revision is a distinct key outright)."""
 
 
-class MissingFunctionalChecklistEvidenceError(Exception):
-    """The pre-commit evidence guard's discoverability check (`GPT-R38-001`):
-    raised when no `Workflow-Functional-Checklist` evidence commit is
-    discoverable for the exact live round -- names the missing round key
-    and `/prepare-functional-review` as the remedy."""
-
-
 class NonFirstParentFunctionalChecklistEvidenceError(Exception):
     """Raised by `discover_current_functional_checklist_evidence` (revision
     27 correction, `GPT-R41-002`) when evidence commits for the exact live
     round exist somewhere in `base_commit..head`, but none sits on `head`'s
     first-parent chain -- e.g. a merged side branch whose own evidence
     commit was never carried onto the resulting branch's first-parent line.
-    Distinct from `MissingFunctionalChecklistEvidenceError`: evidence was
-    genuinely prepared, it just never became a first-parent workflow
-    transition, so the remedy is not \"run /prepare-functional-review\" but
-    an explicit re-provenance action (re-commit the evidence directly on the
-    first-parent line). Never silently resolved by ordinary reachable-history
-    order -- that would let side-branch evidence become authoritative
-    without ever appearing as a first-parent transition."""
-
-
-class StaleFunctionalChecklistConfirmationError(Exception):
-    """The pre-commit evidence guard's confirmation-evidence-binding check
-    (revision 27, `GPT-R40-001`): raised when the user's confirmation names
-    an evidence commit/blob that is not the round's current evidence --
-    names both the confirmed and current identity, and instructs the user
-    to review the newer `/prepare-functional-review` report and
-    reconfirm. There is deliberately no automatic migration of an existing
-    confirmation onto newer evidence."""
-
-
-class MalformedFunctionalChecklistEvidenceError(Exception):
-    """The pre-commit evidence guard's confirmation-evidence-binding check,
-    third clause (revision 27, `GPT-R40-001`): raised when a commit's own
-    actually-committed content at `functional_checklist_path` does not
-    match the blob its own `Workflow-Functional-Checklist` trailer names --
-    a defense against a hand-crafted or corrupted trailer."""
-
-
-class DirtyFunctionalChecklistPathError(Exception):
-    """The pre-commit evidence guard's clean-working-tree check
-    (`GPT-R37-004`): raised when `functional_checklist_path` has a staged
-    or unstaged working-tree change relative to `HEAD` -- a working-tree
-    edit the user may have just read and accepted is never silently
-    replaced by an older committed blob."""
-
-
-class ScopedRemediationLiveValueChangedError(Exception):
-    """The pre-commit evidence guard's cross-invocation value-agreement
-    check, fourth clause: raised when `reviewed_implementation_head` or
-    `functional_checklist_path`'s committed content at `HEAD` has changed
-    since this same invocation's own earlier read -- the single-invocation
-    window `WFR-21`'s existing plan-approval durability guard already
-    treats the same way for a different stage."""
+    Distinct from "no evidence commit exists for this round at all", which
+    `discover_current_functional_checklist_evidence` reports by returning
+    `None`: here evidence was genuinely prepared, it just never became a
+    first-parent workflow transition, so the remedy is not "run
+    /prepare-functional-review" but an explicit re-provenance action
+    (re-commit the evidence directly on the first-parent line). Never
+    silently resolved by ordinary reachable-history order -- that would let
+    side-branch evidence become authoritative without ever appearing as a
+    first-parent transition."""
 
 
 def _run(args: list[str], cwd: Path) -> str:
@@ -2285,6 +2249,15 @@ class PlanApprovalTakeoverRefusedError(Exception):
     is `"destructive"` -- refuses having mutated nothing."""
 
 
+class PlanApprovalTakeoverWorkItemMismatchError(PlanApprovalTakeoverRefusedError):
+    """Raised when the open journal belongs to a different work item than
+    the one the invoking command resolved as its target (convergence
+    repair, optional finding 3). A subclass of
+    `PlanApprovalTakeoverRefusedError` because it is a refusal of the same
+    kind and at the same point -- observed, authorized, nothing mutated --
+    not a new takeover mode."""
+
+
 class PlanApprovalTakeoverInProgressError(Exception):
     """Raised when another session's takeover of the same transaction
     epoch is already claiming it (`os.link`'s exclusivity)."""
@@ -2389,10 +2362,21 @@ def acquire_plan_approval_guard(
       i.e. is live, and refuses.
     - anything else refuses, naming the held guard."""
     step_class = plan_approval_step_class(step)
+    # Salvage audit `O8`: this guard is repository-scoped -- one fixed
+    # path, one at a time, whichever work item is being approved -- so the
+    # body carried a hardcoded `"work_item_id": "workflow-v2-1-core"`
+    # that was simply false for any other item's plan approval. Nothing
+    # ever read it (`read_plan_approval_guard` validates `lease_id`
+    # alone; the release literal names `lease_id`/`step`/`step_class`;
+    # the takeover literal names the *journal's* own `work_item_id`,
+    # which is per-item and correct), so it was diagnostic text that
+    # could only mislead a human inspecting the lease. Dropped rather
+    # than plumbed through: the journal, read under this same lock, is
+    # already the per-item authority, and the guard has no business
+    # asserting an identity it does not know.
     body = {
         "lease_id": secrets.token_hex(16),
         "holder_owner_token": holder_owner_token,
-        "work_item_id": "workflow-v2-1-core",
         "stage": "plan",
         "step": step,
         "step_class": step_class,
@@ -2636,7 +2620,8 @@ def plan_approval_guard_release_authorization_literal(guard: dict) -> str:
 
 
 def take_over_plan_approval_transaction(
-    repo_root: Path, *, now: str, user_authorization: str | None, evidence: dict | None = None,
+    repo_root: Path, *, work_item_id: str, now: str, user_authorization: str | None,
+    evidence: dict | None = None,
     guard_release_authorization: str | None = None, journal_path: Path = PLAN_APPROVAL_JOURNAL_PATH,
     guard_path: Path = PLAN_APPROVAL_GUARD_PATH,
 ) -> str:
@@ -2644,7 +2629,24 @@ def take_over_plan_approval_transaction(
     (`D-Approval-Commits`' "Refuse by default; takeover is explicit").
     Returns the fresh `owner_token` `T'`.
 
+    `work_item_id` is the target the *invoking command* resolved, and it
+    is a **required** keyword argument, not an optional cross-check: the
+    journal is a single, repository-wide object (`.ai-review/runtime/
+    PLAN_APPROVAL_JOURNAL.json`), so `/approve-review B plan` observes an
+    interrupted transaction belonging to work item A exactly as readily as
+    one of its own, and every step from `6a` onward then drives A's pinned
+    record, A's paths and A's expected post-state under B's invocation
+    (convergence repair, optional finding 3). Nothing else refused that:
+    the authorization literal names A, but naming A is not the same as
+    checking that the operator meant A. An optional argument would leave
+    the same forget-to-pass-it hole this repair exists to close, so the
+    argument is required and the mismatch is refused at step 1a, before
+    the claim, the guard, or any rotation -- having mutated nothing.
+
     1. **Observe** -- `plan_approval_takeover_evidence`.
+    1a. **Target** -- the open journal's own `work_item_id` must equal the
+       caller's resolved `work_item_id`; otherwise
+       `PlanApprovalTakeoverWorkItemMismatchError`, naming both.
     2. **Authorize** -- the literal must be exactly
        `plan_approval_takeover_authorization_literal(evidence)`. When a
        guard was observed, a separate guard-release authorization quoting
@@ -2672,6 +2674,16 @@ def take_over_plan_approval_transaction(
     if evidence.get("journal") is None:
         raise NoPlanApprovalTransactionError(
             "no plan-approval transaction is open -- nothing to take over"
+        )
+    journal_work_item_id = evidence["journal"]["work_item_id"]
+    if journal_work_item_id != work_item_id:
+        raise PlanApprovalTakeoverWorkItemMismatchError(
+            f"the open plan-approval transaction belongs to work item "
+            f"{journal_work_item_id!r}, but this invocation resolved "
+            f"{work_item_id!r} as its target -- refusing to take over, and "
+            f"complete, another work item's approval under this one's "
+            f"invocation; re-run the command targeting {journal_work_item_id!r} "
+            f"if that transaction is the one that should be resumed"
         )
     expected = plan_approval_takeover_authorization_literal(evidence)
     if user_authorization != expected:
@@ -3103,9 +3115,19 @@ def select_next_checkpoint(work_item: dict, registry: dict) -> str | None:
     - `None` if every registry checkpoint is already `COMPLETE` -- a
       legitimate, distinct outcome from being blocked, signaling the
       caller to drive the `IMPLEMENTING` -> `SELF_REVIEWING_IMPLEMENTATION`
-      transition (`complete_checkpoint` already does this the moment the
-      last checkpoint completes, so a caller only ever observes `None`
-      here on a stale/out-of-band re-check).
+      transition by calling `enter_self_reviewing_implementation`, which
+      owns that edge and is a no-op when the phase is already there.
+
+      This clause used to add that `complete_checkpoint` "already does
+      this the moment the last checkpoint completes, so a caller only ever
+      observes `None` here on a stale/out-of-band re-check". That was
+      false and load-bearing (salvage audit `B8`): `None` is also the
+      correct answer on the *first* selection after a plan re-approval on
+      an item whose checkpoints are all already `COMPLETE`, where
+      `apply_plan_approval` has legitimately just written `IMPLEMENTING`
+      and `complete_checkpoint` has no checkpoint left to fire on. Both
+      wrap-up branches took the sentence at face value, named no writer,
+      and wedged the item.
 
     Raises `NoCheckpointReadyError` (rule 4) when at least one checkpoint
     remains incomplete but none is currently selectable -- names the
@@ -3231,6 +3253,81 @@ def complete_checkpoint(
     all_ids = [entry["id"] for entry in registry["checkpoints"]]
     if all(work_item["checkpoints"].get(cid, {}).get("status") == "COMPLETE" for cid in all_ids):
         work_item["phase"] = "SELF_REVIEWING_IMPLEMENTATION"
+    return new_state
+
+
+def enter_self_reviewing_implementation(
+    state: dict, work_item_id: str, registry: dict, now: str,
+) -> dict:
+    """`SELF_REVIEWING_IMPLEMENTATION`'s **second** writer, and the one
+    `/milestone-implement`'s and `/bootstrap-workflow-v2`'s own
+    `NO_CHECKPOINT` terminal-wrap-up branches call (salvage audit `B8`,
+    convergence pass 7).
+
+    Before this existed, `complete_checkpoint` above was the phase's sole
+    writer, reachable only as a side effect of a checkpoint *transitioning*
+    to `COMPLETE`. Both commands' wrap-up branches say "enter
+    `SELF_REVIEWING_IMPLEMENTATION`" in prose and named no state writer at
+    all, which is invisible on the ordinary path -- the branch is entered
+    on the invocation *after* the last checkpoint completed, when
+    `complete_checkpoint` has already written the phase -- but wedges the
+    work item permanently the moment the branch is entered from a real
+    `IMPLEMENTING`: a plan re-approval (`apply_plan_approval`, which sets
+    `IMPLEMENTING` unconditionally and correctly) on an item whose every
+    registry checkpoint is already `COMPLETE`. `select_next_checkpoint`
+    then returns `None`, `resolve_checkpoint_ownership` returns
+    `NO_CHECKPOINT`, and every outgoing lifecycle path refuses:
+    `record_bundle_generation` at both stages
+    (`IllegalBundleGenerationSourcePhaseError`),
+    `enter_applying_review_feedback`
+    (`IllegalApplyingReviewFeedbackEntryPhaseError`), and
+    `/accept-milestone` (`milestone_complete_gate_reachable` is `False`
+    for `IMPLEMENTING`, whatever the registry says).
+
+    The three outcomes, in the order they are decided:
+
+    - `phase == "SELF_REVIEWING_IMPLEMENTATION"` already: **returns the
+      input state unchanged**, with no `state_revision` bump and no
+      `last_transition` rewrite. This is the ordinary path's own case, and
+      it must stay a true no-op -- the wrap-up branch is re-entered on
+      every subsequent invocation until the bundle is generated, and a
+      writer that bumped the revision each time would manufacture a state
+      change out of a read-only re-check.
+    - `phase == "IMPLEMENTING"` and every checkpoint named in `registry`
+      is `COMPLETE`: writes the transition, bumps `state_revision`, sets
+      `last_transition`. Same all-complete predicate `complete_checkpoint`
+      applies, deliberately re-derived from `registry` rather than trusted
+      from any stored phase value.
+    - `phase == "IMPLEMENTING"` with an outstanding checkpoint:
+      `IncompleteCheckpointsForSelfReviewError`, naming it. There is real
+      work left; the caller must implement it, not skip it.
+
+    Any other phase raises `IllegalSelfReviewEntryPhaseError`. Returns a
+    new state dict (or the input, unchanged, for the no-op case)."""
+    work_item = state["work_items"][work_item_id]
+    phase = work_item.get("phase")
+    if phase == "SELF_REVIEWING_IMPLEMENTATION":
+        return state
+    if phase != "IMPLEMENTING":
+        raise IllegalSelfReviewEntryPhaseError(
+            f"enter_self_reviewing_implementation invoked for {work_item_id!r} from phase "
+            f"{phase!r}, but the only legal source phase is 'IMPLEMENTING' (a work item "
+            f"already at 'SELF_REVIEWING_IMPLEMENTATION' is a no-op)"
+        )
+    is_terminal, outstanding = registry_completion_status(work_item, registry)
+    if not is_terminal:
+        raise IncompleteCheckpointsForSelfReviewError(
+            f"{work_item_id!r} cannot enter SELF_REVIEWING_IMPLEMENTATION -- checkpoint "
+            f"{outstanding!r} is not COMPLETE; that phase's entry condition is "
+            f"'all checkpoints implemented', so the outstanding checkpoint must be "
+            f"implemented through /milestone-implement, never skipped",
+            outstanding_checkpoint_id=outstanding,
+        )
+    new_state = copy.deepcopy(state)
+    new_work_item = new_state["work_items"][work_item_id]
+    new_work_item["phase"] = "SELF_REVIEWING_IMPLEMENTATION"
+    new_work_item["state_revision"] = new_work_item.get("state_revision", 1) + 1
+    new_work_item["last_transition"] = now
     return new_state
 
 
@@ -6081,12 +6178,322 @@ def write_registry_and_mapping(
     for checkpoint_id in new_ids:
         identity_reference_admits(repo_root, work_item_id, checkpoint_id)
 
+    # Salvage audit `O3`: this is the sole sanctioned writer of either
+    # file, and `/milestone-plan` step 3 calls it before anything else has
+    # necessarily created `docs/ai-workflow/registry/` or
+    # `docs/ai-workflow/requirements/`. A repository adopting the workflow
+    # for the first time otherwise gets a bare `FileNotFoundError` out of
+    # the one step that is supposed to create these artifacts.
+    full_mapping_path = repo_root / mapping_path
+    full_registry_path.parent.mkdir(parents=True, exist_ok=True)
+    full_mapping_path.parent.mkdir(parents=True, exist_ok=True)
     full_registry_path.write_text(json.dumps(registry, indent=2) + "\n")
-    (repo_root / mapping_path).write_text(json.dumps(mapping, indent=2) + "\n")
+    full_mapping_path.write_text(json.dumps(mapping, indent=2) + "\n")
+
+
+# Salvage audit `B4`/`B5` (cluster `C3`): the default template's own
+# classification vocabulary. Both stages inherit an already-reviewed set
+# rather than an empty or hand-authored one -- the same reasoning the
+# plan-stage half has always used -- but the implementation-stage half now
+# actually names something, and both halves now name every path this
+# workflow's own commands are *guaranteed* to write. Fail-closed is
+# preserved throughout: these are closed sets, and a path under any
+# directory they do not name still raises `UnclassifiedPathError`.
+
+_WORKFLOW_MACHINERY_JUSTIFICATION = (
+    "written by this workflow's own commands (state/config persistence, the "
+    "registry/requirements artifacts, the functional-review checklist, the "
+    "roadmap/milestone archival) -- excluded so the machinery's own "
+    "bookkeeping writes can never stale this item's approvals"
+)
+
+# Every other work item's plan-stage content lives under here, alongside
+# this workflow's own bookkeeping. Excluded at *both* stages in the
+# generated template (salvage audit `B7`): a repository running two work
+# items at once -- which `D1` names as the normal case, not the exception
+# -- otherwise has to hand-enumerate every sibling's plan document in
+# every new item's declaration, and a missed one fails the *reader's*
+# classification closed, not the writer's. This item's own artifacts file
+# is carved out by exact path in `implementation_stage.protected_paths`
+# and checked first, so its self-protection is unaffected; this item's own
+# plan/registry/mapping paths are `plan_stage.protected_paths` members and
+# `classify_path` checks protected first, so they stay protected too.
+WORKFLOW_DOCS_PREFIX = "docs/ai-workflow/"
+
+_SIBLING_WORKFLOW_DOCS_JUSTIFICATION = (
+    "another work item's own plan-stage content and this workflow's own "
+    "bookkeeping -- owned, reviewed and bound by whichever item declares it, "
+    "never this item's own reviewed content. A work item whose deliverable "
+    "genuinely *is* a workflow design document under this prefix must move "
+    "that exact path into implementation_stage.protected_paths during "
+    "SELF_REVIEWING_PLAN, exactly as workflow-v2-1-core-artifacts.json does "
+    "for MILESTONE_WORKFLOW.md and REVIEW_PROTOCOL.md (salvage audit B7)"
+)
+
+_PLAN_GOVERNED_JUSTIFICATION = (
+    "plan-stage-governed content for this or another work item -- reviewed and "
+    "bound at the plan stage, never an implementation deliverable in its own right"
+)
+
+_SHARED_TERRITORY_JUSTIFICATION = (
+    "repository-wide territory neither work_item_type owns exclusively -- "
+    "agent instructions, CI configuration, the agent-context inventory and "
+    "the improvement backlog; a concurrent work item of either type may "
+    "write here, so it is excluded for both rather than protected by one "
+    "(salvage audit I8). An item whose deliverable genuinely is one of these "
+    "must move that exact path into implementation_stage.protected_paths "
+    "during SELF_REVIEWING_PLAN."
+)
+
+_OTHER_TYPE_JUSTIFICATION = (
+    "outside this work item's own deliverable tree -- a concurrent work item of "
+    "the other work_item_type may write here; excluded so it never stales this "
+    "item's technical_approval (the implementation-stage counterpart of "
+    "PRODUCT_SCOPE_JUSTIFICATION's own plan-stage reasoning)"
+)
+
+# Paths this workflow's own commands write, at either stage, for any work
+# item: `WORKFLOW_STATE.json`/`WORKFLOW_CONFIG.json` (every state writer),
+# `FUNCTIONAL_CHECKLIST_PATH` (`/prepare-functional-review`'s own mandatory
+# evidence commit), `docs/ROADMAP.md` (`/accept-milestone` step 3).
+_WORKFLOW_MACHINERY_PATHS = (
+    "docs/ai-workflow/WORKFLOW_STATE.json",
+    "docs/ai-workflow/WORKFLOW_CONFIG.json",
+    FUNCTIONAL_CHECKLIST_PATH,
+    "docs/ROADMAP.md",
+)
+
+_WORKFLOW_MACHINERY_PREFIXES = (
+    "docs/ai-workflow/registry/",
+    "docs/ai-workflow/requirements/",
+    "docs/ai-workflow/archive/",
+    "docs/milestones/",
+)
+
+# The deliverable tree each work_item_type owns at the implementation
+# stage -- "the kind of content technical_approval binds to" for that type.
+# `process`: this repository's own workflow tooling, exactly the pair
+# `workflow-v2-1-core-artifacts.json` itself protects. `product`: the
+# application source, its build configuration, and the product
+# documentation a product milestone genuinely authors.
+#
+# Salvage audit `I8` (convergence pass 7): these two tables are the *only*
+# per-type input to `_implementation_stage_default`, and the "other" type's
+# entries become that type's exclusions by construction. Before this, the
+# per-type branching was one-directional -- the `process` branch excluded a
+# hand-listed slice of product documentation territory, and the `product`
+# branch had no mirror at all -- so a product milestone editing
+# `docs/UX_FLOWS.md`, `docs/DOMAIN_GLOSSARY.md`, `docs/adr/` or a
+# repository-root build file reached `UnclassifiedPathError` at its first
+# implementation bundle, after the plan-approval hard gate had already
+# advanced durable state. Making the two types symmetric table lookups
+# removes the whole class rather than adding a second hand-list.
+IMPLEMENTATION_STAGE_DELIVERABLE_PREFIXES = MappingProxyType({
+    "process": MappingProxyType({
+        ".claude/commands/": "this repository's own workflow command files -- process deliverable",
+        "scripts/": "this repository's own workflow tooling scripts -- process deliverable",
+    }),
+    "product": MappingProxyType({
+        "app/": "application source and its own tests -- product deliverable",
+        "gradle/": "build configuration for the application -- product deliverable",
+        "config/": "static-analysis/build configuration for the application -- product deliverable",
+        "docs/adr/":
+            "architecture decision records for the application -- product design "
+            "content a product milestone authors and a product technical review "
+            "binds (salvage audit I8)",
+    }),
+})
+
+# The exact-path half of the same per-type deliverable declaration. Kept
+# separate from the prefix half because these are repository-root files and
+# single documents: a prefix would swallow suffixed siblings, exactly the
+# `OPUS-R8-006` reasoning `PLAN_STAGE_EXCLUDED_PATHS` already states. A
+# root build file this table does not name still fails closed, by design.
+IMPLEMENTATION_STAGE_DELIVERABLE_PATHS = MappingProxyType({
+    "process": MappingProxyType({}),
+    "product": MappingProxyType({
+        "build.gradle.kts":
+            "the application's own root build script -- product deliverable "
+            "(salvage audit I8)",
+        "settings.gradle.kts":
+            "the application's own Gradle settings -- product deliverable "
+            "(salvage audit I8)",
+        "gradle.properties":
+            "the application's own Gradle properties -- product deliverable "
+            "(salvage audit I8)",
+        "gradlew":
+            "the application's own Gradle wrapper entry point -- product "
+            "deliverable (salvage audit I8)",
+        "gradlew.bat":
+            "the application's own Gradle wrapper entry point -- product "
+            "deliverable (salvage audit I8)",
+        "docs/DOMAIN_GLOSSARY.md":
+            "the application's own domain terminology and business rules -- "
+            "product design content a product technical review binds "
+            "(salvage audit I8)",
+        "docs/UX_FLOWS.md":
+            "the application's own navigation/UI/interaction flows -- product "
+            "design content a product technical review binds (salvage audit I8)",
+    }),
+})
+
+# Territory neither work_item_type owns exclusively: repository-wide agent
+# instructions, CI configuration, the agent-context inventory, and the
+# improvement backlog. A concurrent work item of *either* type may write
+# here, so both types exclude it -- the same treatment `AGENTS.md`/
+# `CLAUDE.md`/`README.md` already get below, and the third category
+# alongside product-owned and process-owned. An item whose deliverable
+# genuinely is one of these must move that exact path into
+# `implementation_stage.protected_paths` during `SELF_REVIEWING_PLAN`, the
+# same escape `WORKFLOW_DOCS_PREFIX` documents.
+_SHARED_REPOSITORY_PREFIXES = (
+    ".github/",
+    "docs/agent-context/",
+    "docs/improvements/",
+)
+
+
+# A third `work_item_type` added to `WORK_ITEM_TYPES` without a
+# deliverable tree here would reach `_implementation_stage_default` as a
+# bare `KeyError` instead of a named refusal -- the exact class the
+# salvage audit's `I2` closed for the validators. Checked at import, the
+# same way `workflow_fingerprint` validates its own exclusion constants.
+# Both halves of the declaration are checked (salvage audit `I8`): the
+# exact-path table is read for `work_item_type` *and* for the other type
+# on every call, so a missing entry is exactly as fatal as a missing
+# prefix entry.
+assert set(IMPLEMENTATION_STAGE_DELIVERABLE_PREFIXES) == set(WORK_ITEM_TYPES), (
+    "IMPLEMENTATION_STAGE_DELIVERABLE_PREFIXES must name exactly WORK_ITEM_TYPES"
+)
+assert set(IMPLEMENTATION_STAGE_DELIVERABLE_PATHS) == set(WORK_ITEM_TYPES), (
+    "IMPLEMENTATION_STAGE_DELIVERABLE_PATHS must name exactly WORK_ITEM_TYPES"
+)
+
+# One type's protected deliverable is the other's exclusion, so a path or
+# prefix claimed by both types would make the generated classification
+# depend on dictionary insertion order rather than on the declaration.
+# Checked at import rather than left to a test.
+assert not (
+    set(IMPLEMENTATION_STAGE_DELIVERABLE_PATHS["process"])
+    & set(IMPLEMENTATION_STAGE_DELIVERABLE_PATHS["product"])
+), "IMPLEMENTATION_STAGE_DELIVERABLE_PATHS entries must be owned by exactly one type"
+assert not (
+    set(IMPLEMENTATION_STAGE_DELIVERABLE_PREFIXES["process"])
+    & set(IMPLEMENTATION_STAGE_DELIVERABLE_PREFIXES["product"])
+), "IMPLEMENTATION_STAGE_DELIVERABLE_PREFIXES entries must be owned by exactly one type"
+assert not (
+    set(_SHARED_REPOSITORY_PREFIXES)
+    & (set(IMPLEMENTATION_STAGE_DELIVERABLE_PREFIXES["process"])
+       | set(IMPLEMENTATION_STAGE_DELIVERABLE_PREFIXES["product"]))
+), "_SHARED_REPOSITORY_PREFIXES must not claim either type's deliverable tree"
+
+
+def _implementation_stage_default(
+    work_item_type: str, own_artifacts_path: str,
+    plan_path: str, registry_path: str, mapping_path: str,
+) -> dict:
+    """The type-appropriate `implementation_stage` half of
+    `generate_artifacts_declarations`' template (salvage audit `B4`).
+
+    Before this, the generated half named nothing but the declarations
+    file protecting itself -- `protected_prefixes`/`excluded_paths`/
+    `excluded_prefixes` were all empty -- so the *first*
+    implementation-stage computation for any freshly created work item
+    raised `UnclassifiedPathError` on the item's own deliverable, after
+    the plan-approval hard gate. The generator was also never given
+    `work_item_type`, so it could not have emitted a type-appropriate set
+    even in principle.
+
+    What the template classifies, and deliberately what it does not:
+
+    - **protected**: this file itself (unchanged self-protection), plus
+      the deliverable tree this `work_item_type` owns
+      (`IMPLEMENTATION_STAGE_DELIVERABLE_PREFIXES`).
+    - **excluded**: every path this workflow's own commands are
+      *guaranteed* to write for any work item (`_WORKFLOW_MACHINERY_*`),
+      this item's own three plan-stage declaration paths, the repository
+      housekeeping/product-brief documents the plan stage's own closed set
+      already names, and the *other* `work_item_type`'s deliverable tree
+      and documentation territory.
+    - **neither**: everything else, which still fails closed via
+      `UnclassifiedPathError` -- any path under a directory the template
+      does not name at all.
+
+    The one judgment the template *does* make rather than defer is
+    `docs/ai-workflow/` (salvage audit `B7`): excluded at both stages,
+    because everything under it is either this workflow's own bookkeeping
+    or *another* work item's plan-stage content, owned and bound by
+    whichever item declares it. Leaving it unclassified instead was tried
+    and is worse: it makes two concurrent work items -- `D1`'s normal
+    case -- impossible without hand-enumerating every sibling's plan
+    document in every new declaration, which is exactly what every real
+    work item in this repository ended up doing, one of them missing a
+    sibling and being caught only at plan review. A `process` item whose
+    deliverable genuinely *is* a workflow design document under this
+    prefix must move that exact path into
+    `implementation_stage.protected_paths` during `SELF_REVIEWING_PLAN`,
+    the way `workflow-v2-1-core-artifacts.json` does for
+    `MILESTONE_WORKFLOW.md` and `REVIEW_PROTOCOL.md`."""
+    other_type = "product" if work_item_type == "process" else "process"
+    protected_prefixes = dict(IMPLEMENTATION_STAGE_DELIVERABLE_PREFIXES[work_item_type])
+
+    excluded_paths = {path: _WORKFLOW_MACHINERY_JUSTIFICATION for path in _WORKFLOW_MACHINERY_PATHS}
+    for path in (plan_path, registry_path, mapping_path):
+        excluded_paths[path] = _PLAN_GOVERNED_JUSTIFICATION
+    # Repository housekeeping and top-level product-brief documents any
+    # concurrent work item may write -- the same closed set the plan stage
+    # already names, restated here rather than derived from it (the two
+    # stages' sets are near-inverses and must never be adapted from one
+    # another, `OPUS-R20-003`).
+    for path in (
+        ".gitignore", "AGENTS.md", "CLAUDE.md", "README.md",
+        "docs/PROJECT_BRIEF.md", "docs/TECHNICAL_DECISIONS.md",
+    ):
+        excluded_paths.setdefault(path, _OTHER_TYPE_JUSTIFICATION)
+    # The other type's own exact-path deliverables (salvage audit `I8`) --
+    # the mirror of the prefix-shaped rule below, and symmetric for both
+    # types rather than hand-listed for one of them.
+    for path in IMPLEMENTATION_STAGE_DELIVERABLE_PATHS[other_type]:
+        excluded_paths.setdefault(path, _OTHER_TYPE_JUSTIFICATION)
+
+    excluded_prefixes = {
+        prefix: _WORKFLOW_MACHINERY_JUSTIFICATION for prefix in _WORKFLOW_MACHINERY_PREFIXES
+    }
+    for prefix in IMPLEMENTATION_STAGE_DELIVERABLE_PREFIXES[other_type]:
+        excluded_prefixes[prefix] = _OTHER_TYPE_JUSTIFICATION
+    for prefix in _SHARED_REPOSITORY_PREFIXES:
+        excluded_prefixes.setdefault(prefix, _SHARED_TERRITORY_JUSTIFICATION)
+    excluded_prefixes.setdefault(WORKFLOW_DOCS_PREFIX, _SIBLING_WORKFLOW_DOCS_JUSTIFICATION)
+
+    # The item's own declarations file is carved out by exact path and
+    # checked first by `classify_path_implementation_stage`, so the
+    # `docs/ai-workflow/registry/` exclusion above never weakens its
+    # self-protection.
+    protected_paths = {
+        own_artifacts_path:
+            "this file's own concrete, spelled-out path -- an editable-under-"
+            "no-approval declarations file would let someone widen an "
+            "exclusion and re-bless the resulting digest in the same "
+            "session, with no gate ever having seen the classification "
+            "change (OPUS-R25-006, OPUS-R26-004)",
+    }
+    # This type's own exact-path deliverables, added *after* the
+    # self-protection entry and never overwriting it: `setdefault` keeps
+    # the declarations file's own justification intact even if a future
+    # table entry ever collided with it (salvage audit `I8`).
+    for path, justification in IMPLEMENTATION_STAGE_DELIVERABLE_PATHS[work_item_type].items():
+        protected_paths.setdefault(path, justification)
+    return {
+        "protected_paths": protected_paths,
+        "protected_prefixes": protected_prefixes,
+        "excluded_paths": excluded_paths,
+        "excluded_prefixes": excluded_prefixes,
+    }
 
 
 def generate_artifacts_declarations(
     work_item_id: str, plan_path: str, registry_path: str, mapping_path: str,
+    *, work_item_type: str,
 ) -> dict:
     """The default `<work_item_id>-artifacts.json` template
     (`D-Fingerprint-Generalization`, `OPUS-R25-004`): the item's own three
@@ -6102,30 +6509,81 @@ def generate_artifacts_declarations(
     file's own concrete, self-referential `implementation_stage.protected_paths`
     entry (`OPUS-R25-006`/`OPUS-R26-004`) so the file protects itself under
     `technical_approval` by construction, the same pattern
-    `workflow-v2-1-core-artifacts.json`'s own migrated entry uses."""
+    `workflow-v2-1-core-artifacts.json`'s own migrated entry uses.
+
+    **`work_item_type` is required** (salvage audit `B4`): the
+    implementation-stage half is type-specific -- a `process` item's
+    deliverable tree is this repository's own workflow tooling, a
+    `product` item's is the application source -- and the generator
+    previously never saw the type at all, so it emitted an
+    implementation-stage classification that named nothing but its own
+    file and failed closed on the item's own deliverable at the first
+    implementation-stage computation. See `_implementation_stage_default`.
+
+    **Plan-stage completeness** (salvage audit `B5`): the inherited
+    `PLAN_STAGE_EXCLUDED_PATHS` was authored as the complement of
+    `fingerprint.PLAN_STAGE_PROTECTED`, but this template's own
+    `protected_paths` is a *different, smaller* set -- the item's own
+    three declaration paths. The three documents `PLAN_STAGE_PROTECTED`
+    names therefore landed in neither set and failed closed the moment any
+    of them changed, including `docs/TECHNICAL_DECISIONS.md`, which
+    `/milestone-plan` step 5 explicitly directs the planner to engage
+    with. They are excluded here, by exact path, as another work item's
+    plan-stage content -- unless this item's own `plan_path`/
+    `registry_path`/`mapping_path` names one of them, in which case
+    `classify_path`'s protected-first ordering keeps it protected."""
     validate_work_item_id(work_item_id)
+    validate_work_item_type(work_item_type)
     own_artifacts_path = str(fingerprint.artifacts_path_for_work_item(work_item_id).as_posix())
+    own_declaration_paths = {plan_path, registry_path, mapping_path}
+
+    plan_stage_excluded_paths = dict(fingerprint.PLAN_STAGE_EXCLUDED_PATHS)
+    plan_stage_excluded_prefixes = dict(fingerprint.PLAN_STAGE_EXCLUDED_PREFIXES)
+    plan_stage_excluded_prefixes.setdefault(
+        WORKFLOW_DOCS_PREFIX, _SIBLING_WORKFLOW_DOCS_JUSTIFICATION,
+    )
+    for path in sorted(fingerprint.PLAN_STAGE_PROTECTED):
+        if path in own_declaration_paths:
+            continue
+        plan_stage_excluded_paths.setdefault(
+            path,
+            "another work item's own plan-stage protected design content, not this "
+            "item's -- excluded, not unmentioned, so a concurrent edit to it never "
+            "leaves this item's own plan-stage classification unresolvable "
+            "(salvage audit B5)",
+        )
+    # The repository-root build files (salvage audit `I8`). The inherited
+    # `PLAN_STAGE_EXCLUDED_PATHS` is `workflow-v2-1-core`'s own frozen
+    # constant and names none of them, so they were unclassified at the
+    # *plan* stage too, for both work-item types -- and the plan-stage
+    # projection is recomputed all the way through implementation
+    # (`implementing_entry_reachable`, `/accept-milestone`'s registry
+    # coverage check), so a product milestone that bumps `build.gradle.kts`
+    # mid-implementation failed its own plan-stage freshness check closed.
+    # Excluded here, in the generated template, rather than by widening the
+    # frozen constant: no existing declaration file changes, so no existing
+    # approval's identity moves (salvage audit `I7`'s own rule).
+    for path in sorted(IMPLEMENTATION_STAGE_DELIVERABLE_PATHS["product"]):
+        if path in own_declaration_paths or path in fingerprint.PLAN_STAGE_PROTECTED:
+            continue
+        plan_stage_excluded_paths.setdefault(
+            path,
+            "product build configuration and product documentation -- implementation-"
+            "stage content owned by whichever product work item declares it, never "
+            "plan-stage design content for this item (salvage audit I8)",
+        )
+
     return {
         "schema_version": 2,
         "work_item_id": work_item_id,
         "plan_stage": {
-            "protected_paths": sorted({plan_path, registry_path, mapping_path}),
-            "excluded_paths": dict(fingerprint.PLAN_STAGE_EXCLUDED_PATHS),
-            "excluded_prefixes": dict(fingerprint.PLAN_STAGE_EXCLUDED_PREFIXES),
+            "protected_paths": sorted(own_declaration_paths),
+            "excluded_paths": plan_stage_excluded_paths,
+            "excluded_prefixes": plan_stage_excluded_prefixes,
         },
-        "implementation_stage": {
-            "protected_paths": {
-                own_artifacts_path:
-                    "this file's own concrete, spelled-out path -- an editable-under-"
-                    "no-approval declarations file would let someone widen an "
-                    "exclusion and re-bless the resulting digest in the same "
-                    "session, with no gate ever having seen the classification "
-                    "change (OPUS-R25-006, OPUS-R26-004)",
-            },
-            "protected_prefixes": {},
-            "excluded_paths": {},
-            "excluded_prefixes": {},
-        },
+        "implementation_stage": _implementation_stage_default(
+            work_item_type, own_artifacts_path, plan_path, registry_path, mapping_path,
+        ),
     }
 
 
@@ -6150,8 +6608,7 @@ def default_work_item(
     mechanism as `plan_path`/`registry_path`, not a new one."""
     validate_work_item_id(work_item_id)
     validate_work_item_type(work_item_type)
-    if work_item_kind not in WORK_ITEM_KINDS:
-        raise InvalidWorkItemTypeError(f"unknown work_item_kind: {work_item_kind!r}")
+    validate_work_item_kind(work_item_kind)
     return {
         "work_item_type": work_item_type,
         "work_item_kind": work_item_kind,
@@ -6234,8 +6691,7 @@ def route_work_item(
     """
     validate_work_item_id(work_item_id)
     validate_work_item_type(work_item_type)
-    if work_item_kind not in WORK_ITEM_KINDS:
-        raise InvalidWorkItemTypeError(f"unknown work_item_kind: {work_item_kind!r}")
+    validate_work_item_kind(work_item_kind)
 
     new_state = copy.deepcopy(state)
     work_items = new_state.setdefault("work_items", {})
@@ -6354,9 +6810,9 @@ def incomplete_children(state: dict, work_item_id: str) -> list[str]:
 
 
 def registry_completion_status(work_item: dict, registry: dict) -> tuple[bool, str | None]:
-    """`D-Scoped-Remediation-Acceptance`'s new helper: the sole place the
-    terminal/non-terminal question is answered -- every other function in
-    this section consumes its result rather than re-deriving it. Returns
+    """The sole place the terminal/non-terminal question is answered --
+    every other function in this section consumes its result rather than
+    re-deriving it. Returns
     `(is_terminal, outstanding_checkpoint_id)`: `(True, None)` when
     `select_next_checkpoint` reports every registry checkpoint already
     `COMPLETE`; `(False, <checkpoint_id>)` otherwise, whether the next
@@ -6374,7 +6830,7 @@ def registry_completion_status(work_item: dict, registry: dict) -> tuple[bool, s
 
 
 def milestone_complete_gate_reachable(*, phase: str, is_terminal: bool) -> bool:
-    """`D-Scoped-Remediation-Acceptance`'s gate function, mirroring
+    """`/accept-milestone`'s gate function, mirroring
     `approval_gate_reachable`/`technical_approval_gate_reachable`'s
     existing non-circular pattern (D-States): `True` iff `is_terminal` and
     `phase` is `AWAITING_FUNCTIONAL_REVIEW` or `AWAITING_USER_ACCEPTANCE`
@@ -6382,14 +6838,6 @@ def milestone_complete_gate_reachable(*, phase: str, is_terminal: bool) -> bool:
     this codebase writes it, a pre-existing gap this decision does not
     attempt to close)."""
     return is_terminal and phase in ("AWAITING_FUNCTIONAL_REVIEW", "AWAITING_USER_ACCEPTANCE")
-
-
-def scoped_remediation_gate_reachable(*, phase: str, is_terminal: bool) -> bool:
-    """`D-Scoped-Remediation-Acceptance`'s second gate function: `True` iff
-    `phase == "AWAITING_FUNCTIONAL_REVIEW"` and `not is_terminal` -- mutually
-    exclusive with `milestone_complete_gate_reachable` by construction,
-    since exactly one of `is_terminal`/`not is_terminal` holds at once."""
-    return phase == "AWAITING_FUNCTIONAL_REVIEW" and not is_terminal
 
 
 def resolve_own_registry_completion_status(repo_root: Path, work_item: dict) -> tuple[bool, str | None]:
@@ -6518,8 +6966,8 @@ def _assert_registry_covered_by_current_plan_approval(
     **The real runtime guard against a malformed persisted `review_content_
     manifest`** (`workflow-v2-3-followups` continued scope, external
     cross-model review round 4, `OPUS-R25-007`'s own precedent): this is
-    the exact function `/accept-milestone`/`/accept-scoped-remediation`
-    reach through `resolve_own_registry_completion_status`, over the
+    the exact function `/accept-milestone` reaches through
+    `resolve_own_registry_completion_status`, over the
     *live* `WORKFLOW_STATE.json` -- `validate_state`'s own shape check
     is never on this call path, so the guard below, not that one, is what
     actually stops a malformed manifest from being iterated as a list of
@@ -6821,11 +7269,16 @@ _NON_WRITER_VIOLATION_RE = re.compile(
 # later command files -- `.claude/commands/review-implementation.md` and
 # `.claude/commands/review-functional.md` (`workflow-v2-3` CP1/CP2), both
 # bundle-report consumers -- were added when they were built, bringing the
-# roster to its current fifteen files (eleven bundle/verdict consumers,
-# four exempt). Adding a file here is a deliberate per-command decision at
-# the time that command is written, not automatic for everything that
-# postdates any prior snapshot. `.claude/commands/recover-implementation-
-# provenance.md` (added earlier, `WF8c` item (b)) was considered and left
+# roster to fifteen files (eleven bundle/verdict consumers, four exempt).
+# Retiring `/accept-scoped-remediation` (ledger `I10`) removed one exempt
+# entry, leaving the roster at its current fourteen files (eleven bundle/
+# verdict consumers, three exempt): a deleted command file cannot carry a
+# declaration, and leaving it on the roster would make the discovery
+# function refuse for a file that no longer exists. Adding a file here is a
+# deliberate per-command decision at the time that command is written, not
+# automatic for everything that postdates any prior snapshot.
+# `.claude/commands/recover-implementation-provenance.md` (added earlier,
+# `WF8c` item (b)) was considered and left
 # off: it is a `state_writer: true` recovery action, and its classification
 # against `WFR-67`'s roster is deliberately left unassigned rather than
 # resolved -- its own step 6 does read `<bundle_dir>/MANIFEST.md`'s existing
@@ -6846,8 +7299,8 @@ _NON_WRITER_VIOLATION_RE = re.compile(
 # `workflow_fingerprint.assert_bundle_not_rejected` actually appears at the
 # right points. That derivation is separate, deferred `WF8c` scope; this
 # function and its conformance test instead pin the **known-correct**
-# classification (the eleven consumers/four exempt split over the current
-# fifteen-file roster above -- nine/four over thirteen files at `WFR-67`'s
+# classification (the eleven consumers/three exempt split over the current
+# fourteen-file roster above -- nine/four over thirteen files at `WFR-67`'s
 # own revision-80 text, extended since) as an explicit expected-value
 # table, so a file that drifts from it is still caught, even though the
 # check is against a recorded table rather than re-derived from first
@@ -6856,7 +7309,6 @@ _NON_WRITER_VIOLATION_RE = re.compile(
 
 REVIEW_SUBJECT_ROSTER = frozenset({
     ".claude/commands/accept-milestone.md",
-    ".claude/commands/accept-scoped-remediation.md",
     ".claude/commands/apply-functional-review.md",
     ".claude/commands/apply-implementation-review.md",
     ".claude/commands/apply-plan-review.md",
@@ -8648,8 +9100,11 @@ def complete_work_item(state: dict, work_item_id: str, now: str, *, repo_root: P
     every still-incomplete child, rather than completing a parent whose
     broad remediation work is still open elsewhere.
 
-    `D-Scoped-Remediation-Acceptance`'s own-checkpoint-completion block
-    (resolves `WF8B-002`, hardened `GPT-R37-001`): independent of, and in
+    The own-checkpoint-completion block (`D-Scoped-Remediation-Acceptance`,
+    resolves `WF8B-002`, hardened `GPT-R37-001`; the one part of that
+    decision that outlived `/accept-scoped-remediation`'s retirement,
+    ledger `I10`, because it guards `/accept-milestone` rather than the
+    retired command): independent of, and in
     addition to, the child-completion check above, this now also resolves
     and loads the work item's **own** registry authoritatively (never a
     caller-supplied dict -- `resolve_own_registry_completion_status`,
@@ -8683,8 +9138,11 @@ def complete_work_item(state: dict, work_item_id: str, now: str, *, repo_root: P
     if not is_terminal:
         raise IncompleteOwnCheckpointsError(
             f"{work_item_id!r} cannot reach MILESTONE_COMPLETE -- its own checkpoint "
-            f"{outstanding_checkpoint_id!r} is not COMPLETE (use /accept-scoped-remediation "
-            f"if this is a continued-scope remediation round, or complete the checkpoint first)"
+            f"{outstanding_checkpoint_id!r} is not COMPLETE. Finish it with "
+            f"/milestone-implement if it is still part of this milestone; for a "
+            f"functional-review finding, use /apply-functional-review -- its bounded "
+            f"branch for a same-scope fix, or its broad branch, which creates a "
+            f"remediation child work item, for new or wider scope"
         )
 
     verdicts = resolve_completion_obligations(repo_root, work_item)
@@ -9047,8 +9505,8 @@ def _describe_malformed_review_content_manifest_shape(manifest: object) -> str |
     between a relocated read-path guard and its write-time/`validate_state`
     backstop, never a duplicated copy that can drift) so `validate_approval_
     record` (the write chokepoint), `_assert_registry_covered_by_current_
-    plan_approval` (the live-state read consumer `/accept-milestone`/
-    `/accept-scoped-remediation` reach), and `_resolve_one_obligation`
+    plan_approval` (the live-state read consumer `/accept-milestone`
+    reaches), and `_resolve_one_obligation`
     (the committed-blob read consumer, malformed state arriving from a
     historical commit rather than the live file) all refuse the identical
     malformed shape the identical way, rather than three separately
@@ -9093,8 +9551,8 @@ def validate_approval_record(record: dict, *, stage: str) -> None:
     persisted in `WORKFLOW_STATE.json` (an old backup, import, hand edit,
     or pre-fix tooling) lives at the two real consumer chokepoints instead:
     `_assert_registry_covered_by_current_plan_approval` (live-state,
-    `/accept-milestone`/`/accept-scoped-remediation`) and
-    `_resolve_one_obligation` (committed-blob, historical state)."""
+    `/accept-milestone`) and `_resolve_one_obligation` (committed-blob,
+    historical state)."""
     if stage not in APPROVAL_STAGES:
         raise InvalidApprovalRecordError(f"unknown approval stage: {stage!r}")
     if record.get("status") not in APPROVAL_STATUSES:
@@ -10177,29 +10635,22 @@ def apply_implementation_provenance_recovery(state: dict, work_item_id: str, now
 
 
 # ---------------------------------------------------------------------------
-# D-Scoped-Remediation-Acceptance continued: functional-checklist evidence
-# trailer discovery (`/prepare-functional-review`'s new dedicated commit),
-# the pre-commit evidence guard, `/accept-scoped-remediation`'s confirmation
-# binding-field parser, round replay/duplicate classification, and the
-# acceptance record writer.
+# Functional-checklist evidence trailer discovery: `/prepare-functional-
+# review`'s dedicated, content-idempotent checklist-evidence commit, and the
+# round-scoped lookup `/prepare-functional-review` and `/review-functional`
+# both read it back through.
+#
+# `D-Scoped-Remediation-Acceptance`'s own machinery -- the scoped-remediation
+# trailer discovery, the pre-commit evidence guard and its live snapshot, the
+# confirmation binding-field parser, the round replay/duplicate classifier
+# and the acceptance record writer -- was removed with
+# `/accept-scoped-remediation` itself (ledger `I10`): every one of those
+# helpers had exactly one caller, that command, and its gate was unreachable
+# through every supported lifecycle. The evidence *production* and *lookup*
+# below stay: both are reached by supported commands, and both survive a
+# bounded functional-fix round, which advances `implementation_revision` and
+# so needs its own round-scoped evidence (ledger `I7`).
 # ---------------------------------------------------------------------------
-
-
-def discover_scoped_remediation_commits(
-    repo_root: Path, work_item_id: str, base_commit: str, head: str = "HEAD",
-) -> dict[str, str]:
-    """Every commit reachable in `base_commit..head` carrying an exact
-    `Workflow-Scoped-Remediation-Acceptance: <outstanding_checkpoint_id>/
-    <implementation_revision>` + `Workflow-Work-Item: <work_item_id>`
-    trailer pair (revision 23, `GPT-R37-002`'s corrected keying: by
-    `implementation_revision`, not `work_item_id`, so each round for the
-    same still-incomplete checkpoint gets its own distinct key). Returns
-    `{"<checkpoint_id>/<implementation_revision>": commit_sha}`."""
-    return _discover_trailer_commits(
-        repo_root, "Workflow-Scoped-Remediation-Acceptance", work_item_id, base_commit, head,
-        ambiguous_error_cls=AmbiguousScopedRemediationTrailerError,
-    )
-
 
 def discover_functional_checklist_commits(
     repo_root: Path, work_item_id: str, base_commit: str, head: str = "HEAD",
@@ -10262,376 +10713,6 @@ def discover_current_functional_checklist_evidence(
         f"{sorted(commit_to_blob)} -- re-commit the checklist evidence directly on "
         f"the first-parent line"
     )
-
-
-def build_scoped_remediation_live_snapshot(
-    repo_root: Path, work_item: dict, *, checklist_path: str = FUNCTIONAL_CHECKLIST_PATH,
-) -> dict:
-    """The pre-commit evidence guard's cross-invocation reference point:
-    captured once, early in `/accept-scoped-remediation`'s own invocation
-    (before the entry guard's registry load), and passed unchanged into
-    every later call of `verify_functional_checklist_evidence` so its
-    fourth check can detect a value that changed mid-invocation."""
-    return {
-        "reviewed_implementation_head": work_item.get("reviewed_implementation_head"),
-        "checklist_blob_at_head": _run(
-            ["git", "rev-parse", f"HEAD:{checklist_path}"], cwd=repo_root,
-        ).strip(),
-    }
-
-
-def verify_functional_checklist_evidence(
-    repo_root: Path, work_item: dict, *, base_commit: str, head: str,
-    confirmed_commit: str, confirmed_blob: str, expected_live_snapshot: dict,
-    checklist_path: str = FUNCTIONAL_CHECKLIST_PATH,
-) -> dict:
-    """The pre-commit evidence guard's four ordered checks (`GPT-R36-003`,
-    extended `GPT-R37-004`, extended `GPT-R38-001`, discovery corrected
-    revision 26 `GPT-R39-001`, confirmation-evidence-binding check added
-    revision 27 `GPT-R40-001`). Callers run this once, before building the
-    scoped-remediation acceptance entry (with `expected_live_snapshot`
-    captured moments earlier via `build_scoped_remediation_live_snapshot`),
-    and once more, immediately before the provenance commit, passing the
-    *same* `expected_live_snapshot` both times -- a working-tree edit or a
-    superseding evidence commit landing in the gap between the two calls is
-    exactly as unreviewed as one present from the start.
-
-    1. **Discoverability**: a `Workflow-Functional-Checklist` evidence
-       commit must be discoverable for the exact live round --
-       `MissingFunctionalChecklistEvidenceError` naming the missing round
-       key and `/prepare-functional-review` as the remedy, or
-       `NonFirstParentFunctionalChecklistEvidenceError` (`GPT-R41-002`) if
-       round-scoped evidence exists only off `head`'s first-parent chain.
-    2. **Confirmation-evidence binding**: the confirmed commit/blob must
-       equal the round's current evidence exactly --
-       `StaleFunctionalChecklistConfirmationError`, naming both identities,
-       otherwise. The commit's own actually-committed content at
-       `checklist_path` must also equal the confirmed blob --
-       `MalformedFunctionalChecklistEvidenceError` otherwise.
-    3. **Clean working tree**: `checklist_path` must have no staged or
-       unstaged change relative to `HEAD` -- `DirtyFunctionalChecklistPathError`
-       otherwise.
-    4. **Cross-invocation value agreement**: `reviewed_implementation_head`
-       and `checklist_path`'s committed blob at `HEAD` must both still
-       equal `expected_live_snapshot` -- `ScopedRemediationLiveValueChangedError`
-       otherwise.
-
-    Returns the discoverability check's own `{"commit_sha", "blob"}` result
-    on success."""
-    work_item_id = work_item["work_item_id"]
-    implementation_revision = work_item["implementation_revision"]
-
-    current = discover_current_functional_checklist_evidence(
-        repo_root, work_item_id, base_commit, head, implementation_revision,
-    )
-    if current is None:
-        raise MissingFunctionalChecklistEvidenceError(
-            f"no Workflow-Functional-Checklist evidence commit found for "
-            f"{work_item_id}/{implementation_revision} -- run /prepare-functional-review first"
-        )
-
-    if confirmed_commit != current["commit_sha"] or confirmed_blob != current["blob"]:
-        raise StaleFunctionalChecklistConfirmationError(
-            f"user_confirmation names evidence commit {confirmed_commit!r}/blob "
-            f"{confirmed_blob!r}, but the round's current evidence is "
-            f"{current['commit_sha']!r}/{current['blob']!r} -- review the newer "
-            f"/prepare-functional-review report and reconfirm"
-        )
-
-    actual_blob = _run(
-        ["git", "rev-parse", f"{confirmed_commit}:{checklist_path}"], cwd=repo_root,
-    ).strip()
-    if actual_blob != confirmed_blob:
-        raise MalformedFunctionalChecklistEvidenceError(
-            f"commit {confirmed_commit} actually committed blob {actual_blob!r} at "
-            f"{checklist_path!r}, but its Workflow-Functional-Checklist trailer names "
-            f"blob {confirmed_blob!r}"
-        )
-
-    status = _run(["git", "status", "--porcelain", "--", checklist_path], cwd=repo_root)
-    if status.strip():
-        raise DirtyFunctionalChecklistPathError(
-            f"{checklist_path} has uncommitted changes -- commit or discard them before "
-            f"accepting scoped remediation"
-        )
-
-    live_now = build_scoped_remediation_live_snapshot(repo_root, work_item, checklist_path=checklist_path)
-    if live_now != expected_live_snapshot:
-        raise ScopedRemediationLiveValueChangedError(
-            f"reviewed_implementation_head or {checklist_path}'s committed content "
-            f"changed since this invocation began: expected {expected_live_snapshot}, "
-            f"found {live_now}"
-        )
-    return current
-
-
-def parse_scoped_remediation_confirmation_binding_fields(text: str) -> dict[str, str]:
-    """The `scoped_remediation` stage's own binding-field parser (revision
-    27, `GPT-R40-001`), mirroring the pattern `REVIEW_PROTOCOL.md`'s
-    `Reviewed bundle ID:`/`Reviewed base commit:`/`Work item:` fields
-    already establish for external review feedback
-    (`parse_review_feedback_binding_fields`). Requires two explicit fields
-    in the confirmation text -- `Functional checklist evidence commit:
-    <sha>` and `Functional checklist evidence blob: <blob>` -- each a
-    full, well-formed 40-hex Git object id; missing or malformed:
-    `UserConfirmationRejectedError`, naming which field is missing or
-    malformed."""
-    fields: dict[str, str] = {}
-    for key, label in (
-        ("functional_checklist_evidence_commit", "Functional checklist evidence commit"),
-        ("functional_checklist_evidence_blob", "Functional checklist evidence blob"),
-    ):
-        match = re.search(rf"{re.escape(label)}:\s*(\S*)", text)
-        if not match or not match.group(1):
-            raise UserConfirmationRejectedError(
-                f"user_confirmation is missing the required {label!r} field"
-            )
-        value = match.group(1)
-        if not _GIT_OBJECT_ID_RE.match(value):
-            raise UserConfirmationRejectedError(
-                f"user_confirmation's {label!r} field {value!r} is not a well-formed "
-                f"40-hex Git object id"
-            )
-        fields[key] = value
-    return fields
-
-
-class NoExistingRound:
-    """`resolve_scoped_remediation_round` outcome: no commit carries this
-    exact round's `Workflow-Scoped-Remediation-Acceptance` trailer yet --
-    a first attempt, or a genuinely new round for a checkpoint scoped-
-    accepted before under a different `implementation_revision`."""
-
-    def __repr__(self) -> str:
-        return "NoExistingRound()"
-
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, NoExistingRound)
-
-
-class ExactReplay:
-    """`resolve_scoped_remediation_round` outcome: a commit exists for this
-    round and its own committed acceptance entry agrees with every live
-    field -- a provable replay, safe to report idempotently."""
-
-    def __init__(self, commit_sha: str) -> None:
-        self.commit_sha = commit_sha
-
-    def __repr__(self) -> str:
-        return f"ExactReplay({self.commit_sha!r})"
-
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, ExactReplay) and other.commit_sha == self.commit_sha
-
-
-class ConflictingDuplicate:
-    """`resolve_scoped_remediation_round` outcome: a commit exists for this
-    round but at least one canonical field disagrees with the live values
-    -- never silently treated as a replay."""
-
-    def __init__(self, commit_sha: str, differing_fields: list[str]) -> None:
-        self.commit_sha = commit_sha
-        self.differing_fields = differing_fields
-
-    def __repr__(self) -> str:
-        return f"ConflictingDuplicate({self.commit_sha!r}, {self.differing_fields!r})"
-
-    def __eq__(self, other: object) -> bool:
-        return (
-            isinstance(other, ConflictingDuplicate)
-            and other.commit_sha == self.commit_sha
-            and other.differing_fields == self.differing_fields
-        )
-
-
-class MalformedAcceptanceRecord:
-    """`resolve_scoped_remediation_round` outcome: a commit exists for this
-    round but its own committed acceptance entry's schema cannot be
-    trusted enough to compare field values from at all."""
-
-    def __init__(self, commit_sha: str, reason: str) -> None:
-        self.commit_sha = commit_sha
-        self.reason = reason
-
-    def __repr__(self) -> str:
-        return f"MalformedAcceptanceRecord({self.commit_sha!r}, {self.reason!r})"
-
-    def __eq__(self, other: object) -> bool:
-        return (
-            isinstance(other, MalformedAcceptanceRecord)
-            and other.commit_sha == self.commit_sha
-            and other.reason == self.reason
-        )
-
-
-class AmbiguousHistory:
-    """`resolve_scoped_remediation_round` outcome: more than one first-
-    parent-reachable commit carries this exact round's trailer -- the same
-    genuine-ambiguity recovery every other trailer scheme here already
-    has; manual history inspection is required."""
-
-    def __init__(self, round_key: str) -> None:
-        self.round_key = round_key
-
-    def __repr__(self) -> str:
-        return f"AmbiguousHistory({self.round_key!r})"
-
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, AmbiguousHistory) and other.round_key == self.round_key
-
-
-def resolve_scoped_remediation_round(
-    repo_root: Path, work_item_id: str, base_commit: str, head: str,
-    outstanding_checkpoint_id: str, implementation_revision: int, live_fields: dict,
-) -> NoExistingRound | ExactReplay | ConflictingDuplicate | MalformedAcceptanceRecord | AmbiguousHistory:
-    """The **single** place replay/duplicate classification happens
-    (revision 25, `GPT-R38-002`; comparison coverage completed revision 26,
-    `GPT-R39-002`; widened revision 27, `GPT-R40-002`) -- called identically
-    by `/accept-scoped-remediation`'s entry guard and its provenance-commit
-    step, never a second copy of the logic. Always performs the full
-    lookup-and-compare in one pass; there is no cheaper "key exists" path
-    that skips the comparison.
-
-    `live_fields` must carry the eight keys
-    `_SCOPED_REMEDIATION_COMPARISON_FIELD_MAP` names: `outstanding_checkpoint_id`,
-    `implementation_revision`, `reviewed_implementation_head`,
-    `technical_approval_review_content_id`, `functional_checklist_path`,
-    `functional_checklist_blob`, `functional_checklist_evidence_commit`,
-    `active_work_item_id`."""
-    round_key = f"{outstanding_checkpoint_id}/{implementation_revision}"
-    try:
-        matches = discover_scoped_remediation_commits(repo_root, work_item_id, base_commit, head)
-    except AmbiguousScopedRemediationTrailerError:
-        return AmbiguousHistory(round_key)
-
-    commit_sha = matches.get(round_key)
-    if commit_sha is None:
-        return NoExistingRound()
-
-    state_json = _run(
-        ["git", "show", f"{commit_sha}:{DEFAULT_STATE_PATH.as_posix()}"], cwd=repo_root,
-    )
-    try:
-        committed_state = json.loads(state_json)
-    except json.JSONDecodeError as exc:
-        return MalformedAcceptanceRecord(
-            commit_sha, f"committed {DEFAULT_STATE_PATH} is not valid JSON: {exc}",
-        )
-
-    entries = (
-        committed_state.get("work_items", {}).get(work_item_id, {}).get("scoped_remediation_acceptance") or []
-    )
-    entry = None
-    for candidate in entries:
-        if (
-            candidate.get("outstanding_checkpoint_id") == outstanding_checkpoint_id
-            and candidate.get("implementation_revision") == implementation_revision
-        ):
-            entry = candidate
-            break
-    if entry is None:
-        return MalformedAcceptanceRecord(
-            commit_sha, f"no scoped_remediation_acceptance entry matches round key {round_key!r}",
-        )
-
-    # Schema/version check, first (revision 26, GPT-R39-002; version/field
-    # count updated revision 27, GPT-R40-002) -- an unsupported or
-    # incomplete schema shape cannot be compared against live_fields
-    # meaningfully at all.
-    if entry.get("acceptance_record_version") != 2:
-        return MalformedAcceptanceRecord(
-            commit_sha,
-            f"unsupported acceptance_record_version: {entry.get('acceptance_record_version')!r}",
-        )
-    if set(entry.keys()) != SCOPED_REMEDIATION_ACCEPTANCE_FIELDS:
-        return MalformedAcceptanceRecord(
-            commit_sha,
-            f"entry field set does not match the eleven documented fields: {sorted(entry.keys())}",
-        )
-    recorded_at = entry.get("recorded_at")
-    user_confirmation = entry.get("user_confirmation")
-    if not isinstance(recorded_at, str) or not recorded_at:
-        return MalformedAcceptanceRecord(commit_sha, "recorded_at is missing or not a well-formed non-empty string")
-    if not isinstance(user_confirmation, str) or not user_confirmation:
-        return MalformedAcceptanceRecord(
-            commit_sha, "user_confirmation is missing or not a well-formed non-empty string",
-        )
-
-    # Full canonical field comparison (revision 26, GPT-R39-002, widened
-    # revision 27, GPT-R40-002): recorded_at/user_confirmation are
-    # validated above but never compared to a live value -- recorded_at is
-    # a historical timestamp by definition, and user_confirmation's
-    # *current*-turn counterpart is already checked separately by
-    # validate_user_confirmation.
-    differing = [
-        entry_field for entry_field, live_key in _SCOPED_REMEDIATION_COMPARISON_FIELD_MAP.items()
-        if entry.get(entry_field) != live_fields.get(live_key)
-    ]
-    if differing:
-        return ConflictingDuplicate(commit_sha, differing)
-    return ExactReplay(commit_sha)
-
-
-def build_scoped_remediation_live_fields(
-    state: dict, work_item_id: str, *, outstanding_checkpoint_id: str,
-    functional_checklist_evidence_commit: str, functional_checklist_blob: str,
-) -> dict:
-    """Builds the eight-key `live_fields` dict `resolve_scoped_remediation_round`
-    compares a committed entry against -- read fresh at classification
-    time, never cached across the entry guard's two `resolve_scoped_remediation_round`
-    call sites (the entry guard itself, and the provenance-commit step)."""
-    work_item = state["work_items"][work_item_id]
-    return {
-        "outstanding_checkpoint_id": outstanding_checkpoint_id,
-        "implementation_revision": work_item["implementation_revision"],
-        "reviewed_implementation_head": work_item.get("reviewed_implementation_head"),
-        "technical_approval_review_content_id": (
-            (work_item.get("technical_approval") or {}).get("approved_review_content_id")
-        ),
-        "functional_checklist_path": FUNCTIONAL_CHECKLIST_PATH,
-        "functional_checklist_blob": functional_checklist_blob,
-        "functional_checklist_evidence_commit": functional_checklist_evidence_commit,
-        "active_work_item_id": state.get("active_work_item_id"),
-    }
-
-
-def apply_scoped_remediation_acceptance(
-    state: dict, work_item_id: str, *, outstanding_checkpoint_id: str,
-    functional_checklist_evidence_commit: str, functional_checklist_blob: str,
-    user_confirmation: str, now: str,
-) -> dict:
-    """Appends one entry to `work_item["scoped_remediation_acceptance"]` (a
-    list, created empty if absent) -- the eleven documented fields
-    (`SCOPED_REMEDIATION_ACCEPTANCE_FIELDS`). Sets `phase = "IMPLEMENTING"`.
-    Leaves `checkpoints`/`current_checkpoint_id`/`active_work_item_id`/
-    `plan_approval`/`technical_approval`/`functional_acceptance_status`
-    completely untouched -- this function's caller (`/accept-scoped-
-    remediation`) is responsible for creating the dedicated, metadata-only
-    provenance commit this write and the returned state must land in
-    together."""
-    work_item = state["work_items"][work_item_id]
-    entry = {
-        "outstanding_checkpoint_id": outstanding_checkpoint_id,
-        "active_work_item_id_at_acceptance": state.get("active_work_item_id"),
-        "implementation_revision": work_item["implementation_revision"],
-        "reviewed_implementation_head": work_item["reviewed_implementation_head"],
-        "technical_approval_review_content_id": work_item["technical_approval"]["approved_review_content_id"],
-        "functional_checklist_path": FUNCTIONAL_CHECKLIST_PATH,
-        "functional_checklist_blob": functional_checklist_blob,
-        "functional_checklist_evidence_commit": functional_checklist_evidence_commit,
-        "user_confirmation": user_confirmation,
-        "recorded_at": now,
-        "acceptance_record_version": 2,
-    }
-    assert set(entry.keys()) == SCOPED_REMEDIATION_ACCEPTANCE_FIELDS  # internal consistency, never user-facing
-
-    new_state = copy.deepcopy(state)
-    new_work_item = new_state["work_items"][work_item_id]
-    new_work_item.setdefault("scoped_remediation_acceptance", []).append(entry)
-    new_work_item["phase"] = "IMPLEMENTING"
-    new_work_item["state_revision"] = new_work_item.get("state_revision", 1) + 1
-    new_work_item["last_transition"] = now
-    return new_state
 
 
 # ---------------------------------------------------------------------------
@@ -10956,8 +11037,7 @@ def import_legacy_work_item(
 
 def promote_legacy_work_item(
     state: dict, repo_root: Path, *, work_item_id: str,
-    required_active_milestone_substring: str,
-    artifacts_path: Path = fingerprint.DEFAULT_ARTIFACTS_PATH, now: str,
+    required_active_milestone_substring: str, artifacts_path: Path, now: str,
 ) -> dict:
     """D-Legacy phase 2 (`WF-M8b`): promotes a dormant `LEGACY_READY` entry
     to active, ordinary Workflow v2.1 routing. Called by
@@ -10993,7 +11073,19 @@ def promote_legacy_work_item(
     `OPUS-R10-011`), and `phase` transitions to `AWAITING_FUNCTIONAL_REVIEW`
     -- `technical_approval` itself is preserved exactly as imported
     (`basis: LEGACY_V1`, untouched); adoption changes routing, never the
-    approval record."""
+    approval record.
+
+    **`artifacts_path` has no default** (salvage audit `I6`): it used to
+    default to `fingerprint.DEFAULT_ARTIFACTS_PATH`, `workflow-v2-1-core`'s
+    own declarations file, even though `/prepare-functional-review` step
+    0a's own text says to pass "this item's own artifact-declarations
+    file, not `workflow-v2-1-core`'s". A caller that omitted it evaluated
+    check 2 against a *process* item's classification, in which `app/` is
+    `excluded` -- so a legacy *product* item whose product code genuinely
+    changed since `reviewed_content_commit` was promoted with a `CURRENT`
+    legacy approval instead of being refused. Reproduced by execution; the
+    argument is now required, so omitting it is a loud `TypeError` rather
+    than a silent wrong answer -- the `GPT-R30-005` treatment."""
     work_item = state["work_items"][work_item_id]
     if work_item.get("phase") != "LEGACY_READY":
         raise LegacyAdoptionWrongPhaseError(
@@ -11098,8 +11190,8 @@ def _validate_work_item(work_item_id: str, work_item: dict) -> None:
     validate_work_item_id(work_item_id)
     validate_work_item_type(work_item["work_item_type"])
     kind = work_item.get("work_item_kind")
-    if kind is not None and kind not in WORK_ITEM_KINDS:
-        raise InvalidWorkItemTypeError(f"unknown work_item_kind: {kind!r}")
+    if kind is not None:
+        validate_work_item_kind(kind)
     phase = work_item.get("phase")
     if phase not in KNOWN_PHASES:
         raise UnknownPhaseError(f"work_items[{work_item_id!r}].phase == {phase!r}")

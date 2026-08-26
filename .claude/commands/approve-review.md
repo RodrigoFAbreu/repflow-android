@@ -15,7 +15,15 @@ Enter `AWAITING_PLAN_APPROVAL` or `AWAITING_TECHNICAL_APPROVAL`
 
 `<bundle_dir>`/`<feedback_dir>` below resolve per
 `docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Bundle location"
-(`workflow_fingerprint.resolve_bundle_dir`/`resolve_feedback_dir`).
+(`workflow_fingerprint.resolve_bundle_dir`/`resolve_feedback_dir`). This
+command runs at both stages, so pass the stage it was invoked for:
+`resolve_bundle_dir(repo_root, work_item_id, stage="plan")` on the plan
+stage, which is always `.ai-review/<work_item_id>/current/`, and
+`resolve_bundle_dir(repo_root, work_item_id)` (no stage argument, the
+scoped-else-flat compatibility rule) on the technical/implementation
+stage, whose bundle may genuinely be on the flat layout when it was
+generated without `prepare-ai-review.sh`'s optional `[work-item-id]`
+argument. `<feedback_dir>` takes no stage argument at either stage.
 
 **This command is user-only by construction.** `disable-model-invocation:
 true` is the primary, harness-enforced control (blocks the SlashCommand
@@ -269,12 +277,27 @@ actually load-bearing control for the Skill exposure path, not mechanism
     journal (`open_plan_approval_journal` would refuse this anyway,
     `PlanApprovalTransactionInProgressError`, but reporting first gives
     the user the exact recovery literal rather than a bare exception).
+    **Target check, before the recovery below**: the journal is a single,
+    repository-wide object, so the open transaction it describes may
+    belong to a work item that is *not* this invocation's resolved
+    target. Report `evidence["journal"]["work_item_id"]` alongside the
+    values above, and when it differs from this invocation's own resolved
+    `work_item_id`, say so plainly and tell the user to re-run targeting
+    that work item — never take over, complete, or roll back another work
+    item's approval under this one's invocation.
+    `take_over_plan_approval_transaction` takes the resolved
+    `work_item_id` as a **required** argument and refuses a mismatch with
+    `PlanApprovalTakeoverWorkItemMismatchError`, having mutated nothing,
+    so this is a fail-closed check in production rather than a rule this
+    step is trusted to remember.
+
     Recovery: the user supplies the literal takeover authorization
     `workflow_state.plan_approval_takeover_authorization_literal(evidence)`
     (plus, if `evidence["guard"]` is held, the release literal
     `workflow_state.plan_approval_guard_release_authorization_literal(...)`)
     on a subsequent turn; only then call
-    `workflow_state.take_over_plan_approval_transaction(...)` to obtain a
+    `workflow_state.take_over_plan_approval_transaction(repo_root,
+    work_item_id=<this invocation's resolved target>, ...)` to obtain a
     fresh `owner_token`, then resume forward-completion or rollback per
     `evidence["outcome"]` at step 6a below using that token, skipping
     straight past steps 4c-6 (a taken-over transaction already has its
@@ -396,6 +419,44 @@ actually load-bearing control for the Skill exposure path, not mechanism
    technical-approval commit undiscoverable. The exact scoped trailer
    lookup is `workflow_state.discover_technical_approval_commit`
    (`WF4a-iii`).
+
+   **Implementation stage — post-commit verification of the commit this
+   invocation just created** (workflow system audit, convergence pass 12,
+   ledger row `I21`). The plan stage has step 6a's verification set; this
+   stage had none, and its own dedicated validator had no live caller
+   anywhere — implemented, documented and unit-tested, but never run, so a
+   technical-approval commit that also mutated a *different* work item's
+   entry or a top-level routing field, or that recorded
+   `technical_approval` without transitioning `phase`, was accepted by
+   every consumer. Immediately after the commit lands, call both:
+
+   - `workflow_state.validate_technical_approval_commit(repo_root,
+     <the new commit's SHA>, work_item_id)` — the exhaustive
+     field-mutation check, the sibling
+     `validate_bundle_generation_record_commit` has always applied to
+     generation-record commits. It refuses via
+     `MalformedTechnicalApprovalCommitError`, naming the offending fields
+     or the other work item's id.
+   - `workflow_state.verify_post_approval_manifest_match(repo_root,
+     work_item, stage="implementation", base_commit=base_commit,
+     commit=<the new commit's SHA>)` — the same post-approval identity
+     re-verification step 6a runs for the plan stage.
+
+   Both are applied **only to the commit this invocation just created**,
+   never retroactively to discovered history: two technical-approval
+   commits already in this repository predate the check and do not satisfy
+   it (`9fd3c72` for `v2-1-dry-run`, which recorded the approval without a
+   `phase` transition, and `ae51770` for `workflow-v2-1-core`, whose field
+   set is wider than the contract), and history rewriting is not available
+   — several such SHAs are pinned into `WORKFLOW_STATE.json` and approved
+   bundles. Wiring the check into discovery instead would therefore have
+   refused real, already-approved rounds; wiring it here constrains every
+   commit this command creates from now on and re-judges nothing.
+
+   On a failure: **stop**. The commit exists and must not be silently
+   amended away — report the exact error, the commit SHA, and that the
+   malformed commit needs human resolution before
+   `AWAITING_FUNCTIONAL_REVIEW` can be trusted.
 6a. **Plan stage only — classify the outcome from durable Git state**
     (`WF8c` items 347/350, never from this invocation's own exit status
     and never from `WORKFLOW_STATE.json`'s own content): call
