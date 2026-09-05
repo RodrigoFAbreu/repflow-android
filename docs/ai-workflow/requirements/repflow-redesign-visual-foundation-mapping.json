@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "work_item_id": "repflow-redesign-visual-foundation",
+  "requirements": {
+    "REQ-1": {
+      "description": "Establish design tokens (color/typography/shape/spacing) matching the Claude Design/Nocturne target, re-verified precisely against the live source.",
+      "checkpoint_ids": [
+        "CP1"
+      ]
+    },
+    "REQ-2": {
+      "description": "Provide a bounded local icon approach (Phosphor subset) without adding an icon-library Gradle dependency.",
+      "checkpoint_ids": [
+        "CP2"
+      ]
+    },
+    "REQ-3": {
+      "description": "Provide a small reusable primitive component set (three button tiers, cards, tags/pills incl. interactive picker rows, stepper, scale-row, status chips, a consolidated LoadingIndicator/EmptyState/FailureState(onRetry) replacing the currently-duplicated per-screen versions) built from CP1/CP2 tokens.",
+      "checkpoint_ids": [
+        "CP3"
+      ]
+    },
+    "REQ-4": {
+      "description": "Apply the foundation to the app shell bottom nav without changing navigation/IA: same routes, same 6-destination set, same selection wiring. Top app bars are not touched as a separate item -- no shared top app bar exists in the codebase to restyle; the two that come along incidentally via CP5/CP6 are covered by REQ-5/REQ-6.",
+      "checkpoint_ids": [
+        "CP4"
+      ]
+    },
+    "REQ-5": {
+      "description": "Apply the foundation to the Exercise list as a representative list/search/CRUD surface, with no ExerciseListViewModel/UiState contract change.",
+      "checkpoint_ids": [
+        "CP5"
+      ]
+    },
+    "REQ-6": {
+      "description": "Apply the foundation to Active Workout set-entry + rest timer as the representative core-interaction surface, preserving workout semantics: RPE/warm-up/pain/technique fields, the rest-timer tick-loop derivation, and undo/edit-last-set scope.",
+      "checkpoint_ids": [
+        "CP6"
+      ]
+    },
+    "REQ-7": {
+      "description": "Preserve every invariant in the plan's \"Preserved invariants\" section (progression determinism, rest-timer absolute-endAt reconstruction, undo/edit scope, warm-up classification, session invalidation/plan-version immutability/single-active-session, domain purity, existing test assertions) across every checkpoint.",
+      "checkpoint_ids": [
+        "CP1",
+        "CP2",
+        "CP3",
+        "CP4",
+        "CP5",
+        "CP6",
+        "CP7"
+      ]
+    },
+    "REQ-8": {
+      "description": "Introduce no new Gradle dependency, no Room schema/migration change, and no domain/application-layer behavior change; CP7 verifies this held.",
+      "checkpoint_ids": [
+        "CP1",
+        "CP2",
+        "CP7"
+      ]
+    },
+    "REQ-9": {
+      "description": "On completion, resolve the \"Exact UI design system and visual identity\" Open decision in docs/TECHNICAL_DECISIONS.md, without touching \"Navigation structure\" or any other Open-decision row.",
+      "checkpoint_ids": [
+        "CP7"
+      ]
+    }
+  }
+}

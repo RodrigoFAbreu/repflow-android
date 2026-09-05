@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_work_item_id": null,
+  "active_work_item_id": "repflow-redesign-visual-foundation",
   "work_items": {
     "workflow-v2-1-core": {
       "work_item_type": "process",
@@ -897,6 +897,84 @@
       "blocking_decisions": [],
       "state_revision": 59,
       "last_transition": "2026-08-24T00:56:14Z"
+    },
+    "repflow-redesign-visual-foundation": {
+      "work_item_type": "product",
+      "work_item_kind": "product",
+      "work_item_id": "repflow-redesign-visual-foundation",
+      "parent_work_item_id": null,
+      "plan_path": "docs/milestones/repflow-redesign-visual-foundation-execution.md",
+      "registry_path": "docs/ai-workflow/registry/repflow-redesign-visual-foundation-registry.json",
+      "mapping_path": "docs/ai-workflow/requirements/repflow-redesign-visual-foundation-mapping.json",
+      "governing_workflow_version": "2.1",
+      "phase": "IMPLEMENTING",
+      "plan_revision": 19,
+      "implementation_revision": null,
+      "functional_review_round": null,
+      "base_commit": "b39af90c98fda382bd4923aa919058d7343e57a5",
+      "reviewed_implementation_head": null,
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": null,
+      "checkpoints": {},
+      "current_bundle_id": null,
+      "plan_approval": {
+        "status": "CURRENT",
+        "basis": "EXTERNAL_APPROVE",
+        "reviewed_bundle_id": "46ba86678fdea652503c3942332b1585fdd099b997babc40f4c3fee67d97a5eb",
+        "approved_review_content_id": "89a46b1e3edb0af12b86edfbf78eb0c0543966a53e664ddfb2bc2559aaa36e70",
+        "review_content_manifest": [
+          {
+            "path": "docs/ai-workflow/registry/repflow-redesign-visual-foundation-registry.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b6fca45aeb63b46ddbd459daa7a28ec337a6b937"
+          },
+          {
+            "path": "docs/ai-workflow/requirements/repflow-redesign-visual-foundation-mapping.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b9abd70be540dcb9390a0dd5caf5601bc6d8dd71"
+          },
+          {
+            "path": "docs/milestones/repflow-redesign-visual-foundation-execution.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "73986f8bd38ee026950dd485cf7589ae5aca6ab0"
+          },
+          {
+            "path": "docs/milestones/repflow-redesign-visual-foundation-reference.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "1ba425a71050483e8384309f46602ab8ac4470ae"
+          }
+        ],
+        "reviewed_content_commit": null,
+        "legacy_evidence": null,
+        "user_confirmation": "plan repflow-redesign-visual-foundation",
+        "waived_guarantees": [],
+        "recorded_at": "2026-09-05T21:40:42+01:00"
+      },
+      "technical_approval": null,
+      "technical_review_block_pins": [],
+      "plan_review_stages": {
+        "review_content_id": "89a46b1e3edb0af12b86edfbf78eb0c0543966a53e664ddfb2bc2559aaa36e70",
+        "LOCAL_MODEL_PLAN_REVIEW": {
+          "bundle_id": "d5f18a37a31acdde0e156f65f3cfbf37397633f0b03ecede7d60479ae19c5fe7",
+          "verdict": "APPROVE",
+          "round": 18,
+          "completed_at": "2026-09-05T18:02:00+01:00"
+        },
+        "MANUAL_EXTERNAL_PLAN_REVIEW": {
+          "bundle_id": "d5f18a37a31acdde0e156f65f3cfbf37397633f0b03ecede7d60479ae19c5fe7",
+          "verdict": "APPROVE",
+          "round": 1,
+          "completed_at": "2026-09-05T18:12:00+01:00"
+        }
+      },
+      "functional_acceptance_status": null,
+      "blocking_decisions": [],
+      "state_revision": 58,
+      "last_transition": "2026-09-05T21:40:42+01:00"
     }
   }
 }
