@@ -2,12 +2,90 @@
 
 ## Milestone
 
+**`repflow-redesign-visual-foundation`** — the bounded visual-foundation
+milestone that establishes the production Compose design system (colour,
+type, shape and spacing tokens; a local icon set; a small primitive set)
+and applies it to three representative surfaces to prove it. Governed by
+Workflow v2.1; plan approved at revision 19.
+
+Roadmap milestones 0-8 remain complete. Milestone 8's closed record is
+preserved verbatim under "Milestone 8 — accepted and closed" below.
+
+## Goal
+
+Establish the production Compose design foundation derived from the
+RepFlow Claude Design / Nocturne target, then apply it to the app shell
+(bottom nav), the Exercise list, and the Active Workout set-entry + rest
+timer — enough surface to prove the system without becoming a whole-app
+visual rewrite. No navigation/IA change, no domain or application-layer
+change, no schema change, no new runtime dependency.
+
+## Current checkpoint
+
+**CP1 — Design tokens & Compose theme foundation: complete.**
+
+- Spike (step 0) confirmed the plain-JVM `app/src/test` suite constructs
+  and reads a real Material 3 `ColorScheme` and does alpha-composite
+  arithmetic with no Robolectric — so no new test-scope dependency
+  category was needed. Deleted once `RepFlowThemeTest` subsumed it.
+- Step 1 re-derived every colour value independently before authoring:
+  all three OKLCH→sRGB conversions (`#9184d9`, `#eb827b`, `#a74541`)
+  reproduce the plan's hexes exactly, as do all 32 role/context contrast
+  ratios, both nav alpha composites and both selected-pill composites —
+  zero mismatches against the plan's own table.
+- Added `presentation/designsystem/`: `RepFlowColor.kt`,
+  `RepFlowTypography.kt`, `RepFlowShapes.kt`, `RepFlowSpacing.kt`, plus
+  `ROLE_AUDIT.md` (step 5's role → consumer → value → ratio table, kept
+  under `app/` rather than in the plan doc, which is a protected path).
+- Inter 4.1 bundled as local static weights 400/500/600 under
+  `res/font/` (SIL OFL 1.1, license text at `app/licenses/inter/OFL.txt`)
+  — no downloadable-font provider, no new Gradle dependency.
+- `RepFlowTheme.kt` now builds `MaterialTheme` from the real schemes,
+  typography and shapes, and provides the two composition locals for the
+  tokens Material 3 has no slot for.
+- `RepFlowThemeTest` (13 tests) pins every assigned role's hex in both
+  themes, the accent ramp, the two per-theme extras, the three one-off
+  radii, and nine computed contrast floors whose inputs are all read from
+  production rather than restated in the test.
+- `config/detekt/detekt.yml` scopes `MagicNumber`/`MayBeConst` off
+  `**/presentation/designsystem/**`: a token file is definitionally a list
+  of transcribed literals, and its members must stay plain `val`s (some
+  are `@Composable` getters; the rest keep the identifiers the plan and
+  CP4's call site name).
+- Verified: `spotlessCheck`, `detekt`, `lintDebug`,
+  `testDebugUnitTest` (388 tests, 0 failures) and
+  `assembleDebugAndroidTest` all pass.
+
+Remaining: CP2 (icons), CP3 (primitives), CP4/CP5/CP6 (the three
+surfaces), CP7 (verification and doc updates).
+
+## Current blockers
+
+None.
+
+## Active plan
+
+`docs/milestones/repflow-redesign-visual-foundation-execution.md`
+(revision 19), with
+`docs/milestones/repflow-redesign-visual-foundation-reference.md` as its
+source-of-truth reference. Checkpoint registry:
+`docs/ai-workflow/registry/repflow-redesign-visual-foundation-registry.json`.
+
+## Next action
+
+CP2 — bounded icon approach (local vector assets). Continue with
+`/milestone-implement`.
+
+---
+
+## Milestone 8 — accepted and closed
+
 All roadmap milestones (0-8) are **complete**. Milestone 8 (post-MVP
 functional usability stabilization) is accepted and closed under an
 explicit user waiver of its planned functional-review gate — see
 "Functional review disposition" below.
 
-## Goal
+### Goal
 
 Milestone 8 closed the functional/usability gaps in
 `docs/milestones/completed/milestone-8-reference.md`'s "Goals" section:
@@ -16,7 +94,7 @@ set-classification and start-from-plan wiring, History filtering and safe
 accidental-workout removal, training-plan archive/restore, navigation
 consistency, and backup hardening.
 
-## Current checkpoint
+### Final state
 
 **Milestone 8 accepted and complete.** All checkpoints (P0, CP0-CP16)
 implemented and committed; full checkpoint-by-checkpoint detail is
@@ -33,7 +111,14 @@ archived plan docs.
   disposition" below.
 - Milestone status: **accepted/complete**.
 
-## Functional review disposition
+Milestone 8's plans are archived at
+`docs/milestones/completed/milestone-8-{execution,reference}.md`.
+Milestones 1-7 remain archived alongside them.
+`docs/improvements/IMPROVEMENT_ROADMAP.md` §2.1 (`ReturnCount` tuning)
+was deferred pending Milestone 8's acceptance and is now unblocked, but
+has not been started or scheduled.
+
+### Functional review disposition
 
 The manual functional-review checklist prepared at CP16 (23 numbered
 flows covering navigation, Recovery/futsal, workout/plan wiring, History,
@@ -50,28 +135,6 @@ not a claim that functional review passed. Stated reasons:
 - the user is postponing detailed UI/UX validation;
 - future UI/UX work will be handled as a separate, later, Figma-led
   redesign milestone.
-
-## Current blockers
-
-None. Milestone 8 is accepted and closed. No roadmap milestone is
-currently active.
-
-## Active plan
-
-None active. Milestone 8's plans are archived at
-`docs/milestones/completed/milestone-8-{execution,reference}.md`.
-Milestones 1-7 remain archived alongside them.
-
-## Next action
-
-No further roadmap milestone is currently defined — `docs/ROADMAP.md`
-0-8 are all complete. `docs/improvements/IMPROVEMENT_ROADMAP.md` §2.1
-(`ReturnCount` tuning) was deferred pending Milestone 8's acceptance and
-is now unblocked, but has not been started or scheduled. The
-user has indicated the next substantive product work will be a separate
-Figma-led UI/UX redesign milestone; it has not been planned or scoped in
-this repository. Do not begin it and do not run `/milestone-plan` until
-the user explicitly initiates that work.
 
 ---
 

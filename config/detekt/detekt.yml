@@ -52,3 +52,26 @@ style:
   # limit for genuinely branchy, non-guard-clause functions elsewhere.
   ReturnCount:
     excludeGuardClauses: true
+  # A design-token file is definitionally a list of literal values transcribed
+  # from a design source (colour hexes, opacity multipliers). Introducing a
+  # named constant per literal only to feed it straight into the token it
+  # already names adds a second name for the same thing and one more place a
+  # transcription error can hide; the values are pinned by RepFlowThemeTest
+  # instead. The default excludes (test sources) are restated because setting
+  # this key replaces the rule's default list rather than adding to it.
+  MagicNumber:
+    excludes:
+      - '**/test/**'
+      - '**/androidTest/**'
+      - '**/*.Test.kt'
+      - '**/*.Spec.kt'
+      - '**/*.Spek.kt'
+      - '**/presentation/designsystem/**'
+  # The same token object deliberately keeps every member a plain `val`: some
+  # of its tokens are @Composable getters that can never be `const`, and the
+  # rest are named exactly as the plan and their call sites name them, which
+  # ktlint's property-naming rule would force into screaming snake case the
+  # moment they became `const`.
+  MayBeConst:
+    excludes:
+      - '**/presentation/designsystem/**'
