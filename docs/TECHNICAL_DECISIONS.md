@@ -113,6 +113,42 @@ wiring it into generic CI would fail on any later, unrelated product PR
 once this milestone's own diff is no longer current (`GPT-R9-002`); it is
 a local/explicit real-repository demonstration, run on demand.
 
+## UI design system and visual identity
+
+Resolved by milestone `repflow-redesign-visual-foundation` (plan revision 19,
+`docs/milestones/repflow-redesign-visual-foundation-execution.md`). The
+concrete system lives in
+`app/src/main/kotlin/com/repflow/app/presentation/designsystem/`:
+
+- `RepFlowColor.kt` — the dark/light `ColorScheme` pair plus the extra
+  per-theme tokens Material 3 has no slot for (`control`, `hairline`) and the
+  named accent steps. Which `ColorScheme` roles this milestone assigns, and
+  which are deliberately left at the Material 3 baseline because a stock
+  component elsewhere in the app reads the same role, is recorded in
+  `presentation/designsystem/ROLE_AUDIT.md` — read it before adding or
+  changing a role.
+- `RepFlowTypography.kt`, `RepFlowShapes.kt`, `RepFlowSpacing.kt` — the type
+  scale, the radius scale (8 for controls, 12 for cards/buttons, 16 for
+  sheets, plus the three sanctioned one-offs `stepper`/`fab`/`pill`), and the
+  spacing scale (6/8/10/12 gaps, 14-18 card padding, 16 screen padding).
+- `designsystem/icons/RepFlowIcons.kt` — the bounded local Phosphor vector
+  set (no icon-library dependency added).
+- `designsystem/components/` — the reusable primitives (card, buttons, tag,
+  stepper, state composables).
+
+Values are transcribed from the live Claude Design RepFlow spec, recorded in
+`docs/milestones/repflow-redesign-visual-foundation-reference.md`. Tokens are
+reached through `MaterialTheme.colorScheme`/`.typography`/`.shapes` wherever
+Material 3 has a slot; `RepFlowColor`/`RepFlowShapes`/`RepFlowSpacing` are for
+the named tokens that have none. No screen hardcodes a colour literal.
+
+This resolves *what the design system is*, not *how far it has been applied*:
+only the bottom nav, the Exercise list, and the Active Workout set-entry +
+rest timer were reskinned in this milestone. Every other screen still renders
+through the same cascading theme but keeps its bespoke per-screen loading /
+empty / error composables until a later milestone applies the primitives
+there — see that milestone's "Known limitations".
+
 ## Dependency policy
 
 Add libraries only when they solve a concrete requirement. Avoid Firebase,
@@ -132,6 +168,6 @@ until explicitly prioritized.
 | Whether active workouts may span calendar days | Open |
 | How substitutions affect progression history | Open |
 | Whether completed workouts may be manually corrected | Open |
-| Exact UI design system and visual identity | Open |
+| Exact UI design system and visual identity | Resolved by milestone `repflow-redesign-visual-foundation` — see "UI design system and visual identity" above |
 
 Agents must not silently finalize these decisions during unrelated tasks.

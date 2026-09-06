@@ -22,6 +22,69 @@ change, no schema change, no new runtime dependency.
 
 ## Current checkpoint
 
+**CP7 — Verification, dark/light check, Open-decision + status doc updates:
+complete.** CP1–CP6 remain complete below. **All seven checkpoints are done.**
+
+- **Full local suite, every task force-executed** (`--rerun-tasks`, so nothing
+  was reported green off a stale up-to-date marker):
+  `spotlessCheck`, `detekt`, `lintDebug`, `testDebugUnitTest`,
+  `assembleDebug`, `assembleDebugAndroidTest` — `BUILD SUCCESSFUL`,
+  95/95 actionable tasks executed. **427 JVM unit tests, 0 failures, 0
+  errors, 0 skipped** across 76 suites. `LayerBoundaryTest` (6 tests) passes
+  as a matter of record, per the plan's domain-purity invariant.
+- **`connectedDebugAndroidTest` ran for real this time** — the gate CP1–CP6
+  each had to defer for want of a device. Headless AVD
+  `RepFlow_S24_Ultra_API_37` (Android 17, API 37, x86_64):
+  **155 instrumented tests, 0 failures, 0 skipped**, `BUILD SUCCESSFUL` in
+  2m05s. That includes every Compose UI test over a reskinned surface —
+  `ExerciseListScreenTest`, `ActiveWorkoutScreenTest`,
+  `MainActivityNavHostSmokeTest` — plus the migration and DAO suites.
+- **Verification greps, re-run this session rather than re-cited** (CP1's own
+  self-review flag, and CP3's reason for pinning the three sanctioned radii):
+  zero `Color(...)` literals anywhere under `presentation/` outside
+  `designsystem/`, so the "the cascade reaches every screen" assumption holds
+  as stated; zero literal `RoundedCornerShape(...)` radii outside
+  `designsystem/` — the one shape token used at a call site is
+  `ActiveWorkoutExerciseCard.kt`'s `CircleShape` set marker, which is a shape,
+  not a radius literal.
+- **Manual dark/light pass, driven on the same emulator** (17 screenshots
+  under `.ai-review/repflow-redesign-visual-foundation/cp7-manual-pass/`,
+  gitignored alongside the bundle). Every surface CP4–CP6 touched was
+  actually exercised, not type-checked: bottom nav in both themes, the
+  Exercise list empty state and a populated row, the Active Workout set-entry
+  card (`WEIGHT_AND_REPS` branch), a recorded set, the live rest strip, and
+  the collapsible detail disclosure expanded. What it confirmed:
+  - Bottom nav reads correctly on both themes — CP2's glyphs, the selected
+    accent pill, and unselected labels that stay legible (the corrected `.66`
+    light alpha is visibly grey-on-light, not washed out).
+  - The `surface`/`background` split is visible on the top app bar and the
+    Exercise list rows in both themes, as round 9's I1(b) and round 10's I2
+    disclosed. It reads as a deliberate band, not as a rendering artefact.
+  - Light `control` — the plan's flagged judgment call — has two live
+    renders here: the rest-timer progress track and the set marker's fill.
+    Both read as an intentional neutral step against the card, so the
+    placeholder value looks defensible; still the reviewer's call.
+  - Dark `DropdownMenu` (Start-workout menu) does read as a *recessed* panel
+    rather than an elevated one, exactly the disclosed
+    `surfaceContainer`-darker-than-`surface` inversion. Light's menu
+    (Exercise list kebab) is delimited only by its shadow, also as disclosed —
+    over `background` it still reads as a floating panel.
+  - `error` at the corrected light/dark values is legible in its live context
+    (the exercise editor's `isError` "Name is required." message).
+  - The untouched `FilterChip` selected state (exercise editor tracking-type
+    row) still renders Material 3's own pair, confirming round 15's B2
+    scoping actually took effect.
+- **Two items CP6 left open are unchanged and go to the reviewer as-is**: the
+  unconsumed `RepFlowStepper`, and CP2's four unconfirmed nav-glyph judgment
+  calls. Neither is a defect; both are the "areas the reviewer should
+  specifically challenge" list doing its job.
+- `docs/TECHNICAL_DECISIONS.md`: the "Exact UI design system and visual
+  identity" row moves from `Open` to resolved, pointing at a new
+  "UI design system and visual identity" section that names this milestone
+  and the concrete token set under `presentation/designsystem/`.
+  **"Navigation structure" is untouched**, still
+  `Open (D-1 approved for M1 only)` — this milestone does not advance it.
+
 **CP6 — Apply foundation to Active Workout set-entry + rest timer: complete.**
 CP1–CP5 remain complete below.
 
@@ -446,8 +509,7 @@ CP3 remain complete below.
   `testDebugUnitTest` (388 tests, 0 failures) and
   `assembleDebugAndroidTest` all pass.
 
-Remaining: CP7 (verification, dark/light check, Open-decision + status doc
-updates).
+Remaining: none. CP1–CP7 are all complete.
 
 ## Current blockers
 
@@ -463,14 +525,17 @@ source-of-truth reference. Checkpoint registry:
 
 ## Next action
 
-CP7 — the milestone's own verification checkpoint: the full local suite plus
-`connectedDebugAndroidTest` on a real device/emulator, a manual dark/light pass
-across every surface CP4–CP6 touched, and the Open-decision + status doc
-updates. Continue with `/milestone-implement`.
+All seven checkpoints are complete. The work item moves to
+`SELF_REVIEWING_IMPLEMENTATION` and then to the external
+implementation-review gate — re-invoke `/milestone-implement` to run the
+self-review, the full verification report, and bundle generation.
 
-CP7's manual pass should also weigh in on the two items CP6 left open: the
-unconsumed `RepFlowStepper` (see CP6's deviation note above) and CP2's four
-unconfirmed nav-glyph judgment calls.
+The judgment calls this milestone deliberately leaves to the reviewer, all
+disclosed rather than silently resolved: CP2's four unconfirmed nav glyphs;
+the unconsumed `RepFlowStepper` (CP6's deviation note above); light `control`,
+the light scale-row selected state and the light status-chip accent tint; and
+the disclosed `surfaceContainer` menu-elevation inversion. See the plan's
+"Known limitations" and "Areas the reviewer should specifically challenge".
 
 ---
 
