@@ -32,6 +32,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -527,6 +529,13 @@ private fun WarmupToggleRow(
  * state and are still submitted, and `clearEntryFields` still resets them
  * after every recorded set, so nothing can be carried into the next set
  * unseen.
+ *
+ * `clickable` merges the header's descendants into one node, and both glyphs
+ * carry `contentDescription = null`, so without the `stateDescription` below
+ * the header would read identically open and closed - the caret being the
+ * only signal, and the caret being invisible to the semantics tree. The
+ * milestone's rule that state is never signalled by colour (or glyph) alone
+ * applies here exactly as it does to [RepFlowStatusChip]'s required label.
  */
 @Composable
 private fun SetDetailSection(
@@ -539,6 +548,14 @@ private fun SetDetailSection(
     techniqueQualityText: String,
     onTechniqueQualityChange: (String) -> Unit,
 ) {
+    val stateLabel =
+        stringResource(
+            if (expanded) {
+                R.string.workout_active_set_detail_expanded
+            } else {
+                R.string.workout_active_set_detail_collapsed
+            },
+        )
     Column(verticalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapMd)) {
         Row(
             modifier =
@@ -546,7 +563,8 @@ private fun SetDetailSection(
                     .fillMaxWidth()
                     .heightIn(min = ControlRowMinHeight)
                     .clip(MaterialTheme.shapes.small)
-                    .clickable(role = Role.Button) { onExpandedChange(!expanded) },
+                    .clickable(role = Role.Button) { onExpandedChange(!expanded) }
+                    .semantics { stateDescription = stateLabel },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapMd),
         ) {

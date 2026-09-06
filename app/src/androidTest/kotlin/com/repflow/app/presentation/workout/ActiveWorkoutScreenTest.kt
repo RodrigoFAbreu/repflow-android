@@ -2,6 +2,9 @@ package com.repflow.app.presentation.workout
 
 import androidx.activity.ComponentActivity
 import androidx.annotation.StringRes
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -185,16 +188,24 @@ class ActiveWorkoutScreenTest {
     /*
      * The set-detail disclosure is the one new user-facing interaction CP6
      * introduces, and it gates three data-entry fields that had no coverage
-     * before it existed. The three tests below pin the whole contract: what
-     * the disclosure hides, that opening it reveals all three fields, and
-     * that a value typed into them reaches `onRecordSet` whether the section
-     * is open or closed at submit time - the retention property
-     * `SetDetailSection`'s KDoc claims.
+     * before it existed. The four tests below pin the whole contract: what
+     * the disclosure hides, that opening it reveals all three fields, that a
+     * value typed into them reaches `onRecordSet` whether the section is open
+     * or closed at submit time (the retention property `SetDetailSection`'s
+     * KDoc claims), and that the header node a screen reader activates
+     * actually reads differently in the two states.
      */
 
     private fun node(
         @StringRes label: Int,
     ) = composeRule.onNodeWithText(composeRule.activity.getString(label))
+
+    private fun hasStateDescription(
+        @StringRes value: Int,
+    ) = SemanticsMatcher.expectValue(
+        SemanticsProperties.StateDescription,
+        composeRule.activity.getString(value),
+    )
 
     @Test
     fun theSetDetailFieldsAreHiddenUntilTheDisclosureIsExpanded() {
@@ -239,6 +250,25 @@ class ActiveWorkoutScreenTest {
 
         assertEquals(8.0, recordedRpe)
         assertEquals(2, recordedPain)
+    }
+
+    @Test
+    fun theDisclosureHeaderReadsItsExpandedStateToAccessibilityServices() {
+        setContent(exercise(ExerciseTrackingType.WEIGHT_AND_REPS))
+
+        // `clickable` merges the header's descendants into one node and both
+        // glyphs are `contentDescription = null`, so the caret cannot carry
+        // this: without a state description the node reads identically in
+        // both states and activating it announces nothing.
+        node(R.string.workout_active_set_detail_toggle)
+            .performScrollTo()
+            .assert(hasStateDescription(R.string.workout_active_set_detail_collapsed))
+
+        node(R.string.workout_active_set_detail_toggle).performScrollTo().performClick()
+
+        node(R.string.workout_active_set_detail_toggle)
+            .performScrollTo()
+            .assert(hasStateDescription(R.string.workout_active_set_detail_expanded))
     }
 
     @Test
