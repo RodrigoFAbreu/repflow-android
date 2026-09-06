@@ -312,13 +312,15 @@ and **all three were accepted — none was rejected this round.**
 - **I2 — `ROLE_AUDIT.md`'s completeness premise was false.** It claimed
   `presentation/**` held no colour literal and no direct
   `MaterialTheme.colorScheme` read, "so this table is the whole story". At
-  HEAD there are 29 direct reads under `presentation/` (1 at `b39af90`), 14
-  of them outside `designsystem/`, and `RepFlowColor.kt` is itself a file of
-  literals. The sentence described the pre-milestone codebase. Replaced with
-  what is true, and all 14 direct reads are now named in the `Consumers`
-  column of the role they read, with the ground each renders on. **No
-  contrast value changed and none is breached** — each was recomputed
-  independently before the edit.
+  HEAD there are **14** direct reads under `presentation/` outside
+  `designsystem/` (zero anywhere under `presentation/` at `b39af90`), and
+  `RepFlowColor.kt` is itself a file of literals. The sentence described the
+  pre-milestone codebase. Replaced with what is true, and all 14 direct reads
+  are now named in the `Consumers` column of the role they read, with the
+  ground each renders on. **No contrast value changed and none is breached** —
+  each was recomputed independently before the edit. (Round 3's I1 corrected
+  the two figures this bullet originally carried; see "Implementation review
+  round 3" below.)
 - **I3 — this round's evidence documents carried the previous round's
   numbers.** All three corrected: the path-classification count (recomputed
   through `classify_path_implementation_stage`: **58 protected, 111

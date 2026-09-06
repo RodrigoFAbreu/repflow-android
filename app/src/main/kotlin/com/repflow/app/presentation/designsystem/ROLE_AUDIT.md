@@ -22,21 +22,33 @@ Imported Material 3 components, audited: `AlertDialog`, `Button`, `Card`,
 **Two paths, not one.** The sentence that used to stand here said
 `presentation/**` contained no `Color(...)` literal and no direct
 `MaterialTheme.colorScheme` read, so stock component defaults were the whole
-story. That described the pre-milestone codebase (one direct read at
-`b39af90`, in `RepFlowTheme.kt`'s own scheme assignment) and is false of the
-code this file now ships beside. What is true:
+story. That was true of the pre-milestone codebase - `b39af90` has **zero**
+direct reads under `presentation/` - and is false of the code this file now
+ships beside. What is true:
 
 - **Colour literals live in `designsystem/` by design.** `RepFlowColor.kt` is
   a token file — definitionally a list of transcribed `Color(0x…)` literals.
   The one-way rule is that no *other* file under `presentation/` carries one,
   and it is re-verified by grep every round (currently 0 hits outside
   `designsystem/`), not assumed.
-- **The three reskinned surfaces read `ColorScheme` roles directly.** 29
-  `MaterialTheme.colorScheme` reads sit under `presentation/` at HEAD, 14 of
-  them outside `designsystem/`: `RepFlowBottomNavigationBar.kt:42` (covered by
+- **The three reskinned surfaces read `ColorScheme` roles directly.** **14**
+  direct `MaterialTheme.colorScheme` reads sit under `presentation/` outside
+  `designsystem/` at HEAD: `RepFlowBottomNavigationBar.kt:42` (covered by
   the bottom-nav section below), `ExerciseListScreen.kt:188,189,266,355`,
   `ActiveWorkoutScreen.kt:278,300` and
   `ActiveWorkoutExerciseCard.kt:327,338,354,360,511,574,585`.
+
+  **No total for `presentation/` as a whole is stated here, on purpose.** The
+  obvious grep also matches prose: this paragraph and the one above it are two
+  of its hits, and `RepFlowColor.kt:76,78` are two more, so any total written
+  into this file changes the number it is stating and is stale the moment it is
+  written. Scoping to `--include='*.kt'` does not repair that either - it still
+  counts `RepFlowColor.kt`'s two KDoc mentions. The count *outside*
+  `designsystem/` has no such problem, because every self-referential mention
+  lives inside it, and it is the half the `Consumers` column is actually
+  checked against. Grep for it with a literal dot; an unescaped `.` is a
+  wildcard that also matches `MaterialTheme(colorScheme = ...` constructor
+  arguments.
 
 So the table is complete only because the `Consumers` column below carries
 *both* — the stock components a role reaches through Material 3's own
