@@ -116,8 +116,9 @@ comparable from `am get-config`, `wm size`, `wm density` and the
 `navigationBars` inset on both before any comparison was drawn. The same
 debug APK was installed on both. **The physical device is authoritative
 wherever the two disagree.** Full device metadata, the evidence index, and
-40 screenshots (both themes, both devices) are under
-`.ai-review/repflow-redesign-visual-foundation/cp7-manual-pass/revalidation/`.
+**39** screenshots (both themes, both devices) are under
+`.ai-review/repflow-redesign-visual-foundation/cp7-manual-pass/revalidation/`,
+alongside `DEVICE_METADATA.md`.
 
 Results at 384 dp:
 
@@ -164,9 +165,10 @@ two-row training plan (`Push Day`: a reps-tracked row and a duration-tracked
 row), two completed workout sessions, and a recovery entry plus a futsal
 session. That state was then exported and **restored on the 384 dp AVD**
 (`RepFlow_S24Ultra_384dp_API36`) through the app's own backup/restore, which
-also exercised the restore confirmation end to end. 45 screenshots are under
+also exercised the restore confirmation end to end. **49** screenshots are
+under
 `.ai-review/repflow-redesign-visual-foundation/cp7-manual-pass/round2-enumerated/`
-(`phys/`, `avd/`; gitignored). Themes were switched with
+(43 `phys/`, 6 `avd/`; gitignored). Themes were switched with
 `adb shell cmd uimode night yes|no`.
 
 **Results, by the check CP7 step 1 names.**
