@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.repflow.app.presentation.designsystem.RepFlowColor
 import com.repflow.app.presentation.designsystem.RepFlowShapes
 import com.repflow.app.presentation.designsystem.RepFlowSpacing
+import com.repflow.app.presentation.designsystem.isDarkColorScheme
 
 /*
  * Pills, in both of the forms the design uses them: the static status chip,

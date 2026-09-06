@@ -15,6 +15,7 @@ import com.repflow.app.presentation.designsystem.RepFlowLightColorScheme
 import com.repflow.app.presentation.designsystem.RepFlowLightExtraColors
 import com.repflow.app.presentation.designsystem.RepFlowShapeScheme
 import com.repflow.app.presentation.designsystem.RepFlowShapes
+import com.repflow.app.presentation.designsystem.isDarkColorScheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

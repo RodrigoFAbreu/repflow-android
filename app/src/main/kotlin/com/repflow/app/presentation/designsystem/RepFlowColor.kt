@@ -1,5 +1,6 @@
 package com.repflow.app.presentation.designsystem
 
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -7,6 +8,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 
 /*
  * Colour tokens for the RepFlow visual foundation.
@@ -128,6 +130,25 @@ object RepFlowColor {
     /** Light selected-item indicator pill: `primary` at 16%. */
     val navSelectedIndicatorAlphaLight = 0.16f
 }
+
+/**
+ * Which theme is in force, asked of the applied scheme rather than of
+ * `isSystemInDarkTheme()`.
+ *
+ * Several primitives read a different design value per theme, and the scheme
+ * they are actually rendering with is the honest input: a preview or a future
+ * theme override that supplies the light scheme gets light's values, where a
+ * second `isSystemInDarkTheme()` call would silently disagree with the colours
+ * around it.
+ *
+ * It lives here, beside the two schemes whose luminance it reads, rather than
+ * in `components/`: it resolves a token, it is not a button concern, and the
+ * bottom nav reads it without that making `navigation` depend on `components`.
+ */
+internal fun isDarkColorScheme(scheme: ColorScheme): Boolean = scheme.surface.luminance() < LIGHT_SURFACE_LUMINANCE_FLOOR
+
+/** Both schemes' `surface` sit far from this - dark 0.02, light 0.90. */
+private const val LIGHT_SURFACE_LUMINANCE_FLOOR = 0.5f
 
 /**
  * Dark scheme.

@@ -18,13 +18,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.repflow.app.presentation.designsystem.RepFlowColor
+import com.repflow.app.presentation.designsystem.isDarkColorScheme
 
 /*
  * The three button tiers, from RepFlow's own component spec.
@@ -96,21 +96,6 @@ internal fun repFlowAccentOutlineColors(scheme: ColorScheme): RepFlowAccentOutli
     } else {
         RepFlowAccentOutlineColors(border = RepFlowColor.accent600, label = RepFlowColor.accent700)
     }
-
-/**
- * Which theme is in force, asked of the applied scheme rather than of
- * `isSystemInDarkTheme()`.
- *
- * Several primitives below read a different design value per theme, and the
- * scheme they are actually rendering with is the honest input: a preview or a
- * future theme override that supplies the light scheme gets light's values,
- * where a second `isSystemInDarkTheme()` call would silently disagree with the
- * colours around it.
- */
-internal fun isDarkColorScheme(scheme: ColorScheme): Boolean = scheme.surface.luminance() < LIGHT_SURFACE_LUMINANCE_FLOOR
-
-/** Both schemes' `surface` sit far from this - dark 0.02, light 0.90. */
-private const val LIGHT_SURFACE_LUMINANCE_FLOOR = 0.5f
 
 /**
  * The one primary action on a screen: solid accent fill, `onPrimary` label at

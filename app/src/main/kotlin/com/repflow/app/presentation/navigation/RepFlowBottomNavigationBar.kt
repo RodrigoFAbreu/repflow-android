@@ -17,7 +17,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import com.repflow.app.presentation.designsystem.RepFlowColor
-import com.repflow.app.presentation.designsystem.components.isDarkColorScheme
+import com.repflow.app.presentation.designsystem.isDarkColorScheme
 
 /**
  * The app's bottom navigation bar (Milestone 8, CP1): one
