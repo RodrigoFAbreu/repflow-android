@@ -22,6 +22,100 @@ change, no schema change, no new runtime dependency.
 
 ## Current checkpoint
 
+**CP5 — Apply foundation to Exercise list: complete.** CP1–CP4 remain complete
+below.
+
+- The plan's one named file, `presentation/exercise/list/ExerciseListScreen.kt`,
+  is rewritten to render through CP1 tokens, CP2 glyphs and CP3 primitives.
+  No `ExerciseListViewModel`/`ExerciseListUiState` change, no callback added
+  or removed, no change to the message-queue snackbar wiring — every edit is
+  "this composable now renders differently", never "does something
+  different".
+- **The four private state composables are gone**, replaced by CP3's shared
+  ones: `LoadingIndicator` → `RepFlowLoadingIndicator`, `EmptyState` →
+  `RepFlowEmptyState`, `FailureState(onRetry)` → `RepFlowFailureState`
+  (retry callback preserved, now rendered as the accent-outline button —
+  which is how the design draws exactly this affordance). This is the
+  de-duplication CP3 was built for; `ActiveWorkoutScreen.kt`'s and
+  `TrainingPlanListScreen.kt`'s private copies stay, per the plan's own note
+  that this de-duplication does not complete within this milestone.
+- **Rows are `RepFlowCard`s**: 64dp minimum height (the design's own value,
+  inside its stated 56–68 range), a `titleMedium` name over a `bodySmall`
+  meta line, and the kebab as an `IconButton` carrying CP2's
+  `dotsThreeVertical` instead of a `TextButton` with a literal `"⋮"`. The
+  meta line's content is byte-identical to before —
+  `trackingTypeLabel(...) + summarySuffix(...)`, both functions untouched.
+  The name gets two lines rather than one before ellipsis: the design's own
+  `2c` calls out long exercise names as a case this screen handles, and 64dp
+  is a minimum rather than a fixed height.
+- **The filter row is CP3's `RepFlowPillPicker`, not a clickable
+  `RepFlowStatusChip`** — a deliberate pick, not a convenience. The chip is
+  28dp; making it the tap target would break the ≥44dp floor
+  `RepFlowPrimitivesTest` already holds every interactive primitive to. The
+  picker is the one CP3 pill primitive that is interactive *and* clears the
+  floor, and "one primitive rather than four bespoke pickers" is exactly what
+  it exists for. The design's own `ph-funnel` sits in front of it as the
+  row's decorative marker.
+- **FAB**: 60×60dp at `RepFlowShapes.fab` (18dp), `primary`/`onPrimary` fill
+  and glyph, carrying CP2's `plusBold` — the bold weight CP2 bundled
+  specifically because the design draws this one plus bold and every other
+  plus regular. `RepFlowButtons.kt` has no FAB tier, so this stays a Material 3
+  `FloatingActionButton` with the design's shape and colours applied to it.
+- **Two new string resources**, both for affordances the design confirms:
+  `exercise_list_search_clear_content_description` (the `ph-x-circle` clear
+  button, which CP2's own `RepFlowIcons.xCircle` KDoc already named as "clear
+  the Exercise list search field") and `exercise_list_row_archived_badge`.
+  The clear button routes through the existing `onQueryChanged("")` — no new
+  event, no state-shape change — and only renders once there is something to
+  clear, so the search-field test's empty-query path is untouched.
+- **Three deviations from the design's `2c`, flagged not buried.** (1) The
+  archived badge is drawn as an `Outline`-tone chip with the `ph-archive`
+  glyph rather than at the design's literal reduced opacity: the tone is
+  already the quietest chip treatment, and an unverified alpha on its label
+  is exactly the kind of value the rest of this milestone refuses to ship
+  without a contrast number behind it. (2) The picker's cells are
+  equal-weight, so the two filters read as a segmented control rather than
+  the design's content-sized pills — the cost of using the shared primitive
+  instead of a fourth bespoke one. (3) The design's query-aware
+  `Create "<query>"` empty state is **not** implemented: pre-filling the
+  create form with the query needs a route argument and a ViewModel change,
+  both of which this milestone's scope forbids, and a button that said
+  `Create "bench"` while creating a blank exercise would be worse than its
+  absence. The three existing empty-state strings are unchanged, which is
+  also what keeps `ExerciseListScreenTest`'s three empty-state assertions
+  green.
+- Of CP2's eight Exercise-list glyphs, six are consumed here
+  (`magnifyingGlass`, `xCircle`, `funnel`, `dotsThreeVertical`, `archive`,
+  `plusBold`). `arrowLeft` is not: the Exercise list is a top-level
+  destination with no back affordance, and the design's back arrow belongs to
+  an IA this milestone explicitly does not change. `arrowCounterClockwise` is
+  not: the plan states the snackbar's own appearance is untouched by this
+  checkpoint.
+- **Two additions beyond the plan's "Files modified" list**, on the same
+  footing as CP1–CP4's own test files. `ExerciseListLabels.kt` holds the two
+  non-composable label mappings and the filter row's order — split out both
+  because detekt's `TooManyFunctions` threshold (11) is reached otherwise and
+  because, being non-composable, it is the only part of this checkpoint a
+  plain-JVM test can reach at all. `ExerciseListScreenWiringTest` (5 tests)
+  is that test: it pins that the index-based filter row's order, labels and
+  emitted enum agree (an inverted order still renders two plausible pills and
+  still fires `onFilterChanged` — with the wrong value, invisible to the
+  device test), that the three empty reasons stay three distinct messages,
+  and that the row/FAB sizes and the 44dp tap-target floor hold.
+- Pre-edit self-review flag from the plan discharged: `ExerciseListScreenTest`
+  (androidTest) was read first, and every node it asserts on survives — the
+  search-hint placeholder, the two filter labels, the three empty-state
+  strings, the failure message and `Retry`, the FAB and row-menu content
+  descriptions, the three dropdown items, and both snackbar messages.
+  `MainActivityNavHostSmokeTest`'s own search-hint assertion is likewise
+  untouched. `Archive` and `Archived` remain distinct nodes — `onNodeWithText`
+  matches exactly, so the new badge cannot shadow the menu item.
+- Verified: `testDebugUnitTest --tests
+  "...presentation.exercise.list.*" --tests "...presentation.designsystem.*"
+  --tests "...presentation.navigation.*"` (56 tests, 0 failures), plus
+  `spotlessCheck`, `detekt`, `lintDebug` and `assembleDebugAndroidTest` all
+  pass.
+
 **CP4 — Apply foundation to app shell (bottom nav): complete.** CP1, CP2 and
 CP3 remain complete below.
 
@@ -245,8 +339,8 @@ CP3 remain complete below.
   `testDebugUnitTest` (388 tests, 0 failures) and
   `assembleDebugAndroidTest` all pass.
 
-Remaining: CP5/CP6 (the two remaining surfaces), CP7 (verification and doc
-updates).
+Remaining: CP6 (Active Workout set-entry + rest timer), CP7 (verification and
+doc updates).
 
 ## Current blockers
 
@@ -262,8 +356,9 @@ source-of-truth reference. Checkpoint registry:
 
 ## Next action
 
-CP5 — apply the foundation to the Exercise list (the representative
-list/CRUD surface). Continue with `/milestone-implement`.
+CP6 — apply the foundation to the Active Workout set-entry + rest timer (the
+representative core-interaction surface, and this milestone's highest-risk
+checkpoint). Continue with `/milestone-implement`.
 
 ---
 

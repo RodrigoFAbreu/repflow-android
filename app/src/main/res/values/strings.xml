@@ -6,7 +6,9 @@
     <string name="exercise_list_search_hint">Search exercises</string>
     <string name="exercise_list_filter_active">Active</string>
     <string name="exercise_list_filter_archived">Archived</string>
+    <string name="exercise_list_search_clear_content_description">Clear search</string>
     <string name="exercise_list_add_content_description">Add exercise</string>
+    <string name="exercise_list_row_archived_badge">Archived</string>
     <string name="exercise_list_empty_no_exercises">No exercises yet. Tap + to add one.</string>
     <string name="exercise_list_empty_no_search_results">No exercises match your search.</string>
     <string name="exercise_list_empty_no_archived">No archived exercises.</string>
