@@ -290,6 +290,72 @@ diff (`git diff b39af90..HEAD -- app/.../presentation/` lists 18 files; that
 file is not one of them), so this is pre-existing and outside scope. Recorded
 here so it reaches the functional review rather than being lost.
 
+### Implementation review round 2 — what was applied (2026-09-06)
+
+`LOCAL_MODEL_IMPLEMENTATION_REVIEW`, status `REVISE`, **0 Blocking, 3
+Important**, against bundle `5e6d7053…` / `review_content_id` `5fd8dd90…`
+(implementation revision 2). Nothing above is retracted. Every Important
+finding was reproduced against the actual code before anything was changed,
+and **all three were accepted — none was rejected this round.**
+
+- **I1 — the set-detail disclosure reached no accessibility service.**
+  `SetDetailSection`'s header is a `Row` carrying `clickable(role =
+  Role.Button)`, which merges its descendants; both glyphs are
+  `contentDescription = null`, so the merged node read exactly
+  `"Set details", button` whether the section was open or closed. The caret,
+  the only signal of the state, is invisible to the semantics tree. Fixed:
+  the header now carries `stateDescription`, resolved from two new strings.
+  This is the codebase's first `stateDescription` — introduced for a
+  user-facing defect, not for a test. `ActiveWorkoutScreenTest` gains a
+  fourth disclosure test asserting the merged node's state description flips
+  on tap.
+- **I2 — `ROLE_AUDIT.md`'s completeness premise was false.** It claimed
+  `presentation/**` held no colour literal and no direct
+  `MaterialTheme.colorScheme` read, "so this table is the whole story". At
+  HEAD there are 29 direct reads under `presentation/` (1 at `b39af90`), 14
+  of them outside `designsystem/`, and `RepFlowColor.kt` is itself a file of
+  literals. The sentence described the pre-milestone codebase. Replaced with
+  what is true, and all 14 direct reads are now named in the `Consumers`
+  column of the role they read, with the ground each renders on. **No
+  contrast value changed and none is breached** — each was recomputed
+  independently before the edit.
+- **I3 — this round's evidence documents carried the previous round's
+  numbers.** All three corrected: the path-classification count (recomputed
+  through `classify_path_implementation_stage`: **58 protected, 111
+  excluded, 0 unclassified**); the `ActiveWorkoutScreenTest:182` citation,
+  which had moved to `:252` and has since moved again to `:311` — now cited
+  **by test name** (`tappingAddSetClearsTheEntryFields`) so no future test
+  addition can stale it; and the self-review section, which still said "56
+  protected paths" and still listed the CP7 addendum as an uncommitted
+  working-tree change after `b50bc65` committed it. The two screenshot
+  counts are corrected too (**49** for the enumerated pass, **39** PNGs plus
+  `DEVICE_METADATA.md` for the revalidation).
+
+**Optional and missing-test findings.** O1 (detekt's restated excludes were
+an older default) and O2 (`ROLE_AUDIT.md`'s dark-only `on control` figure —
+light computes to **7.03**, and both halves were already pinned by
+`RepFlowPrimitivesTest`) are fixed. O3 (`RepFlowTagTone.Outline` and
+`.UpNext` resolving to identical colours) is **recorded on the member rather
+than reshaped**: `UpNext` has no consumer, so splitting the enum now would be
+churn with no call site to validate it against. Missing tests 1 and 2 are
+both closed — the chip-overflow guard and the search-clear button now have
+instrumented coverage, and each was run against a deliberately broken build
+first to confirm it is a regression test rather than a tautology. Missing
+test 3 is **already satisfied** by the pre-existing
+`ExerciseListScreenTest.filterChipClickInvokesOnFilterChanged`, which drives
+`RepFlowPillPicker` end to end now that CP5 replaced the `FilterChip` row
+with it; last round's deferral is dropped rather than carried.
+
+**Three disclosed limitations became named follow-ups**, per the round's
+acceptance criterion 4: the unconsumed `RepFlowStepper`, the two diverging
+FABs and the light selected-pill value are now
+`docs/improvements/IMPROVEMENT_ROADMAP.md` §8.1–8.3, with scope,
+preconditions and acceptance criteria, instead of standing "Known
+limitations". The stepper deviation itself is **not re-opened** — the round
+ruled it accurately stated against the plan text that applies, its
+justification checked out leg by leg, and REQ-3 is satisfied by authoring
+the primitive.
+
 **CP6 — Apply foundation to Active Workout set-entry + rest timer: complete.**
 CP1–CP5 remain complete below.
 
@@ -356,9 +422,13 @@ CP1–CP5 remain complete below.
 
   What still justifies it, on the plan text that actually applies:
   (1) the plan's "Preserved invariants" require `ActiveWorkoutScreenTest` to
-  keep passing, and `ActiveWorkoutScreenTest:182` does `performTextInput("60")`
-  on the load field, which a stepper cannot satisfy — changing that assertion
-  is changing a preserved invariant, not implementing one;
+  keep passing, and its `tappingAddSetClearsTheEntryFields` does
+  `performTextInput("60")` on the load field, which a stepper cannot satisfy —
+  changing that assertion is changing a preserved invariant, not implementing
+  one. (The citation is by test name deliberately: it was written as
+  `ActiveWorkoutScreenTest:182`, and every round that adds a test to that file
+  moves the line — it was `:252` after round 2's three disclosure tests and is
+  `:311` after round 3's two. The test name does not move.);
   (2) load is decimal and unbounded, so a stepper needs a step size, and the
   design states none. The nearest existing candidate is **not** invented: the
   domain already carries `defaultLoadIncrementGrams` per exercise (it is
@@ -383,7 +453,10 @@ CP1–CP5 remain complete below.
   plan is real and belongs in front of the reviewer. A later redesign milestone
   that is allowed to change set-entry interaction, and to plumb
   `defaultLoadIncrementGrams` onto `ActiveExerciseUi`, is where the stepper and
-  the pill rows land.
+  the pill rows land — **now a named follow-up with its own scope and
+  acceptance criteria, `docs/improvements/IMPROVEMENT_ROADMAP.md` §8.1**, not a
+  standing "Known limitation" (implementation review round 2, acceptance
+  criterion 4).
 - **Two smaller deviations.** (1) The collapsible detail section *is* adopted
   (the plan's reference names it), defaulting to collapsed, so RPE/pain/
   technique start hidden — the values still live in `ExerciseCard`'s own state,
@@ -776,17 +849,20 @@ source-of-truth reference. Checkpoint registry:
 
 ## Next action
 
-All seven checkpoints are complete. The work item moves to
-`SELF_REVIEWING_IMPLEMENTATION` and then to the external
-implementation-review gate — re-invoke `/milestone-implement` to run the
-self-review, the full verification report, and bundle generation.
+All seven checkpoints are complete. Implementation review round 2 returned
+`REVISE` with 0 Blocking and 3 Important; all three are applied (see
+"Implementation review round 2" above) and the bundle is regenerated at
+implementation revision 3. The next state is `AWAITING_TECHNICAL_APPROVAL` —
+only the user invokes `/approve-review implementation`.
 
 The judgment calls this milestone deliberately leaves to the reviewer, all
 disclosed rather than silently resolved: CP2's four unconfirmed nav glyphs;
-the unconsumed `RepFlowStepper` (CP6's deviation note above); light `control`,
-the light scale-row selected state and the light status-chip accent tint; and
-the disclosed `surfaceContainer` menu-elevation inversion. See the plan's
-"Known limitations" and "Areas the reviewer should specifically challenge".
+light `control`, the light scale-row selected state and the light status-chip
+accent tint; and the disclosed `surfaceContainer` menu-elevation inversion.
+See the plan's "Known limitations" and "Areas the reviewer should
+specifically challenge". The unconsumed `RepFlowStepper`, the two diverging
+FABs and the light selected-pill value have moved off that list and into
+`docs/improvements/IMPROVEMENT_ROADMAP.md` §8.1–8.3 as named follow-ups.
 
 ---
 
