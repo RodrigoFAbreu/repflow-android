@@ -22,6 +22,52 @@ change, no schema change, no new runtime dependency.
 
 ## Current checkpoint
 
+**CP2 — Bounded icon approach (local vector assets): complete.**
+
+- 23 Phosphor glyphs bundled as local vector drawables
+  (`res/drawable/ic_ph_*.xml`), path data copied verbatim from the
+  upstream SVGs on Phosphor's own 256x256 grid — programmatically
+  re-verified byte-identical against the source for all 23, which also
+  confirms every file name resolves to the glyph it claims. Phosphor is
+  MIT-licensed; license text bundled at `app/licenses/phosphor/LICENSE`,
+  matching CP1's `app/licenses/inter/OFL.txt` pattern.
+- No new Gradle dependency: `material-icons-core`/`-extended` stay
+  absent, so AGENTS.md's "new dependency categories" stop condition is
+  not triggered. The bounded-set-vs-icon-library decision remains
+  surfaced for review, not silently finalized (execution plan CP2).
+- `presentation/designsystem/icons/RepFlowIcons.kt` exposes the set as
+  `@DrawableRes Int`s named after their upstream glyph. Resource ids
+  rather than `Painter`/`ImageVector` so a non-composable holder can
+  carry one — CP4 changes `TopLevelDestination.icon` from a `String`
+  glyph to exactly this.
+- The glyph set is the one the plan enumerates, no more: 8 for the
+  Exercise list (CP5), 9 for Active Workout set-entry + rest timer
+  (CP6), 6 for the bottom nav (CP4). Both plus weights are bundled
+  (`ic_ph_plus`, `ic_ph_plus_bold`) because the design draws the FAB's
+  plus bold and every other plus regular. The reference doc's `ph-pulse`
+  is deliberately *not* bundled — it belongs to the progression-suggestion
+  banner, which that doc itself marks out of scope.
+- **Nav picks — four are judgment calls, flagged not claimed.**
+  `RepFlowIcons.Nav` records the per-destination mapping here (picking it
+  is CP2's decision; CP4 only consumes it). Design-confirmed: Plans =
+  `list-checks`, History = `clock-counter-clockwise`. **Unconfirmed
+  judgment calls**, because the target design has a four-destination bar
+  and this milestone keeps the app's existing six: Exercises = `books`,
+  Workout = `barbell`, Recovery = `moon-stars` (the design's only
+  Recovery glyph, but drawn as an empty-state illustration, not a nav
+  tab), Backup = `cloud-arrow-up`. A later design pass may replace all
+  four; nothing else depends on the specific choice. CP7's manual pass
+  should weigh in on them.
+- `RepFlowIconsTest` (5 tests) pins the catalogue against the drawables:
+  no two glyph names share one drawable, the catalogue and the bundled
+  `ic_ph_*` set are exactly equal (so neither an orphan drawable nor a
+  stray entry survives), the bundled set is the plan's enumerated set,
+  each of the six destinations gets its own glyph from the catalogue, and
+  the two design-confirmed nav picks are the glyphs the design names.
+- Verified: `testDebugUnitTest --tests
+  "...designsystem.icons.RepFlowIconsTest"` (5 tests, 0 failures), plus
+  `spotlessCheck`, `detekt` and `lintDebug` all pass.
+
 **CP1 — Design tokens & Compose theme foundation: complete.**
 
 - Spike (step 0) confirmed the plain-JVM `app/src/test` suite constructs
@@ -56,8 +102,8 @@ change, no schema change, no new runtime dependency.
   `testDebugUnitTest` (388 tests, 0 failures) and
   `assembleDebugAndroidTest` all pass.
 
-Remaining: CP2 (icons), CP3 (primitives), CP4/CP5/CP6 (the three
-surfaces), CP7 (verification and doc updates).
+Remaining: CP3 (primitives), CP4/CP5/CP6 (the three surfaces), CP7
+(verification and doc updates).
 
 ## Current blockers
 
@@ -73,7 +119,7 @@ source-of-truth reference. Checkpoint registry:
 
 ## Next action
 
-CP2 — bounded icon approach (local vector assets). Continue with
+CP3 — core reusable primitive components. Continue with
 `/milestone-implement`.
 
 ---
