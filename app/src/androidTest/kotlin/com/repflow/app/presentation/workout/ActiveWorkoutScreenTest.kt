@@ -165,6 +165,35 @@ class ActiveWorkoutScreenTest {
     }
 
     @Test
+    fun everyPlannedTargetChipStaysOnScreenWhenTheRowOutgrowsTheWidth() {
+        // The guard this pins is `weight(1f, fill = false)` on each chip plus
+        // `RepFlowStatusChip`'s own `maxLines = 1`/`Ellipsis`: a row that
+        // outgrows the screen must degrade visibly rather than push its last
+        // chip off the right edge. Without the weight the third chip measures
+        // to zero width and stops being displayed - which is exactly the
+        // silent clipping the round-1 fix exists to prevent, and which was
+        // otherwise verified only by eye. Values are deliberately absurd so
+        // the row cannot fit at any phone width.
+        val target =
+            PlannedTargetUi(
+                targetWarmupSets = null,
+                targetWorkingSets = 1,
+                repRange = 100_000_000..999_999_999,
+                durationRangeSeconds = 100_000_000L..999_999_999L,
+                restSeconds = 999_999_999,
+            )
+        setContent(exercise(ExerciseTrackingType.WEIGHT_AND_REPS, plannedTarget = target))
+
+        listOf(
+            composeRule.activity.getString(R.string.workout_active_plan_rep_range, 100_000_000, 999_999_999),
+            composeRule.activity.getString(R.string.workout_active_plan_duration_range, 100_000_000L, 999_999_999L),
+            composeRule.activity.getString(R.string.workout_active_plan_rest, 999_999_999),
+        ).forEach { chipText ->
+            composeRule.onNodeWithText(chipText).performScrollTo().assertIsDisplayed()
+        }
+    }
+
+    @Test
     fun anAdHocExerciseShowsNoPlannedTargetSummary() {
         setContent(exercise(ExerciseTrackingType.WEIGHT_AND_REPS, plannedTarget = null))
 

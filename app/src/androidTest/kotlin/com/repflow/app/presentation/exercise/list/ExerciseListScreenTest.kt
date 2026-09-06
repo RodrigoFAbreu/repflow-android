@@ -176,6 +176,51 @@ class ExerciseListScreenTest {
         assertEquals("bench", query)
     }
 
+    /*
+     * The search-clear button is an affordance CP5 introduced - it did not
+     * exist before this milestone - so "a surface whose behaviour did not
+     * change" does not cover it. Two properties: it appears only once there
+     * is something to clear, and it clears through the existing
+     * `onQueryChanged("")` rather than a new event.
+     */
+
+    @Test
+    fun theSearchClearButtonAppearsOnlyForANonEmptyQuery() {
+        setContent(
+            uiState =
+                ExerciseListUiState(
+                    query = "",
+                    content = ExerciseListContent.Empty(ExerciseListEmptyReason.NO_EXERCISES),
+                ),
+        )
+
+        composeRule
+            .onNodeWithContentDescription(
+                composeRule.activity.getString(R.string.exercise_list_search_clear_content_description),
+            ).assertDoesNotExist()
+    }
+
+    @Test
+    fun tappingTheSearchClearButtonInvokesOnQueryChangedWithAnEmptyQuery() {
+        var query: String? = null
+        setContent(
+            uiState =
+                ExerciseListUiState(
+                    query = "bench",
+                    content = ExerciseListContent.Empty(ExerciseListEmptyReason.NO_SEARCH_RESULTS),
+                ),
+            onQueryChanged = { query = it },
+        )
+
+        composeRule
+            .onNodeWithContentDescription(
+                composeRule.activity.getString(R.string.exercise_list_search_clear_content_description),
+            ).assertIsDisplayed()
+            .performClick()
+
+        assertEquals("", query)
+    }
+
     @Test
     fun createFabClickInvokesOnCreateClick() {
         var created = false
