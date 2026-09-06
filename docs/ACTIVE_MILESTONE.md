@@ -22,6 +22,73 @@ change, no schema change, no new runtime dependency.
 
 ## Current checkpoint
 
+**CP4 — Apply foundation to app shell (bottom nav): complete.** CP1, CP2 and
+CP3 remain complete below.
+
+- Two files touched, exactly the two the plan names:
+  `presentation/navigation/RepFlowDestinations.kt` and
+  `RepFlowBottomNavigationBar.kt`. Same six routes, same order, same
+  `selected`/`onClick`/`contentDescription` wiring — visual only.
+- `TopLevelDestination.icon` changes from a literal single-letter `String`
+  glyph to a `@DrawableRes Int` fed from CP2's `RepFlowIcons.Nav`, which is
+  why CP2 exposed resource ids rather than `Painter`s: the destination list
+  stays plain, non-composable data. The bar renders it as
+  `Icon(painter = painterResource(...), contentDescription = null)` — the
+  accessible name is already set once on the `NavigationBarItem`'s own
+  `Modifier.semantics` block, and a second description would land on that
+  same merged node, which is how `MainActivityNavHostSmokeTest.kt` resolves
+  its navigation targets.
+- **Two roles arrive through the cascade, three are overridden here.**
+  Re-confirmed against Material 3 1.4.0's own `NavigationBarTokens` rather
+  than assumed: `ContainerColor` = `SurfaceContainer` and
+  `ItemActiveLabelTextColor` = `Secondary`, both assigned globally by CP1,
+  so the bar fill and the selected label need nothing. The other three
+  (`onSurfaceVariant` unselected icon+label, `secondaryContainer` pill,
+  `onSecondaryContainer` selected icon) stay at the M3 baseline globally —
+  they have consumers the design's values would break — and are applied
+  through this file's own `NavigationBarItemDefaults.colors(...)`. Also
+  re-confirmed from the 1.4.0 source: every parameter of that overload
+  defaults to `Color.Unspecified` and merges via `copy`/`takeOrElse`, so
+  the four parameters passed here leave `selectedTextColor` reading
+  `secondary` exactly as before.
+- **The per-theme pair is resolved from the applied scheme**, via
+  `repFlowNavColors(scheme)` + CP3's `isDarkColorScheme(scheme)` — the same
+  shape as CP3's `repFlowAccentOutlineColors`. Dark: `onSurface` @
+  `navUnselectedAlphaDark` (.60), `primary` @
+  `navSelectedIndicatorAlphaDark` (.20), `accent300` label. Light:
+  `onSurface` @ `navUnselectedAlphaLight` (.66 — not the design's literal
+  .55, which composites to 3.34:1 against the light bar), `primary` @
+  `navSelectedIndicatorAlphaLight` (.16), `primary` label.
+- **One deviation, flagged not buried.** The plan writes these values as
+  `RepFlowDarkColorScheme.onSurface.copy(...)` /
+  `RepFlowLightColorScheme.primary`; the implementation reads `onSurface`/
+  `primary` off the *applied* scheme instead. For the app's two real
+  schemes the resulting colours are identical — the branch still selects
+  the theme's own alpha and its own selected-icon step — but a preview or a
+  future override that supplies the light scheme now gets light's values
+  rather than colours disagreeing with everything around them. This is
+  CP3's established pattern, not a new one.
+- **One addition beyond the plan's "Files modified" list**, on the same
+  footing as CP1/CP2/CP3, whose own file lists likewise omitted the test
+  classes they added: `RepFlowBottomNavigationBarTest` (5 tests). It pins
+  what `RepFlowThemeTest` structurally cannot see — that test proves the
+  *values* clear their floors, but would stay green if the bar swapped the
+  two alphas or applied dark's `accent300` in light. The new tests assert
+  `repFlowNavColors`' render inputs against those same named constants,
+  that the two themes really do get different pairs, the six
+  destination → glyph mappings, and that the routes and their order are
+  unchanged. The colours' actual application to `NavigationBarItem`
+  remains composable-only and is left to CP7's manual dark/light pass —
+  adding Robolectric for it would be a new dependency category.
+- Pre-edit self-review flag from the plan discharged: `grep` confirms no
+  test anywhere asserts against the old literal `"E"`/`"W"`/… glyph text,
+  and `BasicText` now has no remaining use in the codebase.
+- Verified: `testDebugUnitTest --tests
+  "...navigation.RepFlowBottomNavigationBarTest" --tests
+  "...designsystem.icons.RepFlowIconsTest"` (10 tests, 0 failures), plus
+  `spotlessCheck`, `detekt`, `lintDebug` and `assembleDebugAndroidTest` all
+  pass.
+
 **CP3 — Core reusable primitive components: complete.**
 
 - Five new files under `presentation/designsystem/components/`, no existing
@@ -178,7 +245,7 @@ change, no schema change, no new runtime dependency.
   `testDebugUnitTest` (388 tests, 0 failures) and
   `assembleDebugAndroidTest` all pass.
 
-Remaining: CP4/CP5/CP6 (the three surfaces), CP7 (verification and doc
+Remaining: CP5/CP6 (the two remaining surfaces), CP7 (verification and doc
 updates).
 
 ## Current blockers
@@ -195,8 +262,8 @@ source-of-truth reference. Checkpoint registry:
 
 ## Next action
 
-CP4 — apply the foundation to the app shell (bottom nav). Continue with
-`/milestone-implement`.
+CP5 — apply the foundation to the Exercise list (the representative
+list/CRUD surface). Continue with `/milestone-implement`.
 
 ---
 

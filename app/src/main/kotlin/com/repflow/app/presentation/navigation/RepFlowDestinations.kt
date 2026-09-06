@@ -1,6 +1,8 @@
 package com.repflow.app.presentation.navigation
 
+import androidx.annotation.DrawableRes
 import com.repflow.app.R
+import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
 
 /**
  * String route constants for [RepFlowNavHost] (D-1: plain string routes, no
@@ -42,24 +44,55 @@ object RepFlowDestinations {
      */
     val TOP_LEVEL_DESTINATIONS: List<TopLevelDestination> =
         listOf(
-            TopLevelDestination(EXERCISES, R.string.exercise_list_title, R.string.exercise_list_content_description, "E"),
-            TopLevelDestination(WORKOUT, R.string.workout_active_title, R.string.exercise_list_workout_content_description, "W"),
-            TopLevelDestination(PLANS, R.string.training_plan_list_title, R.string.exercise_list_plans_content_description, "P"),
-            TopLevelDestination(RECOVERY, R.string.recovery_futsal_title, R.string.exercise_list_recovery_content_description, "R"),
-            TopLevelDestination(HISTORY, R.string.history_title, R.string.exercise_list_history_content_description, "H"),
-            TopLevelDestination(BACKUP, R.string.backup_title, R.string.exercise_list_backup_content_description, "B"),
+            TopLevelDestination(
+                EXERCISES,
+                R.string.exercise_list_title,
+                R.string.exercise_list_content_description,
+                RepFlowIcons.Nav.exercises,
+            ),
+            TopLevelDestination(
+                WORKOUT,
+                R.string.workout_active_title,
+                R.string.exercise_list_workout_content_description,
+                RepFlowIcons.Nav.workout,
+            ),
+            TopLevelDestination(
+                PLANS,
+                R.string.training_plan_list_title,
+                R.string.exercise_list_plans_content_description,
+                RepFlowIcons.Nav.plans,
+            ),
+            TopLevelDestination(
+                RECOVERY,
+                R.string.recovery_futsal_title,
+                R.string.exercise_list_recovery_content_description,
+                RepFlowIcons.Nav.recovery,
+            ),
+            TopLevelDestination(
+                HISTORY,
+                R.string.history_title,
+                R.string.exercise_list_history_content_description,
+                RepFlowIcons.Nav.history,
+            ),
+            TopLevelDestination(
+                BACKUP,
+                R.string.backup_title,
+                R.string.exercise_list_backup_content_description,
+                RepFlowIcons.Nav.backup,
+            ),
         )
 }
 
 /**
  * One entry in [RepFlowDestinations.TOP_LEVEL_DESTINATIONS]. [icon] is a
- * plain single-letter glyph, not a vector icon - neither `material-icons-core`
- * nor `material-icons-extended` is a dependency of this project (mirrors the
- * FAB's plain "+" glyph in `ExerciseListScreen`).
+ * drawable resource id from the bounded local Phosphor set
+ * ([RepFlowIcons.Nav]) - a plain `Int`, so this stays ordinary data a
+ * non-composable holder can carry. Neither `material-icons-core` nor
+ * `material-icons-extended` is a dependency of this project.
  */
 data class TopLevelDestination(
     val route: String,
     val titleRes: Int,
     val contentDescriptionRes: Int,
-    val icon: String,
+    @param:DrawableRes @get:DrawableRes val icon: Int,
 )
