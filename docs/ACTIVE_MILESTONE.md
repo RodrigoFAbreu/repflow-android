@@ -22,6 +22,82 @@ change, no schema change, no new runtime dependency.
 
 ## Current checkpoint
 
+**CP3 — Core reusable primitive components: complete.**
+
+- Five new files under `presentation/designsystem/components/`, no existing
+  file touched: `RepFlowButtons.kt`, `RepFlowCard.kt`, `RepFlowTag.kt`,
+  `RepFlowStepper.kt`, `RepFlowStateComposables.kt`.
+- **Buttons — three tiers**, as the plan corrected them: primary (56dp,
+  12dp radius, `primary`/`onPrimary` fill+label, 16sp at weight 600 — the
+  design's single confirmed weight-600 usage, and CP1 bundled the font for
+  exactly this), accent-outline (48dp, 10dp radius, per-theme accent pair),
+  neutral-outline (44dp, 8dp radius, `RepFlowColor.hairline` border, label
+  at 80%). The two outline tiers draw `hairline`/the accent ramp directly,
+  never `ColorScheme.outline`.
+- **Per-theme accent pair, resolved from the applied scheme**, not from a
+  second `isSystemInDarkTheme()` call: `isDarkColorScheme(scheme)` reads
+  `surface`'s luminance, so a preview or a future theme override that
+  supplies the light scheme gets light's values instead of disagreeing with
+  the colours around it. Dark reads accent-700 border/accent-300 label,
+  light accent-600/accent-700 — the ramp steps differ per theme, and dark's
+  pair in light measures 1.38:1.
+- **Cards** apply fill and border literally
+  (`Modifier.background`/`.border`), so `RepFlowCard` never performs
+  Material 3's own container lookup and never reads
+  `surfaceContainerHighest` (which CP1 assigns for the app's one bare
+  `Card(`). Radius is the shape scheme's own `large` (16dp, the top of the
+  design's confirmed 14–16dp card range) rather than a fourth one-off
+  token. The accent-tinted tone keeps the plan's theme-independent
+  `accent900` fill/`accent700` border and therefore carries its own light
+  content colour (the dark scheme's `onSurface`, 11.6:1 on that fill):
+  light's `onSurface` would measure ~1:1 on it. Nothing consumes the accent
+  tone in this milestone; light theme's treatment of it is undecided the
+  same way the light selected pill is — one more item for CP7's light pass.
+- **Tags/pills are one file because they are one pattern**: a static
+  status chip (done/pending/outline/up-next, label always required so state
+  is never colour alone) and `RepFlowPillPicker`, the single primitive
+  covering the 0–5 recovery scale and the RPE/pain/technique rows rather
+  than four bespoke pickers. The dark accent-tinted state is the design's
+  own `primary` @ 22% + accent-600 border + accent-300 label, shared by the
+  selected pill and the "done" chip; light reuses the confirmed
+  accent-outline pair with no fill — the disclosed judgment call the plan's
+  "Known limitations" already names. Neither reads
+  `secondaryContainer`/`onSecondaryContainer`.
+- **Stepper** is parameterised over the design's two sizes, defaulting to
+  the in-context 44dp/`RepFlowShapes.stepper`/24sp pair CP6 consumes; the
+  larger 48dp/10dp/32sp spec-sheet variant is reachable from the same
+  component. The value renders in `RepFlowNumericTextStyle` so a changing
+  digit does not reflow the row.
+- **State composables** consolidate the loading/empty/failure trio,
+  `FailureState`'s `onRetry` preserved (rendered as the accent-outline
+  button, which is how the design draws exactly this affordance). They are
+  `RepFlow`-prefixed because Material 3 now ships its own
+  `LoadingIndicator`. No screen adopts them yet — CP5 removes the Exercise
+  list's private copies; `ActiveWorkoutScreen.kt`'s and
+  `TrainingPlanListScreen.kt`'s stay, per the plan's own note that this
+  de-duplication does not complete within this milestone.
+- **Three deviations, flagged not buried.** (1) The plan enumerated four
+  files but specified five primitive families; the stepper had no assigned
+  home, so it got its own file rather than being wedged into
+  `RepFlowButtons.kt`. (2) Pill cells are 44dp, not the design's literal
+  42dp: the design's own layout rules also state "every tap target is at
+  least 44", the two disagree by 2dp, and the rule that protects the user
+  wins. (3) No `enabled` parameter on the hand-drawn stepper/pill picker —
+  the design specifies no disabled treatment, and a flag that renders
+  identically either way is worse than its absence; a consumer that needs
+  one adds it with a real visual.
+- `RepFlowPrimitivesTest` (16 tests) pins what a plain-JVM test can reach:
+  the per-theme accent pair, the selected-pill fallback, every contrast
+  floor the primitives own (accent-outline and neutral-outline labels,
+  primary labels, the dark selected pill over both grounds its translucent
+  fill sits on, pending chips on `control`, the accent card's content
+  colour), the tap-target minimum across all seven interactive sizes, the
+  three tiers' heights/label sizes, and that the button and card radii
+  reuse CP1's shape scheme wherever it already has the value.
+- Verified: `testDebugUnitTest --tests
+  "...designsystem.components.RepFlowPrimitivesTest"` (16 tests, 0
+  failures), plus `spotlessCheck`, `detekt` and `lintDebug` all pass.
+
 **CP2 — Bounded icon approach (local vector assets): complete.**
 
 - 23 Phosphor glyphs bundled as local vector drawables
@@ -102,8 +178,8 @@ change, no schema change, no new runtime dependency.
   `testDebugUnitTest` (388 tests, 0 failures) and
   `assembleDebugAndroidTest` all pass.
 
-Remaining: CP3 (primitives), CP4/CP5/CP6 (the three surfaces), CP7
-(verification and doc updates).
+Remaining: CP4/CP5/CP6 (the three surfaces), CP7 (verification and doc
+updates).
 
 ## Current blockers
 
@@ -119,7 +195,7 @@ source-of-truth reference. Checkpoint registry:
 
 ## Next action
 
-CP3 — core reusable primitive components. Continue with
+CP4 — apply the foundation to the app shell (bottom nav). Continue with
 `/milestone-implement`.
 
 ---
