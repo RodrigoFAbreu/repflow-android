@@ -85,6 +85,211 @@ complete.** CP1–CP6 remain complete below. **All seven checkpoints are done.**
   **"Navigation structure" is untouched**, still
   `Open (D-1 approved for M1 only)` — this milestone does not advance it.
 
+### CP7 addendum — device-coverage correction and revalidation (2026-09-06)
+
+The CP7 bullets above are left as written; this addendum corrects and
+extends them rather than rewriting them.
+
+**Correction to the manual-pass claim above.** The original CP7 manual pass
+ran on **one** AVD, `RepFlow_S24_Ultra_API_37`, whose hardware profile is
+actually `pixel_9_pro_xl`: 1344×2992 px @ 480 dpi = **448 dp wide**. That is
+the roomiest common phone width, so the pass above overstates its coverage —
+it establishes that the surfaces render correctly at 448 dp, not that they
+render correctly at the widths real users have. No claim above is false at
+448 dp; the gap is that only 448 dp was exercised.
+
+**360 dp follow-up.** Forcing that AVD to 360 dp (`wm size 1080x2400`,
+density 480) exposed two narrow-width issues, both confirmed **pre-existing**
+by reading the pre-checkpoint sources rather than assumed: bottom-navigation
+label truncation (`maxLines = 1` + `TextOverflow.Ellipsis` were already in
+`RepFlowBottomNavigationBar.kt` before CP4, `git show 83c4132`), and the
+Active Workout "Load (kg, optional)" field wrapping to two lines while the
+adjacent "Reps" field does not — the two fields have shared a `Row` with
+`Modifier.weight(1f)` since before CP6 (`git show 5e0870d`).
+
+**Revalidation at the real target width.** Both findings were then re-checked
+on the **physical Samsung SM-S928B** (`RFCXA0RLSVT`, Android 16 / API 36,
+1080×2340 @ 450 dpi, `sw384dp w384dp h832dp`, 3-button nav, 135 px bottom
+inset) and on a matching **384 dp AVD** (`RepFlow_S24Ultra_384dp_API36`,
+`emulator-5554`, same reported configuration). Geometry was confirmed
+comparable from `am get-config`, `wm size`, `wm density` and the
+`navigationBars` inset on both before any comparison was drawn. The same
+debug APK was installed on both. **The physical device is authoritative
+wherever the two disagree.** Full device metadata, the evidence index, and
+40 screenshots (both themes, both devices) are under
+`.ai-review/repflow-redesign-visual-foundation/cp7-manual-pass/revalidation/`.
+
+Results at 384 dp:
+
+- **Bottom-nav truncation does *not* reproduce.** All six labels render in
+  full on both devices, in both themes. The labels do sit flush against the
+  screen edges with no horizontal breathing room, so the margin before
+  truncation is thin — but nothing is clipped at the target width.
+  Width-specific, pre-existing, **Optional**.
+- **The Load/Reps height mismatch *does* reproduce**, on the physical device
+  and the AVD, in both themes: "Load (kg, optional)" wraps to two lines and
+  its field is visibly taller than "Reps" beside it. Pre-existing (the layout
+  predates CP6), reproduces at the real target width, and sits on a surface
+  this milestone restyled. **Important, not Blocking** — and not attributable
+  to this milestone.
+  - For contrast, the expanded Set-details pair ("Pain during this set…" /
+    "Technique quality…") *both* wrap to three lines, so that row stays
+    visually matched. The Load/Reps row is the asymmetric case.
+- Everything else in the original list re-checked clean on both devices in
+  both themes: bottom nav, Exercise list empty and populated, the set-entry
+  card, recorded-set presentation with the circular set marker, the live rest
+  strip over its neutral `control` track, the expanded detail disclosure, top
+  app bars, the `surface`/`background` list-row band, and both `DropdownMenu`
+  sites (dark still reads as the disclosed recessed panel; light is still
+  delimited only by its shadow).
+- AVD-vs-physical differences observed were confined to system UI — One UI's
+  status bar, navigation glyphs and permission-dialog styling versus AOSP's.
+  Per the validation rule these are not product defects; the physical device
+  was correct in every case.
+
+### CP7 addendum 2 — the enumerated regression checks, completed (2026-09-06)
+
+Implementation review round 1 (`LOCAL_MODEL_IMPLEMENTATION_REVIEW`, finding
+I1) was right that the two records above discharge only part of CP7 step 1.
+CP7 step 1 does not ask for "a manual dark/light pass" in the abstract; it
+enumerates, screen by screen and with the plan round that added each one, a
+specific list of regression checks. **Those checks have now been run.** Nothing
+above is retracted — this addendum completes it.
+
+**How.** The app was seeded from empty through its own UI on the physical
+**Samsung SM-S928B** (`RFCXA0RLSVT`, Android 16 / API 36, `sw384dp`, the
+authoritative device): three exercises covering all three tracking types
+(`Bench Press` WEIGHT_AND_REPS, `Pull Up` REPS_ONLY, `Plank` DURATION), a
+two-row training plan (`Push Day`: a reps-tracked row and a duration-tracked
+row), two completed workout sessions, and a recovery entry plus a futsal
+session. That state was then exported and **restored on the 384 dp AVD**
+(`RepFlow_S24Ultra_384dp_API36`) through the app's own backup/restore, which
+also exercised the restore confirmation end to end. 45 screenshots are under
+`.ai-review/repflow-redesign-visual-foundation/cp7-manual-pass/round2-enumerated/`
+(`phys/`, `avd/`; gitignored). Themes were switched with
+`adb shell cmd uimode night yes|no`.
+
+**Results, by the check CP7 step 1 names.**
+
+- **The four `TextButton`-based dialogs and the date picker's "today" marker**
+  (round 10's B1, upgrading round 5's I1 from a trade-off to a regression
+  check). All four exercised, both themes: the `DatePickerDialog`
+  (`HistoryScreen.kt:361`) and its `Clear`/`Cancel`/`OK` `TextButton`s; the
+  Recovery date picker (`RecoveryFutsalScreen.kt:207`, dark — see the gap
+  note below); the invalidate-session `AlertDialog` (`HistoryScreen.kt:176`);
+  and the restore `AlertDialog` (`BackupScreen.kt:62`). **All render legibly
+  on the now-lighter dark dialog container**; every dialog label is `primary`
+  on `surfaceContainerHigh` and reads comfortably. The **"today" marker
+  (`HistoryScreen.kt:388`) was checked on dark with today deliberately *not*
+  selected** (a later date was chosen first), which is the only way the
+  outlined-today treatment is visible rather than subsumed by the selection
+  fill: it renders as a `primary` ring with a `primary` numeral, clearly
+  legible. **Retiring the "raised tier" (dark `surfaceContainerHigh` now
+  equals dark `surface`) does not read as a regression** — a dialog is always
+  drawn over its own scrim, so it separates from the page regardless.
+- **`TrainingPlanEditorFormFields.kt:123-165`'s bare `Card` on dark**
+  (round 15's B1 — one of the two the reviewer named as minimum). Exercised on
+  both devices, both themes, with both a first row (move-up disabled) and a
+  second row (move-up enabled) so the enabled/disabled `TextButton` pair is
+  visible at once. **The reassigned `surfaceContainerHighest` does not read as
+  a regression against the `background` it sits on**: at the disclosed 1.16:1
+  dark / 1.05:1 light the card is a narrow but genuinely perceptible panel,
+  its edge traceable along its full height, and two stacked cards stay
+  separable from each other. `primary` on that card (the "Pull Up"/"Plank"
+  titles, at the fixed 4.71:1) is comfortable. The `TextButton`s at
+  `:228`/`:258`/`:263`/`:268` all read as `primary`, and the disabled
+  move-up is unmistakably dimmer than the enabled move-down. The `Checkbox`
+  at `:161` was exercised **both** unchecked (outline square, clearly visible
+  on the card) and checked (solid `primary` fill with its check glyph).
+- **`TargetRangeFields`' duration-tracked vs reps-tracked rows** (round 16's
+  I6). Both branches rendered **in the same editor at the same time** — row 1
+  `Min reps`/`Max reps`, row 2 `Min duration (s)`/`Max duration (s)` — so all
+  seven focused `OutlinedTextField` labels this card can render were reached.
+  Both themes.
+- **`RecoveryFutsalScreen.kt:255`'s `Switch` on dark** (round 16's I2).
+  Exercised. **The off state still reads as off, not as disabled.** At the
+  reassigned 1.16:1 the unchecked track is close to the page ground, but the
+  `Outline`-coloured boundary (4.80:1 against the track) draws a crisp ring
+  that keeps the control's extent legible, and the thumb sits clearly to the
+  left in a distinctly lighter grey. Same verdict for the second stock
+  `Switch` site, `ActiveWorkoutExerciseCard.kt:129`'s warm-up toggle, on both
+  themes.
+- **`RecoveryFutsalScreen.kt:93`'s "View history" `TopAppBar` `TextButton`**
+  (round 16's B1). Exercised on both themes. It renders `primary` on the
+  bar's `surface` fill and **reads consistently with the row card's other
+  `TextButton`s** — same colour, same weight, no sense that the bar action is
+  a different tier.
+- **`TrainingPlanListScreen.kt:98`'s untouched `FloatingActionButton`
+  alongside CP5's restyled one** (round 6's I1). Both exercised, both themes.
+  The divergence is real and is **more pronounced on light**: the Exercise
+  list FAB is a solid accent fill with a white glyph, the Plans FAB is a pale
+  `primaryContainer` tint with a small purple glyph. On dark they converge
+  somewhat (both read as purple squares) but still differ in fill lightness
+  and glyph colour. They never appear side by side, only one tab apart.
+  **Verdict: an acceptable disclosed limitation for a milestone that reskins
+  three surfaces on purpose, and the most visible touched-vs-untouched
+  inconsistency in the app** — the next application milestone should close it.
+- **The five untouched stock `ListItem` rows** (round 9's I1(b)) — all five:
+  `HistoryScreen.kt:143` (two rows), `HistoryDetailScreen.kt:49`,
+  `RecoveryHistoryScreen.kt:87` and `:104` (both populated for this pass), and
+  `TrainingPlanListScreen.kt:164`. Both themes. **The newly-visible
+  `surface`/`background` band reads as intended** — a deliberate row band with
+  a hairline divider, not a rendering artefact — on both themes, and it is the
+  same band the reskinned Exercise list already shows.
+- **All ten top app bars** (round 10's I2). Exercises, Workout, Plans,
+  Recovery, Recovery history, History, History detail, Backup, New/Edit plan,
+  New/Edit exercise — all seen across this pass, both themes. Same verdict as
+  the `ListItem` band: an intended, consistent band.
+- **The light selected `FilterChip`** (round 16's I2 / round 10's I2) on
+  `HistoryScreen.kt:245` and `TrainingPlanListScreen.kt:108,114`. Exercised.
+  On `TrainingPlanListScreen` the selected/unselected distinction is carried
+  by **two** signals, not the fill alone — selected has a fill and no border,
+  unselected has a border and no fill — so the 1.05:1 fill-vs-ground
+  narrowing is not the only cue. On `HistoryScreen` the chip is the only one
+  in its row, so there is nothing to confuse it with. In both cases the fill
+  is a pale *pink*-lilac against a cool blue-lilac ground, so it separates by
+  hue as well as by luminance and reads more clearly than 1.05:1 alone
+  suggests. **Thin but legible; no regression** — and it is the thinnest of
+  all the checks in this list.
+- **`ActiveWorkoutExerciseCard`'s `REPS_ONLY` and `DURATION` branches**
+  (round 14's I1 — the second of the two the reviewer named as minimum). Both
+  exercised on both devices and both themes, with the set-detail disclosure
+  expanded so the RPE/pain/technique fields render too. `REPS_ONLY` shows only
+  `Reps`; `DURATION` shows only `Duration (s)`; the warm-up `Switch` and all
+  the `OutlinedTextField` resting borders render at Material 3's own unchanged
+  default and are legible on the card in both themes. Combined with the
+  `WEIGHT_AND_REPS` branch already recorded above, **all seven
+  `OutlinedTextField` call sites and the `Switch` have now been seen.**
+- **Five more `DropdownMenu` sites**, beyond the two already recorded:
+  `ExerciseListScreen.kt:249` (kebab), `ActiveWorkoutScreen.kt:128`
+  (start-workout), `TrainingPlanEditorFormFields.kt:233` (exercise picker),
+  `HistoryScreen.kt:263` and `:299`. **All seven are now exercised.** One
+  nuance worth recording: the disclosed `surfaceContainer` "recessed panel"
+  reading on dark only appears where the menu overlays `surface` (a card or
+  app bar). Over `background` — which is where `HistoryScreen`'s two menus
+  open — `surfaceContainer` is *lighter* than the ground and the menu reads as
+  elevated, exactly as expected. Both readings follow from the disclosed role
+  values; neither is a defect.
+
+**Two gaps, stated rather than implied.**
+
+1. `RecoveryFutsalScreen.kt:207`'s date picker was exercised on **dark only**.
+   It is the same Material 3 `DatePickerDialog` composable reading the same
+   roles as `HistoryScreen.kt:361`'s, which *was* exercised on both themes, so
+   the light-theme rendering is covered by an identical instance rather than
+   by this exact call site. Carried to the functional-review checklist.
+2. Light-theme `HistoryDetailScreen.kt:49` was captured after the dark run
+   rather than alongside the rest of the light pass; it is included and clean,
+   but the two device screenshots for it are from different sessions of this
+   same pass.
+
+**One observation, not a milestone defect.** On the History detail screen a
+DURATION set renders as `Set 0:  kg x ` with empty values above its correct
+`Duration: 45s` line. `HistoryDetailScreen.kt` is **not** in this milestone's
+diff (`git diff b39af90..HEAD -- app/.../presentation/` lists 18 files; that
+file is not one of them), so this is pre-existing and outside scope. Recorded
+here so it reaches the functional review rather than being lost.
+
 **CP6 — Apply foundation to Active Workout set-entry + rest timer: complete.**
 CP1–CP5 remain complete below.
 
@@ -133,23 +338,52 @@ CP1–CP5 remain complete below.
   significant deviation, flagged not buried.** The design draws weight/reps as
   steppers and RPE/pain/technique as horizontal pill rows; this checkpoint
   keeps all seven fields as `OutlinedTextField`s and the warm-up flag as a
-  `Switch`, restyling only their chrome. Three reasons, in order of weight:
-  (1) the plan's CP6 text lists "their existing input affordances (only their
-  visual chrome changes)" in its *preserving* clause, and its "Preserved
-  invariants" section requires `ActiveWorkoutScreenTest` to keep passing —
-  that test does `performTextInput("60")` on the load field, which a stepper
-  cannot satisfy; (2) load is decimal and unbounded, so a stepper needs a step
-  size (2.5kg? 1kg? plate math?) that neither the design nor the plan states —
-  inventing one is `AGENTS.md`'s "ambiguous product behavior", not a reskin;
-  (3) the plan's own non-goals say set entry is "functionally identical before
-  and after this milestone — only their rendering changes", and typing → tapping
-  is not only rendering. **Consequence, stated plainly: `RepFlowStepper` now has
-  no consumer anywhere in this milestone** (CP3 authored it for exactly this
-  surface), and the pill picker's only consumer remains CP5's filter row. This
-  is the right call for a bounded visual milestone, but it is a real gap
-  against the design and belongs on CP7's list and in front of the reviewer —
-  a later redesign milestone that is allowed to change set-entry interaction
-  is where the stepper and the pill rows land.
+  `Switch`, restyling only their chrome.
+
+  **Restated after implementation review (LOCAL_MODEL_IMPLEMENTATION_REVIEW
+  round 1, I2): the plan clause originally cited does not reach load/reps, and
+  the plan text that does reach them says the opposite of what was built.**
+  CP6's preserving clause
+  (`docs/milestones/repflow-redesign-visual-foundation-execution.md:3097-3098`)
+  enumerates only "the RPE/warm-up-flag/optional-pain/optional-technique fields
+  and their existing input affordances" — load, reps and duration are not in
+  that list. Meanwhile CP3 (`:2873`) introduces the stepper as the primitive
+  "used by CP6's weight/reps entry" and sizes its default "since that's what
+  CP6 actually consumes", and CP6's own file description (`:3084`) names "the
+  load/reps/duration steppers" as part of the surface being reskinned. **So on
+  load/reps the approved plan specifies the stepper and this checkpoint did not
+  build it.** That is the honest shape of the deviation.
+
+  What still justifies it, on the plan text that actually applies:
+  (1) the plan's "Preserved invariants" require `ActiveWorkoutScreenTest` to
+  keep passing, and `ActiveWorkoutScreenTest:182` does `performTextInput("60")`
+  on the load field, which a stepper cannot satisfy — changing that assertion
+  is changing a preserved invariant, not implementing one;
+  (2) load is decimal and unbounded, so a stepper needs a step size, and the
+  design states none. The nearest existing candidate is **not** invented: the
+  domain already carries `defaultLoadIncrementGrams` per exercise (it is
+  rendered on the Exercise list today, `ExerciseListScreen.kt:439`, from
+  `ExerciseListItem.defaultLoadIncrementGrams`). But it is not on
+  `ActiveExerciseUi` (`ActiveWorkoutUiState.kt:77-84`), so consuming it would
+  mean adding a field to a UiState, plumbing it through
+  `ActiveWorkoutViewModel` and its use case — a UiState/ViewModel change, which
+  this milestone's non-goals put out of scope ("no domain or application-layer
+  change"; the plan's CP6 text is a reskin of an existing composable). It is
+  also only a *default* per exercise and nullable, so a stepper would still
+  need an invented fallback for every exercise that has none;
+  (3) the plan's non-goals say set entry is "functionally identical before and
+  after this milestone — only their rendering changes", and typing → tapping is
+  not only rendering.
+
+  **Consequence, stated plainly: `RepFlowStepper` now has no consumer anywhere
+  in this milestone** (CP3 authored it for exactly this surface), and the pill
+  picker's only consumer remains CP5's filter row. REQ-3 names the stepper and
+  the scale row as deliverables in their own right, so authoring them satisfies
+  that requirement independently of CP6's consumption — but the gap against the
+  plan is real and belongs in front of the reviewer. A later redesign milestone
+  that is allowed to change set-entry interaction, and to plumb
+  `defaultLoadIncrementGrams` onto `ActiveExerciseUi`, is where the stepper and
+  the pill rows land.
 - **Two smaller deviations.** (1) The collapsible detail section *is* adopted
   (the plan's reference names it), defaulting to collapsed, so RPE/pain/
   technique start hidden — the values still live in `ExerciseCard`'s own state,
@@ -159,6 +393,23 @@ CP1–CP5 remain complete below.
   flowing row: four chips on one line overflow a 360dp screen, and a clipped
   chip is both unreadable and invisible to `assertIsDisplayed`. `FlowRow` is
   still experimental API and was not worth adopting for this.
+- **Why adopting the disclosure and declining the steppers is not two
+  standards** (implementation review round 1, O1 — the reviewer is right that
+  the two decisions need one rule between them, so here it is). The rule this
+  checkpoint applied is: **CP6's preserving clause names four fields by name,
+  and it is those four fields' *input affordance* that must not change.** The
+  disclosure changes none of them: RPE, pain and technique are still three
+  `OutlinedTextField`s, entered by typing, submitted identically, reset
+  identically — only whether they are on screen before you ask for them
+  changes, which is layout. Replacing the load field with a stepper changes
+  what a field *is*: typing becomes tapping, a decimal becomes a quantised
+  step, and a preserved test assertion (`performTextInput`) stops being
+  satisfiable. Disclosure is chrome; affordance is not. The three fields the
+  disclosure hides are also exactly the three the plan calls "optional",
+  which is why the design puts them behind one, and
+  `ActiveWorkoutScreenTest`'s three new disclosure tests now pin the whole
+  contract (collapsed by default, expanding reveals all three, a value typed
+  while expanded still reaches `onRecordSet` after collapsing).
 - Of CP2's ten Active-Workout glyphs, **all ten are consumed**: `minus`,
   `plus`, `x` (rest strip), `fire`, `info`, `sliders`, `caretUp`, `caretDown`,
   `arrowCounterClockwise`, `pencilSimple` (set-entry pad).
