@@ -141,11 +141,35 @@ object RepFlowColor {
  * second `isSystemInDarkTheme()` call would silently disagree with the colours
  * around it.
  *
+ * **Where that guarantee stops.** It covers every value resolved from a
+ * `ColorScheme` at the call site - the accent-outline pair, the selected pill,
+ * the nav pair - and, through [repFlowExtraColors], the
+ * [RepFlowColor.control]/[RepFlowColor.hairline] pair too, which
+ * `RepFlowTheme` derives from the scheme it applied rather than from a second
+ * `isSystemInDarkTheme()` call. It does *not* reach through a **nested**
+ * `MaterialTheme` that swaps only the scheme: [LocalRepFlowExtraColors] is a
+ * composition local, so such a composition keeps the enclosing theme's
+ * `control`/`hairline` until something re-provides them. Calling
+ * `RepFlowTheme` does; `MaterialTheme(colorScheme = ...)` on its own does not.
+ * A nested override that wants the whole system to follow it goes through
+ * `RepFlowTheme`.
+ *
  * It lives here, beside the two schemes whose luminance it reads, rather than
  * in `components/`: it resolves a token, it is not a button concern, and the
  * bottom nav reads it without that making `navigation` depend on `components`.
  */
 internal fun isDarkColorScheme(scheme: ColorScheme): Boolean = scheme.surface.luminance() < LIGHT_SURFACE_LUMINANCE_FLOOR
+
+/**
+ * The [RepFlowExtraColors] that belong with [scheme].
+ *
+ * `RepFlowTheme` installs [LocalRepFlowExtraColors] from this, inside its own
+ * `MaterialTheme`, so the two tokens with no `ColorScheme` slot follow the
+ * same rule as everything that has one: the applied scheme decides, not a
+ * second `isSystemInDarkTheme()` call one level up.
+ */
+internal fun repFlowExtraColors(scheme: ColorScheme): RepFlowExtraColors =
+    if (isDarkColorScheme(scheme)) RepFlowDarkExtraColors else RepFlowLightExtraColors
 
 /** Both schemes' `surface` sit far from this - dark 0.02, light 0.90. */
 private const val LIGHT_SURFACE_LUMINANCE_FLOOR = 0.5f

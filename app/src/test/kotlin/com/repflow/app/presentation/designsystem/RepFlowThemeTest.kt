@@ -85,6 +85,18 @@ class RepFlowThemeTest {
     }
 
     @Test
+    fun theExtrasAreSelectedByTheAppliedSchemeNotBySomeOtherSignal() {
+        // RepFlowTheme used to resolve these from its own isSystemInDarkTheme()
+        // call, one level above the MaterialTheme it applied - the single place
+        // the design system asked the system theme twice, and the one case
+        // isDarkColorScheme's KDoc promises cannot happen. Pinning the mapping
+        // scheme -> extras is what makes that promise checkable: swapping the
+        // branch, or reintroducing a system-theme read, breaks this.
+        assertEquals(RepFlowDarkExtraColors, repFlowExtraColors(RepFlowDarkColorScheme))
+        assertEquals(RepFlowLightExtraColors, repFlowExtraColors(RepFlowLightColorScheme))
+    }
+
+    @Test
     fun accentRampStepsResolveToTheDesignValues() {
         assertEquals(Color(0xFFD2CEFD), RepFlowColor.accent300)
         assertEquals(Color(0xFF796CBF), RepFlowColor.accent600)
