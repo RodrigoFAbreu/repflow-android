@@ -1,10 +1,12 @@
 package com.repflow.app.presentation.workout
 
 import androidx.activity.ComponentActivity
+import androidx.annotation.StringRes
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
@@ -178,6 +180,65 @@ class ActiveWorkoutScreenTest {
             composeRule.activity.getString(R.string.workout_active_set_row_weight_reps, 2, 60.0, 8) +
                 " " + composeRule.activity.getString(R.string.workout_active_set_extra_suffix)
         composeRule.onNodeWithText(secondRowText).assertIsDisplayed()
+    }
+
+    /*
+     * The set-detail disclosure is the one new user-facing interaction CP6
+     * introduces, and it gates three data-entry fields that had no coverage
+     * before it existed. The three tests below pin the whole contract: what
+     * the disclosure hides, that opening it reveals all three fields, and
+     * that a value typed into them reaches `onRecordSet` whether the section
+     * is open or closed at submit time - the retention property
+     * `SetDetailSection`'s KDoc claims.
+     */
+
+    private fun node(
+        @StringRes label: Int,
+    ) = composeRule.onNodeWithText(composeRule.activity.getString(label))
+
+    @Test
+    fun theSetDetailFieldsAreHiddenUntilTheDisclosureIsExpanded() {
+        setContent(exercise(ExerciseTrackingType.WEIGHT_AND_REPS))
+
+        node(R.string.workout_active_set_detail_toggle).performScrollTo().assertIsDisplayed()
+        node(R.string.workout_active_rpe_label).assertDoesNotExist()
+        node(R.string.workout_active_pain_label).assertDoesNotExist()
+        node(R.string.workout_active_technique_quality_label).assertDoesNotExist()
+    }
+
+    @Test
+    fun expandingTheDisclosureRevealsAllThreeOptionalFields() {
+        setContent(exercise(ExerciseTrackingType.WEIGHT_AND_REPS))
+
+        node(R.string.workout_active_set_detail_toggle).performScrollTo().performClick()
+
+        node(R.string.workout_active_rpe_label).performScrollTo().assertIsDisplayed()
+        node(R.string.workout_active_pain_label).performScrollTo().assertIsDisplayed()
+        node(R.string.workout_active_technique_quality_label).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun aValueTypedIntoTheExpandedDetailFieldsReachesOnRecordSetEvenAfterCollapsing() {
+        var recordedRpe: Double? = null
+        var recordedPain: Int? = null
+        setContent(
+            exercise(ExerciseTrackingType.WEIGHT_AND_REPS),
+            onRecordSet = { _, _, _, _, rpe, _, pain, _ ->
+                recordedRpe = rpe
+                recordedPain = pain
+            },
+        )
+
+        node(R.string.workout_active_set_detail_toggle).performScrollTo().performClick()
+        node(R.string.workout_active_rpe_label).performScrollTo().performTextInput("8")
+        node(R.string.workout_active_pain_label).performScrollTo().performTextInput("2")
+        // Collapse again before submitting: the values live in ExerciseCard's
+        // own state, not in the section, so hiding them must not drop them.
+        node(R.string.workout_active_set_detail_toggle).performScrollTo().performClick()
+        node(R.string.workout_active_add_set).performScrollTo().performClick()
+
+        assertEquals(8.0, recordedRpe)
+        assertEquals(2, recordedPain)
     }
 
     @Test
