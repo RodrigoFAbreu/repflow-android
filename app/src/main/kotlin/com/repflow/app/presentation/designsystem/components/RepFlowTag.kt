@@ -60,7 +60,21 @@ enum class RepFlowTagTone {
     /** Hairline border only, no fill. */
     Outline,
 
-    /** The all-caps micro-pill. Callers pass the string already uppercased. */
+    /**
+     * The all-caps micro-pill. Callers pass the string already uppercased.
+     *
+     * Known modelling smell (implementation review round 2, O3): this
+     * resolves to the same transparent fill, `hairline` border and
+     * `onSurface` label as [Outline] and differs only in `textStyle`, so a
+     * `tone` enum is separating two members by typography rather than by
+     * tone. It is left as-is deliberately: [UpNext] has no consumer in this
+     * milestone (it is one of the six disclosed unconsumed foundation
+     * members), so reshaping the API into a `tone` + `style` pair now would
+     * be churn with no call site to validate it against. The milestone that
+     * first draws an up-next pill is where this either earns a colour of its
+     * own or becomes a size parameter - decide it there, before a third
+     * caller picks between the two by guesswork.
+     */
     UpNext,
 }
 
