@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.repflow.app.presentation.designsystem.RepFlowColor
@@ -177,7 +178,17 @@ fun RepFlowStatusChip(
                 modifier = Modifier.size(RepFlowTagDefaults.iconSize),
             )
         }
-        Text(text = text, style = textStyle, color = label)
+        // A chip is one short word or one short number pair. Constraining it to
+        // a single ellipsized line means a longer string - a future locale, or
+        // a rep-range/rest pair on a narrow screen - degrades visibly instead
+        // of being clipped silently by the row that holds it.
+        Text(
+            text = text,
+            style = textStyle,
+            color = label,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

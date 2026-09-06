@@ -212,6 +212,11 @@ internal fun ExerciseCard(
  * unreadable and invisible to the device test's `assertIsDisplayed`. Every
  * string, and the condition that decides whether it appears at all, is
  * unchanged.
+ *
+ * Each chip takes `weight(1f, fill = false)`, so it keeps its intrinsic width
+ * while the row fits and shares the row's width when it does not - with
+ * `RepFlowStatusChip`'s own single ellipsized line, a row that outgrows the
+ * screen degrades visibly rather than clipping off the right edge.
  */
 @Composable
 private fun PlannedTargetSummary(
@@ -225,6 +230,7 @@ private fun PlannedTargetSummary(
             target.targetWarmupSets?.let { targetWarmup ->
                 RepFlowStatusChip(
                     text = stringResource(R.string.workout_active_plan_warmup_progress, warmupDone, targetWarmup),
+                    modifier = Modifier.weight(1f, fill = false),
                     tone = if (warmupDone >= targetWarmup) RepFlowTagTone.Done else RepFlowTagTone.Pending,
                     icon = RepFlowIcons.fire,
                 )
@@ -236,6 +242,7 @@ private fun PlannedTargetSummary(
                         workingDone,
                         target.targetWorkingSets,
                     ),
+                modifier = Modifier.weight(1f, fill = false),
                 tone = if (workingDone >= target.targetWorkingSets) RepFlowTagTone.Done else RepFlowTagTone.Pending,
             )
         }
@@ -244,15 +251,20 @@ private fun PlannedTargetSummary(
                 target.repRange?.let { range ->
                     RepFlowStatusChip(
                         text = stringResource(R.string.workout_active_plan_rep_range, range.first, range.last),
+                        modifier = Modifier.weight(1f, fill = false),
                     )
                 }
                 target.durationRangeSeconds?.let { range ->
                     RepFlowStatusChip(
                         text = stringResource(R.string.workout_active_plan_duration_range, range.first, range.last),
+                        modifier = Modifier.weight(1f, fill = false),
                     )
                 }
                 target.restSeconds?.let { rest ->
-                    RepFlowStatusChip(text = stringResource(R.string.workout_active_plan_rest, rest))
+                    RepFlowStatusChip(
+                        text = stringResource(R.string.workout_active_plan_rest, rest),
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
                 }
             }
         }
