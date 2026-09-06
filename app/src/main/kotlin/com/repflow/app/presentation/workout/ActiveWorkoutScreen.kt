@@ -1,11 +1,15 @@
 package com.repflow.app.presentation.workout
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -13,11 +17,12 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -28,15 +33,26 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.repflow.app.R
 import com.repflow.app.domain.exercise.ExerciseId
-import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSessionId
+import com.repflow.app.presentation.designsystem.RepFlowColor
+import com.repflow.app.presentation.designsystem.RepFlowNumericTextStyle
+import com.repflow.app.presentation.designsystem.RepFlowShapes
+import com.repflow.app.presentation.designsystem.RepFlowSpacing
+import com.repflow.app.presentation.designsystem.components.RepFlowCard
+import com.repflow.app.presentation.designsystem.components.RepFlowNeutralOutlineButton
+import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
 
 /**
  * Stateless current-workout screen: state in, events out (see
@@ -191,6 +207,21 @@ private fun ActiveSessionState(
     }
 }
 
+/**
+ * The inline rest strip, as the design draws it: a card carrying a tabular
+ * countdown, an accent-tinted progress bar, and the ±15s/dismiss controls.
+ *
+ * **The tick loop below is untouched.** The countdown is still derived on
+ * every tick from the absolute [RestTimerUi.endAt] against `Instant.now()`,
+ * so a recomposition after process death still reconstructs the correct
+ * value with no drift; this checkpoint restyles what that loop renders and
+ * adds a bar that re-expresses the same number, nothing else. The three
+ * callbacks and the strings they carry are unchanged. `-15s`/`+15s` keep
+ * their words as well as gaining glyphs, because the step size is the whole
+ * content of those two buttons; skip becomes the design's own `ph-x` dismiss,
+ * which is the one control here whose meaning an icon carries on its own -
+ * and it keeps "Skip" as its accessible name.
+ */
 @Composable
 private fun RestTimerBar(
     timer: RestTimerUi,
@@ -220,26 +251,110 @@ private fun RestTimerBar(
                 ).coerceAtLeast(0)
         }
     }
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    val skipContentDescription = stringResource(R.string.workout_active_rest_timer_skip)
+    RepFlowCard(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = RepFlowSpacing.screenPadding, vertical = RepFlowSpacing.gapSm),
+        contentPadding = PaddingValues(RepFlowSpacing.cardPaddingMin),
     ) {
-        Text(
-            stringResource(
-                R.string.workout_active_rest_timer_remaining,
-                remainingSeconds / MINUTE_SECONDS,
-                remainingSeconds % MINUTE_SECONDS,
-            ),
-            modifier = Modifier.weight(1f),
-        )
-        TextButton(onClick = onRemoveRestTime) { Text(stringResource(R.string.workout_active_rest_timer_remove)) }
-        TextButton(onClick = onAddRestTime) { Text(stringResource(R.string.workout_active_rest_timer_add)) }
-        TextButton(onClick = onSkipRestTimer) { Text(stringResource(R.string.workout_active_rest_timer_skip)) }
+        Column(verticalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapMd)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapMd),
+            ) {
+                Text(
+                    stringResource(
+                        R.string.workout_active_rest_timer_remaining,
+                        remainingSeconds / MINUTE_SECONDS,
+                        remainingSeconds % MINUTE_SECONDS,
+                    ),
+                    style =
+                        RepFlowNumericTextStyle.copy(
+                            fontSize = RestTimerCountdownFontSize,
+                            lineHeight = RestTimerCountdownLineHeight,
+                        ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(
+                    onClick = onSkipRestTimer,
+                    modifier = Modifier.semantics { contentDescription = skipContentDescription },
+                ) {
+                    Icon(
+                        painter = painterResource(RepFlowIcons.x),
+                        contentDescription = null,
+                        modifier = Modifier.size(RestTimerIconSize),
+                    )
+                }
+            }
+            LinearProgressIndicator(
+                progress = { restTimerProgress(remainingSeconds, timer.totalDurationSeconds) },
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(RestTimerTrackHeight)
+                        .clip(RepFlowShapes.pill),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = RepFlowColor.control,
+                strokeCap = StrokeCap.Round,
+                gapSize = RestTimerTrackGap,
+                drawStopIndicator = {},
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapSm)) {
+                RepFlowNeutralOutlineButton(
+                    text = stringResource(R.string.workout_active_rest_timer_remove),
+                    onClick = onRemoveRestTime,
+                    modifier = Modifier.weight(1f),
+                    leadingIcon = RepFlowIcons.minus,
+                )
+                RepFlowNeutralOutlineButton(
+                    text = stringResource(R.string.workout_active_rest_timer_add),
+                    onClick = onAddRestTime,
+                    modifier = Modifier.weight(1f),
+                    leadingIcon = RepFlowIcons.plus,
+                )
+            }
+        }
     }
 }
 
+/**
+ * How much of the planned rest is still to run, as the progress bar's own
+ * 0..1 fraction.
+ *
+ * Derived, never stored: the countdown itself still comes from the absolute
+ * `endAt` tick loop above, and this only re-expresses it. A timer with no
+ * recorded total reads as fully elapsed rather than dividing by zero.
+ */
+internal fun restTimerProgress(
+    remainingSeconds: Long,
+    totalDurationSeconds: Int,
+): Float =
+    if (totalDurationSeconds <= 0) {
+        PROGRESS_MIN
+    } else {
+        (remainingSeconds.toFloat() / totalDurationSeconds).coerceIn(PROGRESS_MIN, PROGRESS_MAX)
+    }
+
 private const val MINUTE_SECONDS = 60L
 private const val TICK_INTERVAL_MILLIS = 1_000L
+private const val PROGRESS_MIN = 0f
+private const val PROGRESS_MAX = 1f
+
+/** The design's tabular rest countdown. */
+private val RestTimerCountdownFontSize = 24.sp
+
+private val RestTimerCountdownLineHeight = 30.sp
+
+private val RestTimerIconSize = 20.dp
+
+private val RestTimerTrackHeight = 6.dp
+
+/** No inset between indicator and track: the design draws one continuous bar. */
+private val RestTimerTrackGap = 0.dp
 
 @Composable
 private fun AddExercisePicker(

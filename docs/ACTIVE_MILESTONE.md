@@ -22,6 +22,113 @@ change, no schema change, no new runtime dependency.
 
 ## Current checkpoint
 
+**CP6 — Apply foundation to Active Workout set-entry + rest timer: complete.**
+CP1–CP5 remain complete below.
+
+- Both files the plan names, and only those two:
+  `presentation/workout/ActiveWorkoutExerciseCard.kt` (the whole set-entry
+  surface) and `presentation/workout/ActiveWorkoutScreen.kt` — in the latter,
+  **only `RestTimerBar`**, per the plan's own narrowing. `LoadingIndicator`,
+  `NoActiveSessionState`, `ActiveSessionState`, `AddExercisePicker`,
+  `RecommendationRow` and `FailureState` are untouched; this file's private
+  loading/failure copies stay, exactly as the plan's CP3 note says they should.
+- **Zero logic change, re-checked line by line against the diff.** Every
+  callback keeps its signature, its argument order and the condition that
+  gates it: `onRecordSet`/`onEditLastSet` still receive the same eight
+  values built from the same `toDoubleOrNull()`/`toIntOrNull()` calls,
+  `clearEntryFields()` still runs immediately after both, undo/edit still
+  appear only when `exercise.sets.isNotEmpty()`, and
+  `ActiveWorkoutViewModel`/the use cases are not touched at all (14
+  `ActiveWorkoutViewModelTest` tests still green, unchanged).
+- **The rest timer's tick loop is byte-identical.** The `remember(timer.endAt)`
+  seed and the `LaunchedEffect` that re-derives `remainingSeconds` from
+  `timer.endAt.epochSecond - Instant.now().epochSecond` on every tick are
+  copied through unedited — the preserved invariant the plan names explicitly.
+  The new progress bar is a second *reading* of that same number
+  (`restTimerProgress(remainingSeconds, timer.totalDurationSeconds)`), not a
+  stored countdown; `totalDurationSeconds` was already on `RestTimerUi`, so no
+  UI-state shape changed.
+- **Rest strip**: a `RepFlowCard` carrying a 24sp tabular countdown, a
+  `LinearProgressIndicator` tinted `primary` over `RepFlowColor.control` at
+  `RepFlowShapes.pill`, and the controls beneath it. `-15s`/`+15s` are
+  `RepFlowNeutralOutlineButton`s that keep their words *and* gain CP2's
+  `minus`/`plus` — the step size is the entire content of those two buttons,
+  so replacing it with a bare glyph would be a usability regression, not a
+  reskin. Skip becomes the design's `ph-x` `IconButton` (48dp), with "Skip"
+  preserved as its accessible name.
+- **Set-entry pad**: the card is a `RepFlowCard`; the header pairs a
+  `titleMedium` name with an `Outline` chip carrying CP2's `info` and the
+  exercise's tracking-type label; planned targets are status chips
+  (`Done`/`Pending` by whether the quota is met, warm-up carrying `fire`);
+  logged sets get the design's 26dp circular marker (`fire` for a warm-up set,
+  otherwise the set number in tabular figures) beside a tabular summary line;
+  RPE/pain/technique move behind the design's own collapsible detail
+  disclosure (`sliders` + `caretUp`/`caretDown`); Add set is
+  `RepFlowPrimaryButton` and undo/edit are `RepFlowNeutralOutlineButton`s
+  carrying `arrowCounterClockwise`/`pencilSimple`.
+- **Input affordances are deliberately unchanged — the checkpoint's one
+  significant deviation, flagged not buried.** The design draws weight/reps as
+  steppers and RPE/pain/technique as horizontal pill rows; this checkpoint
+  keeps all seven fields as `OutlinedTextField`s and the warm-up flag as a
+  `Switch`, restyling only their chrome. Three reasons, in order of weight:
+  (1) the plan's CP6 text lists "their existing input affordances (only their
+  visual chrome changes)" in its *preserving* clause, and its "Preserved
+  invariants" section requires `ActiveWorkoutScreenTest` to keep passing —
+  that test does `performTextInput("60")` on the load field, which a stepper
+  cannot satisfy; (2) load is decimal and unbounded, so a stepper needs a step
+  size (2.5kg? 1kg? plate math?) that neither the design nor the plan states —
+  inventing one is `AGENTS.md`'s "ambiguous product behavior", not a reskin;
+  (3) the plan's own non-goals say set entry is "functionally identical before
+  and after this milestone — only their rendering changes", and typing → tapping
+  is not only rendering. **Consequence, stated plainly: `RepFlowStepper` now has
+  no consumer anywhere in this milestone** (CP3 authored it for exactly this
+  surface), and the pill picker's only consumer remains CP5's filter row. This
+  is the right call for a bounded visual milestone, but it is a real gap
+  against the design and belongs on CP7's list and in front of the reviewer —
+  a later redesign milestone that is allowed to change set-entry interaction
+  is where the stepper and the pill rows land.
+- **Two smaller deviations.** (1) The collapsible detail section *is* adopted
+  (the plan's reference names it), defaulting to collapsed, so RPE/pain/
+  technique start hidden — the values still live in `ExerciseCard`'s own state,
+  are still submitted when set, and `clearEntryFields` still resets them after
+  every recorded set, so nothing can be carried into the next set unseen.
+  (2) The planned-target chips are split across two rows rather than one
+  flowing row: four chips on one line overflow a 360dp screen, and a clipped
+  chip is both unreadable and invisible to `assertIsDisplayed`. `FlowRow` is
+  still experimental API and was not worth adopting for this.
+- Of CP2's ten Active-Workout glyphs, **all ten are consumed**: `minus`,
+  `plus`, `x` (rest strip), `fire`, `info`, `sliders`, `caretUp`, `caretDown`,
+  `arrowCounterClockwise`, `pencilSimple` (set-entry pad).
+- Pre-edit self-review flag from the plan discharged: `ActiveWorkoutScreenTest`
+  (androidTest) was read first, and every node its nine tests resolve survives.
+  The three field labels stay `OutlinedTextField` labels on nodes that still
+  accept `performTextInput`; the logged-set summary stays **one** text node
+  carrying exactly `primary + warm-up suffix + extra suffix` (which is why the
+  two suffixes were *not* promoted into chips — `onNodeWithText` matches that
+  concatenation exactly); the three planned-target strings and the `Add set`
+  label are unchanged. The new type chip's three labels ("Weight & reps",
+  "Reps only", "Duration") are all distinct from the field labels ("Load (kg,
+  optional)", "Reps", "Duration (s)") under `onNodeWithText`'s exact match, so
+  it cannot shadow one. `MainActivityNavHostSmokeTest` asserts nothing on this
+  screen.
+- **Two additions beyond the plan's "Files modified" list**, on the same
+  footing as CP1–CP5's own test files: one new string
+  (`workout_active_set_detail_toggle`, the disclosure's label) and
+  `ActiveWorkoutScreenWiringTest` (8 tests). The device test never constructs a
+  `RestTimerUi`, so the rest strip has no instrumented coverage at all — the
+  wiring test is what pins `restTimerProgress`, this checkpoint's one new
+  derivation, including the two cases that would otherwise ship silently
+  broken: `+15s` pushing remaining past the original total (clamped to full,
+  not 1.4) and a zero/negative total (reads elapsed, never divides by zero).
+  It also pins `setsWithExtraFlag`'s separate warm-up/working quotas (made
+  `internal` for this; it decides row *content*, not appearance) and that the
+  surface's tap targets clear the design's 44dp floor.
+- Verified: `testDebugUnitTest --tests "...presentation.workout.*" --tests
+  "...presentation.designsystem.*"` (56 tests, 0 failures), plus
+  `spotlessCheck`, `detekt`, `lintDebug` and `assembleDebugAndroidTest` all
+  pass. `connectedDebugAndroidTest` was **not** run — no device/emulator in
+  this session; it is CP7's own gate.
+
 **CP5 — Apply foundation to Exercise list: complete.** CP1–CP4 remain complete
 below.
 
@@ -339,8 +446,8 @@ CP3 remain complete below.
   `testDebugUnitTest` (388 tests, 0 failures) and
   `assembleDebugAndroidTest` all pass.
 
-Remaining: CP6 (Active Workout set-entry + rest timer), CP7 (verification and
-doc updates).
+Remaining: CP7 (verification, dark/light check, Open-decision + status doc
+updates).
 
 ## Current blockers
 
@@ -356,9 +463,14 @@ source-of-truth reference. Checkpoint registry:
 
 ## Next action
 
-CP6 — apply the foundation to the Active Workout set-entry + rest timer (the
-representative core-interaction surface, and this milestone's highest-risk
-checkpoint). Continue with `/milestone-implement`.
+CP7 — the milestone's own verification checkpoint: the full local suite plus
+`connectedDebugAndroidTest` on a real device/emulator, a manual dark/light pass
+across every surface CP4–CP6 touched, and the Open-decision + status doc
+updates. Continue with `/milestone-implement`.
+
+CP7's manual pass should also weigh in on the two items CP6 left open: the
+unconsumed `RepFlowStepper` (see CP6's deviation note above) and CP2's four
+unconfirmed nav-glyph judgment calls.
 
 ---
 

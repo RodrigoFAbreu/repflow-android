@@ -112,6 +112,7 @@
     <string name="workout_active_warmup_suffix">(warm-up)</string>
     <string name="workout_active_pain_label">Pain during this set (0-5, optional)</string>
     <string name="workout_active_technique_quality_label">Technique quality (0-5, optional)</string>
+    <string name="workout_active_set_detail_toggle">Set details</string>
     <string name="workout_active_add_set">Add set</string>
     <string name="workout_active_undo_set">Undo</string>
     <string name="workout_active_edit_set">Edit</string>
