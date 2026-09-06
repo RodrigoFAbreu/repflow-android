@@ -54,7 +54,21 @@ val RepFlowLightExtraColors =
         hairline = Color(0xFFCFD3E5),
     )
 
-val LocalRepFlowExtraColors = staticCompositionLocalOf { RepFlowDarkExtraColors }
+/**
+ * Deliberately has **no** default value.
+ *
+ * These two tokens are the only ones in the system that vary per theme and
+ * have no `ColorScheme` slot to fall back on, so any default would be one
+ * theme's values handed to whatever composition forgot to install
+ * [com.repflow.app.presentation.RepFlowTheme] - a plausible-looking wrong
+ * colour rather than a failure. Failing loudly instead means a missing
+ * provider is found by the first test or preview that renders the surface,
+ * not by someone noticing the wrong grey.
+ */
+val LocalRepFlowExtraColors =
+    staticCompositionLocalOf<RepFlowExtraColors> {
+        error("No RepFlowExtraColors provided - wrap this content in RepFlowTheme { }")
+    }
 
 /**
  * The RepFlow tokens that sit outside `MaterialTheme.colorScheme`.

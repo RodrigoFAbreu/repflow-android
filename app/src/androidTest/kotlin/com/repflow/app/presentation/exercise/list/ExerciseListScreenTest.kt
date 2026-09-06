@@ -12,6 +12,7 @@ import com.repflow.app.R
 import com.repflow.app.application.exercise.ExerciseStatusFilter
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseTrackingType
+import com.repflow.app.presentation.RepFlowTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -23,6 +24,12 @@ import org.junit.runner.RunWith
  * used only for `.activity.getString(...)` access to real string
  * resources - the activity under test still renders nothing but this
  * screen's own content, no Hilt-provided ViewModel is involved.
+ *
+ * The content is wrapped in [RepFlowTheme] so these tests render the same
+ * scheme/token combination production does. Without it the screen would take
+ * Material 3's baseline scheme while `LocalRepFlowExtraColors` had no
+ * provider at all - a combination that cannot occur in the app, and one the
+ * local's failing default now rejects outright.
  */
 @RunWith(AndroidJUnit4::class)
 class ExerciseListScreenTest {
@@ -42,18 +49,20 @@ class ExerciseListScreenTest {
         onMessageShown: (Long) -> Unit = {},
     ) {
         composeRule.setContent {
-            ExerciseListScreen(
-                uiState = uiState,
-                onQueryChanged = onQueryChanged,
-                onFilterChanged = onFilterChanged,
-                onRetry = onRetry,
-                onExerciseClick = onExerciseClick,
-                onCreateClick = onCreateClick,
-                onArchiveClicked = onArchiveClicked,
-                onRestoreClicked = onRestoreClicked,
-                onUndoArchiveClicked = onUndoArchiveClicked,
-                onMessageShown = onMessageShown,
-            )
+            RepFlowTheme {
+                ExerciseListScreen(
+                    uiState = uiState,
+                    onQueryChanged = onQueryChanged,
+                    onFilterChanged = onFilterChanged,
+                    onRetry = onRetry,
+                    onExerciseClick = onExerciseClick,
+                    onCreateClick = onCreateClick,
+                    onArchiveClicked = onArchiveClicked,
+                    onRestoreClicked = onRestoreClicked,
+                    onUndoArchiveClicked = onUndoArchiveClicked,
+                    onMessageShown = onMessageShown,
+                )
+            }
         }
     }
 

@@ -12,6 +12,7 @@ import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.domain.workout.WorkoutSetId
+import com.repflow.app.presentation.RepFlowTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -24,6 +25,12 @@ import java.time.Instant
  * recorded-set formatting: only the field(s) each [ExerciseTrackingType]
  * actually persists are shown, and a recorded set's summary never stands
  * in a misleading `0`/`0.0` for a genuinely-absent value.
+ *
+ * The content is wrapped in [RepFlowTheme] so these tests render the same
+ * scheme/token combination production does. Without it the screen would take
+ * Material 3's baseline scheme while `LocalRepFlowExtraColors` had no
+ * provider at all - a combination that cannot occur in the app, and one the
+ * local's failing default now rejects outright.
  */
 @RunWith(AndroidJUnit4::class)
 class ActiveWorkoutScreenTest {
@@ -35,30 +42,32 @@ class ActiveWorkoutScreenTest {
         onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit = { _, _, _, _, _, _, _, _ -> },
     ) {
         composeRule.setContent {
-            ActiveWorkoutScreen(
-                uiState =
-                    ActiveWorkoutUiState(
-                        content =
-                            ActiveWorkoutContent.Active(
-                                sessionId = WorkoutSessionId("session-1"),
-                                startedAt = Instant.parse("2026-01-01T00:00:00Z"),
-                                exercises = listOf(exercise),
-                            ),
-                    ),
-                dayContext = null,
-                onStartWorkout = {},
-                onAddExercise = {},
-                onOverrideRecommendation = { _, _ -> },
-                onRecordSet = onRecordSet,
-                onUndoLastSet = {},
-                onEditLastSet = { _, _, _, _, _, _, _, _ -> },
-                onAddRestTime = {},
-                onRemoveRestTime = {},
-                onSkipRestTimer = {},
-                onCompleteWorkout = {},
-                onAbandonWorkout = {},
-                onRetry = {},
-            )
+            RepFlowTheme {
+                ActiveWorkoutScreen(
+                    uiState =
+                        ActiveWorkoutUiState(
+                            content =
+                                ActiveWorkoutContent.Active(
+                                    sessionId = WorkoutSessionId("session-1"),
+                                    startedAt = Instant.parse("2026-01-01T00:00:00Z"),
+                                    exercises = listOf(exercise),
+                                ),
+                        ),
+                    dayContext = null,
+                    onStartWorkout = {},
+                    onAddExercise = {},
+                    onOverrideRecommendation = { _, _ -> },
+                    onRecordSet = onRecordSet,
+                    onUndoLastSet = {},
+                    onEditLastSet = { _, _, _, _, _, _, _, _ -> },
+                    onAddRestTime = {},
+                    onRemoveRestTime = {},
+                    onSkipRestTimer = {},
+                    onCompleteWorkout = {},
+                    onAbandonWorkout = {},
+                    onRetry = {},
+                )
+            }
         }
     }
 
