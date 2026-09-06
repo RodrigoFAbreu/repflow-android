@@ -292,6 +292,103 @@ diff (`git diff b39af90..HEAD -- app/.../presentation/` lists 18 files; that
 file is not one of them), so this is pre-existing and outside scope. Recorded
 here so it reaches the functional review rather than being lost.
 
+### Implementation review round 3 — what was applied (2026-09-06)
+
+`LOCAL_MODEL_IMPLEMENTATION_REVIEW`, status `REVISE`, **0 Blocking, 2
+Important**, against bundle `29cc074d…` / `review_content_id` `9423b43d…`
+(implementation revision 3). Neither Important finding is a code defect;
+both are stale numbers in evidence documents, and the round's own summary
+says so. Nothing above is retracted. **Both were reproduced before anything
+was changed, and both were accepted.** The one Optional finding was
+accepted too.
+
+- **I1 — the role-read total is wrong and cannot be made right where it
+  stands.** Reproduced: the obvious grep over `presentation/` returns **30**,
+  not `ROLE_AUDIT.md`'s 29. The reviewer's diagnosis is exactly right — the
+  sentence counts itself. Four of the 30 are prose, not reads:
+  `ROLE_AUDIT.md:24` and `:35` (round 2's own two sentences) plus
+  `RepFlowColor.kt:76,78`'s KDoc. So the total was correct until the round-2
+  edit added two mentions, and repointing it to 30 would break again on the
+  next edit to its own paragraph. **Fixed by dropping the total, not
+  repointing it**, keeping only the exact, load-bearing half: **14** direct
+  reads outside `designsystem/`, which is what the `Consumers` column is
+  checked against and which no edit to a designsystem document can move. The
+  paragraph now says why no total is stated, so it does not get helpfully
+  added back.
+  - **One correction to the finding, on the record.** Its first fix option —
+    scope the grep with `--include=*.kt` "which gives a stable 26" — is off
+    by two: that scope returns **28**, because `RepFlowColor.kt`'s two KDoc
+    mentions are in a `.kt` file. 26 is the count of actual reads, which no
+    single grep produces. The second option was taken instead.
+  - **Two further defects in the same sentence, found while reproducing it
+    and fixed here.** "1 at `b39af90`" was a regex artifact: an unescaped `.`
+    is a wildcard, and the one match was `MaterialTheme(colorScheme =
+    colorScheme` in the old `RepFlowTheme.kt`. `git grep -F` at `b39af90`
+    returns **0**, which is what the replaced premise had actually claimed.
+    All 14 citations were re-verified file:line against the worktree; no
+    contrast value, ratio or `Consumers` entry changed.
+- **I2 — the screenshot-count correction reached one document of three.**
+  Reproduced by counting the directories again rather than trusting either
+  document: revalidation **39** PNGs plus `DEVICE_METADATA.md`;
+  enumerated pass **49** PNGs (43 `phys/`, 6 `avd/`). Round 2 reported this
+  as "counted from the directories", which was true of the bundle's
+  `TEST_RESULTS.md` §5 and of nothing else, so `IMPLEMENTATION_SUMMARY.md`
+  stated both 45 and 49 for one pass and both 40 and 39 for the other. All
+  four remaining figures are corrected — two here, two in the bundle
+  document. **The evidence is unchanged and unweakened**; what was wrong was
+  a completeness claim.
+- **O1 — the theme was detected two ways, and the KDoc's own scenario was the
+  one where they disagreed. Accepted and fixed, not narrowed.** Every
+  primitive asked `isDarkColorScheme(scheme)`, but `RepFlowTheme` resolved
+  `LocalRepFlowExtraColors` from its own `isSystemInDarkTheme()` call
+  *outside* `MaterialTheme` — so that local was the second system-theme read
+  the KDoc says the system does not perform, and a nested light-scheme
+  override under a dark system would have drawn a light `surface` fill inside
+  a dark border. No live defect existed (`RepFlowTheme` is the app's only
+  `MaterialTheme` call site), so nothing rendered changes. New
+  `repFlowExtraColors(scheme)` resolves the pair through `isDarkColorScheme`,
+  and `RepFlowTheme` provides it inside its own `MaterialTheme` from the
+  scheme it just applied. `RepFlowThemeTest` gains
+  `theExtrasAreSelectedByTheAppliedSchemeNotBySomeOtherSignal` (14 tests in
+  that class now) so reintroducing a system-theme read fails.
+  - Acceptance criterion 3 asks which behaviour is intended when a scheme
+    override and the system theme disagree, and `isDarkColorScheme`'s KDoc now
+    answers it: **the applied scheme wins**, and the guarantee stops at a
+    *nested* `MaterialTheme` that swaps only the scheme — a composition local
+    keeps the enclosing theme's `control`/`hairline` until something
+    re-provides them, which `RepFlowTheme` does and a bare
+    `MaterialTheme(colorScheme = …)` does not.
+  - The scheme is read from the local `RepFlowTheme` hands `MaterialTheme`
+    rather than back out of `MaterialTheme.colorScheme`: identical by
+    construction, and it keeps `ROLE_AUDIT.md`'s direct-read inventory a list
+    of role reads on the three reskinned surfaces rather than gaining a
+    fifteenth entry for the theme's own plumbing.
+
+**The one missing-test note is rejected with evidence, and the reviewer had
+already said it was not worth a round.** The suggestion was to fold the
+first `PlannedTargetSummary` row's two chips into
+`everyPlannedTargetChipStaysOnScreenWhenTheRowOutgrowsTheWidth`, since only
+the second row is asserted. It was attempted, not declined on paper: the two
+`weight(1f, fill = false)` modifiers on that row were removed and the
+extended test run against the broken build on the 384 dp AVD. **It passed** —
+so the assertion would have been a tautology. Measured on device to find out
+why: with `Int.MAX_VALUE` in both `PlannedTargetUi` fields (the longest
+labels those two `Int`s can produce, the done-counts being 0 with no recorded
+sets) the two chips measure **408 px and 313 px** inside a **1080 px** root at
+384 dp — the row fits with room to spare and cannot be made to overflow
+through the UiState at any supported width. The reviewer's underlying concern
+is a *localized* label length, which no test can vary. The first row's guard
+therefore stays unasserted deliberately, which is better than an assertion
+that cannot fail. The change was reverted; `ActiveWorkoutExerciseCard.kt` and
+`ActiveWorkoutScreenTest.kt` are byte-identical to round 3's bundle.
+
+**Acceptance criterion 4 is respected**: rounds 1 and 2's dispositions are
+untouched — the stepper deviation (`IMPROVEMENT_ROADMAP.md` §8.1) is not
+re-litigated, the unconsumed foundation ships, the `"Archived"` string and
+`MainActivityNavHostSmokeTest` rejections hold, the Load/Reps deferral stands,
+and the four unconfirmed nav glyphs and light `control` remain the reviewer's
+judgment calls.
+
 ### Implementation review round 2 — what was applied (2026-09-06)
 
 `LOCAL_MODEL_IMPLEMENTATION_REVIEW`, status `REVISE`, **0 Blocking, 3
@@ -853,11 +950,13 @@ source-of-truth reference. Checkpoint registry:
 
 ## Next action
 
-All seven checkpoints are complete. Implementation review round 2 returned
-`REVISE` with 0 Blocking and 3 Important; all three are applied (see
-"Implementation review round 2" above) and the bundle is regenerated at
-implementation revision 3. The next state is `AWAITING_TECHNICAL_APPROVAL` —
-only the user invokes `/approve-review implementation`.
+All seven checkpoints are complete. Implementation review round 3 returned
+`REVISE` with 0 Blocking and 2 Important; both are applied, the round's one
+Optional finding is applied too, and its one missing-test note is rejected
+with measured on-device evidence (see "Implementation review round 3" above).
+The bundle is regenerated at implementation revision 4. The next state is
+`AWAITING_TECHNICAL_APPROVAL` — only the user invokes
+`/approve-review implementation`.
 
 The judgment calls this milestone deliberately leaves to the reviewer, all
 disclosed rather than silently resolved: CP2's four unconfirmed nav glyphs;
