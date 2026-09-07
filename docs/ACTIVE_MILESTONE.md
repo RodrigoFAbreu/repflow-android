@@ -105,7 +105,12 @@ label truncation (`maxLines = 1` + `TextOverflow.Ellipsis` were already in
 `RepFlowBottomNavigationBar.kt` before CP4, `git show 83c4132`), and the
 Active Workout "Load (kg, optional)" field wrapping to two lines while the
 adjacent "Reps" field does not — the two fields have shared a `Row` with
-`Modifier.weight(1f)` since before CP6 (`git show 5e0870d`).
+`Modifier.weight(1f)` since before CP6 (`git show 5e0870d`). Its **3**
+dark-theme screenshots are under
+`.ai-review/repflow-redesign-visual-foundation/cp7-manual-pass/narrow-360dp/`
+(gitignored). That count is stated here from review round 4 onward: the probe
+was always described, but its shots were never counted in the bundle's own
+evidence table, which now enumerates four passes and **108** PNGs in total.
 
 **Revalidation at the real target width.** Both findings were then re-checked
 on the **physical Samsung SM-S928B** (`RFCXA0RLSVT`, Android 16 / API 36,
@@ -291,6 +296,93 @@ DURATION set renders as `Set 0:  kg x ` with empty values above its correct
 diff (`git diff b39af90..HEAD -- app/.../presentation/` lists 18 files; that
 file is not one of them), so this is pre-existing and outside scope. Recorded
 here so it reaches the functional review rather than being lost.
+
+### Implementation review round 4 — what was applied (2026-09-07)
+
+`LOCAL_MODEL_IMPLEMENTATION_REVIEW`, status `REVISE`, **0 Blocking, 2
+Important, 1 Optional**, against bundle `de81985b…` / `review_content_id`
+`4d83e3b5…` (implementation revision 4). No finding is a code defect; all
+three are wrong figures in round 4's own evidence documents, and the round's
+own summary says so. Nothing above is retracted. **All three were reproduced
+before anything was changed, and all three were accepted — nothing is rejected
+this round.**
+
+Only one commit carries content, and it changes one markdown file:
+`git diff 817cbd1..HEAD -- app/` is `…/designsystem/ROLE_AUDIT.md` and nothing
+else, and `git diff 817cbd1..HEAD -- '*.kt'` is empty. I1 and I2 are
+corrections to the bundle's own author-written documents, which live under the
+gitignored `.ai-review/` and produce no commit at all.
+
+- **I1 — the "check this statically" grep was itself off by one, in exactly
+  the way its own sentence warned about.** `TEST_RESULTS.md` §5 claimed
+  `grep -rn "MaterialTheme(" app/src/main` "returns exactly two hits" while
+  congratulating itself on naming the one documentation hit it had caught.
+  Reproduced: it returns **three**. The missed one is `ROLE_AUDIT.md:50` —
+  prose added by round 3's own I1 fix, in a `.md` file that lives under
+  `app/src/main/kotlin/…/designsystem/`, which an unscoped `grep -rn` counts.
+  **Fixed by anchoring the command to code rather than repointing the count**:
+  `grep -rnE --include='*.kt' '^[[:space:]]*MaterialTheme\(' app/src/main`
+  returns exactly **one** hit, `RepFlowTheme.kt:39`, and can match neither a
+  markdown file nor a KDoc line (they begin with `*`). The conclusion is
+  unaffected and was re-verified: one `MaterialTheme` call site, one
+  `LocalRepFlowExtraColors` provider, **0** `@Preview` composables anywhere in
+  `app/src`, and `RepFlowTheme { … }` entered only from `MainActivity.kt:17`
+  and the two instrumented tests. **No manual pass and no device rerun is owed
+  on account of I1.**
+- **I2 — two counts had been carried rather than re-derived.**
+  (1) "286 commits sit between the base and HEAD" was round 3's figure;
+  `git rev-list --count b39af90..817cbd1` is **292**, and the bundle's own
+  `COMMITS.txt` already had 292 lines. Both statements are now re-derived
+  after this round's last commit and cross-checked against `COMMITS.txt`'s
+  line count, which the generator writes at the same HEAD.
+  (2) The unscoped grep's move from **30** at `543ce13` to **32** at `817cbd1`
+  was attributed to "three more mentions". Diffing the match sets, the delta
+  is **+2**: `ROLE_AUDIT.md:50` and `RepFlowColor.kt:153` were added, while
+  `ROLE_AUDIT.md:35` was already a match at `543ce13` — round 3 rewrote that
+  line, it did not create one. Corrected in all three bundle documents, and
+  `TEST_RESULTS.md` §3 now states the figures as a delta between two *fixed*
+  commits so neither end can drift again. **The 14 direct reads outside
+  `designsystem/` are unmoved**, at both commits and at this HEAD.
+- **O1 — accepted and fixed, not rejected.** `ROLE_AUDIT.md`'s paragraph
+  explaining why no `presentation/`-wide total is stated enumerated its own
+  hits — "this paragraph and the one above it are two of its hits" — and the
+  enumeration is right under neither grep it discusses: under the literal-dot
+  grep the paragraph recommends, "this paragraph" (`:50`) is **not** a hit,
+  and under the wildcard grep there are **six** prose hits, not four. Fixed
+  the same way round 3's I1 was: the enumeration is dropped and the paragraph
+  now says why it enumerates nothing. The literal-dot advice, the
+  `--include='*.kt'` caveat and the load-bearing **14** are unchanged, and the
+  greps were re-run after the edit (wildcard **32**, literal dot **30**).
+- **A third instance of the same class, found while checking O1 and recorded
+  rather than quietly fixed.** `REVIEW_REQUEST.md`'s challenge item 1 said
+  `--include='*.kt'` gives "28" with no commit anchor. That was the value at
+  `543ce13`; at round 4's own HEAD it was already **29**, because round 3's O1
+  fix added `RepFlowColor.kt:153`. Neither round 4 nor its review caught it.
+  It is now anchored to both commits.
+
+**Device evidence for this round, stated plainly.** The physical **Samsung
+SM-S928B is not attached to this session** — `adb devices` lists only
+`emulator-5554`, the 384 dp AVD `RepFlow_S24Ultra_384dp_API36`. The full gate
+(`spotlessCheck detekt lintDebug testDebugUnitTest assembleDebug
+assembleDebugAndroidTest connectedDebugAndroidTest --rerun-tasks`) is
+`BUILD SUCCESSFUL`, 96/96 tasks executed, **428 JVM tests / 76 suites / 0
+failures** and **162 instrumented tests on the AVD, 0 failures, 0 skipped**.
+**No physical run is claimed for this round.** Round 4's review set the rule
+that a change under `app/` does not inherit the documentation-only exemption;
+this round earns it on the file instead: `ROLE_AUDIT.md` is neither a Kotlin
+compile input nor a packaged resource, and `unzip -l` over the debug APK that
+run built returns **zero** `ROLE_AUDIT` entries. Every byte that reaches a
+device is byte-identical to revision 4, which the phone tested at 162/0/0/0.
+If technical acceptance wants a physical pass over the shipped code, the
+moment for it is `/approve-review implementation` with the phone attached.
+
+**Round 4's acceptance criterion 4 is respected**: rounds 1–3's dispositions
+are untouched — the stepper deviation (`IMPROVEMENT_ROADMAP.md` §8.1) is not
+re-litigated, the unconsumed foundation ships, the `"Archived"` string and
+`MainActivityNavHostSmokeTest` rejections hold, the Load/Reps deferral stands,
+round 4's measured rejection of the first-row chip assertion stands (its
+review accepted it and withdrew the note), and the four unconfirmed nav glyphs
+and light `control` remain the reviewer's judgment calls.
 
 ### Implementation review round 3 — what was applied (2026-09-06)
 
@@ -950,13 +1042,21 @@ source-of-truth reference. Checkpoint registry:
 
 ## Next action
 
-All seven checkpoints are complete. Implementation review round 3 returned
-`REVISE` with 0 Blocking and 2 Important; both are applied, the round's one
-Optional finding is applied too, and its one missing-test note is rejected
-with measured on-device evidence (see "Implementation review round 3" above).
-The bundle is regenerated at implementation revision 4. The next state is
-`AWAITING_TECHNICAL_APPROVAL` — only the user invokes
+All seven checkpoints are complete. Implementation review round 4 returned
+`REVISE` with 0 Blocking, 2 Important and 1 Optional; **all three are applied,
+and nothing was rejected** (see "Implementation review round 4" above). None
+was a code defect — all three were wrong figures in the round's own evidence
+documents. The bundle is regenerated at implementation revision 5. The next
+state is `AWAITING_TECHNICAL_APPROVAL` — only the user invokes
 `/approve-review implementation`.
+
+**One thing to weigh before approving**: the physical Samsung SM-S928B was not
+attached for round 5, so its instrumented evidence is the 384 dp AVD alone
+(162/0/0/0). The round's only change under `app/` is a markdown file that does
+not reach the APK, so the shipped bytes are identical to the revision the
+phone tested — but if a physical pass over the shipped code is wanted before
+technical acceptance, the moment for it is at `/approve-review implementation`
+with the phone attached.
 
 The judgment calls this milestone deliberately leaves to the reviewer, all
 disclosed rather than silently resolved: CP2's four unconfirmed nav glyphs;
