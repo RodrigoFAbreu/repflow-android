@@ -1146,21 +1146,12 @@ source-of-truth reference. Checkpoint registry:
 
 ## Next action
 
-All seven checkpoints are complete. Implementation review round 4 returned
-`REVISE` with 0 Blocking, 2 Important and 1 Optional; **all three are applied,
-and nothing was rejected** (see "Implementation review round 4" above). None
-was a code defect — all three were wrong figures in the round's own evidence
-documents. The bundle is regenerated at implementation revision 5. The next
-state is `AWAITING_TECHNICAL_APPROVAL` — only the user invokes
-`/approve-review implementation`.
-
-**One thing to weigh before approving**: the physical Samsung SM-S928B was not
-attached for round 5, so its instrumented evidence is the 384 dp AVD alone
-(162/0/0/0). The round's only change under `app/` is a markdown file that does
-not reach the APK, so the shipped bytes are identical to the revision the
-phone tested — but if a physical pass over the shipped code is wanted before
-technical acceptance, the moment for it is at `/approve-review implementation`
-with the phone attached.
+All seven checkpoints are complete, and **technical approval is recorded**:
+`/approve-review implementation` wrote `technical_approval` `CURRENT` with
+basis `EXTERNAL_APPROVE` against reviewed content commit `5cad0a1` (bundle
+`c1f6e9fd…` / `review_content_id` `ba49e077…`) on 2026-09-07. The item is now
+at `AWAITING_FUNCTIONAL_REVIEW` — a **hard gate**. The next action is the
+user's: walk the checklist below on a device.
 
 The judgment calls this milestone deliberately leaves to the reviewer, all
 disclosed rather than silently resolved: CP2's four unconfirmed nav glyphs;
@@ -1170,6 +1161,332 @@ See the plan's "Known limitations" and "Areas the reviewer should
 specifically challenge". The unconsumed `RepFlowStepper`, the two diverging
 FABs and the light selected-pill value have moved off that list and into
 `docs/improvements/IMPROVEMENT_ROADMAP.md` §8.1–8.3 as named follow-ups.
+
+---
+
+## `repflow-redesign-visual-foundation` — functional review checklist (implementation revision 6)
+
+The milestone's hard functional-review gate. Everything below is a **manual**
+pass; the automated gate is already green and is not re-run by walking this
+list.
+
+Findings go to **`.ai-review/feedback/FUNCTIONAL_REVIEW.md`**. If it is clean,
+`/accept-milestone` is the only acceptance command.
+
+**What this milestone actually changed, so the pass can be aimed.** Three
+surfaces are reskinned on purpose — the bottom nav (CP4), the Exercise list
+(CP5), and Active Workout's set-entry card + rest timer (CP6). Every *other*
+screen is untouched markup that nonetheless renders through the new theme, so
+its colours, type and container fills move even though its layout does not.
+Flows 1–13 exercise the reskinned surfaces; 14–16 are the judgment calls the
+plan leaves open for the reviewer; 17–23 are regression checks on the
+untouched screens the cascade reaches.
+
+### Setup
+
+- **Device.** Physical **Samsung SM-S928B** (`RFCXA0RLSVT`, Android 16 / API
+  36, 1080×2340 @ 450 dpi = **384 dp** wide). This is the milestone's
+  authoritative device — where it and an emulator disagree, the phone is
+  right. The 384 dp AVD `RepFlow_S24Ultra_384dp_API36` (`emulator-5554`) is
+  attached too and is fine as a cross-check, but no verdict should rest on it
+  alone.
+- **Build and install.** Already done this session against this HEAD, with a
+  clean working tree:
+
+  ```
+  ./gradlew assembleDebug
+  adb -s RFCXA0RLSVT install -r app/build/outputs/apk/debug/app-debug.apk
+  ```
+
+  Both succeeded, so the app on the phone is built from the exact content this
+  checklist describes. Re-run them only if the tree changes.
+- **App data starts empty.** `adb -s RFCXA0RLSVT shell run-as com.repflow.app
+  ls` shows no `databases/` directory, so the empty states in flows 2 and 7
+  are reachable immediately, with nothing to clear first. Seed after checking
+  them.
+- **Theme switching.** `adb -s RFCXA0RLSVT shell cmd uimode night yes` (dark)
+  / `no` (light), or Settings → Display → Dark mode. The device is currently
+  on **dark**. There is **no in-app theme setting** — `RepFlowTheme` follows
+  `isSystemInDarkTheme()`, which is a stated non-goal, not a defect.
+- **No feature flags, no network.** RepFlow is offline-first; nothing here
+  needs connectivity.
+
+### Automated verification (current — deliberately not re-run)
+
+Nothing under `app/` has changed since the last forced full run:
+`git log 5cad0a1..HEAD -- app/` is empty, the only diff since is
+`docs/ai-workflow/WORKFLOW_STATE.json`, and the working tree is clean. So the
+run below is still the current evidence rather than a stale one:
+
+```
+./gradlew spotlessCheck detekt lintDebug testDebugUnitTest \
+  assembleDebug assembleDebugAndroidTest connectedDebugAndroidTest --rerun-tasks
+```
+
+**`BUILD SUCCESSFUL`, 96 actionable tasks / 96 executed** (`--rerun-tasks`, so
+nothing was reported green off an `UP-TO-DATE` marker); **428 JVM unit tests
+across 76 suites, 0 failures / 0 errors / 0 skipped**; **162 instrumented
+tests, 0 failures / 0 skipped**.
+
+**One caveat, stated rather than implied.** The instrumented half of that run
+is the **384 dp AVD only** — the physical phone was not attached for
+implementation revisions 4, 5 or 6. It **is** attached now. Those three
+revisions changed only markdown under `app/`, which reaches no APK entry
+(`unzip -l` returns zero `ROLE_AUDIT` hits), so the shipped bytes are
+identical to the revision the phone did test at 162/0/0/0 — but if you want a
+physical instrumented pass on the record before accepting, this is the moment:
+
+```
+adb -s emulator-5554 emu kill      # leave only the phone attached
+./gradlew connectedDebugAndroidTest
+```
+
+That is optional. This gate does not require it.
+
+### Test data
+
+Seed through the app's own UI, from the empty state, after flows 2 and 7 have
+been checked empty:
+
+1. **Three exercises, one per tracking type** — these are what make all seven
+   `OutlinedTextField` call sites on the set-entry card reachable:
+   `Bench Press` (Weight & reps), `Pull Up` (Reps only), `Plank` (Duration).
+2. **A fourth exercise you then archive** (any tracking type), so the
+   `Archived` filter and the archived badge have a row to render.
+3. **One training plan, `Push Day`, with two rows** — two, so the first row's
+   move-up is disabled while the second's is enabled, and so the plan editor
+   card renders both its reps pair and its duration pair:
+   - row 1 `Pull Up` — sets 3, warm-up sets 1, min/max reps 8/12, rest 60;
+   - row 2 `Plank` — sets 2, min/max duration 30/45, rest 45.
+4. **One finished workout session** started from `Push Day`, with at least one
+   warm-up set and one working set recorded, so History, History detail and
+   the "Done"/"Pending" planned-target chips all have real content.
+5. **One recovery/futsal entry**, so Recovery history has rows.
+
+The rest timer needs no plan rest value to appear: recording *any* set starts
+it, at the plan's rest if there is one and **90 s** otherwise.
+
+### Flows to exercise manually
+
+Walk every flow on **both themes** unless it says otherwise. "Expect" is the
+pass condition for that flow.
+
+**The three reskinned surfaces**
+
+1. **Bottom navigation (CP4).** Tap through all six destinations —
+   Exercises, Workout, Plans, Recovery, History, Backup — and back again.
+   **Expect:** six glyphs and six labels, no truncation at 384 dp; the
+   selected item sits in an accent pill with its own label/glyph tint; the
+   unselected labels stay comfortably legible on **both** themes (light's
+   unselected alpha was corrected to `.66` specifically so it is grey-on-light
+   rather than washed out — this is the one nav value with a numeric floor
+   behind it, ~4.55:1). Selection follows the screen you are on, and no tap
+   loses your place.
+2. **Exercise list, empty (CP5).** Before seeding.
+   **Expect:** "No exercises yet. Tap + to add one." in the shared empty-state
+   primitive, the search field and filter row still present above it, and the
+   FAB bottom-right as a **solid accent square** with a bold white `+`.
+3. **Exercise list, populated (CP5).** After seeding.
+   **Expect:** each row is a card at least 64 dp tall — name on top, tracking
+   type + summary beneath — with a `⋮` kebab as a proper icon button, not a
+   text glyph. A long exercise name wraps to **two** lines before ellipsis
+   rather than one. Rows read as a band lifted off the page ground (this is
+   the deliberate `surface`/`background` split; flow 17 checks it elsewhere).
+4. **Exercise list, search (CP5).** Type into the search field, then use the
+   `⊗` clear button rather than backspacing.
+   **Expect:** the clear button appears **only** once there is something to
+   clear; tapping it empties the field and restores the full list. Searching
+   for something that matches nothing gives "No exercises match your search."
+5. **Exercise list, filter, archive and undo (CP5).** Switch between `Active`
+   and `Archived`; archive an exercise from its kebab; use the snackbar's
+   `Undo`; restore from the `Archived` filter.
+   **Expect:** the two filters read as a segmented control (equal-width cells,
+   a deliberate deviation — see limitations); the archived row carries an
+   `Archived` badge chip with an archive glyph; the snackbar's `Undo` actually
+   restores; with no archived exercises the `Archived` filter shows "No
+   archived exercises."
+6. **Exercise list → editor.** Tap the FAB, save with a blank name, then
+   fill it in and save.
+   **Expect:** the validation message **"Name is required."** renders in the
+   destructive colour and is legible on **both** themes — light's `error` was
+   darkened one OKLCH step specifically to clear its floor here, so this is
+   the live check on that decision. The tracking-type `FilterChip` row in this
+   editor is deliberately **untouched** Material 3 (see flow 16).
+7. **Active Workout with no session (CP6).** Before starting anything.
+   **Expect:** "No active workout." plus `Start workout`. Open the
+   start-workout menu.
+   **Expect:** the menu lists your plans and `Start without a plan`.
+8. **Set entry — Weight & reps (CP6).** Start an ad-hoc workout, add
+   `Bench Press`, type a load and reps, tap `Add set`.
+   **Expect:** the card is a RepFlow card with the exercise name beside a
+   quiet outline chip carrying an info glyph and the tracking-type label;
+   `Add set` is the solid accent button; the fields **clear immediately**
+   after recording; the recorded set appears with a **26 dp circular marker**
+   carrying the set number in tabular figures, beside a tabular summary line.
+   Typing still works exactly as before — these are text fields, not steppers,
+   deliberately (see limitations).
+9. **Set entry — Reps only and Duration (CP6).** Add `Pull Up` and `Plank`
+   to the same session and record a set on each.
+   **Expect:** `Pull Up` shows **only** `Reps`; `Plank` shows **only**
+   `Duration (s)`. Flip the `Warm-up set` switch on and record.
+   **Expect:** the warm-up set's marker carries a **flame** glyph instead of
+   a number, and the summary line gains its `(warm-up)` suffix. Together with
+   flow 8 this reaches every field the card can render.
+10. **Set-detail disclosure (CP6).** Tap `Set details`.
+    **Expect:** it starts **collapsed**; expanding reveals RPE, pain and
+    technique; the caret flips. Type an RPE, collapse the section, then
+    `Add set` — **the RPE must still be recorded**, and the fields must reset
+    afterwards so nothing carries into the next set unseen. With TalkBack on,
+    the header should announce its expanded/collapsed state, not just "Set
+    details, button".
+11. **Recorded sets, undo and edit (CP6).** With at least one set recorded,
+    use `Undo` and `Edit`.
+    **Expect:** both appear **only** when the exercise has recorded sets; both
+    are neutral outline buttons carrying their own glyphs; `Undo` removes the
+    last set and `Edit` reopens it with its values.
+12. **Rest timer strip (CP6).** Record any set and watch the strip that
+    appears.
+    **Expect:** a large tabular `M:SS` countdown that **ticks down in real
+    time**; a progress bar that drains left-to-right over a neutral track;
+    `-15s` and `+15s` keeping their words (not bare glyphs) and actually
+    moving the countdown; `+15s` past the original total leaves the bar
+    **full** rather than overflowing; `Skip` is an X icon button that
+    dismisses the strip. Background the app for ~20 s and return — the
+    countdown must reflect **wall-clock** elapsed time, not resume where it
+    paused.
+13. **Planned targets (CP6).** Start a workout from `Push Day` and record
+    sets against a planned row.
+    **Expect:** target chips render per row (target reps/duration, rest,
+    warm-up/working progress), split across two lines rather than clipped;
+    a chip flips from `Pending` to `Done` as its quota is met; the warm-up
+    chip carries the flame glyph. Nothing is cut off at 384 dp.
+
+**The judgment calls the plan leaves to you** — these are opinions being
+asked for, not pass/fail defects.
+
+14. **Light `control`.** On **light**, look at the rest-timer progress
+    **track** (flow 12) and the set marker's fill (flow 8). This neutral has
+    no design-confirmed light value; `#b2b6ca` is a placeholder.
+    **Question:** does it read as an intentional neutral step against the
+    card, or does it need to be quieter/stronger?
+15. **The four unconfirmed nav glyphs.** Exercises, Workout, Recovery and
+    Backup have no design-confirmed icon; Plans and History do.
+    **Question:** are those four reasonable, or should they stay generic
+    until the navigation-IA milestone settles which destinations survive?
+16. **Light selected pill and accent-tinted chips.** On **light**, compare
+    the selected vs unselected state on the Exercise list filter row, on
+    History's filter chip, and on the Plans filter chips.
+    **Question:** the selected-vs-ground separation is thin by design here
+    (it leans on hue, and on Plans also on a border-vs-fill difference).
+    Is that enough, or does the selected state need a stronger value?
+
+**Regression checks on the untouched screens the theme cascade reaches** —
+these screens were *not* rebuilt; the question is only whether the new colour
+roles broke anything.
+
+17. **The `surface`/`background` band.** On both themes, look at all ten top
+    app bars (Exercises, Workout, Plans, Recovery, Recovery history, History,
+    History detail, Backup, plan editor, exercise editor) and the stock list
+    rows on History, History detail, Recovery history and Plans.
+    **Expect:** a faint but deliberate band separating bar/row from the page.
+    It is subtle (1.13:1 light / 1.16:1 dark) and it is intended.
+    **Question:** does it read as intentional, or as a rendering artefact?
+18. **Dialogs and date pickers.** Exercise, on both themes: History's date
+    picker (including its `Clear`/`Cancel`/`OK`), Recovery's date picker,
+    History's invalidate-session confirmation, and Backup's restore
+    confirmation.
+    **Expect:** every label legible on the dialog container. On **dark**,
+    check the date picker's "today" ring with today *not* selected (pick a
+    later date first) — it should be a clearly legible accent ring.
+19. **Dropdown menus.** Open all seven: the Exercise list kebab, the
+    start-workout menu, Active Workout's exercise picker, the plan editor's
+    exercise picker, Plans' row menu, and History's two filter menus.
+    **Expect:** every menu readable. Two disclosed, non-defect readings: on
+    **dark**, a menu over a card or app bar reads as a *recessed* panel rather
+    than a raised one; on **light**, a menu is delimited by its shadow alone.
+    Over the page ground on dark the menu reads as elevated, normally.
+20. **Plan editor card on dark.** Open `Push Day` for editing.
+    **Expect:** each exercise row's card is a perceptible panel against the
+    page (narrow — 1.16:1 dark, 1.05:1 light — but its edge traceable, and two
+    stacked cards separable). Row titles and every `TextButton` read as the
+    accent; the **disabled** move-up on row 1 is unmistakably dimmer than the
+    enabled move-down; the `Optional` checkbox is clearly visible both
+    unchecked and checked. Both target pairs (`Min/Max reps` on row 1,
+    `Min/Max duration (s)` on row 2) render and are legible.
+21. **Switches on dark.** Active Workout's `Warm-up set` switch and
+    Recovery's switch.
+    **Expect:** the **off** state still reads as *off*, not as *disabled* —
+    the track sits close to the page ground and it is the outlined boundary
+    plus the light thumb that carry it.
+    **Question:** does that hold, or does off read as greyed-out?
+22. **The two FABs.** Compare the Exercise list FAB (restyled, solid accent)
+    with the Plans FAB (untouched Material 3, pale tint), one tab apart, on
+    both themes.
+    **Expect:** they diverge — this is a known, accepted limitation and the
+    most visible touched-vs-untouched inconsistency in the app. Confirm you
+    accept it for this milestone.
+23. **Backup round-trip.** Export a backup, then restore it.
+    **Expect:** the restore confirmation dialog reads clearly, the restore
+    completes, and the seeded data comes back intact. This is a **data**
+    regression check — the milestone touches no persistence, and nothing here
+    should have changed.
+
+### Expected result
+
+The milestone passes functional review if, on the physical SM-S928B, on both
+themes:
+
+- flows 1–13 render as described, with **no functional change** to anything —
+  every field still takes the same input, every callback still fires, undo,
+  edit, archive/restore, snackbars, the rest timer's wall-clock behaviour and
+  backup/restore all behave exactly as they did before this milestone;
+- nothing is clipped, truncated or unreadable at 384 dp;
+- flows 17–23 show no *new* illegibility on the untouched screens;
+- you have formed and recorded an opinion on flows 14, 15, 16 and 21 — these
+  are the questions the milestone deliberately did not answer for you.
+
+Anything failing that, or any opinion you want acted on, goes to
+`.ai-review/feedback/FUNCTIONAL_REVIEW.md`.
+
+### Known limitations / out of scope for this review
+
+Disclosed before testing, so they are not reported as discoveries:
+
+- **Set entry stays typed, not stepped.** The design draws load/reps as
+  steppers and RPE/pain/technique as pill rows; all seven fields remain text
+  fields and the warm-up flag remains a switch. `RepFlowStepper` is built and
+  ships **unconsumed**. Reasons and follow-up:
+  `docs/improvements/IMPROVEMENT_ROADMAP.md` §8.1.
+- **Only three surfaces are reskinned.** Plans, Recovery, History, Backup and
+  both editors keep their current layout and their own bespoke
+  loading/empty/error composables. Their colours and type move with the theme;
+  their structure does not. Not a defect — the milestone's stated scope.
+- **Eight of the ten top app bars** get no markup change beyond that cascade;
+  there is no shared top-bar primitive yet.
+- **The two FABs diverge** (flow 22) — `IMPROVEMENT_ROADMAP.md` §8.2.
+- **The light selected-pill value** is a placeholder — §8.3.
+- **No theme setting.** Light/dark follows the system only.
+- **The `surface`/`background` band** (flow 17) and the **dark menu-elevation
+  inversion** (flow 19) are disclosed consequences of the new role values, not
+  bugs. Weigh them; don't file them as surprises.
+- **Two pre-existing issues, confirmed pre-existing by reading the
+  pre-milestone sources, and explicitly *not* attributable to this
+  milestone.** Report them if you want them fixed, but they are not
+  regressions:
+  1. On Active Workout, **"Load (kg, optional)" wraps to two lines** while
+     "Reps" beside it does not, so the two fields are visibly different
+     heights. Reproduces at 384 dp on the phone and the AVD, both themes. The
+     shared-`Row` layout predates CP6 (`git show 5e0870d`).
+  2. On History detail, a **DURATION set renders as `Set 0:  kg x `** with
+     empty values above its correct `Duration: 45s` line.
+     `HistoryDetailScreen.kt` is not in this milestone's diff at all.
+- **Bottom-nav label truncation does not reproduce at 384 dp** — all six
+  labels render in full, though flush to the screen edges with little margin.
+  It reproduces only when forced to 360 dp, and the `maxLines = 1` +
+  ellipsis that cause it predate CP4 (`git show 83c4132`).
+- **One coverage gap from the implementation pass**, carried here so it is
+  closed by a human rather than assumed: Recovery's date picker was exercised
+  on **dark only**. Flow 18 asks for it on light too.
 
 ---
 
