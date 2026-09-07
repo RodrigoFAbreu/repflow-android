@@ -297,6 +297,110 @@ diff (`git diff b39af90..HEAD -- app/.../presentation/` lists 18 files; that
 file is not one of them), so this is pre-existing and outside scope. Recorded
 here so it reaches the functional review rather than being lost.
 
+### Implementation review round 5 — what was applied (2026-09-07)
+
+`LOCAL_MODEL_IMPLEMENTATION_REVIEW`, status `REVISE`, **0 Blocking, 1
+Important, 1 Optional**, against bundle `e1062e8e…` / `review_content_id`
+`d169c9bb…` (implementation revision 5). Nothing above is retracted. **Both
+findings were reproduced against the actual code before anything was changed,
+and both were accepted — nothing is rejected this round.** Unlike rounds 3 and
+4, this round's finding is *not* about a grep counting its own prose: it lands
+on `ROLE_AUDIT.md`'s substance, in a file that ships in the source tree and is
+the document that designates itself the procedure to re-run before any token
+change.
+
+Exactly one commit carries content and it changes one markdown file:
+`git diff 76f6257..HEAD -- app/` is `…/designsystem/ROLE_AUDIT.md` and nothing
+else, and `git diff 76f6257..HEAD -- '*.kt'` is empty.
+
+- **I1 — the audit's stock-consumer inventory was still the pre-milestone one
+  where this milestone had moved it, and the right number was already in the
+  same bundle.** The `onSurfaceVariant` row claimed "**6** `ListItem`
+  supporting lines". Reproduced by counting rather than by reading: `ListItem(`
+  composable call sites are **6** at `b39af90` and **5** at HEAD, and each of
+  the five carries exactly one `supportingContent` holding one `Text`
+  (`HistoryScreen.kt:143`, `HistoryDetailScreen.kt:49`,
+  `RecoveryHistoryScreen.kt:87` and `:104`, `TrainingPlanListScreen.kt:164`).
+  The sixth was `ExerciseListScreen.kt:218`, which CP5 replaced with
+  `RepFlowCard` + `ExerciseRow` — **so the line did not disappear, it moved
+  from the stock bucket to the direct bucket**, and only its arrival at `:355`
+  was recorded. `docs/ACTIVE_MILESTONE.md`'s CP7 addendum 2 above already
+  enumerates exactly those five. Corrected, with the five sites named in the
+  audit so the figure is checkable rather than trusted.
+  - **The audited-imports list was byte-for-byte the `b39af90` component set**,
+    so a maintainer re-running the method the file states produced a different
+    input list than the one recorded. Both components this milestone newly
+    imports are now in it and both are audited from `material3-android-1.4.0`'s
+    own token files rather than waved through: **`LinearProgressIndicator`**
+    would default to `ProgressIndicatorTokens.ActiveIndicatorColor` = `Primary`
+    and `TrackColor` = **`SecondaryContainer`** — the second being a role CP4
+    deliberately leaves at the Material 3 baseline — and reaches **neither**,
+    because `color`, `trackColor` and `drawStopIndicator` are all supplied at
+    its only call site (`ActiveWorkoutScreen.kt:293,300,301,304`);
+    **`Icon`** reads no `ColorScheme` role at all (its `tint` defaults to
+    `LocalContentColor`, confirmed in `IconKt`'s bytecode), and every container
+    feeding its seven untinted call sites is already in the audit. The **16**
+    non-component `material3` imports are listed too, so the cross-reference
+    now reproduces the exact **42**-name input set this table was built from —
+    26 components + 16 non-components, verified to match the tree with no
+    overlap and no omission.
+  - **A third stale figure in the same cell, found by re-deriving all of it
+    rather than only the flagged half, and fixed here.** "5 `OutlinedButton`
+    labels" is still **5**, but `grep -c` now returns **7** call sites. The two
+    new ones are CP3's own primitives (`RepFlowButtons.kt:145`, `:170`) and
+    **neither is a consumer** — both pass
+    `ButtonDefaults.outlinedButtonColors(contentColor = …)` explicitly, so
+    `OutlinedButtonTokens.LabelTextColor` is never reached. Recorded with the
+    five stock sites named, because a maintainer re-running the grep gets 7 and
+    would otherwise read the audit as stale. ("4 dialog bodies" was re-derived
+    too and is right: exactly four `AlertDialog(` sites, each with a `text =`
+    slot, at both commits.)
+- **O1 — accepted rather than rejected, and re-deriving it found more than the
+  finding claimed.** The counting basis is now stated once at the top of the
+  file. But "**23** `OutlinedTextField` labels" needed more than a basis line:
+  of the 23 `onSurfaceVariant` text slots, **22 are labels and one is the
+  Exercise-list search field's placeholder** (`ExerciseListScreen.kt:211`),
+  which carries no `label` at all — at HEAD *and* at `b39af90`. It is a
+  consumer through `InputPlaceholderColor`, which is the same role as
+  `LabelColor` (read out of `OutlinedTextFieldTokens`, not assumed). So 23 is
+  the right total under the reading that matters and was never right under the
+  word "labels". Call sites are **17** at HEAD against **23** at `b39af90`
+  because CP6 collapsed `ActiveWorkoutExerciseCard.kt`'s seven inline blocks
+  into one `NumericEntryField` (`:468`) invoked seven times.
+
+**No colour, ratio, override or test changed**, which is what the finding's own
+acceptance criterion 1 asks for; the load-bearing **14** direct reads outside
+`designsystem/` are unmoved at this HEAD. The file's own prose greps do move,
+as the file says they must: the unscoped wildcard count over `presentation/`
+goes 32 → **33** and the literal-dot count 30 → **31**, because this round's
+edit adds one prose mention. `--include='*.kt'` is unmoved at **29** — a `.md`
+edit cannot reach it.
+
+**Device evidence for this round, stated plainly.** The physical **Samsung
+SM-S928B is still not attached** — `adb devices` lists only `emulator-5554`,
+the 384 dp AVD `RepFlow_S24Ultra_384dp_API36`. The full gate
+(`spotlessCheck detekt lintDebug testDebugUnitTest assembleDebug
+assembleDebugAndroidTest connectedDebugAndroidTest --rerun-tasks`) is
+`BUILD SUCCESSFUL`, **96/96 tasks executed**, **428 JVM tests / 76 suites / 0
+failures** and **162 instrumented tests on the AVD, 0 failures, 0 skipped**.
+**No physical run is claimed for this round.** Round 4's rule — a change under
+`app/` does not inherit the documentation-only exemption — is engaged again and
+earned on the file again: `ROLE_AUDIT.md` is neither a Kotlin compile input nor
+a packaged resource, and `unzip -l` over the debug APK that run built returns
+**zero** `ROLE_AUDIT` entries and exactly one `.md` entry
+(`META-INF/NOTICE.md`, from a dependency). Every byte that reaches a device is
+byte-identical to revision 5, and to revision 4 before it. If technical
+acceptance wants a physical pass over the shipped code, the moment for it is
+`/approve-review implementation` with the phone attached.
+
+**Round 5's acceptance criterion 4 is respected**: rounds 1–4's dispositions are
+untouched — the stepper deviation (`IMPROVEMENT_ROADMAP.md` §8.1) is not
+re-litigated, the unconsumed foundation ships, the `"Archived"` string and
+`MainActivityNavHostSmokeTest` rejections hold, the Load/Reps deferral stands,
+round 4's measured rejection of the first-row chip assertion stands, and the
+four unconfirmed nav glyphs and light `control` remain the reviewer's judgment
+calls.
+
 ### Implementation review round 4 — what was applied (2026-09-07)
 
 `LOCAL_MODEL_IMPLEMENTATION_REVIEW`, status `REVISE`, **0 Blocking, 2
