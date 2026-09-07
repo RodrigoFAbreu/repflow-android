@@ -38,17 +38,19 @@ ships beside. What is true:
   `ActiveWorkoutScreen.kt:278,300` and
   `ActiveWorkoutExerciseCard.kt:327,338,354,360,511,574,585`.
 
-  **No total for `presentation/` as a whole is stated here, on purpose.** The
-  obvious grep also matches prose: this paragraph and the one above it are two
-  of its hits, and `RepFlowColor.kt:76,78` are two more, so any total written
-  into this file changes the number it is stating and is stale the moment it is
-  written. Scoping to `--include='*.kt'` does not repair that either - it still
-  counts `RepFlowColor.kt`'s two KDoc mentions. The count *outside*
-  `designsystem/` has no such problem, because every self-referential mention
-  lives inside it, and it is the half the `Consumers` column is actually
-  checked against. Grep for it with a literal dot; an unescaped `.` is a
-  wildcard that also matches `MaterialTheme(colorScheme = ...` constructor
-  arguments.
+  **No total for `presentation/` as a whole is stated here, on purpose.** Grep
+  for these reads with a literal dot; an unescaped `.` is a wildcard that also
+  matches `MaterialTheme(colorScheme = ...` constructor arguments, so the two
+  spellings return different sets. Either spelling also matches prose —
+  sentences in this very file, and KDoc in `RepFlowColor.kt` — so any total
+  written into this paragraph changes the number it is stating and is stale the
+  moment it is written. The prose hits are deliberately not enumerated here
+  either: an enumeration is one more self-counting figure, and one the two
+  spellings would not even agree on. Scoping to `--include='*.kt'` does not
+  repair the total — it still counts `RepFlowColor.kt`'s KDoc. The count
+  *outside* `designsystem/` has no such problem, because every self-referential
+  mention lives inside it, and it is the half the `Consumers` column is
+  actually checked against.
 
 So the table is complete only because the `Consumers` column below carries
 *both* — the stock components a role reaches through Material 3's own
