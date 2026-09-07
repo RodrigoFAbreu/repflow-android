@@ -12,12 +12,57 @@ computed (not eyeballed) against every surface the role actually renders on.
 Alpha roles get one ratio per background, not one overall. A value scoped to
 one component still owes its floor inside that component.
 
-Imported Material 3 components, audited: `AlertDialog`, `Button`, `Card`,
+**Counting basis, stated once so every figure below is reproducible.** Counts
+are *rendered call sites at HEAD* — a composable invoked seven times through a
+shared private helper counts seven, not one, because seven labelled fields
+reach the screen. The alternative basis, `grep -c` over the component's own
+name, disagrees wherever this milestone consolidated call sites, and is not
+what any figure here uses.
+
+Imported Material 3 **components**, audited: `AlertDialog`, `Button`, `Card`,
 `Checkbox`, `CircularProgressIndicator`, `DatePicker`, `DatePickerDialog`,
 `DropdownMenu`, `DropdownMenuItem`, `FilterChip`, `FloatingActionButton`,
-`HorizontalDivider`, `IconButton`, `ListItem`, `NavigationBar`,
-`NavigationBarItem`, `OutlinedButton`, `OutlinedTextField`, `Scaffold`,
-`Snackbar`, `Switch`, `Text`, `TextButton`, `TopAppBar`.
+`HorizontalDivider`, `Icon`, `IconButton`, `LinearProgressIndicator`,
+`ListItem`, `NavigationBar`, `NavigationBarItem`, `OutlinedButton`,
+`OutlinedTextField`, `Scaffold`, `Snackbar`, `Switch`, `Text`, `TextButton`,
+`TopAppBar`.
+
+Two of those 26 are this milestone's own new imports, and both are audited
+here rather than assumed benign:
+
+- **`LinearProgressIndicator`** (`ActiveWorkoutScreen.kt:293`, CP6's rest
+  timer — its only call site). Its defaults would read two roles:
+  `ProgressIndicatorTokens.ActiveIndicatorColor` = `Primary` and
+  `TrackColor` = **`SecondaryContainer`**, the role CP4 deliberately leaves at
+  the Material 3 baseline. **Neither default is reached**: `color` is set to
+  `MaterialTheme.colorScheme.primary` (`:300`) and `trackColor` to
+  `RepFlowColor.control` (`:301`), and `drawStopIndicator = {}` (`:304`)
+  suppresses the third (`StopColor` = `Primary`). So it adds no consumer to
+  any row below.
+- **`Icon`** (7 files, 14 call sites) reads **no `ColorScheme` role of its
+  own**: its `tint` defaults to `LocalContentColor`, so it renders whatever
+  its container provides. Seven of the 14 take that default, and every
+  container supplying them already appears in this audit — `NavigationBarItem`
+  (`RepFlowBottomNavigationBar.kt:58`; its colours are CP4's own override,
+  tabulated in the bottom-nav section), `FloatingActionButton` at an explicit
+  `contentColor = onPrimary` (`ExerciseListScreen.kt:191`, the direct read
+  already named at `:189`), `OutlinedTextField`'s leading and trailing icon
+  slots (`:218`, `:230` — `LeadingIconColor`/`TrailingIconColor` are both
+  `OnSurfaceVariant`, the row this milestone leaves at baseline), `IconButton`
+  at `:391` and `ActiveWorkoutScreen.kt:286` (itself `LocalContentColor.current`,
+  not a role — both sit inside a `RepFlowCard`, which provides `onSurface`),
+  and `Button`/`OutlinedButton` via `RepFlowButtons.kt:203`, each at the
+  explicit `contentColor` its tier sets. The other seven pass an explicit
+  `tint`, and all seven are already named in the `Consumers` column below.
+
+The remaining `androidx.compose.material3` imports are not components and read
+no role: `ButtonDefaults`, `ColorScheme`, `ExperimentalMaterial3Api`,
+`LocalContentColor`, `MaterialTheme`, `NavigationBarItemDefaults`,
+`SelectableDates`, `Shapes`, `SnackbarDuration`, `SnackbarHost`,
+`SnackbarHostState`, `SnackbarResult`, `Typography`, `darkColorScheme`,
+`lightColorScheme`, `rememberDatePickerState`. They are listed so a maintainer
+re-running the import cross-reference gets the same input set this table was
+built from.
 
 **Two paths, not one.** The sentence that used to stand here said
 `presentation/**` contained no `Color(...)` literal and no direct
@@ -78,11 +123,37 @@ greps, not just the import cross-reference.
 | Role | Why | Baseline ratio |
 | --- | --- | --- |
 | `outline` | Also every `OutlinedTextField`/`Switch` resting border; the design's hairline measures 1.2–1.8:1 there. Exposed as `RepFlowColor.hairline` instead. | dark 4.80 / 5.56, light 4.19 / 3.70 (3:1 floor) |
-| `onSurfaceVariant` | Also 23 `OutlinedTextField` labels, 6 `ListItem` supporting lines, 4 dialog bodies, 5 `OutlinedButton` labels; the design's 55–60% value composites to 3.20–3.34:1 there. Applied via CP4's per-item override instead. **Direct reads (baseline value, not the design's):** the filter-row funnel tint (`ExerciseListScreen.kt:266`, on `background`); the Exercise-list row meta line (`:355`) and CP6's logged-set detail line (`ActiveWorkoutExerciseCard.kt:360`), both on card `surface`; three in-card glyph tints (`:511,574,585`, on card `surface`). All six are covered by the baseline ratios beside this row. | dark 8.91 / 10.33, light 8.59 / 7.59 |
+| `onSurfaceVariant` | Also 23 `OutlinedTextField` text slots (22 labels + the Exercise-list search field's placeholder, `ExerciseListScreen.kt:211`, which carries no label — `LabelColor` and `InputPlaceholderColor` are the same role), 5 `ListItem` supporting lines, 4 dialog bodies, 5 `OutlinedButton` labels; the design's 55–60% value composites to 3.20–3.34:1 there. Applied via CP4's per-item override instead. **Direct reads (baseline value, not the design's):** the filter-row funnel tint (`ExerciseListScreen.kt:266`, on `background`); the Exercise-list row meta line (`:355`) and CP6's logged-set detail line (`ActiveWorkoutExerciseCard.kt:360`), both on card `surface`; three in-card glyph tints (`:511,574,585`, on card `surface`). All six are covered by the baseline ratios beside this row. | dark 8.91 / 10.33, light 8.59 / 7.59 |
 | `secondaryContainer`/`onSecondaryContainer` | Also `FilterChip`'s selected state on three untouched screens, where the nav's own pair measures 4.41:1. Applied via CP4's per-item override instead. | Material 3's opaque pair clears AA |
 | `outlineVariant` | `FilterChip` unselected outline and 3 `HorizontalDivider`s; the design's own divider value has no consumer this milestone builds. | decorative, no floor owed |
 | `primaryContainer`/`onPrimaryContainer` | Both `FloatingActionButton`s. Disclosed limitation: CP5 restyles one FAB directly, the other keeps the baseline. | not computed |
 | `inverse*` | `Snackbar` only; unchanged by this milestone. | not computed |
+
+**How the `onSurfaceVariant` counts moved, since this milestone moved three of
+them and a raw `grep -c` now disagrees with all three.** The role's own values
+and ratios are untouched; only the inventory is.
+
+- **`ListItem` supporting lines: 6 at `b39af90`, 5 at HEAD.** CP5 replaced
+  `ExerciseListScreen.kt:218`'s `ListItem` with `RepFlowCard` + `ExerciseRow`,
+  so the sixth line did not disappear — it **moved from the stock bucket to
+  the direct bucket**, and is the `:355` direct read named in the same cell.
+  The five that remain are `HistoryScreen.kt:143`,
+  `HistoryDetailScreen.kt:49`, `RecoveryHistoryScreen.kt:87` and `:104`, and
+  `TrainingPlanListScreen.kt:164`, each with exactly one `supportingContent`
+  holding one `Text`.
+- **`OutlinedTextField` text slots: 23, unchanged — but `grep -c` returns 17.**
+  CP6 collapsed `ActiveWorkoutExerciseCard.kt`'s seven inline blocks into one
+  private `NumericEntryField` (`:468`) invoked seven times (`:420,427,438,448,
+  590,598,605`), so under the counting basis stated at the top of this file the
+  figure holds where the call-site count does not.
+- **`OutlinedButton` labels: 5, unchanged — but `grep -c` returns 7.** CP3 added
+  two `OutlinedButton` call sites of its own (`RepFlowButtons.kt:145`, `:170`),
+  and **neither is a consumer**: both pass
+  `ButtonDefaults.outlinedButtonColors(contentColor = …)` explicitly — the
+  accent-ramp label and `onSurface` at 80% respectively — so
+  `OutlinedButtonTokens.LabelTextColor` is never reached. The five stock sites
+  are `TrainingPlanEditorFormFields.kt:108`, `ExerciseEditorFormFields.kt:158`
+  and `:184`, and `ActiveWorkoutScreen.kt:203` and `:367`.
 
 ## Scoped to the bottom nav (CP4's `NavigationBarItemDefaults.colors`)
 
