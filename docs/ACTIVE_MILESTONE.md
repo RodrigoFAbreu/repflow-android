@@ -1146,12 +1146,27 @@ source-of-truth reference. Checkpoint registry:
 
 ## Next action
 
-All seven checkpoints are complete, and **technical approval is recorded**:
+All seven checkpoints are complete and **technical approval is recorded**:
 `/approve-review implementation` wrote `technical_approval` `CURRENT` with
 basis `EXTERNAL_APPROVE` against reviewed content commit `5cad0a1` (bundle
-`c1f6e9fd…` / `review_content_id` `ba49e077…`) on 2026-09-07. The item is now
-at `AWAITING_FUNCTIONAL_REVIEW` — a **hard gate**. The next action is the
-user's: walk the checklist below on a device.
+`c1f6e9fd…` / `review_content_id` `ba49e077…`) on 2026-09-07.
+
+**Functional review round 1 returned `FAIL`.** Its single Gating finding (F1
+— the app was not converted closely enough to the approved Claude Design
+screens) is deferred in full to the remediation child
+**`repflow-redesign-visual-foundation-remediation-1`**; see "Functional review
+round 1 — outcome" in the checklist section below for the disposition and its
+reasoning. No source or test file was edited, and `technical_approval` stays
+`CURRENT`.
+
+**The next action is `/milestone-plan
+repflow-redesign-visual-foundation-remediation-1`** — after `/design-login`,
+since the Claude Design project is that plan's source of truth and this
+session could not read it. Every command in the child's cycle must **name the
+child id explicitly**: `active_work_item_id` deliberately still points at this
+parent, so an unnamed command would drive the wrong item. This parent stays at
+`AWAITING_FUNCTIONAL_REVIEW` and cannot be accepted until the child reaches
+`MILESTONE_COMPLETE`.
 
 The judgment calls this milestone deliberately leaves to the reviewer, all
 disclosed rather than silently resolved: CP2's four unconfirmed nav glyphs;
@@ -1172,6 +1187,79 @@ list.
 
 Findings go to **`.ai-review/feedback/FUNCTIONAL_REVIEW.md`**. If it is clean,
 `/accept-milestone` is the only acceptance command.
+
+### Functional review round 1 — outcome: FAIL, deferred to a remediation child (2026-09-07)
+
+The user walked this checklist and returned **`FAIL — functional remediation
+required`** with a single Gating finding, **F1**. Read `/apply-functional-review`
+classified it as a **missing requirement** and routed it through
+`D-Functional-Remediation`'s **broad** branch. **No source or test file in this
+work item was edited**, and `technical_approval` is deliberately left `CURRENT`
+— the broad branch stales nothing, because nothing in the parent's tree
+changed.
+
+**F1 — the app was not converted closely enough to the approved Claude Design
+screens.** The finding is not about isolated spacing, colour or icon
+discrepancies. It is that the implementation applied a design *foundation* to
+the existing RepFlow screens rather than converting those screens to the
+Claude Design compositions: screen structure, layout, region placement,
+navigation treatment, control choice and interaction shape all remain
+recognizably the pre-redesign app. The reviewer's own summary — "existing
+RepFlow UI + redesigned styling" rather than "RepFlow rebuilt to closely
+reproduce the approved Claude Design experience" — is accepted as the finding
+of record.
+
+**Deferred in full to `repflow-redesign-visual-foundation-remediation-1`**
+(created by this command; `phase: PLANNING`, governing version `2.1`,
+`base_commit` `3257ee0`). Nothing about F1 is fixed inline: the conversion
+spans multiple screens, would restructure Compose hierarchies rather than
+restyle them, and reaches areas this milestone's approved plan put out of
+scope — so it is planned and reviewed as its own work item, through the full
+independent cycle.
+
+**The scope tension behind F1, recorded because it is what the child must
+resolve — not to dispute the finding.** The approved plan (revision 19) scoped
+this milestone deliberately as **R0** of a multi-milestone redesign
+decomposition and stated the deferral explicitly: the design's 4-tab
+Home/Plans/History/Progress IA is "a *later* milestone, R1 in the redesign
+decomposition, and is explicitly out of scope here," the workout-mode
+full-screen takeover is "the same kind of out-of-scope IA change," and set
+entry is to be "functionally identical before and after this milestone — only
+their rendering changes." Those exclusions are why the disclosed CP5/CP6
+deviations (the untouched input affordances, the unconsumed `RepFlowStepper`,
+the query-aware empty state not built) exist at all. F1 measures the milestone
+against the *intended product outcome* rather than against that plan text, and
+the functional gate is exactly where that judgment belongs. The consequence is
+a routing fact, not an argument: converging to the design requires the IA,
+layout and interaction changes R0 excluded, which is precisely why this is
+broad rather than bounded. **The child's planning stage owns deciding how much
+of R1's scope it absorbs** — that decision is not made here, and must not be
+assumed from this note.
+
+**What this means for the checklist below.** It stays as written, unchanged,
+and is *not* re-run now. The parent is blocked at
+`AWAITING_FUNCTIONAL_REVIEW` until the child reaches `MILESTONE_COMPLETE`
+(`IncompleteChildWorkItemError`). When the child's work lands, the surfaces it
+restructures will need a **new** checklist written against the converted
+screens — the flows below describe the current, unconverted layouts, so they
+will not survive the conversion intact. The parts that will still carry over
+are the regression checks that are about the *theme cascade* rather than
+layout (flows 17–23) and the two pre-existing issues and one coverage gap
+recorded under "Known limitations" — none of which F1 rests on, and all of
+which keep their existing dispositions unless the conversion supersedes them.
+
+**Two preconditions for the child's planning, found while routing this
+finding.** (1) The Claude Design project is the child's stated source of
+truth, and **this session cannot read it** — the Claude Design MCP returned
+`needs_design_scopes`. Run **`/design-login`** before `/milestone-plan
+repflow-redesign-visual-foundation-remediation-1`, or the plan will be drafted
+against `docs/milestones/repflow-redesign-visual-foundation-reference.md`'s
+transcribed values instead of the live designs, which is exactly the
+second-hand reading F1 objects to. (2) F1's acceptance criterion 4 requires
+**side-by-side** validation of design against running app, and criterion 6
+names the physical **SM-S928B** as the primary target with the 384 dp AVD as
+supporting evidence — both need to be reflected in the child's own plan and
+verification steps, not just in its functional checklist.
 
 **What this milestone actually changed, so the pass can be aimed.** Three
 surfaces are reskinned on purpose — the bottom nav (CP4), the Exercise list
