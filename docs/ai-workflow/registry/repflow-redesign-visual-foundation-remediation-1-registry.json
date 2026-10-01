@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "work_item_id": "repflow-redesign-visual-foundation-remediation-1",
+  "plan_revision": 20,
+  "checkpoints": [
+    {
+      "id": "CP1",
+      "name": "Design inventory and deviation register (side-by-side baseline)",
+      "depends_on": [],
+      "complexity": 2,
+      "session_target": "2"
+    },
+    {
+      "id": "CP2",
+      "name": "Navigation: four-tab IA, Settings route, workout-mode nav suppression",
+      "depends_on": [
+        "CP1"
+      ],
+      "complexity": 3,
+      "session_target": "2"
+    },
+    {
+      "id": "CP3",
+      "name": "Structural primitives the design needs beyond the visual foundation",
+      "depends_on": [
+        "CP1"
+      ],
+      "complexity": 3,
+      "session_target": "3"
+    },
+    {
+      "id": "CP4",
+      "name": "Readiness score derivation and readiness detail surface",
+      "depends_on": [
+        "CP3"
+      ],
+      "complexity": 3,
+      "session_target": "2"
+    },
+    {
+      "id": "CP5",
+      "name": "Home screen",
+      "depends_on": [
+        "CP2",
+        "CP3",
+        "CP4"
+      ],
+      "complexity": 3,
+      "session_target": "3"
+    },
+    {
+      "id": "CP6",
+      "name": "Progression recommendation surface on the existing policy",
+      "depends_on": [
+        "CP3",
+        "CP4"
+      ],
+      "complexity": 3,
+      "session_target": "2"
+    },
+    {
+      "id": "CP7",
+      "name": "Workout board screen",
+      "depends_on": [
+        "CP2",
+        "CP3"
+      ],
+      "complexity": 3,
+      "session_target": "3"
+    },
+    {
+      "id": "CP8",
+      "name": "Workout focus mode: steppers, keypad, scale rows, bottom action bar",
+      "depends_on": [
+        "CP3",
+        "CP7"
+      ],
+      "complexity": 3,
+      "session_target": "3"
+    },
+    {
+      "id": "CP9",
+      "name": "Workout finish and session summary screen",
+      "depends_on": [
+        "CP6",
+        "CP7",
+        "CP8"
+      ],
+      "complexity": 2,
+      "session_target": "1"
+    },
+    {
+      "id": "CP10",
+      "name": "Exercise library conversion",
+      "depends_on": [
+        "CP2",
+        "CP3"
+      ],
+      "complexity": 2,
+      "session_target": "2"
+    },
+    {
+      "id": "CP11",
+      "name": "Plans list and plan editor conversion",
+      "depends_on": [
+        "CP2",
+        "CP3"
+      ],
+      "complexity": 3,
+      "session_target": "3"
+    },
+    {
+      "id": "CP12",
+      "name": "History and workout detail conversion",
+      "depends_on": [
+        "CP2",
+        "CP3"
+      ],
+      "complexity": 2,
+      "session_target": "2"
+    },
+    {
+      "id": "CP13",
+      "name": "Recovery entry and recovery history conversion",
+      "depends_on": [
+        "CP3",
+        "CP4"
+      ],
+      "complexity": 2,
+      "session_target": "2"
+    },
+    {
+      "id": "CP14",
+      "name": "Settings screen, preference persistence, and the behaviours it gates",
+      "depends_on": [
+        "CP2",
+        "CP3"
+      ],
+      "complexity": 3,
+      "session_target": "3"
+    },
+    {
+      "id": "CP15",
+      "name": "Progress tab",
+      "depends_on": [
+        "CP2",
+        "CP3"
+      ],
+      "complexity": 3,
+      "session_target": "3"
+    },
+    {
+      "id": "CP16",
+      "name": "Verification, side-by-side design validation, and decision/doc updates",
+      "depends_on": [
+        "CP5",
+        "CP9",
+        "CP10",
+        "CP11",
+        "CP12",
+        "CP13",
+        "CP14",
+        "CP15"
+      ],
+      "complexity": 2,
+      "session_target": "2"
+    }
+  ]
+}
