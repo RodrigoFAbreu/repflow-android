@@ -2,6 +2,7 @@ package com.repflow.app.application.trainingplan
 
 import com.repflow.app.domain.backup.TrainingPlanSnapshot
 import com.repflow.app.domain.common.DomainResult
+import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.trainingplan.PlannedExercise
 import com.repflow.app.domain.trainingplan.PlannedExerciseId
 import com.repflow.app.domain.trainingplan.TrainingPlan
@@ -42,6 +43,15 @@ interface TrainingPlanRepository {
      * archived.
      */
     fun observeVersionLabels(): Flow<Map<TrainingPlanVersionId, TrainingPlanVersionLabel>>
+
+    /**
+     * How many non-archived plans hold each exercise in their **latest**
+     * version, reactively - the exercise library's `in N plans` (remediation-1
+     * CP10). An exercise no current plan holds is absent from the map rather
+     * than mapped to zero. Earlier versions never count: they are history, and
+     * a session started from one keeps it whatever the plan holds now.
+     */
+    fun observeExercisePlanUsage(): Flow<Map<ExerciseId, Int>>
 
     /** Atomically inserts [plan] and its first [version] (version 1). */
     suspend fun createPlanWithFirstVersion(

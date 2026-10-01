@@ -334,4 +334,42 @@ class ExerciseEditorViewModelTest {
         assertEquals("Romanian Deadlift", recreated.uiState.value.name)
         assertEquals("120", recreated.uiState.value.restSecondsText)
     }
+
+    // Remediation-1 CP10: the create route's optional name prefill (the
+    // library's `Create "<query>"`).
+
+    private fun prefilledHandle(name: String) = SavedStateHandle().apply { set(RepFlowDestinations.EXERCISE_NEW_NAME_ARG, name) }
+
+    @Test
+    fun `a prefilled create route starts with that name and save enabled`() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        val viewModel = viewModel(savedStateHandle = prefilledHandle("Landmine Press"))
+
+        assertEquals(ExerciseEditorMode.Create, viewModel.uiState.value.mode)
+        assertEquals("Landmine Press", viewModel.uiState.value.name)
+        assertTrue(viewModel.uiState.value.isSaveEnabled)
+    }
+
+    @Test
+    fun `a prefilled name the user then edits survives recreation as the edit`() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        val savedStateHandle = prefilledHandle("Landmine Press")
+        val first = viewModel(savedStateHandle = savedStateHandle)
+        first.onNameChanged("Landmine Press (half kneeling)")
+
+        val recreated = viewModel(savedStateHandle = savedStateHandle)
+
+        assertEquals("Landmine Press (half kneeling)", recreated.uiState.value.name)
+    }
+
+    @Test
+    fun `backing out of an untouched prefilled editor dismisses without the discard dialog`() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        val viewModel = viewModel(savedStateHandle = prefilledHandle("Landmine Press"))
+
+        viewModel.onBackRequested()
+
+        assertTrue(viewModel.uiState.value.dismissed)
+        assertFalse(viewModel.uiState.value.isDiscardDialogVisible)
+    }
 }

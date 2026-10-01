@@ -538,7 +538,7 @@ listing each converted package's `app/src/test` directory; method counts are
 | `ExerciseListViewModelTest` (JVM, 12) | the shared `viewModel` initializer | **fixture edit**; all 12 survive; +1 new |
 | `InMemoryTrainingPlanRepository` (JVM fixture) | — | **fixture edit** (the new port query) |
 
-- **Register:** `D8`, `D35`, `D36`; open `O7`.
+- **Register:** `D8`, `D35`, `D36`; CP10 added `D73`–`D75` and closed `O7`.
 
 ### 3.11 Exercise editor (CP10)
 
@@ -563,10 +563,11 @@ listing each converted package's `app/src/test` directory; method counts are
 | File | Methods | Verdict |
 |---|---|---|
 | `ExerciseEditorScreenTest` (androidTest, 13) | `loadIncrementFieldIsHiddenForATrackingTypeThatDoesNotSupportLoad` | **rewritten** (silent-pass risk) |
+| | `restDurationPresetClickInvokesOnRestSecondsChanged` | **rewritten by CP10** — `2b` labels the presets `1:00 1:30 2:00 3:00`, so the method clicks `1:30` and still asserts `"90"` (the plan had it surviving on the old `90` label) |
 | | `trackingTypeChipClickInvokesOnTrackingTypeChanged`, `restDurationPresetClickInvokesOnRestSecondsChanged`, `nameFieldInputInvokesOnNameChanged` (`performTextInput`, `:109`) and the other nine | **survive** |
 | `ExerciseEditorViewModelTest` (JVM, 16) | all | **survive**; +3 new (the prefill) |
 
-- **Register:** open `O7`.
+- **Register:** CP10 added `D70`–`D72` and closed `O7`.
 
 ### 3.12 Plans list (CP11)
 
@@ -840,7 +841,7 @@ listing each converted package's `app/src/test` directory; method counts are
 Every row is a place the built app differs from the design. **D1–D24 are
 seeded verbatim from the execution plan's "Deviation register — seeded";
 D25–D38 are added by CP1** from the full read above. Later checkpoints append
-here — the next free id is **D70** (CP3 added D39–D40, CP4 D41–D43, CP5 D44–D48, CP6 D49–D54, CP7 D55–D59, CP8 D60–D66, CP9 D67–D69) — and never renumber. Reasons use the
+here — the next free id is **D76** (CP3 added D39–D40, CP4 D41–D43, CP5 D44–D48, CP6 D49–D54, CP7 D55–D59, CP8 D60–D66, CP9 D67–D69, CP10 D70–D75) — and never renumber. Reasons use the
 plan's four categories: `no domain backing`, `blocked by open decision`,
 `platform convention`, `deliberate product call`.
 
@@ -915,6 +916,12 @@ plan's four categories: `no domain backing`, `blocked by open decision`,
 | D67 | The done screen's `Versus last time` delta: `+2.5 kg` whenever an exercise met its set target, `partial` when it did not, `—` when skipped; the detail line `N sets · <first set's load> × <every set's reps>` (`nRecapRows`, `:4349–4366`) | The delta compares this session's best working set with the best working set of the last earlier valid session that trained the exercise the same way: the heaviest load (`+2.5 kg` / `−2.5 kg` / `same load`), else the most reps (`+2 reps` / `−1 rep` / `same reps`), else the longest hold (`+5 s` / `−5 s` / `same time`); `first time` with nothing comparable before; `—` with no working set, the row dimmed. No `partial`. The detail counts working sets and lists runs at one load, `3 sets · 80 kg × 8, 8; 82.5 kg × 6`, so no set is shown at a load it was not lifted at; a warm-ups-only exercise reads `N warm-ups only`, an empty one `no sets recorded` | no domain backing: the prototype's `+2.5 kg` is a constant that says nothing about what was lifted, and `partial` restates the finish sheet's unfinished list as if it were a comparison. Derived by `ObserveWorkoutSummary` from valid completed sessions only, as Home's load increases are (`ObserveRecentTraining`). **Copy written by CP9 — flagged for the reviewer to accept or reword** | CP9 |
 | D68 | One `Best set on <exercise>` card for the first exercise with any set, its previous best invented as 2.5 kg lighter on a fixed date (`nHasPr` / `nPrDetail`, `:4341–4348`) | One card per exercise whose best working set this session (heaviest load, then most reps at it; else most reps; else longest hold) beats every earlier valid working set of that exercise measured the same way; "previous best … on <date>" names that earlier best and the most recent session that set it. A first time is never a best set (there is nothing to beat), nor is a tie; invalidated sessions are never the record | deliberate product call (plan CP9 item 4: "derived from existing history … never faked"): computed in memory over the completed history on every emission, the same cost as Home's load increases; more than one card when more than one exercise set a record, since picking one would hide the rest | CP9 |
 | D69 | The done screen's tiles at 21/500 (`:1370`); the finish sheet's `Finish and save` at 52 tall, radius 10 (`:1757`) | `RepFlowStatTile`'s 19/500 figures (the tile CP3 built for `3b`'s triple and this screen); `Finish and save` at the design system's 56dp, radius-12 primary | deliberate product call: `6b`'s own scale over one-off sizes, as `D36`, `D40`, `D48`, `D59` | CP9 |
+| D70 | `2b`'s `Save` as a text action at the end of the top bar (`:2380`) | `Save` (`Saving…` while in flight) is the 56 primary on `RepFlowBottomActionBar`, enabled exactly when the draft is saveable. Closes that part of `O7` | deliberate product call: `6b`, the newer turn, pins the one primary action to a bottom bar (as `D35` for the library's create) | CP10 |
+| D71 | `2b`'s field labels (`Name`, `Technique notes — shown during the workout`) drawn 11.5 above their fields (`:2383`, `:2411`) | The name, technique-notes and `Other` value fields keep Material's outlined label inside the field (it rises into the outline once filled); the tracking type, `Default rest` and `Load step` controls carry `2b`'s 11.5 labels above them. The notes field carries the design's prompt as its placeholder | platform convention: a text field's label is its own accessible name, so TalkBack (and the editor's tests, which type into the field by it) reach one node; a separate label above would leave the field itself unnamed | CP10 |
+| D72 | `2b`'s duplicate-name error inline under the name while it is being typed (`:2383–2385`) | The same inline error — the field's error ring, `warning-circle` and `An exercise with this name already exists.` — under the name field, shown once `Save` is refused for a duplicate name and kept until the next save attempt (as today's submit error was) | no domain backing: there is no name-availability query while typing; uniqueness is decided at save by `CreateExercise` / `UpdateExercise`, whose input contract plan CP10 item 4 keeps | CP10 |
+| D73 | `2c`'s tracking-type filter chip `Weight & reps` beside `Active` / `Archived` (`:2436`) | Not built: the filters stay `Active` / `Archived`. (`2c`'s `8 matches` count **is** built, shown while a search is active.) Closes `O7` with `D70`–`D72` | deliberate product call: plan CP10 item 1 converts the status filter only; a second filter dimension would be new behaviour in `ObserveExercises`' criteria that the plan does not ask for. **Flagged for the reviewer** | CP10 |
+| D74 | `2c`'s header: a 40 back arrow beside the 25/500 `Exercises` title (`:2423–2426`) | CP3's sub-screen bar: the 44 `arrow-left` and the title at 17/500, as `2b` and every other pushed screen draw it | deliberate product call: `6b`'s recurring sub-screen bar over `2c`'s one-off header (the library is a pushed screen, reached from Settings), and the 44 tap-target floor, as `D36`, `D69` | CP10 |
+| D75 | `2c` draws an archived exercise inside the `Active` results, dimmed, with its `archived` badge (`:2449–2452`) | Archived exercises appear only under `Archived`, each row dimmed to 60% with the `archived` badge exactly as drawn; `Active` lists active exercises only | deliberate product call: the preserved status-filter semantics of `ObserveExercises` (one status per list), which the plan does not change | CP10 |
 
 **Status-chip audit (`6b`, "never colour alone"; CP3).** Every chip the
 design draws pairs its tone with an icon or a word (§2). On the built
@@ -949,7 +956,7 @@ review finding.
 | O4 | CP7 — **closed: `D56`** | The picker sheet's inline `Create a new exercise` (name + tracking type, `:1612–1633`) and its empty state | the plan converts the picker but is silent on creating from it |
 | O5 | CP7, CP8 — **closed: `D58`** | The rest strip's `−15s` / `+15s` / `Skip rest` / dismiss (backed by `AdjustRestTimer` and `SkipRestTimer`), its lit `Rest done` state, and the in-app `Rest complete` banner with `+30s` (`:1661–1671`) | the plan says the strip "renders here too" without enumerating its controls |
 | O6 | CP8 — **closed: `D63`** | The warm-up hint "Logs outside the set count, 60s rest." (a 60 s warm-up rest, `:4260`), and "applies to the next set you log, then clears" | today's rest rule and the detail fields' lifetime may differ; CP8 states what it keeps |
-| O7 | CP10 | `2c`'s tracking-type filter chip and `N matches` count; `2b`'s `Save` in the top bar (against `6b`'s bottom bar), its duplicate-name inline error, and its `Other` presets | CP10 item 1 names only `Active` / `Archived` |
+| O7 | CP10 — **closed: `D70`–`D73`; `N matches` and the `Other` presets built** | `2c`'s tracking-type filter chip and `N matches` count; `2b`'s `Save` in the top bar (against `6b`'s bottom bar), its duplicate-name inline error, and its `Other` presets | CP10 item 1 names only `Active` / `Archived` |
 | O8 | CP11 | A per-row start action with no active-plan concept; `Open` (`5a`) or `Edit` (`4a`); the warm-up sets stepper and `Optional` toggle (the domain fields exist); the "Saving creates version N" bar; the `Progression — Automatic, per exercise` card | CP11 item 2 lists sets / rep range / rest only |
 | O9 | CP12 | History's `This plan` chip, month section labels, the `PR` badge derivation, the `invalidated` badge, the `<plan> · version N` line | CP12 item 1 says "PR badge where derivable" and "existing filters converted" |
 | O10 | CP13 | `3d`'s futsal insight card — its second sentence ("held back automatically") is a claim about `ProgressionPolicyV1` that CP13 must verify or drop; the `Futsal sessions` list; the 14-day window and selected-day readout; `3c`'s notes field | CP13 items 3–4 name only "the chart above, entries below" |

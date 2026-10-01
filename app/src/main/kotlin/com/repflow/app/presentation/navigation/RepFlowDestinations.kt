@@ -1,5 +1,6 @@
 package com.repflow.app.presentation.navigation
 
+import android.net.Uri
 import androidx.annotation.DrawableRes
 import com.repflow.app.R
 import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
@@ -16,6 +17,19 @@ object RepFlowDestinations {
 
     const val EXERCISES = "exercises"
     const val EXERCISE_NEW = "exercises/new"
+
+    /**
+     * The create route's optional name prefill - the library's `Create
+     * "<query>"` (remediation-1 CP10). Absent by default, so the bare
+     * [EXERCISE_NEW] still resolves; it never decides the editor's mode,
+     * which stays derived from [EXERCISE_EDIT_ARG] alone.
+     */
+    const val EXERCISE_NEW_NAME_ARG = "name"
+    const val EXERCISE_NEW_PATTERN = "$EXERCISE_NEW?$EXERCISE_NEW_NAME_ARG={$EXERCISE_NEW_NAME_ARG}"
+
+    /** [EXERCISE_NEW] with [prefillName] as the new exercise's name, URI-encoded. */
+    fun exerciseNewRoute(prefillName: String): String = "$EXERCISE_NEW?$EXERCISE_NEW_NAME_ARG=${Uri.encode(prefillName)}"
+
     const val EXERCISE_EDIT_ARG = "exerciseId"
     const val EXERCISE_EDIT_PATTERN = "exercises/{$EXERCISE_EDIT_ARG}"
 

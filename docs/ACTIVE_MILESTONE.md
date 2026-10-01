@@ -13,8 +13,106 @@ explicitly** — `active_work_item_id` still points at the parent.
   (revision 20). Registry:
   `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-registry.json`
   (CP1–CP16, executed in array order).
-- **Current checkpoint: CP9 — Workout finish and session summary:
-  complete.** CP1–CP8 complete; CP10–CP16 not started.
+- **Current checkpoint: CP10 — Exercise library conversion: complete.**
+  CP1–CP9 complete; CP11–CP16 not started.
+
+### CP10 — what was done and verified (2026-10-01)
+
+- **Design re-read** from the live project (etag `1786483024007421`): `2c`
+  (`RepFlow.dc.html:2418–2487`) and `2b` (`:2373–2416`).
+- **Library (`2c`, plan items 1, 2, 5; `ExerciseListScreen.kt`,
+  `ExerciseListRows.kt`):** CP3's sub-screen bar with a back arrow (the
+  library is pushed from Settings; `D74`), a 48 search field (surface fill,
+  hairline, radius 10), the `Active` / `Archived` chips drawn at `2c`'s pill
+  size inside 44dp tap targets (`ExerciseFilterChipMinHeight`; the funnel
+  glyph went with the muscle-group chip it belongs to, `D8`), `N matches`
+  while a search is active, flat rows at `ExerciseRowMinHeight` (64, kept as
+  the row's `heightIn`) — the name (two lines) over `<type> · rest m:ss · in N
+  plans` / `not in any plan` — an archived row dimmed to 60% with its
+  `archived` badge, and a 44dp `⋮` (`D36`) that opens a **row-action sheet**
+  (Edit; Archive, or Restore on the archived filter) in place of the
+  `DropdownMenu`; the trigger keeps its content description. Create is the
+  bottom action bar's primary (`Add exercise`, the FAB's accessible name;
+  `D35`) — `ExerciseFabSize` and the FAB are retired. The archive snackbar is
+  `2c`'s card (surface fill, ring, `arrow-counter-clockwise`, accent `Undo`).
+- **`Create "<query>"` (plan item 3):** `Not here? Create “<query>”` under the
+  results while searching the active list, and in place of them when nothing
+  matches. The create route gained one optional argument
+  (`exercises/new?name={name}`, `EXERCISE_NEW_PATTERN`, nullable, default
+  null), so the bare `exercises/new` (workout picker, the bar) still resolves;
+  the mode stays derived from `EXERCISE_EDIT_ARG` only.
+  `ExerciseEditorViewModel` seeds the draft name from it only as the fallback
+  under a restored draft, and `isDirty`'s name clause became `name.trim() !=
+  prefill.trim()`. `ExerciseListContent.Empty` keeps its shape;
+  `exercise_list_empty_no_search_results` keeps its id with the text `Not
+  here?`; the screen gained `onCreateFromQueryClick: (String) -> Unit` (and
+  `onBackClick`).
+- **Plan usage (plan item 5):** `TrainingPlanRepository.observeExercisePlanUsage()`
+  (one read query, `PlannedExerciseDao.observeExercisePlanUsage` over the
+  existing three tables — non-archived plans, latest version only, a plan
+  counted once per exercise; **no schema change, Room stays at version 7**),
+  the use case `ObserveExercisePlanUsage`, a fourth `ExerciseListViewModel`
+  dependency combined inside the same `flatMapLatest` (a failure in either
+  source is the existing retryable `ObservationFailed`), and
+  `ExerciseListItem.planUsageCount` with no default.
+- **Editor (`2b`, plan item 4; `ExerciseEditorScreen.kt`,
+  `ExerciseEditorFormFields.kt`):** CP3's sub-screen bar (real `arrow-left`
+  replacing the `<` text) and `Save` on the bottom action bar (`D70`); the
+  name field 52 tall with `2b`'s inline error — a refused duplicate name now
+  reports under the name field with the error ring and `warning-circle`
+  (`D72`); `Tracking type` as `2b`'s three-segment control, the selected
+  segment tinted and checked; `Default rest` presets `1:00 1:30 2:00 3:00
+  Other` and `Load step` presets `1.25 kg 2.5 kg 5 kg Other` on `6b`'s
+  scale-row cells — a preset calls the same `String` setter typing does,
+  `Other` opens the typed field (and stays selected for any non-preset value,
+  so a restored or invalid draft is never hidden), and **tapping the selected
+  preset again clears the optional default** (the design is silent on
+  clearing; flagged for the reviewer); technique notes with `2b`'s label and
+  prompt. Field labels stay inside the text fields (`D71`).
+  `onTrackingTypeChanged`'s clear-the-load-and-queue-a-message rule is
+  unchanged. The ViewModel's input contract is unchanged.
+- **Copy changed** (named here, per plan item 6): `exercise_list_empty_no_exercises`
+  → `No exercises yet. Add one below.` (the `+` it pointed at is gone);
+  `exercise_list_row_archived_badge` → `archived` (as drawn);
+  `exercise_editor_instructions_label` → `Technique notes — shown during the
+  workout`. The unused `exercise_default_rest_seconds_summary` /
+  `exercise_default_load_increment_summary` were removed (the meta no longer
+  shows the load step, plan item 5).
+- **`O7` closed:** `D70`–`D73`; `N matches` and the `Other` presets built. `D73`
+  (the tracking-type filter chip not built) is **flagged for the reviewer**.
+  Also added `D74` (header), `D75` (archived rows only under `Archived`).
+  Next free register id: **D76**.
+- **Tests (plan item 6's enumeration, as built):** JVM —
+  `ExerciseListScreenWiringTest`: `rowAndFabSizesAreTheDesignsOwn` →
+  `rowHeightIsTheDesignsOwn` (row half kept), `everyTapTargetClearsTheMinimum`
+  rewritten against the bar's primary, the chips, the overflow and the badge;
+  the other three unchanged. `ExerciseListViewModelTest` fixture edit + 1 new
+  (usage counts non-archived plans and follows an archive live; 13/13).
+  `ExerciseEditorViewModelTest` + 3 new (prefill starts named and saveable;
+  an edited prefill survives recreation; an untouched prefill backs out
+  without the dialog; 19/19). `InMemoryTrainingPlanRepository` gains the
+  query. Instrumented — `ExerciseListScreenTest`: `rendersContentRows`
+  (count + meta), `rendersTheNoSearchResultsEmptyState` (new copy + the tap
+  carries `zzz`), `createFabClickInvokesOnCreateClick` →
+  `createBarButtonClickInvokesOnCreateClick` (same content description), the
+  three row-menu tests unchanged in code (their second click now lands on the
+  sheet), helper fixture edits; `ExerciseEditorScreenTest`:
+  `loadIncrementFieldIsHiddenForATrackingTypeThatDoesNotSupportLoad` rewritten
+  to first show the `Load step` row exists, then that it is gone for
+  `REPS_ONLY`; **`restDurationPresetClickInvokesOnRestSecondsChanged`
+  rewritten too** (the plan had it surviving on the old `90` label — it now
+  clicks `1:30` and still asserts `"90"`). New instrumented
+  `LocalTrainingPlanRepositoryPlanUsageTest` (2: latest-version-only and
+  per-plan counting; an archived plan stops counting and the flow re-emits).
+- **Checks run:** `spotlessApply`; `testDebugUnitTest --tests` for
+  `presentation.exercise.*`, `application.trainingplan.*`,
+  `presentation.navigation.*`, `presentation.designsystem.*`,
+  `LayerBoundaryTest` — 17 classes, 135 tests, 0 failures;
+  `spotlessCheck detekt lintDebug assembleDebug assembleDebugAndroidTest` —
+  green; lint 0 errors, 25 warnings and 1 hint, all pre-existing.
+  **Not run (no device):** `ExerciseListScreenTest` (15),
+  `ExerciseEditorScreenTest` (13) and `LocalTrainingPlanRepositoryPlanUsageTest`
+  (2) compile but need `connectedDebugAndroidTest`, as do CP2–CP9's.
 
 ### CP9 — what was done and verified (2026-10-01)
 
@@ -781,7 +879,7 @@ explicitly** — `active_work_item_id` still points at the parent.
 ### Next action
 
 `/milestone-implement repflow-redesign-visual-foundation-remediation-1` —
-CP10 (exercise library conversion). `O11` and
+CP11 (plans list and plan editor conversion). `O11` and
 `O12` were decided by the user on 2026-10-01:
 CP14 and CP15 build the approved plan's `4a` designs; `5c`/`5d`/`5b` go to a
 later remediation child.

@@ -7,25 +7,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import com.repflow.app.R
 import com.repflow.app.domain.exercise.ExerciseTrackingType
+import com.repflow.app.presentation.designsystem.components.RepFlowBottomActionBar
+import com.repflow.app.presentation.designsystem.components.RepFlowLoadingIndicator
+import com.repflow.app.presentation.designsystem.components.RepFlowScreenScaffold
 
 /**
  * Stateless exercise editor screen: state in, events out, no Hilt (see
@@ -33,9 +29,14 @@ import com.repflow.app.domain.exercise.ExerciseTrackingType
  * Form field composables live in `ExerciseEditorFormFields.kt`, split out
  * purely to keep each file under Detekt's per-file function-count
  * threshold.
+ *
+ * `2b`'s composition (remediation-1 CP10) in CP3's frame: the sub-screen bar
+ * with its back arrow (today's discard rule), the form, and `Save` pinned to
+ * the bottom action bar (`6b`'s one primary action; `2b` draws it as a text
+ * action in the top bar - `D70`). The ViewModel's input contract is
+ * unchanged: presets call the same `String` setters a typed value does.
  */
 @Suppress("LongParameterList")
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExerciseEditorScreen(
     uiState: ExerciseEditorUiState,
@@ -66,13 +67,24 @@ fun ExerciseEditorScreen(
         }
     }
 
-    Scaffold(
+    RepFlowScreenScaffold(
+        title = editorTitle(uiState.mode),
         modifier = modifier,
-        topBar = {
-            TopAppBar(
-                title = { Text(editorTitle(uiState.mode)) },
-                navigationIcon = { BackNavigationIcon(onBackRequested) },
-            )
+        onBack = onBackRequested,
+        backContentDescription = stringResource(R.string.exercise_editor_back_content_description),
+        bottomBar = {
+            if (uiState.loadStatus == ExerciseEditorLoadStatus.READY) {
+                RepFlowBottomActionBar(
+                    primaryText =
+                        if (uiState.isSaving) {
+                            stringResource(R.string.exercise_editor_saving)
+                        } else {
+                            stringResource(R.string.exercise_editor_save)
+                        },
+                    onPrimaryClick = onSaveClicked,
+                    primaryEnabled = uiState.isSaveEnabled,
+                )
+            }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) { Snackbar(it) } },
     ) { innerPadding ->
@@ -84,7 +96,6 @@ fun ExerciseEditorScreen(
             onInstructionsChanged,
             onRestSecondsChanged,
             onLoadIncrementChanged,
-            onSaveClicked,
         )
     }
 
@@ -100,17 +111,6 @@ private fun editorTitle(mode: ExerciseEditorMode): String =
         is ExerciseEditorMode.Edit -> stringResource(R.string.exercise_editor_title_edit)
     }
 
-@Composable
-private fun BackNavigationIcon(onBackRequested: () -> Unit) {
-    val contentDescription = stringResource(R.string.exercise_editor_back_content_description)
-    IconButton(
-        onClick = onBackRequested,
-        modifier = Modifier.semantics { this.contentDescription = contentDescription },
-    ) {
-        Text("<")
-    }
-}
-
 @Suppress("LongParameterList")
 @Composable
 private fun EditorBody(
@@ -121,14 +121,13 @@ private fun EditorBody(
     onInstructionsChanged: (String) -> Unit,
     onRestSecondsChanged: (String) -> Unit,
     onLoadIncrementChanged: (String) -> Unit,
-    onSaveClicked: () -> Unit,
 ) {
     when (uiState.loadStatus) {
         ExerciseEditorLoadStatus.LOADING -> {
             Box(
                 modifier = Modifier.padding(innerPadding).fillMaxSize(),
                 contentAlignment = Alignment.Center,
-            ) { CircularProgressIndicator() }
+            ) { RepFlowLoadingIndicator() }
         }
 
         ExerciseEditorLoadStatus.NOT_FOUND -> {
@@ -147,7 +146,6 @@ private fun EditorBody(
                 onInstructionsChanged = onInstructionsChanged,
                 onRestSecondsChanged = onRestSecondsChanged,
                 onLoadIncrementChanged = onLoadIncrementChanged,
-                onSaveClicked = onSaveClicked,
             )
         }
     }

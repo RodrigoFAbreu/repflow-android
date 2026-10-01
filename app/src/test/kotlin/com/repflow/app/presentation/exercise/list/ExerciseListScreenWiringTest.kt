@@ -22,7 +22,7 @@ import org.junit.Test
  *
  * The sizes are here for the same reason CP1's token hexes are pinned: they
  * are transcriptions of the design, and nothing else would catch a typo that
- * leaves the row or the FAB looking merely plausible.
+ * leaves the row or a tap target looking merely plausible.
  */
 class ExerciseListScreenWiringTest {
     @Test
@@ -55,25 +55,34 @@ class ExerciseListScreenWiringTest {
         )
     }
 
-    /** The design's own values: rows 56-68 tall, the FAB 60x60. */
+    /**
+     * The design's own value: rows 56-68 tall (`2c` draws 64). The FAB that
+     * used to sit beside it is gone - create is on the bottom action bar
+     * (remediation-1 CP10, `D35`) - so this pins the row alone.
+     */
     @Test
-    fun rowAndFabSizesAreTheDesignsOwn() {
+    fun rowHeightIsTheDesignsOwn() {
         assertTrue("$ExerciseRowMinHeight outside the design's 56-68 row range", ExerciseRowMinHeight.value in 56f..68f)
-        assertEquals(60f, ExerciseFabSize.value, 0f)
     }
 
     /**
      * Every tap target on this screen clears 44dp - the design's own layout
-     * rule, and the floor CP3's primitives already hold themselves to.
+     * rule, and the floor CP3's primitives already hold themselves to: the
+     * bottom bar's create button, the `Active` / `Archived` chips and the
+     * `Create "<query>"` action (both drawn smaller, inside a 44dp target),
+     * and the row overflow `⋮` (`2c`'s 40, lifted to 44 - `D36`).
      */
     @Test
     fun everyTapTargetClearsTheMinimum() {
         val minimum = RepFlowButtonDefaults.neutralOutlineMinHeight.value
         assertEquals(44f, minimum, 0f)
-        assertTrue("FAB smaller than $minimum", ExerciseFabSize.value >= minimum)
+        assertTrue("create button smaller than $minimum", RepFlowButtonDefaults.primaryMinHeight.value >= minimum)
+        assertTrue("filter chip smaller than $minimum", ExerciseFilterChipMinHeight.value >= minimum)
+        assertTrue("row overflow smaller than $minimum", ExerciseRowActionSize.value >= minimum)
         // The archived badge is deliberately *not* interactive: at the chip's
-        // own 28dp it could not clear the floor, which is why the filter row
-        // uses the pill picker instead of a clickable chip.
+        // own 28dp it could not clear the floor. The filter chips, which are
+        // tappable, draw a pill of the design's size inside their own 44dp
+        // target instead of being bare 28dp chips.
         assertTrue(RepFlowTagDefaults.minHeight.value < minimum)
     }
 }

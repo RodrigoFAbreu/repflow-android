@@ -6,6 +6,7 @@ import com.repflow.app.application.exercise.ArchiveExercise
 import com.repflow.app.application.exercise.ExerciseStatusFilter
 import com.repflow.app.application.exercise.ObserveExercises
 import com.repflow.app.application.exercise.RestoreExercise
+import com.repflow.app.application.trainingplan.ObserveExercisePlanUsage
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.exercise.Exercise
 import com.repflow.app.domain.exercise.ExerciseId
@@ -17,7 +18,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -27,7 +27,10 @@ import javax.inject.Inject
 
 /**
  * Drives [ExerciseListUiState] from [ObserveExercises] (see plan.md section
- * H for the retry design).
+ * H for the retry design), joined with [ObserveExercisePlanUsage] for each
+ * row's `in N plans` (remediation-1 CP10). Both sources sit inside the same
+ * `flatMapLatest`, so a failure in either is the same visible, retryable
+ * [ExerciseListContent.ObservationFailed].
  *
  * [criteria] and [retryTrigger] are combined so that changing the query or
  * filter, or calling [onRetry], all resubscribe to a fresh repository
@@ -46,6 +49,7 @@ class ExerciseListViewModel
         private val observeExercises: ObserveExercises,
         private val archiveExercise: ArchiveExercise,
         private val restoreExercise: RestoreExercise,
+        private val observeExercisePlanUsage: ObserveExercisePlanUsage,
     ) : ViewModel() {
         private data class Criteria(
             val query: String,
@@ -66,9 +70,9 @@ class ExerciseListViewModel
         private val contentState =
             combine(criteria, retryTrigger) { c, _ -> c }
                 .flatMapLatest { c ->
-                    observeExercises(c.filter, c.query)
-                        .map { exercises -> ContentState(c.query, c.filter, toContent(exercises, c)) }
-                        .onStart { emit(ContentState(c.query, c.filter, ExerciseListContent.Loading)) }
+                    combine(observeExercises(c.filter, c.query), observeExercisePlanUsage()) { exercises, usage ->
+                        ContentState(c.query, c.filter, toContent(exercises, usage, c))
+                    }.onStart { emit(ContentState(c.query, c.filter, ExerciseListContent.Loading)) }
                         .catch { failure ->
                             if (failure is CancellationException) throw failure
                             val failed = ExerciseListContent.ObservationFailed(ExerciseListFailureReason.UNKNOWN)
@@ -87,10 +91,11 @@ class ExerciseListViewModel
 
         private fun toContent(
             exercises: List<Exercise>,
+            usage: Map<ExerciseId, Int>,
             criteria: Criteria,
         ): ExerciseListContent {
             if (exercises.isNotEmpty()) {
-                return ExerciseListContent.Content(exercises.map(::toListItem))
+                return ExerciseListContent.Content(exercises.map { toListItem(it, usage[it.id] ?: 0) })
             }
             val reason =
                 when {
@@ -101,14 +106,17 @@ class ExerciseListViewModel
             return ExerciseListContent.Empty(reason)
         }
 
-        private fun toListItem(exercise: Exercise) =
-            ExerciseListItem(
-                id = exercise.id,
-                name = exercise.name.value,
-                trackingType = exercise.trackingType,
-                defaultRestSeconds = exercise.defaultRestDuration?.seconds,
-                defaultLoadIncrementGrams = exercise.defaultLoadIncrement?.grams,
-            )
+        private fun toListItem(
+            exercise: Exercise,
+            planUsageCount: Int,
+        ) = ExerciseListItem(
+            id = exercise.id,
+            name = exercise.name.value,
+            trackingType = exercise.trackingType,
+            defaultRestSeconds = exercise.defaultRestDuration?.seconds,
+            defaultLoadIncrementGrams = exercise.defaultLoadIncrement?.grams,
+            planUsageCount = planUsageCount,
+        )
 
         fun onQueryChanged(query: String) {
             criteria.update { it.copy(query = query) }

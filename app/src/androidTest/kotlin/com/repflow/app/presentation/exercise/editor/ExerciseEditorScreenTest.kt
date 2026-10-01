@@ -1,6 +1,9 @@
 package com.repflow.app.presentation.exercise.editor
 
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -137,21 +140,48 @@ class ExerciseEditorScreenTest {
         assertEquals(ExerciseTrackingType.REPS_ONLY, selected)
     }
 
+    /**
+     * Since remediation-1 CP10 the load increment is `2b`'s `Load step` preset
+     * row. The row is first shown to exist for a type that carries load, so
+     * the absence asserted after the switch is the row being hidden - not a
+     * label that no longer exists anywhere passing by default.
+     */
     @Test
     fun loadIncrementFieldIsHiddenForATrackingTypeThatDoesNotSupportLoad() {
-        setContent(ExerciseEditorUiState(trackingType = ExerciseTrackingType.REPS_ONLY))
+        var uiState by mutableStateOf(ExerciseEditorUiState(trackingType = ExerciseTrackingType.WEIGHT_AND_REPS))
+        composeRule.setContent {
+            ExerciseEditorScreen(
+                uiState = uiState,
+                onNameChanged = {},
+                onTrackingTypeChanged = {},
+                onInstructionsChanged = {},
+                onRestSecondsChanged = {},
+                onLoadIncrementChanged = {},
+                onSaveClicked = {},
+                onBackRequested = {},
+                onDiscardConfirmed = {},
+                onDiscardCancelled = {},
+                onMessageShown = {},
+            )
+        }
+        val loadStepLabel = composeRule.activity.getString(R.string.exercise_editor_load_step_label)
+        val loadStepPreset = composeRule.activity.getString(R.string.exercise_editor_load_step_preset, "2.5")
+        composeRule.onNodeWithText(loadStepLabel).assertIsDisplayed()
+        composeRule.onNodeWithText(loadStepPreset).assertIsDisplayed()
 
-        composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.exercise_editor_load_increment_label))
-            .assertDoesNotExist()
+        uiState = ExerciseEditorUiState(trackingType = ExerciseTrackingType.REPS_ONLY)
+
+        composeRule.onNodeWithText(loadStepLabel).assertDoesNotExist()
+        composeRule.onNodeWithText(loadStepPreset).assertDoesNotExist()
     }
 
+    /** `2b` labels the rest presets as a clock (`1:30`); the value written is still seconds. */
     @Test
     fun restDurationPresetClickInvokesOnRestSecondsChanged() {
         var restSeconds: String? = null
         setContent(ExerciseEditorUiState(), onRestSecondsChanged = { restSeconds = it })
 
-        composeRule.onNodeWithText("90").performClick()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.exercise_rest_clock, 1, 30)).performClick()
 
         assertEquals("90", restSeconds)
     }

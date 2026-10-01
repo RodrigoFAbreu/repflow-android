@@ -9,6 +9,14 @@ import com.repflow.app.application.exercise.FixedClock
 import com.repflow.app.application.exercise.InMemoryExerciseRepository
 import com.repflow.app.application.exercise.ObserveExercises
 import com.repflow.app.application.exercise.RestoreExercise
+import com.repflow.app.application.exercise.SequentialIdentifierGenerator
+import com.repflow.app.application.trainingplan.ArchiveTrainingPlan
+import com.repflow.app.application.trainingplan.CreateTrainingPlan
+import com.repflow.app.application.trainingplan.CreateTrainingPlanCommand
+import com.repflow.app.application.trainingplan.InMemoryTrainingPlanRepository
+import com.repflow.app.application.trainingplan.ObserveExercisePlanUsage
+import com.repflow.app.application.trainingplan.PlannedExerciseInput
+import com.repflow.app.application.trainingplan.PlannedExerciseTargetKind
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.exercise.Exercise
 import com.repflow.app.domain.exercise.ExerciseId
@@ -32,11 +40,13 @@ import java.time.Instant
 class ExerciseListViewModelTest {
     private val repository = InMemoryExerciseRepository()
     private val clock = FixedClock(Instant.parse("2026-01-03T00:00:00Z"))
+    private val planRepository = InMemoryTrainingPlanRepository()
     private val viewModel =
         ExerciseListViewModel(
             ObserveExercises(repository),
             ArchiveExercise(repository, clock),
             RestoreExercise(repository, clock),
+            ObserveExercisePlanUsage(planRepository),
         )
 
     @After
@@ -335,4 +345,64 @@ class ExerciseListViewModelTest {
                 )
             }
         }
+
+    /**
+     * Remediation-1 CP10: each row's `in N plans` counts the non-archived
+     * plans that hold the exercise, and follows the plans live - archiving a
+     * plan drops it from the count without the list being re-opened.
+     */
+    @Test
+    fun `plan usage counts the non-archived plans that hold an exercise`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            repository.seed(exercise("bench", "Bench Press"))
+            repository.seed(exercise("squat", "Squat"))
+            val createPlan = CreateTrainingPlan(planRepository, repository, clock, SequentialIdentifierGenerator("plan"))
+            requireSuccess(createPlan(planCommand("Push Day", "bench")))
+            val archivedPlanId = requireSuccess(createPlan(planCommand("Old Push", "bench")))
+
+            viewModel.uiState.test {
+                val bothPlans =
+                    awaitUntil { state ->
+                        (state.content as? ExerciseListContent.Content)?.items?.any { it.planUsageCount == 2 } == true
+                    }
+                assertEquals(
+                    mapOf("Bench Press" to 2, "Squat" to 0),
+                    (bothPlans.content as ExerciseListContent.Content).items.associate { it.name to it.planUsageCount },
+                )
+
+                requireSuccess(ArchiveTrainingPlan(planRepository, clock)(archivedPlanId))
+
+                val oneArchived =
+                    awaitUntil { state ->
+                        (state.content as? ExerciseListContent.Content)?.items?.any { it.planUsageCount == 1 } == true
+                    }
+                assertEquals(
+                    mapOf("Bench Press" to 1, "Squat" to 0),
+                    (oneArchived.content as ExerciseListContent.Content).items.associate { it.name to it.planUsageCount },
+                )
+            }
+        }
+
+    private fun planCommand(
+        name: String,
+        exerciseId: String,
+    ) = CreateTrainingPlanCommand(
+        name = name,
+        plannedExercises =
+            listOf(
+                PlannedExerciseInput(
+                    exerciseId = exerciseId,
+                    order = 0,
+                    targetSets = 3,
+                    targetKind = PlannedExerciseTargetKind.REPS,
+                    repMin = 8,
+                    repMax = 12,
+                    durationMinSeconds = null,
+                    durationMaxSeconds = null,
+                    restSeconds = 90,
+                    isOptional = false,
+                ),
+            ),
+    )
 }

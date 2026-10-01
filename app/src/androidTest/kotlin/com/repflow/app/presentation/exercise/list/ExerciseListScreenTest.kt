@@ -43,10 +43,12 @@ class ExerciseListScreenTest {
         onRetry: () -> Unit = {},
         onExerciseClick: (ExerciseId) -> Unit = {},
         onCreateClick: () -> Unit = {},
+        onCreateFromQueryClick: (String) -> Unit = {},
         onArchiveClicked: (ExerciseId) -> Unit = {},
         onRestoreClicked: (ExerciseId) -> Unit = {},
         onUndoArchiveClicked: (ExerciseId) -> Unit = {},
         onMessageShown: (Long) -> Unit = {},
+        onBackClick: () -> Unit = {},
     ) {
         composeRule.setContent {
             RepFlowTheme {
@@ -57,15 +59,18 @@ class ExerciseListScreenTest {
                     onRetry = onRetry,
                     onExerciseClick = onExerciseClick,
                     onCreateClick = onCreateClick,
+                    onCreateFromQueryClick = onCreateFromQueryClick,
                     onArchiveClicked = onArchiveClicked,
                     onRestoreClicked = onRestoreClicked,
                     onUndoArchiveClicked = onUndoArchiveClicked,
                     onMessageShown = onMessageShown,
+                    onBackClick = onBackClick,
                 )
             }
         }
     }
 
+    /** `2c`'s row: the name over `<type> · rest m:ss · in N plans` (remediation-1 CP10). */
     @Test
     fun rendersContentRows() {
         val item =
@@ -75,10 +80,13 @@ class ExerciseListScreenTest {
                 trackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
                 defaultRestSeconds = 90,
                 defaultLoadIncrementGrams = 2_500,
+                planUsageCount = 2,
             )
         setContent(ExerciseListUiState(content = ExerciseListContent.Content(listOf(item))))
 
         composeRule.onNodeWithText("Bench Press").assertIsDisplayed()
+        val usage = composeRule.activity.resources.getQuantityString(R.plurals.exercise_list_meta_plan_usage, 2, 2)
+        composeRule.onNodeWithText("Weight & reps · rest 1:30 · $usage").assertIsDisplayed()
     }
 
     @Test
@@ -95,19 +103,32 @@ class ExerciseListScreenTest {
             ).assertIsDisplayed()
     }
 
+    /**
+     * `2c`'s `Not here? Create "<query>"` replaces the old no-results line
+     * (remediation-1 CP10 item 3), and tapping it reaches the create route
+     * carrying the query.
+     */
     @Test
     fun rendersTheNoSearchResultsEmptyState() {
+        var createdFrom: String? = null
         setContent(
             ExerciseListUiState(
                 query = "zzz",
                 content = ExerciseListContent.Empty(ExerciseListEmptyReason.NO_SEARCH_RESULTS),
             ),
+            onCreateFromQueryClick = { createdFrom = it },
         )
 
         composeRule
             .onNodeWithText(
                 composeRule.activity.getString(R.string.exercise_list_empty_no_search_results),
             ).assertIsDisplayed()
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.exercise_list_create_from_query, "zzz"))
+            .assertIsDisplayed()
+            .performClick()
+
+        assertEquals("zzz", createdFrom)
     }
 
     @Test
@@ -221,8 +242,9 @@ class ExerciseListScreenTest {
         assertEquals("", query)
     }
 
+    /** Create sits on the bottom action bar (`D35`), under the FAB's own accessible name. */
     @Test
-    fun createFabClickInvokesOnCreateClick() {
+    fun createBarButtonClickInvokesOnCreateClick() {
         var created = false
         setContent(
             uiState = ExerciseListUiState(content = ExerciseListContent.Empty(ExerciseListEmptyReason.NO_EXERCISES)),
@@ -232,10 +254,18 @@ class ExerciseListScreenTest {
         composeRule
             .onNodeWithContentDescription(
                 composeRule.activity.getString(R.string.exercise_list_add_content_description),
-            ).performClick()
+            ).assertIsDisplayed()
+            .performClick()
 
         assertEquals(true, created)
     }
+
+    /*
+     * The row's `⋮` keeps its content description; since remediation-1 CP10 it
+     * opens a row-action sheet instead of a `DropdownMenu`, so the second click
+     * in each of the three tests below lands on the sheet's row of the same
+     * words.
+     */
 
     @Test
     fun rowMenuEditItemInvokesOnExerciseClick() {
@@ -358,6 +388,7 @@ class ExerciseListScreenTest {
             trackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
             defaultRestSeconds = 90,
             defaultLoadIncrementGrams = 2_500,
+            planUsageCount = 0,
         )
 
     private companion object {

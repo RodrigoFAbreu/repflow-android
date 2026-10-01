@@ -2,6 +2,7 @@ package com.repflow.app.application.trainingplan
 
 import com.repflow.app.domain.backup.TrainingPlanSnapshot
 import com.repflow.app.domain.common.DomainResult
+import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.trainingplan.PlannedExercise
 import com.repflow.app.domain.trainingplan.PlannedExerciseId
 import com.repflow.app.domain.trainingplan.TrainingPlan
@@ -67,6 +68,16 @@ class InMemoryTrainingPlanRepository : TrainingPlanRepository {
                     val planName = plansById[planId]?.name?.value ?: return@flatMap emptyList()
                     versions.map { version -> version.id to TrainingPlanVersionLabel(planId, planName) }
                 }.toMap()
+        }
+
+    override fun observeExercisePlanUsage(): Flow<Map<ExerciseId, Int>> =
+        combine(plans, versionsByPlan) { plansById, versionsByPlanId ->
+            plansById.values
+                .filterNot { it.isArchived }
+                .mapNotNull { plan -> versionsByPlanId[plan.id]?.maxByOrNull { it.versionNumber } }
+                .flatMap { version -> version.plannedExercises.map { it.exerciseId }.distinct() }
+                .groupingBy { it }
+                .eachCount()
         }
 
     @Suppress("ReturnCount")

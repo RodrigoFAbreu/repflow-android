@@ -7,9 +7,20 @@
     <string name="exercise_list_filter_archived">Archived</string>
     <string name="exercise_list_search_clear_content_description">Clear search</string>
     <string name="exercise_list_add_content_description">Add exercise</string>
-    <string name="exercise_list_row_archived_badge">Archived</string>
-    <string name="exercise_list_empty_no_exercises">No exercises yet. Tap + to add one.</string>
-    <string name="exercise_list_empty_no_search_results">No exercises match your search.</string>
+    <string name="exercise_list_row_archived_badge">archived</string>
+    <string name="exercise_list_empty_no_exercises">No exercises yet. Add one below.</string>
+    <string name="exercise_list_empty_no_search_results">Not here?</string>
+    <string name="exercise_list_create_from_query">Create “%1$s”</string>
+    <plurals name="exercise_list_match_count">
+        <item quantity="one">%d match</item>
+        <item quantity="other">%d matches</item>
+    </plurals>
+    <string name="exercise_list_meta_rest">rest %1$s</string>
+    <plurals name="exercise_list_meta_plan_usage">
+        <item quantity="one">in %d plan</item>
+        <item quantity="other">in %d plans</item>
+    </plurals>
+    <string name="exercise_list_meta_no_plan">not in any plan</string>
     <string name="exercise_list_empty_no_archived">No archived exercises.</string>
     <string name="exercise_list_observation_failed">Couldn\'t load exercises.</string>
     <string name="exercise_list_retry">Retry</string>
@@ -24,15 +35,19 @@
     <string name="exercise_tracking_type_weight_and_reps">Weight &amp; reps</string>
     <string name="exercise_tracking_type_reps_only">Reps only</string>
     <string name="exercise_tracking_type_duration">Duration</string>
-    <string name="exercise_default_rest_seconds_summary">Rest %1$ds</string>
-    <string name="exercise_default_load_increment_summary">+%1$dg</string>
+    <string name="exercise_rest_clock">%1$d:%2$02d</string>
 
     <string name="exercise_editor_title_create">New exercise</string>
     <string name="exercise_editor_title_edit">Edit exercise</string>
     <string name="exercise_editor_not_found">This exercise no longer exists.</string>
     <string name="exercise_editor_name_label">Name</string>
     <string name="exercise_editor_tracking_type_label">Tracking type</string>
-    <string name="exercise_editor_instructions_label">Instructions (optional)</string>
+    <string name="exercise_editor_instructions_label">Technique notes — shown during the workout</string>
+    <string name="exercise_editor_instructions_placeholder">Cue, setup, or anything you keep forgetting…</string>
+    <string name="exercise_editor_default_rest_label">Default rest</string>
+    <string name="exercise_editor_load_step_label">Load step</string>
+    <string name="exercise_editor_load_step_preset">%1$s kg</string>
+    <string name="exercise_editor_preset_other">Other</string>
     <string name="exercise_editor_rest_duration_label">Default rest (seconds, optional)</string>
     <string name="exercise_editor_load_increment_label">Default load increment (kg, optional)</string>
     <string name="exercise_editor_save">Save</string>

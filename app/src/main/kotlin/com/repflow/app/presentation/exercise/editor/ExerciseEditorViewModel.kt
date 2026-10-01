@@ -50,6 +50,20 @@ class ExerciseEditorViewModel
         private val editingId: ExerciseId? =
             savedStateHandle.get<String>(RepFlowDestinations.EXERCISE_EDIT_ARG)?.let(::ExerciseId)
 
+        /**
+         * The create route's optional name prefill - the library's `Create
+         * "<query>"` (remediation-1 CP10). It only seeds the draft: a restored
+         * draft name always wins (D-22), it never decides the mode, and an
+         * untouched prefill is not a change ([isDirty]). `""` when absent and
+         * in edit mode.
+         */
+        private val prefillName: String =
+            if (editingId == null) {
+                savedStateHandle.get<String>(RepFlowDestinations.EXERCISE_NEW_NAME_ARG).orEmpty()
+            } else {
+                ""
+            }
+
         private var loadedExercise: Exercise? = null
         private var nextMessageId = 0L
 
@@ -64,7 +78,7 @@ class ExerciseEditorViewModel
             ExerciseEditorUiState(
                 mode = if (id != null) ExerciseEditorMode.Edit(id) else ExerciseEditorMode.Create,
                 loadStatus = if (id != null) ExerciseEditorLoadStatus.LOADING else ExerciseEditorLoadStatus.READY,
-                name = savedStateHandle[KEY_NAME] ?: "",
+                name = savedStateHandle[KEY_NAME] ?: prefillName,
                 trackingType = restoredTrackingType(),
                 instructions = savedStateHandle[KEY_INSTRUCTIONS] ?: "",
                 restSecondsText = savedStateHandle[KEY_REST_SECONDS] ?: "",
@@ -268,7 +282,7 @@ class ExerciseEditorViewModel
         private fun isDirty(state: ExerciseEditorUiState): Boolean =
             when (state.mode) {
                 is ExerciseEditorMode.Create -> {
-                    state.name.isNotBlank() ||
+                    state.name.trim() != prefillName.trim() ||
                         state.instructions.isNotBlank() ||
                         state.restSecondsText.isNotBlank() ||
                         state.loadIncrementKgText.isNotBlank() ||

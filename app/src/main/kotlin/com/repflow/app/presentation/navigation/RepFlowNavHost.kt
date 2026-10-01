@@ -101,9 +101,21 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
                 ExerciseListRoute(
                     onExerciseClick = { id -> navController.navigate(RepFlowDestinations.exerciseEditRoute(id.value)) },
                     onCreateClick = { navController.navigate(RepFlowDestinations.EXERCISE_NEW) },
+                    onCreateFromQueryClick = { name -> navController.navigate(RepFlowDestinations.exerciseNewRoute(name)) },
+                    onBackClick = { navController.popBackStack() },
                 )
             }
-            composable(RepFlowDestinations.EXERCISE_NEW) {
+            composable(
+                route = RepFlowDestinations.EXERCISE_NEW_PATTERN,
+                arguments =
+                    listOf(
+                        navArgument(RepFlowDestinations.EXERCISE_NEW_NAME_ARG) {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        },
+                    ),
+            ) {
                 ExerciseEditorRoute(
                     onSaved = { navController.popBackStack() },
                     onDismissed = { navController.popBackStack() },
