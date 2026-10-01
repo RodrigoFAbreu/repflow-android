@@ -10,6 +10,8 @@ import com.repflow.app.infrastructure.database.recovery.FutsalSessionDao
 import com.repflow.app.infrastructure.database.recovery.FutsalSessionEntity
 import com.repflow.app.infrastructure.database.recovery.RecoveryEntryDao
 import com.repflow.app.infrastructure.database.recovery.RecoveryEntryEntity
+import com.repflow.app.infrastructure.database.settings.SettingsDao
+import com.repflow.app.infrastructure.database.settings.SettingsEntity
 import com.repflow.app.infrastructure.database.trainingplan.PlannedExerciseDao
 import com.repflow.app.infrastructure.database.trainingplan.PlannedExerciseEntity
 import com.repflow.app.infrastructure.database.trainingplan.TrainingPlanDao
@@ -35,7 +37,9 @@ import com.repflow.app.infrastructure.database.workout.WorkoutSetEntity
  * (`workout_sets.pain`/`technique_quality`,
  * `planned_exercises.target_warmup_sets`,
  * `workout_sessions.invalidated_at`, `training_plans.archived_at`) via
- * [MIGRATION_6_7].
+ * [MIGRATION_6_7]. Version 8 adds the single-row `settings` table, seeded
+ * with today's defaults, via [MIGRATION_7_8] (remediation-1 CP14); a fresh
+ * install seeds the same row through [SETTINGS_SEED_CALLBACK].
  */
 @Database(
     entities = [
@@ -49,10 +53,12 @@ import com.repflow.app.infrastructure.database.workout.WorkoutSetEntity
         RecoveryEntryEntity::class,
         FutsalSessionEntity::class,
         ProgressionRecommendationEntity::class,
+        SettingsEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
+@Suppress("TooManyFunctions") // one accessor per DAO, as Room requires
 abstract class RepFlowDatabase : RoomDatabase() {
     abstract fun exerciseDao(): ExerciseDao
 
@@ -73,4 +79,8 @@ abstract class RepFlowDatabase : RoomDatabase() {
     abstract fun futsalSessionDao(): FutsalSessionDao
 
     abstract fun progressionRecommendationDao(): ProgressionRecommendationDao
+
+    abstract fun settingsDao(): SettingsDao
+
+    abstract fun trainingDataDao(): TrainingDataDao
 }

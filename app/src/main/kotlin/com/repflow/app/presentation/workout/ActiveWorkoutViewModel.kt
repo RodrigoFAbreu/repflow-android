@@ -6,6 +6,8 @@ import com.repflow.app.application.exercise.ExerciseStatusFilter
 import com.repflow.app.application.exercise.ObserveExercises
 import com.repflow.app.application.progression.ProgressionRecommendationRepository
 import com.repflow.app.application.recovery.GetWorkoutDayContext
+import com.repflow.app.application.settings.AppSettings
+import com.repflow.app.application.settings.SettingsRepository
 import com.repflow.app.application.trainingplan.ObserveTrainingPlans
 import com.repflow.app.application.trainingplan.TrainingPlanOverview
 import com.repflow.app.application.trainingplan.TrainingPlanRepository
@@ -68,6 +70,13 @@ import javax.inject.Inject
  * every workout (CP5) - so [onStartWorkout] and `availablePlans` have no
  * screen consumer. They are kept, with their tests, as the plan's JVM pass
  * over this package states; CP16's sweep decides whether they go.
+ *
+ * Remediation-1 CP14: Settings gates three of this surface's behaviours, read
+ * from [SettingsRepository]. [onRecordSet] starts the rest timer only while
+ * `Start rest timer automatically` is on, reading the switch when the set is
+ * logged; [settings] carries the rest to the screen (keep screen awake, confirm
+ * before finishing) and [notificationEnabled] to the route's permission prompt
+ * - both `null` until the repository first emits, never a stored default.
  */
 @Suppress("LongParameterList", "TooManyFunctions")
 @HiltViewModel
@@ -91,6 +100,7 @@ class ActiveWorkoutViewModel
         private val skipRestTimer: SkipRestTimer,
         private val completeWorkoutSession: CompleteWorkoutSession,
         private val abandonWorkoutSession: AbandonWorkoutSession,
+        private val settingsRepository: SettingsRepository,
     ) : ViewModel() {
         private val error = MutableStateFlow<ActiveWorkoutErrorReason?>(null)
         private val _dayContext = MutableStateFlow<WorkoutDayContextUi?>(null)
@@ -100,6 +110,21 @@ class ActiveWorkoutViewModel
 
         /** The finish sheet's confirm, from request to the completed session's id (remediation-1 CP9). */
         val finish: StateFlow<WorkoutFinishState> = _finish
+
+        private val _settings = MutableStateFlow<AppSettings?>(null)
+
+        /** The device's settings, `null` until [SettingsRepository] first emits (remediation-1 CP14). */
+        val settings: StateFlow<AppSettings?> = _settings
+
+        /**
+         * The Notification switch for the route's permission prompt: `null` until
+         * it has loaded, so nothing is asked before the switch's real value is
+         * known (remediation-1 CP14).
+         */
+        val notificationEnabled: StateFlow<Boolean?> =
+            _settings
+                .map { it?.restTimerNotification }
+                .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
         /**
          * Milestone 8, CP6: a plain `MutableStateFlow` eagerly kept in sync from
@@ -122,6 +147,12 @@ class ActiveWorkoutViewModel
                         legDoms = context.latestRecoveryEntry?.legDoms,
                         futsalLoad = context.recentFutsalSession?.load,
                     )
+            }
+            viewModelScope.launch {
+                settingsRepository
+                    .observe()
+                    .catch { failure -> if (failure is CancellationException) throw failure }
+                    .collect { value -> _settings.value = value }
             }
             viewModelScope.launch {
                 observeTrainingPlans(TrainingPlanStatusFilter.ACTIVE)
@@ -282,7 +313,10 @@ class ActiveWorkoutViewModel
                             techniqueQuality = techniqueQuality,
                         ),
                     )
-                if (result is DomainResult.Success) startRestTimer(sessionId, restSeconds)
+                // Read when the set is logged, so a switch changed mid-workout applies to the next set.
+                if (result is DomainResult.Success && settingsRepository.get().restTimerAutoStart) {
+                    startRestTimer(sessionId, restSeconds)
+                }
                 result
             }
         }

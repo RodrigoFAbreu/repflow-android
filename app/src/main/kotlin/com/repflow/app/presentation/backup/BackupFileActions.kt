@@ -4,6 +4,10 @@ import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -11,25 +15,33 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.res.stringResource
+import com.repflow.app.R
 import java.io.BufferedReader
 import java.io.IOException
 import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
 
 /**
- * Stateful route composable: owns the ViewModel and the SAF
- * (Storage Access Framework) launchers for the three backup actions. Only
- * this Route touches `Uri`/`ContentResolver` - the ViewModel and Screen work
- * with plain text (see [BackupViewModel]'s doc comment).
+ * The three backup actions, wired to their SAF (Storage Access Framework)
+ * pickers: export a backup, restore from a file, export history as CSV.
+ *
+ * Since remediation-1 CP14 they are rows in Settings' `Data` group (`4a`)
+ * rather than buttons on a Backup screen of their own; the wiring is the old
+ * Backup route's, unchanged. Only this file touches `Uri`/`ContentResolver` -
+ * [BackupViewModel] works with plain text.
  */
-@Composable
-fun BackupRoute(viewModel: BackupViewModel = hiltViewModel()) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
+class BackupFileActions(
+    val onExportBackup: () -> Unit,
+    val onRestoreBackup: () -> Unit,
+    val onExportCsv: () -> Unit,
+)
 
-    val updatedViewModel = rememberUpdatedState(viewModel)
+/** Registers the three SAF launchers against [viewModel] and returns the actions that open them. */
+@Composable
+fun rememberBackupFileActions(viewModel: BackupViewModel): BackupFileActions {
+    val context = LocalContext.current
+    val updatedViewModel by rememberUpdatedState(viewModel)
 
     // Holds the text produced by the last export request until the SAF
     // picker returns a destination Uri to write it to.
@@ -37,38 +49,65 @@ fun BackupRoute(viewModel: BackupViewModel = hiltViewModel()) {
 
     val createBackupDocumentLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-            writeExportOrReportOutcome(context, pendingExportText, uri, BackupExportKind.BACKUP, updatedViewModel.value)
+            writeExportOrReportOutcome(context, pendingExportText, uri, BackupExportKind.BACKUP, updatedViewModel)
             pendingExportText = null
         }
     val createCsvDocumentLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
-            writeExportOrReportOutcome(context, pendingExportText, uri, BackupExportKind.CSV, updatedViewModel.value)
+            writeExportOrReportOutcome(context, pendingExportText, uri, BackupExportKind.CSV, updatedViewModel)
             pendingExportText = null
         }
     val openBackupDocumentLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri == null) return@rememberLauncherForActivityResult
-            readRestoreFileOrReportFailure(context, uri, updatedViewModel.value)
+            readRestoreFileOrReportFailure(context, uri, updatedViewModel)
         }
 
-    BackupScreen(
-        uiState = uiState,
-        onExportBackupClick = {
-            updatedViewModel.value.onExportBackupRequested { json ->
-                pendingExportText = json
-                createBackupDocumentLauncher.launch(BACKUP_FILE_NAME)
+    return remember(createBackupDocumentLauncher, createCsvDocumentLauncher, openBackupDocumentLauncher) {
+        BackupFileActions(
+            onExportBackup = {
+                updatedViewModel.onExportBackupRequested { json ->
+                    pendingExportText = json
+                    createBackupDocumentLauncher.launch(BACKUP_FILE_NAME)
+                }
+            },
+            onRestoreBackup = { openBackupDocumentLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) },
+            onExportCsv = {
+                updatedViewModel.onCsvExportRequested { csv ->
+                    pendingExportText = csv
+                    createCsvDocumentLauncher.launch(CSV_FILE_NAME)
+                }
+            },
+        )
+    }
+}
+
+/**
+ * The existing destructive confirmation in front of a restore: the safe
+ * action and the destructive one, nothing replaced until the latter.
+ */
+@Composable
+fun BackupRestoreConfirmDialog(
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(stringResource(R.string.backup_restore_confirm_title)) },
+        text = { Text(stringResource(R.string.backup_restore_confirm_body)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(
+                    text = stringResource(R.string.backup_restore_confirm_action),
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
         },
-        onRestoreBackupClick = { openBackupDocumentLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) },
-        onCsvExportClick = {
-            updatedViewModel.value.onCsvExportRequested { csv ->
-                pendingExportText = csv
-                createCsvDocumentLauncher.launch(CSV_FILE_NAME)
+        dismissButton = {
+            TextButton(onClick = onCancel) {
+                Text(stringResource(R.string.backup_restore_cancel_action))
             }
         },
-        onRestoreConfirmed = viewModel::onRestoreConfirmed,
-        onRestoreCancelled = viewModel::onRestoreCancelled,
-        onStatusMessageShown = viewModel::onStatusMessageShown,
     )
 }
 

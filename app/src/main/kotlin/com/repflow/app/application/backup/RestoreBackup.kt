@@ -5,7 +5,8 @@ import javax.inject.Inject
 
 /**
  * Parses and validates a backup's JSON text, then atomically replaces all
- * local data with it via [BackupRepository.replaceAll]. A parse/validation
+ * local training data with it via [BackupRepository.replaceAll] - the
+ * device's settings stay as they are (remediation-1 CP14). A parse/validation
  * failure never touches stored data (see [BackupRepository.replaceAll]'s
  * atomicity contract).
  */

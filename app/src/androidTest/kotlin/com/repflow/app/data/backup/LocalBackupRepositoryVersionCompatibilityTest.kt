@@ -38,7 +38,7 @@ class LocalBackupRepositoryVersionCompatibilityTest {
             Room
                 .inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), RepFlowDatabase::class.java)
                 .build()
-        repository = LocalBackupRepository(database)
+        repository = LocalBackupRepository(database, LocalTrainingDataRepository(database))
         restoreBackup = RestoreBackup(repository)
     }
 

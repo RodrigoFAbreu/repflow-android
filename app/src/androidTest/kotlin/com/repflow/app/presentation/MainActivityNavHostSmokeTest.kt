@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.repflow.app.R
 import org.junit.Rule
 import org.junit.Test
@@ -20,7 +21,7 @@ import org.junit.Test
  * Every destination that stopped being a tab is reached here by its new
  * inward path, **walked from the start destination** rather than opened from
  * the middle of the chain: Workout, Recovery and Settings from Home, and the
- * exercise library and Backup from Settings. An assertion that started at a
+ * exercise library and the backup actions from Settings. An assertion that started at a
  * relocated route would pass against a route no user can open.
  *
  * The per-destination walks also keep this file's original purpose: a
@@ -133,16 +134,17 @@ class MainActivityNavHostSmokeTest {
     @Test
     fun exerciseLibraryIsReachableFromSettings() {
         clickByDescription(R.string.home_settings_content_description)
-        clickByText(R.string.settings_placeholder_library)
+        clickByText(R.string.settings_library_row)
         // The search field only exists on the exercise list screen.
         composeRule.onNodeWithText(string(R.string.exercise_list_search_hint)).assertIsDisplayed()
     }
 
+    /** Since remediation-1 CP14 backup and restore are Settings' own Data rows (`4a`), not a screen of their own. */
     @Test
     fun backupIsReachableFromSettings() {
         clickByDescription(R.string.home_settings_content_description)
-        clickByText(R.string.settings_placeholder_backup)
-        composeRule.onNodeWithText(string(R.string.backup_export_action)).assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.backup_export_action)).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.backup_restore_action)).performScrollTo().assertIsDisplayed()
     }
 
     @Test

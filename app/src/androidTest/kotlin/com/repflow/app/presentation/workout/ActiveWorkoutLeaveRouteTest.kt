@@ -51,6 +51,7 @@ import com.repflow.app.data.exercise.LocalExerciseRepository
 import com.repflow.app.data.progression.LocalProgressionRecommendationRepository
 import com.repflow.app.data.recovery.LocalFutsalRepository
 import com.repflow.app.data.recovery.LocalRecoveryRepository
+import com.repflow.app.data.settings.LocalSettingsRepository
 import com.repflow.app.data.trainingplan.LocalTrainingPlanRepository
 import com.repflow.app.data.workout.LocalWorkoutRepository
 import com.repflow.app.domain.common.DomainResult
@@ -107,6 +108,11 @@ import java.time.Instant
  *   and no board entry on the back stack (`D16`);
  * - the sheet's confirm completes the session and lands on the done screen,
  *   with no board entry behind it, and `Back to Home` goes Home.
+ *
+ * And CP14's gate over that one finish request (item 4), driven through both
+ * Home's `Finish it` and the board's `Finish`: with `Confirm before
+ * finishing` off each completes the session at once and lands on the done
+ * screen with no sheet; turned back on, the sheet is restored.
  */
 @RunWith(AndroidJUnit4::class)
 class ActiveWorkoutLeaveRouteTest {
@@ -290,6 +296,57 @@ class ActiveWorkoutLeaveRouteTest {
         }
     }
 
+    @Test
+    fun withConfirmBeforeFinishingOffFinishItFromHomeCompletesAtOnceWithNoSheet() {
+        setConfirmBeforeFinishing(false)
+        val sessionId = startSession()
+        renderFromHome()
+
+        composeRule.onNodeWithText(string(R.string.home_finish_it)).performClick()
+
+        composeRule.waitUntil(TIMEOUT_MILLIS) { status(sessionId) == WorkoutSessionStatus.COMPLETED }
+        waitForText(string(R.string.workout_done_back_home))
+        composeRule.onNodeWithText(string(R.string.workout_finish_title)).assertDoesNotExist()
+        composeRule.runOnIdle { assertEquals(RepFlowDestinations.WORKOUT_DONE_PATTERN, navController.currentDestination?.route) }
+    }
+
+    @Test
+    fun withConfirmBeforeFinishingOffTheBoardsFinishCompletesAtOnceWithNoSheet() {
+        setConfirmBeforeFinishing(false)
+        val sessionId = startSession()
+        openWorkoutFromHome()
+
+        composeRule.onNodeWithText(string(R.string.workout_board_finish)).performClick()
+
+        composeRule.waitUntil(TIMEOUT_MILLIS) { status(sessionId) == WorkoutSessionStatus.COMPLETED }
+        waitForText(string(R.string.workout_done_back_home))
+        composeRule.onNodeWithText(string(R.string.workout_finish_title)).assertDoesNotExist()
+    }
+
+    @Test
+    fun turningConfirmBeforeFinishingBackOnRestoresTheSheetOnBothPaths() {
+        setConfirmBeforeFinishing(false)
+        setConfirmBeforeFinishing(true)
+        val sessionId = startSession()
+        openWorkoutFromHome()
+
+        composeRule.onNodeWithText(string(R.string.workout_board_finish)).performClick()
+        waitForText(string(R.string.workout_finish_title))
+        assertEquals(WorkoutSessionStatus.ACTIVE, status(sessionId))
+
+        // Home's `Finish it`, from the sheet's own way back Home.
+        composeRule.onNodeWithText(string(R.string.workout_leave_go_home)).performClick()
+        waitForText(string(R.string.home_finish_it))
+        composeRule.onNodeWithText(string(R.string.home_finish_it)).performClick()
+        waitForText(string(R.string.workout_finish_title))
+        composeRule.onNodeWithText(string(R.string.workout_finish_title)).assertIsDisplayed()
+        assertEquals(WorkoutSessionStatus.ACTIVE, status(sessionId))
+    }
+
+    private fun setConfirmBeforeFinishing(on: Boolean) {
+        runBlocking { success(LocalSettingsRepository(database).update { it.copy(confirmBeforeFinishing = on) }) }
+    }
+
     private fun startSession(): WorkoutSessionId =
         runBlocking {
             success(StartWorkoutSession(workouts, clock, ids)(StartWorkoutSessionCommand(null)))
@@ -455,6 +512,7 @@ class ActiveWorkoutLeaveRouteTest {
                     clock,
                 ),
             abandonWorkoutSession = AbandonWorkoutSession(workouts, clock),
+            settingsRepository = LocalSettingsRepository(database),
         )
     }
 

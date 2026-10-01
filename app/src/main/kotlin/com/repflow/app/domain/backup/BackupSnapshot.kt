@@ -15,6 +15,13 @@ import com.repflow.app.domain.workout.WorkoutSession
  * `docs/DOMAIN_GLOSSARY.md`'s "Backup schema version": independent of the
  * Room database version and the app version, and never a direct
  * serialization of Room entities.
+ *
+ * **It carries the user's training data and nothing else.** The device's
+ * settings (remediation-1 CP14: rest-timer and workout preferences) are
+ * deliberately excluded - they are device settings, not training data - so a
+ * restored backup applies the receiving device's own settings, and the
+ * restore leaves them untouched. Adding them was considered and rejected; it
+ * is a decision, not an omission.
  */
 @ConsistentCopyVisibility
 data class BackupSnapshot private constructor(

@@ -12,6 +12,7 @@ import com.repflow.app.application.progression.InMemoryProgressionRecommendation
 import com.repflow.app.application.recovery.GetWorkoutDayContext
 import com.repflow.app.application.recovery.InMemoryFutsalRepository
 import com.repflow.app.application.recovery.InMemoryRecoveryRepository
+import com.repflow.app.application.settings.InMemorySettingsRepository
 import com.repflow.app.application.trainingplan.InMemoryTrainingPlanRepository
 import com.repflow.app.application.trainingplan.ObserveTrainingPlans
 import com.repflow.app.application.workout.AbandonWorkoutSession
@@ -53,6 +54,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.Instant
 
@@ -65,6 +68,7 @@ class ActiveWorkoutViewModelTest {
     private val exerciseRepository = InMemoryExerciseRepository()
     private val trainingPlanRepository = InMemoryTrainingPlanRepository()
     private val progressionRecommendationRepository = InMemoryProgressionRecommendationRepository()
+    private val settingsRepository = InMemorySettingsRepository()
     private val viewModel =
         ActiveWorkoutViewModel(
             observeActiveWorkoutSession = ObserveActiveWorkoutSession(workoutRepository),
@@ -95,6 +99,7 @@ class ActiveWorkoutViewModelTest {
                     clock,
                 ),
             abandonWorkoutSession = AbandonWorkoutSession(workoutRepository, clock),
+            settingsRepository = settingsRepository,
         )
 
     private fun <T> requireSuccess(result: DomainResult<T, *>): T =
@@ -643,6 +648,46 @@ class ActiveWorkoutViewModelTest {
             .sets
             .single()
     }
+
+    @Test
+    fun `with rest auto-start on, a logged set starts the rest timer`() =
+        runTest {
+            seedExercise()
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                val withExercise = startWorkoutWithFirstAvailableExercise()
+
+                viewModel.onRecordSet(withExercise.id, 60.0, 8)
+                awaitSingleSet()
+
+                assertNotNull(workoutRepository.findActiveSession()?.restTimer)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `with rest auto-start off, a logged set is recorded but starts no rest timer`() =
+        runTest {
+            seedExercise()
+            settingsRepository.update { it.copy(restTimerAutoStart = false) }
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                val withExercise = startWorkoutWithFirstAvailableExercise()
+
+                viewModel.onRecordSet(withExercise.id, 60.0, 8)
+                assertEquals(60.0, awaitSingleSet().load)
+
+                val session = requireNotNull(workoutRepository.findActiveSession())
+                assertEquals(
+                    1,
+                    session.exercises
+                        .single()
+                        .sets.size,
+                )
+                assertNull(session.restTimer)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 
     @Test
     fun `onCompleteWorkout returns to no active session`() =

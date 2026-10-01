@@ -13,8 +13,110 @@ explicitly** — `active_work_item_id` still points at the parent.
   (revision 20). Registry:
   `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-registry.json`
   (CP1–CP16, executed in array order).
-- **Current checkpoint: CP13 — Recovery entry and recovery history conversion: complete.**
-  CP1–CP12 complete; CP14–CP16 not started.
+- **Current checkpoint: CP14 — Settings, preference persistence, and the behaviours it gates: complete.**
+  CP1–CP13 complete; CP15–CP16 not started.
+
+### CP14 — what was done and verified (2026-10-01)
+
+- **Design re-read** from the live project (etag `1786483024007421`): `4a`'s
+  Settings (`RepFlow.dc.html:1052–1111`), its restore sheet (`:1461–1487`),
+  `nTimerRows` / `nSetRows` (`:3928–3946`) and `5d`'s CSV row (`:657`). Built
+  to `4a`, per the user's 2026-10-01 decision on `O11`.
+- **Schema 7 → 8 (plan items 7, "Migration and schema impact").** One table,
+  `settings`: a single row pinned at `id = 1`, one typed `INTEGER NOT NULL`
+  column per switch (no enum-valued preference exists, so no `TEXT` column).
+  `MIGRATION_7_8` is the plain `CREATE TABLE` plus `INSERT OR IGNORE` of the
+  default row (auto-start, vibrate, notification and confirm-before-finishing
+  on, keep screen awake off - `D21`); `SETTINGS_SEED_CALLBACK` seeds the same
+  row on a fresh install; `DatabaseModule` registers both; exported schema
+  `8.json`. No existing table, column or enum changes; no destructive
+  migration. `LocalSettingsRepository` reads an absent row as
+  `AppSettings.DEFAULT` and writes the whole row in a transaction.
+- **Layers.** `application/settings/` (`AppSettings`, `SettingsRepository`);
+  `application/backup/` (`TrainingDataRepository` port, `EraseAllData`);
+  `data/settings/LocalSettingsRepository`, `data/backup/LocalTrainingDataRepository`
+  (the ten training tables, children first, one `withTransaction`, never
+  `clearAllTables()`); `infrastructure/database/` (`SettingsEntity`,
+  `SettingsDao`, `TrainingDataDao`). Bound in `RepositoryModule`.
+- **Restore path (item 9).** `LocalBackupRepository.replaceAll` now clears
+  through `TrainingDataRepository.clearTrainingData()` inside its own
+  transaction (a failed clear aborts it) instead of `clearAllTables()`, so the
+  settings row survives a restore; its KDoc, `BackupRepository.replaceAll`'s,
+  `RestoreBackup`'s and `BackupSnapshot`'s now say "all local **training**
+  data" and that preferences are deliberately not in the snapshot.
+- **Rest timer (item 3).** `ActiveWorkoutViewModel` gains `SettingsRepository`:
+  `onRecordSet` starts rest only while auto-start is on (read when the set is
+  logged); `settings` and `notificationEnabled` are `StateFlow`s that are
+  `null` until the repository emits. The receiver is `@AndroidEntryPoint`
+  (bytecode checked: Hilt's transform calls `Hilt_…onReceive`, which injects)
+  and hands off through `goAsync()` on `Dispatchers.IO` to the injected
+  `RestTimerExpiryHandler`, which reads the switches **when the alarm fires**
+  and runs `restAlertPlan`'s two halves: the notification (permission check
+  first, unchanged; today's `rest_timer` channel, sound kept, no vibration,
+  never deleted) and an explicit one-shot buzz through `RestAlertVibrator`
+  with `USAGE_NOTIFICATION` (`VibrationAttributes` on 33+, `AudioAttributes`
+  on 28–32), bound to `SystemRestAlertVibrator` by `RestAlertModule` in
+  `presentation/workout/`. The route schedules the alarm for every rest and
+  asks for `POST_NOTIFICATIONS` only through `RestTimerPermissionPromptEffect`
+  (Notification on, loaded, API 33+, not granted).
+  `RestTimerAlarmScheduler.scheduledPendingIntent` is the test hook. Receiver
+  KDoc rewritten. **Visible change:** with the defaults, rest end now buzzes
+  in normal ringer mode.
+- **During a workout (item 4).** `Keep screen awake` sets the hosting view's
+  `keepScreenOn` while the board or focus mode is composed (off by default).
+  `Confirm before finishing` gates the one finish request: off, every entry
+  point - the board's and focus mode's `Finish`, the leave sheet's `Finish and
+  save it now`, `Next ›` with nothing left, and Home's `Finish it` - completes
+  at once and lands on the done screen; `null` (not loaded) counts as on for a
+  tap, and Home's `Finish it` waits for the value.
+- **Settings screen (items 1, 2, 5, 8; `presentation/settings/`).** Replaces
+  `SettingsPlaceholder`: `Library` → `Exercise library` (`D25`), `Rest timer`
+  and `During a workout` switches (the whole row toggles, announced as a
+  switch, disabled until loaded), `Data` - `Export a backup` (`Saved` once
+  written), `Restore from a file`, `Workout history as CSV` - the
+  `Irreversible` card and `Erase all data` behind a typed confirmation, and the
+  footer. No `Units` group (`D5`). The Backup screen and its route are retired:
+  its SAF wiring moved unchanged into `presentation/backup/BackupFileActions.kt`,
+  `BackupViewModel` untouched (`D103`).
+- **Erase all data (item 6).** `EraseAllData` → `clearTrainingData()`: every
+  training table, an active session included, in one transaction; the
+  settings row and exported files untouched; the confirmation copy says both.
+- **Deviations:** `D103`–`D107` added; `O11` closed. Flagged for the reviewer:
+  `D103` (Backup screen retired, CSV row kept), `D105` (erase confirmation
+  copy). Next free register id: **D108**. Four Phosphor glyphs added
+  (`database`, `table`, `check`, `warning`); `cloud-arrow-up` retired with
+  the Backup screen.
+- **Tests.** JVM: `ActiveWorkoutViewModelTest` (fixture + 2: auto-start on
+  starts rest, off records the set with no rest), `ActiveWorkoutFocusPlumbingTest`
+  (fixture only - **not in the plan's enumeration**: it also constructs the
+  ViewModel), new `RestAlertTest` (4: the four combinations, the prompt rule,
+  the usage constants), `SettingsViewModelTest` (7), `EraseAllDataTest` (2),
+  `RepFlowIconsTest` (expected set). Instrumented (compile only):
+  `RepFlowDatabaseMigrationTest` (+2, `MIGRATION_7_8`),
+  `LocalBackupRepositoryAtomicityTest` (**retargeted**: KDoc, the third test's
+  name and message now name the scoped clear; mechanism kept),
+  `LocalBackupRepositoryVersionCompatibilityTest` (constructor only), new
+  `SettingsPersistenceTest` (4: fresh seed, update, erase keeps settings and
+  discards the active session, a pre-milestone schema-2 backup restores all
+  ten collections and keeps the settings row), `RestTimerExpiryHandlerTest`
+  (6: every combination × permission, without and with a pre-created channel;
+  each switch flipped both ways after scheduling), `RestTimerReceiverDeliveryTest`
+  (2, real Hilt graph via `MainActivity`), `RestTimerPermissionPromptEffectTest`
+  (4), `KeepScreenAwakeTest` (4), `SettingsScreenTest` (4),
+  `ActiveWorkoutLeaveRouteTest` (+3: confirm off via Home's `Finish it` and the
+  board's `Finish`, and back on restores the sheet; fixture edit),
+  `ProgressionRecommendationRouteTest` (fixture edit), the smoke test's two
+  Settings walks and the two backup route tests' opening navigation (the four
+  string ids kept).
+- **Checks run:** `spotlessApply`; `testDebugUnitTest --tests` for
+  `presentation.workout.*`, `presentation.settings.*`, `presentation.backup.*`,
+  `application.backup.*`, `presentation.designsystem.*`,
+  `presentation.navigation.*`, `data.backup.*`,
+  `architecture.LayerBoundaryTest` - 21 classes, 151 tests, 0 failures;
+  `spotlessCheck detekt lintDebug assembleDebug assembleDebugAndroidTest` -
+  green; lint 0 errors, 21 warnings and 1 hint, none in the touched packages.
+  **Not run (no device):** every instrumented test above, including the
+  `MIGRATION_7_8` test, needs `connectedDebugAndroidTest`, as do CP2–CP13's.
 
 ### CP13 — what was done and verified (2026-10-01)
 
@@ -1203,8 +1305,7 @@ explicitly** — `active_work_item_id` still points at the parent.
 ### Next action
 
 `/milestone-implement repflow-redesign-visual-foundation-remediation-1` —
-CP13 (recovery entry and recovery history conversion). `O11` and
-`O12` were decided by the user on 2026-10-01:
+CP15 (Progress tab). `O11` and `O12` were decided by the user on 2026-10-01:
 CP14 and CP15 build the approved plan's `4a` designs; `5c`/`5d`/`5b` go to a
 later remediation child.
 

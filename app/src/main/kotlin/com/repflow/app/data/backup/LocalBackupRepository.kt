@@ -7,6 +7,7 @@ import android.database.sqlite.SQLiteFullException
 import androidx.room.withTransaction
 import com.repflow.app.application.backup.BackupRepository
 import com.repflow.app.application.backup.BackupRestoreError
+import com.repflow.app.application.backup.TrainingDataRepository
 import com.repflow.app.data.exercise.ExerciseEntityMapper
 import com.repflow.app.data.progression.ProgressionRecommendationMapper
 import com.repflow.app.data.recovery.FutsalSessionMapper
@@ -25,14 +26,25 @@ import javax.inject.Inject
 /**
  * The [BackupRepository] implementation: [BackupJsonMapper] handles the
  * text <-> entity-row shape, existing per-aggregate `*Mapper` objects handle
- * entity <-> domain, and [replaceAll] wipes and rewrites every table in one
- * [androidx.room.withTransaction] call - all-or-nothing, per the milestone
- * reference's "restore replaces all local data atomically" invariant.
+ * entity <-> domain, and [replaceAll] clears and rewrites **the training-data
+ * tables** - the ten the snapshot carries - in one
+ * [androidx.room.withTransaction] call, all-or-nothing.
+ *
+ * That scope is deliberately narrower than "every table" (remediation-1
+ * CP14): the restore used to open with `clearAllTables()`, which would also
+ * delete the `settings` row - and nothing would put it back, because
+ * preferences are device settings and are not in the snapshot. The clear is
+ * now [TrainingDataRepository.clearTrainingData], the same one `Erase all
+ * data` uses, called inside this transaction (Room's `withTransaction` is
+ * re-entrant, so it joins it), and the receiving device keeps its own
+ * settings. "Restore replaces all local data atomically" therefore means all
+ * local **training** data.
  */
 class LocalBackupRepository
     @Inject
     constructor(
         private val database: RepFlowDatabase,
+        private val trainingDataRepository: TrainingDataRepository,
     ) : BackupRepository {
         override fun serializeSnapshot(snapshot: BackupSnapshot): String = BackupJsonMapper.serialize(toEntitySnapshot(snapshot))
 
@@ -47,7 +59,10 @@ class LocalBackupRepository
             val entitySnapshot = toEntitySnapshot(snapshot)
             return try {
                 database.withTransaction {
-                    database.clearAllTables()
+                    if (trainingDataRepository.clearTrainingData() is DomainResult.Failure) {
+                        // Aborts the enclosing transaction; mapped below like any storage failure.
+                        throw SQLiteException("Clearing training data before the restore failed")
+                    }
                     entitySnapshot.exercises.forEach { database.exerciseDao().insert(it) }
                     entitySnapshot.trainingPlans.forEach { database.trainingPlanDao().insert(it) }
                     entitySnapshot.trainingPlanVersions.forEach { database.trainingPlanVersionDao().insert(it) }

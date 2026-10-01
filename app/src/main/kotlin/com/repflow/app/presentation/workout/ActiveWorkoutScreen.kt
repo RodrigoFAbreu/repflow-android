@@ -21,6 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -86,6 +88,14 @@ import com.repflow.app.presentation.progression.labelRes
  *
  * Starting a workout is Home's alone (remediation-1 CP5); this surface no
  * longer carries a start menu.
+ *
+ * **Settings gate two things here** (remediation-1 CP14).
+ * [confirmBeforeFinishing] sits on the one finish request, so it governs every
+ * entry point above, Home's `Finish it` included: on, the request raises the
+ * finish sheet; off, it finishes at once, with no sheet. `null` - not loaded
+ * yet - is treated as on for a tap, and Home's `Finish it` waits for the real
+ * value before deciding. [keepScreenAwake] keeps the screen on while the
+ * board or focus mode shows ([KeepScreenOn]), and lets it go when they leave.
  */
 @Suppress("LongParameterList")
 @Composable
@@ -111,6 +121,8 @@ fun ActiveWorkoutScreen(
     finish: WorkoutFinishState = WorkoutFinishState.Idle,
     raiseFinishFromHome: Boolean = false,
     onWorkoutFinished: (WorkoutSessionId) -> Unit = {},
+    keepScreenAwake: Boolean = false,
+    confirmBeforeFinishing: Boolean? = true,
 ) {
     LaunchedEffect(finish) {
         if (finish is WorkoutFinishState.Finished) onWorkoutFinished(finish.sessionId)
@@ -130,6 +142,7 @@ fun ActiveWorkoutScreen(
             }
 
             is ActiveWorkoutContent.Active -> {
+                if (keepScreenAwake) KeepScreenOn()
                 WorkoutMode(
                     content = content,
                     availableExercises = uiState.availableExercises,
@@ -151,6 +164,7 @@ fun ActiveWorkoutScreen(
                     onLeaveWorkout = onLeaveWorkout,
                     onAbandonWorkout = onAbandonWorkout,
                     raiseFinishFromHome = raiseFinishFromHome,
+                    confirmBeforeFinishing = confirmBeforeFinishing,
                 )
             }
 
@@ -161,6 +175,61 @@ fun ActiveWorkoutScreen(
                     onRetry = onRetry,
                 )
             }
+        }
+    }
+}
+
+/**
+ * Keeps the screen on while it is in composition - the Compose-side
+ * `FLAG_KEEP_SCREEN_ON`, set on the hosting view - and clears it when it
+ * leaves (remediation-1 CP14's `Keep screen awake in a workout`).
+ */
+@Composable
+private fun KeepScreenOn() {
+    val view = LocalView.current
+    DisposableEffect(view) {
+        view.keepScreenOn = true
+        onDispose { view.keepScreenOn = false }
+    }
+}
+
+/**
+ * The one finish request, gated by `Confirm before finishing` (remediation-1
+ * CP14): off finishes at once; on - or not loaded yet - raises the sheet.
+ */
+private fun requestFinish(
+    confirmBeforeFinishing: Boolean?,
+    onRaiseSheet: () -> Unit,
+    onFinishNow: () -> Unit,
+) {
+    if (confirmBeforeFinishing == false) onFinishNow() else onRaiseSheet()
+}
+
+/** Home's `Finish it` raises the sheet at once when the switch is known to be on. */
+private fun initialOverlay(
+    raiseFinishFromHome: Boolean,
+    confirmBeforeFinishing: Boolean?,
+): WorkoutOverlay =
+    if (raiseFinishFromHome && confirmBeforeFinishing == true) WorkoutOverlay.FINISH_SHEET_FROM_HOME else WorkoutOverlay.NONE
+
+/**
+ * Home's `Finish it` is one request, decided once (remediation-1 CP14): when
+ * [initialOverlay] could not raise the sheet - the switch off, or not loaded
+ * yet - this waits for the switch's value and then either raises the sheet or
+ * finishes at once.
+ */
+@Composable
+private fun HomeFinishRequestEffect(
+    raiseFinishFromHome: Boolean,
+    confirmBeforeFinishing: Boolean?,
+    onRaiseSheet: () -> Unit,
+    onFinishNow: () -> Unit,
+) {
+    var pending by rememberSaveable { mutableStateOf(raiseFinishFromHome && confirmBeforeFinishing != true) }
+    LaunchedEffect(confirmBeforeFinishing) {
+        if (pending && confirmBeforeFinishing != null) {
+            pending = false
+            requestFinish(confirmBeforeFinishing, onRaiseSheet, onFinishNow)
         }
     }
 }
@@ -191,12 +260,23 @@ private fun WorkoutMode(
     onLeaveWorkout: () -> Unit,
     onAbandonWorkout: (WorkoutSessionId) -> Unit,
     raiseFinishFromHome: Boolean,
+    confirmBeforeFinishing: Boolean?,
 ) {
-    var overlay by rememberSaveable {
-        mutableStateOf(if (raiseFinishFromHome) WorkoutOverlay.FINISH_SHEET_FROM_HOME else WorkoutOverlay.NONE)
-    }
+    var overlay by rememberSaveable { mutableStateOf(initialOverlay(raiseFinishFromHome, confirmBeforeFinishing)) }
+    HomeFinishRequestEffect(
+        raiseFinishFromHome = raiseFinishFromHome,
+        confirmBeforeFinishing = confirmBeforeFinishing,
+        onRaiseSheet = { overlay = WorkoutOverlay.FINISH_SHEET_FROM_HOME },
+        onFinishNow = { onCompleteWorkout(content.sessionId) },
+    )
     val close = { overlay = WorkoutOverlay.NONE }
-    val askFinish = { overlay = WorkoutOverlay.FINISH_SHEET }
+    val askFinish: () -> Unit = {
+        requestFinish(
+            confirmBeforeFinishing = confirmBeforeFinishing,
+            onRaiseSheet = { overlay = WorkoutOverlay.FINISH_SHEET },
+            onFinishNow = { onCompleteWorkout(content.sessionId) },
+        )
+    }
     val focused = focusedExerciseId?.let { id -> content.exercises.find { it.id == id } }
 
     // A sheet or dialog handles back itself (it closes); with neither open,
@@ -251,7 +331,10 @@ private fun WorkoutMode(
                     close()
                     onLeaveWorkout()
                 },
-                onFinishNow = askFinish,
+                onFinishNow = {
+                    close()
+                    askFinish()
+                },
                 onAbandon = { overlay = WorkoutOverlay.ABANDON_CONFIRM },
             )
         }

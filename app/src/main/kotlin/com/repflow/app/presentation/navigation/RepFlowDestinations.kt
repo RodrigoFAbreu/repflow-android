@@ -76,9 +76,8 @@ object RepFlowDestinations {
 
     const val PROGRESS = "progress"
 
+    /** Settings, reached from Home; its Data group carries backup and restore (remediation-1 CP14). */
     const val SETTINGS = "settings"
-
-    const val BACKUP = "backup"
 
     /**
      * Single source of truth for the bottom [androidx.compose.material3.NavigationBar]'s
@@ -88,8 +87,8 @@ object RepFlowDestinations {
      * Everything else is reached from inside one of these, never from the bar
      * (`6b`: "Bottom nav on the four top-level destinations only"): the
      * workout and recovery entry from Home, Settings from Home (its header
-     * gear once CP5 builds Home), and the exercise library and backup from
-     * Settings. Because [RepFlowNavHost]
+     * gear once CP5 builds Home), and the exercise library from Settings,
+     * whose Data group holds backup and restore. Because [RepFlowNavHost]
      * shows the bar only on these routes, every other route - the workout
      * route included, which is what "workout mode replaces the nav" asks for -
      * renders without it.

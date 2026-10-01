@@ -8,7 +8,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Validates [MIGRATION_1_2] against a real v1-schema database, using the
+ * Validates every migration ([MIGRATION_1_2] through [MIGRATION_7_8]) against a real older-schema database, using the
  * exported schema JSON files under `app/schemas` (see the `androidTest`
  * `assets.directories` entry in `app/build.gradle.kts`). This is the first
  * real migration test in the project - version 1 never had one, and there
@@ -308,6 +308,56 @@ class RepFlowDatabaseMigrationTest {
         assertEquals(3, setCursor.getInt(0))
         assertEquals(4, setCursor.getInt(1))
         setCursor.close()
+    }
+
+    /**
+     * Remediation-1 CP14: the single-row `settings` table arrives with today's
+     * defaults - auto-start, vibrate and notification on, keep screen awake off,
+     * confirm before finishing on - and every existing row survives.
+     */
+    @Test
+    fun migrate7To8_addsTheSettingsTableWithTheDefaultRowAndKeepsExistingRows() {
+        seedDatabaseThroughVersion6()
+        helper.runMigrationsAndValidate(TEST_DB, 7, true, MIGRATION_6_7).close()
+
+        val migratedDb = helper.runMigrationsAndValidate(TEST_DB, 8, true, MIGRATION_7_8)
+
+        val settingsCursor =
+            migratedDb.query(
+                "SELECT id, rest_timer_auto_start, rest_timer_vibrate, rest_timer_notification, " +
+                    "keep_screen_awake, confirm_before_finishing FROM settings",
+            )
+        assertEquals(1, settingsCursor.count)
+        settingsCursor.moveToFirst()
+        assertEquals(1, settingsCursor.getInt(0))
+        assertEquals(listOf(1, 1, 1, 0, 1), (1..5).map { settingsCursor.getInt(it) })
+        settingsCursor.close()
+
+        val exerciseCursor = migratedDb.query("SELECT name FROM exercises WHERE id = 'exercise-1'")
+        exerciseCursor.moveToFirst()
+        assertEquals("Bench Press", exerciseCursor.getString(0))
+        exerciseCursor.close()
+
+        val setCursor = migratedDb.query("SELECT load, reps FROM workout_sets WHERE id = 'set-1'")
+        setCursor.moveToFirst()
+        assertEquals(60.0, setCursor.getDouble(0), 0.0)
+        assertEquals(8, setCursor.getInt(1))
+        setCursor.close()
+    }
+
+    @Test
+    fun migrate7To8_allowsUpdatingTheSettingsRow() {
+        seedDatabaseThroughVersion6()
+        helper.runMigrationsAndValidate(TEST_DB, 7, true, MIGRATION_6_7).close()
+
+        val migratedDb = helper.runMigrationsAndValidate(TEST_DB, 8, true, MIGRATION_7_8)
+        migratedDb.execSQL("UPDATE settings SET keep_screen_awake = 1, rest_timer_vibrate = 0 WHERE id = 1")
+
+        val cursor = migratedDb.query("SELECT keep_screen_awake, rest_timer_vibrate FROM settings WHERE id = 1")
+        cursor.moveToFirst()
+        assertEquals(1, cursor.getInt(0))
+        assertEquals(0, cursor.getInt(1))
+        cursor.close()
     }
 
     private fun seedDatabaseThroughVersion6() {

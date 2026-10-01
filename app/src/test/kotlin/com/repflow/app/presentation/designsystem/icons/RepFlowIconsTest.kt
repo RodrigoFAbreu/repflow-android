@@ -104,13 +104,14 @@ class RepFlowIconsTest {
                 // Bottom navigation (parent CP4): the two design-confirmed tab
                 // glyphs at regular weight, plus the four the six-tab bar used as
                 // judgment calls, which remediation-1 CP2 keeps as the glyphs of the
-                // affordances that now lead to those destinations.
+                // affordances that now lead to those destinations. `cloud-arrow-up`
+                // (Backup) went with the Backup screen when remediation-1 CP14 moved
+                // its actions into Settings' Data group, which wears `4a`'s glyphs.
                 "ic_ph_list_checks",
                 "ic_ph_clock_counter_clockwise",
                 "ic_ph_books",
                 "ic_ph_barbell",
                 "ic_ph_moon_stars",
-                "ic_ph_cloud_arrow_up",
                 // Four-tab bar (remediation-1 CP2): exactly six additions - the two
                 // tabs the six-tab bar never had (Home, Progress) at both weights,
                 // and the fill weight of the two tabs it keeps (Plans, History).
@@ -165,6 +166,12 @@ class RepFlowIconsTest {
                 // Recovery (remediation-1 CP13): the futsal mark on the entry's load
                 // line and across the recovery history.
                 "ic_ph_soccer_ball",
+                // Settings (remediation-1 CP14): the Data group's export and CSV rows, the
+                // export row's `Saved`, and the `Irreversible` card.
+                "ic_ph_database",
+                "ic_ph_table",
+                "ic_ph_check",
+                "ic_ph_warning",
             )
     }
 }

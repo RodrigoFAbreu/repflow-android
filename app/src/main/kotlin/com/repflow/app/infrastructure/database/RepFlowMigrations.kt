@@ -1,5 +1,6 @@
 package com.repflow.app.infrastructure.database
 
+import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
@@ -339,5 +340,61 @@ val MIGRATION_6_7: Migration =
             db.execSQL("ALTER TABLE `planned_exercises` ADD COLUMN `target_warmup_sets` INTEGER")
             db.execSQL("ALTER TABLE `workout_sessions` ADD COLUMN `invalidated_at` INTEGER")
             db.execSQL("ALTER TABLE `training_plans` ADD COLUMN `archived_at` INTEGER")
+        }
+    }
+
+/**
+ * The default `settings` row (remediation-1 CP14): the values that keep
+ * today's behaviour - rest auto-start on, vibrate on, notification on, keep
+ * screen awake **off** (nothing kept the screen on before this table existed;
+ * the design's `setAwake: true` is register `D21`) and confirm before
+ * finishing on (CP9's unconditional confirmation). `INSERT OR IGNORE`, so a
+ * row that already exists is never overwritten.
+ *
+ * A literal rather than a value built from the application's defaults: a
+ * migration's SQL is frozen once shipped. `SettingsPersistenceTest` pins it
+ * to `AppSettings.DEFAULT`.
+ */
+internal const val INSERT_DEFAULT_SETTINGS_ROW_SQL =
+    "INSERT OR IGNORE INTO `settings` (`id`, `rest_timer_auto_start`, `rest_timer_vibrate`, " +
+        "`rest_timer_notification`, `keep_screen_awake`, `confirm_before_finishing`) VALUES (1, 1, 1, 1, 0, 1)"
+
+/**
+ * The real, additive 7-to-8 migration introducing the single-row `settings`
+ * table (remediation-1 CP14): one typed column per preference, the row pinned
+ * at `id = 1`, seeded with [INSERT_DEFAULT_SETTINGS_ROW_SQL]. Nothing about
+ * the existing tables changes. No `fallbackToDestructiveMigration` call
+ * exists anywhere (see [RepFlowDatabase]'s KDoc).
+ */
+@Suppress("MagicNumber")
+val MIGRATION_7_8: Migration =
+    object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `settings` (
+                    `id` INTEGER NOT NULL,
+                    `rest_timer_auto_start` INTEGER NOT NULL,
+                    `rest_timer_vibrate` INTEGER NOT NULL,
+                    `rest_timer_notification` INTEGER NOT NULL,
+                    `keep_screen_awake` INTEGER NOT NULL,
+                    `confirm_before_finishing` INTEGER NOT NULL,
+                    PRIMARY KEY(`id`)
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(INSERT_DEFAULT_SETTINGS_ROW_SQL)
+        }
+    }
+
+/**
+ * Seeds the same default `settings` row on a fresh install, where Room creates
+ * the schema at the current version and no migration runs - so every install,
+ * upgraded or new, has the pinned row.
+ */
+val SETTINGS_SEED_CALLBACK: RoomDatabase.Callback =
+    object : RoomDatabase.Callback() {
+        override fun onCreate(db: SupportSQLiteDatabase) {
+            db.execSQL(INSERT_DEFAULT_SETTINGS_ROW_SQL)
         }
     }

@@ -8,6 +8,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.espresso.intent.Intents
 import androidx.test.espresso.intent.matcher.IntentMatchers.hasAction
 import com.repflow.app.R
@@ -20,7 +21,7 @@ import org.junit.Test
 /**
  * Real end-to-end coverage (Milestone 8, CP14) for the "user cancels the SAF
  * export picker" path: [Intents.intending] stubs the `CreateDocument` intent
- * [BackupRoute] launches to return [Activity.RESULT_CANCELED], exactly what
+ * Settings' Data group ([rememberBackupFileActions]) launches to return [Activity.RESULT_CANCELED], exactly what
  * Android delivers when a real user backs out of the system file picker
  * without choosing a destination. Confirms this reaches
  * [BackupViewModel.onExportWriteCancelled] - busy state cleared, no failure
@@ -48,17 +49,16 @@ class BackupRouteSafCancellationTest {
             .intending(hasAction(Intent.ACTION_CREATE_DOCUMENT))
             .respondWith(Instrumentation.ActivityResult(Activity.RESULT_CANCELED, null))
 
-        // Backup is no longer a tab (remediation-1 CP2): its only inward path is
-        // Home's Settings affordance, then the Settings `Backup and restore` row.
+        // Backup is no longer a tab (remediation-1 CP2), and since CP14 its actions
+        // are rows in Settings' Data group (`4a`): Home's Settings affordance, then
+        // the row itself.
         composeRule
             .onNodeWithContentDescription(
                 composeRule.activity.getString(R.string.home_settings_content_description),
             ).performClick()
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.settings_placeholder_backup))
-            .performClick()
-        composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.backup_export_action))
+            .performScrollTo()
             .performClick()
         composeRule.waitForIdle()
 

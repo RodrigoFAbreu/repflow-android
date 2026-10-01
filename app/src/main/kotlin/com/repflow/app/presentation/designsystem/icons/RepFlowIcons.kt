@@ -99,6 +99,10 @@ object RepFlowIcons {
     @DrawableRes
     val chartLineUpFill: Int = R.drawable.ic_ph_chart_line_up_fill
 
+    /** Settings' `Export a backup` row once the file is written: `Saved` (`4a`, `ph-check`). Remediation-1 CP14. */
+    @DrawableRes
+    val check: Int = R.drawable.ic_ph_check
+
     /** The recommendation screen's reason rows for an increase or a hold (`6a`, `ph-check-circle`). Remediation-1 CP6. */
     @DrawableRes
     val checkCircle: Int = R.drawable.ic_ph_check_circle
@@ -119,13 +123,9 @@ object RepFlowIcons {
     @DrawableRes
     val clockCounterClockwiseFill: Int = R.drawable.ic_ph_clock_counter_clockwise_fill
 
-    /**
-     * Backup and restore: the Settings placeholder's `Backup` row, carried into
-     * the grouped Settings screen's `Data` group. A nav tab glyph until the
-     * four-destination bar retired the Backup tab.
-     */
+    /** Settings' `Export a backup` row (`4a`, `ph-database`). Remediation-1 CP14. */
     @DrawableRes
-    val cloudArrowUp: Int = R.drawable.ic_ph_cloud_arrow_up
+    val database: Int = R.drawable.ic_ph_database
 
     /** The board's status chip for an exercise with some sets logged (`6b`, `ph-dot-outline`). Remediation-1 CP7. */
     @DrawableRes
@@ -262,7 +262,16 @@ object RepFlowIcons {
     @DrawableRes
     val sliders: Int = R.drawable.ic_ph_sliders
 
-    /** Home's resume card: abandon the running workout (`ph-trash`). Remediation-1 CP5. */
+    /**
+     * Settings' Data group, `Workout history as CSV` (`5d`, `ph-table`). Remediation-1 CP14.
+     */
+    @DrawableRes
+    val table: Int = R.drawable.ic_ph_table
+
+    /**
+     * Home's resume card: abandon the running workout (`ph-trash`), remediation-1 CP5;
+     * and Settings' `Erase all data` (`4a`), CP14.
+     */
     @DrawableRes
     val trash: Int = R.drawable.ic_ph_trash
 
@@ -289,6 +298,10 @@ object RepFlowIcons {
      */
     @DrawableRes
     val warningCircle: Int = R.drawable.ic_ph_warning_circle
+
+    /** Settings' `Irreversible` card over `Erase all data` (`4a`, `ph-warning`). Remediation-1 CP14. */
+    @DrawableRes
+    val warning: Int = R.drawable.ic_ph_warning
 
     /** Dismiss the rest-timer strip (Active Workout). */
     @DrawableRes
@@ -317,8 +330,10 @@ object RepFlowIcons {
      * The six-destination bar this replaces also carried `books` (Exercises),
      * `barbell` (Workout), `moon-stars` (Recovery) and `cloud-arrow-up`
      * (Backup) as unconfirmed judgment calls. Those four destinations are no
-     * longer tabs; their glyphs stay in the top-level set, worn by the
-     * affordances that now lead to them (see each entry's own doc).
+     * longer tabs; the first three glyphs stay in the top-level set, worn by
+     * the affordances that now lead to them (see each entry's own doc).
+     * `cloud-arrow-up` is gone: remediation-1 CP14 moved backup into Settings'
+     * Data group, whose rows wear `4a`'s own glyphs.
      */
     object Nav {
         /** Design-confirmed (`ph-house`). */

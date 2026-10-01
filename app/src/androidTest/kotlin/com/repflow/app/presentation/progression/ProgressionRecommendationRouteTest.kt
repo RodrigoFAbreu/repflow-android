@@ -48,6 +48,7 @@ import com.repflow.app.data.exercise.LocalExerciseRepository
 import com.repflow.app.data.progression.LocalProgressionRecommendationRepository
 import com.repflow.app.data.recovery.LocalFutsalRepository
 import com.repflow.app.data.recovery.LocalRecoveryRepository
+import com.repflow.app.data.settings.LocalSettingsRepository
 import com.repflow.app.data.trainingplan.LocalTrainingPlanRepository
 import com.repflow.app.data.workout.LocalWorkoutRepository
 import com.repflow.app.domain.common.DomainResult
@@ -308,6 +309,7 @@ class ProgressionRecommendationRouteTest {
                     clock,
                 ),
             abandonWorkoutSession = AbandonWorkoutSession(workouts, clock),
+            settingsRepository = LocalSettingsRepository(database),
         )
     }
 

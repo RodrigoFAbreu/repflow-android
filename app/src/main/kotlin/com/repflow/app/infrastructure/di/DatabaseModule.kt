@@ -8,7 +8,9 @@ import com.repflow.app.infrastructure.database.MIGRATION_3_4
 import com.repflow.app.infrastructure.database.MIGRATION_4_5
 import com.repflow.app.infrastructure.database.MIGRATION_5_6
 import com.repflow.app.infrastructure.database.MIGRATION_6_7
+import com.repflow.app.infrastructure.database.MIGRATION_7_8
 import com.repflow.app.infrastructure.database.RepFlowDatabase
+import com.repflow.app.infrastructure.database.SETTINGS_SEED_CALLBACK
 import com.repflow.app.infrastructure.database.exercise.ExerciseDao
 import com.repflow.app.infrastructure.database.progression.ProgressionRecommendationDao
 import com.repflow.app.infrastructure.database.recovery.FutsalSessionDao
@@ -44,7 +46,15 @@ object DatabaseModule {
     ): RepFlowDatabase =
         Room
             .databaseBuilder(context, RepFlowDatabase::class.java, DATABASE_NAME)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+            .addMigrations(
+                MIGRATION_1_2,
+                MIGRATION_2_3,
+                MIGRATION_3_4,
+                MIGRATION_4_5,
+                MIGRATION_5_6,
+                MIGRATION_6_7,
+                MIGRATION_7_8,
+            ).addCallback(SETTINGS_SEED_CALLBACK)
             .build()
 
     @Provides

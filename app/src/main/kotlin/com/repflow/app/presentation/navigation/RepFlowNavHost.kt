@@ -13,7 +13,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.repflow.app.presentation.backup.BackupRoute
 import com.repflow.app.presentation.exercise.editor.ExerciseEditorRoute
 import com.repflow.app.presentation.exercise.list.ExerciseListRoute
 import com.repflow.app.presentation.history.HistoryRoute
@@ -22,7 +21,7 @@ import com.repflow.app.presentation.progress.ProgressPlaceholder
 import com.repflow.app.presentation.progression.ProgressionRecommendationRoute
 import com.repflow.app.presentation.recovery.RecoveryFutsalRoute
 import com.repflow.app.presentation.recovery.RecoveryHistoryRoute
-import com.repflow.app.presentation.settings.SettingsPlaceholder
+import com.repflow.app.presentation.settings.SettingsRoute
 import com.repflow.app.presentation.trainingplan.editor.TrainingPlanEditorRoute
 import com.repflow.app.presentation.trainingplan.list.TrainingPlanListRoute
 import com.repflow.app.presentation.workout.ActiveWorkoutRoute
@@ -39,7 +38,8 @@ private val TOP_LEVEL_ROUTES: Set<String> = RepFlowDestinations.TOP_LEVEL_DESTIN
  *
  * Destinations that stopped being tabs are reached from inside the app, as
  * the design reaches them: the workout and recovery entry from Home, Settings
- * from Home, and the exercise library and backup from Settings (the exercise
+ * from Home, and the exercise library from Settings, whose Data group also
+ * carries the backup actions since remediation-1 CP14 (the exercise
  * editor also from the workout's and the plan editor's picker sheets, and the
  * workout also from a plan card's `Start workout`). Workout mode is left only
  * through its own `X` / `Finish` - system back there opens the leave sheet -
@@ -92,10 +92,9 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
                 )
             }
             composable(RepFlowDestinations.SETTINGS) {
-                SettingsPlaceholder(
-                    onBackClick = { navController.popBackStack() },
+                SettingsRoute(
+                    onBack = { navController.popBackStack() },
                     onLibraryClick = { navController.navigate(RepFlowDestinations.EXERCISES) },
-                    onBackupClick = { navController.navigate(RepFlowDestinations.BACKUP) },
                 )
             }
             composable(RepFlowDestinations.EXERCISES) {
@@ -202,9 +201,6 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
             }
             composable(RepFlowDestinations.PROGRESS) {
                 ProgressPlaceholder()
-            }
-            composable(RepFlowDestinations.BACKUP) {
-                BackupRoute()
             }
         }
     }

@@ -15,10 +15,11 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Owns the backup/restore/CSV-export screen state. The Route composable
- * hosts the SAF ([androidx.activity.result.contract.ActivityResultContracts])
- * launchers and passes already-opened text content in/out - this ViewModel
- * never touches `Uri`, `ContentResolver` or any Android I/O type directly.
+ * Owns the backup/restore/CSV-export state - Settings' Data group since
+ * remediation-1 CP14. [rememberBackupFileActions] hosts the SAF
+ * ([androidx.activity.result.contract.ActivityResultContracts]) launchers and
+ * passes already-opened text content in/out - this ViewModel never touches
+ * `Uri`, `ContentResolver` or any Android I/O type directly.
  */
 @HiltViewModel
 class BackupViewModel

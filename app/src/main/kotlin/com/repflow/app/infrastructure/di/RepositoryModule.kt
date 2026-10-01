@@ -1,17 +1,21 @@
 package com.repflow.app.infrastructure.di
 
 import com.repflow.app.application.backup.BackupRepository
+import com.repflow.app.application.backup.TrainingDataRepository
 import com.repflow.app.application.exercise.ExerciseRepository
 import com.repflow.app.application.progression.ProgressionRecommendationRepository
 import com.repflow.app.application.recovery.FutsalRepository
 import com.repflow.app.application.recovery.RecoveryRepository
+import com.repflow.app.application.settings.SettingsRepository
 import com.repflow.app.application.trainingplan.TrainingPlanRepository
 import com.repflow.app.application.workout.WorkoutRepository
 import com.repflow.app.data.backup.LocalBackupRepository
+import com.repflow.app.data.backup.LocalTrainingDataRepository
 import com.repflow.app.data.exercise.LocalExerciseRepository
 import com.repflow.app.data.progression.LocalProgressionRecommendationRepository
 import com.repflow.app.data.recovery.LocalFutsalRepository
 import com.repflow.app.data.recovery.LocalRecoveryRepository
+import com.repflow.app.data.settings.LocalSettingsRepository
 import com.repflow.app.data.trainingplan.LocalTrainingPlanRepository
 import com.repflow.app.data.workout.LocalWorkoutRepository
 import dagger.Binds
@@ -53,4 +57,12 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindBackupRepository(impl: LocalBackupRepository): BackupRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindTrainingDataRepository(impl: LocalTrainingDataRepository): TrainingDataRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindSettingsRepository(impl: LocalSettingsRepository): SettingsRepository
 }

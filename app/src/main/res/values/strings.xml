@@ -360,18 +360,21 @@
     <string name="history_date_picker_confirm">Set</string>
     <string name="history_date_picker_clear">Clear</string>
 
-    <string name="backup_title">Backup</string>
-    <string name="backup_export_action">Export backup</string>
-    <string name="backup_restore_action">Restore backup</string>
-    <string name="backup_csv_export_action">Export history as CSV</string>
-    <string name="backup_message_export_succeeded">Backup exported</string>
+    <!-- Backup actions, in Settings' Data group since remediation-1 CP14 (4a). The ids are kept: the backup route tests read them. -->
+    <string name="backup_export_action">Export a backup</string>
+    <string name="backup_export_meta">One file, everything, readable without the app</string>
+    <string name="backup_export_saved">Saved</string>
+    <string name="backup_restore_action">Restore from a file</string>
+    <string name="backup_restore_meta">Nothing is replaced until you confirm</string>
+    <string name="backup_csv_export_action">Workout history as CSV</string>
+    <string name="backup_csv_export_meta">For spreadsheets and other tools</string>
     <string name="backup_message_restore_succeeded">Backup restored</string>
     <string name="backup_message_csv_succeeded">History exported as CSV</string>
     <string name="backup_message_invalid_backup">That file isn\'t a valid RepFlow backup.</string>
     <string name="backup_message_operation_failed">Couldn\'t complete the operation. Try again.</string>
-    <string name="backup_restore_confirm_title">Restore backup?</string>
-    <string name="backup_restore_confirm_body">This replaces all local data with the contents of the selected backup. This cannot be undone.</string>
-    <string name="backup_restore_confirm_action">Restore</string>
+    <string name="backup_restore_confirm_title">Restore this backup?</string>
+    <string name="backup_restore_confirm_body">Every exercise, plan, workout, recovery entry and recommendation on this device is replaced by the file\'s contents. Your settings stay as they are. This can\'t be undone.</string>
+    <string name="backup_restore_confirm_action">Replace my data</string>
     <string name="backup_restore_cancel_action">Cancel</string>
 
     <string name="nav_home_title">Home</string>
@@ -606,11 +609,37 @@
 
     <string name="settings_title">Settings</string>
     <string name="settings_back_content_description">Back</string>
-    <string name="settings_placeholder_library">Library</string>
-    <string name="settings_placeholder_library_meta">Create, edit and archive exercises</string>
-    <string name="settings_placeholder_backup">Backup and restore</string>
-    <string name="settings_placeholder_backup_meta">Export, restore, CSV export</string>
-    <string name="settings_placeholder_row_caret">›</string>
+    <!-- Settings (remediation-1 CP14, artboard 4a). -->
+    <string name="settings_section_library">Library</string>
+    <string name="settings_library_row">Exercise library</string>
+    <string name="settings_library_meta">Create, edit and archive exercises</string>
+    <string name="settings_section_rest_timer">Rest timer</string>
+    <string name="settings_rest_auto_start">Start rest timer automatically</string>
+    <string name="settings_rest_auto_start_meta">After every logged set</string>
+    <string name="settings_rest_vibrate">Vibrate when rest ends</string>
+    <string name="settings_rest_vibrate_meta">Even with the screen off</string>
+    <string name="settings_rest_notification">Rest timer notification</string>
+    <string name="settings_rest_notification_meta">Shows when rest ends</string>
+    <string name="settings_section_workout">During a workout</string>
+    <string name="settings_keep_screen_awake">Keep screen awake in a workout</string>
+    <string name="settings_keep_screen_awake_meta">Ends when you finish</string>
+    <string name="settings_confirm_finish">Confirm before finishing</string>
+    <string name="settings_confirm_finish_meta">Lists anything unfinished</string>
+    <string name="settings_section_data">Data</string>
+    <string name="settings_erase_label">Irreversible</string>
+    <string name="settings_erase_body">Erasing removes every workout, plan and exercise on this device. Export a backup first.</string>
+    <string name="settings_erase_action">Erase all data</string>
+    <string name="settings_erase_confirm_title">Erase all data?</string>
+    <string name="settings_erase_confirm_body">This deletes every exercise, plan, workout, recovery entry and recommendation on this device - including a workout that is still running. Your settings stay, and backup files you have already exported are not touched. It can\'t be undone.</string>
+    <string name="settings_erase_confirm_prompt">Type %1$s to confirm</string>
+    <string name="settings_erase_confirm_word">ERASE</string>
+    <string name="settings_erase_confirm_action">Erase everything</string>
+    <string name="settings_erase_keep_action">Keep my data</string>
+    <string name="settings_message_erased">All data erased</string>
+    <string name="settings_message_erase_failed">Couldn\'t erase. Nothing was changed.</string>
+    <string name="settings_message_save_failed">Couldn\'t save that setting. Try again.</string>
+    <string name="settings_footer">RepFlow %1$s · offline, no account</string>
+    <string name="settings_footer_no_version">RepFlow · offline, no account</string>
 
     <string name="progress_placeholder_empty">Your progress shows up here once you have logged a few workouts.</string>
 

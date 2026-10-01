@@ -1,6 +1,6 @@
 package com.repflow.app.presentation.backup
 
-/** Backup screen state: transient status messages for each of the three actions. */
+/** The backup actions' state - in Settings' Data group since remediation-1 CP14: busy, a transient status message, a restore awaiting confirmation. */
 data class BackupUiState(
     val isBusy: Boolean = false,
     val statusMessage: BackupStatusMessage? = null,

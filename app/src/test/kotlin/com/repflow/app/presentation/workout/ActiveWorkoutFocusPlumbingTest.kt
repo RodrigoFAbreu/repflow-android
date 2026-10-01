@@ -11,6 +11,7 @@ import com.repflow.app.application.progression.InMemoryProgressionRecommendation
 import com.repflow.app.application.recovery.GetWorkoutDayContext
 import com.repflow.app.application.recovery.InMemoryFutsalRepository
 import com.repflow.app.application.recovery.InMemoryRecoveryRepository
+import com.repflow.app.application.settings.InMemorySettingsRepository
 import com.repflow.app.application.trainingplan.InMemoryTrainingPlanRepository
 import com.repflow.app.application.trainingplan.ObserveTrainingPlans
 import com.repflow.app.application.workout.AbandonWorkoutSession
@@ -91,6 +92,7 @@ class ActiveWorkoutFocusPlumbingTest {
                     clock,
                 ),
             abandonWorkoutSession = AbandonWorkoutSession(workoutRepository, clock),
+            settingsRepository = InMemorySettingsRepository(),
         )
 
     @After
