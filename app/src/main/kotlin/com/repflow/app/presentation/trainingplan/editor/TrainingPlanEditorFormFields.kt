@@ -1,274 +1,181 @@
 package com.repflow.app.presentation.trainingplan.editor
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.repflow.app.R
-import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.trainingplan.TrainingPlanValidationError
+import com.repflow.app.presentation.designsystem.RepFlowColor
+import com.repflow.app.presentation.designsystem.RepFlowSpacing
+import com.repflow.app.presentation.designsystem.components.RepFlowAccentOutlineButton
+import com.repflow.app.presentation.designsystem.components.RepFlowSectionLabel
+import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
+import com.repflow.app.presentation.designsystem.repFlowSecondaryTextColor
+import com.repflow.app.presentation.exercise.editor.InlineError
+import com.repflow.app.presentation.exercise.editor.editorFieldColors
 
 /**
- * Form field composables for [TrainingPlanEditorScreen], split out purely to
- * keep each file under Detekt's per-file function-count threshold (see
- * [com.repflow.app.presentation.exercise.editor.ExerciseEditorFormFields]).
+ * The editor's scrolling body (remediation-1 CP11): the plan name, `4a`'s
+ * `Exercises` header with its `N exercises · N working sets` count, the rows
+ * ([PlannedExerciseRow]), `4a`'s 52-tall `Add exercise`, the plan-version note,
+ * and a refused save's reason.
  */
 @Composable
 internal fun EditorForm(
     uiState: TrainingPlanEditorUiState,
-    modifier: Modifier,
+    contentPadding: PaddingValues,
     onNameChanged: (String) -> Unit,
     rowActions: TrainingPlanEditorRowActions,
+    expandedRowId: Long?,
+    onRowHeaderClick: (PlannedExerciseRowUiState) -> Unit,
+    onChangeExerciseClick: (Long) -> Unit,
     onAddRowClicked: () -> Unit,
-    onSaveClicked: () -> Unit,
 ) {
     Column(
-        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        modifier =
+            Modifier
+                .padding(contentPadding)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(top = RepFlowSpacing.gapXs, bottom = RepFlowSpacing.gapLg),
     ) {
         NameField(uiState, onNameChanged)
-        Spacer(Modifier.padding(top = 8.dp))
-        RowsSection(uiState, rowActions, onAddRowClicked)
-        Spacer(Modifier.padding(top = 8.dp))
-        SubmitErrorText(uiState.submitError)
-        Button(onClick = onSaveClicked, enabled = uiState.isSaveEnabled, modifier = Modifier.fillMaxWidth()) {
-            Text(
-                if (uiState.isSaving) {
-                    stringResource(R.string.training_plan_editor_saving)
-                } else {
-                    stringResource(R.string.training_plan_editor_save)
-                },
+        ExercisesHeader(uiState.rows)
+        if (uiState.rows.isEmpty()) {
+            NoExercisesHint()
+        }
+        uiState.rows.forEachIndexed { index, row ->
+            PlannedExerciseRow(
+                row = row,
+                expanded = row.rowId == expandedRowId,
+                canMoveUp = index > 0,
+                canMoveDown = index < uiState.rows.lastIndex,
+                actions = rowActions,
+                onHeaderClick = { onRowHeaderClick(row) },
+                onChangeExerciseClick = { onChangeExerciseClick(row.rowId) },
             )
         }
+        RepFlowAccentOutlineButton(
+            text = stringResource(R.string.training_plan_editor_add_exercise),
+            onClick = onAddRowClicked,
+            leadingIcon = RepFlowIcons.plus,
+            modifier = Modifier.fillMaxWidth().padding(top = AddButtonTopGap).heightIn(min = AddButtonMinHeight),
+        )
+        if (uiState.mode is TrainingPlanEditorMode.Edit) {
+            VersionNote()
+        }
+        SubmitErrorText(uiState.submitError)
     }
 }
 
+/** The plan name: `2b`'s 52-tall field treatment, the label inside it (`D71`), the inline error under it. */
 @Composable
 private fun NameField(
     uiState: TrainingPlanEditorUiState,
     onNameChanged: (String) -> Unit,
 ) {
+    val error = fieldErrorText(uiState.nameError)
     OutlinedTextField(
         value = uiState.name,
         onValueChange = onNameChanged,
         label = { Text(stringResource(R.string.training_plan_editor_name_label)) },
-        isError = uiState.nameError != null,
-        supportingText = { fieldErrorText(uiState.nameError)?.let { Text(it) } },
+        isError = error != null,
+        supportingText = error?.let { { InlineError(it) } },
         singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
+        shape = FieldShape,
+        colors = editorFieldColors(),
+        modifier = Modifier.fillMaxWidth().heightIn(min = NameFieldMinHeight),
     )
 }
 
+/** `2a`'s `Exercises` label with `4a`'s count beside it (`:899`, `:3657`). */
 @Composable
-private fun RowsSection(
-    uiState: TrainingPlanEditorUiState,
-    rowActions: TrainingPlanEditorRowActions,
-    onAddRowClicked: () -> Unit,
-) {
-    Column {
-        if (uiState.rows.isEmpty()) {
-            Text(stringResource(R.string.training_plan_editor_no_exercises))
-        }
-        uiState.rows.forEachIndexed { index, row ->
-            PlannedExerciseRow(
-                row = row,
-                availableExercises = uiState.availableExercises,
-                canMoveUp = index > 0,
-                canMoveDown = index < uiState.rows.lastIndex,
-                actions = rowActions,
-            )
-            Spacer(Modifier.padding(top = 8.dp))
-        }
-        OutlinedButton(onClick = onAddRowClicked, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.training_plan_editor_add_exercise))
-        }
-    }
-}
-
-@Suppress("LongMethod")
-@Composable
-private fun PlannedExerciseRow(
-    row: PlannedExerciseRowUiState,
-    availableExercises: List<TrainingPlanEditorExerciseOption>,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
-    actions: TrainingPlanEditorRowActions,
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                ExercisePicker(row, availableExercises) { exerciseId -> actions.onExerciseSelected(row.rowId, exerciseId) }
-                RowMoveAndRemoveActions(row.rowId, canMoveUp, canMoveDown, actions)
-            }
-            OutlinedTextField(
-                value = row.targetSetsText,
-                onValueChange = { actions.onTargetSetsChanged(row.rowId, it) },
-                label = { Text(stringResource(R.string.training_plan_editor_row_target_sets_label)) },
-                isError = row.targetSetsError != null,
-                supportingText = { fieldErrorText(row.targetSetsError)?.let { Text(it) } },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = row.targetWarmupSetsText,
-                onValueChange = { actions.onTargetWarmupSetsChanged(row.rowId, it) },
-                label = { Text(stringResource(R.string.training_plan_editor_row_target_warmup_sets_label)) },
-                isError = row.targetWarmupSetsError != null,
-                supportingText = { fieldErrorText(row.targetWarmupSetsError)?.let { Text(it) } },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            TargetRangeFields(row, actions)
-            OutlinedTextField(
-                value = row.restSecondsText,
-                onValueChange = { actions.onRestSecondsChanged(row.rowId, it) },
-                label = { Text(stringResource(R.string.training_plan_editor_row_rest_label)) },
-                isError = row.restError != null,
-                supportingText = { fieldErrorText(row.restError)?.let { Text(it) } },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Row {
-                Checkbox(checked = row.isOptional, onCheckedChange = { actions.onOptionalChanged(row.rowId, it) })
-                Text(stringResource(R.string.training_plan_editor_row_optional_label))
-            }
-        }
-    }
-}
-
-@Composable
-private fun TargetRangeFields(
-    row: PlannedExerciseRowUiState,
-    actions: TrainingPlanEditorRowActions,
-) {
-    if (row.trackingType == ExerciseTrackingType.DURATION) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            OutlinedTextField(
-                value = row.durationMinText,
-                onValueChange = { actions.onDurationMinChanged(row.rowId, it) },
-                label = { Text(stringResource(R.string.training_plan_editor_row_duration_min_label)) },
-                isError = row.targetRangeError != null,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-                modifier = Modifier.weight(1f),
-            )
-            OutlinedTextField(
-                value = row.durationMaxText,
-                onValueChange = { actions.onDurationMaxChanged(row.rowId, it) },
-                label = { Text(stringResource(R.string.training_plan_editor_row_duration_max_label)) },
-                isError = row.targetRangeError != null,
-                supportingText = { fieldErrorText(row.targetRangeError)?.let { Text(it) } },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-                modifier = Modifier.weight(1f),
-            )
-        }
-    } else {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            OutlinedTextField(
-                value = row.repMinText,
-                onValueChange = { actions.onRepMinChanged(row.rowId, it) },
-                label = { Text(stringResource(R.string.training_plan_editor_row_rep_min_label)) },
-                isError = row.targetRangeError != null,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-                modifier = Modifier.weight(1f),
-            )
-            OutlinedTextField(
-                value = row.repMaxText,
-                onValueChange = { actions.onRepMaxChanged(row.rowId, it) },
-                label = { Text(stringResource(R.string.training_plan_editor_row_rep_max_label)) },
-                isError = row.targetRangeError != null,
-                supportingText = { fieldErrorText(row.targetRangeError)?.let { Text(it) } },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-                modifier = Modifier.weight(1f),
-            )
-        }
-    }
-}
-
-@Composable
-private fun ExercisePicker(
-    row: PlannedExerciseRowUiState,
-    availableExercises: List<TrainingPlanEditorExerciseOption>,
-    onSelected: (String) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        TextButton(onClick = { expanded = true }) {
+private fun ExercisesHeader(rows: List<PlannedExerciseRowUiState>) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = SectionGap, bottom = RepFlowSpacing.gapSm),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RepFlowSectionLabel(text = stringResource(R.string.training_plan_editor_exercises_label))
+        if (rows.isNotEmpty()) {
+            val workingSets = plannedWorkingSetTotal(rows)
             Text(
-                row.exerciseName.ifBlank { stringResource(R.string.training_plan_editor_select_exercise_placeholder) },
+                text =
+                    stringResource(
+                        R.string.training_plan_editor_exercises_count,
+                        pluralStringResource(R.plurals.training_plan_editor_exercise_count, rows.size, rows.size),
+                        pluralStringResource(R.plurals.training_plan_editor_working_set_count, workingSets, workingSets),
+                    ),
+                style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
             )
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            availableExercises.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option.name) },
-                    onClick = {
-                        expanded = false
-                        onSelected(option.id)
-                    },
-                )
-            }
         }
     }
 }
 
+/** `4a`'s empty day (`:901-903`): a hairline ring at radius 12 around the prompt. */
 @Composable
-private fun RowMoveAndRemoveActions(
-    rowId: Long,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
-    actions: TrainingPlanEditorRowActions,
-) {
-    val moveUpDescription = stringResource(R.string.training_plan_editor_row_move_up_content_description)
-    val moveDownDescription = stringResource(R.string.training_plan_editor_row_move_down_content_description)
-    val removeDescription = stringResource(R.string.training_plan_editor_row_remove_content_description)
-    Row {
-        TextButton(
-            onClick = { actions.onMoveUp(rowId) },
-            enabled = canMoveUp,
-            modifier = Modifier.semantics { contentDescription = moveUpDescription },
-        ) { Text("↑") }
-        TextButton(
-            onClick = { actions.onMoveDown(rowId) },
-            enabled = canMoveDown,
-            modifier = Modifier.semantics { contentDescription = moveDownDescription },
-        ) { Text("↓") }
-        TextButton(
-            onClick = { actions.onRemove(rowId) },
-            modifier = Modifier.semantics { contentDescription = removeDescription },
-        ) { Text("✕") }
+private fun NoExercisesHint() {
+    Text(
+        text = stringResource(R.string.training_plan_editor_no_exercises),
+        style = MaterialTheme.typography.bodyMedium.copy(fontSize = HintFontSize),
+        color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
+        textAlign = TextAlign.Center,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .border(1.dp, RepFlowColor.hairline, HintShape)
+                .padding(horizontal = RepFlowSpacing.screenPadding, vertical = HintVerticalPadding),
+    )
+}
+
+/**
+ * Plan item 3, `4a`'s note (`:948`): plan versions are immutable and a past
+ * workout keeps the version it ran on - an invariant RepFlow already enforces
+ * and never said. "From this day" reads "from this plan" (no days, `D4`).
+ * Shown when editing an existing plan, the case it describes.
+ */
+@Composable
+private fun VersionNote() {
+    val color = repFlowSecondaryTextColor(MaterialTheme.colorScheme)
+    Row(
+        modifier = Modifier.padding(top = SectionGap),
+        horizontalArrangement = Arrangement.spacedBy(NoteGap),
+    ) {
+        Icon(
+            painter = painterResource(RepFlowIcons.checkCircle),
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.padding(top = NoteGlyphTopGap).size(NoteGlyphSize),
+        )
+        Text(
+            text = stringResource(R.string.training_plan_editor_version_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = color,
+        )
     }
 }
 
@@ -282,13 +189,14 @@ private fun SubmitErrorText(submitError: TrainingPlanEditorSubmitError?) {
             null -> null
         }
     text?.let {
-        Text(it)
-        Spacer(Modifier.padding(top = 4.dp))
+        Row(modifier = Modifier.padding(top = SectionGap)) {
+            InlineError(it)
+        }
     }
 }
 
 @Composable
-private fun fieldErrorText(error: TrainingPlanEditorFieldError?): String? =
+internal fun fieldErrorText(error: TrainingPlanEditorFieldError?): String? =
     when (error) {
         is TrainingPlanEditorFieldError.Domain -> domainErrorText(error.error)
         TrainingPlanEditorFieldError.InvalidNumber -> stringResource(R.string.training_plan_editor_error_invalid_number)
@@ -303,3 +211,15 @@ private fun domainErrorText(error: TrainingPlanValidationError): String =
         TrainingPlanValidationError.NameTooLong -> stringResource(R.string.training_plan_editor_error_name_too_long)
         else -> stringResource(R.string.training_plan_editor_error_invalid_number)
     }
+
+private val FieldShape = RoundedCornerShape(10.dp)
+private val NameFieldMinHeight = 52.dp
+private val SectionGap = 18.dp
+private val AddButtonTopGap = 14.dp
+private val AddButtonMinHeight = 52.dp
+private val HintShape = RoundedCornerShape(12.dp)
+private val HintVerticalPadding = 22.dp
+private val HintFontSize = 13.5.sp
+private val NoteGap = 9.dp
+private val NoteGlyphTopGap = 1.dp
+private val NoteGlyphSize = 15.dp

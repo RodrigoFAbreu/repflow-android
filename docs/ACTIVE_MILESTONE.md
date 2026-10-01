@@ -13,8 +13,125 @@ explicitly** — `active_work_item_id` still points at the parent.
   (revision 20). Registry:
   `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-registry.json`
   (CP1–CP16, executed in array order).
-- **Current checkpoint: CP10 — Exercise library conversion: complete.**
-  CP1–CP9 complete; CP11–CP16 not started.
+- **Current checkpoint: CP11 — Plans list and plan editor conversion: complete.**
+  CP1–CP10 complete; CP12–CP16 not started.
+
+### CP11 — what was done and verified (2026-10-01)
+
+- **Design re-read** from the live project (etag `1786483024007421`): `5a`
+  (`RepFlow.dc.html:345–409`) and its script (`:3410–3438`); `4a`'s Plans tab
+  and plan edit (`:825–950`), their script (`:3609–3694`) and the plan picker
+  sheet `nPlanPickOpen` (`:1635–1659`); `2a` (`:2212–2370`) and its script
+  (`:4470–4541`).
+- **Plans list (`5a`, plan item 1; `TrainingPlanListScreen.kt`,
+  `TrainingPlanListCards.kt`):** CP3's top-level frame (`Plans` at 25/500),
+  the `Active` / `Archived` pills at `5a`'s size inside 44dp targets, and one
+  card per plan (radius 14, padding 16, surface inside a hairline): the name at
+  17/500, `N exercises · vN` (no days, `D4`), an archived plan's `Archived <d
+  MMM yyyy>`, `Archive` / `Restore` **on the card face** (44 tall, `D79`), then
+  `Start workout` (accent primary, filled `play`, 46 tall) on an active plan
+  and `Open` (`5a`'s word over `4a`'s `Edit`, `D78`). The card body still opens
+  the plan, as the row did. `5a`'s empty card (`list-checks`, `No active plans.
+  Restore one, or create a plan.` / `Nothing archived.`), the footnote
+  `Archiving never touches completed workouts.` (`D80`), the archive snackbar
+  as `5a`'s card (`archive` glyph, accent `Undo`), and `New plan` as a 52 accent
+  outline on `RepFlowBottomActionBar` in place of the FAB (keeping the FAB's
+  content description, whose text is now `New plan`). The row `DropdownMenu`
+  is gone.
+- **Start action (plan item 1, `O8` → `D77`, flagged for the reviewer):**
+  `TrainingPlanListViewModel` gains `StartWorkoutSessionFromPlan` (a fourth
+  constructor dependency), `onStartClicked(planId)` — the plan's **latest
+  version**, read with one `observeTrainingPlans(ACTIVE).first()` exactly as
+  Home's `startFromPlan` does, then the same use case Home's start card calls —
+  and `onWorkoutOpened()`. Success raises `TrainingPlanListUiState.openWorkout`
+  (Home's navigation-via-stable-state flag); the route clears it and opens
+  `workout` (`RepFlowNavHost`: `onOpenWorkout`). A workout already running is
+  refused with the new message `WorkoutAlreadyActive` → `A workout is already
+  running.`; any other refusal is the existing `OperationFailed`. A second tap
+  while one start is in flight is ignored. Archived cards have no start.
+  `TrainingPlanListItem` gains `versionNumber` and `archivedAt`, no defaults.
+- **Plan editor (`4a` + `2a`, plan item 2; `TrainingPlanEditorScreen.kt`,
+  `…FormFields.kt`, new `…Rows.kt`, `…Targets.kt`, `…Picker.kt`,
+  `…RowModel.kt`):** CP3's sub-screen bar (`Edit plan` / `New plan`, real
+  `arrow-left`, the existing `Back` description), the name as `2b`'s 52-tall
+  field (`D81`), `EXERCISES` with `N exercises · N working sets`, and one row per
+  planned exercise at `4a`'s 64: `2a`'s stacked up/down carets (44×32, `D82`),
+  the name over `3 × 8–12 reps · 1 warm-up · 90s rest` (or `Check this
+  exercise's targets.` when a field is invalid), `2a`'s `optional` badge, a
+  caret, and a 44 `trash` — **reorder and remove stay on the collapsed row**,
+  which is what keeps plan item 5's three row-action tests reachable. Tapping a
+  row **expands it in place** (one at a time) into `4a`'s stepper lines on CP3's
+  stepper (44 buttons, value 16 tabular, the value opens the keypad): working
+  sets, warm-up sets, min/max reps or min/max seconds (`D83`), rest (step 15,
+  shown `m:ss`) with `2a`'s six presets, then `Optional` (a checkbox toggle) and
+  `Change exercise` (`D84`). Each stepper writes the row's existing text field
+  through the unchanged `String` setters; field errors show under their line.
+  Steps and bounds are `PlanRowStepping` (pure): the domain's own `TargetSets` /
+  `RepRange` / `DurationTarget` / `RestDuration` limits, and an empty field's
+  first tap lands on `2a`'s new-row defaults (3 sets, 8–12, 30–60 s; rest 1:30).
+  `Save` / `Saving…` is the bottom bar's primary (`D85`); the discard dialog
+  stays. **The ViewModel is unchanged.**
+- **Picker as a sheet (plan item 2, `D87`):** the row `DropdownMenu` became
+  `4a`'s sheet — `Add to plan`, a 48 search over names, `Create a new exercise`
+  (opens the exercise editor; `onCreateExercise` on the route, wired in
+  `RepFlowNavHost` for both editor routes), 60-tall rows with an accent
+  `plus`. `Add exercise` still calls `onAddRowClicked`; the screen then opens the
+  sheet for the new empty row as soon as it appears, and a choice fills it via
+  `onExerciseSelected` and expands it. A row still without an exercise reopens
+  the sheet from its header.
+- **Plan-version note (plan item 3):** "Changes apply to the next session you
+  start from this plan. Past workouts keep the version they were run on."
+  (`check-circle`, under the rows) when editing an existing plan — "this day"
+  reads "this plan" (`D4`).
+- **Deviations (plan item 4) and `O8`:** no day tabs, `Active plan` badge, `Make
+  active` or superset toggle (`D1`, `D4`); `D76`–`D87` added, `O8` closed
+  (`D77`, `D78`, `D84`, `D85`, `D86`). Flagged for the reviewer: `D76` (`Last
+  used` not built), `D77` (start directly from the card), `D82` (carets 32 tall,
+  below the 44 floor), `D85` (no `Saving creates version N` bar). Next free
+  register id: **D88**.
+- **Copy changed:** `training_plan_list_add_content_description` → `New plan`;
+  `training_plan_list_empty` / `_empty_no_archived` → `5a`'s two lines;
+  `training_plan_editor_no_exercises` → `Nothing in this plan yet. Add the
+  exercises you want to hit.`; the row labels → `Working sets`, `Warm-up sets`,
+  `Min seconds`, `Max seconds`, `Rest`. `training_plan_list_row_menu_*` became
+  `training_plan_list_card_*`; `training_plan_list_exercise_count` was removed
+  (the meta is now the `training_plan_list_card_exercise_count` plural).
+- **Tests (plan item 5's enumeration, as built):** instrumented
+  `TrainingPlanListScreenTest` (11 → 12): `createFabClickInvokesOnCreateClick` →
+  `createBarButtonClickInvokesOnCreateClick` (same content description); the
+  two archive/restore methods → `cardShowsArchive…` / `cardShowsRestore…`
+  (click the card's own action, and assert the other one and an archived
+  card's start are absent); **`rowMenuEditItemInvokesOnPlanClick` is rewritten,
+  not retired** — `Open` is its own affordance, so it becomes
+  `cardOpenButtonInvokesOnPlanClick`; **new** `cardStartButtonInvokesOnStartClickWithoutOpeningThePlan`;
+  `rendersContentRowsAndInvokesOnPlanClick` unchanged in intent (fixture via
+  `planItem()`, plus the meta line); the rest unchanged.
+  `TrainingPlanEditorScreenTest` (15 → 17): helper gains
+  `onCreateExerciseClick`; the three row-action methods untouched and still
+  reach their descriptions on the collapsed row; **new**
+  `aRowWithNoExerciseOpensThePickerSheetAndTheChoiceFillsThatRow` and
+  `addExerciseOpensThePickerSheetForTheNewRowOnceItAppears`. JVM:
+  `TrainingPlanListViewModelTest` (11 → 14) — **not "unexamined" as plan item 5
+  expected**: the start action needs the new constructor argument, so the
+  fixture changes, and three tests are added (version and archive instant on
+  the item; start opens the workout from the latest version; start while a
+  workout runs reports it and keeps the running session). New
+  `PlanRowSteppingTest` (6). `TrainingPlanEditorViewModelTest` (8) untouched.
+- **Checks run:** `spotlessApply`; `testDebugUnitTest --tests` for
+  `presentation.trainingplan.*`, `application.trainingplan.*`,
+  `presentation.navigation.*`, `presentation.designsystem.*`,
+  `presentation.home.*`, `LayerBoundaryTest` — 20 classes, 143 tests, 0
+  failures (one earlier run of the same set saw a single 3 s Turbine timeout in
+  the pre-existing `onRetry resubscribes and still reflects current content`;
+  it did not recur in 15 isolated runs of that class and 3 forced re-runs of
+  the full set); `spotlessCheck detekt
+  lintDebug assembleDebug assembleDebugAndroidTest` — green; lint 0 errors, 24
+  warnings and 1 hint (one fewer than before: the removed
+  `training_plan_list_exercise_count`). **Not run (no device):**
+  `TrainingPlanListScreenTest` (12) and `TrainingPlanEditorScreenTest` (17)
+  compile but need `connectedDebugAndroidTest`, as do CP2–CP10's.
+- **Room stays at version 7**: no query, table, migration or domain change; the
+  one new write path is the existing `StartWorkoutSessionFromPlan`.
 
 ### CP10 — what was done and verified (2026-10-01)
 

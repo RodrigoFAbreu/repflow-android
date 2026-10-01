@@ -1,6 +1,9 @@
 package com.repflow.app.presentation.trainingplan.editor
 
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -11,6 +14,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
+import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.trainingplan.TrainingPlanId
 import com.repflow.app.domain.trainingplan.TrainingPlanValidationError
 import org.junit.Assert.assertEquals
@@ -21,7 +25,9 @@ import org.junit.runner.RunWith
 /**
  * Stateless Compose coverage for [TrainingPlanEditorScreen], mirroring
  * [com.repflow.app.presentation.exercise.editor.ExerciseEditorScreenTest]'s
- * shape.
+ * shape. Remediation-1 CP11 replaced the row's exercise dropdown with the
+ * picker sheet (the last two tests); the row actions stay on the collapsed
+ * row, so the move/remove tests reach them without expanding anything.
  */
 @RunWith(AndroidJUnit4::class)
 class TrainingPlanEditorScreenTest {
@@ -37,6 +43,7 @@ class TrainingPlanEditorScreenTest {
         onBackRequested: () -> Unit = {},
         onDiscardConfirmed: () -> Unit = {},
         onDiscardCancelled: () -> Unit = {},
+        onCreateExerciseClick: () -> Unit = {},
     ) {
         composeRule.setContent {
             TrainingPlanEditorScreen(
@@ -48,6 +55,7 @@ class TrainingPlanEditorScreenTest {
                 onBackRequested = onBackRequested,
                 onDiscardConfirmed = onDiscardConfirmed,
                 onDiscardCancelled = onDiscardCancelled,
+                onCreateExerciseClick = onCreateExerciseClick,
             )
         }
     }
@@ -280,4 +288,64 @@ class TrainingPlanEditorScreenTest {
             .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_submit_error_duplicate_name))
             .assertIsDisplayed()
     }
+
+    @Test
+    fun aRowWithNoExerciseOpensThePickerSheetAndTheChoiceFillsThatRow() {
+        var selected: Pair<Long, String>? = null
+        val row = PlannedExerciseRowUiState(rowId = 7L)
+        setContent(
+            TrainingPlanEditorUiState(rows = listOf(row), availableExercises = pickerOptions()),
+            rowActions = noOpRowActions().copy(onExerciseSelected = { rowId, exerciseId -> selected = rowId to exerciseId }),
+        )
+
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_select_exercise_placeholder))
+            .performClick()
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_picker_title))
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("Romanian Deadlift").performClick()
+
+        assertEquals(7L to "ex-rdl", selected)
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_picker_title))
+            .assertDoesNotExist()
+    }
+
+    @Test
+    fun addExerciseOpensThePickerSheetForTheNewRowOnceItAppears() {
+        var state by mutableStateOf(TrainingPlanEditorUiState(availableExercises = pickerOptions()))
+        var selected: Pair<Long, String>? = null
+        // A stateful host: the ViewModel's new empty row has to actually appear for the sheet to open for it.
+        composeRule.setContent {
+            TrainingPlanEditorScreen(
+                uiState = state,
+                onNameChanged = {},
+                rowActions = noOpRowActions().copy(onExerciseSelected = { rowId, exerciseId -> selected = rowId to exerciseId }),
+                onAddRowClicked = { state = state.copy(rows = state.rows + PlannedExerciseRowUiState(rowId = 3L)) },
+                onSaveClicked = {},
+                onBackRequested = {},
+                onDiscardConfirmed = {},
+                onDiscardCancelled = {},
+                onCreateExerciseClick = {},
+            )
+        }
+
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_add_exercise))
+            .performClick()
+        composeRule.onNodeWithText("Plank").performClick()
+
+        assertEquals(3L to "ex-plank", selected)
+    }
+
+    private fun pickerOptions() =
+        listOf(
+            TrainingPlanEditorExerciseOption(
+                id = "ex-rdl",
+                name = "Romanian Deadlift",
+                trackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
+            ),
+            TrainingPlanEditorExerciseOption(id = "ex-plank", name = "Plank", trackingType = ExerciseTrackingType.DURATION),
+        )
 }

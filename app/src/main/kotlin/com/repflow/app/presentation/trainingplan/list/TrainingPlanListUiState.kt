@@ -9,11 +9,16 @@ import com.repflow.app.domain.trainingplan.TrainingPlanId
  * active/archived filter and snackbar-message-queue shape (Milestone 8,
  * CP12) - plans still have no search field, so [filter] is the only
  * criterion.
+ *
+ * [openWorkout] is raised once a card's `Start workout` has started a session
+ * (remediation-1 CP11), the same navigation-via-stable-state flag Home's
+ * `HomeUiState.openWorkout` is; the route clears it once it has navigated.
  */
 data class TrainingPlanListUiState(
     val filter: TrainingPlanStatusFilter = TrainingPlanStatusFilter.ACTIVE,
     val content: TrainingPlanListContent = TrainingPlanListContent.Loading,
     val messages: List<TrainingPlanListMessage> = emptyList(),
+    val openWorkout: Boolean = false,
 )
 
 /**
@@ -29,6 +34,11 @@ sealed interface TrainingPlanListMessage {
     ) : TrainingPlanListMessage
 
     data class OperationFailed(
+        override val id: Long,
+    ) : TrainingPlanListMessage
+
+    /** A card's start was refused because a workout is already running (the single-active-session invariant). */
+    data class WorkoutAlreadyActive(
         override val id: Long,
     ) : TrainingPlanListMessage
 }

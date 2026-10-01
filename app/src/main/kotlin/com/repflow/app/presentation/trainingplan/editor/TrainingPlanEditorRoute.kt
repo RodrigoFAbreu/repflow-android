@@ -11,12 +11,14 @@ import com.repflow.app.domain.trainingplan.TrainingPlanId
  * Stateful route composable: owns the ViewModel, delegates rendering to the
  * stateless [TrainingPlanEditorScreen]. Mirrors
  * [com.repflow.app.presentation.exercise.editor.ExerciseEditorRoute]'s
- * navigation-via-stable-state pattern.
+ * navigation-via-stable-state pattern. [onCreateExercise] is the picker
+ * sheet's `Create a new exercise` (remediation-1 CP11).
  */
 @Composable
 fun TrainingPlanEditorRoute(
     onSaved: (TrainingPlanId) -> Unit,
     onDismissed: () -> Unit,
+    onCreateExercise: () -> Unit,
     viewModel: TrainingPlanEditorViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -59,5 +61,6 @@ fun TrainingPlanEditorRoute(
         onBackRequested = viewModel::onBackRequested,
         onDiscardConfirmed = viewModel::onDiscardConfirmed,
         onDiscardCancelled = viewModel::onDiscardCancelled,
+        onCreateExerciseClick = onCreateExercise,
     )
 }

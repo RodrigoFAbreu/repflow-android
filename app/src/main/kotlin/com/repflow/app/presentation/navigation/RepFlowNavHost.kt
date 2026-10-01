@@ -40,7 +40,8 @@ private val TOP_LEVEL_ROUTES: Set<String> = RepFlowDestinations.TOP_LEVEL_DESTIN
  * Destinations that stopped being tabs are reached from inside the app, as
  * the design reaches them: the workout and recovery entry from Home, Settings
  * from Home, and the exercise library and backup from Settings (the exercise
- * editor also from the workout's picker sheet). Workout mode is left only
+ * editor also from the workout's and the plan editor's picker sheets, and the
+ * workout also from a plan card's `Start workout`). Workout mode is left only
  * through its own `X` / `Finish` - system back there opens the leave sheet -
  * and leaving goes Home by [leaveWorkoutForHome]. Finishing ends on the done
  * screen ([openWorkoutDone], remediation-1 CP9), which has no bar either.
@@ -134,12 +135,14 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
                 TrainingPlanListRoute(
                     onPlanClick = { id -> navController.navigate(RepFlowDestinations.planEditRoute(id.value)) },
                     onCreateClick = { navController.navigate(RepFlowDestinations.PLAN_NEW) },
+                    onOpenWorkout = { navController.navigate(RepFlowDestinations.WORKOUT) { launchSingleTop = true } },
                 )
             }
             composable(RepFlowDestinations.PLAN_NEW) {
                 TrainingPlanEditorRoute(
                     onSaved = { navController.popBackStack() },
                     onDismissed = { navController.popBackStack() },
+                    onCreateExercise = { navController.navigate(RepFlowDestinations.EXERCISE_NEW) },
                 )
             }
             composable(
@@ -149,6 +152,7 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
                 TrainingPlanEditorRoute(
                     onSaved = { navController.popBackStack() },
                     onDismissed = { navController.popBackStack() },
+                    onCreateExercise = { navController.navigate(RepFlowDestinations.EXERCISE_NEW) },
                 )
             }
             composable(
