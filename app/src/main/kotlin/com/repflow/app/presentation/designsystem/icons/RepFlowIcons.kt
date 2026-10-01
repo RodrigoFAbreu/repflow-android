@@ -80,6 +80,10 @@ object RepFlowIcons {
     @DrawableRes
     val calendarCheck: Int = R.drawable.ic_ph_calendar_check
 
+    /** History's date filter chips (`3a`, `ph-calendar-blank`). Remediation-1 CP12. */
+    @DrawableRes
+    val calendarBlank: Int = R.drawable.ic_ph_calendar_blank
+
     /**
      * `RepFlowListRow`'s trailing caret (`ph-caret-right`, drawn on every
      * navigating row in History, Settings and the sheets). Remediation-1 CP3.
@@ -205,6 +209,14 @@ object RepFlowIcons {
     /** Home's `Start workout` (`ph-fill ph-play`). Remediation-1 CP5. */
     @DrawableRes
     val playFill: Int = R.drawable.ic_ph_play_fill
+
+    /**
+     * An invalidated workout: History's `invalidated` badge, its `Show
+     * invalidated` chip and the detail's `Invalidate workout` (`3a`,
+     * `ph-prohibit`). Remediation-1 CP12.
+     */
+    @DrawableRes
+    val prohibit: Int = R.drawable.ic_ph_prohibit
 
     /** Stepper increment (weight/reps entry). */
     @DrawableRes

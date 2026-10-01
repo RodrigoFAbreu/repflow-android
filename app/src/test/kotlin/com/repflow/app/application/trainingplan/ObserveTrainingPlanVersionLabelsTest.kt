@@ -60,7 +60,7 @@ class ObserveTrainingPlanVersionLabelsTest {
         )
 
     @Test
-    fun `maps every historical version of a revised plan back to its identity and current name`() =
+    fun `maps every historical version of a revised plan back to its identity, current name and own number`() =
         runTest {
             val exerciseId = seedExercise()
             val planId =
@@ -81,6 +81,8 @@ class ObserveTrainingPlanVersionLabelsTest {
             assertEquals("Push Day V2", labels[firstVersion]?.planName)
             assertEquals(planId, labels[secondVersion]?.planId)
             assertEquals("Push Day V2", labels[secondVersion]?.planName)
+            assertEquals(1, labels[firstVersion]?.versionNumber)
+            assertEquals(2, labels[secondVersion]?.versionNumber)
         }
 
     @Test

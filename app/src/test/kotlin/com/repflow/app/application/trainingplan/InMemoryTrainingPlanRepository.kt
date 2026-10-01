@@ -66,7 +66,7 @@ class InMemoryTrainingPlanRepository : TrainingPlanRepository {
             versionsByPlanId
                 .flatMap { (planId, versions) ->
                     val planName = plansById[planId]?.name?.value ?: return@flatMap emptyList()
-                    versions.map { version -> version.id to TrainingPlanVersionLabel(planId, planName) }
+                    versions.map { version -> version.id to TrainingPlanVersionLabel(planId, planName, version.versionNumber) }
                 }.toMap()
         }
 

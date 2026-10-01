@@ -3,6 +3,7 @@ package com.repflow.app.presentation.history
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -21,13 +22,15 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 /**
  * Stateless Compose coverage for [HistoryScreen] - state in, events out, no
  * Hilt, mirroring
  * [com.repflow.app.presentation.exercise.list.ExerciseListScreenTest].
+ *
+ * Remediation-1 CP12 moved invalidating a workout off the list row to the
+ * detail's `⋮` (`3a`, `askInvalidate`), so the three invalidate tests open the
+ * detail first (a selected session) and reach the same dialog from there.
  */
 @RunWith(AndroidJUnit4::class)
 class HistoryScreenTest {
@@ -77,7 +80,42 @@ class HistoryScreenTest {
         setContent(HistoryUiState(isLoading = false, sessions = listOf(completedSession())))
 
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.history_session_invalidate_action))
+            .onNodeWithText(composeRule.activity.getString(R.string.home_untitled_workout))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.history_duration_minutes, 60), substring = true)
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(composeRule.activity.resources.getQuantityString(R.plurals.history_count, 1, 1))
+            .assertIsDisplayed()
+        // The row face carries no destructive action any more: it lives on the detail.
+        composeRule
+            .onNodeWithContentDescription(composeRule.activity.getString(R.string.history_session_invalidate_action))
+            .assertDoesNotExist()
+    }
+
+    @Test
+    fun rowsCarryThePrAndInvalidatedBadges() {
+        val personalBest = completedSession("session-1")
+        val invalidated =
+            when (val result = completedSession("session-2").invalidate(Instant.parse("2026-01-02T00:00:00Z"))) {
+                is DomainResult.Success -> result.value
+                is DomainResult.Failure -> throw AssertionError("Expected success but was failure: ${result.error}")
+            }
+        setContent(
+            HistoryUiState(
+                isLoading = false,
+                sessions = listOf(personalBest, invalidated),
+                personalBestSessionIds = setOf(personalBest.id),
+                filters = HistoryFilters(showInvalidated = true),
+            ),
+        )
+
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.history_row_badge_pr))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.history_row_badge_invalidated))
             .assertIsDisplayed()
     }
 
@@ -90,8 +128,7 @@ class HistoryScreenTest {
             onSessionClick = { clickedId = it },
         )
 
-        val dateText = session.startedAt.atZone(ZoneId.systemDefault()).format(rowDateFormatter)
-        composeRule.onNodeWithText(dateText).performClick()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.home_untitled_workout)).performClick()
 
         assertEquals(session.id, clickedId)
     }
@@ -101,12 +138,12 @@ class HistoryScreenTest {
         var invalidatedId: WorkoutSessionId? = null
         val session = completedSession()
         setContent(
-            HistoryUiState(isLoading = false, sessions = listOf(session)),
+            HistoryUiState(isLoading = false, sessions = listOf(session), selectedSessionId = session.id),
             onInvalidateClicked = { invalidatedId = it },
         )
 
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.history_session_invalidate_action))
+            .onNodeWithContentDescription(composeRule.activity.getString(R.string.history_session_invalidate_action))
             .performClick()
 
         composeRule
@@ -120,12 +157,12 @@ class HistoryScreenTest {
         var invalidatedId: WorkoutSessionId? = null
         val session = completedSession()
         setContent(
-            HistoryUiState(isLoading = false, sessions = listOf(session)),
+            HistoryUiState(isLoading = false, sessions = listOf(session), selectedSessionId = session.id),
             onInvalidateClicked = { invalidatedId = it },
         )
 
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.history_session_invalidate_action))
+            .onNodeWithContentDescription(composeRule.activity.getString(R.string.history_session_invalidate_action))
             .performClick()
         composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.history_invalidate_dialog_confirm))
@@ -139,12 +176,12 @@ class HistoryScreenTest {
         var invalidatedId: WorkoutSessionId? = null
         val session = completedSession()
         setContent(
-            HistoryUiState(isLoading = false, sessions = listOf(session)),
+            HistoryUiState(isLoading = false, sessions = listOf(session), selectedSessionId = session.id),
             onInvalidateClicked = { invalidatedId = it },
         )
 
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.history_session_invalidate_action))
+            .onNodeWithContentDescription(composeRule.activity.getString(R.string.history_session_invalidate_action))
             .performClick()
         composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.history_invalidate_dialog_cancel))
@@ -224,7 +261,7 @@ class HistoryScreenTest {
     }
 
     @Test
-    fun exerciseFilterMenuInvokesOnExerciseFilterChanged() {
+    fun exerciseFilterSheetInvokesOnExerciseFilterChanged() {
         var selectedExerciseId: ExerciseId? = null
         setContent(
             HistoryUiState(isLoading = false, sessions = listOf(completedSessionWithExercise())),
@@ -234,6 +271,9 @@ class HistoryScreenTest {
         composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.history_filter_exercise_all))
             .performClick()
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.history_filter_exercise_sheet_title).uppercase())
+            .assertIsDisplayed()
         composeRule.onNodeWithText("Bench Press").performClick()
 
         assertEquals(ExerciseId("bench-press"), selectedExerciseId)
@@ -241,6 +281,5 @@ class HistoryScreenTest {
 
     private companion object {
         const val SNACKBAR_AUTO_DISMISS_TIMEOUT_MILLIS = 8_000L
-        val rowDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm")
     }
 }

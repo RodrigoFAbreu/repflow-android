@@ -13,8 +13,120 @@ explicitly** — `active_work_item_id` still points at the parent.
   (revision 20). Registry:
   `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-registry.json`
   (CP1–CP16, executed in array order).
-- **Current checkpoint: CP11 — Plans list and plan editor conversion: complete.**
-  CP1–CP10 complete; CP12–CP16 not started.
+- **Current checkpoint: CP12 — History and workout detail conversion: complete.**
+  CP1–CP11 complete; CP13–CP16 not started.
+
+### CP12 — what was done and verified (2026-10-01)
+
+- **Design re-read** from the live project (etag `1786483024007421`): `3a`
+  (`RepFlow.dc.html:1830–1956`) and `3b` (`:1958–2014`), their script
+  (`SESSIONS` `:3072–3085`, `histVals` `:4369–4406`), and `4a`'s History tab
+  and detail (`:952–1011`, script `:3699–3730`).
+- **History list (`3a`, plan item 1; `HistoryScreen.kt`, new
+  `HistoryFilterChips.kt`, `HistoryModel.kt`):** CP3's top-level frame
+  (`History` at 25/500); the existing filters as `3a`'s chips at 36 tall inside
+  44dp targets, in a `FlowRow` — the plan (a sheet: `Any plan`, `No plan`, each
+  plan), `Show invalidated` (a toggle chip, `prohibit`), `From any date` /
+  `To any date` (each a sheet with Material's date picker, `Clear`, `Set`) and
+  the exercise (a sheet); `N workouts · newest first`, where the order word is
+  the sort toggle (`Change order`); month section labels; and one 68-tall row
+  per workout — the plan's name (or `Untitled workout`) at 15.5/500 with a `PR`
+  badge (`medal`) and an `invalidated` badge (`prohibit`), the meta
+  `Sat 8 Aug · 10:20 · 52 min · 18 sets · 6,720 kg`, a caret. The two
+  `DropdownMenu`s and the date-picker dialog are gone; the empty and
+  no-match states are `RepFlowEmptyState`; the snackbar is the design's card
+  and is now hosted over the detail too. `HistoryFilters` and
+  `HistoryUiState`'s filtering and sorting are unchanged.
+- **PR badge (plan item 1, "where derivable"):** derived, never stored —
+  `sessionsWithPersonalBests` (`ObserveWorkoutSummary.kt`, pure, one pass) badges
+  exactly the valid sessions whose done-screen summary lists a best set (CP9's
+  `D68` rule); invalidated workouts never carry it. `HistoryViewModel` computes
+  it on every emission into the new `HistoryUiState.personalBestSessionIds`
+  (default empty); its constructor is unchanged.
+- **Workout detail (`3b`, plan item 2; `HistoryDetailScreen.kt`):** CP3's
+  sub-screen bar (back keeps `history_detail_back` as its content
+  description) with `3a`'s `⋮`; `SAT 8 AUG · 10:20 → 11:12`; the name at
+  28/500; `<plan> · version N` (or `No plan`) with an `invalidated` badge on an
+  invalidated workout; `Time` / `Volume (kg)` / `Sets` tiles; one block per
+  exercise — name, `N warm-up sets`, CP9's change against last time (`+2.5 kg`,
+  `same load`, `first time` …, medal for a personal best), then every logged set:
+  working sets numbered, warm-ups marked `warm-up`, the value by tracking type
+  (`70 kg × 10`, `12 reps`, `45 s`), `RPE 8`, and `Pain 2/5` / `Technique 4/5`
+  below. A zero-set exercise reads `No sets logged` with no change (`D20`). The
+  detail is now given a `WorkoutSummary` (from `workoutSummaryOf` over the
+  loaded sessions) and the session's `TrainingPlanVersionLabel`.
+- **Version number:** `TrainingPlanVersionLabel` gains `versionNumber` (no
+  default), filled from the existing `training_plan_versions.version_number`
+  column in `LocalTrainingPlanRepository.observeVersionLabels` — **no query,
+  table or migration change; Room stays at version 7.**
+- **Invalidation (plan items 3 and 6):** the trigger moved from the row to the
+  detail's `⋮`, named `Invalidate workout` and absent on an invalidated
+  workout; it keeps the destructive confirmation (`Invalidate this workout?`,
+  `Keep it` / `Invalidate workout` in the error tone with `prohibit`). Its copy
+  no longer promises a way back that no use case offers (`D93`). The ViewModel's
+  `onInvalidateClicked` is unchanged and still closes the detail on success.
+- **DURATION defect (plan item 5):** fixed — the row picks its words by
+  tracking type (`historySetValueOf`), so a timed set reads `45 s` and never
+  `Set 0:  kg x `; `history_detail_set_row` is removed.
+- **Not built:** the set-edit pencil (`D7`, open decision), the session note
+  (`D3`), `This plan` (`D88`).
+- **Deviations:** `D88`–`D96` added; `O9` closed (`D88`, `D92`; month sections,
+  the `invalidated` badge and `<plan> · version N` built). Flagged for the
+  reviewer: `D93` (the `⋮` opens the destructive dialog directly and is named
+  for it; reworded dialog copy), `D94` (volume unit in the caption), `D95`
+  (every logged set listed, warm-ups included). Next free register id:
+  **D97**.
+- **Copy changed:** `history_empty`, `history_empty_no_matches`,
+  `history_filter_exercise_all` (`Any exercise`), `history_filter_plan_ad_hoc`
+  (`No plan`), the date chip labels, `history_filter_sort_newest` /
+  `_oldest` (lower case, inside the count line), `history_date_picker_confirm`
+  (`Set`), `history_session_invalidate_action` (`Invalidate workout`, now the
+  `⋮`'s description), `history_invalidate_dialog_message` and `_cancel`
+  (`Keep it`), and the set-field strings (`RPE 8.5`, `Pain 2/5`, `Technique
+  4/5`, `warm-up`, `45 s`). Removed: `history_session_summary`,
+  `history_detail_set_count`, `history_detail_set_row`,
+  `history_session_headline_invalidated`, `history_date_picker_dismiss`. Two new
+  glyphs, `prohibit` and `calendar-blank` (Phosphor regular, MIT), with
+  `RepFlowIconsTest`'s expected set extended.
+- **Tests (plan item 6's enumeration, as built):** instrumented
+  `HistoryScreenTest` (9 → 10): `rendersContentRows` rewritten (name, meta and
+  count line shown; no invalidate action on the list); the three invalidate
+  methods rewritten to open the detail (a selected session) and click the `⋮`
+  by its description, same assertions; `exerciseFilterMenu…` →
+  `exerciseFilterSheetInvokesOnExerciseFilterChanged` (asserts the sheet);
+  **`rowClickInvokesOnSessionClick` rewritten too, though the plan listed it
+  untouched** — it located the row by the old `d MMM yyyy, HH:mm` text, which
+  the converted row no longer shows, so it now clicks the row by its name;
+  **new** `rowsCarryThePrAndInvalidatedBadges`; the snackbar, sort and
+  show-invalidated methods unchanged. `HistoryDetailScreenTest` (3 → 5): the two
+  set-row methods rewritten against the converted rows asserting the same five
+  facts (the warm-up marker is now an exact match, since the `1 warm-up set`
+  line also contains the word); `backButtonInvokesOnBackClick` rewritten from
+  text to content description (CP3's back is an icon); **new**
+  `aZeroSetExerciseShowsNoSetsLoggedAndNoDelta` and
+  `aDurationSetHasNoLoadAndRepsTemplate` (item 5's defect test). JVM: new
+  `HistoryModelTest` (7); `ObserveWorkoutSummaryTest` + 2 (the badge set equals
+  the summaries' and same-instant sessions); `ObserveTrainingPlanVersionLabelsTest`'s
+  first method also asserts version numbers (renamed);
+  `HistoryUiStateTest` — **fixture edit only** (the label's new argument), its
+  nine assertions untouched; `HistoryViewModelTest` untouched (8/8), as planned
+  — the one-line badge wiring is covered by `ObserveWorkoutSummaryTest`, not by
+  a ViewModel test.
+- **Checks run:** `spotlessApply`; `testDebugUnitTest --tests` for
+  `presentation.history.*`, `application.history.*`,
+  `application.trainingplan.*`, `presentation.designsystem.*`,
+  `presentation.home.*`, `presentation.workout.*`, `application.backup.*`,
+  `presentation.backup.*`, `LayerBoundaryTest` — 32 classes, 212 tests, 0
+  failures; `spotlessCheck detekt lintDebug assembleDebug
+  assembleDebugAndroidTest` — green; lint 0 errors, 22 warnings and 1 hint (two
+  fewer than before: the removed `%d exercises` / `%d sets` strings). **Not run
+  (no device):** `HistoryScreenTest` (10) and `HistoryDetailScreenTest` (5)
+  compile but need `connectedDebugAndroidTest`, as do CP2–CP11's.
+- **Observed, not changed:** the system back gesture on the detail is not
+  intercepted (pre-existing — the detail is a state of the History route, not a
+  destination), so it leaves History rather than closing the detail; only the
+  bar's back arrow closes it. Not in CP12's items; noted for the functional
+  review.
 
 ### CP11 — what was done and verified (2026-10-01)
 
@@ -996,7 +1108,7 @@ explicitly** — `active_work_item_id` still points at the parent.
 ### Next action
 
 `/milestone-implement repflow-redesign-visual-foundation-remediation-1` —
-CP11 (plans list and plan editor conversion). `O11` and
+CP13 (recovery entry and recovery history conversion). `O11` and
 `O12` were decided by the user on 2026-10-01:
 CP14 and CP15 build the approved plan's `4a` designs; `5c`/`5d`/`5b` go to a
 later remediation child.

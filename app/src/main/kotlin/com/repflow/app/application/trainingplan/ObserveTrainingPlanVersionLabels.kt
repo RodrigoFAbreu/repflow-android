@@ -5,10 +5,17 @@ import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
-/** A training plan's stable identity and current display name, for labeling one of its historical versions. */
+/**
+ * A training plan's stable identity and current display name, for labeling
+ * one of its historical versions.
+ *
+ * @property versionNumber the labelled version's own number - History's
+ *   `<plan> · version N` line (remediation-1 CP12).
+ */
 data class TrainingPlanVersionLabel(
     val planId: TrainingPlanId,
     val planName: String,
+    val versionNumber: Int,
 )
 
 /**

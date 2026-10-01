@@ -73,7 +73,7 @@ class LocalTrainingPlanRepository
                     .mapNotNull { versionEntity ->
                         val planName = nameByPlanId[versionEntity.planId] ?: return@mapNotNull null
                         TrainingPlanVersionId(versionEntity.id) to
-                            TrainingPlanVersionLabel(TrainingPlanId(versionEntity.planId), planName)
+                            TrainingPlanVersionLabel(TrainingPlanId(versionEntity.planId), planName, versionEntity.versionNumber)
                     }.toMap()
             }
 

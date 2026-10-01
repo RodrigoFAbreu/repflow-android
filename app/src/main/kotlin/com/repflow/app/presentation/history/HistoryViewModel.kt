@@ -3,6 +3,7 @@ package com.repflow.app.presentation.history
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.repflow.app.application.history.ObserveWorkoutHistory
+import com.repflow.app.application.history.sessionsWithPersonalBests
 import com.repflow.app.application.trainingplan.ObserveTrainingPlanVersionLabels
 import com.repflow.app.application.workout.InvalidateWorkoutSession
 import com.repflow.app.domain.common.DomainResult
@@ -41,7 +42,15 @@ class HistoryViewModel
             viewModelScope.launch {
                 combine(observeWorkoutHistory(), observeTrainingPlanVersionLabels()) { sessions, labels -> sessions to labels }
                     .collect { (sessions, labels) ->
-                        _uiState.update { it.copy(isLoading = false, sessions = sessions, versionLabels = labels) }
+                        val personalBests = sessionsWithPersonalBests(sessions)
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                sessions = sessions,
+                                versionLabels = labels,
+                                personalBestSessionIds = personalBests,
+                            )
+                        }
                     }
             }
         }

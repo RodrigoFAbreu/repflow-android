@@ -158,6 +158,10 @@ class RepFlowIconsTest {
                 "ic_ph_pulse",
                 // Done screen (remediation-1 CP9): the best-set card.
                 "ic_ph_medal_fill",
+                // History (remediation-1 CP12): the `invalidated` badge and the
+                // invalidate action, and the date filter chips.
+                "ic_ph_prohibit",
+                "ic_ph_calendar_blank",
             )
     }
 }

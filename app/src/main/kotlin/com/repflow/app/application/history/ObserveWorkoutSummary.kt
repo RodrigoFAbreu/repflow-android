@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import java.time.Instant
 import javax.inject.Inject
+import kotlin.reflect.KClass
 
 /**
  * The finished-workout summary (remediation-1 CP9, `4a` `nDone`): the session
@@ -212,3 +213,54 @@ internal fun bestSetOf(
         }
     }
 }
+
+/**
+ * The sessions in [sessions] that set a personal best - History's `PR` badge
+ * (remediation-1 CP12): exactly the valid completed sessions whose
+ * [workoutSummaryOf] lists at least one [PersonalBest], worked out in one pass
+ * over the history instead of one summary per row.
+ *
+ * Sessions are visited oldest first, keeping each exercise's best set so far
+ * per kind ([BestSet.isComparableTo]); a session sets a personal best when one
+ * of its exercises beats the best of the same kind from every session that
+ * ended **before** it. Sessions that ended at the same instant are judged
+ * against the same earlier bests, as [workoutSummaryOf] judges them. An
+ * invalidated session neither earns the badge nor counts as an earlier one.
+ */
+fun sessionsWithPersonalBests(sessions: List<WorkoutSession>): Set<WorkoutSessionId> {
+    val bestSoFar = mutableMapOf<ExerciseId, MutableMap<KClass<out BestSet>, BestSet>>()
+    val withPersonalBests = mutableSetOf<WorkoutSessionId>()
+    sessions
+        .filter { it.status == WorkoutSessionStatus.COMPLETED && it.invalidatedAt == null && it.endedAt != null }
+        .groupBy { checkNotNull(it.endedAt) }
+        .toSortedMap()
+        .values
+        .forEach { endedTogether ->
+            val bestsBySession = endedTogether.associate { session -> session.id to bestSetsByExercise(session) }
+            withPersonalBests += bestsBySession.filterValues { bests -> bests.beatsAny(bestSoFar) }.keys
+            bestsBySession.values.forEach { bests -> bestSoFar.keepBests(bests) }
+        }
+    return withPersonalBests
+}
+
+/** Whether any of these bests beats the earlier best of the same kind for its exercise. */
+private fun Map<ExerciseId, BestSet>.beatsAny(bestSoFar: Map<ExerciseId, Map<KClass<out BestSet>, BestSet>>): Boolean =
+    any { (exerciseId, best) ->
+        val previous = bestSoFar[exerciseId]?.get(best::class)
+        previous != null && best > previous
+    }
+
+private fun MutableMap<ExerciseId, MutableMap<KClass<out BestSet>, BestSet>>.keepBests(bests: Map<ExerciseId, BestSet>) {
+    bests.forEach { (exerciseId, best) ->
+        val byKind = getOrPut(exerciseId) { mutableMapOf() }
+        val kept = byKind[best::class]
+        if (kept == null || best > kept) byKind[best::class] = best
+    }
+}
+
+private fun bestSetsByExercise(session: WorkoutSession): Map<ExerciseId, BestSet> =
+    session.exercises
+        .map { it.exerciseId }
+        .distinct()
+        .mapNotNull { exerciseId -> bestSetIn(session, exerciseId)?.let { exerciseId to it } }
+        .toMap()

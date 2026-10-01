@@ -132,6 +132,39 @@ class ObserveWorkoutSummaryTest {
     }
 
     @Test
+    fun `history's PR badges are exactly the valid sessions whose summary lists a best set`() {
+        val sessions =
+            listOf(
+                session("first", day = 1, exercises = listOf(entry(squat, set(80.0, 7)))),
+                session("tie", day = 2, exercises = listOf(entry(squat, set(80.0, 7)))),
+                session("heavier", day = 3, exercises = listOf(entry(squat, set(82.5, 5)))),
+                session("invalidated", day = 4, exercises = listOf(entry(squat, set(150.0, 1))), invalidated = true),
+                session("past-the-valid-record", day = 5, exercises = listOf(entry(squat, set(85.0, 3)), entry(plank, seconds(60)))),
+                session("longer-hold", day = 6, exercises = listOf(entry(plank, seconds(70)))),
+                session("first-time", day = 7, exercises = listOf(entry(pullUp, set(null, 10)))),
+            )
+
+        val badged = sessionsWithPersonalBests(sessions)
+
+        assertEquals(setOf("heavier", "past-the-valid-record", "longer-hold").map(::WorkoutSessionId).toSet(), badged)
+        val bySummary =
+            sessions
+                .filter { !it.isInvalidated && checkNotNull(workoutSummaryOf(it.id, sessions)).personalBests.isNotEmpty() }
+                .map { it.id }
+                .toSet()
+        assertEquals(bySummary, badged)
+    }
+
+    @Test
+    fun `sessions that ended together are each judged only against earlier ones`() {
+        val earlier = session("earlier", day = 1, exercises = listOf(entry(squat, set(80.0, 5))))
+        val lighter = session("lighter", day = 2, exercises = listOf(entry(squat, set(85.0, 5))))
+        val heavier = session("heavier", day = 2, exercises = listOf(entry(squat, set(90.0, 5))))
+
+        assertEquals(setOf(lighter.id, heavier.id), sessionsWithPersonalBests(listOf(earlier, lighter, heavier)))
+    }
+
+    @Test
     fun `the flow emits the summary once the session is completed`() =
         runTest {
             val repository = InMemoryWorkoutRepository()
