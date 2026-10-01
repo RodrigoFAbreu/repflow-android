@@ -1,5 +1,71 @@
 # Active Milestone
 
+## In implementation: `repflow-redesign-visual-foundation-remediation-1`
+
+The remediation child that discharges the parent's functional-review finding
+F1 (see the parent's "Functional review round 1 — outcome" below). Governed
+by Workflow v2.1; plan approved at **revision 20** (approval commit
+`17e7f32`, basis `EXTERNAL_APPROVE`). Every command must **name the child id
+explicitly** — `active_work_item_id` still points at the parent.
+
+- **Active plan:**
+  `docs/milestones/repflow-redesign-visual-foundation-remediation-1-execution.md`
+  (revision 20). Registry:
+  `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-registry.json`
+  (CP1–CP16, executed in array order).
+- **Current checkpoint: CP1 — Design inventory and deviation register:
+  complete.** CP2–CP16 not started.
+
+### CP1 — what was done and verified (2026-10-01)
+
+- Read the live Claude Design project in full — every artboard's markup and
+  the prototype's component script (`RepFlow.dc.html`, 4 723 lines, etag
+  `1786483024007421`) — and wrote
+  `docs/milestones/repflow-redesign-visual-foundation-remediation-1-inventory.md`:
+  per screen, the defining artboards, regions with the design's own values
+  (cited to `6b` or to the artboard's line), every interactive element, the
+  Compose owner after conversion, and the existing tests that read what the
+  conversion changes, each found by grep and marked survives / rewritten.
+- **Deviation register:** D1–D24 seeded verbatim from the plan; **D25–D38
+  added** from the full read (Settings `Library` row, recovery check-in as a
+  screen rather than `4a`'s sheet, the focus strip carrying the progression
+  recommendation rather than readiness, readiness chips / decision list /
+  override not rendered, ad-hoc naming, set-edit scope, custom-load override,
+  override-streak line, backup history / safety snapshot / undo, `2c`'s FAB
+  and 40dp overflow, the done-screen recommendations section, and `1b`/`1c`
+  not built). Next free id: D39.
+- **Open items O1–O12** — design elements that pass the domain-backing test
+  but that the plan text does not decide — each assigned to its owning
+  checkpoint to build or register. **Two need a user decision before their
+  checkpoint starts:** `O11` (CP14 — `5c`, the newer turn, draws `Theme`,
+  `Default rest`, `Extra set fields` and `Archived exercises and plans`,
+  which the plan's `4a`-based CP14 omits; any of them would be a new column
+  in `MIGRATION_7_8`) and `O12` (CP15 — `5b`, the newer turn, draws a
+  different Progress composition from the `4a` one the plan describes).
+  `D38` (`1c` exercise detail, domain-backed, not built) is flagged for the
+  reviewer to accept or reject.
+- **Test-column findings beyond the plan's enumerations:** the two backup
+  route tests' *second* step reads four string ids on the Backup screen CP14
+  converts (two behind `assertDoesNotExist`), so CP14 must keep those ids or
+  rewrite the methods; `RepFlowPrimitivesTest`'s stepper and pill-picker
+  size tests read the primitives CP3 reworks; the three `performTextInput`
+  calls outside the workout all type into fields that stay text fields.
+- No production code changed (CP1 item 4). No Gradle check applies to a
+  documentation-only checkpoint; none was run.
+
+### Next action
+
+`/milestone-implement repflow-redesign-visual-foundation-remediation-1` —
+CP2 (navigation). Raise `O11` and `O12` with the user before CP14 and CP15
+respectively.
+
+---
+
+## Parent milestone
+
+The sections below are the parent's own record, unchanged except for the
+superseded next-action note.
+
 ## Milestone
 
 **`repflow-redesign-visual-foundation`** — the bounded visual-foundation
@@ -1159,7 +1225,9 @@ round 1 — outcome" in the checklist section below for the disposition and its
 reasoning. No source or test file was edited, and `technical_approval` stays
 `CURRENT`.
 
-**The next action is `/milestone-plan
+*(Superseded: the child's plan is approved at revision 20 and the child is in
+implementation — see "In implementation" at the top of this file.)* **The
+next action was `/milestone-plan
 repflow-redesign-visual-foundation-remediation-1`** — after `/design-login`,
 since the Claude Design project is that plan's source of truth and this
 session could not read it. Every command in the child's cycle must **name the
