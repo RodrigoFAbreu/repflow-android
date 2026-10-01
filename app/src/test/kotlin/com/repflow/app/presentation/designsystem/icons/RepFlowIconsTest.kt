@@ -162,6 +162,9 @@ class RepFlowIconsTest {
                 // invalidate action, and the date filter chips.
                 "ic_ph_prohibit",
                 "ic_ph_calendar_blank",
+                // Recovery (remediation-1 CP13): the futsal mark on the entry's load
+                // line and across the recovery history.
+                "ic_ph_soccer_ball",
             )
     }
 }

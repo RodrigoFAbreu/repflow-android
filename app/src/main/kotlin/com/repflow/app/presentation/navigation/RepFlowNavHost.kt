@@ -189,7 +189,10 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
                 ProgressionRecommendationRoute(onBack = { navController.popBackStack() })
             }
             composable(RepFlowDestinations.RECOVERY) {
-                RecoveryFutsalRoute(onHistoryClick = { navController.navigate(RepFlowDestinations.RECOVERY_HISTORY) })
+                RecoveryFutsalRoute(
+                    onBack = { navController.popBackStack() },
+                    onHistoryClick = { navController.navigate(RepFlowDestinations.RECOVERY_HISTORY) },
+                )
             }
             composable(RepFlowDestinations.RECOVERY_HISTORY) {
                 RecoveryHistoryRoute(onBackClick = { navController.popBackStack() })

@@ -13,8 +13,103 @@ explicitly** — `active_work_item_id` still points at the parent.
   (revision 20). Registry:
   `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-registry.json`
   (CP1–CP16, executed in array order).
-- **Current checkpoint: CP12 — History and workout detail conversion: complete.**
-  CP1–CP11 complete; CP13–CP16 not started.
+- **Current checkpoint: CP13 — Recovery entry and recovery history conversion: complete.**
+  CP1–CP12 complete; CP14–CP16 not started.
+
+### CP13 — what was done and verified (2026-10-01)
+
+- **Design re-read** from the live project (etag `1786483024007421`): `3c`
+  (`RepFlow.dc.html:2017–2092`) and `3d` (`:2095–2203`), their script
+  (`SCALES` `:3126–3133`, `RECOV` `:3089–3096`, `recVals` `:4408–4466`), and
+  `6b`'s stepper and scale row (`:289–308`).
+- **Recovery entry (`3c`, plan items 1, 2 and 5; `RecoveryFutsalScreen.kt`,
+  new `RecoveryFutsalBlock.kt`, `RecoveryScales.kt`):** CP3's sub-screen bar
+  (`Recovery`, a back arrow it never had - Recovery stopped being a tab in CP2 -
+  and `History` at 13.5 in the accent, keeping its content description); the
+  date row (`calendar-blank`, `Today · 11 Aug 2026`, `Change`), whose date
+  picker moved from a dialog into CP3's sheet (`Cancel` / `Set`, still today or
+  earlier only); the **six `-`/`+` steppers replaced by CP3's
+  `RepFlowScaleRow`**, each labelled at both ends; `Futsal` with the two 52-tall
+  toggles (`Played in last 24h`, `Playing in next 24h`; a checkbox to
+  accessibility, `check-circle` while on); while `Played` is on, the card with
+  the `Minutes` (±5) and `Session RPE` (±1, 0–10) steppers - CP3's stepper,
+  value opening CP3's keypad - the hint, and `Training load 420 — minutes ×
+  RPE` (`soccer-ball`); `Notes`; and one pinned `Save entry` that reads `Saved`
+  with a check until the next edit.
+- **Polarity (plan item 5):** the end labels are chosen *from*
+  `ReadinessFactor.inverted` - `RecoveryScaleField` now names its readiness
+  factor - so DOMS, heel stiffness, pain while walking and heavy legs run
+  `None → Severe` and sleep / energy `Terrible → Great` / `Flat → Fresh`; a
+  non-inverted factor without its own words fails at initialisation. CP13 reads
+  no score and changes no readiness input.
+- **One save (D98):** `RecoveryFutsalViewModel.onSaveEntry` replaces
+  `onSaveRecovery` / `onSaveFutsal`: it saves the check-in and, while `Played`
+  is on, the session; both futsal fields empty saves the check-in alone; one
+  without the other (or a non-number) is rejected before anything is written.
+  `isSaving` / `isEntrySaved` replace the two in-flight flags and the two saved
+  messages; any edit clears `isEntrySaved`. The `Saved` snackbar is retired for
+  the bar's own `Saved` (a polite live region); errors still use the snackbar,
+  now the design's toast card. `today` is new UI state from the injected clock.
+- **Recovery history (`3d`, plan items 3 and 4; `RecoveryHistoryScreen.kt`,
+  new `RecoveryHistoryModel.kt`, `RecoveryTrendChart.kt`,
+  `RecoveryTrendDrawing.kt`):** CP3's sub-screen bar; the trend card -
+  `Sleep & energy · 14 days`, `avg 3.6 / 3.1`, the selected-day readout, the
+  5 / 3 / 1 axis, sleep solid in the accent and energy dashed, futsal dots on the
+  baseline, a dashed marker on the selected day, day ticks every third day,
+  `Tap any day for its values` and the futsal legend - drawn with Compose
+  `Canvas`, **no charting dependency**; then `Entries` (`Today · Sleep 4 ·
+  Energy 3 · DOMS 2`, the ball for a check-in that played in the last 24h) and
+  `Futsal sessions` (`10 Aug · 50 min · RPE 8 · load 400`). The window is
+  `recoveryTrendOf` - pure: the 14 days ending today, gaps left unbridged,
+  averages over the window's check-ins. `RecoveryHistoryViewModel` gains the
+  injected `Clock` (its one new constructor argument) for `today`.
+- **Not built:** `3d`'s insight card (`D101` - its second sentence is false
+  against `ProgressionPolicyV1`, which holds back every exercise for 24 hours
+  after a recorded session, not leg work for two days).
+- **Deviations:** `D97`–`D102` added; `O10` closed. Flagged for the reviewer:
+  `D98` (one save, the optional futsal session, the retired snackbar) and
+  `D101` (insight card not built). Next free register id: **D103**.
+- **Copy changed:** the entry's labels (`History`, `Change`, `Set`, `Played in
+  last 24h`, `Playing in next 24h`, `Minutes`, `Session RPE`, `Notes`, the load
+  line), the history's `Entries` and its row (`DOMS` in place of `Pain`, `D102`),
+  the futsal row (`50 min · RPE 8` + `load 400`). New: the six end-label words,
+  the stepper descriptions and hint, the notes prompt, `Save entry`, the date
+  sheet's title, and the chart's strings. Removed: `recovery_history_back`,
+  `recovery_futsal_recovery_section_title`, `recovery_futsal_save_recovery`,
+  `recovery_futsal_save_futsal`. One new glyph, `soccer-ball` (Phosphor
+  regular, MIT), with `RepFlowIconsTest`'s expected set extended.
+- **Tests (plan item 6's enumeration, as built):** the plan's grep is empty
+  for the two screens, as it said - **but the destination smoke test reads the
+  entry screen by a string**: `MainActivityNavHostSmokeTest.recoveryIsReachableFromHome`
+  asserted `recovery_futsal_recovery_section_title` (`Recovery entry`), a heading
+  `3c` does not have. It is rewritten to assert the pinned `Save entry`
+  (`recoveryHistoryIsReachableBehindRecovery` is unchanged - its content
+  description and title survive). The plan's grep is closed on composable
+  invocations and the smoke test navigates instead, which is why it could not
+  see it. **`RecoveryFutsalViewModelTest` did not survive as a pure affordance
+  swap**, though the plan expected it to: its saves are `onSaveEntry` now, so
+  every method that called `onSaveRecovery` / `onSaveFutsal` is retargeted
+  (9 → 14); the two the plan named as the domain pins (`… persists the current
+  scale values`, `… up to the widened maximum of 5`) keep their stored-value
+  assertions verbatim, the futsal-error method additionally asserts the check-in
+  was not written, and the `"saved"` message assertions become `isEntrySaved`.
+  **New:** both futsal fields empty saves the check-in only; `Played` off saves
+  no session; an edit clears `Saved`; `today`; and every scale row shows the
+  value its readiness factor reads (item 5, end to end through the load).
+  `RecoveryHistoryViewModelTest` - **fixture edit only** (the clock), both
+  assertions untouched. New JVM: `RecoveryScalesTest` (4: order, polarity,
+  words, labels) and `RecoveryHistoryModelTest` (7). New instrumented:
+  `RecoveryFutsalScreenTest` (9) and `RecoveryHistoryScreenTest` (6).
+- **Checks run:** `spotlessApply`; `testDebugUnitTest --tests` for
+  `presentation.recovery.*`, `presentation.designsystem.*`,
+  `presentation.home.*`, `application.recovery.*`, `domain.recovery.*`,
+  `architecture.LayerBoundaryTest` - 20 classes, 155 tests, 0 failures;
+  `spotlessCheck detekt lintDebug assembleDebug assembleDebugAndroidTest` -
+  green; lint 0 errors, 21 warnings and 1 hint, none in the recovery package.
+  **Not run (no device):** `RecoveryFutsalScreenTest` (9),
+  `RecoveryHistoryScreenTest` (6) and the rewritten
+  `MainActivityNavHostSmokeTest.recoveryIsReachableFromHome` compile but need
+  `connectedDebugAndroidTest`, as do CP2–CP12's.
 
 ### CP12 — what was done and verified (2026-10-01)
 

@@ -102,11 +102,16 @@ class MainActivityNavHostSmokeTest {
         waitForText(R.string.home_greeting)
     }
 
+    /**
+     * Remediation-1 CP13: `3c` has no `Recovery entry` heading any more, so the
+     * screen is recognised by its pinned `Save entry`, which no other
+     * destination carries.
+     */
     @Test
     fun recoveryIsReachableFromHome() {
         clickByDescription(R.string.home_recovery_log_content_description)
         composeRule
-            .onNodeWithText(string(R.string.recovery_futsal_recovery_section_title))
+            .onNodeWithText(string(R.string.recovery_futsal_save_entry))
             .assertIsDisplayed()
     }
 

@@ -218,6 +218,14 @@ object RepFlowIcons {
     @DrawableRes
     val prohibit: Int = R.drawable.ic_ph_prohibit
 
+    /**
+     * Futsal: the recovery entry's training-load line, and the recovery
+     * history's futsal day, legend and played-in-the-last-24h mark (`3c`/`3d`,
+     * `ph-soccer-ball`). Remediation-1 CP13.
+     */
+    @DrawableRes
+    val soccerBall: Int = R.drawable.ic_ph_soccer_ball
+
     /** Stepper increment (weight/reps entry). */
     @DrawableRes
     val plus: Int = R.drawable.ic_ph_plus
