@@ -22,8 +22,9 @@ import com.repflow.app.presentation.designsystem.isDarkColorScheme
 /**
  * The app's bottom navigation bar (Milestone 8, CP1): one
  * [NavigationBarItem] per [RepFlowDestinations.TOP_LEVEL_DESTINATIONS]
- * entry, replacing the old ad-hoc `TextButton`s in `ExerciseListScreen`'s
- * app bar. [currentRoute] drives selected state; [onDestinationSelected]
+ * entry - the design's four tabs since remediation-1's CP2. [currentRoute]
+ * drives selected state, which picks each destination's fill glyph over its
+ * regular one as well as recolouring it; [onDestinationSelected]
  * is expected to navigate with `launchSingleTop`/`popUpTo`/`restoreState`
  * (see [RepFlowNavHost]) so switching tabs never duplicates back-stack
  * entries.
@@ -51,12 +52,15 @@ fun RepFlowBottomNavigationBar(
         RepFlowDestinations.TOP_LEVEL_DESTINATIONS.forEach { destination ->
             val label = stringResource(destination.titleRes)
             val destinationContentDescription = stringResource(destination.contentDescriptionRes)
+            val selected = currentRoute == destination.route
             NavigationBarItem(
-                selected = currentRoute == destination.route,
+                selected = selected,
                 onClick = { onDestinationSelected(destination.route) },
                 icon = {
                     Icon(
-                        painter = painterResource(destination.icon),
+                        // The design's fill-on-select (`'ph-fill '` vs `'ph '`): the
+                        // glyph's weight is the second selection signal beside colour.
+                        painter = painterResource(if (selected) destination.selectedIcon else destination.icon),
                         // The accessible name is already set once, on the item's
                         // own semantics block below; a second description on the
                         // icon would land on that same merged node.

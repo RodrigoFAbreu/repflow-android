@@ -44,11 +44,19 @@ object RepFlowIcons {
     @DrawableRes
     val arrowLeft: Int = R.drawable.ic_ph_arrow_left
 
-    /** Workout destination glyph - see [Nav.workout]. */
+    /**
+     * Starting or resuming a workout: the Home placeholder's start affordance,
+     * carried into Home's start card and the workout board. A nav tab glyph
+     * until the four-destination bar retired the Workout tab.
+     */
     @DrawableRes
     val barbell: Int = R.drawable.ic_ph_barbell
 
-    /** Exercises destination glyph - see [Nav.exercises]. */
+    /**
+     * The exercise library: the Settings placeholder's `Library` row, carried
+     * into the grouped Settings screen. A nav tab glyph until the
+     * four-destination bar retired the Exercises tab.
+     */
     @DrawableRes
     val books: Int = R.drawable.ic_ph_books
 
@@ -60,11 +68,27 @@ object RepFlowIcons {
     @DrawableRes
     val caretUp: Int = R.drawable.ic_ph_caret_up
 
-    /** History destination glyph - see [Nav.history]. */
+    /** Progress tab glyph, unselected - see [Nav.progress]. */
+    @DrawableRes
+    val chartLineUp: Int = R.drawable.ic_ph_chart_line_up
+
+    /** Progress tab glyph, selected - see [Nav.progressSelected]. */
+    @DrawableRes
+    val chartLineUpFill: Int = R.drawable.ic_ph_chart_line_up_fill
+
+    /** History tab glyph, unselected - see [Nav.history]. */
     @DrawableRes
     val clockCounterClockwise: Int = R.drawable.ic_ph_clock_counter_clockwise
 
-    /** Backup destination glyph - see [Nav.backup]. */
+    /** History tab glyph, selected - see [Nav.historySelected]. */
+    @DrawableRes
+    val clockCounterClockwiseFill: Int = R.drawable.ic_ph_clock_counter_clockwise_fill
+
+    /**
+     * Backup and restore: the Settings placeholder's `Backup` row, carried into
+     * the grouped Settings screen's `Data` group. A nav tab glyph until the
+     * four-destination bar retired the Backup tab.
+     */
     @DrawableRes
     val cloudArrowUp: Int = R.drawable.ic_ph_cloud_arrow_up
 
@@ -80,13 +104,25 @@ object RepFlowIcons {
     @DrawableRes
     val funnel: Int = R.drawable.ic_ph_funnel
 
+    /** Home tab glyph, unselected - see [Nav.home]. */
+    @DrawableRes
+    val house: Int = R.drawable.ic_ph_house
+
+    /** Home tab glyph, selected - see [Nav.homeSelected]. */
+    @DrawableRes
+    val houseFill: Int = R.drawable.ic_ph_house_fill
+
     /** Exercise-type note (Active Workout set entry). */
     @DrawableRes
     val info: Int = R.drawable.ic_ph_info
 
-    /** Plans destination glyph - see [Nav.plans]. */
+    /** Plans tab glyph, unselected - see [Nav.plans]. */
     @DrawableRes
     val listChecks: Int = R.drawable.ic_ph_list_checks
+
+    /** Plans tab glyph, selected - see [Nav.plansSelected]. */
+    @DrawableRes
+    val listChecksFill: Int = R.drawable.ic_ph_list_checks_fill
 
     /** Search affordance (Exercise list). */
     @DrawableRes
@@ -96,7 +132,11 @@ object RepFlowIcons {
     @DrawableRes
     val minus: Int = R.drawable.ic_ph_minus
 
-    /** Recovery destination glyph - see [Nav.recovery]. */
+    /**
+     * Recovery: the Home placeholder's recovery `Log` row, carried into Home's
+     * recovery card. A nav tab glyph until the four-destination bar retired
+     * the Recovery tab.
+     */
     @DrawableRes
     val moonStars: Int = R.drawable.ic_ph_moon_stars
 
@@ -129,51 +169,58 @@ object RepFlowIcons {
     val xCircle: Int = R.drawable.ic_ph_x_circle
 
     /**
-     * The glyph each of the six top-level destinations gets in the bottom
-     * navigation bar, wired up in CP4. The mapping lives here, next to the
-     * icon set it picks from, because picking it *is* this checkpoint's
-     * decision - CP4 only consumes it.
+     * The regular/fill glyph pair each of the four top-level destinations gets
+     * in the bottom navigation bar - the design's own bar (artboard `4a`,
+     * `nTabs`): Home `house`, Plans `list-checks`, History
+     * `clock-counter-clockwise`, Progress `chart-line-up`. The mapping lives
+     * here, next to the icon set it picks from; `RepFlowDestinations` only
+     * consumes it.
      *
-     * **Only [plans] and [history] are design-confirmed.** The target design
-     * has a four-destination bar (Home/Plans/History/Progress); this milestone
-     * keeps the app's existing six, so [exercises], [workout], [recovery] and
-     * [backup] have no confirmed glyph and the picks below are reasoned
-     * judgment calls, not design facts:
+     * **All four are design-confirmed**, and so is the treatment: the design
+     * draws the selected tab at Phosphor's fill weight and every other tab at
+     * regular weight (`'ph-fill '` vs `'ph '`). Each destination therefore
+     * carries two glyphs - the unselected one under its plain name and the
+     * selected one under `<name>Selected` - and the bar picks between them on
+     * selection, on top of its colour change, so selection is never signalled
+     * by colour alone.
      *
-     * - [exercises] `books` - the exercise library is a catalogue to browse,
-     *   and it must not collide with [workout]'s more literal glyph.
-     * - [workout] `barbell` - the one destination that is a training session.
-     * - [recovery] `moon-stars` - the only Recovery glyph the design draws
-     *   anywhere, though as an empty-state illustration rather than a nav tab.
-     * - [backup] `cloud-arrow-up` - reads as export/save even though RepFlow's
-     *   backup is entirely local.
-     *
-     * A later design pass may replace all four; nothing else depends on the
-     * specific choice.
+     * The six-destination bar this replaces also carried `books` (Exercises),
+     * `barbell` (Workout), `moon-stars` (Recovery) and `cloud-arrow-up`
+     * (Backup) as unconfirmed judgment calls. Those four destinations are no
+     * longer tabs; their glyphs stay in the top-level set, worn by the
+     * affordances that now lead to them (see each entry's own doc).
      */
     object Nav {
-        /** Judgment call - see [Nav]. */
+        /** Design-confirmed (`ph-house`). */
         @DrawableRes
-        val exercises: Int = books
+        val home: Int = house
 
-        /** Judgment call - see [Nav]. */
+        /** Design-confirmed (`ph-fill ph-house`). */
         @DrawableRes
-        val workout: Int = barbell
+        val homeSelected: Int = houseFill
 
         /** Design-confirmed (`ph-list-checks`). */
         @DrawableRes
         val plans: Int = listChecks
 
-        /** Judgment call - see [Nav]. */
+        /** Design-confirmed (`ph-fill ph-list-checks`). */
         @DrawableRes
-        val recovery: Int = moonStars
+        val plansSelected: Int = listChecksFill
 
         /** Design-confirmed (`ph-clock-counter-clockwise`). */
         @DrawableRes
         val history: Int = clockCounterClockwise
 
-        /** Judgment call - see [Nav]. */
+        /** Design-confirmed (`ph-fill ph-clock-counter-clockwise`). */
         @DrawableRes
-        val backup: Int = cloudArrowUp
+        val historySelected: Int = clockCounterClockwiseFill
+
+        /** Design-confirmed (`ph-chart-line-up`). */
+        @DrawableRes
+        val progress: Int = chartLineUp
+
+        /** Design-confirmed (`ph-fill ph-chart-line-up`). */
+        @DrawableRes
+        val progressSelected: Int = chartLineUpFill
     }
 }

@@ -10,7 +10,8 @@ import org.junit.Test
 
 /**
  * Pins what the bottom nav's own scoped overrides resolve to, and the
- * destination -> glyph wiring this checkpoint introduces.
+ * destination -> glyph wiring (the four-tab set and its regular/fill pairs
+ * since remediation-1 CP2).
  *
  * `RepFlowThemeTest` already proves the *values* clear their contrast floors
  * (`onSurface` at each theme's unselected alpha over `surfaceContainer`; each
@@ -68,34 +69,40 @@ class RepFlowBottomNavigationBarTest {
         assertNotEquals(dark.selectedIndicator.alpha, light.selectedIndicator.alpha)
     }
 
+    /**
+     * Each tab carries the design's regular/fill pair (remediation-1 CP2): the
+     * bar draws [TopLevelDestination.icon] unselected and
+     * [TopLevelDestination.selectedIcon] selected.
+     */
     @Test
-    fun everyTopLevelDestinationCarriesItsOwnNavGlyph() {
+    fun everyTopLevelDestinationCarriesItsOwnNavGlyphPair() {
         val expected =
             mapOf(
-                RepFlowDestinations.EXERCISES to RepFlowIcons.Nav.exercises,
-                RepFlowDestinations.WORKOUT to RepFlowIcons.Nav.workout,
-                RepFlowDestinations.PLANS to RepFlowIcons.Nav.plans,
-                RepFlowDestinations.RECOVERY to RepFlowIcons.Nav.recovery,
-                RepFlowDestinations.HISTORY to RepFlowIcons.Nav.history,
-                RepFlowDestinations.BACKUP to RepFlowIcons.Nav.backup,
+                RepFlowDestinations.HOME to (RepFlowIcons.Nav.home to RepFlowIcons.Nav.homeSelected),
+                RepFlowDestinations.PLANS to (RepFlowIcons.Nav.plans to RepFlowIcons.Nav.plansSelected),
+                RepFlowDestinations.HISTORY to (RepFlowIcons.Nav.history to RepFlowIcons.Nav.historySelected),
+                RepFlowDestinations.PROGRESS to (RepFlowIcons.Nav.progress to RepFlowIcons.Nav.progressSelected),
             )
         assertEquals(
             expected,
-            RepFlowDestinations.TOP_LEVEL_DESTINATIONS.associate { it.route to it.icon },
+            RepFlowDestinations.TOP_LEVEL_DESTINATIONS.associate { it.route to (it.icon to it.selectedIcon) },
         )
     }
 
-    /** This checkpoint is visual only: same six routes, same order. */
+    /**
+     * The design's four-destination bar, in its order (`4a`'s `nTabs`): Home,
+     * Plans, History, Progress. This retires the six-tab pin the parent
+     * milestone kept: Exercises, Workout, Recovery and Backup are no longer
+     * tabs, and are reached from Home and Settings instead.
+     */
     @Test
-    fun topLevelDestinationsKeepTheirRoutesAndOrder() {
+    fun topLevelDestinationsAreTheDesignsFourTabsInOrder() {
         assertEquals(
             listOf(
-                RepFlowDestinations.EXERCISES,
-                RepFlowDestinations.WORKOUT,
+                RepFlowDestinations.HOME,
                 RepFlowDestinations.PLANS,
-                RepFlowDestinations.RECOVERY,
                 RepFlowDestinations.HISTORY,
-                RepFlowDestinations.BACKUP,
+                RepFlowDestinations.PROGRESS,
             ),
             RepFlowDestinations.TOP_LEVEL_DESTINATIONS.map { it.route },
         )

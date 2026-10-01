@@ -13,8 +13,75 @@ explicitly** — `active_work_item_id` still points at the parent.
   (revision 20). Registry:
   `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-registry.json`
   (CP1–CP16, executed in array order).
-- **Current checkpoint: CP1 — Design inventory and deviation register:
-  complete.** CP2–CP16 not started.
+- **Current checkpoint: CP2 — Navigation: four-tab IA, Settings route,
+  workout-mode nav suppression: complete.** CP1 complete; CP3–CP16 not
+  started.
+
+### CP2 — what was done and verified (2026-10-01)
+
+- **Four tabs.** `TOP_LEVEL_DESTINATIONS` is now Home, Plans, History,
+  Progress (re-read from the live design: `4a`'s `nTabs`, `RepFlow.dc.html`
+  `:3590–3603`, and the bar markup `:1114–1123`). `TopLevelDestination`
+  gained `selectedIcon`; the bar draws the fill glyph when selected and the
+  regular one otherwise, on top of the unchanged colour treatment.
+- **Six new Phosphor drawables** (`house`, `house-fill`, `chart-line-up`,
+  `chart-line-up-fill`, `list-checks-fill`, `clock-counter-clockwise-fill`),
+  path data verbatim from `@phosphor-icons/core@2.1.1` (the version the
+  design loads via `@phosphor-icons/web@2.1.1`; the two existing regular
+  glyphs were checked byte-identical against the same release). Six matching
+  top-level `RepFlowIcons` entries; `RepFlowIcons.Nav` is now four
+  regular/fill pairs, and its KDoc is rewritten. `books`, `barbell`,
+  `moon-stars` and `cloud-arrow-up` stay top-level entries, each documented
+  with its CP2 consumer.
+- **New routes** `HOME` (start destination, replacing `EXERCISES`),
+  `PROGRESS`, `SETTINGS`, rendered by `HomePlaceholder`
+  (`presentation/home/`, replaced by CP5), `SettingsPlaceholder`
+  (`presentation/settings/`, replaced by CP14) and `ProgressPlaceholder`
+  (`presentation/progress/`, replaced by CP15), each carrying a one-line
+  "Placeholder - replaced by … CP<n>" comment for CP16's grep. Home carries
+  exactly the three contracted affordances: `Start or resume a workout`
+  (`barbell`) → `WORKOUT`; the recovery `Log ›` row (`moon-stars`) →
+  `RECOVERY`; `Settings ›` → `SETTINGS`. Settings carries `Library`
+  (`books`) → `EXERCISES` and `Backup and restore` (`cloud-arrow-up`) →
+  `BACKUP`, plus a back arrow. Progress shows the title and `1d`'s
+  empty-state treatment.
+- **Nav suppression** needed no code: the workout and settings routes are
+  not in `TOP_LEVEL_ROUTES`, so the bar is absent there. Back-gesture
+  interception stays CP7's (plan CP2 item 6).
+- **Strings:** added `nav_*`, `home_placeholder_*`, `settings_*`,
+  `progress_placeholder_empty`; removed the four retired tabs' now-unused
+  content descriptions (`exercise_list_content_description`,
+  `exercise_list_workout_content_description`,
+  `exercise_list_recovery_content_description`,
+  `exercise_list_backup_content_description`).
+- **Tests (plan CP2 item 7):** `RepFlowIconsTest` — the 23-name literal is
+  now 29 with the six additions named; `everyTopLevelDestinationGetsItsOwnGlyph`
+  rewritten as `…GlyphPair` (pairs distinct, no glyph shared);
+  `designConfirmedNavGlyphsAreTheOnesTheDesignNames` asserts all eight.
+  `RepFlowBottomNavigationBarTest` — the glyph test asserts the
+  `icon`/`selectedIcon` pairs, and the six-route pin (and its stale KDoc) is
+  replaced by `topLevelDestinationsAreTheDesignsFourTabsInOrder`; the three
+  colour tests untouched. `MainActivityNavHostSmokeTest` rewritten (9
+  methods): Home start + four tabs; Workout from Home with the nav absent
+  (asserted as a pair); Recovery and recovery history from Home; Settings
+  from Home with the nav absent; Exercises and Backup from Settings, walked
+  from Home; History and Progress tabs. The two backup route tests are
+  re-routed (Home → `Settings ›` → `Backup and restore`); their subjects
+  and second-step string ids are unchanged.
+- **Checks run:** `spotlessApply`; `testDebugUnitTest --tests
+  RepFlowIconsTest --tests RepFlowBottomNavigationBarTest --tests
+  *LayerBoundaryTest` — 16 tests, 0 failures; `spotlessCheck detekt
+  assembleDebugAndroidTest` — green; `lintDebug` — 0 errors, no new
+  warnings. **Not run (no device):** `MainActivityNavHostSmokeTest`,
+  `BackupRouteSafCancellationTest`, `BackupRouteUnreadableRestoreFileTest`
+  compile but still need a `connectedDebugAndroidTest` run.
+- **Known interim limitations, deliberately not fixed at CP2:** the Home
+  placeholder's Settings affordance is a `Settings ›` text button, not the
+  design's `ph-gear-six` glyph (the plan budgets exactly six new drawables;
+  CP5's header gear replaces it). The Exercises, Recovery, Backup and
+  Workout screens, now pushed rather than tabs, still have no top-bar back
+  arrow — system back returns to where they were opened from; their
+  conversions (CP3's `RepFlowScreenScaffold`, CP7, CP10, CP13, CP14) add it.
 
 ### CP1 — what was done and verified (2026-10-01)
 
@@ -56,8 +123,8 @@ explicitly** — `active_work_item_id` still points at the parent.
 ### Next action
 
 `/milestone-implement repflow-redesign-visual-foundation-remediation-1` —
-CP2 (navigation). Raise `O11` and `O12` with the user before CP14 and CP15
-respectively.
+CP3 (structural primitives). Raise `O11` and `O12` with the user before CP14
+and CP15 respectively.
 
 ---
 

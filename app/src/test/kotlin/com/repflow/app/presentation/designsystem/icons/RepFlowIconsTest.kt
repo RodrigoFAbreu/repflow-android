@@ -2,6 +2,7 @@ package com.repflow.app.presentation.designsystem.icons
 
 import com.repflow.app.R
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.lang.reflect.Modifier
@@ -62,35 +63,59 @@ class RepFlowIconsTest {
                 "ic_ph_caret_up",
                 "ic_ph_info",
                 "ic_ph_x",
-                // Bottom navigation (CP4).
+                // Bottom navigation (parent CP4): the two design-confirmed tab
+                // glyphs at regular weight, plus the four the six-tab bar used as
+                // judgment calls, which remediation-1 CP2 keeps as the glyphs of the
+                // affordances that now lead to those destinations.
                 "ic_ph_list_checks",
                 "ic_ph_clock_counter_clockwise",
                 "ic_ph_books",
                 "ic_ph_barbell",
                 "ic_ph_moon_stars",
                 "ic_ph_cloud_arrow_up",
+                // Four-tab bar (remediation-1 CP2): exactly six additions - the two
+                // tabs the six-tab bar never had (Home, Progress) at both weights,
+                // and the fill weight of the two tabs it keeps (Plans, History).
+                "ic_ph_house",
+                "ic_ph_house_fill",
+                "ic_ph_chart_line_up",
+                "ic_ph_chart_line_up_fill",
+                "ic_ph_list_checks_fill",
+                "ic_ph_clock_counter_clockwise_fill",
             )
         assertEquals(expected, bundledPhosphorDrawables().keys)
     }
 
+    /**
+     * The four-tab bar carries a regular/fill pair per destination: each pair
+     * must be two different glyphs (or selection would fall back to colour
+     * alone), and no glyph may be shared between destinations in either state.
+     */
     @Test
-    fun everyTopLevelDestinationGetsItsOwnGlyph() {
-        val nav =
+    fun everyTopLevelDestinationGetsItsOwnGlyphPair() {
+        val pairs =
             listOf(
-                RepFlowIcons.Nav.exercises,
-                RepFlowIcons.Nav.workout,
-                RepFlowIcons.Nav.plans,
-                RepFlowIcons.Nav.recovery,
-                RepFlowIcons.Nav.history,
-                RepFlowIcons.Nav.backup,
+                RepFlowIcons.Nav.home to RepFlowIcons.Nav.homeSelected,
+                RepFlowIcons.Nav.plans to RepFlowIcons.Nav.plansSelected,
+                RepFlowIcons.Nav.history to RepFlowIcons.Nav.historySelected,
+                RepFlowIcons.Nav.progress to RepFlowIcons.Nav.progressSelected,
             )
-        assertEquals("Two destinations share a nav glyph", nav.size, nav.toSet().size)
-        assertTrue(catalogue().values.toSet().containsAll(nav))
+        pairs.forEach { (regular, fill) -> assertNotEquals("A destination's two glyphs are the same", regular, fill) }
+        val all = pairs.flatMap { listOf(it.first, it.second) }
+        assertEquals("Two destinations share a nav glyph", all.size, all.toSet().size)
+        assertTrue(catalogue().values.toSet().containsAll(all))
     }
 
+    /** All four tabs are the design's own (`4a`'s `nTabs`): regular weight unselected, fill weight selected. */
     @Test
     fun designConfirmedNavGlyphsAreTheOnesTheDesignNames() {
+        assertEquals(RepFlowIcons.house, RepFlowIcons.Nav.home)
+        assertEquals(RepFlowIcons.houseFill, RepFlowIcons.Nav.homeSelected)
         assertEquals(RepFlowIcons.listChecks, RepFlowIcons.Nav.plans)
+        assertEquals(RepFlowIcons.listChecksFill, RepFlowIcons.Nav.plansSelected)
         assertEquals(RepFlowIcons.clockCounterClockwise, RepFlowIcons.Nav.history)
+        assertEquals(RepFlowIcons.clockCounterClockwiseFill, RepFlowIcons.Nav.historySelected)
+        assertEquals(RepFlowIcons.chartLineUp, RepFlowIcons.Nav.progress)
+        assertEquals(RepFlowIcons.chartLineUpFill, RepFlowIcons.Nav.progressSelected)
     }
 }

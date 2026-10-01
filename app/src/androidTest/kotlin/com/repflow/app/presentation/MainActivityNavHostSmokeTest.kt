@@ -1,5 +1,6 @@
 package com.repflow.app.presentation
 
+import androidx.annotation.StringRes
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -11,78 +12,120 @@ import org.junit.Test
 
 /**
  * End-to-end instrumentation smoke test: boots [MainActivity] through Hilt
- * and asserts the exercise list - the app's start destination (D-1) - is
- * the first thing rendered. Replaces the Milestone 0 placeholder
- * `MainActivitySmokeTest` now that a real `NavHost` exists.
+ * and walks the app's information architecture - the design's four tabs
+ * (Home, Plans, History, Progress) with `HOME` as the start destination
+ * (remediation-1 CP2).
  *
- * The per-destination tests below exist because a registered `NavHost`
- * route is not proof a screen can actually be constructed: `hiltViewModel()`
- * silently fails at runtime (not compile time) if the target ViewModel is
- * missing `@HiltViewModel`, which is exactly the regression these guard
- * against (found during Milestone 8 planning on Recovery/History/Backup).
+ * Every destination that stopped being a tab is reached here by its new
+ * inward path, **walked from the start destination** rather than opened from
+ * the middle of the chain: Workout, Recovery and Settings from Home, and the
+ * exercise library and Backup from Settings. An assertion that started at a
+ * relocated route would pass against a route no user can open.
+ *
+ * The per-destination walks also keep this file's original purpose: a
+ * registered `NavHost` route is not proof a screen can actually be
+ * constructed, because `hiltViewModel()` fails at runtime (not compile time)
+ * if the target ViewModel is missing `@HiltViewModel`.
  */
 class MainActivityNavHostSmokeTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<MainActivity>()
 
+    private val tabDescriptions =
+        listOf(
+            R.string.nav_home_content_description,
+            R.string.exercise_list_plans_content_description,
+            R.string.exercise_list_history_content_description,
+            R.string.nav_progress_content_description,
+        )
+
+    private fun string(
+        @StringRes id: Int,
+    ): String = composeRule.activity.getString(id)
+
+    private fun clickByDescription(
+        @StringRes id: Int,
+    ) {
+        composeRule.onNodeWithContentDescription(string(id)).performClick()
+    }
+
+    private fun clickByText(
+        @StringRes id: Int,
+    ) {
+        composeRule.onNodeWithText(string(id)).performClick()
+    }
+
+    private fun assertBottomNavAbsent() {
+        tabDescriptions.forEach { composeRule.onNodeWithContentDescription(string(it)).assertDoesNotExist() }
+    }
+
     @Test
-    fun mainActivityRendersTheExerciseListAsTheStartDestination() {
-        // "Exercises" itself is ambiguous once the bottom nav bar is on screen (its
-        // own "Exercises" label plus the destination's TopAppBar title) - assert on
-        // the search field, which only exists on the exercise list screen.
+    fun homeIsTheStartDestinationAndTheBarCarriesTheFourTabs() {
+        composeRule.onNodeWithText(string(R.string.home_placeholder_start)).assertIsDisplayed()
+        tabDescriptions.forEach { composeRule.onNodeWithContentDescription(string(it)).assertIsDisplayed() }
+    }
+
+    /**
+     * The workout surface is reachable from Home - today's Workout tab entry
+     * point, carried onto Home - and renders without the bottom nav ("workout
+     * mode replaces the nav"). The two halves are asserted together on
+     * purpose: the nav gate is a property of the route, so on its own it
+     * would also pass on a route no user can reach.
+     */
+    @Test
+    fun workoutIsReachableFromHomeAndReplacesTheNav() {
+        clickByText(R.string.home_placeholder_start)
+        composeRule.onNodeWithText(string(R.string.workout_active_title)).assertIsDisplayed()
+        assertBottomNavAbsent()
+    }
+
+    @Test
+    fun recoveryIsReachableFromHome() {
+        clickByDescription(R.string.home_placeholder_recovery_log_content_description)
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.exercise_list_search_hint))
+            .onNodeWithText(string(R.string.recovery_futsal_recovery_section_title))
             .assertIsDisplayed()
     }
 
     @Test
-    fun recoveryDestinationOpensWithoutCrashing() {
-        composeRule
-            .onNodeWithContentDescription(
-                composeRule.activity.getString(R.string.exercise_list_recovery_content_description),
-            ).performClick()
-        // The bottom nav bar's own "Recovery" label stays on screen alongside the
-        // destination, so asserting on that ambiguous shared text would match two
-        // nodes - assert on content unique to the Recovery screen instead.
-        composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.recovery_futsal_recovery_section_title))
-            .assertIsDisplayed()
+    fun recoveryHistoryIsReachableBehindRecovery() {
+        clickByDescription(R.string.home_placeholder_recovery_log_content_description)
+        clickByDescription(R.string.recovery_futsal_view_history_content_description)
+        composeRule.onNodeWithText(string(R.string.recovery_history_title)).assertIsDisplayed()
+    }
+
+    /** Settings is not a tab, so it shows no nav either (`4a`: `nShowNav = nTab !== 'settings'`). */
+    @Test
+    fun settingsIsReachableFromHomeWithoutTheNav() {
+        clickByDescription(R.string.home_placeholder_settings_content_description)
+        composeRule.onNodeWithText(string(R.string.settings_title)).assertIsDisplayed()
+        assertBottomNavAbsent()
     }
 
     @Test
-    fun recoveryHistoryDestinationOpensWithoutCrashing() {
-        composeRule
-            .onNodeWithContentDescription(
-                composeRule.activity.getString(R.string.exercise_list_recovery_content_description),
-            ).performClick()
-        composeRule
-            .onNodeWithContentDescription(
-                composeRule.activity.getString(R.string.recovery_futsal_view_history_content_description),
-            ).performClick()
-        composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.recovery_history_title))
-            .assertIsDisplayed()
+    fun exerciseLibraryIsReachableFromSettings() {
+        clickByDescription(R.string.home_placeholder_settings_content_description)
+        clickByText(R.string.settings_placeholder_library)
+        // The search field only exists on the exercise list screen.
+        composeRule.onNodeWithText(string(R.string.exercise_list_search_hint)).assertIsDisplayed()
     }
 
     @Test
-    fun historyDestinationOpensWithoutCrashing() {
-        composeRule
-            .onNodeWithContentDescription(
-                composeRule.activity.getString(R.string.exercise_list_history_content_description),
-            ).performClick()
-        composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.history_empty))
-            .assertIsDisplayed()
+    fun backupIsReachableFromSettings() {
+        clickByDescription(R.string.home_placeholder_settings_content_description)
+        clickByText(R.string.settings_placeholder_backup)
+        composeRule.onNodeWithText(string(R.string.backup_export_action)).assertIsDisplayed()
     }
 
     @Test
-    fun backupDestinationOpensWithoutCrashing() {
-        composeRule
-            .onNodeWithContentDescription(
-                composeRule.activity.getString(R.string.exercise_list_backup_content_description),
-            ).performClick()
-        composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.backup_export_action))
-            .assertIsDisplayed()
+    fun historyTabOpensWithoutCrashing() {
+        clickByDescription(R.string.exercise_list_history_content_description)
+        composeRule.onNodeWithText(string(R.string.history_empty)).assertIsDisplayed()
+    }
+
+    @Test
+    fun progressTabOpensWithoutCrashing() {
+        clickByDescription(R.string.nav_progress_content_description)
+        composeRule.onNodeWithText(string(R.string.progress_placeholder_empty)).assertIsDisplayed()
     }
 }

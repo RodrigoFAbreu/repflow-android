@@ -50,10 +50,15 @@ class BackupRouteUnreadableRestoreFileTest {
             .intending(hasAction(Intent.ACTION_OPEN_DOCUMENT))
             .respondWith(Instrumentation.ActivityResult(Activity.RESULT_OK, Intent().setData(unreadableUri)))
 
+        // Backup is no longer a tab (remediation-1 CP2): its only inward path is
+        // Home's Settings affordance, then the Settings `Backup and restore` row.
         composeRule
             .onNodeWithContentDescription(
-                composeRule.activity.getString(R.string.exercise_list_backup_content_description),
+                composeRule.activity.getString(R.string.home_placeholder_settings_content_description),
             ).performClick()
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.settings_placeholder_backup))
+            .performClick()
         composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.backup_restore_action))
             .performClick()
