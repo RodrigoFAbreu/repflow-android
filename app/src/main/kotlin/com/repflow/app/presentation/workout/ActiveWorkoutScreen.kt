@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -53,6 +54,8 @@ import com.repflow.app.presentation.designsystem.RepFlowSpacing
 import com.repflow.app.presentation.designsystem.components.RepFlowCard
 import com.repflow.app.presentation.designsystem.components.RepFlowNeutralOutlineButton
 import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
+import com.repflow.app.presentation.progression.ProgressionRecommendationUi
+import com.repflow.app.presentation.progression.labelRes
 
 /**
  * Stateless current-workout screen: state in, events out (see
@@ -67,7 +70,7 @@ fun ActiveWorkoutScreen(
     dayContext: WorkoutDayContextUi?,
     onStartWorkout: (TrainingPlanVersionId?) -> Unit,
     onAddExercise: (ExercisePickerItem) -> Unit,
-    onOverrideRecommendation: (ExerciseId, ProgressionResultUi) -> Unit,
+    onOpenRecommendation: (ExerciseId) -> Unit,
     onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
     onUndoLastSet: (WorkoutExerciseId) -> Unit,
     onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
@@ -99,7 +102,7 @@ fun ActiveWorkoutScreen(
                         availableExercises = uiState.availableExercises,
                         dayContext = dayContext,
                         onAddExercise = onAddExercise,
-                        onOverrideRecommendation = onOverrideRecommendation,
+                        onOpenRecommendation = onOpenRecommendation,
                         onRecordSet = onRecordSet,
                         onUndoLastSet = onUndoLastSet,
                         onEditLastSet = onEditLastSet,
@@ -169,7 +172,7 @@ private fun ActiveSessionState(
     availableExercises: List<ExercisePickerItem>,
     dayContext: WorkoutDayContextUi?,
     onAddExercise: (ExercisePickerItem) -> Unit,
-    onOverrideRecommendation: (ExerciseId, ProgressionResultUi) -> Unit,
+    onOpenRecommendation: (ExerciseId) -> Unit,
     onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
     onUndoLastSet: (WorkoutExerciseId) -> Unit,
     onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
@@ -194,7 +197,7 @@ private fun ActiveSessionState(
             items(items = content.exercises, key = { it.id.value }) { exercise ->
                 ExerciseCard(exercise, onRecordSet, onUndoLastSet, onEditLastSet)
             }
-            item { AddExercisePicker(availableExercises, onAddExercise, onOverrideRecommendation) }
+            item { AddExercisePicker(availableExercises, onAddExercise, onOpenRecommendation) }
         }
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             Button(onClick = { onCompleteWorkout(content.sessionId) }) {
@@ -360,7 +363,7 @@ private val RestTimerTrackGap = 0.dp
 private fun AddExercisePicker(
     availableExercises: List<ExercisePickerItem>,
     onAddExercise: (ExercisePickerItem) -> Unit,
-    onOverrideRecommendation: (ExerciseId, ProgressionResultUi) -> Unit,
+    onOpenRecommendation: (ExerciseId) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box(modifier = Modifier.padding(16.dp)) {
@@ -374,7 +377,14 @@ private fun AddExercisePicker(
                         Column {
                             Text(exercise.name)
                             exercise.recommendation?.let { recommendation ->
-                                RecommendationRow(exercise.id, recommendation, onOverrideRecommendation)
+                                RecommendationRow(
+                                    exerciseName = exercise.name,
+                                    recommendation = recommendation,
+                                    onWhyClick = {
+                                        expanded = false
+                                        onOpenRecommendation(exercise.id)
+                                    },
+                                )
                             }
                         }
                     },
@@ -388,40 +398,48 @@ private fun AddExercisePicker(
     }
 }
 
+/**
+ * The picker row's recommendation summary: the result in force, the policy's
+ * top reason and the overridden marker, then `Why ›` into the recommendation
+ * screen (remediation-1 CP6). The three inline override buttons this row used
+ * to carry moved there - the override is recorded on that screen, through the
+ * same `RecordManualOverride` - so the row is a way in, not a second place to
+ * decide. CP7 carries the row into the picker sheet exactly as it stands.
+ */
 @Composable
 private fun RecommendationRow(
-    exerciseId: ExerciseId,
+    exerciseName: String,
     recommendation: ProgressionRecommendationUi,
-    onOverrideRecommendation: (ExerciseId, ProgressionResultUi) -> Unit,
+    onWhyClick: () -> Unit,
 ) {
     Text(
         text =
-            stringResource(recommendation.result.toLabelRes()) +
+            stringResource(recommendation.result.labelRes()) +
                 (recommendation.topReason?.let { " — $it" } ?: "") +
                 if (recommendation.isOverridden) " (${stringResource(R.string.progression_overridden)})" else "",
         style = MaterialTheme.typography.bodySmall,
     )
-    Row {
-        TextButton(onClick = { onOverrideRecommendation(exerciseId, ProgressionResultUi.INCREASE_LOAD) }) {
-            Text(stringResource(R.string.progression_result_increase_load), style = MaterialTheme.typography.labelSmall)
-        }
-        TextButton(onClick = { onOverrideRecommendation(exerciseId, ProgressionResultUi.MAINTAIN_LOAD) }) {
-            Text(stringResource(R.string.progression_result_maintain_load), style = MaterialTheme.typography.labelSmall)
-        }
-        TextButton(onClick = { onOverrideRecommendation(exerciseId, ProgressionResultUi.REDUCE_LOAD) }) {
-            Text(stringResource(R.string.progression_result_reduce_load), style = MaterialTheme.typography.labelSmall)
-        }
+    val whyDescription = stringResource(R.string.progression_why_content_description, exerciseName)
+    TextButton(
+        onClick = onWhyClick,
+        modifier =
+            Modifier
+                .heightIn(min = WhyLinkMinHeight)
+                .semantics { contentDescription = whyDescription },
+    ) {
+        Text(stringResource(R.string.progression_why_link), style = MaterialTheme.typography.labelLarge)
+        Icon(
+            painter = painterResource(RepFlowIcons.caretRight),
+            contentDescription = null,
+            modifier = Modifier.padding(start = 4.dp).size(WhyLinkCaretSize),
+        )
     }
 }
 
-private fun ProgressionResultUi.toLabelRes(): Int =
-    when (this) {
-        ProgressionResultUi.INCREASE_LOAD -> R.string.progression_result_increase_load
-        ProgressionResultUi.MAINTAIN_LOAD -> R.string.progression_result_maintain_load
-        ProgressionResultUi.REDUCE_LOAD -> R.string.progression_result_reduce_load
-        ProgressionResultUi.RECOVERY_ADJUSTMENT -> R.string.progression_result_recovery_adjustment
-        ProgressionResultUi.WAIT_FOR_MORE_DATA -> R.string.progression_result_wait_for_more_data
-    }
+/** `6b`'s 44 tap-target floor. */
+private val WhyLinkMinHeight = 44.dp
+
+private val WhyLinkCaretSize = 12.dp
 
 @Composable
 private fun FailureState(onRetry: () -> Unit) {

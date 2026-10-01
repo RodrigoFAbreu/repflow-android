@@ -9,7 +9,6 @@ import com.repflow.app.application.exercise.ObserveExercises
 import com.repflow.app.application.exercise.SequentialIdentifierGenerator
 import com.repflow.app.application.progression.ComputeProgressionRecommendation
 import com.repflow.app.application.progression.InMemoryProgressionRecommendationRepository
-import com.repflow.app.application.progression.RecordManualOverride
 import com.repflow.app.application.recovery.GetWorkoutDayContext
 import com.repflow.app.application.recovery.InMemoryFutsalRepository
 import com.repflow.app.application.recovery.InMemoryRecoveryRepository
@@ -74,7 +73,6 @@ class ActiveWorkoutViewModelTest {
             trainingPlanRepository = trainingPlanRepository,
             getWorkoutDayContext = GetWorkoutDayContext(InMemoryRecoveryRepository(), InMemoryFutsalRepository(), clock),
             progressionRecommendationRepository = progressionRecommendationRepository,
-            recordManualOverride = RecordManualOverride(progressionRecommendationRepository, clock),
             startWorkoutSession = StartWorkoutSession(workoutRepository, clock, ids),
             startWorkoutSessionFromPlan = StartWorkoutSessionFromPlan(workoutRepository, GetExercise(exerciseRepository), clock, ids),
             addWorkoutExercise = AddWorkoutExercise(workoutRepository, ids),

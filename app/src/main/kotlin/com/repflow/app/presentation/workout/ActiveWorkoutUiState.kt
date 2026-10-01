@@ -6,6 +6,7 @@ import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.domain.workout.WorkoutSetId
+import com.repflow.app.presentation.progression.ProgressionRecommendationUi
 import java.time.Instant
 
 /**
@@ -41,21 +42,6 @@ data class ExercisePickerItem(
     val trackingType: ExerciseTrackingType,
     val recommendation: ProgressionRecommendationUi? = null,
 )
-
-/** A read-only, presentation-layer view of the latest [com.repflow.app.domain.progression.ProgressionRecommendation] for an exercise. */
-data class ProgressionRecommendationUi(
-    val result: ProgressionResultUi,
-    val topReason: String?,
-    val isOverridden: Boolean,
-)
-
-enum class ProgressionResultUi {
-    INCREASE_LOAD,
-    MAINTAIN_LOAD,
-    REDUCE_LOAD,
-    RECOVERY_ADJUSTMENT,
-    WAIT_FOR_MORE_DATA,
-}
 
 sealed interface ActiveWorkoutContent {
     data object Loading : ActiveWorkoutContent

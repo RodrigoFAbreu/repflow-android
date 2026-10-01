@@ -97,6 +97,17 @@ class RepFlowIconsTest {
                 "ic_ph_lightning",
                 "ic_ph_list_plus",
                 "ic_ph_warning_circle",
+                // Progression recommendation (remediation-1 CP6): one outcome glyph per
+                // `ProgressionResult` (`6a`/`6c`), the reason-row glyphs, and the
+                // override record card.
+                "ic_ph_trend_up",
+                "ic_ph_trend_down",
+                "ic_ph_arrow_right",
+                "ic_ph_heartbeat",
+                "ic_ph_hourglass_medium",
+                "ic_ph_check_circle",
+                "ic_ph_arrow_down",
+                "ic_ph_user_circle",
             )
         assertEquals(expected, bundledPhosphorDrawables().keys)
     }

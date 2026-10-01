@@ -19,6 +19,7 @@ import com.repflow.app.presentation.exercise.list.ExerciseListRoute
 import com.repflow.app.presentation.history.HistoryRoute
 import com.repflow.app.presentation.home.HomeRoute
 import com.repflow.app.presentation.progress.ProgressPlaceholder
+import com.repflow.app.presentation.progression.ProgressionRecommendationRoute
 import com.repflow.app.presentation.recovery.RecoveryFutsalRoute
 import com.repflow.app.presentation.recovery.RecoveryHistoryRoute
 import com.repflow.app.presentation.settings.SettingsPlaceholder
@@ -131,7 +132,15 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
                 )
             }
             composable(RepFlowDestinations.WORKOUT) {
-                ActiveWorkoutRoute()
+                ActiveWorkoutRoute(
+                    onOpenRecommendation = { id -> navController.navigate(RepFlowDestinations.progressionRoute(id.value)) },
+                )
+            }
+            composable(
+                route = RepFlowDestinations.PROGRESSION_PATTERN,
+                arguments = listOf(navArgument(RepFlowDestinations.PROGRESSION_EXERCISE_ARG) { type = NavType.StringType }),
+            ) {
+                ProgressionRecommendationRoute(onBack = { navController.popBackStack() })
             }
             composable(RepFlowDestinations.RECOVERY) {
                 RecoveryFutsalRoute(onHistoryClick = { navController.navigate(RepFlowDestinations.RECOVERY_HISTORY) })

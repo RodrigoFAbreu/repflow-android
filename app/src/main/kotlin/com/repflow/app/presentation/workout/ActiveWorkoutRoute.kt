@@ -11,7 +11,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.repflow.app.domain.exercise.ExerciseId
 
 /**
  * Stateful route composable: owns the ViewModel, delegates rendering to the
@@ -20,10 +23,18 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
  * `POST_NOTIFICATIONS` runtime permission (Android 13+) the first time a
  * timer starts - purely presentation-layer concerns, kept out of the
  * ViewModel/domain/application layers.
+ *
+ * The picker row's `Why ›` leaves through [onOpenRecommendation] (the
+ * recommendation screen, remediation-1 CP6), and every `ON_START` re-reads the
+ * picker's recommendations, so a choice recorded there shows on return.
  */
 @Composable
-fun ActiveWorkoutRoute(viewModel: ActiveWorkoutViewModel = hiltViewModel()) {
+fun ActiveWorkoutRoute(
+    onOpenRecommendation: (ExerciseId) -> Unit,
+    viewModel: ActiveWorkoutViewModel = hiltViewModel(),
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.onRefreshRecommendations() }
     val dayContext by viewModel.dayContext.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val notificationPermissionLauncher =
@@ -49,7 +60,7 @@ fun ActiveWorkoutRoute(viewModel: ActiveWorkoutViewModel = hiltViewModel()) {
         dayContext = dayContext,
         onStartWorkout = viewModel::onStartWorkout,
         onAddExercise = viewModel::onAddExercise,
-        onOverrideRecommendation = viewModel::onOverrideRecommendation,
+        onOpenRecommendation = onOpenRecommendation,
         onRecordSet = viewModel::onRecordSet,
         onUndoLastSet = viewModel::onUndoLastSet,
         onEditLastSet = viewModel::onEditLastSet,

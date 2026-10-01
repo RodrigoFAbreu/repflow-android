@@ -40,9 +40,17 @@ object RepFlowIcons {
     @DrawableRes
     val arrowCounterClockwise: Int = R.drawable.ic_ph_arrow_counter_clockwise
 
+    /** The recommendation screen's reason rows for a `Reduce load` suggestion (`6c`, `ph-arrow-down`). Remediation-1 CP6. */
+    @DrawableRes
+    val arrowDown: Int = R.drawable.ic_ph_arrow_down
+
     /** Back navigation (Exercise list top app bar). */
     @DrawableRes
     val arrowLeft: Int = R.drawable.ic_ph_arrow_left
+
+    /** The recommendation screen's `Maintain load` outcome (`6a`'s value-card arrow, `ph-arrow-right`). Remediation-1 CP6. */
+    @DrawableRes
+    val arrowRight: Int = R.drawable.ic_ph_arrow_right
 
     /**
      * Starting or resuming a workout: the Home placeholder's start affordance
@@ -88,6 +96,10 @@ object RepFlowIcons {
     @DrawableRes
     val chartLineUpFill: Int = R.drawable.ic_ph_chart_line_up_fill
 
+    /** The recommendation screen's reason rows for an increase or a hold (`6a`, `ph-check-circle`). Remediation-1 CP6. */
+    @DrawableRes
+    val checkCircle: Int = R.drawable.ic_ph_check_circle
+
     /** History tab glyph, unselected - see [Nav.history]. */
     @DrawableRes
     val clockCounterClockwise: Int = R.drawable.ic_ph_clock_counter_clockwise
@@ -120,6 +132,10 @@ object RepFlowIcons {
     @DrawableRes
     val gearSix: Int = R.drawable.ic_ph_gear_six
 
+    /** The recommendation screen's `Recovery adjustment` outcome (`6c`, `ph-heartbeat`). Remediation-1 CP6. */
+    @DrawableRes
+    val heartbeat: Int = R.drawable.ic_ph_heartbeat
+
     /** Home tab glyph, unselected - see [Nav.home]. */
     @DrawableRes
     val house: Int = R.drawable.ic_ph_house
@@ -128,7 +144,14 @@ object RepFlowIcons {
     @DrawableRes
     val houseFill: Int = R.drawable.ic_ph_house_fill
 
-    /** Exercise-type note (Active Workout set entry). */
+    /** The recommendation screen's `Not enough data yet` outcome (`6c`, `ph-hourglass-medium`). Remediation-1 CP6. */
+    @DrawableRes
+    val hourglassMedium: Int = R.drawable.ic_ph_hourglass_medium
+
+    /**
+     * Exercise-type note (Active Workout set entry), and the recommendation
+     * screen's reason rows for `Not enough data yet` (remediation-1 CP6).
+     */
     @DrawableRes
     val info: Int = R.drawable.ic_ph_info
 
@@ -196,7 +219,23 @@ object RepFlowIcons {
     @DrawableRes
     val trash: Int = R.drawable.ic_ph_trash
 
-    /** Home's error card when the history cannot be read (`1d`, `ph-warning-circle`). Remediation-1 CP5. */
+    /** The recommendation screen's `Reduce load` outcome (`6c`, `ph-trend-down`). Remediation-1 CP6. */
+    @DrawableRes
+    val trendDown: Int = R.drawable.ic_ph_trend_down
+
+    /** The recommendation screen's `Increase load` outcome (`6a`, `ph-trend-up`). Remediation-1 CP6. */
+    @DrawableRes
+    val trendUp: Int = R.drawable.ic_ph_trend_up
+
+    /** The recommendation screen's override record card (`6a`, `ph-user-circle`). Remediation-1 CP6. */
+    @DrawableRes
+    val userCircle: Int = R.drawable.ic_ph_user_circle
+
+    /**
+     * Home's error card when the history cannot be read (`1d`, `ph-warning-circle`),
+     * remediation-1 CP5; and the recommendation screen's reason rows for a
+     * `Recovery adjustment` (`6c`), CP6.
+     */
     @DrawableRes
     val warningCircle: Int = R.drawable.ic_ph_warning_circle
 

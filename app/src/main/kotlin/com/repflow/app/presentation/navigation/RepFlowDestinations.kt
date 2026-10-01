@@ -30,6 +30,16 @@ object RepFlowDestinations {
 
     const val WORKOUT = "workout"
 
+    /**
+     * The progression recommendation for one exercise (remediation-1 CP6),
+     * reached from the workout picker row's `Why ›`; CP8's focus strip and
+     * CP9's finish screen add their own ways in.
+     */
+    const val PROGRESSION_EXERCISE_ARG = "exerciseId"
+    const val PROGRESSION_PATTERN = "progression/{$PROGRESSION_EXERCISE_ARG}"
+
+    fun progressionRoute(exerciseId: String): String = "progression/$exerciseId"
+
     const val RECOVERY = "recovery"
     const val RECOVERY_HISTORY = "recovery/history"
 

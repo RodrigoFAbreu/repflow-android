@@ -7,17 +7,21 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
+import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.domain.workout.WorkoutSetId
 import com.repflow.app.presentation.RepFlowTheme
+import com.repflow.app.presentation.progression.ProgressionRecommendationUi
+import com.repflow.app.presentation.progression.ProgressionResultUi
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -45,6 +49,8 @@ class ActiveWorkoutScreenTest {
     private fun setContent(
         exercise: ActiveExerciseUi,
         onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit = { _, _, _, _, _, _, _, _ -> },
+        availableExercises: List<ExercisePickerItem> = emptyList(),
+        onOpenRecommendation: (ExerciseId) -> Unit = {},
     ) {
         composeRule.setContent {
             RepFlowTheme {
@@ -57,11 +63,12 @@ class ActiveWorkoutScreenTest {
                                     startedAt = Instant.parse("2026-01-01T00:00:00Z"),
                                     exercises = listOf(exercise),
                                 ),
+                            availableExercises = availableExercises,
                         ),
                     dayContext = null,
                     onStartWorkout = {},
                     onAddExercise = {},
-                    onOverrideRecommendation = { _, _ -> },
+                    onOpenRecommendation = onOpenRecommendation,
                     onRecordSet = onRecordSet,
                     onUndoLastSet = {},
                     onEditLastSet = { _, _, _, _, _, _, _, _ -> },
@@ -313,5 +320,51 @@ class ActiveWorkoutScreenTest {
 
         assertEquals(60.0, recordedLoad)
         composeRule.onNodeWithText("60").assertDoesNotExist()
+    }
+
+    /**
+     * The picker row's way into the recommendation screen (remediation-1 CP6):
+     * the row keeps its summary and gains `Why ›`, which hands out that row's
+     * exercise; the three inline override buttons it used to carry are gone,
+     * because the override is now recorded on the recommendation screen. The
+     * route-level half - `Why ›` actually reaching the screen through the nav
+     * graph - is `ProgressionRecommendationRouteTest`'s.
+     */
+    @Test
+    fun thePickerRowsWhyOpensTheRecommendationForItsExercise() {
+        val squat = ExerciseId("exercise-squat")
+        var opened: ExerciseId? = null
+        setContent(
+            exercise(ExerciseTrackingType.WEIGHT_AND_REPS),
+            availableExercises =
+                listOf(
+                    ExercisePickerItem(
+                        id = squat,
+                        name = "Back Squat",
+                        trackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
+                        recommendation =
+                            ProgressionRecommendationUi(
+                                result = ProgressionResultUi.INCREASE_LOAD,
+                                topReason = "Every working set reached 8+ reps",
+                                isOverridden = false,
+                            ),
+                    ),
+                ),
+            onOpenRecommendation = { opened = it },
+        )
+
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.workout_active_add_exercise)).performScrollTo().performClick()
+        composeRule
+            .onNodeWithText(
+                composeRule.activity.getString(R.string.progression_result_increase_load) + " — Every working set reached 8+ reps",
+            ).assertIsDisplayed()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.progression_result_maintain_load)).assertDoesNotExist()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.progression_result_reduce_load)).assertDoesNotExist()
+
+        composeRule
+            .onNodeWithContentDescription(composeRule.activity.getString(R.string.progression_why_content_description, "Back Squat"))
+            .performClick()
+
+        assertEquals(squat, opened)
     }
 }

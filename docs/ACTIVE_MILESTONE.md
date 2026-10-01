@@ -13,8 +13,107 @@ explicitly** — `active_work_item_id` still points at the parent.
   (revision 20). Registry:
   `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-registry.json`
   (CP1–CP16, executed in array order).
-- **Current checkpoint: CP5 — Home screen: complete.** CP1–CP4 complete;
-  CP6–CP16 not started.
+- **Current checkpoint: CP6 — Progression recommendation surface:
+  complete.** CP1–CP5 complete; CP7–CP16 not started.
+
+### CP6 — what was done and verified (2026-10-01)
+
+- **Design re-read** from the live project (etag `1786483024007421`): `6a`
+  (`RepFlow.dc.html:43–196`), `6c` (`:198–251`) and the script behind them
+  (`prOptions`/`prVals`, `:3462–3505`).
+- **New recommendation screen** under `presentation/progression/`
+  (`ProgressionRecommendationRoute`, `…Screen`, `…ViewModel`, `…UiState`,
+  `ProgressionOutcomeStyle`), route `progression/{exerciseId}`
+  (`RepFlowDestinations.PROGRESSION_PATTERN` / `progressionRoute`), no bottom
+  nav. It reads the exercise's **latest** recommendation (the one the picker
+  row summarises) through the existing `ProgressionRecommendationRepository`
+  port, and writes a choice through the existing `RecordManualOverride` — no
+  domain or application concept, no policy change, no schema change. Three
+  states, as `6a` draws them:
+  - **Suggestion:** exercise label, the outcome glyph + title (26/500), `Why`
+    with one row per reason the policy recorded (its own words, its order),
+    the footnote; pinned bar `Go with the suggestion` (writes nothing — the
+    recommendation already stands; `Done` for `Not enough data yet`),
+    `Pick another load`, and `Keep the same load` (override → maintain) for an
+    increase or a reduction.
+  - **`Your call`:** `Increase load` / `Maintain load` / `Reduce load` as
+    68-tall selectable rows (`The suggestion` under the suggested one, the
+    one in force selected), `Back`; system back closes it. Picking what is
+    already in force writes nothing; anything else is a `RecordManualOverride`
+    and the screen re-reads.
+  - **Recorded choice:** `You overrode this` (or `You went with the
+    suggestion` for a change of mind back to it, which is recorded as an
+    override equal to the result — an override can be replaced, not
+    removed), `Suggested · …`, `Chosen · …`, `Policy v1 · d MMM`, then the
+    reasons again; `Change my mind` and `Done`.
+  - **All five `ProgressionResult` cases** render as their own state — only
+    the glyph, its tint and the action labels change (`6c`'s rule).
+    **`RecoveryAdjustment`** additionally shows a `Today's check-in` card
+    (score, band, CP4's driver sentence, `Details ›`) opening CP4's
+    `ReadinessSheet`, from `ObserveReadiness(today)` — read for that outcome
+    only (plan CP6 item 4); no card without today's check-in.
+- **Entry point (the one that exists at CP6):** the workout picker row keeps
+  its summary and replaces its three inline override `TextButton`s with
+  `Why ›` (44 tall, described `Why this suggestion for <exercise>`), routed by
+  `ActiveWorkoutRoute(onOpenRecommendation)` → `RepFlowNavHost`.
+  `ActiveWorkoutViewModel` loses `RecordManualOverride`/`onOverrideRecommendation`
+  and gains `onRefreshRecommendations()`, called from the route's `ON_START`
+  so a choice made on the screen shows on return. CP7 carries this row into
+  the picker sheet; CP8 wires its focus strip's `Why ›` here and owns that
+  inward-path test; CP9 adds the finish-screen entry.
+- **Shared mapping:** `ProgressionResultUi` and `ProgressionRecommendationUi`
+  moved from `presentation/workout/` to `presentation/progression/`, with one
+  `toSummaryUi()`; the picker row's `overridden` marker now means "the
+  choice differs from the suggestion" (`isOverridden()`), so a change of mind
+  back to the suggestion is not marked. `progression_result_wait_for_more_data`
+  now reads `6c`'s `Not enough data yet`.
+- **Eight new Phosphor drawables** (`@phosphor-icons/core@2.1.1`, path data
+  verbatim): `trend-up`, `trend-down`, `arrow-right`, `arrow-down`,
+  `heartbeat`, `hourglass-medium`, `check-circle`, `user-circle`; eight
+  `RepFlowIcons` entries; `RepFlowIconsTest`'s enumerated set 38 → 46.
+  `info` and `warning-circle` gain the reason-row consumers.
+- **Deviation register:** `D49` (no value card, no load figures — closes
+  `O3`'s value row), `D50` (no `What it looked at`), `D51` (no applied state,
+  no `Earlier suggestions`), **`D52` (copy: footnote, `Your call` line,
+  recorded-choice body, `Not enough data yet` — flagged for the reviewer to
+  accept or reword)**, `D53` (one screen per exercise, five states;
+  `Pick another load` for every outcome), `D54` (the recovery card's
+  `Today's check-in` link). `O3` closed. Next free register id: **D55**.
+- **Tests:** new `ProgressionRecommendationViewModelTest` (13 — one state
+  test per `ProgressionResult` case, `RecoveryAdjustment` with today's
+  readiness and without; a pick reaching `RecordManualOverride` and
+  re-rendering as the recorded choice, with the picker summary agreeing;
+  `Keep the same load`; picking the suggestion writes nothing; change of mind
+  back to the suggestion; failed save; not found; exercise name).
+  `ActiveWorkoutViewModelTest` drops the removed constructor argument only
+  (14/14). Instrumented: new `ProgressionRecommendationScreenTest` (7 — one
+  render test per case, the recovery card opening the readiness sheet,
+  `Your call` selection and pick, the recorded-choice state); new
+  `ProgressionRecommendationRouteTest` (2, in-memory Room — **an override
+  reaches `RecordManualOverride`** (stored override, result untouched) **and
+  the screen re-renders as overridden**; **the inward path**: a nav graph
+  registering `WORKOUT` and `PROGRESSION_PATTERN` as `RepFlowNavHost` does,
+  `Add exercise` → the row's `Why ›` → the recommendation screen);
+  `ActiveWorkoutScreenTest` gains `thePickerRowsWhyOpensTheRecommendationForItsExercise`
+  (summary kept, the three override buttons gone, `Why ›` hands out the
+  row's exercise) and its no-op `onOverrideRecommendation` becomes
+  `onOpenRecommendation`.
+- **Checks run:** `spotlessApply`; `testDebugUnitTest --tests` for
+  `ProgressionRecommendationViewModelTest`, `RepFlowIconsTest`,
+  `ActiveWorkoutViewModelTest`, `ActiveWorkoutScreenWiringTest`,
+  `LayerBoundaryTest`, `ComputeProgressionRecommendationTest`,
+  `RecordManualOverrideTest` — 50 tests, 0 failures; `spotlessCheck detekt
+  lintDebug assembleDebugAndroidTest assembleDebug` — green (the last
+  validates the Hilt graph for the new `@HiltViewModel`); lint 0 errors, 28 warnings,
+  1 hint, all pre-existing, none in CP6's files. **Not run (no device):**
+  `ProgressionRecommendationScreenTest`, `ProgressionRecommendationRouteTest`
+  and the changed `ActiveWorkoutScreenTest` compile but need
+  `connectedDebugAndroidTest`, as do CP2–CP5's.
+- **Not covered by a device-free path:** the real `RepFlowNavHost` lambda and
+  the screen's `hiltViewModel()` construction. `MainActivityNavHostSmokeTest`
+  walks a fresh install, where no recommendation exists and the picker row
+  (and so `Why ›`) is not drawn; the route test reproduces the graph instead.
+- **Room stays at version 7**: no query, table or migration added.
 
 ### CP5 — what was done and verified (2026-10-01)
 
