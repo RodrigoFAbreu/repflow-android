@@ -17,7 +17,7 @@ import com.repflow.app.presentation.exercise.editor.ExerciseEditorRoute
 import com.repflow.app.presentation.exercise.list.ExerciseListRoute
 import com.repflow.app.presentation.history.HistoryRoute
 import com.repflow.app.presentation.home.HomeRoute
-import com.repflow.app.presentation.progress.ProgressPlaceholder
+import com.repflow.app.presentation.progress.ProgressRoute
 import com.repflow.app.presentation.progression.ProgressionRecommendationRoute
 import com.repflow.app.presentation.recovery.RecoveryFutsalRoute
 import com.repflow.app.presentation.recovery.RecoveryHistoryRoute
@@ -200,7 +200,7 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
                 HistoryRoute()
             }
             composable(RepFlowDestinations.PROGRESS) {
-                ProgressPlaceholder()
+                ProgressRoute()
             }
         }
     }

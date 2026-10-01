@@ -641,7 +641,25 @@
     <string name="settings_footer">RepFlow %1$s · offline, no account</string>
     <string name="settings_footer_no_version">RepFlow · offline, no account</string>
 
-    <string name="progress_placeholder_empty">Your progress shows up here once you have logged a few workouts.</string>
+    <!-- Progress tab (remediation-1 CP15, 4a). -->
+    <string name="progress_empty">Your progress shows up here once you have logged a few workouts.</string>
+    <string name="progress_metric_top_set">Top set</string>
+    <string name="progress_metric_estimated_one_rep_max">Est. 1RM</string>
+    <string name="progress_metric_volume">Volume</string>
+    <string name="progress_unit_kg">kg</string>
+    <string name="progress_unit_kg_total">kg total</string>
+    <string name="progress_unit_reps">reps</string>
+    <string name="progress_unit_seconds">s</string>
+    <string name="progress_delta">%1$s %2$s since %3$s</string>
+    <string name="progress_best">Best: %1$s %2$s · %3$d-session window</string>
+    <string name="progress_metric_empty">Not enough sessions yet. A trend needs at least two.</string>
+    <string name="progress_load_metrics_unavailable">Est. 1RM and Volume need a recorded load.</string>
+    <string name="progress_valid_sessions_note">Only valid sessions count. Invalidating a workout in History removes its points from this chart.</string>
+    <plurals name="progress_chart_description">
+        <item quantity="one">%1$s over the last %2$d session, from %3$s to %4$s</item>
+        <item quantity="other">%1$s over the last %2$d sessions, from %3$s to %4$s</item>
+    </plurals>
+    <string name="progress_value_with_unit">%1$s %2$s</string>
 
     <!-- Design-system primitives (remediation-1 CP3). -->
     <string name="repflow_back_content_description">Back</string>

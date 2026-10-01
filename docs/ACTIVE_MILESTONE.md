@@ -13,8 +13,79 @@ explicitly** — `active_work_item_id` still points at the parent.
   (revision 20). Registry:
   `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-registry.json`
   (CP1–CP16, executed in array order).
-- **Current checkpoint: CP14 — Settings, preference persistence, and the behaviours it gates: complete.**
-  CP1–CP13 complete; CP15–CP16 not started.
+- **Current checkpoint: CP15 — Progress tab: complete.**
+  CP1–CP14 complete; CP16 not started.
+
+### CP15 — what was done and verified (2026-10-01)
+
+- **Design re-read** from the live project (etag `1786483024007421`): `4a`'s
+  Progress tab (`RepFlow.dc.html:1013–1050`), its script (`nProgChips` …
+  `nProgBest`, `:3743–3771`; `nSeries`, `:3531–3532`) and sample data
+  (`PROGRESS`, `PMONTHS`, `PLABEL`, `:3106–3124`), and `1c`'s `Best set` /
+  `Est. 1RM` pair (`:2959–2960`). Built to `4a`, per the user's 2026-10-01
+  decision on `O12`; `5b` is a later remediation child's.
+- **Estimated 1RM (plan item 2).** New `domain/progression/EstimatedOneRepMax.kt`,
+  pure Kotlin: **Brzycki**, `load × 36 / (37 − reps)` - it reproduces `1c`'s
+  `82.5 × 7 → 99 kg` exactly - for 1 to 12 reps; outside that (or a negative
+  load) there is no estimate (`D109`, flagged).
+- **Read model (plan items 3, 4, 6).** New `application/progress/`:
+  `ExerciseProgress.kt` (`ProgressMetric`, `ProgressPoint`, `ProgressSeries`,
+  `ExerciseProgress`, the pure `exerciseProgressOf`) and
+  `ObserveExerciseProgress` over `WorkoutRepository.observeCompletedSessions(includeInvalidated = false)`.
+  Valid (completed, not invalidated) sessions only, filtered again in the pure
+  function; working sets only; one point per session per metric, only when
+  it has a value. `WEIGHT_AND_REPS` offers `Top set` (heaviest working load),
+  `Est. 1RM` (best per-set estimate, whole kg) and `Volume` (Σ load × reps,
+  whole kg, as History's); `REPS_ONLY` and `DURATION` offer `Top set` alone
+  (most reps / longest set in seconds; `D22`). The window is the last twelve
+  points; `hasTrend` (two or more), `delta` (latest − window start) and
+  `best` are measured within it. Exercises are ordered most recently trained
+  first and named and typed by their latest session. No schema change, no new
+  repository method.
+- **Progress tab (plan items 1, 5, 7; `presentation/progress/`).** Replaces
+  CP2's `ProgressPlaceholder` (deleted) at the `PROGRESS` route:
+  `ProgressRoute` / `ProgressViewModel` (`@HiltViewModel`, live over the read
+  model) / `ProgressUiState` (selection with fallbacks: an absent exercise →
+  the most recently trained, an unoffered metric → `Top set`, the user's metric
+  restored when they return) / `ProgressScreen` (title, sideways-scrolling
+  exercise chips, the three-segment metric control, the card, the note
+  "Only valid sessions count…" with `info`) / `ProgressCard` (exercise and
+  signed delta `+10 kg since 5 May`, the value at 30/500 with `kg` / `kg total`
+  / `reps` / `s`, the bars drawn with Compose `Canvas` - latest in the accent,
+  month labels where a month starts, one spoken description - and
+  `Best: 82.5 kg · 12-session window`; fewer than two points shows `1d`'s
+  empty treatment in the card; a reps-only or timed exercise says `Est. 1RM
+  and Volume need a recorded load.`) / `ProgressModel` (bar heights by the
+  prototype's 14–96% rule, month labels, signed numbers). No history shows the
+  tab's `1d` empty state. **No new dependency** - no charting library.
+- **Deviations:** `D108`–`D111` added; `O12` closed. Flagged for the reviewer:
+  `D109` (Brzycki and the 12-rep ceiling) and `D110` (window and empty-state
+  copy). Next free register id: **D112**. No new glyph (`check-fat`, `info`,
+  `chart-line-up` already existed).
+- **Copy:** new `progress_*` strings (metric labels, units, delta, best line,
+  metric empty state, the `D22` line, the note, the chart's spoken
+  description as a plural); `progress_placeholder_empty` renamed
+  `progress_empty`, same words.
+- **Tests.** New JVM: `EstimatedOneRepMaxTest` (5), `ExerciseProgressTest`
+  (10 - plan item 8's enumeration: the offered set and each value per tracking
+  type, reps-only and duration with many sessions still `Top set` only and not
+  empty, one weight-and-reps session in the empty state, an unloaded session
+  giving no point; plus item 4's pin that invalidating a session removes its
+  point from the live `ObserveExerciseProgress` flow, the 12-session window,
+  ordering/naming, a duplicated exercise), `ProgressModelTest` (4),
+  `ProgressViewModelTest` (4). New instrumented (compile only):
+  `ProgressScreenTest` (6). Rewritten: `MainActivityNavHostSmokeTest.progressTabOpensWithoutCrashing`
+  (waits for `progress_empty` - the placeholder's string id is gone).
+- **Checks run:** `spotlessApply`; `testDebugUnitTest --tests` for
+  `domain.progression.*`, `application.progress.*`, `presentation.progress.*`,
+  `presentation.navigation.*`, `presentation.designsystem.*`,
+  `architecture.LayerBoundaryTest` - 13 classes, 109 tests, 0 failures;
+  `spotlessCheck detekt lintDebug assembleDebug assembleDebugAndroidTest` -
+  green; lint 0 errors, 21 warnings and 1 hint (baseline), none in the
+  progress package (a `PluralsCandidate` on the new chart description was
+  fixed by making it a plural). **Not run (no device):** `ProgressScreenTest`
+  (6) and the rewritten smoke method need `connectedDebugAndroidTest`, as do
+  CP2–CP14's.
 
 ### CP14 — what was done and verified (2026-10-01)
 
@@ -1305,9 +1376,10 @@ explicitly** — `active_work_item_id` still points at the parent.
 ### Next action
 
 `/milestone-implement repflow-redesign-visual-foundation-remediation-1` —
-CP15 (Progress tab). `O11` and `O12` were decided by the user on 2026-10-01:
-CP14 and CP15 build the approved plan's `4a` designs; `5c`/`5d`/`5b` go to a
-later remediation child.
+CP16 (verification, side-by-side design validation, and decision/doc
+updates). `O11` and `O12` were decided by the user on 2026-10-01: CP14 and
+CP15 built the approved plan's `4a` designs; `5c`/`5d`/`5b` go to a later
+remediation child.
 
 ---
 

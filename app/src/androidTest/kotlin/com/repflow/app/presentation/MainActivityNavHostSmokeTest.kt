@@ -153,10 +153,12 @@ class MainActivityNavHostSmokeTest {
         composeRule.onNodeWithText(string(R.string.history_empty)).assertIsDisplayed()
     }
 
+    /** Since remediation-1 CP15 the tab is the real Progress screen; with no history it shows its empty state, read from Room. */
     @Test
     fun progressTabOpensWithoutCrashing() {
         clickByDescription(R.string.nav_progress_content_description)
-        composeRule.onNodeWithText(string(R.string.progress_placeholder_empty)).assertIsDisplayed()
+        waitForText(R.string.progress_empty)
+        composeRule.onNodeWithText(string(R.string.progress_empty)).assertIsDisplayed()
     }
 
     private companion object {
