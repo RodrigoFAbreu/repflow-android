@@ -166,7 +166,12 @@ listing each converted package's `app/src/test` directory; method counts are
   start; `Train something else` → start sheet; `Log ›` → recovery entry
   (`D26`); score → readiness sheet (§3.3); chips → recovery entry.
 - **Owner:** new `presentation/home/` (Route, Screen, ViewModel, UiState);
-  replaces CP2's `HomePlaceholder`.
+  replaces CP2's `HomePlaceholder`. **Built by CP5:** `HomeRoute`,
+  `HomeScreen` (header, overlays, abandon confirmation), `HomeResumeCard`,
+  `HomeStartCard` (start card, `1d` first-run card, start sheet),
+  `HomeRecoveryCard`, `HomeCards` (`Last workout`, `1d` history error),
+  `HomeViewModel`/`HomeUiState`/`HomeFormatting`; the history read model
+  `application/history/ObserveRecentTraining`. `O1` → `D44`, `O2` → `D45`.
 - **Tests:** none exist — there is no Home today. CP5 item 4 owes new ones
   (ViewModel reactivity, the midnight case, the sleep/`onForeground` case,
   and the instrumented `HomeRoute` lifecycle test). The start path's existing
@@ -174,8 +179,8 @@ listing each converted package's `app/src/test` directory; method counts are
   (`:150–:319`, `:439`): **survives** if CP5's sheet calls the existing
   `onStartWorkout`; a CP5 that moves the start path adds that file to the
   roll-up (plan, CP8's JVM second pass).
-- **Register:** `D4`, `D6`, `D9`, `D16`, `D17`, `D18`, `D19`, `D26`; open
-  `O1`, `O2`.
+- **Register:** `D4`, `D6`, `D9`, `D16`, `D17`, `D18`, `D19`, `D26`,
+  `D44`–`D48`; `O1` and `O2` closed by CP5 (`D44`, `D45`).
 
 ### 3.3 Readiness detail sheet (CP4; hosted by Home, CP5)
 
@@ -809,7 +814,7 @@ listing each converted package's `app/src/test` directory; method counts are
 Every row is a place the built app differs from the design. **D1–D24 are
 seeded verbatim from the execution plan's "Deviation register — seeded";
 D25–D38 are added by CP1** from the full read above. Later checkpoints append
-here — the next free id is **D44** (CP3 added D39–D40, CP4 D41–D43) — and never renumber. Reasons use the
+here — the next free id is **D49** (CP3 added D39–D40, CP4 D41–D43, CP5 D44–D48) — and never renumber. Reasons use the
 plan's four categories: `no domain backing`, `blocked by open decision`,
 `platform convention`, `deliberate product call`.
 
@@ -858,6 +863,11 @@ plan's four categories: `no domain backing`, `blocked by open decision`,
 | D41 | The readiness band colours in light theme: the design draws none (`RDY_BANDS`, `:3153–3158`, are the dark values) | Dark keeps the design's four values. Light keeps each band's hue and chroma and lowers OKLCH lightness to the first step clearing 4.5:1 on both light grounds: Ready = light `primary` (accent-700), Hold `#826210` (`oklch(.515 .10 85)`), Back off `#9E5416` (`oklch(.525 .12 55)`), Protect = light `error` | platform convention (WCAG): the dark values measure 1.73–2.41:1 on light `surface`, and the band word and a flagged factor's label are text drawn in that colour. `ReadinessBandStyleTest` pins the floor | CP4 |
 | D42 | The readiness sheet's title `How today was adjusted`, its line "…The score changes what the app proposes — never what you are allowed to do." (`:1494–1495`), and the gate note "…at 3 or more, leg work is flagged regardless of the score." (`:1519`) | `How today's score was set`; "Your check-in sets one score. It is a read on today — never a limit on what you are allowed to do."; "…at 3 or more, or heel stiffness at 4 or more, the band is Protect regardless of the score." | no domain backing: nothing in the app acts on the band (`D19`, `D29`), so copy saying the score adjusts proposals or flags leg work would be false — the same reason `D19` drops the advice line. The gate note also names the heel-stiffness gate the engine applies (`readiness()`, `:3142–3166`) and the design's note omits. **Copy written by CP4 — flagged for the reviewer to accept or reword** | CP4 |
 | D43 | The sheet's factor rows draw label, five dots and weight; the flagged state is carried by the label's and dots' colour alone (`:1508–1516`; `nRdyFactors` computes `value` and `note` but the markup renders neither) | Each row adds `v/5 · pulling the score down` or `v/5 · fine` under the label (plan CP4 item 4) | deliberate product call (plan): `6b`'s "destructive and accent are never the only signal — every state also carries an icon or a word" | CP4 |
+| D44 | The start card's meta `N exercises · N working sets · ~N min` — the prototype estimates the minutes as `sets × 2.8 + 8` (`:3554`) | `N exercises · N working sets`; no time estimate | no domain backing: nothing in the domain estimates a session's length, and the prototype's figure is a placeholder constant, not a model. Resolves `O1` | CP5 |
+| D45 | The start sheet's `From <plan>` label over one row per plan day, closing with `A different plan ›` (`:1411–1434`) | `Your plans` over one row per active plan (name, `N exercises · N working sets`), then `Empty workout`; no `A different plan ›` row | no domain backing: plans have no days (`D4`), so the rows are the plans themselves — every active plan is already listed, and the closing row would have nothing left to open. Resolves `O2` | CP5 |
+| D46 | The start card stays on Home under the resume card while a session runs, `Start workout` and all (`:738–761`) | While a session is active the start card is not drawn; the resume card's `Resume` is the screen's one primary action | deliberate product call: only one session may be active (`StartWorkoutSession` refuses with `ActiveSessionAlreadyExists`), so the button could only fail; `6b` also allows one primary action per screen | CP5 |
+| D47 | The recovery card's `What it changes ›` on the score (`:772`); the empty state's "Nothing logged today. Sleep and leg soreness shape the load suggestions." and `Log recovery — 20 seconds` (`1d`, `:3005–3006`) | `Details ›`; "Nothing logged today. Pain while walking and heavy legs shape the load suggestions."; `Log recovery` | no domain backing: the readiness sheet shows how the score was set, not what it changes (`D19`, `D29`, `D42`); `ProgressionPolicyV1` reads pain while walking and heavy legs from the check-in (`ProgressionPolicyV1.kt:79–88`), never sleep or DOMS; `Log` opens the full entry screen (`D26`), not a 20-second sheet. **Copy written by CP5 — flagged for the reviewer to accept or reword** | CP5 |
+| D48 | The resume card's `Resume`, `Finish it` and trash at 48 tall, radius 10 (`:748–750`), and the recovery card's `Log ›` at 36 tall (`:766`) | `Resume` is the 56dp radius-12 primary tier and its two neighbours match its height; `Log ›` meets the 44 tap-target floor | deliberate product call: `6b`'s own button scale and 44 floor over one-off sizes, as `D36` and `D40` | CP5 |
 
 **Status-chip audit (`6b`, "never colour alone"; CP3).** Every chip the
 design draws pairs its tone with an icon or a word (§2). On the built
@@ -886,8 +896,8 @@ review finding.
 
 | # | Owner | Design element | Why it is open |
 |---|---|---|---|
-| O1 | CP5 | The start card's meta `N exercises · N working sets · ~N min` (the prototype's estimate is `sets × 2.8 + 8`, `:3554`) | the plan is silent on a time estimate |
-| O2 | CP5 | The start sheet's `A different plan ›` row, against CP5 item 3's plan list + `Start without a plan` | the plan names its own sheet content |
+| O1 | CP5 — **closed: `D44`** | The start card's meta `N exercises · N working sets · ~N min` (the prototype's estimate is `sets × 2.8 + 8`, `:3554`) | the plan is silent on a time estimate |
+| O2 | CP5 — **closed: `D45`** | The start sheet's `A different plan ›` row, against CP5 item 3's plan list + `Start without a plan` | the plan names its own sheet content |
 | O3 | CP6 | `6a`'s numeric value (`80 kg → 82.5 kg`, `Use 82.5 kg`), `What it looked at`, `Next session starts as`, `Earlier suggestions`, `Recorded as …`; `6c`'s two-action card | `ProgressionResult` carries no load, so any value must be derived (last working load + `defaultLoadIncrement`) or the value row registered as a deviation; a history list needs `ProgressionRecommendationRepository.findAll` |
 | O4 | CP7 | The picker sheet's inline `Create a new exercise` (name + tracking type, `:1612–1633`) and its empty state | the plan converts the picker but is silent on creating from it |
 | O5 | CP7, CP8 | The rest strip's `−15s` / `+15s` / `Skip rest` / dismiss (backed by `AdjustRestTimer` and `SkipRestTimer`), its lit `Rest done` state, and the in-app `Rest complete` banner with `+30s` (`:1661–1671`) | the plan says the strip "renders here too" without enumerating its controls |

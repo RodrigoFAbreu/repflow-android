@@ -190,9 +190,12 @@ private fun ScoreHeadline(
     }
 }
 
-/** The 4dp bar at the score's percentage. Decorative: the number above says the same. */
+/**
+ * The 4dp bar at the score's percentage. Decorative: the number above says the
+ * same. Home's recovery card draws the same bar (CP5).
+ */
 @Composable
-private fun ScoreBar(
+internal fun ScoreBar(
     score: Int,
     bandColor: Color,
 ) {

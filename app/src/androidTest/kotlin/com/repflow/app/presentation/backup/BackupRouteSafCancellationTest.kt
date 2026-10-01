@@ -52,7 +52,7 @@ class BackupRouteSafCancellationTest {
         // Home's Settings affordance, then the Settings `Backup and restore` row.
         composeRule
             .onNodeWithContentDescription(
-                composeRule.activity.getString(R.string.home_placeholder_settings_content_description),
+                composeRule.activity.getString(R.string.home_settings_content_description),
             ).performClick()
         composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.settings_placeholder_backup))

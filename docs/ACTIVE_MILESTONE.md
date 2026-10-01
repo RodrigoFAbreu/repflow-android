@@ -13,8 +13,125 @@ explicitly** — `active_work_item_id` still points at the parent.
   (revision 20). Registry:
   `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-registry.json`
   (CP1–CP16, executed in array order).
-- **Current checkpoint: CP4 — Readiness score derivation and readiness
-  detail surface: complete.** CP1–CP3 complete; CP5–CP16 not started.
+- **Current checkpoint: CP5 — Home screen: complete.** CP1–CP4 complete;
+  CP6–CP16 not started.
+
+### CP5 — what was done and verified (2026-10-01)
+
+- **Design re-read** from the live project (etag `1786483024007421`): `4a`'s
+  Home tab (`:726–822`), the start sheet `nStartSheet` (`:1405–1436`), `1d`'s
+  light Home with its empty, error and first-run states (`:2976–3030`), and
+  the script behind them — `nTodayMeta`/`nDayOptions` (`:3550–3560`),
+  `nRecChips`/`nRdy*` (`:3772–3813`), `nResumeMeta`/`nDiscardSession`/
+  `nAskFinish` (`:4323–4330`), the board title `nTitle` (`:1165`).
+- **Home replaces CP2's `HomePlaceholder`** (deleted) under
+  `presentation/home/`: `HomeRoute`, `HomeScreen`, `HomeResumeCard`,
+  `HomeStartCard`, `HomeRecoveryCard`, `HomeCards`, `HomeViewModel`,
+  `HomeUiState`, `HomeFormatting`. Top to bottom:
+  - **Header:** the date as an uppercase label over `Ready when you are`
+    (25/500), and the 44dp round `gear-six` button → Settings — absorbing the
+    placeholder's `Settings ›` (same accessible name, `Open settings`).
+  - **Resume card** (only while a session is active): the accent card,
+    `<plan> — still running` (`Untitled workout` for an ad-hoc session, the
+    design's default), `m:ss elapsed · N sets logged` re-derived from
+    `startedAt` every second (never counted), `Resume` and `Finish it` → the
+    workout surface (CP9 re-wires `Finish it` into its finish sheet), and the
+    trash → `Abandon this workout?` (`D17`/`D18`'s copy; confirm `Abandon`,
+    `Keep it`) → the existing `AbandonWorkoutSession`, nothing deleted. The
+    accent card is a dark surface in both themes (the parent's
+    `RepFlowCardTone.Accent` decision), so its content renders with the dark
+    scheme in light theme too.
+  - **Start card** (no active session): `Today`, the plan, `N exercises · N
+    working sets`, `Start workout` (56, `play-fill`) and `Train something
+    else ›` → the start sheet (`Your plans`: one row per active plan, then
+    `Empty workout`), converted from the workout screen's `DropdownMenu`. The
+    plan is **the one last trained** (newest valid completed session started
+    from a plan, resolved to its plan's *latest* version), else the first
+    active plan; with no active plan, `1d`'s first-run card (`Create a plan` →
+    the plan editor, `Empty workout`). Dark: `4a`'s gradient `#262a60 →
+    #232532` with the `#423a6a` ring; light: `1d`'s surface and hairline.
+  - **Recovery card:** `Recovery today` + `Log ›` (always) → the recovery
+    entry screen; with today's check-in, the score button (38/500 in the band
+    colour, band word, `readiness score`, `Details ›`) → CP4's
+    `ReadinessSheet`, now hosted; CP4's bar (`ScoreBar`, now `internal`); the
+    driver sentence; and the `Sleep N · Energy N · DOMS N` chips → the entry
+    screen. Without one, `1d`'s empty state. A failed read shows the header
+    only (claims nothing either way).
+  - **Last workout** (full width — `This week` is `D9`): name, `Mon · 61 min`
+    (Today / Yesterday / weekday within a week / `d MMM`), and `N load
+    increases` in the accent, or `No load increases`; `1d`'s `Couldn't load
+    your history` + `Retry` when the history read fails; nothing before the
+    first workout.
+- **"Today" (plan CP4 item 2), as specified:** `HomeViewModel` holds
+  `MutableStateFlow<LocalDate>` from the injected `Clock`; readiness follows
+  it through `flatMapLatest`; a midnight wait (inside the collected flow, so
+  only while Home's state is collected) and `onForeground()` re-read the
+  clock; `HomeRoute` calls `onForeground()` from
+  `LifecycleEventEffect(ON_START)`. The header date is the date the readiness
+  was read for.
+- **Start path:** Home calls `StartWorkoutSession` / `StartWorkoutSessionFromPlan`
+  itself (same use cases, same "stale version → `NotFound`, never an empty
+  fallback" rule as the workout screen) and opens the workout on success.
+  `ActiveWorkoutViewModel` is untouched — its own start menu stays until CP7 —
+  so `ActiveWorkoutViewModelTest`'s start methods survive unchanged (14/14
+  green).
+- **Application read model (no schema change):** new
+  `application/history/ObserveRecentTraining` over
+  `WorkoutRepository.observeCompletedSessions(includeInvalidated = false)`:
+  the last valid workout, its **load increases** (per exercise, top working
+  load — heaviest non-warm-up set with a load — above the same exercise's
+  most recent earlier valid session that has one; unloaded exercises and
+  first times never count), and the plan version last trained. Invalidated
+  sessions are excluded throughout, as from progression.
+- **Eight new Phosphor drawables** (`@phosphor-icons/core@2.1.1`, path data
+  verbatim): `gear-six`, `calendar-check`, `play` (fill), `record` (fill),
+  `trash`, `lightning`, `list-plus`, `warning-circle`; eight `RepFlowIcons`
+  entries; `RepFlowIconsTest`'s enumerated set 30 → 38. `barbell` has no
+  consumer now (its KDoc says so; CP16's sweep decides).
+- **Strings:** the six `home_placeholder_*` strings replaced by `home_*` (three
+  plurals) and the shared `workout_abandon_confirm_*` / `workout_abandon_keep_action`
+  CP7 will reuse. `home_settings_content_description` and
+  `home_recovery_log_content_description` keep the placeholder's values.
+- **Deviation register:** `D44` (no `~N min`; closes `O1`), `D45` (start sheet
+  rows are plans, no `A different plan ›`; closes `O2`), `D46` (no start card
+  while a session runs), **`D47` (recovery-card copy: `Details ›`, the empty
+  line names the inputs the policy actually reads, `Log recovery` — flagged
+  for the reviewer to accept or reword)**, `D48` (resume-card buttons at the
+  design-system tiers, `Log ›` at 44). Next free register id: **D49**.
+- **Tests:** new `ObserveRecentTrainingTest` (7); new `HomeViewModelTest` (9 —
+  CP4's Home half: saving today's check-in through `RecordRecoveryEntry`
+  replaces the log prompt on the same subscription; yesterday's entry is not
+  today's; **the midnight case** on a virtual-time `Clock` from 23:59; **the
+  sleep case** — wall clock jumped to 07:00 next day, `expectNoEvents()`, then
+  `onForeground()`; first-run start + `onWorkoutOpened`; last-trained plan
+  over the first plan, and starting it; first-plan fallback; a stale plan
+  version → `PLAN_NOT_FOUND`, nothing started; abandon → `ABANDONED`, kept);
+  new `HomeFormattingTest` (4: elapsed, rounded minutes, workout day, the
+  start card's text ≥ 4.5:1 on its own ground in both themes). Instrumented:
+  new `HomeRouteLifecycleTest` (plan CP5 item 4's route half: in-memory Room,
+  settable clock at 10:00, score shown; clock to 07:00 next day,
+  `CREATED` → `RESUMED`, `Nothing logged today` shown) and `HomeScreenTest`
+  (6: abandon only after confirmation, `Keep it` cancels; `Resume`/`Finish it`
+  and no start card while running; start card, sheet rows and `Empty
+  workout`; first-run card; score → readiness sheet; empty state → log).
+  `MainActivityNavHostSmokeTest` re-pointed at Home's real affordances (the
+  greeting; `Empty workout` → workout, then abandoned again so the walk leaves
+  a fresh install's state; the recovery `Log` and the gear by their unchanged
+  descriptions); the two backup route tests' gear string id renamed only.
+- **Checks run:** `spotlessApply`; `testDebugUnitTest --tests` for
+  `HomeViewModelTest`, `HomeFormattingTest`, `ObserveRecentTrainingTest`,
+  `RepFlowIconsTest`, `LayerBoundaryTest`, `ReadinessBandStyleTest`,
+  `ObserveReadinessTest`, `ActiveWorkoutViewModelTest`,
+  `ObserveWorkoutHistoryTest`, `RepFlowBottomNavigationBarTest`,
+  `RepFlowPrimitivesTest` — 90 tests, 0 failures; `spotlessCheck detekt
+  lintDebug assembleDebugAndroidTest` — green; lint 0 errors, 28 warnings and
+  1 hint, all pre-existing, none in CP5's files (the two `NonObservableLocale`
+  errors lint raised on the first pass were fixed by reading the locale from
+  `LocalConfiguration`). **Not run (no device):** `HomeRouteLifecycleTest`,
+  `HomeScreenTest`, the re-pointed `MainActivityNavHostSmokeTest` and the two
+  backup route tests compile but need `connectedDebugAndroidTest`, as do
+  CP2's, CP3's and CP4's.
+- **Room stays at version 7**: no query, table or migration added in CP5.
 
 ### CP4 — what was done and verified (2026-10-01)
 
@@ -265,8 +382,8 @@ explicitly** — `active_work_item_id` still points at the parent.
 ### Next action
 
 `/milestone-implement repflow-redesign-visual-foundation-remediation-1` —
-CP5 (Home screen; hosts CP4's `ReadinessSheet` and owns "today" for
-`ObserveReadiness`). `O11` and `O12` were decided by the user on 2026-10-01:
+CP6 (progression recommendation surface on the existing policy). `O11` and
+`O12` were decided by the user on 2026-10-01:
 CP14 and CP15 build the approved plan's `4a` designs; `5c`/`5d`/`5b` go to a
 later remediation child.
 

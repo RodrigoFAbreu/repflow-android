@@ -245,12 +245,66 @@
     <string name="nav_progress_title">Progress</string>
     <string name="nav_progress_content_description">View progress</string>
 
-    <string name="home_placeholder_start">Start or resume a workout</string>
-    <string name="home_placeholder_recovery_label">Recovery today</string>
-    <string name="home_placeholder_recovery_log">Log ›</string>
-    <string name="home_placeholder_recovery_log_content_description">Log today\'s recovery</string>
-    <string name="home_placeholder_settings">Settings ›</string>
-    <string name="home_placeholder_settings_content_description">Open settings</string>
+    <string name="home_settings_content_description">Open settings</string>
+    <string name="home_greeting">Ready when you are</string>
+    <string name="home_untitled_workout">Untitled workout</string>
+    <string name="home_resume_title">%1$s — still running</string>
+    <string name="home_resume_meta">%1$s elapsed · %2$s</string>
+    <plurals name="home_sets_logged">
+        <item quantity="one">%d set logged</item>
+        <item quantity="other">%d sets logged</item>
+    </plurals>
+    <string name="home_resume">Resume</string>
+    <string name="home_finish_it">Finish it</string>
+    <string name="home_abandon_content_description">Abandon this workout</string>
+    <string name="home_start_label">Today</string>
+    <string name="home_start_meta">%1$s · %2$s</string>
+    <plurals name="home_exercise_count">
+        <item quantity="one">%d exercise</item>
+        <item quantity="other">%d exercises</item>
+    </plurals>
+    <plurals name="home_working_set_count">
+        <item quantity="one">%d working set</item>
+        <item quantity="other">%d working sets</item>
+    </plurals>
+    <string name="home_start_workout">Start workout</string>
+    <string name="home_train_something_else">Train something else</string>
+    <string name="home_start_sheet_title">Your plans</string>
+    <string name="home_empty_workout">Empty workout</string>
+    <string name="home_empty_workout_meta">No plan — add exercises as you go</string>
+    <string name="home_first_run_message">Build a plan, or just start an empty workout and add exercises as you go.</string>
+    <string name="home_create_plan">Create a plan</string>
+    <string name="home_recovery_label">Recovery today</string>
+    <string name="home_recovery_log">Log</string>
+    <string name="home_recovery_log_content_description">Log today\'s recovery</string>
+    <string name="home_readiness_caption">readiness score</string>
+    <string name="home_readiness_details">Details</string>
+    <string name="home_readiness_content_description">Readiness %1$d, %2$s. Show how it was set.</string>
+    <string name="home_recovery_chip_sleep">Sleep %1$d</string>
+    <string name="home_recovery_chip_energy">Energy %1$d</string>
+    <string name="home_recovery_chip_doms">DOMS %1$d</string>
+    <string name="home_recovery_empty_message">Nothing logged today. Pain while walking and heavy legs shape the load suggestions.</string>
+    <string name="home_recovery_empty_action">Log recovery</string>
+    <string name="home_last_workout_label">Last workout</string>
+    <string name="home_last_workout_meta">%1$s · %2$d min</string>
+    <string name="home_last_workout_today">Today</string>
+    <string name="home_last_workout_yesterday">Yesterday</string>
+    <plurals name="home_load_increases">
+        <item quantity="one">%d load increase</item>
+        <item quantity="other">%d load increases</item>
+    </plurals>
+    <string name="home_no_load_increases">No load increases</string>
+    <string name="home_history_error_title">Couldn\'t load your history</string>
+    <string name="home_history_error_message">Your workouts are safe on this device. Try again.</string>
+    <string name="home_history_retry">Retry</string>
+    <string name="home_error_already_active">A workout is already running.</string>
+    <string name="home_error_plan_not_found">That plan is no longer available.</string>
+    <string name="home_error_unknown">Something went wrong. Try again.</string>
+
+    <string name="workout_abandon_confirm_title">Abandon this workout?</string>
+    <string name="workout_abandon_confirm_message">It will be marked abandoned and left out of History. The sets logged so far stay stored on this device. This can\'t be undone.</string>
+    <string name="workout_abandon_confirm_action">Abandon</string>
+    <string name="workout_abandon_keep_action">Keep it</string>
 
     <string name="settings_title">Settings</string>
     <string name="settings_back_content_description">Back</string>

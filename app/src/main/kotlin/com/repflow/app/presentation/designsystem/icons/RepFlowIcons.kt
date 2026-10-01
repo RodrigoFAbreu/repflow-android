@@ -45,9 +45,10 @@ object RepFlowIcons {
     val arrowLeft: Int = R.drawable.ic_ph_arrow_left
 
     /**
-     * Starting or resuming a workout: the Home placeholder's start affordance,
-     * carried into Home's start card and the workout board. A nav tab glyph
-     * until the four-destination bar retired the Workout tab.
+     * Starting or resuming a workout: the Home placeholder's start affordance
+     * (remediation-1 CP2), and a nav tab glyph before that. CP5's Home draws
+     * the design's own [playFill] instead, so this glyph has no consumer until
+     * a later checkpoint draws it or CP16's sweep removes it.
      */
     @DrawableRes
     val barbell: Int = R.drawable.ic_ph_barbell
@@ -67,6 +68,10 @@ object RepFlowIcons {
     /** Expand the set-entry detail section (RPE/pain/technique). */
     @DrawableRes
     val caretUp: Int = R.drawable.ic_ph_caret_up
+
+    /** Home's start card label (`ph-calendar-check`). Remediation-1 CP5. */
+    @DrawableRes
+    val calendarCheck: Int = R.drawable.ic_ph_calendar_check
 
     /**
      * `RepFlowListRow`'s trailing caret (`ph-caret-right`, drawn on every
@@ -111,6 +116,10 @@ object RepFlowIcons {
     @DrawableRes
     val funnel: Int = R.drawable.ic_ph_funnel
 
+    /** Home's header settings button (`ph-gear-six`). Remediation-1 CP5. */
+    @DrawableRes
+    val gearSix: Int = R.drawable.ic_ph_gear_six
+
     /** Home tab glyph, unselected - see [Nav.home]. */
     @DrawableRes
     val house: Int = R.drawable.ic_ph_house
@@ -123,6 +132,10 @@ object RepFlowIcons {
     @DrawableRes
     val info: Int = R.drawable.ic_ph_info
 
+    /** The start sheet's `Empty workout` row (`ph-lightning`). Remediation-1 CP5. */
+    @DrawableRes
+    val lightning: Int = R.drawable.ic_ph_lightning
+
     /** Plans tab glyph, unselected - see [Nav.plans]. */
     @DrawableRes
     val listChecks: Int = R.drawable.ic_ph_list_checks
@@ -130,6 +143,10 @@ object RepFlowIcons {
     /** Plans tab glyph, selected - see [Nav.plansSelected]. */
     @DrawableRes
     val listChecksFill: Int = R.drawable.ic_ph_list_checks_fill
+
+    /** Home's first-run start card, when no plan exists yet (`1d`, `ph-list-plus`). Remediation-1 CP5. */
+    @DrawableRes
+    val listPlus: Int = R.drawable.ic_ph_list_plus
 
     /** Search affordance (Exercise list). */
     @DrawableRes
@@ -140,9 +157,9 @@ object RepFlowIcons {
     val minus: Int = R.drawable.ic_ph_minus
 
     /**
-     * Recovery: the Home placeholder's recovery `Log` row, carried into Home's
-     * recovery card. A nav tab glyph until the four-destination bar retired
-     * the Recovery tab.
+     * Recovery: Home's recovery card when nothing is logged today (`1d`'s
+     * empty state, remediation-1 CP5). A nav tab glyph until the
+     * four-destination bar retired the Recovery tab.
      */
     @DrawableRes
     val moonStars: Int = R.drawable.ic_ph_moon_stars
@@ -150,6 +167,10 @@ object RepFlowIcons {
     /** Edit a logged set row (Active Workout). */
     @DrawableRes
     val pencilSimple: Int = R.drawable.ic_ph_pencil_simple
+
+    /** Home's `Start workout` (`ph-fill ph-play`). Remediation-1 CP5. */
+    @DrawableRes
+    val playFill: Int = R.drawable.ic_ph_play_fill
 
     /** Stepper increment (weight/reps entry). */
     @DrawableRes
@@ -163,9 +184,21 @@ object RepFlowIcons {
     @DrawableRes
     val plusBold: Int = R.drawable.ic_ph_plus_bold
 
+    /** Home's resume card: the session is still running (`ph-fill ph-record`). Remediation-1 CP5. */
+    @DrawableRes
+    val recordFill: Int = R.drawable.ic_ph_record_fill
+
     /** Expand the set-entry detail panel (Active Workout). */
     @DrawableRes
     val sliders: Int = R.drawable.ic_ph_sliders
+
+    /** Home's resume card: abandon the running workout (`ph-trash`). Remediation-1 CP5. */
+    @DrawableRes
+    val trash: Int = R.drawable.ic_ph_trash
+
+    /** Home's error card when the history cannot be read (`1d`, `ph-warning-circle`). Remediation-1 CP5. */
+    @DrawableRes
+    val warningCircle: Int = R.drawable.ic_ph_warning_circle
 
     /** Dismiss the rest-timer strip (Active Workout). */
     @DrawableRes

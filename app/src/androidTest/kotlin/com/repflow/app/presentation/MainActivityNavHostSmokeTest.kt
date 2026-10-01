@@ -2,6 +2,7 @@ package com.repflow.app.presentation
 
 import androidx.annotation.StringRes
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -55,33 +56,49 @@ class MainActivityNavHostSmokeTest {
         composeRule.onNodeWithText(string(id)).performClick()
     }
 
+    /** Home's cards are drawn from Room flows, which the Compose idling check does not wait for. */
+    private fun waitForText(
+        @StringRes id: Int,
+    ) {
+        val text = string(id)
+        composeRule.waitUntil(WAIT_MILLIS) { composeRule.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty() }
+    }
+
     private fun assertBottomNavAbsent() {
         tabDescriptions.forEach { composeRule.onNodeWithContentDescription(string(it)).assertDoesNotExist() }
     }
 
     @Test
     fun homeIsTheStartDestinationAndTheBarCarriesTheFourTabs() {
-        composeRule.onNodeWithText(string(R.string.home_placeholder_start)).assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.home_greeting)).assertIsDisplayed()
         tabDescriptions.forEach { composeRule.onNodeWithContentDescription(string(it)).assertIsDisplayed() }
     }
 
     /**
-     * The workout surface is reachable from Home - today's Workout tab entry
-     * point, carried onto Home - and renders without the bottom nav ("workout
-     * mode replaces the nav"). The two halves are asserted together on
-     * purpose: the nav gate is a property of the route, so on its own it
-     * would also pass on a route no user can reach.
+     * The workout surface is reachable from Home and renders without the
+     * bottom nav ("workout mode replaces the nav"). The two halves are
+     * asserted together on purpose: the nav gate is a property of the route,
+     * so on its own it would also pass on a route no user can reach.
+     *
+     * Like the History walk below, this assumes a fresh install: with no plan
+     * yet, Home's start card is `1d`'s first-run card, whose `Empty workout`
+     * starts a session and opens the workout (remediation-1 CP5). The session
+     * is abandoned again afterwards so the next walk finds Home as this one
+     * did.
      */
     @Test
     fun workoutIsReachableFromHomeAndReplacesTheNav() {
-        clickByText(R.string.home_placeholder_start)
+        waitForText(R.string.home_empty_workout)
+        clickByText(R.string.home_empty_workout)
         composeRule.onNodeWithText(string(R.string.workout_active_title)).assertIsDisplayed()
         assertBottomNavAbsent()
+        waitForText(R.string.workout_active_abandon)
+        clickByText(R.string.workout_active_abandon)
     }
 
     @Test
     fun recoveryIsReachableFromHome() {
-        clickByDescription(R.string.home_placeholder_recovery_log_content_description)
+        clickByDescription(R.string.home_recovery_log_content_description)
         composeRule
             .onNodeWithText(string(R.string.recovery_futsal_recovery_section_title))
             .assertIsDisplayed()
@@ -89,7 +106,7 @@ class MainActivityNavHostSmokeTest {
 
     @Test
     fun recoveryHistoryIsReachableBehindRecovery() {
-        clickByDescription(R.string.home_placeholder_recovery_log_content_description)
+        clickByDescription(R.string.home_recovery_log_content_description)
         clickByDescription(R.string.recovery_futsal_view_history_content_description)
         composeRule.onNodeWithText(string(R.string.recovery_history_title)).assertIsDisplayed()
     }
@@ -97,14 +114,14 @@ class MainActivityNavHostSmokeTest {
     /** Settings is not a tab, so it shows no nav either (`4a`: `nShowNav = nTab !== 'settings'`). */
     @Test
     fun settingsIsReachableFromHomeWithoutTheNav() {
-        clickByDescription(R.string.home_placeholder_settings_content_description)
+        clickByDescription(R.string.home_settings_content_description)
         composeRule.onNodeWithText(string(R.string.settings_title)).assertIsDisplayed()
         assertBottomNavAbsent()
     }
 
     @Test
     fun exerciseLibraryIsReachableFromSettings() {
-        clickByDescription(R.string.home_placeholder_settings_content_description)
+        clickByDescription(R.string.home_settings_content_description)
         clickByText(R.string.settings_placeholder_library)
         // The search field only exists on the exercise list screen.
         composeRule.onNodeWithText(string(R.string.exercise_list_search_hint)).assertIsDisplayed()
@@ -112,7 +129,7 @@ class MainActivityNavHostSmokeTest {
 
     @Test
     fun backupIsReachableFromSettings() {
-        clickByDescription(R.string.home_placeholder_settings_content_description)
+        clickByDescription(R.string.home_settings_content_description)
         clickByText(R.string.settings_placeholder_backup)
         composeRule.onNodeWithText(string(R.string.backup_export_action)).assertIsDisplayed()
     }
@@ -127,5 +144,9 @@ class MainActivityNavHostSmokeTest {
     fun progressTabOpensWithoutCrashing() {
         clickByDescription(R.string.nav_progress_content_description)
         composeRule.onNodeWithText(string(R.string.progress_placeholder_empty)).assertIsDisplayed()
+    }
+
+    private companion object {
+        const val WAIT_MILLIS = 5_000L
     }
 }

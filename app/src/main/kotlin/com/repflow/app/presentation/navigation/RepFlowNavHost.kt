@@ -17,7 +17,7 @@ import com.repflow.app.presentation.backup.BackupRoute
 import com.repflow.app.presentation.exercise.editor.ExerciseEditorRoute
 import com.repflow.app.presentation.exercise.list.ExerciseListRoute
 import com.repflow.app.presentation.history.HistoryRoute
-import com.repflow.app.presentation.home.HomePlaceholder
+import com.repflow.app.presentation.home.HomeRoute
 import com.repflow.app.presentation.progress.ProgressPlaceholder
 import com.repflow.app.presentation.recovery.RecoveryFutsalRoute
 import com.repflow.app.presentation.recovery.RecoveryHistoryRoute
@@ -74,10 +74,11 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(RepFlowDestinations.HOME) {
-                HomePlaceholder(
-                    onWorkoutClick = { navController.navigate(RepFlowDestinations.WORKOUT) },
-                    onRecoveryClick = { navController.navigate(RepFlowDestinations.RECOVERY) },
+                HomeRoute(
+                    onOpenWorkout = { navController.navigate(RepFlowDestinations.WORKOUT) { launchSingleTop = true } },
                     onSettingsClick = { navController.navigate(RepFlowDestinations.SETTINGS) },
+                    onLogRecoveryClick = { navController.navigate(RepFlowDestinations.RECOVERY) },
+                    onCreatePlanClick = { navController.navigate(RepFlowDestinations.PLAN_NEW) },
                 )
             }
             composable(RepFlowDestinations.SETTINGS) {

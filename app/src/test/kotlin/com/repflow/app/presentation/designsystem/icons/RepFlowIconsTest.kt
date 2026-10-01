@@ -85,6 +85,18 @@ class RepFlowIconsTest {
                 // Structural primitives (remediation-1 CP3): RepFlowListRow's
                 // trailing caret.
                 "ic_ph_caret_right",
+                // Home (remediation-1 CP5): the header gear, the start card's label
+                // and `Start workout`, the resume card's running marker and abandon,
+                // the start sheet's `Empty workout` row, and `1d`'s first-run and
+                // history-error cards.
+                "ic_ph_gear_six",
+                "ic_ph_calendar_check",
+                "ic_ph_play_fill",
+                "ic_ph_record_fill",
+                "ic_ph_trash",
+                "ic_ph_lightning",
+                "ic_ph_list_plus",
+                "ic_ph_warning_circle",
             )
         assertEquals(expected, bundledPhosphorDrawables().keys)
     }
