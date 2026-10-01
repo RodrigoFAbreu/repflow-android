@@ -115,6 +115,9 @@ class RepFlowIconsTest {
                 "ic_ph_circle",
                 "ic_ph_timer",
                 "ic_ph_plus_circle",
+                // Workout focus mode (remediation-1 CP8): `Board` and the suggestion strip.
+                "ic_ph_list_bullets",
+                "ic_ph_pulse",
             )
         assertEquals(expected, bundledPhosphorDrawables().keys)
     }

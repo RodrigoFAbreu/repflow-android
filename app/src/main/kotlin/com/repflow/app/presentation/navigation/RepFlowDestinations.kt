@@ -32,8 +32,8 @@ object RepFlowDestinations {
 
     /**
      * The progression recommendation for one exercise (remediation-1 CP6),
-     * reached from the workout picker row's `Why ›`; CP8's focus strip and
-     * CP9's finish screen add their own ways in.
+     * reached from the workout picker row's `Why ›` and focus mode's suggestion
+     * strip (CP8); CP9's finish screen adds its own way in.
      */
     const val PROGRESSION_EXERCISE_ARG = "exerciseId"
     const val PROGRESSION_PATTERN = "progression/{$PROGRESSION_EXERCISE_ARG}"

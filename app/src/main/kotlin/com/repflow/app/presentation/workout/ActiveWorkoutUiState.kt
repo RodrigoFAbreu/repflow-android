@@ -7,6 +7,7 @@ import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.domain.workout.WorkoutSetId
 import com.repflow.app.presentation.progression.ProgressionRecommendationUi
+import java.math.BigDecimal
 import java.time.Instant
 
 /**
@@ -69,6 +70,19 @@ data class ActiveExerciseUi(
     val sets: List<ActiveSetUi>,
     /** The resolved plan target this exercise was seeded from, `null` for an ad-hoc exercise (Milestone 8, implementation-review finding #2). */
     val plannedTarget: PlannedTargetUi? = null,
+    /**
+     * The library exercise this workout exercise records, so focus mode can show
+     * its progression suggestion and route `Why ›` to it (remediation-1 CP8).
+     */
+    val exerciseId: ExerciseId? = null,
+    /**
+     * [com.repflow.app.domain.exercise.Exercise.defaultLoadIncrement] in kg - the
+     * weight stepper's step (`6b`: "Step size comes from the exercise's load
+     * increment"); `null` when the exercise has none (remediation-1 CP8).
+     */
+    val defaultLoadIncrement: BigDecimal? = null,
+    /** [com.repflow.app.domain.exercise.Exercise.instructions], shown as focus mode's technique notes; `null` when there are none (remediation-1 CP8). */
+    val instructions: String? = null,
 )
 
 /**

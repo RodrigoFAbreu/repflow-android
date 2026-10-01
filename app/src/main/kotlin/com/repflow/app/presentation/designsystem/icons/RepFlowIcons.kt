@@ -226,6 +226,14 @@ object RepFlowIcons {
     @DrawableRes
     val recordFill: Int = R.drawable.ic_ph_record_fill
 
+    /** Focus mode's way back to the board (`4a`, `ph-list-bullets`). Remediation-1 CP8. */
+    @DrawableRes
+    val listBullets: Int = R.drawable.ic_ph_list_bullets
+
+    /** Focus mode's suggestion strip (`4a`, `ph-pulse`). Remediation-1 CP8. */
+    @DrawableRes
+    val pulse: Int = R.drawable.ic_ph_pulse
+
     /** Expand the set-entry detail panel (Active Workout). */
     @DrawableRes
     val sliders: Int = R.drawable.ic_ph_sliders

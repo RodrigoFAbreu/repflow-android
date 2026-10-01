@@ -7,14 +7,20 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.unit.width
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
 import com.repflow.app.domain.exercise.ExerciseId
@@ -26,6 +32,7 @@ import com.repflow.app.presentation.RepFlowTheme
 import com.repflow.app.presentation.progression.ProgressionRecommendationUi
 import com.repflow.app.presentation.progression.ProgressionResultUi
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -63,6 +70,7 @@ class ActiveWorkoutScreenTest {
         openFirstExercise: Boolean = true,
         exercises: List<ActiveExerciseUi> = listOf(exercise),
         onFocusExercise: (WorkoutExerciseId?) -> Unit = {},
+        onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit = { _, _, _, _, _, _, _, _ -> },
     ) {
         composeRule.setContent {
             RepFlowTheme {
@@ -85,7 +93,7 @@ class ActiveWorkoutScreenTest {
                     onOpenRecommendation = onOpenRecommendation,
                     onRecordSet = onRecordSet,
                     onUndoLastSet = {},
-                    onEditLastSet = { _, _, _, _, _, _, _, _ -> },
+                    onEditLastSet = onEditLastSet,
                     onAddRestTime = {},
                     onRemoveRestTime = {},
                     onSkipRestTimer = {},
@@ -102,12 +110,16 @@ class ActiveWorkoutScreenTest {
         trackingType: ExerciseTrackingType,
         sets: List<ActiveSetUi> = emptyList(),
         plannedTarget: PlannedTargetUi? = null,
+        exerciseId: ExerciseId? = null,
+        instructions: String? = null,
     ) = ActiveExerciseUi(
         id = WorkoutExerciseId("exercise-1"),
         name = "Bench Press",
         trackingType = trackingType,
         sets = sets,
         plannedTarget = plannedTarget,
+        exerciseId = exerciseId,
+        instructions = instructions,
     )
 
     private fun set(
@@ -116,6 +128,8 @@ class ActiveWorkoutScreenTest {
         reps: Int? = null,
         durationSeconds: Int? = null,
         isWarmup: Boolean = false,
+        rpe: Double? = null,
+        pain: Int? = null,
     ) = ActiveSetUi(
         id = WorkoutSetId("set-$setNumber"),
         setNumber = setNumber,
@@ -123,7 +137,15 @@ class ActiveWorkoutScreenTest {
         reps = reps,
         durationSeconds = durationSeconds,
         isWarmup = isWarmup,
+        rpe = rpe,
+        pain = pain,
     )
+
+    private fun plural(
+        id: Int,
+        quantity: Int,
+        vararg args: Any,
+    ) = composeRule.activity.resources.getQuantityString(id, quantity, *args)
 
     @Test
     fun weightAndRepsExerciseShowsLoadAndRepsFieldsButNotDuration() {
@@ -170,32 +192,46 @@ class ActiveWorkoutScreenTest {
             .assertIsDisplayed()
     }
 
+    /**
+     * Remediation-1 CP8 rewrote this against focus mode: the planned-target
+     * chips are gone, and warm-up and working progress are the header's
+     * `X of Y sets done` - with the plan's warm-ups beside it - while each
+     * planned set not logged yet is a row of its own carrying the target.
+     */
     @Test
     fun aPlannedExerciseShowsWarmupAndWorkingProgress() {
         val target = PlannedTargetUi(targetWarmupSets = 2, targetWorkingSets = 3, repRange = 8..12, restSeconds = 60)
         setContent(exercise(ExerciseTrackingType.WEIGHT_AND_REPS, plannedTarget = target))
 
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.workout_active_plan_warmup_progress, 0, 2))
-            .assertIsDisplayed()
+            .onNodeWithText(
+                plural(R.plurals.workout_focus_sets_done, 3, 0, 3) + " · " + plural(R.plurals.workout_focus_warmups_done, 2, 0, 2),
+            ).assertIsDisplayed()
+        val firstPendingRow =
+            listOf(
+                composeRule.activity.getString(R.string.workout_focus_set_row_pending, 1),
+                composeRule.activity.getString(R.string.workout_active_plan_rep_range, 8, 12),
+                composeRule.activity.getString(R.string.workout_active_plan_rest, 60),
+            ).joinToString(separator = " · ")
+        composeRule.onNodeWithText(firstPendingRow).performScrollTo().assertIsDisplayed()
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.workout_active_plan_working_progress, 0, 3))
-            .assertIsDisplayed()
-        composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.workout_active_plan_rep_range, 8, 12))
-            .assertIsDisplayed()
+            .onAllNodesWithText(composeRule.activity.getString(R.string.workout_focus_set_row_pending, 3), substring = true)
+            .assertCountEquals(1)
     }
 
+    /**
+     * The parent milestone's chip-row clipping guard, **retargeted** by
+     * remediation-1 CP8 rather than retired: the rep range, duration range
+     * and rest the old chips carried now ride on the not-yet-logged set row,
+     * and that row must still degrade visibly rather than push a value off
+     * the right edge - the silent clipping the parent's round-1 fix existed to
+     * prevent. Same method as before: values deliberately absurd, so nothing
+     * fits at any phone width, then every value must be on screen. The row is
+     * one wrapping line, so this also pins that it stays inside the root's
+     * width.
+     */
     @Test
-    fun everyPlannedTargetChipStaysOnScreenWhenTheRowOutgrowsTheWidth() {
-        // The guard this pins is `weight(1f, fill = false)` on each chip plus
-        // `RepFlowStatusChip`'s own `maxLines = 1`/`Ellipsis`: a row that
-        // outgrows the screen must degrade visibly rather than push its last
-        // chip off the right edge. Without the weight the third chip measures
-        // to zero width and stops being displayed - which is exactly the
-        // silent clipping the round-1 fix exists to prevent, and which was
-        // otherwise verified only by eye. Values are deliberately absurd so
-        // the row cannot fit at any phone width.
+    fun everyPlannedTargetValueStaysOnScreenWhenThePendingRowOutgrowsTheWidth() {
         val target =
             PlannedTargetUi(
                 targetWarmupSets = null,
@@ -206,22 +242,34 @@ class ActiveWorkoutScreenTest {
             )
         setContent(exercise(ExerciseTrackingType.WEIGHT_AND_REPS, plannedTarget = target))
 
+        val rootWidth = composeRule.onRoot().getUnclippedBoundsInRoot().width
         listOf(
             composeRule.activity.getString(R.string.workout_active_plan_rep_range, 100_000_000, 999_999_999),
             composeRule.activity.getString(R.string.workout_active_plan_duration_range, 100_000_000L, 999_999_999L),
             composeRule.activity.getString(R.string.workout_active_plan_rest, 999_999_999),
-        ).forEach { chipText ->
-            composeRule.onNodeWithText(chipText).performScrollTo().assertIsDisplayed()
+        ).forEach { value ->
+            val row = composeRule.onNodeWithText(value, substring = true)
+            row.performScrollTo().assertIsDisplayed()
+            val bounds = row.getUnclippedBoundsInRoot()
+            assertTrue("The pending row ends at ${bounds.right}, past the root's $rootWidth", bounds.right <= rootWidth)
         }
     }
 
+    /**
+     * Remediation-1 CP8: with the target chips gone for every exercise, the
+     * old "no working-progress chip" assertion would pass vacuously. What
+     * distinguishes an ad-hoc exercise on focus mode is that it has no
+     * target: its header only counts (`D55`) and it has no not-yet-logged
+     * rows - both asserted positively.
+     */
     @Test
     fun anAdHocExerciseShowsNoPlannedTargetSummary() {
         setContent(exercise(ExerciseTrackingType.WEIGHT_AND_REPS, plannedTarget = null))
 
+        composeRule.onNodeWithText(plural(R.plurals.workout_focus_sets_logged, 0, 0)).assertIsDisplayed()
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.workout_active_plan_working_progress, 0, 0))
-            .assertDoesNotExist()
+            .onAllNodesWithText(composeRule.activity.getString(R.string.workout_focus_set_row_pending, 1))
+            .assertCountEquals(0)
     }
 
     @Test
@@ -237,14 +285,16 @@ class ActiveWorkoutScreenTest {
     }
 
     /*
-     * The set-detail disclosure is the one new user-facing interaction CP6
-     * introduces, and it gates three data-entry fields that had no coverage
-     * before it existed. The four tests below pin the whole contract: what
-     * the disclosure hides, that opening it reveals all three fields, that a
-     * value typed into them reaches `onRecordSet` whether the section is open
+     * The set-detail disclosure gates the three optional inputs - RPE, pain
+     * and technique, scale rows since remediation-1 CP8 replaced the text
+     * fields. Three tests below are about the disclosure and survive that
+     * swap unchanged: what it hides, that opening it reveals all three rows
+     * (located by their labels), and that the header node a screen reader
+     * activates reads differently in the two states. The fourth is about the
+     * values it reveals and was rewritten by CP8 to drive the scale rows: a
+     * value chosen in them reaches `onRecordSet` whether the section is open
      * or closed at submit time (the retention property `SetDetailSection`'s
-     * KDoc claims), and that the header node a screen reader activates
-     * actually reads differently in the two states.
+     * KDoc claims).
      */
 
     private fun node(
@@ -292,12 +342,21 @@ class ActiveWorkoutScreenTest {
         )
 
         node(R.string.workout_active_set_detail_toggle).performScrollTo().performClick()
-        node(R.string.workout_active_rpe_label).performScrollTo().performTextInput("8")
-        node(R.string.workout_active_pain_label).performScrollTo().performTextInput("2")
-        // Collapse again before submitting: the values live in ExerciseCard's
-        // own state, not in the section, so hiding them must not drop them.
-        node(R.string.workout_active_set_detail_toggle).performScrollTo().performClick()
-        node(R.string.workout_active_add_set).performScrollTo().performClick()
+        // RPE's row is the only one with an 8; pain is the second of the three rows with a 2.
+        composeRule.onNode(hasText("8") and isSelectable()).performScrollTo().performClick()
+        composeRule.onAllNodes(hasText("2") and isSelectable())[1].performScrollTo().performClick()
+        // Collapse again before submitting: the values live in focus mode's own
+        // entry state, not in the section, so hiding them must not drop them.
+        composeRule
+            .onNode(hasStateDescription(R.string.workout_active_set_detail_expanded))
+            .performScrollTo()
+            .performClick()
+        composeRule
+            .onNodeWithText(
+                composeRule.activity.getString(R.string.workout_focus_detail_rpe, 8) + " · " +
+                    composeRule.activity.getString(R.string.workout_focus_detail_pain, 2),
+            ).assertIsDisplayed()
+        node(R.string.workout_focus_log_set).performClick()
 
         assertEquals(8.0, recordedRpe)
         assertEquals(2, recordedPain)
@@ -322,6 +381,12 @@ class ActiveWorkoutScreenTest {
             .assert(hasStateDescription(R.string.workout_active_set_detail_expanded))
     }
 
+    /**
+     * Rewritten by remediation-1 CP8 to drive the weight stepper and its
+     * keypad, since a stepper cannot take `performTextInput`. The contract is
+     * unchanged: logging a set clears what was entered, so the next set starts
+     * fresh (`D60`).
+     */
     @Test
     fun tappingAddSetClearsTheEntryFields() {
         var recordedLoad: Double? = null
@@ -330,8 +395,15 @@ class ActiveWorkoutScreenTest {
             onRecordSet = { _, load, _, _, _, _, _, _ -> recordedLoad = load },
         )
 
-        composeRule.onNodeWithText(composeRule.activity.getString(R.string.workout_active_load_label)).performTextInput("60")
-        composeRule.onNodeWithText(composeRule.activity.getString(R.string.workout_active_add_set)).performClick()
+        composeRule
+            .onNodeWithContentDescription(composeRule.activity.getString(R.string.workout_focus_more_weight))
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithText("2.5").performScrollTo().performClick()
+        listOf("6", "0").forEach { key -> composeRule.onNodeWithText(key).performClick() }
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.repflow_keypad_confirm)).performClick()
+        composeRule.onNodeWithText("60").performScrollTo().assertIsDisplayed()
+        node(R.string.workout_focus_log_set).performClick()
 
         assertEquals(60.0, recordedLoad)
         composeRule.onNodeWithText("60").assertDoesNotExist()
@@ -444,12 +516,6 @@ class ActiveWorkoutScreenTest {
             )
         setContent(exercises.first(), exercises = exercises, openFirstExercise = false)
 
-        fun plural(
-            id: Int,
-            quantity: Int,
-            vararg args: Any,
-        ) = composeRule.activity.resources.getQuantityString(id, quantity, *args)
-
         composeRule.onNodeWithText(plural(R.plurals.workout_board_progress, 3, 1, 3, 3, 9)).assertIsDisplayed()
         composeRule.onNodeWithText(plural(R.plurals.workout_board_status_progress, 2, 2, 2)).assertIsDisplayed()
         composeRule.onNodeWithText(plural(R.plurals.workout_board_status_progress, 3, 3, 1)).assertIsDisplayed()
@@ -478,5 +544,134 @@ class ActiveWorkoutScreenTest {
             ).performScrollTo()
             .assertIsDisplayed()
         composeRule.onNodeWithText(composeRule.activity.getString(R.string.home_untitled_workout)).assertIsDisplayed()
+    }
+
+    // ---- Focus mode (remediation-1 CP8) ----
+
+    private fun benchPickerItem(recommendation: ProgressionRecommendationUi?) =
+        ExercisePickerItem(
+            id = ExerciseId("exercise-bench"),
+            name = "Bench Press",
+            trackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
+            recommendation = recommendation,
+        )
+
+    /**
+     * Plan CP8 item 5's state test, first half: when the exercise has a
+     * recommendation, the suggestion strip shows the proposed action and the
+     * policy's top reason, and its `Why ›` hands out this exercise - the
+     * route-level half, `Why ›` reaching CP6's screen through the graph, is
+     * `ProgressionRecommendationRouteTest`'s.
+     */
+    @Test
+    fun theSuggestionStripShowsTheRecommendationAndItsWhyOpensIt() {
+        var opened: ExerciseId? = null
+        setContent(
+            exercise(ExerciseTrackingType.WEIGHT_AND_REPS, exerciseId = ExerciseId("exercise-bench")),
+            availableExercises =
+                listOf(
+                    benchPickerItem(
+                        ProgressionRecommendationUi(
+                            result = ProgressionResultUi.INCREASE_LOAD,
+                            topReason = "Every working set reached 8+ reps",
+                            isOverridden = false,
+                        ),
+                    ),
+                ),
+            onOpenRecommendation = { opened = it },
+        )
+
+        composeRule
+            .onNodeWithText(
+                composeRule.activity.getString(R.string.progression_result_increase_load) + " — Every working set reached 8+ reps",
+            ).performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithContentDescription(composeRule.activity.getString(R.string.progression_why_content_description, "Bench Press"))
+            .performScrollTo()
+            .performClick()
+
+        assertEquals(ExerciseId("exercise-bench"), opened)
+    }
+
+    /** Plan CP8 item 5's state test, second half: no recommendation, no strip and no `Why`. */
+    @Test
+    fun theSuggestionStripIsAbsentWhenThereIsNoRecommendation() {
+        setContent(
+            exercise(ExerciseTrackingType.WEIGHT_AND_REPS, exerciseId = ExerciseId("exercise-bench")),
+            availableExercises = listOf(benchPickerItem(recommendation = null)),
+        )
+
+        composeRule
+            .onNodeWithContentDescription(composeRule.activity.getString(R.string.progression_why_content_description, "Bench Press"))
+            .assertDoesNotExist()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.progression_why_link)).assertDoesNotExist()
+    }
+
+    /** Plan CP8 item 11: the exercise's technique notes are a collapsed row under the header. */
+    @Test
+    fun techniqueNotesAreACollapsedRowThatRevealsTheExercisesInstructions() {
+        setContent(exercise(ExerciseTrackingType.WEIGHT_AND_REPS, instructions = "Keep the bar over mid-foot."))
+
+        composeRule.onNodeWithText("Keep the bar over mid-foot.").assertDoesNotExist()
+        node(R.string.workout_focus_technique_notes).performScrollTo().performClick()
+        composeRule.onNodeWithText("Keep the bar over mid-foot.").performScrollTo().assertIsDisplayed()
+    }
+
+    /** Plan CP8 item 11: absent entirely when the exercise has no instructions. */
+    @Test
+    fun techniqueNotesAreAbsentWhenTheExerciseHasNone() {
+        setContent(exercise(ExerciseTrackingType.WEIGHT_AND_REPS, instructions = null))
+
+        node(R.string.workout_focus_technique_notes).assertDoesNotExist()
+    }
+
+    /** `Next ›` skips finished exercises and opens the next unfinished one in board order. */
+    @Test
+    fun nextOpensTheNextUnfinishedExercise() {
+        var focused: WorkoutExerciseId? = null
+        val exercises =
+            listOf(
+                boardExercise("e1", "Bench Press", targetWorkingSets = 2),
+                boardExercise("e2", "Row", sets = listOf(set(1, 50.0, 10)), targetWorkingSets = 1),
+                boardExercise("e3", "Curl", targetWorkingSets = 3),
+            )
+        setContent(exercises.first(), exercises = exercises, onFocusExercise = { focused = it })
+
+        node(R.string.workout_focus_next).performClick()
+
+        assertEquals(WorkoutExerciseId("e3"), focused)
+    }
+
+    /**
+     * The pencil on the most recently logged set opens the correction sheet
+     * (`D31`, `D66`): it corrects what was lifted through `onEditLastSet` and
+     * hands the set's RPE, pain and warm-up flag back unchanged.
+     */
+    @Test
+    fun correctingTheLastSetKeepsItsOtherFieldsAndReachesOnEditLastSet() {
+        var edited: List<Any?>? = null
+        setContent(
+            exercise(
+                ExerciseTrackingType.WEIGHT_AND_REPS,
+                sets = listOf(set(1, load = 60.0, reps = 8, rpe = 7.5, pain = 1)),
+            ),
+            onEditLastSet = { _, load, reps, duration, rpe, isWarmup, pain, technique ->
+                edited = listOf(load, reps, duration, rpe, isWarmup, pain, technique)
+            },
+        )
+
+        composeRule
+            .onNode(hasClickAction() and hasText(composeRule.activity.getString(R.string.workout_active_set_row_weight_reps, 1, 60.0, 8)))
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.workout_focus_correct_title, 1)).assertIsDisplayed()
+        composeRule
+            .onAllNodesWithContentDescription(composeRule.activity.getString(R.string.workout_focus_more_reps))
+            .onLast()
+            .performClick()
+        node(R.string.workout_focus_correct_save).performClick()
+
+        assertEquals(listOf(60.0, 9, null, 7.5, false, 1, null), edited)
     }
 }

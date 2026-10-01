@@ -409,7 +409,21 @@ listing each converted package's `app/src/test` directory; method counts are
   Plus the block comment at `:217–226` (rewritten). Production KDoc that goes
   stale: `PlannedTargetSummary` (`ActiveWorkoutExerciseCard.kt:212–221`);
   the live constraint that stays: `LoggedSetRow` (`:287–291`).
-- **Register:** `D1`, `D10`, `D11`, `D27`, `D31`; open `O5`, `O6`.
+- **Register:** `D1`, `D10`, `D11`, `D27`, `D31`; CP8 added `D60`–`D66` and
+  closed `O6` (`D63`); `O5` was closed by CP7 (`D58` - the shared rest strip
+  is the board's, so focus mode draws it rather than `4a`'s slim variant).
+- **Built (CP8):** focus mode in `WorkoutFocus.kt` (top bar, header,
+  technique notes, `Last:` / `Undo last`, suggestion strip, type note, pinned
+  `Log set` / `Next ›`), `WorkoutFocusSets.kt` (the set list and the
+  correction sheet), `WorkoutFocusEntry.kt` (stepper cards, the RPE / pain /
+  technique disclosure, the warm-up chip) and `WorkoutFocusModel.kt` (rows,
+  header counts, `Next ›`, the hint's rest, the load step; `setsWithExtraFlag`
+  moved here). `ActiveWorkoutExerciseCard.kt` is deleted; `ControlRowMinHeight`
+  lives in `WorkoutFocusEntry.kt`. `ActiveExerciseUi` gains `exerciseId`,
+  `defaultLoadIncrement` (kg) and `instructions`, all defaulted.
+  `ActiveWorkoutScreenTest`: the five methods the table names rewritten, the
+  nine others unchanged, plus six focus-mode methods;
+  `ProgressionRecommendationRouteTest` gains the strip's inward path.
 
 ### 3.8 Finish sheet and done screen (CP9)
 
@@ -826,7 +840,7 @@ listing each converted package's `app/src/test` directory; method counts are
 Every row is a place the built app differs from the design. **D1–D24 are
 seeded verbatim from the execution plan's "Deviation register — seeded";
 D25–D38 are added by CP1** from the full read above. Later checkpoints append
-here — the next free id is **D60** (CP3 added D39–D40, CP4 D41–D43, CP5 D44–D48, CP6 D49–D54, CP7 D55–D59) — and never renumber. Reasons use the
+here — the next free id is **D67** (CP3 added D39–D40, CP4 D41–D43, CP5 D44–D48, CP6 D49–D54, CP7 D55–D59, CP8 D60–D66) — and never renumber. Reasons use the
 plan's four categories: `no domain backing`, `blocked by open decision`,
 `platform convention`, `deliberate product call`.
 
@@ -891,6 +905,13 @@ plan's four categories: `no domain backing`, `blocked by open decision`,
 | D57 | The board draws no recovery or futsal context (`nBoard`, `:1161–1238`) | The line the workout screen already showed — `Heavy legs: n/4 · Leg DOMS: n/4 · Futsal in the last 24h (load n)` — kept as a meta line under the progress line when any of the three exists | deliberate product call: no checkpoint retires this reading, `docs/UX_FLOWS.md` asks for recent futsal context around a workout, and Home's readiness card is not visible in workout mode | CP7 |
 | D58 | The rest strip's `Resting — <exercise>` / `Next set is ready — <exercise>`, its lit `Rest done` state (fill `#2b2741`, ring `#9184d9`), the separate in-app `Rest complete` banner with `+30s` (`:1661–1671`), and a 40 dismiss `X` | `Resting` / `Next set is ready` with no exercise name; at zero the strip stays up and says `Rest done`, the word carrying the state without the lit fill; no banner (the system notification still fires); the dismiss `X` at the 44 floor or above (a Material `IconButton`). `−15s` / `+15s` / `Skip rest` / dismiss are built on `AdjustRestTimer` / `SkipRestTimer`. Resolves `O5` (the strip is one composable shared by the board and the set entry, so CP8 inherits it) | no domain backing: `RestTimer` records no exercise (`RestTimer.kt`), and `+30s` on an expired timer would need a restart rule `AdjustRestTimer` does not have; the lit fill would need a card tone with no light-theme render; `6b`'s 44 floor | CP7 |
 | D59 | The board top bar's `Finish` at 40 tall, radius 8, 13.5 (`:1174`) | The design system's accent-outline button (48, radius 10) | deliberate product call: `6b`'s own button scale over a one-off size, as `D36`, `D40`, `D48` | CP7 |
+| D60 | After `Log set` the weight and reps stay where they were for the next set, and before the first set they start from the last session (`Last time: 82.5 kg × 8`, `nLastSetHint` / `nLogSet`, `:4275–4288`, `:4262–4273`) | Every logged set clears the entry: the steppers go back to `—` and the RPE / pain / technique / warm-up choices reset. `Last: …` shows the set just logged in this session; nothing is shown before the first one | deliberate product call: the plan's preserved contract that recording a set clears the entry state (`tappingAddSetClearsTheEntryFields`, Milestone 8 finding #3: no accidental duplicate submit), and no read model gives focus mode the previous session's sets | CP8 |
+| D61 | Weight steps by `2.5` kg (`5` lb) whatever the exercise (`stepW`, `nWeightUnit`, `:4207`) | Weight steps by the exercise's own `defaultLoadIncrement` (`6b`: "Step size comes from the exercise's load increment"), falling back to the prototype's 2.5 kg when the exercise sets none; reps step by 1 and seconds by 5, as the prototype; every stepper starts empty (`—`) and the first `+` steps up from zero | deliberate product call: `6b` over `4a`'s fixed step; the fallback is the design's own value | CP8 |
+| D62 | The `Weight` and `Reps` cards always side by side (`:1286–1306`) | Side by side only from 400dp of content width; narrower, they stack. At a 360dp phone each half-width card leaves its value 39dp between the two 44dp buttons, and a load such as `102.5` at 24sp needs about 70 | platform convention: a value that wraps or clips inside the stepper is unreadable, and `6b`'s 44 buttons cannot shrink | CP8 |
+| D63 | The warm-up hint "Logs outside the set count, 60s rest." — a fixed 60 s rest after a warm-up (`nWarmHint`, `nLogSet`, `:4260`, `:4286`) | "Logs outside the set count, Ns rest." / "Working set — Ns rest after it." with `N` the exercise's planned rest, else the app's 90 s default — the rest `onRecordSet` actually starts, warm-up or not. "Optional. Whatever you set applies to the next set you log, then clears." is kept as drawn: it is true (`D60`). Resolves `O6` | deliberate product call: the hint states today's rest rule rather than the drawing's; a separate warm-up rest would be a new rule in `ActiveWorkoutViewModel.onRecordSet`, which this milestone does not change | CP8 |
+| D64 | The RPE row as one line of pills (`6,7,8,9,10` in `4a`; `6b`'s "0–5 and RPE" scale row) | RPE `0–10` (`D11`) as `6b`'s scale row in two lines, `0–5` over `6–10`, the second line keeping the first line's cell width. End labels `easy → max`; pain `none → sharp` and technique `form broke → clean` on their `0–5` rows (`D10`) | platform convention: eleven cells on one line would be about 25dp wide at a 360dp phone, under `6b`'s own 44 tap-target floor | CP8 |
+| D65 | Set rows with a separate index column (`W` for a warm-up, otherwise the working-set number) and a summary such as `82.5 kg × 8 · RPE 8 · niggle` (`nFocusRows`, `:4118–4141`); pending rows read only `not logged` | The index is the summary's existing `Set N:` — every logged set counted, warm-ups included — and the summary keeps the parent milestone's three formats (`Set 2: 60.0 kg x 8 (extra)`), with RPE / pain / technique on a second line. A pending row reads `Set N: not logged · Target: 8-12 reps · Rest: 60s`: the planned target and rest the old chips carried, on one wrapping line. The plan's warm-up target, which no row shows, is beside the header's `X of Y sets done` (`0 of 2 warm-ups`) | deliberate product call: the plan's preserved summary formats (two parent defect fixes and the `extra` marker are pinned by exact text), and plan CP8 item 3, which makes the pending rows the chips' replacement | CP8 |
+| D66 | The correction sheet on every logged set, with `Delete` and `Save the correction` (`nSetEditOpen`, `:1549–1581`) | The pencil, and the sheet, on the most recently logged set only (`D31`); the sheet corrects weight / reps / seconds through `EditLastWorkoutSet` and hands the set's RPE, pain, technique and warm-up flag back unchanged; no `Delete` — removing the last set is `Undo last` | deliberate product call: the preserved undo/edit scope (`D31`); a per-set delete would be a new use case | CP8 |
 
 **Status-chip audit (`6b`, "never colour alone"; CP3).** Every chip the
 design draws pairs its tone with an icon or a word (§2). On the built
@@ -924,7 +945,7 @@ review finding.
 | O3 | CP6 — **closed: `D49`, `D50`, `D51`** | `6a`'s numeric value (`80 kg → 82.5 kg`, `Use 82.5 kg`), `What it looked at`, `Next session starts as`, `Earlier suggestions`, `Recorded as …`; `6c`'s two-action card | `ProgressionResult` carries no load, so any value must be derived (last working load + `defaultLoadIncrement`) or the value row registered as a deviation; a history list needs `ProgressionRecommendationRepository.findAll` |
 | O4 | CP7 — **closed: `D56`** | The picker sheet's inline `Create a new exercise` (name + tracking type, `:1612–1633`) and its empty state | the plan converts the picker but is silent on creating from it |
 | O5 | CP7, CP8 — **closed: `D58`** | The rest strip's `−15s` / `+15s` / `Skip rest` / dismiss (backed by `AdjustRestTimer` and `SkipRestTimer`), its lit `Rest done` state, and the in-app `Rest complete` banner with `+30s` (`:1661–1671`) | the plan says the strip "renders here too" without enumerating its controls |
-| O6 | CP8 | The warm-up hint "Logs outside the set count, 60s rest." (a 60 s warm-up rest, `:4260`), and "applies to the next set you log, then clears" | today's rest rule and the detail fields' lifetime may differ; CP8 states what it keeps |
+| O6 | CP8 — **closed: `D63`** | The warm-up hint "Logs outside the set count, 60s rest." (a 60 s warm-up rest, `:4260`), and "applies to the next set you log, then clears" | today's rest rule and the detail fields' lifetime may differ; CP8 states what it keeps |
 | O7 | CP10 | `2c`'s tracking-type filter chip and `N matches` count; `2b`'s `Save` in the top bar (against `6b`'s bottom bar), its duplicate-name inline error, and its `Other` presets | CP10 item 1 names only `Active` / `Archived` |
 | O8 | CP11 | A per-row start action with no active-plan concept; `Open` (`5a`) or `Edit` (`4a`); the warm-up sets stepper and `Optional` toggle (the domain fields exist); the "Saving creates version N" bar; the `Progression — Automatic, per exercise` card | CP11 item 2 lists sets / rep range / rest only |
 | O9 | CP12 | History's `This plan` chip, month section labels, the `PR` badge derivation, the `invalidated` badge, the `<plan> · version N` line | CP12 item 1 says "PR badge where derivable" and "existing filters converted" |

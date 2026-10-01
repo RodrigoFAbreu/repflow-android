@@ -128,7 +128,7 @@ internal fun LeaveWorkoutSheet(
  * exercise`, then one row per active exercise. A row adds its exercise to the
  * workout. Each row still carries the recommendation summary and its `Why ›`
  * into the recommendation screen, exactly as the menu row did (plan CP7
- * item 6) - the screen's only way in until CP8's focus strip.
+ * item 6) - one way in; focus mode's suggestion strip is the other (CP8).
  *
  * `Create a new exercise` opens the existing exercise editor rather than the
  * prototype's inline name-and-type sheet, and the new exercise is then picked

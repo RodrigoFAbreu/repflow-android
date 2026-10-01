@@ -373,7 +373,7 @@ private fun EmptyBoard() {
 
 /** Seconds since [startedAt], re-read from the wall clock every second - derived, never counted. */
 @Composable
-private fun rememberElapsedSeconds(startedAt: Instant): Long {
+internal fun rememberElapsedSeconds(startedAt: Instant): Long {
     var elapsed by remember(startedAt) { mutableLongStateOf(secondsSince(startedAt)) }
     LaunchedEffect(startedAt) {
         while (true) {

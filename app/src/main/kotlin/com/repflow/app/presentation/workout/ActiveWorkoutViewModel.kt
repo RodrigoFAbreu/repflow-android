@@ -55,6 +55,7 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.math.BigDecimal
 import javax.inject.Inject
 
 /**
@@ -138,9 +139,26 @@ class ActiveWorkoutViewModel
                     emit(emptyMap())
                 }
 
+        /**
+         * Every library exercise, archived ones included, by id: focus mode's
+         * load step and technique notes (remediation-1 CP8) come from the
+         * exercise a workout exercise records, which may have been archived
+         * since it was added. A failed read degrades to the stepper's default
+         * step and no notes rather than failing the workout surface.
+         */
+        private val exerciseDetails =
+            combine(
+                observeExercises(ExerciseStatusFilter.ACTIVE, ""),
+                observeExercises(ExerciseStatusFilter.ARCHIVED, ""),
+            ) { active, archived -> (active + archived).associateBy { it.id } }
+                .catch { failure ->
+                    if (failure is CancellationException) throw failure
+                    emit(emptyMap())
+                }
+
         private val content =
-            combine(observeActiveWorkoutSession(), planLabels) { session, labels ->
-                toContent(session, session?.trainingPlanVersionId?.let { labels[it]?.planName })
+            combine(observeActiveWorkoutSession(), planLabels, exerciseDetails) { session, labels, details ->
+                toContent(session, session?.trainingPlanVersionId?.let { labels[it]?.planName }, details)
             }.onStart { emit(ActiveWorkoutContent.Loading) }
                 .catch { failure ->
                     if (failure is CancellationException) throw failure
@@ -365,6 +383,7 @@ class ActiveWorkoutViewModel
         private suspend fun toContent(
             session: WorkoutSession?,
             planName: String?,
+            details: Map<ExerciseId, Exercise>,
         ): ActiveWorkoutContent =
             if (session == null) {
                 ActiveWorkoutContent.NoActiveSession
@@ -373,12 +392,15 @@ class ActiveWorkoutViewModel
                     sessionId = session.id,
                     startedAt = session.startedAt,
                     restTimer = session.restTimer?.toUi(),
-                    exercises = session.exercises.map { exercise -> toExerciseUi(exercise) },
+                    exercises = session.exercises.map { exercise -> toExerciseUi(exercise, details[exercise.exerciseId]) },
                     planName = planName,
                 )
             }
 
-        private suspend fun toExerciseUi(exercise: WorkoutExercise): ActiveExerciseUi =
+        private suspend fun toExerciseUi(
+            exercise: WorkoutExercise,
+            detail: Exercise?,
+        ): ActiveExerciseUi =
             ActiveExerciseUi(
                 id = exercise.id,
                 name = exercise.exerciseNameSnapshot,
@@ -401,6 +423,9 @@ class ActiveWorkoutViewModel
                     exercise.plannedExerciseId
                         ?.let { trainingPlanRepository.findPlannedExercise(it) }
                         ?.toUi(),
+                exerciseId = exercise.exerciseId,
+                defaultLoadIncrement = detail?.defaultLoadIncrement?.let { BigDecimal.valueOf(it.grams, GRAMS_TO_KG_SCALE) },
+                instructions = detail?.instructions?.value,
             )
 
         /** The exercise's planned rest, if it was seeded from a plan target; `null` for an ad-hoc exercise (Milestone 8, implementation-review finding #2). */
@@ -413,6 +438,9 @@ class ActiveWorkoutViewModel
 
         private companion object {
             const val STOP_TIMEOUT_MILLIS = 5_000L
+
+            /** `LoadIncrement` is stored in grams; the stepper steps in kg. */
+            const val GRAMS_TO_KG_SCALE = 3
         }
     }
 

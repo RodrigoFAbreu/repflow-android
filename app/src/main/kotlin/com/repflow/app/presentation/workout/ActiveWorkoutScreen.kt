@@ -62,13 +62,13 @@ import com.repflow.app.presentation.progression.labelRes
  * Stateless workout surface: state in, events out. Since remediation-1 CP7 it
  * is `4a`'s workout mode - the **board** (one row per exercise, `X` / title
  * with the elapsed clock / `Finish`) - and, for the exercise the board opened
- * ([focusedExerciseId]), that exercise's set entry. CP8 converts the set entry
- * into `4a`'s focus screen; until then it is the existing per-exercise card
- * under a sub-screen bar whose back arrow returns to the board.
+ * ([focusedExerciseId]), that exercise's **focus mode** ([WorkoutFocus],
+ * remediation-1 CP8): steppers, keypad, scale rows and a pinned `Log set` /
+ * `Next ›` bar, with `Board` back to the board.
  *
  * **Workout mode replaces the nav, and an `X` or `Finish` is the only way out**
  * (`6b`). The `X` - and the system back gesture on the board - open the leave
- * sheet rather than popping the back stack; back from the set entry returns
+ * sheet rather than popping the back stack; back from focus mode returns
  * to the board. Leaving calls no use case ([onLeaveWorkout] only navigates),
  * and abandoning sits behind its own destructive confirmation (`D17`, `D18`).
  * When the session ends - abandoned or finished - there is no workout surface
@@ -172,16 +172,24 @@ private fun WorkoutMode(
     val focused = focusedExerciseId?.let { id -> content.exercises.find { it.id == id } }
 
     // A sheet or dialog handles back itself (it closes); with neither open,
-    // back leaves the set entry for the board, and the board for the leave
+    // back leaves focus mode for the board, and the board for the leave
     // sheet - never the back stack.
     BackHandler(enabled = overlay == WorkoutOverlay.NONE) {
         if (focused != null) onFocusExercise(null) else overlay = WorkoutOverlay.LEAVE_SHEET
     }
 
     if (focused != null) {
-        ExerciseSetEntry(
+        WorkoutFocus(
+            content = content,
             exercise = focused,
+            recommendation =
+                focused.exerciseId?.let { exerciseId ->
+                    availableExercises.find { it.id == exerciseId }?.recommendation
+                },
             onBackToBoard = { onFocusExercise(null) },
+            onFinishClick = { onCompleteWorkout(content.sessionId) },
+            onNextExercise = { onFocusExercise(nextUnfinishedExercise(content.exercises, focused.id)) },
+            onOpenRecommendation = onOpenRecommendation,
             onRecordSet = onRecordSet,
             onUndoLastSet = onUndoLastSet,
             onEditLastSet = onEditLastSet,
@@ -242,37 +250,6 @@ private fun WorkoutMode(
                     onOpenRecommendation(id)
                 },
             )
-        }
-    }
-}
-
-/**
- * One exercise's set entry, opened from its board row. Remediation-1 CP7
- * hosts the existing [ExerciseCard] here unchanged; CP8 replaces it with
- * `4a`'s focus screen (steppers, keypad, scale rows, pinned bottom bar).
- */
-@Composable
-private fun ExerciseSetEntry(
-    exercise: ActiveExerciseUi,
-    onBackToBoard: () -> Unit,
-    onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
-    onUndoLastSet: (WorkoutExerciseId) -> Unit,
-    onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
-    restStrip: @Composable () -> Unit,
-) {
-    RepFlowScreenScaffold(
-        title = exercise.name,
-        onBack = onBackToBoard,
-        backContentDescription = stringResource(R.string.workout_focus_back_content_description),
-        bottomBar = restStrip,
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding()),
-        ) {
-            item(key = exercise.id.value) {
-                ExerciseCard(exercise, onRecordSet, onUndoLastSet, onEditLastSet)
-            }
         }
     }
 }
@@ -473,13 +450,7 @@ internal fun RecommendationRow(
     recommendation: ProgressionRecommendationUi,
     onWhyClick: () -> Unit,
 ) {
-    Text(
-        text =
-            stringResource(recommendation.result.labelRes()) +
-                (recommendation.topReason?.let { " — $it" } ?: "") +
-                if (recommendation.isOverridden) " (${stringResource(R.string.progression_overridden)})" else "",
-        style = MaterialTheme.typography.bodySmall,
-    )
+    Text(text = recommendationSummary(recommendation), style = MaterialTheme.typography.bodySmall)
     val whyDescription = stringResource(R.string.progression_why_content_description, exerciseName)
     TextButton(
         onClick = onWhyClick,
@@ -496,6 +467,17 @@ internal fun RecommendationRow(
         )
     }
 }
+
+/**
+ * A recommendation in one line: the result in force, the policy's top reason,
+ * and the overridden marker. Shared by the picker row and focus mode's
+ * suggestion strip (remediation-1 CP8), so the two never word it differently.
+ */
+@Composable
+internal fun recommendationSummary(recommendation: ProgressionRecommendationUi): String =
+    stringResource(recommendation.result.labelRes()) +
+        (recommendation.topReason?.let { " — $it" } ?: "") +
+        if (recommendation.isOverridden) " (${stringResource(R.string.progression_overridden)})" else ""
 
 /** `6b`'s 44 tap-target floor. */
 private val WhyLinkMinHeight = 44.dp

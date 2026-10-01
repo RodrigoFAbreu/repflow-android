@@ -32,6 +32,7 @@ import com.repflow.app.application.recovery.ObserveReadiness
 import com.repflow.app.application.trainingplan.ObserveTrainingPlans
 import com.repflow.app.application.workout.AbandonWorkoutSession
 import com.repflow.app.application.workout.AddWorkoutExercise
+import com.repflow.app.application.workout.AddWorkoutExerciseCommand
 import com.repflow.app.application.workout.AdjustRestTimer
 import com.repflow.app.application.workout.CompleteWorkoutSession
 import com.repflow.app.application.workout.EditLastWorkoutSet
@@ -82,7 +83,8 @@ import java.time.Instant
  *   untouched - **and the screen then re-renders as overridden**;
  * - **the inward path**: from the workout's exercise picker, the
  *   recommendation row's `Why ›` reaches this screen through the nav graph,
- *   with the route's own pattern and argument. A test that only rendered the
+ *   with the route's own pattern and argument - and, since remediation-1 CP8,
+ *   so does focus mode's suggestion strip. A test that only rendered the
  *   screen would pass with every way in missing (the CP2 item 7 discipline).
  *   The graph here registers the two destinations exactly as `RepFlowNavHost`
  *   does, with ViewModels built over the test database in place of Hilt's.
@@ -167,6 +169,63 @@ class ProgressionRecommendationRouteTest {
     @Test
     fun theWorkoutPickersWhyReachesTheRecommendationScreen() {
         runBlocking { success(StartWorkoutSession(workoutRepository(), clock, ids)(StartWorkoutSessionCommand(null))) }
+        setWorkoutGraph()
+        val why = string(R.string.progression_why_content_description, "Back Squat")
+        waitForText(string(R.string.workout_active_add_exercise))
+        composeRule.onNodeWithText(string(R.string.workout_active_add_exercise)).performScrollTo().performClick()
+        composeRule.waitUntil(TIMEOUT_MILLIS) {
+            composeRule.onAllNodes(hasContentDescriptionExactly(why)).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithContentDescription(why).performClick()
+
+        assertOnTheRecommendationScreen()
+    }
+
+    /**
+     * Plan CP8 item 5's inward-path assertion (remediation-1 CP8): focus mode's
+     * suggestion strip reaches the recommendation screen through the nav graph.
+     * The exercise is on the workout, the board opens its focus mode, and the
+     * strip's `Why ›` - not the picker's - is the way in.
+     */
+    @Test
+    fun theFocusModeSuggestionStripsWhyReachesTheRecommendationScreen() {
+        runBlocking {
+            val workouts = workoutRepository()
+            val sessionId = success(StartWorkoutSession(workouts, clock, ids)(StartWorkoutSessionCommand(null)))
+            success(
+                AddWorkoutExercise(workouts, ids)(
+                    AddWorkoutExerciseCommand(
+                        sessionId = sessionId,
+                        exerciseId = exerciseId,
+                        exerciseNameSnapshot = "Back Squat",
+                        trackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
+                        plannedExerciseId = null,
+                    ),
+                ),
+            )
+        }
+        setWorkoutGraph()
+        waitForText("Back Squat")
+        composeRule.onNodeWithText("Back Squat").performClick()
+        waitForText(string(R.string.workout_focus_log_set))
+        val why = string(R.string.progression_why_content_description, "Back Squat")
+        composeRule.waitUntil(TIMEOUT_MILLIS) {
+            composeRule.onAllNodes(hasContentDescriptionExactly(why)).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithContentDescription(why).performScrollTo().performClick()
+
+        assertOnTheRecommendationScreen()
+    }
+
+    private fun assertOnTheRecommendationScreen() {
+        waitForText(string(R.string.progression_go_with_it))
+        composeRule.onNodeWithText(string(R.string.progression_screen_title)).assertIsDisplayed()
+        composeRule.onNodeWithText("BACK SQUAT").assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.progression_result_increase_load)).assertIsDisplayed()
+    }
+
+    /** The workout and recommendation destinations, registered exactly as `RepFlowNavHost` does. */
+    private fun setWorkoutGraph() {
         val workoutViewModel = workoutViewModel()
         composeRule.setContent {
             RepFlowTheme {
@@ -193,18 +252,6 @@ class ProgressionRecommendationRouteTest {
                 }
             }
         }
-        val why = string(R.string.progression_why_content_description, "Back Squat")
-        waitForText(string(R.string.workout_active_add_exercise))
-        composeRule.onNodeWithText(string(R.string.workout_active_add_exercise)).performScrollTo().performClick()
-        composeRule.waitUntil(TIMEOUT_MILLIS) {
-            composeRule.onAllNodes(hasContentDescriptionExactly(why)).fetchSemanticsNodes().isNotEmpty()
-        }
-        composeRule.onNodeWithContentDescription(why).performClick()
-
-        waitForText(string(R.string.progression_go_with_it))
-        composeRule.onNodeWithText(string(R.string.progression_screen_title)).assertIsDisplayed()
-        composeRule.onNodeWithText("BACK SQUAT").assertIsDisplayed()
-        composeRule.onNodeWithText(string(R.string.progression_result_increase_load)).assertIsDisplayed()
     }
 
     private fun recommendationViewModel(argument: String): ProgressionRecommendationViewModel =

@@ -13,8 +13,106 @@ explicitly** — `active_work_item_id` still points at the parent.
   (revision 20). Registry:
   `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-registry.json`
   (CP1–CP16, executed in array order).
-- **Current checkpoint: CP7 — Workout board screen: complete.** CP1–CP6
-  complete; CP8–CP16 not started.
+- **Current checkpoint: CP8 — Workout focus mode: complete.** CP1–CP7
+  complete; CP9–CP16 not started.
+
+### CP8 — what was done and verified (2026-10-01)
+
+- **Design re-read** from the live project (etag `1786483024007421`): `4a`'s
+  focus screen `nFocus` (`RepFlow.dc.html:1240–1362`), the correction sheet
+  `nSetEditOpen` (`:1549–1581`), the script behind them — `nFocusRows` /
+  `nRepTarget` / the steppers / `nSugLabel` / the detail pickers /
+  `nWarmHint` / `nLastSetHint` (`:4115–4273`), `nLogSet` / `nUndoSet` /
+  `nNextExercise` (`:4275–4313`), `nextUnfinished` (`:3520–3527`) — and `6b`'s
+  stepper and scale-row spec (`:290–308`).
+- **Focus mode replaces the flat exercise card** (`presentation/workout/`;
+  `ActiveWorkoutExerciseCard.kt` deleted):
+  - `WorkoutFocus.kt`: `Board` (`ph-list-bullets`) / elapsed (re-derived from
+    `startedAt`) / `Finish` (accent text; completes directly until CP9);
+    `Exercise N of M`, the name at 26/500, `X of Y sets done` (plus `0 of 2
+    warm-ups` when the plan has warm-ups; an ad-hoc exercise only counts,
+    `D55`); **technique notes** (`Exercise.instructions`) as a collapsed row
+    under the header, absent when null (plan item 11); `Last: …` + `Undo
+    last`; the **suggestion strip** — the progression recommendation's action
+    and top reason, `ph-pulse`, `Why ›` → CP6's screen (plan item 5, `D27`),
+    absent without a recommendation; the type note; the pinned bar — `Log set`
+    / `Log warm-up` (primary, check glyph) and `Next ›` (next unfinished
+    exercise in board order, wrapping; the board when none is left). The
+    shared rest strip (tick loop untouched, `D58`) sits above the bar.
+  - `WorkoutFocusSets.kt`: logged rows (26dp disc — check on accent / flame
+    on hairline — the unchanged one-node summary with `(warm-up)` /
+    `(extra)`, the RPE/pain/technique line, and the pencil on the **last**
+    set only) and one **pending row per planned working set not logged yet**
+    (`Set N: not logged · Target: 8-12 reps · Rest: 60s`, wrapping) — the
+    chips' replacement (`D65`); the **correction sheet** (last set only,
+    weight/reps/seconds via `EditLastWorkoutSet`, other fields handed back
+    unchanged, no `Delete`, `D66`).
+  - `WorkoutFocusEntry.kt`: **steppers replace the text fields** — CP3's
+    `RepFlowStepper` (value → keypad); weight steps by the exercise's load
+    increment (2.5 kg fallback), reps by 1, seconds by 5; captions `kg · 2.5
+    steps`, `target 8–12`, `target 30–60 s` / `seconds held`; cards side by
+    side from 400dp, stacked below (`D62`). The disclosure (`ph-sliders`,
+    summary `RPE 8 · pain 2/5` or "RPE, pain, technique", caret, hairline
+    ring, `stateDescription` unchanged) reveals **scale rows**: RPE 0–10 in
+    two lines (`D11`, `D64`), pain and technique 0–5 (`D10`); tapping the
+    chosen cell clears it. The **warm-up chip** (44 pill, flame, a switch to
+    accessibility) replaces the `Switch`; its hint states the real rest
+    (`D63`, closes `O6`). Entry state is one saveable `SetEntryState`,
+    cleared after every logged set (`D60`).
+  - `WorkoutFocusModel.kt` (pure): rows, header counts, `Next ›`'s target,
+    the hint's rest, the load step; `setsWithExtraFlag` moved here unchanged.
+- **Plumbing:** `ActiveExerciseUi` gains `exerciseId`, `defaultLoadIncrement`
+  (kg, from `LoadIncrement`'s grams) and `instructions`, all defaulted — one
+  field more than the plan's two, because the strip's `Why ›` needs the
+  library exercise id. `ActiveWorkoutViewModel` reads them from the exercise
+  catalogue, archived exercises included (`ObserveExercises` ACTIVE ∪
+  ARCHIVED); constructor unchanged. The strip's recommendation is the picker
+  item's (already refreshed on every `ON_START`).
+  `recommendationSummary` is shared by the picker row and the strip.
+- **Two Phosphor drawables** (`@phosphor-icons/core@2.1.1`, regular, path
+  data verbatim): `list-bullets`, `pulse`; `RepFlowIconsTest` 51 → 53.
+- **Strings:** `workout_focus_*` (header, rows, `Last:`, correction sheet,
+  captions, stepper descriptions, detail summary and end labels, type notes,
+  warm-up hints, `Log set` / `Log warm-up` / `Next`, technique notes); the
+  label strings now carry the design's words (`Weight`, `Seconds`, `Effort
+  (RPE)`, `Pain`, `Technique`, and the disclosure's "RPE, pain, technique");
+  removed the six that lost their last consumer
+  (`workout_active_plan_warmup_progress`, `…_plan_working_progress`,
+  `…_add_set`, `…_undo_set`, `…_edit_set`, `workout_focus_back_content_description`).
+- **Deviation register:** `D60`–`D66`; `O6` closed by `D63`. Next free
+  register id: **D67**.
+- **Tests:** new JVM `WorkoutFocusModelTest` (7) and
+  `ActiveWorkoutFocusPlumbingTest` (2: id / grams→kg / notes, archived
+  included). `ActiveWorkoutScreenTest`, against plan CP8's table: rewritten
+  `aPlannedExerciseShowsWarmupAndWorkingProgress` (header + pending row),
+  `everyPlannedTargetValueStaysOnScreenWhenThePendingRowOutgrowsTheWidth` (the
+  parent's clipping guard **retargeted** onto the pending row, same absurd
+  values, plus a right-edge bound check), `anAdHocExerciseShowsNoPlannedTargetSummary`
+  (positive: the count-only header, no pending rows),
+  `aValueTypedIntoTheExpandedDetailFieldsReachesOnRecordSetEvenAfterCollapsing`
+  (drives the scale rows, same 8.0 / 2 contract) and
+  `tappingAddSetClearsTheEntryFields` (stepper `+` and keypad, same contract);
+  the block comment above the disclosure tests rewritten; the other nine
+  unchanged; six new — strip present + `Why` hands out the exercise, strip
+  absent, technique notes collapsed → revealed, notes absent, `Next ›` skips a
+  finished exercise, the correction sheet keeps the set's other fields.
+  `ProgressionRecommendationRouteTest` gains the strip's **inward path**
+  (board row → focus → `Why ›` → the recommendation screen, in-memory Room).
+- **Checks run:** `spotlessApply`; `testDebugUnitTest --tests` for
+  `presentation.workout.*`, `presentation.designsystem.*`,
+  `presentation.progression.*`, `presentation.home.*`,
+  `presentation.navigation.*`, `LayerBoundaryTest` — 16 classes, 141 tests,
+  0 failures (`ActiveWorkoutViewModelTest` 14/14 and
+  `ActiveWorkoutScreenWiringTest` 8/8 unchanged and green);
+  `spotlessCheck detekt lintDebug assembleDebug assembleDebugAndroidTest` —
+  green; lint 0 errors, 25 warnings and 1 hint, all pre-existing (the one new
+  `PluralsCandidate`, `Last: N reps`, was fixed by making it a plural).
+  **Not run (no device):** the changed `ActiveWorkoutScreenTest` (24
+  methods) and `ProgressionRecommendationRouteTest` (3) compile but need
+  `connectedDebugAndroidTest`, as do CP2–CP7's.
+- **Room stays at version 7**: no query, table or migration; no domain or
+  application write path added. `ROLE_AUDIT.md` still cites the deleted
+  `ActiveWorkoutExerciseCard.kt` lines — its consumer re-run is CP16 item 8's.
 
 ### CP7 — what was done and verified (2026-10-01)
 
@@ -598,7 +696,7 @@ explicitly** — `active_work_item_id` still points at the parent.
 ### Next action
 
 `/milestone-implement repflow-redesign-visual-foundation-remediation-1` —
-CP8 (workout focus mode). `O11` and
+CP9 (workout finish and session summary). `O11` and
 `O12` were decided by the user on 2026-10-01:
 CP14 and CP15 build the approved plan's `4a` designs; `5c`/`5d`/`5b` go to a
 later remediation child.
