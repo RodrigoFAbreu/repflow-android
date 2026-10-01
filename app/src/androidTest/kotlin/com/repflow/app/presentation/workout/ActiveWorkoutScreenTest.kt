@@ -5,7 +5,10 @@ import androidx.annotation.StringRes
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -46,11 +49,20 @@ class ActiveWorkoutScreenTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
+    /**
+     * Renders the workout surface with [exercises] on the board. By default
+     * the first exercise's set entry is open - the surface every test before
+     * remediation-1 CP7 rendered directly, and which the board now opens per
+     * exercise; pass `openFirstExercise = false` to see the board itself.
+     */
     private fun setContent(
         exercise: ActiveExerciseUi,
         onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit = { _, _, _, _, _, _, _, _ -> },
         availableExercises: List<ExercisePickerItem> = emptyList(),
         onOpenRecommendation: (ExerciseId) -> Unit = {},
+        openFirstExercise: Boolean = true,
+        exercises: List<ActiveExerciseUi> = listOf(exercise),
+        onFocusExercise: (WorkoutExerciseId?) -> Unit = {},
     ) {
         composeRule.setContent {
             RepFlowTheme {
@@ -61,13 +73,15 @@ class ActiveWorkoutScreenTest {
                                 ActiveWorkoutContent.Active(
                                     sessionId = WorkoutSessionId("session-1"),
                                     startedAt = Instant.parse("2026-01-01T00:00:00Z"),
-                                    exercises = listOf(exercise),
+                                    exercises = exercises,
                                 ),
                             availableExercises = availableExercises,
                         ),
                     dayContext = null,
-                    onStartWorkout = {},
+                    focusedExerciseId = if (openFirstExercise) exercises.firstOrNull()?.id else null,
+                    onFocusExercise = onFocusExercise,
                     onAddExercise = {},
+                    onCreateExercise = {},
                     onOpenRecommendation = onOpenRecommendation,
                     onRecordSet = onRecordSet,
                     onUndoLastSet = {},
@@ -76,6 +90,7 @@ class ActiveWorkoutScreenTest {
                     onRemoveRestTime = {},
                     onSkipRestTimer = {},
                     onCompleteWorkout = {},
+                    onLeaveWorkout = {},
                     onAbandonWorkout = {},
                     onRetry = {},
                 )
@@ -351,6 +366,7 @@ class ActiveWorkoutScreenTest {
                     ),
                 ),
             onOpenRecommendation = { opened = it },
+            openFirstExercise = false,
         )
 
         composeRule.onNodeWithText(composeRule.activity.getString(R.string.workout_active_add_exercise)).performScrollTo().performClick()
@@ -366,5 +382,101 @@ class ActiveWorkoutScreenTest {
             .performClick()
 
         assertEquals(squat, opened)
+    }
+
+    // ---- The workout board (remediation-1 CP7) ----
+
+    private fun boardExercise(
+        id: String,
+        name: String,
+        sets: List<ActiveSetUi> = emptyList(),
+        targetWorkingSets: Int? = null,
+    ) = ActiveExerciseUi(
+        id = WorkoutExerciseId(id),
+        name = name,
+        trackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
+        sets = sets,
+        plannedTarget = targetWorkingSets?.let { PlannedTargetUi(targetWarmupSets = null, targetWorkingSets = it) },
+    )
+
+    /**
+     * Plan CP7 item 7's state test: a board row has **one** action - opening
+     * the exercise's set entry - and no overflow trigger or row-sheet option,
+     * because none of the design's six row-sheet options has domain backing
+     * (`D1`-`D3`, `D13`-`D15`). The labels are the design's own
+     * (`RepFlow.dc.html:1213`, `:1689-1703`); none may exist anywhere.
+     */
+    @Test
+    fun aBoardRowOpensItsSetEntryAndExposesNoOverflowOrRowSheet() {
+        var focused: WorkoutExerciseId? = null
+        val bench = boardExercise("exercise-1", "Bench Press", targetWorkingSets = 3)
+        setContent(bench, openFirstExercise = false, onFocusExercise = { focused = it })
+
+        composeRule.onAllNodes(hasClickAction() and hasText("Bench Press")).assertCountEquals(1)
+        composeRule.onNodeWithContentDescription("Exercise options").assertDoesNotExist()
+        listOf(
+            "Do this later",
+            "Swap for another exercise",
+            "Superset with the next exercise",
+            "Skip for today",
+            "Add a note",
+            "Remove from this workout",
+        ).forEach { composeRule.onNodeWithText(it, substring = true).assertDoesNotExist() }
+
+        composeRule.onNodeWithText("Bench Press").performClick()
+        assertEquals(bench.id, focused)
+    }
+
+    /**
+     * The progress line and the three status-chip states, each a word (`6b`:
+     * never colour alone), with `up next` on the first unfinished exercise -
+     * which need not be the first row: out-of-order work is the point of the
+     * board. Warm-ups never count towards a target.
+     */
+    @Test
+    fun theBoardShowsProgressEachRowsStatusAndUpNext() {
+        val warmup = set(1, load = 40.0, reps = 10, isWarmup = true)
+        val exercises =
+            listOf(
+                boardExercise("e1", "Bench Press", sets = listOf(set(1, 60.0, 8), set(2, 60.0, 8)), targetWorkingSets = 2),
+                boardExercise("e2", "Row", sets = listOf(warmup, set(2, 50.0, 10)), targetWorkingSets = 3),
+                boardExercise("e3", "Curl", targetWorkingSets = 4),
+            )
+        setContent(exercises.first(), exercises = exercises, openFirstExercise = false)
+
+        fun plural(
+            id: Int,
+            quantity: Int,
+            vararg args: Any,
+        ) = composeRule.activity.resources.getQuantityString(id, quantity, *args)
+
+        composeRule.onNodeWithText(plural(R.plurals.workout_board_progress, 3, 1, 3, 3, 9)).assertIsDisplayed()
+        composeRule.onNodeWithText(plural(R.plurals.workout_board_status_progress, 2, 2, 2)).assertIsDisplayed()
+        composeRule.onNodeWithText(plural(R.plurals.workout_board_status_progress, 3, 3, 1)).assertIsDisplayed()
+        composeRule.onNodeWithText(plural(R.plurals.workout_board_status_target, 4, 4)).assertIsDisplayed()
+        composeRule
+            .onAllNodes(
+                hasText(composeRule.activity.getString(R.string.workout_board_up_next), ignoreCase = true),
+            ).assertCountEquals(1)
+        composeRule
+            .onNode(
+                hasClickAction() and hasText("Row") and
+                    hasText(composeRule.activity.getString(R.string.workout_board_up_next), ignoreCase = true),
+            ).assertIsDisplayed()
+    }
+
+    /** `4a`'s empty board: the clock is already running; `Add exercise` is still there. */
+    @Test
+    fun anEmptyBoardShowsTheDesignsEmptyStateAndAddExercise() {
+        setContent(exercise(ExerciseTrackingType.WEIGHT_AND_REPS), exercises = emptyList(), openFirstExercise = false)
+
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.workout_board_empty_title)).assertIsDisplayed()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.workout_board_empty_body)).assertIsDisplayed()
+        composeRule
+            .onNodeWithText(
+                composeRule.activity.getString(R.string.workout_active_add_exercise),
+            ).performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.home_untitled_workout)).assertIsDisplayed()
     }
 }

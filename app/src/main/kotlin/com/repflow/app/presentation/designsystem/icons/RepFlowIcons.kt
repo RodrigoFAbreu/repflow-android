@@ -53,10 +53,9 @@ object RepFlowIcons {
     val arrowRight: Int = R.drawable.ic_ph_arrow_right
 
     /**
-     * Starting or resuming a workout: the Home placeholder's start affordance
-     * (remediation-1 CP2), and a nav tab glyph before that. CP5's Home draws
-     * the design's own [playFill] instead, so this glyph has no consumer until
-     * a later checkpoint draws it or CP16's sweep removes it.
+     * The workout board's empty state (`4a`, `ph-barbell` 28), remediation-1
+     * CP7. Before that: the Home placeholder's start affordance (CP2), and a
+     * nav tab glyph.
      */
     @DrawableRes
     val barbell: Int = R.drawable.ic_ph_barbell
@@ -104,6 +103,14 @@ object RepFlowIcons {
     @DrawableRes
     val clockCounterClockwise: Int = R.drawable.ic_ph_clock_counter_clockwise
 
+    /** The board's status chip for an exercise whose target sets are all done (`6b`, `ph-check-fat`). Remediation-1 CP7. */
+    @DrawableRes
+    val checkFat: Int = R.drawable.ic_ph_check_fat
+
+    /** The board's status chip for an exercise with nothing logged yet (`6b`, `ph-circle`). Remediation-1 CP7. */
+    @DrawableRes
+    val circle: Int = R.drawable.ic_ph_circle
+
     /** History tab glyph, selected - see [Nav.historySelected]. */
     @DrawableRes
     val clockCounterClockwiseFill: Int = R.drawable.ic_ph_clock_counter_clockwise_fill
@@ -115,6 +122,10 @@ object RepFlowIcons {
      */
     @DrawableRes
     val cloudArrowUp: Int = R.drawable.ic_ph_cloud_arrow_up
+
+    /** The board's status chip for an exercise with some sets logged (`6b`, `ph-dot-outline`). Remediation-1 CP7. */
+    @DrawableRes
+    val dotOutline: Int = R.drawable.ic_ph_dot_outline
 
     /** Per-row overflow menu (Exercise list). */
     @DrawableRes
@@ -199,6 +210,10 @@ object RepFlowIcons {
     @DrawableRes
     val plus: Int = R.drawable.ic_ph_plus
 
+    /** The exercise picker sheet's `Create a new exercise` (`4a`, `ph-plus-circle`). Remediation-1 CP7. */
+    @DrawableRes
+    val plusCircle: Int = R.drawable.ic_ph_plus_circle
+
     /**
      * Exercise list floating action button. The design draws the FAB's plus at
      * Phosphor's bold weight and every other plus at regular weight, so both
@@ -218,6 +233,10 @@ object RepFlowIcons {
     /** Home's resume card: abandon the running workout (`ph-trash`). Remediation-1 CP5. */
     @DrawableRes
     val trash: Int = R.drawable.ic_ph_trash
+
+    /** The workout board's elapsed clock under the title (`4a`, `ph-timer`). Remediation-1 CP7. */
+    @DrawableRes
+    val timer: Int = R.drawable.ic_ph_timer
 
     /** The recommendation screen's `Reduce load` outcome (`6c`, `ph-trend-down`). Remediation-1 CP6. */
     @DrawableRes

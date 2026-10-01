@@ -175,6 +175,8 @@ class ProgressionRecommendationRouteTest {
                     composable(RepFlowDestinations.WORKOUT) {
                         ActiveWorkoutRoute(
                             onOpenRecommendation = { id -> navController.navigate(RepFlowDestinations.progressionRoute(id.value)) },
+                            onCreateExercise = {},
+                            onLeaveWorkout = {},
                             viewModel = workoutViewModel,
                         )
                     }

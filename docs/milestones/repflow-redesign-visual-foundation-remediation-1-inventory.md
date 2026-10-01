@@ -319,7 +319,18 @@ listing each converted package's `app/src/test` directory; method counts are
   confirmation; the persisted `ABANDONED` session keeps its sets; a row has
   no overflow trigger.
 - **Register:** `D1`–`D3`, `D8`, `D13`–`D15`, `D17`, `D18`, `D28`, `D30`;
-  open `O4`, `O5`.
+  CP7 added `D55`–`D59` and closed `O4` (`D56`) and `O5` (`D58`).
+- **Built (CP7):** the board in `WorkoutBoard.kt` (+ `WorkoutBoardModel.kt`
+  for the row/progress/search rules), the leave and picker sheets in
+  `WorkoutSheets.kt`, the shared `AbandonWorkoutDialog.kt`, and the rest
+  strip restyled in place in `ActiveWorkoutScreen.kt`. A row opens that
+  exercise's set entry, which is the existing card under a back-to-board bar
+  until CP8 converts it. `ActiveWorkoutScreenTest`'s helper now opens the
+  first exercise's set entry by default (`openFirstExercise`) so its
+  fourteen set-entry methods reach the surface they always tested, and
+  CP6's picker method renders the board; CP7 adds three board methods (18
+  in all). The fourteen set-entry methods are otherwise unchanged and stay
+  CP8's per §3.7.
 
 ### 3.7 Workout focus mode (CP8)
 
@@ -815,7 +826,7 @@ listing each converted package's `app/src/test` directory; method counts are
 Every row is a place the built app differs from the design. **D1–D24 are
 seeded verbatim from the execution plan's "Deviation register — seeded";
 D25–D38 are added by CP1** from the full read above. Later checkpoints append
-here — the next free id is **D55** (CP3 added D39–D40, CP4 D41–D43, CP5 D44–D48, CP6 D49–D54) — and never renumber. Reasons use the
+here — the next free id is **D60** (CP3 added D39–D40, CP4 D41–D43, CP5 D44–D48, CP6 D49–D54, CP7 D55–D59) — and never renumber. Reasons use the
 plan's four categories: `no domain backing`, `blocked by open decision`,
 `platform convention`, `deliberate product call`.
 
@@ -875,6 +886,11 @@ plan's four categories: `no domain backing`, `blocked by open decision`,
 | D52 | `6a`'s copy that says a choice changes the next session or teaches the policy: the footnote "…Nothing is applied until you choose.", `Your call`'s "Whatever you pick is what next session starts with.", and the overridden line "…so the policy can learn where it's consistently wrong for you." (`:86`, `:93`, `:147`) | Footnote "Policy v1 · calculated on this device from your own logs. It never changes a load for you — you set the load while training."; "Whatever you pick is kept on record as your final say. The suggestion stays on record either way."; "Your choice wins. RepFlow keeps both the suggestion and your choice on record."; a choice back to the suggestion after an override reads `You went with the suggestion`. `Wait for more data` is renamed to `6c`'s own `Not enough data yet` everywhere it shows | no domain backing: no load is ever applied from a recommendation and `ProgressionPolicyV1` does not learn from overrides, so the design's lines would be false — the same reason as `D42` and `D47`. **Copy written by CP6 — flagged for the reviewer to accept or reword** | CP6 |
 | D53 | `6c`'s `Suggestions` screen: one card per exercise, each outcome a card with two actions, and `Not enough data yet` with none (`:198–251`) | One screen per exercise, reached from that exercise's `Why ›`; each of the five outcomes is a state of it (plan CP6 item 3), with the same layout and actions: `Pick another load` is offered for every outcome, `Not enough data yet` included, and its primary is `Done`. `Keep the same load` shows only where it differs from the suggestion (increase, reduce). `Maintain load`, which neither artboard draws, takes `6a`'s value-card `ph-arrow-right` | deliberate product call: the override the workout picker offered before CP6 applied to every outcome, so the move keeps it (plan CP6 "replaces and relocates an existing capability"); the per-exercise entry points (picker row, CP8's strip, CP9's finish screen) open one exercise, not a list | CP6 |
 | D54 | `6c`'s recovery-adjustment card: the policy's reasons only | The policy's reasons, then a `Today's check-in` card — score and band word in the band colour, CP4's driver sentence, `Details ›` — opening the readiness sheet; drawn only when today has a check-in | deliberate product call (plan CP6 item 4): the one outcome whose explanation is a recovery fact links to the readiness detail and reuses its driver list. The card says what today's check-in reads and claims nothing about what the policy saw, since the policy reads the latest check-in at completion time, not today's | CP6 |
+| D55 | Every exercise carries a set target; one added in the workout gets the prototype's default `target: 3` (`nPickRows` `add`, `:3990`), so its chip reads `0/3 sets` and it is unfinished until three are logged | An ad-hoc exercise has no target: its chip reads `No sets yet` (`ph-circle`) or `N sets` (`ph-check-fat`, done tone), it counts as finished once one working set is logged, and it adds what it logged — not a target — to the progress line's `T`; a board with no planned exercise reads `N of M exercises · S sets` | no domain backing: `WorkoutExercise` has no target outside a plan (`PlannedExercise.targetSets`), and inventing `3` would invent outstanding work the finish sheet (CP9) would then list as unfinished | CP7 |
+| D56 | The picker sheet's `Create a new exercise` opens an inline sheet — name, tracking type, muscle group — and adds the new exercise to the workout at once (`nNewEx`, `:1612–1633`; `nCreateEx`, `:4020–4031`) | `Create a new exercise` opens the existing exercise editor (`2b`); saving returns to the board, where the new exercise is picked like any other. Resolves `O4` | deliberate product call: one exercise-creation surface, the editor CP10 converts, carrying every field the domain stores (load increment, rest, instructions), rather than a second, thinner creation path inside workout mode; the muscle group is `D8` | CP7 |
+| D57 | The board draws no recovery or futsal context (`nBoard`, `:1161–1238`) | The line the workout screen already showed — `Heavy legs: n/4 · Leg DOMS: n/4 · Futsal in the last 24h (load n)` — kept as a meta line under the progress line when any of the three exists | deliberate product call: no checkpoint retires this reading, `docs/UX_FLOWS.md` asks for recent futsal context around a workout, and Home's readiness card is not visible in workout mode | CP7 |
+| D58 | The rest strip's `Resting — <exercise>` / `Next set is ready — <exercise>`, its lit `Rest done` state (fill `#2b2741`, ring `#9184d9`), the separate in-app `Rest complete` banner with `+30s` (`:1661–1671`), and a 40 dismiss `X` | `Resting` / `Next set is ready` with no exercise name; at zero the strip stays up and says `Rest done`, the word carrying the state without the lit fill; no banner (the system notification still fires); the dismiss `X` at the 44 floor or above (a Material `IconButton`). `−15s` / `+15s` / `Skip rest` / dismiss are built on `AdjustRestTimer` / `SkipRestTimer`. Resolves `O5` (the strip is one composable shared by the board and the set entry, so CP8 inherits it) | no domain backing: `RestTimer` records no exercise (`RestTimer.kt`), and `+30s` on an expired timer would need a restart rule `AdjustRestTimer` does not have; the lit fill would need a card tone with no light-theme render; `6b`'s 44 floor | CP7 |
+| D59 | The board top bar's `Finish` at 40 tall, radius 8, 13.5 (`:1174`) | The design system's accent-outline button (48, radius 10) | deliberate product call: `6b`'s own button scale over a one-off size, as `D36`, `D40`, `D48` | CP7 |
 
 **Status-chip audit (`6b`, "never colour alone"; CP3).** Every chip the
 design draws pairs its tone with an icon or a word (§2). On the built
@@ -906,8 +922,8 @@ review finding.
 | O1 | CP5 — **closed: `D44`** | The start card's meta `N exercises · N working sets · ~N min` (the prototype's estimate is `sets × 2.8 + 8`, `:3554`) | the plan is silent on a time estimate |
 | O2 | CP5 — **closed: `D45`** | The start sheet's `A different plan ›` row, against CP5 item 3's plan list + `Start without a plan` | the plan names its own sheet content |
 | O3 | CP6 — **closed: `D49`, `D50`, `D51`** | `6a`'s numeric value (`80 kg → 82.5 kg`, `Use 82.5 kg`), `What it looked at`, `Next session starts as`, `Earlier suggestions`, `Recorded as …`; `6c`'s two-action card | `ProgressionResult` carries no load, so any value must be derived (last working load + `defaultLoadIncrement`) or the value row registered as a deviation; a history list needs `ProgressionRecommendationRepository.findAll` |
-| O4 | CP7 | The picker sheet's inline `Create a new exercise` (name + tracking type, `:1612–1633`) and its empty state | the plan converts the picker but is silent on creating from it |
-| O5 | CP7, CP8 | The rest strip's `−15s` / `+15s` / `Skip rest` / dismiss (backed by `AdjustRestTimer` and `SkipRestTimer`), its lit `Rest done` state, and the in-app `Rest complete` banner with `+30s` (`:1661–1671`) | the plan says the strip "renders here too" without enumerating its controls |
+| O4 | CP7 — **closed: `D56`** | The picker sheet's inline `Create a new exercise` (name + tracking type, `:1612–1633`) and its empty state | the plan converts the picker but is silent on creating from it |
+| O5 | CP7, CP8 — **closed: `D58`** | The rest strip's `−15s` / `+15s` / `Skip rest` / dismiss (backed by `AdjustRestTimer` and `SkipRestTimer`), its lit `Rest done` state, and the in-app `Rest complete` banner with `+30s` (`:1661–1671`) | the plan says the strip "renders here too" without enumerating its controls |
 | O6 | CP8 | The warm-up hint "Logs outside the set count, 60s rest." (a 60 s warm-up rest, `:4260`), and "applies to the next set you log, then clears" | today's rest rule and the detail fields' lifetime may differ; CP8 states what it keeps |
 | O7 | CP10 | `2c`'s tracking-type filter chip and `N matches` count; `2b`'s `Save` in the top bar (against `6b`'s bottom bar), its duplicate-name inline error, and its `Other` presets | CP10 item 1 names only `Active` / `Archived` |
 | O8 | CP11 | A per-row start action with no active-plan concept; `Open` (`5a`) or `Edit` (`4a`); the warm-up sets stepper and `Optional` toggle (the domain fields exist); the "Saving creates version N" bar; the `Progression — Automatic, per exercise` card | CP11 item 2 lists sets / rep range / rest only |

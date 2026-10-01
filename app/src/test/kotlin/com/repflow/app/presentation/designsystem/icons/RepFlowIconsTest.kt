@@ -108,6 +108,13 @@ class RepFlowIconsTest {
                 "ic_ph_check_circle",
                 "ic_ph_arrow_down",
                 "ic_ph_user_circle",
+                // Workout board (remediation-1 CP7): the status chip's three glyphs
+                // (`6b`), the elapsed clock, and the picker's create action.
+                "ic_ph_check_fat",
+                "ic_ph_dot_outline",
+                "ic_ph_circle",
+                "ic_ph_timer",
+                "ic_ph_plus_circle",
             )
         assertEquals(expected, bundledPhosphorDrawables().keys)
     }

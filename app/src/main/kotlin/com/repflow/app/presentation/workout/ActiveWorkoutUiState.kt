@@ -53,6 +53,8 @@ sealed interface ActiveWorkoutContent {
         val startedAt: Instant,
         val exercises: List<ActiveExerciseUi>,
         val restTimer: RestTimerUi? = null,
+        /** The plan the session was started from, for the board's title; `null` for an ad-hoc session (`Untitled workout`) or a label that no longer resolves. Remediation-1 CP7. */
+        val planName: String? = null,
     ) : ActiveWorkoutContent
 
     data class ObservationFailed(

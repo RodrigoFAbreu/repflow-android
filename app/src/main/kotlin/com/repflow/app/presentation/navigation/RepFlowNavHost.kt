@@ -38,7 +38,10 @@ private val TOP_LEVEL_ROUTES: Set<String> = RepFlowDestinations.TOP_LEVEL_DESTIN
  *
  * Destinations that stopped being tabs are reached from inside the app, as
  * the design reaches them: the workout and recovery entry from Home, Settings
- * from Home, and the exercise library and backup from Settings.
+ * from Home, and the exercise library and backup from Settings (the exercise
+ * editor also from the workout's picker sheet). Workout mode is left only
+ * through its own `X` / `Finish` - system back there opens the leave sheet -
+ * and leaving goes Home by [leaveWorkoutForHome].
  *
  * "Create" and "edit" share one [ExerciseEditorRoute] destination each because the ViewModel itself distinguishes the two
  * modes from the presence of the `exerciseId` `SavedStateHandle` argument
@@ -134,6 +137,8 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
             composable(RepFlowDestinations.WORKOUT) {
                 ActiveWorkoutRoute(
                     onOpenRecommendation = { id -> navController.navigate(RepFlowDestinations.progressionRoute(id.value)) },
+                    onCreateExercise = { navController.navigate(RepFlowDestinations.EXERCISE_NEW) },
+                    onLeaveWorkout = { navController.leaveWorkoutForHome() },
                 )
             }
             composable(

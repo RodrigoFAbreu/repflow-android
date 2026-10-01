@@ -82,18 +82,24 @@ class MainActivityNavHostSmokeTest {
      *
      * Like the History walk below, this assumes a fresh install: with no plan
      * yet, Home's start card is `1d`'s first-run card, whose `Empty workout`
-     * starts a session and opens the workout (remediation-1 CP5). The session
-     * is abandoned again afterwards so the next walk finds Home as this one
-     * did.
+     * starts a session and opens the workout board (remediation-1 CP5, CP7).
+     * The session is abandoned again afterwards - through the board's own way
+     * out, the `X`, the leave sheet and the abandon confirmation (CP7) - so
+     * the next walk finds Home as this one did.
      */
     @Test
     fun workoutIsReachableFromHomeAndReplacesTheNav() {
         waitForText(R.string.home_empty_workout)
         clickByText(R.string.home_empty_workout)
-        composeRule.onNodeWithText(string(R.string.workout_active_title)).assertIsDisplayed()
+        waitForText(R.string.workout_board_empty_body)
+        composeRule.onNodeWithText(string(R.string.workout_board_empty_body)).assertIsDisplayed()
         assertBottomNavAbsent()
-        waitForText(R.string.workout_active_abandon)
-        clickByText(R.string.workout_active_abandon)
+        clickByDescription(R.string.workout_board_leave_content_description)
+        waitForText(R.string.workout_leave_abandon)
+        clickByText(R.string.workout_leave_abandon)
+        waitForText(R.string.workout_abandon_confirm_action)
+        clickByText(R.string.workout_abandon_confirm_action)
+        waitForText(R.string.home_greeting)
     }
 
     @Test

@@ -71,10 +71,6 @@
     <string name="training_plan_list_message_archived_undo">Undo</string>
     <string name="training_plan_list_message_operation_failed">Something went wrong. Try again.</string>
 
-    <string name="workout_active_title">Workout</string>
-    <string name="workout_active_no_session">No active workout.</string>
-    <string name="workout_active_start">Start workout</string>
-    <string name="workout_active_start_ad_hoc">Start without a plan</string>
     <string name="workout_day_context_heavy_legs">Heavy legs: %1$d/4</string>
     <string name="workout_day_context_leg_doms">Leg DOMS: %1$d/4</string>
     <string name="workout_day_context_futsal_load">Futsal in the last 24h (load %1$.0f)</string>
@@ -115,8 +111,6 @@
     <string name="progression_save_failed">Couldn\'t save your choice. Try again.</string>
     <string name="workout_active_exercise_count">%1$d exercises</string>
     <string name="workout_active_set_count">%1$d sets</string>
-    <string name="workout_active_complete">Finish workout</string>
-    <string name="workout_active_abandon">Abandon workout</string>
     <string name="workout_active_observation_failed">Couldn\'t load the workout.</string>
     <string name="workout_active_retry">Retry</string>
     <string name="workout_active_set_row_weight_reps">Set %1$d: %2$s kg x %3$d</string>
@@ -146,10 +140,8 @@
     <string name="workout_active_undo_set">Undo</string>
     <string name="workout_active_edit_set">Edit</string>
     <string name="workout_active_add_exercise">Add exercise</string>
-    <string name="workout_active_rest_timer_remaining">Rest: %1$d:%2$02d</string>
     <string name="workout_active_rest_timer_add">+15s</string>
     <string name="workout_active_rest_timer_remove">-15s</string>
-    <string name="workout_active_rest_timer_skip">Skip</string>
     <string name="workout_active_rest_timer_notification_title">Rest complete</string>
     <string name="workout_active_rest_timer_notification_text">Time for your next set.</string>
     <string name="workout_active_rest_timer_channel_name">Rest timer</string>
@@ -334,6 +326,52 @@
     <string name="workout_abandon_confirm_message">It will be marked abandoned and left out of History. The sets logged so far stay stored on this device. This can\'t be undone.</string>
     <string name="workout_abandon_confirm_action">Abandon</string>
     <string name="workout_abandon_keep_action">Keep it</string>
+
+    <!-- Workout board (remediation-1 CP7, `4a` nBoard). -->
+    <string name="workout_board_leave_content_description">Leave workout</string>
+    <string name="workout_board_finish">Finish</string>
+    <string name="workout_board_elapsed_content_description">%1$s elapsed</string>
+    <plurals name="workout_board_progress">
+        <item quantity="one">%1$d of %2$d exercise · %3$d/%4$d sets</item>
+        <item quantity="other">%1$d of %2$d exercises · %3$d/%4$d sets</item>
+    </plurals>
+    <plurals name="workout_board_progress_untargeted">
+        <item quantity="one">%2$d of %3$d exercises · %1$d set</item>
+        <item quantity="other">%2$d of %3$d exercises · %1$d sets</item>
+    </plurals>
+    <plurals name="workout_board_status_target">
+        <item quantity="one">%d set</item>
+        <item quantity="other">%d sets</item>
+    </plurals>
+    <plurals name="workout_board_status_progress">
+        <item quantity="one">%2$d/%1$d set</item>
+        <item quantity="other">%2$d/%1$d sets</item>
+    </plurals>
+    <plurals name="workout_board_status_logged">
+        <item quantity="one">%d set</item>
+        <item quantity="other">%d sets</item>
+    </plurals>
+    <string name="workout_board_status_none">No sets yet</string>
+    <string name="workout_board_up_next">up next</string>
+    <string name="workout_board_empty_title">Empty workout</string>
+    <string name="workout_board_empty_body">The clock is already running. Add whatever machine is free — you can keep adding as you go.</string>
+    <string name="workout_focus_back_content_description">Back to the board</string>
+    <string name="workout_leave_title">Leave this workout?</string>
+    <string name="workout_leave_body">Leaving is not finishing — the session stays open and the clock keeps running from its start time.</string>
+    <string name="workout_leave_go_home">Leave it running and go Home</string>
+    <string name="workout_leave_abandon">Abandon this workout</string>
+    <string name="workout_leave_keep_training">Keep training</string>
+    <string name="workout_picker_search_hint">Search exercises</string>
+    <string name="workout_picker_clear_search">Clear search</string>
+    <string name="workout_picker_create">Create a new exercise</string>
+    <string name="workout_picker_no_match">Nothing matches. Create it as a new exercise instead.</string>
+    <string name="workout_picker_empty_library">No exercises yet. Create one to add it here.</string>
+    <string name="workout_rest_remaining">%1$d:%2$02d</string>
+    <string name="workout_rest_done">Rest done</string>
+    <string name="workout_rest_resting">Resting</string>
+    <string name="workout_rest_ready">Next set is ready</string>
+    <string name="workout_rest_skip">Skip rest</string>
+    <string name="workout_rest_dismiss_content_description">Dismiss rest timer</string>
 
     <string name="settings_title">Settings</string>
     <string name="settings_back_content_description">Back</string>

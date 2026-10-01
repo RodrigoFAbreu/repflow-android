@@ -62,6 +62,11 @@ import javax.inject.Inject
  * [ObserveExercises], and dispatches the active-workout use cases: starting,
  * adding an ad hoc exercise, recording/undoing/editing a set, and
  * completing/abandoning the session.
+ *
+ * Since remediation-1 CP7 the workout surface has no start menu - Home starts
+ * every workout (CP5) - so [onStartWorkout] and `availablePlans` have no
+ * screen consumer. They are kept, with their tests, as the plan's JVM pass
+ * over this package states; CP16's sweep decides whether they go.
  */
 @Suppress("LongParameterList", "TooManyFunctions")
 @HiltViewModel
@@ -120,10 +125,23 @@ class ActiveWorkoutViewModel
             }
         }
 
+        /**
+         * Plan names for the board's title (remediation-1 CP7). A failed read
+         * degrades to no names - the board then reads `Untitled workout` - rather
+         * than failing the whole workout surface.
+         */
+        private val planLabels =
+            trainingPlanRepository
+                .observeVersionLabels()
+                .catch { failure ->
+                    if (failure is CancellationException) throw failure
+                    emit(emptyMap())
+                }
+
         private val content =
-            observeActiveWorkoutSession()
-                .map { session -> toContent(session) }
-                .onStart { emit(ActiveWorkoutContent.Loading) }
+            combine(observeActiveWorkoutSession(), planLabels) { session, labels ->
+                toContent(session, session?.trainingPlanVersionId?.let { labels[it]?.planName })
+            }.onStart { emit(ActiveWorkoutContent.Loading) }
                 .catch { failure ->
                     if (failure is CancellationException) throw failure
                     emit(ActiveWorkoutContent.ObservationFailed(ActiveWorkoutErrorReason.UNKNOWN))
@@ -344,7 +362,10 @@ class ActiveWorkoutViewModel
          * as a separate non-suspend closure (same pattern
          * [latestRecommendationUi] already relies on above).
          */
-        private suspend fun toContent(session: WorkoutSession?): ActiveWorkoutContent =
+        private suspend fun toContent(
+            session: WorkoutSession?,
+            planName: String?,
+        ): ActiveWorkoutContent =
             if (session == null) {
                 ActiveWorkoutContent.NoActiveSession
             } else {
@@ -353,6 +374,7 @@ class ActiveWorkoutViewModel
                     startedAt = session.startedAt,
                     restTimer = session.restTimer?.toUi(),
                     exercises = session.exercises.map { exercise -> toExerciseUi(exercise) },
+                    planName = planName,
                 )
             }
 

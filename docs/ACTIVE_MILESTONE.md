@@ -13,8 +13,125 @@ explicitly** — `active_work_item_id` still points at the parent.
   (revision 20). Registry:
   `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-registry.json`
   (CP1–CP16, executed in array order).
-- **Current checkpoint: CP6 — Progression recommendation surface:
-  complete.** CP1–CP5 complete; CP7–CP16 not started.
+- **Current checkpoint: CP7 — Workout board screen: complete.** CP1–CP6
+  complete; CP8–CP16 not started.
+
+### CP7 — what was done and verified (2026-10-01)
+
+- **Design re-read** from the live project (etag `1786483024007421`): `4a`'s
+  board `nBoard` (`RepFlow.dc.html:1161–1238`) with the rest strip, the leave
+  sheet `nExitSheet` (`:1437–1447`), the picker sheet `nPickSheet`
+  (`:1705–1734`), and the script behind them — `statusOf` /
+  `nextUnfinished` (`:3510–3527`), `nTitle` / `nProgress` / `nBoardRows` /
+  `nPickRows` (`:3954–3995`), `nCreateEx` (`:4020–4031`), the rest strip and
+  leave/discard handlers (`:4296–4331`).
+- **The workout surface is now workout mode** (`presentation/workout/`):
+  - **Board** (`WorkoutBoard.kt`): `X` (`Leave workout`), the title — the
+    plan's name, else `Untitled workout` (no rename, `D30`) — over `ph-timer`
+    and the elapsed clock re-derived from `startedAt` every second, and
+    `Finish`; the progress line `N of M exercises · S/T sets`; one 64-tall row
+    per exercise with the `UP NEXT` hint on the first unfinished one and a
+    status chip that always carries a word and a glyph (`T sets` /
+    `ph-circle`, `d/T sets` / `ph-dot-outline`, done / `ph-check-fat`); `4a`'s
+    empty board (`ph-barbell`, `Empty workout`, the "clock is already
+    running" line); `Add exercise` (52, accent outline); the rest strip pinned
+    under the list. **No `⋮` and no row sheet** (plan item 7). Tapping a row
+    opens that exercise's set entry — out of order is fine; `up next` is a
+    hint.
+  - **Rules** (`WorkoutBoardModel.kt`, pure): only working sets count;
+    planned target = the plan's working-set count; an ad-hoc exercise has no
+    target and is finished after one working set (`D55`); `up next` = first
+    unfinished row; the picker search matches names case-insensitively.
+  - **Set entry, interim until CP8:** the existing `ExerciseCard`, unchanged,
+    under a sub-screen bar (exercise name, back arrow `Back to the board`),
+    with the rest strip as its bottom bar. Which exercise is open is
+    `rememberSaveable` in `ActiveWorkoutRoute`.
+  - **Leave sheet** (`WorkoutSheets.kt`): `Leave this workout?`, "Leaving is
+    not finishing …", `Leave it running and go Home` (accent outline,
+    `ph-house`), `Abandon this workout` (error tone, `ph-trash`), `Keep
+    training`. `Finish and save it now` is CP9's. Abandon opens the shared
+    `AbandonWorkoutDialog` (moved out of `HomeScreen.kt` into
+    `presentation/workout/`, same copy, Home now imports it) → the existing
+    `AbandonWorkoutSession`, nothing deleted (`D17`, `D18`).
+  - **System back** (the plan's flagged platform change, shipped here):
+    `BackHandler` in workout mode — set entry → board; board → leave sheet;
+    an open sheet or dialog closes itself. **Today's unconfirmed `Abandon
+    workout` button and the bare bottom `Finish workout` button are gone.**
+  - **Picker sheet**, converted from the `DropdownMenu`: search field (name
+    only, `D8`), `Create a new exercise` → the existing exercise editor
+    (`EXERCISE_NEW`; `D56`, closes `O4`), the empty lines "Nothing matches.
+    Create it as a new exercise instead." / "No exercises yet. …", and
+    60-tall rows (name, tracking type, `+`) that **carry CP6's
+    recommendation summary and `Why ›` unchanged** (plan item 6).
+  - **Rest strip** restyled in place, tick loop untouched: `m:ss` (24/500,
+    accent) / `Rest done` at zero, `Resting` / `Next set is ready`, a 4dp bar
+    (`restTimerProgress` kept), a dismiss `X` at ≥ 44 (`Dismiss rest timer`), and
+    `−15s` / `+15s` / `Skip rest` (primary) at 44 — all on the existing
+    `AdjustRestTimer` / `SkipRestTimer` (`D58`, closes `O5`).
+  - **Recovery/futsal day context** kept as a meta line under the progress
+    line (`D57`).
+- **Leaving and ending:** `NavController.leaveWorkoutForHome()`
+  (`presentation/navigation/RepFlowNavigationActions.kt`) navigates `HOME`
+  with `popUpTo(HOME)` + `launchSingleTop`, so no board entry stays on the
+  stack. It is the leave sheet's action and also the hand-back when the
+  session ends (`NoActiveSession` — abandoned, or finished by the board's
+  `Finish`, which still completes directly until CP9's finish sheet). The
+  workout surface **no longer has a start menu**: Home starts every workout.
+  `ActiveWorkoutViewModel.onStartWorkout` / `availablePlans` therefore have
+  no screen consumer; they and their tests are kept (the plan's JVM pass),
+  for CP16's sweep to decide. The ViewModel gains only the plan name for the
+  title (`observeVersionLabels`, a failed read degrading to `Untitled
+  workout`); its constructor is unchanged.
+- **Five new Phosphor drawables** (`@phosphor-icons/core@2.1.1`, regular,
+  path data verbatim): `check-fat`, `dot-outline`, `circle`, `timer`,
+  `plus-circle`; five `RepFlowIcons` entries; `RepFlowIconsTest`'s
+  enumerated set 46 → 51. `barbell` has a consumer again (the empty board).
+- **Strings:** the `workout_board_*`, `workout_leave_*`, `workout_picker_*`,
+  `workout_rest_*` and `workout_focus_back_content_description` sets (the
+  progress line and the chip texts as plurals); removed the eight that lost
+  their last consumer (`workout_active_title`, `…_no_session`, `…_start`,
+  `…_start_ad_hoc`, `…_complete`, `…_abandon`, `…_rest_timer_remaining`,
+  `…_rest_timer_skip`).
+- **Deviation register:** `D55` (ad-hoc target), `D56` (create → editor;
+  closes `O4`), `D57` (day-context line kept), `D58` (rest strip: no exercise
+  name, no lit fill, no `Rest complete` banner, dismiss `X` at ≥ 44; closes `O5`),
+  `D59` (`Finish` at the accent-outline tier). Next free register id:
+  **D60**.
+- **Tests:** new JVM `WorkoutBoardModelTest` (7: chip states and warm-ups;
+  ad-hoc rows; `up next` out of order; nothing up next when all finished;
+  progress with planned + ad-hoc; no planned → no total; picker search).
+  New instrumented `ActiveWorkoutLeaveRouteTest` (4, in-memory Room, a graph
+  registering `HOME` and `WORKOUT` as `RepFlowNavHost` does with the same
+  `leaveWorkoutForHome`, entered through Home's `Resume`): **leave → Home
+  with the session `ACTIVE`, the resume card shown and no `WORKOUT` entry on
+  the back stack**; **system back on the board opens the leave sheet and the
+  route stays `WORKOUT`**; **`Abandon this workout` abandons nothing until
+  confirmed** (`Keep it` leaves it `ACTIVE`; confirm → `ABANDONED`, back on
+  Home); **a confirmed abandon is stored `ABANDONED` with both logged sets
+  kept**. `ActiveWorkoutScreenTest`: the helper opens the first exercise's
+  set entry by default (the 14 set-entry methods are otherwise untouched and
+  stay CP8's), CP6's picker method now opens the picker **sheet** from the
+  board; three new board methods — **a row has one action and no `Exercise
+  options` trigger or any of the six row-sheet labels** (plan item 7's state
+  test), progress/status/`up next` (out of order, warm-ups excluded), the
+  empty board. `MainActivityNavHostSmokeTest`'s workout walk now asserts the
+  empty board and leaves through `X` → `Abandon this workout` → `Abandon`
+  back to Home. `ProgressionRecommendationRouteTest` passes the route's two
+  new callbacks only.
+- **Checks run:** `spotlessApply`; `testDebugUnitTest --tests` for
+  `presentation.workout.*` (`WorkoutBoardModelTest`,
+  `ActiveWorkoutViewModelTest` 14/14, `ActiveWorkoutScreenWiringTest` 8/8),
+  `RepFlowIconsTest`, `presentation.home.*`, `presentation.navigation.*`,
+  `presentation.progression.*`, `LayerBoundaryTest` — 75 tests, 0 failures;
+  `spotlessCheck detekt lintDebug assembleDebugAndroidTest assembleDebug` —
+  green; lint 0 errors, 28 warnings and 1 hint, all pre-existing (the one
+  new `PluralsCandidate` on the progress line was fixed by making it a
+  plural). **Not run (no device):** `ActiveWorkoutLeaveRouteTest`, the
+  changed `ActiveWorkoutScreenTest`, `MainActivityNavHostSmokeTest` and
+  `ProgressionRecommendationRouteTest` compile but need
+  `connectedDebugAndroidTest`, as do CP2–CP6's.
+- **Room stays at version 7**: no query, table or migration added; no
+  domain or application write path added.
 
 ### CP6 — what was done and verified (2026-10-01)
 
@@ -481,7 +598,7 @@ explicitly** — `active_work_item_id` still points at the parent.
 ### Next action
 
 `/milestone-implement repflow-redesign-visual-foundation-remediation-1` —
-CP6 (progression recommendation surface on the existing policy). `O11` and
+CP8 (workout focus mode). `O11` and
 `O12` were decided by the user on 2026-10-01:
 CP14 and CP15 build the approved plan's `4a` designs; `5c`/`5d`/`5b` go to a
 later remediation child.
