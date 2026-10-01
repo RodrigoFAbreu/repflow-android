@@ -19,12 +19,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
  * inside the 5-second `WhileSubscribed` window, after a deep sleep the
  * midnight wait did not count (plan CP4 item 2).
  *
- * `Resume` and `Finish it` both open the workout surface for now: CP9 re-wires
- * `Finish it` into the finish sheet, the second half of that path to land.
+ * `Resume` opens the workout surface; `Finish it` ([onFinishWorkout]) opens it
+ * with the finish sheet raised (remediation-1 CP9) - it never completes the
+ * session from here, and dismissing that sheet comes back Home (`D16`).
  */
 @Composable
 fun HomeRoute(
     onOpenWorkout: () -> Unit,
+    onFinishWorkout: () -> Unit,
     onSettingsClick: () -> Unit,
     onLogRecoveryClick: () -> Unit,
     onCreatePlanClick: () -> Unit,
@@ -44,7 +46,7 @@ fun HomeRoute(
         uiState = uiState,
         onSettingsClick = onSettingsClick,
         onResumeClick = onOpenWorkout,
-        onFinishClick = onOpenWorkout,
+        onFinishClick = onFinishWorkout,
         onAbandonConfirmed = viewModel::onAbandonWorkout,
         onStartWorkout = viewModel::onStartWorkout,
         onCreatePlanClick = onCreatePlanClick,

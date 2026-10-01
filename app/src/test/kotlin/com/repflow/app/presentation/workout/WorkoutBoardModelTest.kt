@@ -134,4 +134,26 @@ class WorkoutBoardModelTest {
         assertEquals(items, filterPickerItems(items, "   "))
         assertEquals(emptyList<ExercisePickerItem>(), filterPickerItems(items, "deadlift"))
     }
+
+    /**
+     * The finish sheet's unfinished list (remediation-1 CP9): exactly the rows
+     * the board does not count as finished, in board order - a planned one
+     * with the working sets it still owes, an ad-hoc one with nothing logged
+     * as `null` (`No sets yet`, `D55`). Warm-ups pay nothing off.
+     */
+    @Test
+    fun theUnfinishedListIsEveryExerciseTheBoardDoesNotCountAsFinished() {
+        val unfinished =
+            unfinishedExercises(
+                listOf(
+                    exercise("done", sets = listOf(set(), set()), target = 2),
+                    exercise("partial", sets = listOf(set(isWarmup = true), set()), target = 3),
+                    exercise("ad-hoc-empty", sets = listOf(set(isWarmup = true))),
+                    exercise("ad-hoc-logged", sets = listOf(set())),
+                ),
+            )
+
+        assertEquals(listOf("partial", "ad-hoc-empty"), unfinished.map { it.name })
+        assertEquals(listOf(2, null), unfinished.map { it.setsLeft })
+    }
 }

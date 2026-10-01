@@ -2,6 +2,7 @@ package com.repflow.app.presentation.workout
 
 import androidx.activity.ComponentActivity
 import androidx.annotation.StringRes
+import androidx.compose.runtime.remember
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescriptionExactly
 import androidx.compose.ui.test.hasText
@@ -9,10 +10,13 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.lifecycle.SavedStateHandle
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -22,6 +26,7 @@ import com.repflow.app.application.common.IdentifierGenerator
 import com.repflow.app.application.exercise.GetExercise
 import com.repflow.app.application.exercise.ObserveExercises
 import com.repflow.app.application.history.ObserveRecentTraining
+import com.repflow.app.application.history.ObserveWorkoutSummary
 import com.repflow.app.application.progression.ComputeProgressionRecommendation
 import com.repflow.app.application.recovery.GetWorkoutDayContext
 import com.repflow.app.application.recovery.ObserveReadiness
@@ -62,6 +67,7 @@ import com.repflow.app.presentation.home.HomeRoute
 import com.repflow.app.presentation.home.HomeViewModel
 import com.repflow.app.presentation.navigation.RepFlowDestinations
 import com.repflow.app.presentation.navigation.leaveWorkoutForHome
+import com.repflow.app.presentation.navigation.openWorkoutDone
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -74,13 +80,15 @@ import org.junit.runner.RunWith
 import java.time.Instant
 
 /**
- * Workout mode's way out (remediation-1 plan CP7 item 1), over a real
- * in-memory Room database and a nav graph that registers `HOME` and `WORKOUT`
- * exactly as `RepFlowNavHost` does - the same `leaveWorkoutForHome` stack
- * removal, the real `HomeRoute` and `ActiveWorkoutRoute`, ViewModels built
- * over the test database in place of Hilt's. Each walk starts at Home and
- * opens the workout through Home's own `Resume`, so nothing is asserted
- * against a route no user can reach.
+ * Workout mode's ways out (remediation-1 plan CP7 item 1, CP9 item 1), over a
+ * real in-memory Room database and a nav graph that registers `HOME`, the
+ * workout and the done screen exactly as `RepFlowNavHost` does - the same
+ * `leaveWorkoutForHome` / `openWorkoutDone` stack removal and the workout's
+ * `finish` argument, the real `HomeRoute`, `ActiveWorkoutRoute` and
+ * `WorkoutDoneRoute`, ViewModels built over the test database in place of
+ * Hilt's. Each walk starts at Home and opens the workout through Home's own
+ * `Resume` or `Finish it`, so nothing is asserted against a route no user can
+ * reach.
  *
  * The four assertions the plan owes:
  * - `Leave it running and go Home` lands on Home with the session still
@@ -92,6 +100,13 @@ import java.time.Instant
  * - a confirmed abandon persists `ABANDONED` with every logged set kept
  *   (`LocalWorkoutRepository`'s retention, which the in-memory fakes do not
  *   exercise).
+ *
+ * And the two CP9 owes:
+ * - Home's `Finish it` opens the finish sheet rather than completing the
+ *   session, and dismissing it returns to Home with the session still active
+ *   and no board entry on the back stack (`D16`);
+ * - the sheet's confirm completes the session and lands on the done screen,
+ *   with no board entry behind it, and `Back to Home` goes Home.
  */
 @RunWith(AndroidJUnit4::class)
 class ActiveWorkoutLeaveRouteTest {
@@ -138,7 +153,7 @@ class ActiveWorkoutLeaveRouteTest {
             assertNull(navController.previousBackStackEntry)
             assertFalse(
                 "Back from Home must not return to the board",
-                navController.currentBackStack.value.any { it.destination.route == RepFlowDestinations.WORKOUT },
+                navController.currentBackStack.value.any { it.destination.route == RepFlowDestinations.WORKOUT_PATTERN },
             )
         }
         assertEquals(WorkoutSessionStatus.ACTIVE, status(sessionId))
@@ -153,7 +168,7 @@ class ActiveWorkoutLeaveRouteTest {
 
         waitForText(string(R.string.workout_leave_title))
         composeRule.onNodeWithText(string(R.string.workout_leave_title)).assertIsDisplayed()
-        composeRule.runOnIdle { assertEquals(RepFlowDestinations.WORKOUT, navController.currentDestination?.route) }
+        composeRule.runOnIdle { assertEquals(RepFlowDestinations.WORKOUT_PATTERN, navController.currentDestination?.route) }
     }
 
     @Test
@@ -221,6 +236,60 @@ class ActiveWorkoutLeaveRouteTest {
         assertEquals(listOf(100.0 to 5, 105.0 to 4), sets.map { it.load to it.reps })
     }
 
+    @Test
+    fun finishItFromHomeOpensTheFinishSheetAndDismissingItReturnsHomeWithNoBoardBehind() {
+        val sessionId = startSession()
+        renderFromHome()
+
+        composeRule.onNodeWithText(string(R.string.home_finish_it)).performClick()
+
+        waitForText(string(R.string.workout_finish_title))
+        composeRule.onNodeWithText(string(R.string.workout_finish_title)).assertIsDisplayed()
+        assertEquals("Finish it must not complete the session by itself", WorkoutSessionStatus.ACTIVE, status(sessionId))
+
+        // Dismissing the sheet raised from Home: its own `Keep training`, which does what a scrim tap or back does.
+        composeRule.onNodeWithText(string(R.string.workout_finish_keep_training)).performClick()
+
+        waitForText(string(R.string.home_resume))
+        composeRule.onNodeWithText(string(R.string.home_resume)).assertIsDisplayed()
+        composeRule.runOnIdle {
+            assertEquals(RepFlowDestinations.HOME, navController.currentDestination?.route)
+            assertNull(navController.previousBackStackEntry)
+            assertFalse(
+                "Back from Home must not return to the board",
+                navController.currentBackStack.value.any { it.destination.route == RepFlowDestinations.WORKOUT_PATTERN },
+            )
+        }
+        assertEquals(WorkoutSessionStatus.ACTIVE, status(sessionId))
+    }
+
+    @Test
+    fun finishAndSaveCompletesTheSessionAndLandsOnTheDoneScreenWithNoBoardBehind() {
+        val sessionId = startSession()
+        openWorkoutFromHome()
+
+        composeRule.onNodeWithText(string(R.string.workout_board_finish)).performClick()
+        waitForText(string(R.string.workout_finish_confirm))
+        composeRule.onNodeWithText(string(R.string.workout_finish_confirm)).performClick()
+
+        composeRule.waitUntil(TIMEOUT_MILLIS) { status(sessionId) == WorkoutSessionStatus.COMPLETED }
+        waitForText(string(R.string.workout_done_back_home))
+        composeRule.onNodeWithText(string(R.string.workout_done_versus_label).uppercase()).assertIsDisplayed()
+        composeRule.runOnIdle {
+            assertEquals(RepFlowDestinations.WORKOUT_DONE_PATTERN, navController.currentDestination?.route)
+            assertEquals(RepFlowDestinations.HOME, navController.previousBackStackEntry?.destination?.route)
+            assertFalse(navController.currentBackStack.value.any { it.destination.route == RepFlowDestinations.WORKOUT_PATTERN })
+        }
+
+        composeRule.onNodeWithText(string(R.string.workout_done_back_home)).performClick()
+
+        waitForText(string(R.string.home_greeting))
+        composeRule.runOnIdle {
+            assertEquals(RepFlowDestinations.HOME, navController.currentDestination?.route)
+            assertNull(navController.previousBackStackEntry)
+        }
+    }
+
     private fun startSession(): WorkoutSessionId =
         runBlocking {
             success(StartWorkoutSession(workouts, clock, ids)(StartWorkoutSessionCommand(null)))
@@ -228,8 +297,18 @@ class ActiveWorkoutLeaveRouteTest {
 
     private fun status(sessionId: WorkoutSessionId): WorkoutSessionStatus? = runBlocking { workouts.findById(sessionId)?.status }
 
-    /** Renders the two-destination graph at Home and walks into the workout by Home's own `Resume`. */
+    /** Renders the graph at Home and walks into the workout by Home's own `Resume`. */
     private fun openWorkoutFromHome() {
+        renderFromHome()
+        composeRule.onNodeWithText(string(R.string.home_resume)).performClick()
+        val leave = string(R.string.workout_board_leave_content_description)
+        composeRule.waitUntil(TIMEOUT_MILLIS) {
+            composeRule.onAllNodes(hasContentDescriptionExactly(leave)).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    /** Renders `HOME`, the workout and the done screen as `RepFlowNavHost` registers them, and waits for Home's resume card. */
+    private fun renderFromHome() {
         val homeViewModel = homeViewModel()
         val workoutViewModel = workoutViewModel()
         composeRule.setContent {
@@ -240,29 +319,52 @@ class ActiveWorkoutLeaveRouteTest {
                     composable(RepFlowDestinations.HOME) {
                         HomeRoute(
                             onOpenWorkout = { controller.navigate(RepFlowDestinations.WORKOUT) { launchSingleTop = true } },
+                            onFinishWorkout = {
+                                controller.navigate(RepFlowDestinations.WORKOUT_WITH_FINISH_SHEET) { launchSingleTop = true }
+                            },
                             onSettingsClick = {},
                             onLogRecoveryClick = {},
                             onCreatePlanClick = {},
                             viewModel = homeViewModel,
                         )
                     }
-                    composable(RepFlowDestinations.WORKOUT) {
+                    composable(
+                        route = RepFlowDestinations.WORKOUT_PATTERN,
+                        arguments =
+                            listOf(
+                                navArgument(RepFlowDestinations.WORKOUT_FINISH_ARG) {
+                                    type = NavType.BoolType
+                                    defaultValue = false
+                                },
+                            ),
+                    ) { entry ->
                         ActiveWorkoutRoute(
                             onOpenRecommendation = {},
                             onCreateExercise = {},
                             onLeaveWorkout = { controller.leaveWorkoutForHome() },
+                            onWorkoutFinished = { id -> controller.openWorkoutDone(id.value) },
+                            raiseFinishFromHome = entry.arguments?.getBoolean(RepFlowDestinations.WORKOUT_FINISH_ARG) == true,
                             viewModel = workoutViewModel,
+                        )
+                    }
+                    composable(
+                        route = RepFlowDestinations.WORKOUT_DONE_PATTERN,
+                        arguments = listOf(navArgument(RepFlowDestinations.WORKOUT_DONE_ARG) { type = NavType.StringType }),
+                    ) { entry ->
+                        val doneViewModel =
+                            remember(
+                                entry,
+                            ) { doneViewModel(checkNotNull(entry.arguments?.getString(RepFlowDestinations.WORKOUT_DONE_ARG))) }
+                        WorkoutDoneRoute(
+                            onOpenRecommendation = {},
+                            onBackToHome = { controller.leaveWorkoutForHome() },
+                            viewModel = doneViewModel,
                         )
                     }
                 }
             }
         }
         waitForText(string(R.string.home_resume))
-        composeRule.onNodeWithText(string(R.string.home_resume)).performClick()
-        val leave = string(R.string.workout_board_leave_content_description)
-        composeRule.waitUntil(TIMEOUT_MILLIS) {
-            composeRule.onAllNodes(hasContentDescriptionExactly(leave)).fetchSemanticsNodes().isNotEmpty()
-        }
     }
 
     private fun openAbandonConfirmation() {
@@ -310,6 +412,14 @@ class ActiveWorkoutLeaveRouteTest {
             abandonWorkoutSession = AbandonWorkoutSession(workouts, clock),
         )
     }
+
+    private fun doneViewModel(sessionId: String): WorkoutDoneViewModel =
+        WorkoutDoneViewModel(
+            savedStateHandle = SavedStateHandle(mapOf(RepFlowDestinations.WORKOUT_DONE_ARG to sessionId)),
+            observeWorkoutSummary = ObserveWorkoutSummary(workouts),
+            observeTrainingPlanVersionLabels = ObserveTrainingPlanVersionLabels(plans()),
+            progressionRecommendationRepository = LocalProgressionRecommendationRepository(database.progressionRecommendationDao()),
+        )
 
     private fun workoutViewModel(): ActiveWorkoutViewModel {
         val plans = plans()

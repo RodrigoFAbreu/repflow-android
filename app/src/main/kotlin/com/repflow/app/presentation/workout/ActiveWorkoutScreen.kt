@@ -74,6 +74,16 @@ import com.repflow.app.presentation.progression.labelRes
  * When the session ends - abandoned or finished - there is no workout surface
  * left to show, so the screen hands back to Home through [onLeaveWorkout] too.
  *
+ * **Finishing goes through one sheet** (remediation-1 CP9): the board's and
+ * focus mode's `Finish`, the leave sheet's `Finish and save it now` and `Next ›`
+ * with nothing unfinished left all raise [WorkoutFinishSheet], and its confirm
+ * is the only caller of [onCompleteWorkout]. While that confirm is in flight
+ * ([finish]) the ended session does not send the user Home: the screen waits
+ * and hands the finished session's id to [onWorkoutFinished], the done
+ * screen. [raiseFinishFromHome] opens the surface with the sheet already up -
+ * Home's `Finish it` - and then dismissing the sheet returns Home rather than
+ * leaving the board behind it (`D16`).
+ *
  * Starting a workout is Home's alone (remediation-1 CP5); this surface no
  * longer carries a start menu.
  */
@@ -98,7 +108,13 @@ fun ActiveWorkoutScreen(
     onAbandonWorkout: (WorkoutSessionId) -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
+    finish: WorkoutFinishState = WorkoutFinishState.Idle,
+    raiseFinishFromHome: Boolean = false,
+    onWorkoutFinished: (WorkoutSessionId) -> Unit = {},
 ) {
+    LaunchedEffect(finish) {
+        if (finish is WorkoutFinishState.Finished) onWorkoutFinished(finish.sessionId)
+    }
     Box(modifier = modifier.fillMaxSize()) {
         when (val content = uiState.content) {
             is ActiveWorkoutContent.Loading -> {
@@ -106,7 +122,10 @@ fun ActiveWorkoutScreen(
             }
 
             is ActiveWorkoutContent.NoActiveSession -> {
-                LaunchedEffect(Unit) { onLeaveWorkout() }
+                // A finish in flight ends the session too; that end belongs to the done screen.
+                if (finish == WorkoutFinishState.Idle) {
+                    LaunchedEffect(Unit) { onLeaveWorkout() }
+                }
                 RepFlowLoadingIndicator()
             }
 
@@ -131,6 +150,7 @@ fun ActiveWorkoutScreen(
                     onCompleteWorkout = onCompleteWorkout,
                     onLeaveWorkout = onLeaveWorkout,
                     onAbandonWorkout = onAbandonWorkout,
+                    raiseFinishFromHome = raiseFinishFromHome,
                 )
             }
 
@@ -145,8 +165,12 @@ fun ActiveWorkoutScreen(
     }
 }
 
-/** What is drawn over workout mode: at most one sheet or dialog at a time. */
-private enum class WorkoutOverlay { NONE, LEAVE_SHEET, ABANDON_CONFIRM, EXERCISE_PICKER }
+/**
+ * What is drawn over workout mode: at most one sheet or dialog at a time.
+ * [FINISH_SHEET_FROM_HOME] is the finish sheet raised by Home's `Finish it`,
+ * whose dismissal returns Home (`D16`).
+ */
+private enum class WorkoutOverlay { NONE, LEAVE_SHEET, ABANDON_CONFIRM, EXERCISE_PICKER, FINISH_SHEET, FINISH_SHEET_FROM_HOME }
 
 @Suppress("LongParameterList")
 @Composable
@@ -166,9 +190,13 @@ private fun WorkoutMode(
     onCompleteWorkout: (WorkoutSessionId) -> Unit,
     onLeaveWorkout: () -> Unit,
     onAbandonWorkout: (WorkoutSessionId) -> Unit,
+    raiseFinishFromHome: Boolean,
 ) {
-    var overlay by rememberSaveable { mutableStateOf(WorkoutOverlay.NONE) }
+    var overlay by rememberSaveable {
+        mutableStateOf(if (raiseFinishFromHome) WorkoutOverlay.FINISH_SHEET_FROM_HOME else WorkoutOverlay.NONE)
+    }
     val close = { overlay = WorkoutOverlay.NONE }
+    val askFinish = { overlay = WorkoutOverlay.FINISH_SHEET }
     val focused = focusedExerciseId?.let { id -> content.exercises.find { it.id == id } }
 
     // A sheet or dialog handles back itself (it closes); with neither open,
@@ -187,8 +215,12 @@ private fun WorkoutMode(
                     availableExercises.find { it.id == exerciseId }?.recommendation
                 },
             onBackToBoard = { onFocusExercise(null) },
-            onFinishClick = { onCompleteWorkout(content.sessionId) },
-            onNextExercise = { onFocusExercise(nextUnfinishedExercise(content.exercises, focused.id)) },
+            onFinishClick = askFinish,
+            onNextExercise = {
+                val next = nextUnfinishedExercise(content.exercises, focused.id)
+                onFocusExercise(next)
+                if (next == null) askFinish()
+            },
             onOpenRecommendation = onOpenRecommendation,
             onRecordSet = onRecordSet,
             onUndoLastSet = onUndoLastSet,
@@ -200,7 +232,7 @@ private fun WorkoutMode(
             content = content,
             dayContext = dayContext,
             onLeaveClick = { overlay = WorkoutOverlay.LEAVE_SHEET },
-            onFinishClick = { onCompleteWorkout(content.sessionId) },
+            onFinishClick = askFinish,
             onExerciseClick = { id -> onFocusExercise(id) },
             onAddExerciseClick = { overlay = WorkoutOverlay.EXERCISE_PICKER },
             restStrip = restStrip,
@@ -219,7 +251,29 @@ private fun WorkoutMode(
                     close()
                     onLeaveWorkout()
                 },
+                onFinishNow = askFinish,
                 onAbandon = { overlay = WorkoutOverlay.ABANDON_CONFIRM },
+            )
+        }
+
+        WorkoutOverlay.FINISH_SHEET, WorkoutOverlay.FINISH_SHEET_FROM_HOME -> {
+            val fromHome = overlay == WorkoutOverlay.FINISH_SHEET_FROM_HOME
+            val dismiss = {
+                close()
+                if (fromHome) onLeaveWorkout()
+            }
+            WorkoutFinishSheet(
+                content = content,
+                onDismissRequest = dismiss,
+                onConfirm = {
+                    close()
+                    onCompleteWorkout(content.sessionId)
+                },
+                onKeepTraining = dismiss,
+                onLeaveRunning = {
+                    close()
+                    onLeaveWorkout()
+                },
             )
         }
 

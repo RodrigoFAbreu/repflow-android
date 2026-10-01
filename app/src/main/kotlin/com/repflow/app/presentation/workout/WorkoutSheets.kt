@@ -43,6 +43,7 @@ import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.presentation.designsystem.RepFlowSpacing
 import com.repflow.app.presentation.designsystem.components.RepFlowAccentOutlineButton
+import com.repflow.app.presentation.designsystem.components.RepFlowNeutralOutlineButton
 import com.repflow.app.presentation.designsystem.components.RepFlowSheet
 import com.repflow.app.presentation.designsystem.components.repFlowAccentOutlineColors
 import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
@@ -54,8 +55,9 @@ import com.repflow.app.presentation.designsystem.repFlowSecondaryTextColor
  * the primary action only navigates Home - no use case runs, so the session
  * stays active in Room and its clock keeps running from its stored start.
  *
- * `Finish and save it now` is not drawn yet: remediation-1 CP9 adds it with
- * the one finish sheet every finish path goes through. The design's
+ * `Finish and save it now` raises the finish sheet ([onFinishNow],
+ * remediation-1 CP9) - the one finish surface every finish path goes
+ * through - so it completes nothing until that sheet is confirmed. The design's
  * `Discard everything logged` is `Abandon this workout`, behind a destructive
  * confirmation, with today's `AbandonWorkoutSession` behaviour exactly - the
  * session is marked abandoned and nothing is deleted (`D17`, `D18`).
@@ -64,6 +66,7 @@ import com.repflow.app.presentation.designsystem.repFlowSecondaryTextColor
 internal fun LeaveWorkoutSheet(
     onDismissRequest: () -> Unit,
     onLeaveRunning: () -> Unit,
+    onFinishNow: () -> Unit,
     onAbandon: () -> Unit,
 ) {
     RepFlowSheet(onDismissRequest = onDismissRequest) {
@@ -83,6 +86,12 @@ internal fun LeaveWorkoutSheet(
                 text = stringResource(R.string.workout_leave_go_home),
                 onClick = onLeaveRunning,
                 leadingIcon = RepFlowIcons.house,
+                modifier = Modifier.fillMaxWidth().heightIn(min = SheetActionMinHeight),
+            )
+            Spacer(modifier = Modifier.height(RepFlowSpacing.gapSm))
+            RepFlowNeutralOutlineButton(
+                text = stringResource(R.string.workout_leave_finish_now),
+                onClick = onFinishNow,
                 modifier = Modifier.fillMaxWidth().heightIn(min = SheetActionMinHeight),
             )
             Spacer(modifier = Modifier.height(RepFlowSpacing.gapSm))

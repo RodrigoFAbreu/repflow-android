@@ -198,8 +198,8 @@ internal fun WorkoutFocus(
 
 /**
  * `Board` (`ph-list-bullets`) back to the board, the elapsed clock re-derived
- * from the session's start, and `Finish` as accent text - which completes the
- * session directly until remediation-1 CP9 puts its finish sheet in front.
+ * from the session's start, and `Finish` as accent text - which raises the
+ * finish sheet (remediation-1 CP9), never completing the session itself.
  */
 @Composable
 private fun FocusTopBar(
@@ -503,8 +503,8 @@ private fun SuggestionStrip(
 /**
  * The pinned bar (`:1357-1360`): `Log set` - `Log warm-up` while the warm-up
  * chip is on - as the one primary, and `Next ›` beside it. On the last
- * unfinished exercise `Next ›` returns to the board; CP9 makes that return
- * raise the finish sheet.
+ * unfinished exercise `Next ›` returns to the board with the finish sheet
+ * raised, as the prototype's `nNextExercise` does (remediation-1 CP9).
  */
 @Composable
 private fun FocusBottomBar(

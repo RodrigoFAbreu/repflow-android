@@ -80,7 +80,8 @@ internal fun ActiveExerciseUi.focusSetRows(): List<FocusSetRow> {
  * `Next ›`'s target: the next unfinished exercise after [currentId] in board
  * order, wrapping round and reaching [currentId] itself last - the prototype's
  * `nextUnfinished`. `null` when every exercise is finished, in which case
- * `Next ›` returns to the board.
+ * `Next ›` returns to the board with the finish sheet raised (remediation-1
+ * CP9).
  */
 internal fun nextUnfinishedExercise(
     exercises: List<ActiveExerciseUi>,

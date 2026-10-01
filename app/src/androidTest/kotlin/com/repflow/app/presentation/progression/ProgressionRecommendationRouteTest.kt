@@ -236,6 +236,7 @@ class ProgressionRecommendationRouteTest {
                             onOpenRecommendation = { id -> navController.navigate(RepFlowDestinations.progressionRoute(id.value)) },
                             onCreateExercise = {},
                             onLeaveWorkout = {},
+                            onWorkoutFinished = {},
                             viewModel = workoutViewModel,
                         )
                     }

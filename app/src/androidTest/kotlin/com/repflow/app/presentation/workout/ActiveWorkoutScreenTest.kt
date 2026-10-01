@@ -71,6 +71,7 @@ class ActiveWorkoutScreenTest {
         exercises: List<ActiveExerciseUi> = listOf(exercise),
         onFocusExercise: (WorkoutExerciseId?) -> Unit = {},
         onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit = { _, _, _, _, _, _, _, _ -> },
+        onCompleteWorkout: (WorkoutSessionId) -> Unit = {},
     ) {
         composeRule.setContent {
             RepFlowTheme {
@@ -97,7 +98,7 @@ class ActiveWorkoutScreenTest {
                     onAddRestTime = {},
                     onRemoveRestTime = {},
                     onSkipRestTimer = {},
-                    onCompleteWorkout = {},
+                    onCompleteWorkout = onCompleteWorkout,
                     onLeaveWorkout = {},
                     onAbandonWorkout = {},
                     onRetry = {},
@@ -673,5 +674,74 @@ class ActiveWorkoutScreenTest {
         node(R.string.workout_focus_correct_save).performClick()
 
         assertEquals(listOf(60.0, 9, null, 7.5, false, 1, null), edited)
+    }
+
+    // ---- The finish sheet (remediation-1 CP9) ----
+
+    /**
+     * Plan CP9 item 1: the board's `Finish` raises the one finish sheet - it
+     * completes nothing itself - and the sheet lists what is still unfinished
+     * by the board's own rule (`N sets left` for a planned exercise, `No sets
+     * yet` for an ad-hoc one with nothing logged; a finished one is absent).
+     * Only the sheet's confirm reaches `onCompleteWorkout`.
+     */
+    @Test
+    fun theBoardsFinishRaisesTheSheetWhichListsUnfinishedWorkAndOnlyItsConfirmCompletes() {
+        val completed = mutableListOf<WorkoutSessionId>()
+        val exercises =
+            listOf(
+                boardExercise("e1", "Bench Press", sets = listOf(set(1, 60.0, 8)), targetWorkingSets = 1),
+                boardExercise("e2", "Row", sets = listOf(set(1, 50.0, 10)), targetWorkingSets = 3),
+                boardExercise("e3", "Curl"),
+            )
+        setContent(exercises.first(), exercises = exercises, openFirstExercise = false, onCompleteWorkout = { completed += it })
+
+        node(R.string.workout_board_finish).performClick()
+
+        node(R.string.workout_finish_title).assertIsDisplayed()
+        composeRule.onNodeWithText(plural(R.plurals.workout_finish_unfinished_count, 2, 2)).assertIsDisplayed()
+        composeRule.onNodeWithText(plural(R.plurals.workout_finish_sets_left, 2, 2)).assertIsDisplayed()
+        // `Curl` reads `No sets yet` twice: its board chip, and its row in the sheet.
+        composeRule.onAllNodesWithText(composeRule.activity.getString(R.string.workout_board_status_none)).assertCountEquals(2)
+        composeRule.onAllNodesWithText("Bench Press").assertCountEquals(1)
+        assertTrue("Finish completes nothing before the sheet's confirm", completed.isEmpty())
+
+        node(R.string.workout_finish_keep_training).performClick()
+        node(R.string.workout_finish_title).assertDoesNotExist()
+        assertTrue(completed.isEmpty())
+
+        node(R.string.workout_board_finish).performClick()
+        node(R.string.workout_finish_confirm).performClick()
+        assertEquals(listOf(WorkoutSessionId("session-1")), completed)
+    }
+
+    /** Focus mode's `Next ›` on the last unfinished exercise returns to the board with the finish sheet raised (`nNextExercise`). */
+    @Test
+    fun nextWithNothingUnfinishedLeftReturnsToTheBoardWithTheFinishSheetRaised() {
+        val focusRequests = mutableListOf<WorkoutExerciseId?>()
+        val exercises = listOf(boardExercise("e1", "Bench Press", sets = listOf(set(1, 60.0, 8)), targetWorkingSets = 1))
+        setContent(exercises.first(), exercises = exercises, onFocusExercise = { focusRequests += it })
+
+        node(R.string.workout_focus_next).performClick()
+
+        assertEquals(listOf<WorkoutExerciseId?>(null), focusRequests)
+        node(R.string.workout_finish_title).assertIsDisplayed()
+    }
+
+    /** The leave sheet's `Finish and save it now` raises the finish sheet rather than completing anything itself. */
+    @Test
+    fun theLeaveSheetsFinishNowRaisesTheFinishSheet() {
+        val completed = mutableListOf<WorkoutSessionId>()
+        val exercises = listOf(boardExercise("e1", "Bench Press", targetWorkingSets = 2))
+        setContent(exercises.first(), exercises = exercises, openFirstExercise = false, onCompleteWorkout = { completed += it })
+
+        composeRule
+            .onNodeWithContentDescription(
+                composeRule.activity.getString(R.string.workout_board_leave_content_description),
+            ).performClick()
+        node(R.string.workout_leave_finish_now).performClick()
+
+        node(R.string.workout_finish_title).assertIsDisplayed()
+        assertTrue(completed.isEmpty())
     }
 }

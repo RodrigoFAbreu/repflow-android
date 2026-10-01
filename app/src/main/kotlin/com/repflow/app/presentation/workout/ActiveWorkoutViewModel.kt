@@ -96,6 +96,10 @@ class ActiveWorkoutViewModel
         private val _dayContext = MutableStateFlow<WorkoutDayContextUi?>(null)
         val dayContext: StateFlow<WorkoutDayContextUi?> = _dayContext
         private val recommendationRefreshTrigger = MutableStateFlow(0)
+        private val _finish = MutableStateFlow<WorkoutFinishState>(WorkoutFinishState.Idle)
+
+        /** The finish sheet's confirm, from request to the completed session's id (remediation-1 CP9). */
+        val finish: StateFlow<WorkoutFinishState> = _finish
 
         /**
          * Milestone 8, CP6: a plain `MutableStateFlow` eagerly kept in sync from
@@ -332,8 +336,29 @@ class ActiveWorkoutViewModel
             }
         }
 
+        /**
+         * The finish sheet's confirm - the only caller of [CompleteWorkoutSession]
+         * (remediation-1 CP9). On success [finish] carries the session id to the
+         * done screen; on failure it returns to idle and the error is reported
+         * as any other action's is. A second confirm while one is in flight is
+         * ignored: its certain failure would otherwise turn the first one's
+         * finish into a plain "session ended, go Home".
+         */
         fun onCompleteWorkout(sessionId: WorkoutSessionId) {
-            launchAction { completeWorkoutSession(sessionId) }
+            if (_finish.value != WorkoutFinishState.Idle) return
+            _finish.value = WorkoutFinishState.InFlight
+            viewModelScope.launch {
+                when (val result = completeWorkoutSession(sessionId)) {
+                    is DomainResult.Success -> {
+                        _finish.value = WorkoutFinishState.Finished(sessionId)
+                    }
+
+                    is DomainResult.Failure -> {
+                        _finish.value = WorkoutFinishState.Idle
+                        error.update { result.error.toReason() }
+                    }
+                }
+            }
         }
 
         fun onAbandonWorkout(sessionId: WorkoutSessionId) {

@@ -119,3 +119,32 @@ internal fun filterPickerItems(
     val needle = query.trim()
     return if (needle.isEmpty()) items else items.filter { it.name.contains(needle, ignoreCase = true) }
 }
+
+/**
+ * One row of the finish sheet's unfinished list (remediation-1 CP9, `4a`
+ * `nUnfinishedList`): `○ <name> … N sets left`. [setsLeft] is `null` for an
+ * ad-hoc exercise, which has no target to count down from and is unfinished
+ * only while it has no working set (`D55`) - its row reads `No sets yet`.
+ */
+data class UnfinishedExerciseUi(
+    val id: WorkoutExerciseId,
+    val name: String,
+    val setsLeft: Int?,
+)
+
+/**
+ * The finish sheet's unfinished list: every exercise the board does not
+ * count as finished ([isFinished]), in board order - the prototype's
+ * `nUnfinished`. Derived here, next to the board's own rule, so the sheet and
+ * the board can never disagree about what is left.
+ */
+internal fun unfinishedExercises(exercises: List<ActiveExerciseUi>): List<UnfinishedExerciseUi> =
+    exercises
+        .filterNot { it.isFinished() }
+        .map { exercise ->
+            UnfinishedExerciseUi(
+                id = exercise.id,
+                name = exercise.name,
+                setsLeft = exercise.plannedTarget?.targetWorkingSets?.let { it - exercise.workingSetsDone() },
+            )
+        }

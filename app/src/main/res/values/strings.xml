@@ -411,6 +411,69 @@
     <string name="workout_leave_go_home">Leave it running and go Home</string>
     <string name="workout_leave_abandon">Abandon this workout</string>
     <string name="workout_leave_keep_training">Keep training</string>
+    <string name="workout_leave_finish_now">Finish and save it now</string>
+    <!-- Finish sheet and done screen (remediation-1 CP9). -->
+    <string name="workout_finish_title">Finish this workout?</string>
+    <string name="workout_finish_meta">%1$s elapsed · %2$s</string>
+    <plurals name="workout_finish_unfinished_count">
+        <item quantity="one">%d still unfinished</item>
+        <item quantity="other">%d still unfinished</item>
+    </plurals>
+    <plurals name="workout_finish_sets_left">
+        <item quantity="one">%d set left</item>
+        <item quantity="other">%d sets left</item>
+    </plurals>
+    <string name="workout_finish_confirm">Finish and save</string>
+    <string name="workout_finish_keep_training">Keep training</string>
+    <string name="workout_finish_footnote">Leaving keeps the session open — the clock runs from its start time, everything logged is already saved, and Home shows a Resume banner until you finish or discard it.</string>
+    <string name="workout_done_label">%1$s · finished</string>
+    <string name="workout_done_stat_time">Time</string>
+    <string name="workout_done_stat_sets">Sets</string>
+    <string name="workout_done_stat_trained">Trained</string>
+    <string name="workout_done_trained_value">%1$d of %2$d</string>
+    <string name="workout_done_best_set_title">Best set on %1$s</string>
+    <string name="workout_done_best_set_detail">%1$s — previous best %2$s on %3$s.</string>
+    <string name="workout_done_set_load">%1$s kg × %2$d</string>
+    <plurals name="workout_done_set_reps">
+        <item quantity="one">%d rep</item>
+        <item quantity="other">%d reps</item>
+    </plurals>
+    <string name="workout_done_set_seconds">%1$d s</string>
+    <string name="workout_done_versus_label">Versus last time</string>
+    <plurals name="workout_done_recap_detail">
+        <item quantity="one">%1$d set · %2$s</item>
+        <item quantity="other">%1$d sets · %2$s</item>
+    </plurals>
+    <string name="workout_done_recap_load_group">%1$s kg × %2$s</string>
+    <string name="workout_done_recap_reps_group">%1$s reps</string>
+    <string name="workout_done_recap_seconds_group">%1$s s</string>
+    <string name="workout_done_recap_no_sets">no sets recorded</string>
+    <plurals name="workout_done_recap_warmups_only">
+        <item quantity="one">%d warm-up only</item>
+        <item quantity="other">%d warm-ups only</item>
+    </plurals>
+    <string name="workout_done_delta_none">—</string>
+    <string name="workout_done_delta_first">first time</string>
+    <string name="workout_done_delta_load_up">+%1$s kg</string>
+    <string name="workout_done_delta_load_down">−%1$s kg</string>
+    <string name="workout_done_delta_load_same">same load</string>
+    <plurals name="workout_done_delta_reps_up">
+        <item quantity="one">+%d rep</item>
+        <item quantity="other">+%d reps</item>
+    </plurals>
+    <plurals name="workout_done_delta_reps_down">
+        <item quantity="one">−%d rep</item>
+        <item quantity="other">−%d reps</item>
+    </plurals>
+    <string name="workout_done_delta_reps_same">same reps</string>
+    <string name="workout_done_delta_seconds_up">+%1$d s</string>
+    <string name="workout_done_delta_seconds_down">−%1$d s</string>
+    <string name="workout_done_delta_seconds_same">same time</string>
+    <string name="workout_done_recommendations_label">Suggestions for next time</string>
+    <string name="workout_done_saved_line">Saved to History as %1$s → %2$s.</string>
+    <string name="workout_done_back_home">Back to Home</string>
+    <string name="workout_done_not_found">This workout is not in your history.</string>
+    <string name="workout_done_failed">This workout\'s summary could not be loaded.</string>
     <string name="workout_picker_search_hint">Search exercises</string>
     <string name="workout_picker_clear_search">Clear search</string>
     <string name="workout_picker_create">Create a new exercise</string>

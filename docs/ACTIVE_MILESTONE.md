@@ -13,8 +13,93 @@ explicitly** — `active_work_item_id` still points at the parent.
   (revision 20). Registry:
   `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-registry.json`
   (CP1–CP16, executed in array order).
-- **Current checkpoint: CP8 — Workout focus mode: complete.** CP1–CP7
-  complete; CP9–CP16 not started.
+- **Current checkpoint: CP9 — Workout finish and session summary:
+  complete.** CP1–CP8 complete; CP10–CP16 not started.
+
+### CP9 — what was done and verified (2026-10-01)
+
+- **Design re-read** from the live project (etag `1786483024007421`): `4a`'s
+  finish sheet `nFinishSheet` (`RepFlow.dc.html:1736–1763`), the done screen
+  `nDone` (`:1364–1405`), the leave sheet `nExitSheet` (`:1437–1447`, for
+  `Finish and save it now`), and the script behind them — `nUnfinished` /
+  `nextUnfinished` (`:3510–3527`), `nNextExercise` / `nAskFinish` /
+  `nConfirmFinish` / the summary and recap values (`:4310–4366`).
+- **One finish sheet, one finish request** (plan item 1;
+  `WorkoutFinishSheet.kt`): `Finish this workout?`, `<elapsed> elapsed ·
+  <the board's progress line>`, the unfinished box (`N still unfinished`, `○
+  <name> … N sets left`; an ad-hoc exercise with nothing logged reads `No sets
+  yet`, `D55`) from `unfinishedExercises` — the board's own `isFinished` rule —
+  then `Finish and save` (56 primary, `D69`), `Keep training`, `Leave it running
+  and go Home` and the design's footnote. It is raised by the board's and focus
+  mode's `Finish`, the leave sheet's **new** `Finish and save it now` (neutral
+  outline, between leave and abandon, as drawn), focus mode's `Next ›` with
+  nothing unfinished left (back to the board with the sheet up), and **Home's
+  `Finish it`**, re-wired to open `workout?finish=true` with the sheet raised
+  (`D16`): dismissing that sheet — scrim, back, `Keep training` — returns Home
+  through the same `leaveWorkoutForHome` stack removal. The sheet's confirm is
+  the only caller of `CompleteWorkoutSession`. It ships **unconditionally**;
+  CP14 item 4 gates it.
+- **Completion → done screen without a detour Home.**
+  `ActiveWorkoutViewModel.finish` (`WorkoutFinishState`: idle / in flight /
+  finished with the session id) is a separate `StateFlow`, so `uiState`'s
+  emissions are unchanged (`ActiveWorkoutViewModelTest`'s `:650` still sees
+  `NoActiveSession` next). While a finish is in flight the ended session no
+  longer triggers the "go Home" hand-back; on success the route opens
+  `workout/done/{sessionId}` with `popUpTo(HOME)` (`openWorkoutDone`), so no
+  board entry survives behind the done screen. A second confirm while one is in
+  flight is ignored.
+- **Done screen** (plan items 2–5; `WorkoutDone*.kt`): `<day> · finished`, the
+  plan name or `Untitled workout` at 30/500, `Time` / `Sets` (working sets) /
+  `Trained` (`N of M`) tiles, one best-set card per record (`D68`), `Versus
+  last time` with a recap row per exercise and its delta (`D67`), **`Suggestions
+  for next time`** — each exercise's recommendation computed by this completion
+  (computed at or after the session ended), its summary and `Why ›` into CP6's
+  screen (`D37`; re-read on every `ON_START`) — `Saved to History as <start> →
+  <end>.`, and a pinned `Back to Home`. No session note (`D3`, plan item 5).
+- **PR detection (plan item 4) is built, not omitted:** new application read
+  model `ObserveWorkoutSummary` (`application/history/`), derived in memory from
+  `observeCompletedSessions` — valid sessions only, earlier ones only — the same
+  cost and the same rules as Home's `ObserveRecentTraining`. Nothing stored.
+- **One Phosphor drawable** (`@phosphor-icons/core@2.1.1`, fill, path data
+  verbatim): `medal-fill`; `RepFlowIconsTest`'s expected set (now a companion
+  property, the method had reached detekt's 60-line limit) 53 → 54.
+- **Strings:** `workout_finish_*`, `workout_done_*`, `workout_leave_finish_now`;
+  the copy of `D67` (`same load`, `first time`, …) and the `Suggestions for
+  next time` label are CP9's — **flagged for the reviewer**.
+- **Deviation register:** `D67`–`D69`. Next free register id: **D70**.
+- **Tests:** new JVM `ObserveWorkoutSummaryTest` (9: best-set rules per
+  tracking type, last time skipping invalidated / later / unrelated sessions,
+  incomparable measures, records incl. ties and same-load-more-reps, the flow)
+  and `WorkoutDoneTest` (4: recap runs, deltas, this-completion-only
+  recommendations and tile counts through the ViewModel, not found);
+  `WorkoutBoardModelTest` +1 (the unfinished list). Instrumented:
+  `ActiveWorkoutScreenTest` +3 (the board's `Finish` raises the sheet, lists
+  unfinished work, and only the confirm completes; `Next ›` with nothing left
+  raises it; the leave sheet's `Finish and save it now` raises it);
+  `ActiveWorkoutLeaveRouteTest` +2 — **the test plan item 1 owes**: Home's
+  `Finish it` opens the sheet without completing, and dismissing it returns
+  Home with the session active and no workout entry on the back stack; and
+  confirm → `COMPLETED` → done screen with only Home behind it → `Back to Home`.
+  That file's harness now registers the workout as `RepFlowNavHost` does
+  (`WORKOUT_PATTERN` with the `finish` argument, plus the done route), so its
+  two existing back-stack assertions compare against `WORKOUT_PATTERN`.
+  `HomeRouteLifecycleTest` and `ProgressionRecommendationRouteTest` each gain
+  one argument for the new required callbacks.
+- **Checks run:** `spotlessApply`; `testDebugUnitTest --tests` for
+  `presentation.workout.*`, `presentation.designsystem.*`,
+  `presentation.navigation.*`, `presentation.home.*`,
+  `presentation.progression.*`, `application.history.*`, `LayerBoundaryTest` —
+  20 classes, 163 tests, 0 failures (`ActiveWorkoutViewModelTest` 14/14 and
+  `ActiveWorkoutScreenWiringTest` 8/8 unchanged and green);
+  `spotlessCheck detekt lintDebug assembleDebug assembleDebugAndroidTest` —
+  green; lint 0 errors, 25 warnings and 1 hint, all pre-existing.
+  **Not run (no device):** `ActiveWorkoutScreenTest` (27 methods),
+  `ActiveWorkoutLeaveRouteTest` (6), `ProgressionRecommendationRouteTest` (3)
+  and `HomeRouteLifecycleTest` (1) compile but need `connectedDebugAndroidTest`, as
+  do CP2–CP8's.
+- **Room stays at version 7**: no query, table or migration; no domain change;
+  no write path added — the finish sheet calls the existing
+  `CompleteWorkoutSession`, and the new application class only reads.
 
 ### CP8 — what was done and verified (2026-10-01)
 
@@ -696,7 +781,7 @@ explicitly** — `active_work_item_id` still points at the parent.
 ### Next action
 
 `/milestone-implement repflow-redesign-visual-foundation-remediation-1` —
-CP9 (workout finish and session summary). `O11` and
+CP10 (exercise library conversion). `O11` and
 `O12` were decided by the user on 2026-10-01:
 CP14 and CP15 build the approved plan's `4a` designs; `5c`/`5d`/`5b` go to a
 later remediation child.

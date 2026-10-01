@@ -234,6 +234,10 @@ object RepFlowIcons {
     @DrawableRes
     val pulse: Int = R.drawable.ic_ph_pulse
 
+    /** The done screen's best-set card (`4a` `nDone`, `ph-fill ph-medal`). Remediation-1 CP9. */
+    @DrawableRes
+    val medalFill: Int = R.drawable.ic_ph_medal_fill
+
     /** Expand the set-entry detail panel (Active Workout). */
     @DrawableRes
     val sliders: Int = R.drawable.ic_ph_sliders

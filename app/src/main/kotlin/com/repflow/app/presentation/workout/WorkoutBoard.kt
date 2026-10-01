@@ -126,10 +126,10 @@ internal fun WorkoutBoard(
  * The title is not a button: renaming an ad-hoc workout has no domain
  * backing (`D30`). The elapsed time is re-derived from the session's stored
  * start every second - never counted - so it survives leaving and coming
- * back exactly as Home's resume card does. `Finish` completes the session
- * directly until remediation-1 CP9 puts its finish sheet in front, and sits
- * at the design system's accent-outline tier rather than the prototype's
- * one-off 40 (`D59`).
+ * back exactly as Home's resume card does. `Finish` raises the finish sheet
+ * (remediation-1 CP9) - it never completes the session itself - and sits at
+ * the design system's accent-outline tier rather than the prototype's one-off
+ * 40 (`D59`).
  */
 @Composable
 private fun BoardTopBar(
@@ -220,8 +220,9 @@ private fun BoardHeader(
     }
 }
 
+/** The progress line - the board's header and the finish sheet's meta line (remediation-1 CP9) read it alike. */
 @Composable
-private fun progressLabel(progress: BoardProgressUi): String =
+internal fun progressLabel(progress: BoardProgressUi): String =
     if (progress.targetSets != null) {
         pluralStringResource(
             R.plurals.workout_board_progress,

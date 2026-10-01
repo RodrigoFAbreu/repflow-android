@@ -42,7 +42,45 @@ class RepFlowIconsTest {
 
     @Test
     fun bundledIconSetIsTheGlyphSetThePlanEnumerates() {
-        val expected =
+        assertEquals(EXPECTED_GLYPHS, bundledPhosphorDrawables().keys)
+    }
+
+    /**
+     * The four-tab bar carries a regular/fill pair per destination: each pair
+     * must be two different glyphs (or selection would fall back to colour
+     * alone), and no glyph may be shared between destinations in either state.
+     */
+    @Test
+    fun everyTopLevelDestinationGetsItsOwnGlyphPair() {
+        val pairs =
+            listOf(
+                RepFlowIcons.Nav.home to RepFlowIcons.Nav.homeSelected,
+                RepFlowIcons.Nav.plans to RepFlowIcons.Nav.plansSelected,
+                RepFlowIcons.Nav.history to RepFlowIcons.Nav.historySelected,
+                RepFlowIcons.Nav.progress to RepFlowIcons.Nav.progressSelected,
+            )
+        pairs.forEach { (regular, fill) -> assertNotEquals("A destination's two glyphs are the same", regular, fill) }
+        val all = pairs.flatMap { listOf(it.first, it.second) }
+        assertEquals("Two destinations share a nav glyph", all.size, all.toSet().size)
+        assertTrue(catalogue().values.toSet().containsAll(all))
+    }
+
+    /** All four tabs are the design's own (`4a`'s `nTabs`): regular weight unselected, fill weight selected. */
+    @Test
+    fun designConfirmedNavGlyphsAreTheOnesTheDesignNames() {
+        assertEquals(RepFlowIcons.house, RepFlowIcons.Nav.home)
+        assertEquals(RepFlowIcons.houseFill, RepFlowIcons.Nav.homeSelected)
+        assertEquals(RepFlowIcons.listChecks, RepFlowIcons.Nav.plans)
+        assertEquals(RepFlowIcons.listChecksFill, RepFlowIcons.Nav.plansSelected)
+        assertEquals(RepFlowIcons.clockCounterClockwise, RepFlowIcons.Nav.history)
+        assertEquals(RepFlowIcons.clockCounterClockwiseFill, RepFlowIcons.Nav.historySelected)
+        assertEquals(RepFlowIcons.chartLineUp, RepFlowIcons.Nav.progress)
+        assertEquals(RepFlowIcons.chartLineUpFill, RepFlowIcons.Nav.progressSelected)
+    }
+
+    /** The glyphs each milestone surface draws, grouped by the checkpoint that added them. */
+    private companion object {
+        val EXPECTED_GLYPHS: Set<String> =
             setOf(
                 // Exercise list (CP5).
                 "ic_ph_arrow_left",
@@ -118,40 +156,8 @@ class RepFlowIconsTest {
                 // Workout focus mode (remediation-1 CP8): `Board` and the suggestion strip.
                 "ic_ph_list_bullets",
                 "ic_ph_pulse",
+                // Done screen (remediation-1 CP9): the best-set card.
+                "ic_ph_medal_fill",
             )
-        assertEquals(expected, bundledPhosphorDrawables().keys)
-    }
-
-    /**
-     * The four-tab bar carries a regular/fill pair per destination: each pair
-     * must be two different glyphs (or selection would fall back to colour
-     * alone), and no glyph may be shared between destinations in either state.
-     */
-    @Test
-    fun everyTopLevelDestinationGetsItsOwnGlyphPair() {
-        val pairs =
-            listOf(
-                RepFlowIcons.Nav.home to RepFlowIcons.Nav.homeSelected,
-                RepFlowIcons.Nav.plans to RepFlowIcons.Nav.plansSelected,
-                RepFlowIcons.Nav.history to RepFlowIcons.Nav.historySelected,
-                RepFlowIcons.Nav.progress to RepFlowIcons.Nav.progressSelected,
-            )
-        pairs.forEach { (regular, fill) -> assertNotEquals("A destination's two glyphs are the same", regular, fill) }
-        val all = pairs.flatMap { listOf(it.first, it.second) }
-        assertEquals("Two destinations share a nav glyph", all.size, all.toSet().size)
-        assertTrue(catalogue().values.toSet().containsAll(all))
-    }
-
-    /** All four tabs are the design's own (`4a`'s `nTabs`): regular weight unselected, fill weight selected. */
-    @Test
-    fun designConfirmedNavGlyphsAreTheOnesTheDesignNames() {
-        assertEquals(RepFlowIcons.house, RepFlowIcons.Nav.home)
-        assertEquals(RepFlowIcons.houseFill, RepFlowIcons.Nav.homeSelected)
-        assertEquals(RepFlowIcons.listChecks, RepFlowIcons.Nav.plans)
-        assertEquals(RepFlowIcons.listChecksFill, RepFlowIcons.Nav.plansSelected)
-        assertEquals(RepFlowIcons.clockCounterClockwise, RepFlowIcons.Nav.history)
-        assertEquals(RepFlowIcons.clockCounterClockwiseFill, RepFlowIcons.Nav.historySelected)
-        assertEquals(RepFlowIcons.chartLineUp, RepFlowIcons.Nav.progress)
-        assertEquals(RepFlowIcons.chartLineUpFill, RepFlowIcons.Nav.progressSelected)
     }
 }

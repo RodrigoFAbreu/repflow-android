@@ -19,6 +19,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.workout.WorkoutExerciseId
+import com.repflow.app.domain.workout.WorkoutSessionId
 
 /**
  * Stateful route composable: owns the ViewModel, delegates rendering to the
@@ -37,15 +38,22 @@ import com.repflow.app.domain.workout.WorkoutExerciseId
  * Home`, and the hand-back once the session has ended. [onCreateExercise]
  * opens the exercise editor from the picker sheet. Which exercise the board
  * has opened is saved here, so a rotation or process restore returns to it.
+ *
+ * Remediation-1 CP9: [onWorkoutFinished] opens the done screen for the
+ * session the finish sheet just completed, and [raiseFinishFromHome] - Home's
+ * `Finish it` - opens the surface with the finish sheet already raised.
  */
 @Composable
 fun ActiveWorkoutRoute(
     onOpenRecommendation: (ExerciseId) -> Unit,
     onCreateExercise: () -> Unit,
     onLeaveWorkout: () -> Unit,
+    onWorkoutFinished: (WorkoutSessionId) -> Unit,
+    raiseFinishFromHome: Boolean = false,
     viewModel: ActiveWorkoutViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val finish by viewModel.finish.collectAsStateWithLifecycle()
     var focusedExerciseId by rememberSaveable { mutableStateOf<String?>(null) }
     LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.onRefreshRecommendations() }
     val dayContext by viewModel.dayContext.collectAsStateWithLifecycle()
@@ -86,6 +94,9 @@ fun ActiveWorkoutRoute(
         onLeaveWorkout = onLeaveWorkout,
         onAbandonWorkout = viewModel::onAbandonWorkout,
         onRetry = viewModel::onErrorShown,
+        finish = finish,
+        raiseFinishFromHome = raiseFinishFromHome,
+        onWorkoutFinished = onWorkoutFinished,
     )
 }
 

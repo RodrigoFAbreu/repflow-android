@@ -31,9 +31,24 @@ object RepFlowDestinations {
     const val WORKOUT = "workout"
 
     /**
+     * The workout surface opened with its finish sheet already raised - Home's
+     * `Finish it` (remediation-1 CP9). [WORKOUT] itself still navigates here,
+     * with the flag off.
+     */
+    const val WORKOUT_FINISH_ARG = "finish"
+    const val WORKOUT_PATTERN = "$WORKOUT?$WORKOUT_FINISH_ARG={$WORKOUT_FINISH_ARG}"
+    const val WORKOUT_WITH_FINISH_SHEET = "$WORKOUT?$WORKOUT_FINISH_ARG=true"
+
+    /** The done screen for one finished session (remediation-1 CP9, `4a` `nDone`). */
+    const val WORKOUT_DONE_ARG = "sessionId"
+    const val WORKOUT_DONE_PATTERN = "workout/done/{$WORKOUT_DONE_ARG}"
+
+    fun workoutDoneRoute(sessionId: String): String = "workout/done/$sessionId"
+
+    /**
      * The progression recommendation for one exercise (remediation-1 CP6),
      * reached from the workout picker row's `Why ›` and focus mode's suggestion
-     * strip (CP8); CP9's finish screen adds its own way in.
+     * strip (CP8), and from the done screen's recommendations (CP9).
      */
     const val PROGRESSION_EXERCISE_ARG = "exerciseId"
     const val PROGRESSION_PATTERN = "progression/{$PROGRESSION_EXERCISE_ARG}"

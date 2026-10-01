@@ -107,6 +107,7 @@ class HomeRouteLifecycleTest {
             RepFlowTheme {
                 HomeRoute(
                     onOpenWorkout = {},
+                    onFinishWorkout = {},
                     onSettingsClick = {},
                     onLogRecoveryClick = {},
                     onCreatePlanClick = {},

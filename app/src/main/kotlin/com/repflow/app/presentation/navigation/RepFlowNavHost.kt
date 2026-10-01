@@ -26,6 +26,7 @@ import com.repflow.app.presentation.settings.SettingsPlaceholder
 import com.repflow.app.presentation.trainingplan.editor.TrainingPlanEditorRoute
 import com.repflow.app.presentation.trainingplan.list.TrainingPlanListRoute
 import com.repflow.app.presentation.workout.ActiveWorkoutRoute
+import com.repflow.app.presentation.workout.WorkoutDoneRoute
 
 private val TOP_LEVEL_ROUTES: Set<String> = RepFlowDestinations.TOP_LEVEL_DESTINATIONS.map { it.route }.toSet()
 
@@ -41,7 +42,8 @@ private val TOP_LEVEL_ROUTES: Set<String> = RepFlowDestinations.TOP_LEVEL_DESTIN
  * from Home, and the exercise library and backup from Settings (the exercise
  * editor also from the workout's picker sheet). Workout mode is left only
  * through its own `X` / `Finish` - system back there opens the leave sheet -
- * and leaving goes Home by [leaveWorkoutForHome].
+ * and leaving goes Home by [leaveWorkoutForHome]. Finishing ends on the done
+ * screen ([openWorkoutDone], remediation-1 CP9), which has no bar either.
  *
  * "Create" and "edit" share one [ExerciseEditorRoute] destination each because the ViewModel itself distinguishes the two
  * modes from the presence of the `exerciseId` `SavedStateHandle` argument
@@ -80,6 +82,9 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
             composable(RepFlowDestinations.HOME) {
                 HomeRoute(
                     onOpenWorkout = { navController.navigate(RepFlowDestinations.WORKOUT) { launchSingleTop = true } },
+                    onFinishWorkout = {
+                        navController.navigate(RepFlowDestinations.WORKOUT_WITH_FINISH_SHEET) { launchSingleTop = true }
+                    },
                     onSettingsClick = { navController.navigate(RepFlowDestinations.SETTINGS) },
                     onLogRecoveryClick = { navController.navigate(RepFlowDestinations.RECOVERY) },
                     onCreatePlanClick = { navController.navigate(RepFlowDestinations.PLAN_NEW) },
@@ -134,11 +139,31 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
                     onDismissed = { navController.popBackStack() },
                 )
             }
-            composable(RepFlowDestinations.WORKOUT) {
+            composable(
+                route = RepFlowDestinations.WORKOUT_PATTERN,
+                arguments =
+                    listOf(
+                        navArgument(RepFlowDestinations.WORKOUT_FINISH_ARG) {
+                            type = NavType.BoolType
+                            defaultValue = false
+                        },
+                    ),
+            ) { entry ->
                 ActiveWorkoutRoute(
                     onOpenRecommendation = { id -> navController.navigate(RepFlowDestinations.progressionRoute(id.value)) },
                     onCreateExercise = { navController.navigate(RepFlowDestinations.EXERCISE_NEW) },
                     onLeaveWorkout = { navController.leaveWorkoutForHome() },
+                    onWorkoutFinished = { id -> navController.openWorkoutDone(id.value) },
+                    raiseFinishFromHome = entry.arguments?.getBoolean(RepFlowDestinations.WORKOUT_FINISH_ARG) == true,
+                )
+            }
+            composable(
+                route = RepFlowDestinations.WORKOUT_DONE_PATTERN,
+                arguments = listOf(navArgument(RepFlowDestinations.WORKOUT_DONE_ARG) { type = NavType.StringType }),
+            ) {
+                WorkoutDoneRoute(
+                    onOpenRecommendation = { id -> navController.navigate(RepFlowDestinations.progressionRoute(id.value)) },
+                    onBackToHome = { navController.leaveWorkoutForHome() },
                 )
             }
             composable(

@@ -127,3 +127,23 @@ enum class ActiveWorkoutErrorReason {
     PERSISTENCE_UNAVAILABLE,
     UNKNOWN,
 }
+
+/**
+ * Where the finish sheet's confirm is (remediation-1 CP9). Kept apart from
+ * [ActiveWorkoutUiState] so the observed-session stream is unchanged: the
+ * session still goes `Active` → `NoActiveSession` on completion.
+ *
+ * Completing ends the active session, and the workout surface reads an ended
+ * session as "nothing left to show here, go Home". [InFlight] is what tells it
+ * this end is a finish, so it waits for [Finished] - which carries the id the
+ * done screen opens with - instead.
+ */
+sealed interface WorkoutFinishState {
+    data object Idle : WorkoutFinishState
+
+    data object InFlight : WorkoutFinishState
+
+    data class Finished(
+        val sessionId: WorkoutSessionId,
+    ) : WorkoutFinishState
+}
