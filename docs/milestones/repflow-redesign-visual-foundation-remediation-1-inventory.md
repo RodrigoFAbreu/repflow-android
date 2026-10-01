@@ -199,11 +199,14 @@ listing each converted package's `app/src/test` directory; method counts are
 - **Owner:** `domain/recovery/ReadinessScore.kt`,
   `application/recovery/ObserveReadiness`; the sheet composable under
   `presentation/home/` (CP4 builds the derivation, CP5 hosts the sheet).
+  **Built by CP4:** `presentation/home/ReadinessSheet.kt`
+  (`ReadinessSheet` = `ReadinessDetail` inside `RepFlowSheet`) and
+  `ReadinessBandStyle.kt` (band word + colour per theme); no host yet.
 - **Tests:** `InMemoryRecoveryRepository` (JVM fixture) gains
   `observeForDate` — **edited, no assertion changes**; `RecoveryDaoTest`
   (androidTest, 4) — **survives**, plus one new method (CP4 item 5). New
   `ReadinessScoreTest` and `ObserveReadinessTest`.
-- **Register:** `D19`, `D29`.
+- **Register:** `D19`, `D29`, `D41`, `D42`, `D43`.
 
 ### 3.4 Recovery entry (CP13)
 
@@ -806,7 +809,7 @@ listing each converted package's `app/src/test` directory; method counts are
 Every row is a place the built app differs from the design. **D1–D24 are
 seeded verbatim from the execution plan's "Deviation register — seeded";
 D25–D38 are added by CP1** from the full read above. Later checkpoints append
-here — the next free id is **D41** (CP3 added D39–D40) — and never renumber. Reasons use the
+here — the next free id is **D44** (CP3 added D39–D40, CP4 D41–D43) — and never renumber. Reasons use the
 plan's four categories: `no domain backing`, `blocked by open decision`,
 `platform convention`, `deliberate product call`.
 
@@ -852,6 +855,9 @@ plan's four categories: `no domain backing`, `blocked by open decision`,
 | D38 | `1b`'s read-only plan detail and `1c`'s exercise detail (top-set chart, best set, est. 1RM, recent sessions, used in) | Not built | deliberate product call (the plan's artboard inventory: `1a`–`1c` superseded by `4a`/`5a`). `1c` is domain-backed and `4a` never replaces it, so this row is **flagged for the reviewer to accept or reject** | — |
 | D39 | `6b`'s "45% tertiary and labels" text tier (section labels, stat captions) | Dark: lifted to the secondary tier's 55%, so the two tiers coincide and are told apart by size and case; light (no design render): 70% for both | platform convention (WCAG): 45% measures 3.72–3.91:1 on `surface`/`background`/the bottom bar, below the 4.5:1 an always-visible label owes; 50% still misses on `surface` (4.25:1). Same trade as the parent's nav-label lift (`ROLE_AUDIT.md`) | CP3 |
 | D40 | The keypad's `Cancel`/`Set` at 52 tall, radius 10 (`:2840–2841`) | The design-system button tiers: `Cancel` a neutral outline lifted to 56, `Set` the 56dp radius-12 primary; still 1 : 2 | deliberate product call: `6b`'s own button scale (56 primary) over a one-off 52 drawn in the older `1a` turn | CP3 |
+| D41 | The readiness band colours in light theme: the design draws none (`RDY_BANDS`, `:3153–3158`, are the dark values) | Dark keeps the design's four values. Light keeps each band's hue and chroma and lowers OKLCH lightness to the first step clearing 4.5:1 on both light grounds: Ready = light `primary` (accent-700), Hold `#826210` (`oklch(.515 .10 85)`), Back off `#9E5416` (`oklch(.525 .12 55)`), Protect = light `error` | platform convention (WCAG): the dark values measure 1.73–2.41:1 on light `surface`, and the band word and a flagged factor's label are text drawn in that colour. `ReadinessBandStyleTest` pins the floor | CP4 |
+| D42 | The readiness sheet's title `How today was adjusted`, its line "…The score changes what the app proposes — never what you are allowed to do." (`:1494–1495`), and the gate note "…at 3 or more, leg work is flagged regardless of the score." (`:1519`) | `How today's score was set`; "Your check-in sets one score. It is a read on today — never a limit on what you are allowed to do."; "…at 3 or more, or heel stiffness at 4 or more, the band is Protect regardless of the score." | no domain backing: nothing in the app acts on the band (`D19`, `D29`), so copy saying the score adjusts proposals or flags leg work would be false — the same reason `D19` drops the advice line. The gate note also names the heel-stiffness gate the engine applies (`readiness()`, `:3142–3166`) and the design's note omits. **Copy written by CP4 — flagged for the reviewer to accept or reword** | CP4 |
+| D43 | The sheet's factor rows draw label, five dots and weight; the flagged state is carried by the label's and dots' colour alone (`:1508–1516`; `nRdyFactors` computes `value` and `note` but the markup renders neither) | Each row adds `v/5 · pulling the score down` or `v/5 · fine` under the label (plan CP4 item 4) | deliberate product call (plan): `6b`'s "destructive and accent are never the only signal — every state also carries an icon or a word" | CP4 |
 
 **Status-chip audit (`6b`, "never colour alone"; CP3).** Every chip the
 design draws pairs its tone with an icon or a word (§2). On the built

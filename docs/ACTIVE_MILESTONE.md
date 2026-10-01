@@ -13,8 +13,75 @@ explicitly** — `active_work_item_id` still points at the parent.
   (revision 20). Registry:
   `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-registry.json`
   (CP1–CP16, executed in array order).
-- **Current checkpoint: CP3 — Structural primitives the design needs beyond
-  the visual foundation: complete.** CP1–CP2 complete; CP4–CP16 not started.
+- **Current checkpoint: CP4 — Readiness score derivation and readiness
+  detail surface: complete.** CP1–CP3 complete; CP5–CP16 not started.
+
+### CP4 — what was done and verified (2026-10-01)
+
+- **Design re-read** from the live project (etag `1786483024007421`): the
+  engine (`RDY`, `RDY_BANDS`, `readiness()`, `:3142–3166`), `SCALES`
+  (`:3126–3133`), `nRdyFactors` / `nRdyDrivers` (`:3797–3813`) and the sheet
+  markup `nRdySheet` (`:1489–1547`).
+- **Domain:** new pure-Kotlin `domain/recovery/ReadinessScore.kt` —
+  `ReadinessFactor` (the six scales in `RDY` order, weights in integer tenths
+  10/12/10/8/7/15, the four inverted ones), `ReadinessBand`
+  (Ready/Hold/Back off/Protect), `ReadinessFactorReading` (value, normalized,
+  flagged at `n ≤ 2`) and `ReadinessScore.of(entry)`: score
+  `floor((200·S + 310) / 620)` = `round(10·S/31)` in integers, pain gate
+  (pain while walking ≥ 3 or heel stiffness ≥ 4 → Protect) applied before the
+  bands 75/58/42, drivers = first three flagged, and the prototype's driver
+  sentence with the label lowercased whole. Futsal flags are not read.
+- **Read path only (no schema change):** `RecoveryEntryDao.observeForDate`
+  (Room `Flow`, same `entry_date` predicate as `findForDate`),
+  `RecoveryRepository.observeForDate`, `LocalRecoveryRepository`'s mapping.
+  New `application/recovery/ObserveReadiness(date)` maps the entry through
+  `ReadinessScore.of` (or `null`) with `distinctUntilChanged`, since Room
+  re-emits on any write to the table. It never reads the clock — choosing
+  "today" (and re-deriving it at midnight / on foreground) is CP5's Home
+  ViewModel, per plan CP4 item 2.
+- **Sheet (unhosted until CP5):** `presentation/home/ReadinessSheet.kt` —
+  `ReadinessSheet` wraps `ReadinessDetail` in `RepFlowSheet`: title, one
+  line, score 44/500 tabular in the band colour + band word + "out of 100",
+  4dp bar, driver sentence, `The inputs and what they weigh` with one row per
+  factor (label, `v/5 · pulling the score down|fine`, five 7dp dots filled to
+  `n`, weight `×1.2`), the gate note, `Close` (48) on a
+  `RepFlowBottomActionBar`. Not drawn: the advice line (D19), the decision
+  list and override (D29). `ReadinessBandStyle.kt`: band word (string
+  resources) and colour per theme.
+- **Deviation register:** D41 (light-theme band colours, darkened to clear
+  4.5:1 — the design has no light render), **D42 (sheet copy: title, intro
+  line and gate note rewritten so they do not claim the score adjusts
+  proposals; flagged for the reviewer to accept or reword)**, D43 (each factor
+  row carries `v/5` and the flagged/fine word, plan item 4 / `6b`'s never
+  colour alone). Next free register id: **D44**.
+- **Tests:** new `ReadinessScoreTest` (19: weights and inversion, field
+  mapping, 100/0, seed 75.16 → 75 Ready and heavy legs 3 72.58 → 73 Hold,
+  75/74, 58/57, 42/41, pain gate 2 vs 3 and heel 3 vs 4 against an
+  otherwise-Ready input, flagging at `n` 2 vs 3 incl. an inverted scale, the
+  pinned literal "Driven by leg doms 3/5, heavy legs 4/5.", the three-driver
+  cap and order, the all-clear sentence, futsal flags inert); new
+  `ObserveReadinessTest` (4: none, yesterday-only → none, upsert emits on the
+  same subscription and re-scores, another date's write does not re-emit);
+  new `ReadinessBandStyleTest` (4: distinct words, the design's dark values,
+  distinct colours, ≥ 4.5:1 on `surface`/`background` both themes).
+  `InMemoryRecoveryRepository` now backs its map with a `MutableStateFlow`
+  and gains `observeForDate` (re-emitting on every write, like Room) — no
+  assertion changes elsewhere. Instrumented: one new `RecoveryDaoTest`
+  method (`observeForDateReEmitsAfterAnUpsertForThatDate`, Turbine) and new
+  `ReadinessDetailTest` (2: content, Close).
+- **Checks run:** `spotlessApply`; `testDebugUnitTest --tests` for
+  `ReadinessScoreTest`, `ObserveReadinessTest`, `ReadinessBandStyleTest`,
+  `LayerBoundaryTest`, every `application.recovery` and
+  `presentation.recovery` test, and every other consumer of the fake
+  (`BackupViewModelTest`, `ExportBackupTest`,
+  `ComputeProgressionRecommendationTest`,
+  `AddWorkoutExerciseAndRecordWorkoutSetTest`, `ActiveWorkoutViewModelTest`)
+  — 87 tests, 0 failures; `spotlessCheck detekt assembleDebugAndroidTest
+  lintDebug` — green, no lint finding in CP4's files. **Not run (no
+  device):** `RecoveryDaoTest` (5) and `ReadinessDetailTest` (2) compile but
+  need `connectedDebugAndroidTest`, as do CP2's three and CP3's one.
+- **Room stays at version 7**: a new `@Query` only; no table, column or
+  migration.
 
 ### CP3 — what was done and verified (2026-10-01)
 
@@ -198,8 +265,10 @@ explicitly** — `active_work_item_id` still points at the parent.
 ### Next action
 
 `/milestone-implement repflow-redesign-visual-foundation-remediation-1` —
-CP4 (readiness score derivation and readiness detail surface). Raise `O11`
-and `O12` with the user before CP14 and CP15 respectively.
+CP5 (Home screen; hosts CP4's `ReadinessSheet` and owns "today" for
+`ObserveReadiness`). `O11` and `O12` were decided by the user on 2026-10-01:
+CP14 and CP15 build the approved plan's `4a` designs; `5c`/`5d`/`5b` go to a
+later remediation child.
 
 ---
 

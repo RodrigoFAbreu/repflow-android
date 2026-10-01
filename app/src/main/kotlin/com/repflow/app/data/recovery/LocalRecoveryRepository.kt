@@ -10,6 +10,8 @@ import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.recovery.RecoveryEntry
 import com.repflow.app.infrastructure.database.recovery.RecoveryEntryDao
 import com.repflow.app.infrastructure.database.recovery.RecoveryEntryEntity
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -32,6 +34,9 @@ class LocalRecoveryRepository
         private val dao: RecoveryEntryDao,
     ) : RecoveryRepository {
         override suspend fun findForDate(date: LocalDate): RecoveryEntry? = dao.findForDate(date.toString())?.let(::toDomainOrThrow)
+
+        override fun observeForDate(date: LocalDate): Flow<RecoveryEntry?> =
+            dao.observeForDate(date.toString()).map { entity -> entity?.let(::toDomainOrThrow) }
 
         override suspend fun findLatest(): RecoveryEntry? = dao.findLatest()?.let(::toDomainOrThrow)
 
