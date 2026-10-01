@@ -261,4 +261,12 @@
     <string name="settings_placeholder_row_caret">›</string>
 
     <string name="progress_placeholder_empty">Your progress shows up here once you have logged a few workouts.</string>
+
+    <!-- Design-system primitives (remediation-1 CP3). -->
+    <string name="repflow_back_content_description">Back</string>
+    <string name="repflow_keypad_cancel">Cancel</string>
+    <string name="repflow_keypad_confirm">Set</string>
+    <string name="repflow_keypad_backspace_content_description">Delete last digit</string>
+    <string name="repflow_stepper_type_value">Type a value</string>
+    <string name="repflow_scale_end_labels">%1$s → %2$s</string>
 </resources>

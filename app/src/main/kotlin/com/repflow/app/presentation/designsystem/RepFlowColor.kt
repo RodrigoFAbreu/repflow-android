@@ -129,7 +129,69 @@ object RepFlowColor {
 
     /** Light selected-item indicator pill: `primary` at 16%. */
     val navSelectedIndicatorAlphaLight = 0.16f
+
+    /*
+     * Text tiers below `onSurface` (remediation-1 CP3). `6b` names two: "55%
+     * secondary" (meta lines, a scale row's end labels) and "45% tertiary and
+     * labels" (section labels, a stat tile's caption). Both are opacities
+     * over whatever ground the text sits on, so the floor is owed per ground.
+     *
+     * - Dark secondary keeps the design's 55%: 4.83:1 on `surface`, 5.19:1 on
+     *   `background`, 5.08:1 on the bottom bar.
+     * - Dark tertiary cannot keep 45%: it measures 3.72-3.91:1 on those same
+     *   grounds, below the 4.5:1 an always-visible label owes (50% still
+     *   misses on `surface` at 4.25:1). It is lifted to the secondary value,
+     *   so the two tiers coincide in dark and are told apart by size and case
+     *   alone - the same trade the nav's unselected label made (deviation
+     *   register D39).
+     * - Light has no rendered secondary/tertiary text to read a value from;
+     *   70% is the first step that clears 4.5:1 on `background` (4.84:1;
+     *   66% measures 4.32:1), and both tiers use it.
+     */
+
+    /** Dark secondary and tertiary text: `onSurface` at 55%. */
+    val secondaryTextAlphaDark = 0.55f
+
+    /** Light secondary and tertiary text: `onSurface` at 70%. */
+    val secondaryTextAlphaLight = 0.70f
+
+    /** Pinned bottom bar's top edge: `1px rgba(233,233,237,.12)`, as `onSurface` at 12%. */
+    val bottomBarEdgeAlpha = 0.12f
+
+    /** List-row divider: `rgba(233,233,237,.09)`, `6b`'s own divider value. */
+    val dividerAlpha = 0.09f
+
+    /** Bottom-sheet grabber: `rgba(233,233,237,.25)`. */
+    val sheetHandleAlpha = 0.25f
+
+    /** A list row's trailing caret: `onSurface` at 30%. Decorative - the row is labelled. */
+    val trailingCaretAlpha = 0.30f
+
+    /** The stepper value's ring when it is a button: `rgba(233,233,237,.10)`. */
+    val stepperValueRingAlpha = 0.10f
+
+    /**
+     * The scrim behind every sheet, `rgba(15,17,28,.6)`: a dimming of the
+     * page, not a surface, so one value serves both themes.
+     */
+    val sheetScrim = Color(0x990F111C)
 }
+
+/**
+ * Secondary text - meta lines, end labels, section labels, stat captions -
+ * as the one colour per theme [RepFlowColor]'s text-tier note settles on.
+ * Reached through the applied scheme for the same reason [isDarkColorScheme]
+ * is.
+ */
+internal fun repFlowSecondaryTextColor(scheme: ColorScheme): Color =
+    scheme.onSurface.copy(
+        alpha =
+            if (isDarkColorScheme(scheme)) {
+                RepFlowColor.secondaryTextAlphaDark
+            } else {
+                RepFlowColor.secondaryTextAlphaLight
+            },
+    )
 
 /**
  * Which theme is in force, asked of the applied scheme rather than of

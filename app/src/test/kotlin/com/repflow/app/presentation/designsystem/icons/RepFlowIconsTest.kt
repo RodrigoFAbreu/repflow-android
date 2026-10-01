@@ -82,6 +82,9 @@ class RepFlowIconsTest {
                 "ic_ph_chart_line_up_fill",
                 "ic_ph_list_checks_fill",
                 "ic_ph_clock_counter_clockwise_fill",
+                // Structural primitives (remediation-1 CP3): RepFlowListRow's
+                // trailing caret.
+                "ic_ph_caret_right",
             )
         assertEquals(expected, bundledPhosphorDrawables().keys)
     }

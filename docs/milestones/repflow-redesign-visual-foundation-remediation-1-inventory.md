@@ -806,7 +806,7 @@ listing each converted package's `app/src/test` directory; method counts are
 Every row is a place the built app differs from the design. **D1–D24 are
 seeded verbatim from the execution plan's "Deviation register — seeded";
 D25–D38 are added by CP1** from the full read above. Later checkpoints append
-here — the next free id is **D39** — and never renumber. Reasons use the
+here — the next free id is **D41** (CP3 added D39–D40) — and never renumber. Reasons use the
 plan's four categories: `no domain backing`, `blocked by open decision`,
 `platform convention`, `deliberate product call`.
 
@@ -850,6 +850,8 @@ plan's four categories: `no domain backing`, `blocked by open decision`,
 | D36 | `2c`'s row overflow `⋮` is 40×40 (`:2443`) | ≥ 44 | deliberate product call: `6b`, the newer turn, sets the 44 tap-target floor | CP10 |
 | D37 | The done screen (`4a` `nDone`) draws no progression recommendations | A recommendations section on the done screen (CP9 item 3) | deliberate product call: `docs/UX_FLOWS.md` requires "relevant progression recommendations" on completion | CP9 |
 | D38 | `1b`'s read-only plan detail and `1c`'s exercise detail (top-set chart, best set, est. 1RM, recent sessions, used in) | Not built | deliberate product call (the plan's artboard inventory: `1a`–`1c` superseded by `4a`/`5a`). `1c` is domain-backed and `4a` never replaces it, so this row is **flagged for the reviewer to accept or reject** | — |
+| D39 | `6b`'s "45% tertiary and labels" text tier (section labels, stat captions) | Dark: lifted to the secondary tier's 55%, so the two tiers coincide and are told apart by size and case; light (no design render): 70% for both | platform convention (WCAG): 45% measures 3.72–3.91:1 on `surface`/`background`/the bottom bar, below the 4.5:1 an always-visible label owes; 50% still misses on `surface` (4.25:1). Same trade as the parent's nav-label lift (`ROLE_AUDIT.md`) | CP3 |
+| D40 | The keypad's `Cancel`/`Set` at 52 tall, radius 10 (`:2840–2841`) | The design-system button tiers: `Cancel` a neutral outline lifted to 56, `Set` the 56dp radius-12 primary; still 1 : 2 | deliberate product call: `6b`'s own button scale (56 primary) over a one-off 52 drawn in the older `1a` turn | CP3 |
 
 **Status-chip audit (`6b`, "never colour alone"; CP3).** Every chip the
 design draws pairs its tone with an icon or a word (§2). On the built
@@ -858,6 +860,15 @@ surfaces the ones that must hold the rule are the board's status chip
 `archived` badge (CP10), the readiness band (a word; CP4/CP5) and the scale
 row's selected cell (the number is the word). CP3 adds a row here for any
 primitive that fails the audit.
+
+**CP3 audit result: no primitive fails.** `RepFlowStatusChip` takes its word
+as a required, non-null `text` parameter, so every tone — `Done`, `Pending`,
+`Outline`, `UpNext` — carries a word by construction, and an optional glyph
+on top. `RepFlowScaleRow` takes both end labels as required parameters, so a
+scale cannot render without them, and its selected cell is a digit. CP3 also
+gave `UpNext` the colour `6b` draws (accent fill, accent-300 word, no ring),
+settling the parent's open note that it differed from `Outline` by type
+alone. No register row is added for the audit.
 
 ---
 

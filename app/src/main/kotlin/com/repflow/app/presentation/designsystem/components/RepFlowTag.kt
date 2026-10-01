@@ -6,8 +6,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -27,15 +29,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.repflow.app.R
 import com.repflow.app.presentation.designsystem.RepFlowColor
 import com.repflow.app.presentation.designsystem.RepFlowShapes
 import com.repflow.app.presentation.designsystem.RepFlowSpacing
 import com.repflow.app.presentation.designsystem.isDarkColorScheme
+import com.repflow.app.presentation.designsystem.repFlowSecondaryTextColor
 
 /*
  * Pills, in both of the forms the design uses them: the static status chip,
@@ -63,17 +70,11 @@ enum class RepFlowTagTone {
     /**
      * The all-caps micro-pill. Callers pass the string already uppercased.
      *
-     * Known modelling smell (implementation review round 2, O3): this
-     * resolves to the same transparent fill, `hairline` border and
-     * `onSurface` label as [Outline] and differs only in `textStyle`, so a
-     * `tone` enum is separating two members by typography rather than by
-     * tone. It is left as-is deliberately: [UpNext] has no consumer in this
-     * milestone (it is one of the six disclosed unconsumed foundation
-     * members), so reshaping the API into a `tone` + `style` pair now would
-     * be churn with no call site to validate it against. The milestone that
-     * first draws an up-next pill is where this either earns a colour of its
-     * own or becomes a size parameter - decide it there, before a third
-     * caller picks between the two by guesswork.
+     * Remediation-1 CP3 settled the parent's open modelling note (review
+     * round 2, O3) the way `6b` draws it: `up next` is an accent pill -
+     * `rgba(145,132,217,.20)` fill, accent-300 word, no ring - so it now
+     * differs from [Outline] by tone, not only by type. Light has no render
+     * to read from and reuses the selected pill's disclosed fallback.
      */
     UpNext,
 }
@@ -85,11 +86,18 @@ object RepFlowTagDefaults {
     val iconSize = 14.dp
 }
 
-/** Sizing of one selectable pill row; see [RepFlowPillPickerDefaults]. */
+/**
+ * Sizing of one selectable pill row; see [RepFlowPillPickerDefaults].
+ *
+ * @param labelFontSize [TextUnit.Unspecified] keeps the `labelMedium` (meta)
+ *   size; the scale row sets its own.
+ */
 @Immutable
 data class RepFlowPillPickerSizing(
     val minHeight: Dp,
     val shape: Shape,
+    val cellGap: Dp,
+    val labelFontSize: TextUnit = TextUnit.Unspecified,
 )
 
 object RepFlowPillPickerDefaults {
@@ -100,10 +108,23 @@ object RepFlowPillPickerDefaults {
      * "every tap target is at least 44" - the two disagree by 2dp, and the
      * rule that protects the user wins.
      */
-    val pill = RepFlowPillPickerSizing(minHeight = 44.dp, shape = RepFlowShapes.pill)
+    val pill = RepFlowPillPickerSizing(minHeight = 44.dp, shape = RepFlowShapes.pill, cellGap = 8.dp)
 
-    /** Fixed cells at the control radius: the 0-5 recovery scale. */
-    val scale = RepFlowPillPickerSizing(minHeight = 44.dp, shape = RoundedCornerShape(8.dp))
+    /**
+     * Fixed cells at the control radius: `6b`'s scale row - "0-5 and RPE",
+     * `min-height:44px`, `border-radius:8px`, `gap:5px`, digits at 13.5.
+     * Every recovery scale and the RPE/pain/technique rows use it.
+     */
+    val scale =
+        RepFlowPillPickerSizing(
+            minHeight = 44.dp,
+            shape = RoundedCornerShape(8.dp),
+            cellGap = 5.dp,
+            labelFontSize = 13.5.sp,
+        )
+
+    /** `6b`'s scale row header: label left, `low → high` right, 7 above the cells. */
+    val scaleHeaderGap = 7.dp
 }
 
 /**
@@ -138,6 +159,42 @@ internal fun repFlowSelectedPillColors(scheme: ColorScheme): RepFlowSelectedPill
 /** The design's own `rgba(145,132,217,.22)`, expressed against `primary`. */
 internal const val SELECTED_FILL_ALPHA_DARK = 0.22f
 
+/** `6b`'s `up next` pill fill, `rgba(145,132,217,.20)`, against `primary`. */
+internal const val UP_NEXT_FILL_ALPHA_DARK = 0.20f
+
+/**
+ * The `up next` pill (`6b`): dark is the design's accent fill with an
+ * accent-300 word and no ring; light reuses [repFlowSelectedPillColors]'
+ * disclosed fallback, as every accent-tinted pill without a light render does.
+ */
+internal fun repFlowUpNextChipColors(scheme: ColorScheme): RepFlowSelectedPillColors =
+    if (isDarkColorScheme(scheme)) {
+        RepFlowSelectedPillColors(
+            fill = scheme.primary.copy(alpha = UP_NEXT_FILL_ALPHA_DARK),
+            border = Color.Transparent,
+            label = RepFlowColor.accent300,
+        )
+    } else {
+        repFlowSelectedPillColors(scheme)
+    }
+
+/**
+ * Fill, ring and word colour per [RepFlowTagTone]. [control] and [hairline]
+ * are passed in because they come from a composition local.
+ */
+internal fun repFlowStatusChipColors(
+    tone: RepFlowTagTone,
+    scheme: ColorScheme,
+    control: Color,
+    hairline: Color,
+): RepFlowSelectedPillColors =
+    when (tone) {
+        RepFlowTagTone.Done -> repFlowSelectedPillColors(scheme)
+        RepFlowTagTone.UpNext -> repFlowUpNextChipColors(scheme)
+        RepFlowTagTone.Pending -> RepFlowSelectedPillColors(fill = control, border = Color.Transparent, label = scheme.onSurface)
+        RepFlowTagTone.Outline -> RepFlowSelectedPillColors(fill = Color.Transparent, border = hairline, label = scheme.onSurface)
+    }
+
 /**
  * A status chip: always a word, optionally a glyph too - the design's rule is
  * that state is never signalled by colour alone, which taking the label as a
@@ -150,24 +207,16 @@ fun RepFlowStatusChip(
     tone: RepFlowTagTone = RepFlowTagTone.Outline,
     @DrawableRes icon: Int? = null,
 ) {
-    val selected = repFlowSelectedPillColors(MaterialTheme.colorScheme)
-    val fill =
-        when (tone) {
-            RepFlowTagTone.Done -> selected.fill
-            RepFlowTagTone.Pending -> RepFlowColor.control
-            RepFlowTagTone.Outline, RepFlowTagTone.UpNext -> Color.Transparent
-        }
-    val border =
-        when (tone) {
-            RepFlowTagTone.Done -> selected.border
-            RepFlowTagTone.Pending -> Color.Transparent
-            RepFlowTagTone.Outline, RepFlowTagTone.UpNext -> RepFlowColor.hairline
-        }
-    val label =
-        when (tone) {
-            RepFlowTagTone.Done -> selected.label
-            else -> MaterialTheme.colorScheme.onSurface
-        }
+    val colors =
+        repFlowStatusChipColors(
+            tone = tone,
+            scheme = MaterialTheme.colorScheme,
+            control = RepFlowColor.control,
+            hairline = RepFlowColor.hairline,
+        )
+    val fill = colors.fill
+    val border = colors.border
+    val label = colors.label
     val textStyle =
         when (tone) {
             RepFlowTagTone.UpNext -> MaterialTheme.typography.labelSmall
@@ -223,7 +272,7 @@ fun RepFlowPillPicker(
 ) {
     Row(
         modifier = modifier.selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapSm),
+        horizontalArrangement = Arrangement.spacedBy(sizing.cellGap),
     ) {
         options.forEachIndexed { index, label ->
             PillPickerCell(
@@ -261,9 +310,70 @@ private fun RowScope.PillPickerCell(
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.labelMedium,
+            style =
+                if (sizing.labelFontSize == TextUnit.Unspecified) {
+                    MaterialTheme.typography.labelMedium
+                } else {
+                    MaterialTheme.typography.labelMedium.copy(
+                        fontSize = sizing.labelFontSize,
+                        fontFeatureSettings = "tnum",
+                    )
+                },
             color = labelColor,
             textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/**
+ * `6b`'s scale row: "Scale row - 0-5 and RPE ... Always labelled at both
+ * ends, because a high number is good on sleep and bad on pain." The
+ * [RepFlowPillPicker] cells at [RepFlowPillPickerDefaults.scale], under a
+ * header that carries both end labels (`3c`, `RepFlow.dc.html:2036-2039`:
+ * the row's label at 14.5/500 on the left, `low → high` at 12 on the right).
+ *
+ * The end labels are required parameters, so a scale cannot ship without
+ * them.
+ *
+ * @param label the row's own name (`Sleep quality`, `Effort (RPE)`); null when
+ *   a surrounding heading already names it.
+ */
+@Composable
+fun RepFlowScaleRow(
+    options: List<String>,
+    selectedIndex: Int?,
+    onSelect: (Int) -> Unit,
+    lowLabel: String,
+    highLabel: String,
+    modifier: Modifier = Modifier,
+    label: String? = null,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(RepFlowPillPickerDefaults.scaleHeaderGap),
+    ) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            if (label != null) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                Spacer(Modifier.weight(1f))
+            }
+            Text(
+                text = stringResource(R.string.repflow_scale_end_labels, lowLabel, highLabel),
+                style = MaterialTheme.typography.bodySmall,
+                color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
+            )
+        }
+        RepFlowPillPicker(
+            options = options,
+            selectedIndex = selectedIndex,
+            onSelect = onSelect,
+            sizing = RepFlowPillPickerDefaults.scale,
         )
     }
 }

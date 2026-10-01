@@ -112,8 +112,8 @@ greps, not just the import cross-reference.
 | `secondary` | `NavigationBarItem` selected label; 13 component families' focus ring | `#e9e9ed` | `#292b31` | on nav container 13.79 / 13.01 | 4.5 |
 | `background` | `Scaffold` canvas | `#161826` | `#e4e7f5` | fill only | n/a |
 | `onBackground`/`onSurface` | default body text. **Direct reads:** CP6's logged-set summary line (`ActiveWorkoutExerciseCard.kt:354`) and rest countdown (`ActiveWorkoutScreen.kt:278`), both on card `surface`; the set marker's numeral and warm-up glyph (`:327,338`) on `control`. `RepFlowStatusChip`'s `Pending` label and `RepFlowStepper`'s value/glyphs also render on `control` | `#e9e9ed` | `#292b31` | on `background` 14.54 / 11.49; on `surface` 12.55 / 13.01; on `control` 11.69 / 7.03 | 4.5 |
-| `surface` | `ListItem` container; `TopAppBar` container | `#232532` | `#f3f5fe` | fill only | n/a |
-| `surfaceContainer` | `NavigationBar` bar fill; incidentally 7 `DropdownMenu`s | `#1b1d2b` | `#f3f5fe` | fill only | n/a |
+| `surface` | `ListItem` container; `TopAppBar` container. **Direct reads (remediation-1 CP3):** `RepFlowSheet`'s container (`repFlowSheetContainerColor`, passed explicitly so `ModalBottomSheet`'s own default role is never reached — see `surfaceContainerLow` below); `RepFlowStatTile`'s fill | `#232532` | `#f3f5fe` | fill only; text on it is measured in the `onSurface` row and the CP3 section below | n/a |
+| `surfaceContainer` | `NavigationBar` bar fill; incidentally 7 `DropdownMenu`s. **Direct read (remediation-1 CP3):** `RepFlowBottomActionBar`'s fill — the design's `#1b1d2b`, the same as the nav bar it stands in for | `#1b1d2b` | `#f3f5fe` | fill only; the bar's labels are measured in the CP3 section below | n/a |
 | `surfaceContainerHigh` | 4 `AlertDialog`s, 2 `DatePickerDialog`s | `#232532` | `#f3f5fe` | `primary` action label 4.71 / 6.23; `onSurface` headline 12.55; `onSurfaceVariant` supporting 8.91 | 4.5 |
 | `surfaceContainerHighest` | the one bare `Card(` (`TrainingPlanEditorFormFields.kt:123`) | `#232532` (reassigned) | unassigned `#E6E0E9` | `primary` card content 4.71 / 5.23; `error` supporting text 5.80 / 4.54 | 4.5 |
 | `error` | `OutlinedTextField` `isError` label + supporting text | `#eb827b` | `#a74541` | on `background` 6.72 / 4.77; on `surface` 5.80; on the light card 4.54 | 4.5 |
@@ -128,6 +128,7 @@ greps, not just the import cross-reference.
 | `outlineVariant` | `FilterChip` unselected outline and 3 `HorizontalDivider`s; the design's own divider value has no consumer this milestone builds. | decorative, no floor owed |
 | `primaryContainer`/`onPrimaryContainer` | Both `FloatingActionButton`s. Disclosed limitation: CP5 restyles one FAB directly, the other keeps the baseline. | not computed |
 | `inverse*` | `Snackbar` only; unchanged by this milestone. | not computed |
+| `surfaceContainerLow` | **Remediation-1 CP3's role decision for `RepFlowSheet`.** `ModalBottomSheet`'s default container is `BottomSheetDefaults.ContainerColor` → `SheetBottomTokens.DockedContainerColor` → this role (`material3-android-1.4.0`). `RepFlowSheet` passes `containerColor = surface` explicitly, so the role has **no consumer** at HEAD: no other `ModalBottomSheet`, `BottomSheetScaffold` or other reader of it is imported. Leaving it unassigned keeps one fewer token to keep in sync; a future stock consumer of it must be audited here before it ships. | `onSurface` on the baseline values: dark `#1D1B20` 14.10, light `#F7F2FA` 12.83 |
 
 **How the `onSurfaceVariant` counts moved, since this milestone moved three of
 them and a raw `grep -c` now disagrees with all three.** The role's own values
@@ -168,6 +169,30 @@ The design's literal light unselected value is 55% opacity, which composites to
 3.34:1 — below the 4.5:1 an always-visible `NavigationBarItem` label owes. 66%
 is the first step that clears it (65% still measures 4.42:1). A single shared
 value covers both icon and label.
+
+## Remediation-1 CP3 — structural primitives
+
+`ModalBottomSheet` (inside `RepFlowSheet`) is the one new stock component
+import; its container role is settled in the `surfaceContainerLow` row above,
+its scrim is `RepFlowColor.sheetScrim` (passed explicitly, so `ScrimTokens`
+is not read) and its drag handle is RepFlow's own. `HorizontalDivider` (list
+row, bottom-bar edge) and `Scaffold` (`RepFlowScreenScaffold`) were already
+audited and are given explicit colours. Text the new primitives render, per
+ground (pinned in `RepFlowPrimitivesTest`'s contrast region):
+
+| Text | Ground | Dark | Light | Floor |
+| --- | --- | --- | --- | --- |
+| Secondary text — `onSurface` @ `secondaryTextAlphaDark` (.55) / `secondaryTextAlphaLight` (.70): section label, list-row meta, scale end labels, stat caption, keypad title | `background` / `surface` / `surfaceContainer` | 5.19 / 4.83 / 5.08 | 4.84 / 5.15 / 5.15 | 4.5 |
+| The design's own 45% tertiary step, for the record (why the labels are lifted — deviation D39) | `surface` | 3.72 | — | 4.5 (fails) |
+| Bottom-bar secondary label — neutral outline, `onSurface` @ .8 | `surfaceContainer` | 9.24 | 7.02 | 4.5 |
+| Keypad digits, `onSurface` | `control` | 11.69 | 7.03 | 4.5 |
+| Stat figure; sheet content, `onSurface` | `surface` | 12.55 | 13.01 | 4.5 |
+| `up next` chip, accent-300 on `primary` @ .20 (dark); the selected-pill fallback (light) | `background` / `surface` | 8.73 / 7.50 | 6.23 on `surface` | 4.5 |
+
+Decorative, no floor owed: the list row's trailing caret (`onSurface` @ .30;
+the row's title is its label), the 9% divider, the bar's 12% top edge, the
+sheet grabber at 25% and the stepper value's 10% ring (the value text inside
+it is the affordance's label).
 
 ## Known decorative narrowings
 

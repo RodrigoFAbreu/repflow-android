@@ -68,6 +68,13 @@ object RepFlowIcons {
     @DrawableRes
     val caretUp: Int = R.drawable.ic_ph_caret_up
 
+    /**
+     * `RepFlowListRow`'s trailing caret (`ph-caret-right`, drawn on every
+     * navigating row in History, Settings and the sheets). Remediation-1 CP3.
+     */
+    @DrawableRes
+    val caretRight: Int = R.drawable.ic_ph_caret_right
+
     /** Progress tab glyph, unselected - see [Nav.progress]. */
     @DrawableRes
     val chartLineUp: Int = R.drawable.ic_ph_chart_line_up

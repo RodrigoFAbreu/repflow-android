@@ -13,9 +13,84 @@ explicitly** — `active_work_item_id` still points at the parent.
   (revision 20). Registry:
   `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-registry.json`
   (CP1–CP16, executed in array order).
-- **Current checkpoint: CP2 — Navigation: four-tab IA, Settings route,
-  workout-mode nav suppression: complete.** CP1 complete; CP3–CP16 not
-  started.
+- **Current checkpoint: CP3 — Structural primitives the design needs beyond
+  the visual foundation: complete.** CP1–CP2 complete; CP4–CP16 not started.
+
+### CP3 — what was done and verified (2026-10-01)
+
+- **Design re-read** from the live project (etag `1786483024007421`): `6b`
+  (`:253–333`), the sub-screen top bar (`:47–50`), the pinned bars
+  (`:179–185`, `:1155–1157`), the top-level title (`:349–350`), History's row
+  and stat tiles (`:958–983`), the start sheet (`:1407–1416`), `3c`'s scale
+  rows (`:2034–2043`), the keypad (`:2826–2843`) and its key logic
+  (`:4600–4630`).
+- **Seven new primitives** under `presentation/designsystem/components/`:
+  `RepFlowScreenScaffold` (top-level 25/500 title vs. sub-screen 44dp back +
+  17/500 title, chosen by `onBack`; content padding already includes the 16
+  sides; a `bottomBar` slot; no window insets of its own, because
+  `RepFlowNavHost`'s outer `Scaffold` already pads every destination),
+  `RepFlowBottomActionBar` (`surfaceContainer` fill = the design's `#1b1d2b`,
+  12% top edge, padding 12/16/16; a slot form and a primary + optional
+  secondary form), `RepFlowSheet` (`ModalBottomSheet`, fully expanded, top
+  radius 16, 32×4 grabber, the design's scrim, optional section-label
+  title), `RepFlowStatTile`/`RepFlowStatRow` (+ `RepFlowStat`),
+  `RepFlowSectionLabel` (uppercased in the primitive, heading semantics),
+  `RepFlowNumericKeypad` (`1–9 . 0 ⌫`, keys 56 on `control`, Cancel : Set at
+  1 : 2; input rules in the pure `RepFlowKeypadInput`, exactly the
+  prototype's: six characters, one `.`, none for whole numbers, Set on an
+  empty entry dismisses), `RepFlowListRow` (56/68 min heights, 15/500 title,
+  tabular meta, default trailing `caret-right` at 30% on clickable rows, 9%
+  divider, whole row the tap target).
+- **Three reworked:** `RepFlowStepper` — `6b`'s 6dp gap; the value becomes a
+  ringed button when `onValueClick` is given; a new `BigDecimal` overload owns
+  the step size, range and the keypad (arithmetic in the pure
+  `RepFlowStepperMath`, exact decimal, clamped). `RepFlowPillPicker` — sizing
+  gains `cellGap`/`labelFontSize`; the scale sizing is now `6b`'s gap 5 and
+  13.5 tabular digits; new `RepFlowScaleRow` puts the required `low → high`
+  end labels over it (the Exercise list's filter row keeps the pill sizing
+  and its 8dp gap). `RepFlowStatusChip` — colour resolution extracted to
+  `repFlowStatusChipColors`; `UpNext` now gets `6b`'s accent pill, settling
+  the parent's open modelling note.
+- **`RepFlowSheet` role decision:** `surfaceContainerLow` (the
+  `ModalBottomSheet` default) stays unassigned and is **not reached** — the
+  sheet passes `surface` explicitly (= the design's `#232532`). Recorded in
+  `ROLE_AUDIT.md`'s "Deliberately unassigned" with baseline ratios, and a new
+  CP3 section tabulates every new text/ground pair.
+- **Text tiers:** new `RepFlowColor.secondaryTextAlphaDark` (.55, the
+  design's) / `secondaryTextAlphaLight` (.70) and `repFlowSecondaryTextColor`.
+  The design's 45% tertiary step measures 3.72–3.91:1 in dark, so labels use
+  the secondary tier — **deviation D39**. Keypad Cancel/Set use the 56dp
+  button tiers rather than `1a`'s 52 — **D40**. Next free register id: D41.
+  Status-chip audit: no primitive fails (the word and both end labels are
+  required parameters); recorded under the register.
+- **One new drawable**, `ic_ph_caret_right` (path verbatim from
+  `@phosphor-icons/core@2.1.1`), and `RepFlowIcons.caretRight`;
+  `RepFlowIconsTest`'s enumerated set is now 30.
+- **Strings:** `repflow_back_content_description`, `repflow_keypad_cancel`,
+  `repflow_keypad_confirm`, `repflow_keypad_backspace_content_description`,
+  `repflow_stepper_type_value`, `repflow_scale_end_labels`.
+- **Tests:** `RepFlowPrimitivesTest` 16 → 31 — contrast region +7
+  (secondary text on page/card/bar in both themes; the design's 45% shown to
+  miss; stat figure; keypad digits on `control`; sheet on `surface`, never
+  `surfaceContainerLow`; bar secondary label on the bar fill; `up next`
+  chip), dimensions region +8 and the tap-target list +5 entries; the two
+  methods the inventory flagged (`theStepperCarriesBothOfTheDesignsSizes`,
+  `thePillPickerCarriesBothOfTheDesignsCellShapes`) survive unchanged. New
+  `RepFlowKeypadInputTest` (7) and `RepFlowStepperMathTest` (5). New
+  instrumented `RepFlowStructuralPrimitivesTest` (5: step buttons, value →
+  keypad → Set, Cancel, scale end labels, list-row tap).
+- **Checks run:** `spotlessApply`; `testDebugUnitTest --tests` for
+  `RepFlowPrimitivesTest`, `RepFlowKeypadInputTest`, `RepFlowStepperMathTest`,
+  `RepFlowIconsTest`, `RepFlowThemeTest`, `RepFlowBottomNavigationBarTest`,
+  `LayerBoundaryTest` — 73 tests, 0 failures; `spotlessCheck detekt
+  assembleDebugAndroidTest lintDebug` — green, lint findings unchanged (none
+  in CP3's files). **Not run (no device):** `RepFlowStructuralPrimitivesTest`
+  compiles but needs a `connectedDebugAndroidTest` run, as do CP2's three.
+- **No consumer yet, by design:** CP5–CP15 consume these; no existing screen
+  was converted here. Four files whose only top-level class is the
+  composable's `…Defaults` object carry a commented
+  `@file:Suppress("MatchingDeclarationName")` (detekt), named after the
+  composable per the Compose convention.
 
 ### CP2 — what was done and verified (2026-10-01)
 
@@ -123,8 +198,8 @@ explicitly** — `active_work_item_id` still points at the parent.
 ### Next action
 
 `/milestone-implement repflow-redesign-visual-foundation-remediation-1` —
-CP3 (structural primitives). Raise `O11` and `O12` with the user before CP14
-and CP15 respectively.
+CP4 (readiness score derivation and readiness detail surface). Raise `O11`
+and `O12` with the user before CP14 and CP15 respectively.
 
 ---
 
