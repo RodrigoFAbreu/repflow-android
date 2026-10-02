@@ -143,6 +143,7 @@ class TrainingPlanEditorScreenTest {
         setContent(
             TrainingPlanEditorUiState(
                 name = "   ",
+                nameTouched = true,
                 nameError = TrainingPlanEditorFieldError.Domain(TrainingPlanValidationError.NameBlank),
             ),
         )

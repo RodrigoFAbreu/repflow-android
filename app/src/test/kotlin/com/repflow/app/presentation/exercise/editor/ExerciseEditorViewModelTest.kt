@@ -101,6 +101,21 @@ class ExerciseEditorViewModelTest {
     }
 
     @Test
+    fun `a pristine create form shows no name error until the name is touched`() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        val viewModel = viewModel()
+
+        assertNull(viewModel.uiState.value.visibleNameError)
+
+        viewModel.onNameChanged("   ")
+
+        assertEquals(
+            ExerciseEditorFieldError.Domain(ExerciseValidationError.NameBlank),
+            viewModel.uiState.value.visibleNameError,
+        )
+    }
+
+    @Test
     fun `blank name reports a domain NameBlank error`() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         val viewModel = viewModel()

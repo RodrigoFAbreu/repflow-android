@@ -124,7 +124,7 @@ private fun NameField(
     onNameChanged: (String) -> Unit,
 ) {
     val error =
-        fieldErrorText(uiState.nameError)
+        fieldErrorText(uiState.visibleNameError)
             ?: if (uiState.submitError?.kind == ExerciseEditorSubmitErrorKind.DUPLICATE_NAME) {
                 stringResource(R.string.exercise_editor_submit_error_duplicate_name)
             } else {

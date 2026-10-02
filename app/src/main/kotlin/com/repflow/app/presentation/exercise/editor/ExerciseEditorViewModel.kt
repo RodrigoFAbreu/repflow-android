@@ -78,7 +78,8 @@ class ExerciseEditorViewModel
             ExerciseEditorUiState(
                 mode = if (id != null) ExerciseEditorMode.Edit(id) else ExerciseEditorMode.Create,
                 loadStatus = if (id != null) ExerciseEditorLoadStatus.LOADING else ExerciseEditorLoadStatus.READY,
-                name = savedStateHandle[KEY_NAME] ?: prefillName,
+                name = (savedStateHandle[KEY_NAME] ?: prefillName),
+                nameTouched = (savedStateHandle.get<String>(KEY_NAME) ?: prefillName).isNotEmpty(),
                 trackingType = restoredTrackingType(),
                 instructions = savedStateHandle[KEY_INSTRUCTIONS] ?: "",
                 restSecondsText = savedStateHandle[KEY_REST_SECONDS] ?: "",
@@ -135,7 +136,7 @@ class ExerciseEditorViewModel
 
         fun onNameChanged(value: String) {
             savedStateHandle[KEY_NAME] = value
-            _uiState.update { revalidate(it.copy(name = value)) }
+            _uiState.update { revalidate(it.copy(name = value, nameTouched = true)) }
         }
 
         fun onInstructionsChanged(value: String) {

@@ -68,6 +68,7 @@ class TrainingPlanEditorViewModel
                         mode = editingId?.let(TrainingPlanEditorMode::Edit) ?: TrainingPlanEditorMode.Create,
                         loadStatus = if (editingId != null) TrainingPlanEditorLoadStatus.LOADING else TrainingPlanEditorLoadStatus.READY,
                         name = savedStateHandle[KEY_NAME] ?: "",
+                        nameTouched = !savedStateHandle.get<String>(KEY_NAME).isNullOrEmpty(),
                     ),
                 ),
             )
@@ -124,7 +125,7 @@ class TrainingPlanEditorViewModel
 
         fun onNameChanged(value: String) {
             savedStateHandle[KEY_NAME] = value
-            _uiState.update { revalidate(it.copy(name = value)) }
+            _uiState.update { revalidate(it.copy(name = value, nameTouched = true)) }
         }
 
         fun onAddRowClicked() {

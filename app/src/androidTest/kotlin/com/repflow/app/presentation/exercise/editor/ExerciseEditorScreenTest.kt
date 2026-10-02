@@ -125,6 +125,7 @@ class ExerciseEditorScreenTest {
         setContent(
             ExerciseEditorUiState(
                 name = "   ",
+                nameTouched = true,
                 nameError = ExerciseEditorFieldError.Domain(ExerciseValidationError.NameBlank),
             ),
         )

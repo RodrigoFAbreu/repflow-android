@@ -105,6 +105,19 @@ class TrainingPlanEditorViewModelTest {
         }
 
     @Test
+    fun `a pristine create form shows no name error until the name is touched`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            val vm = viewModel()
+
+            assertNull(vm.uiState.value.visibleNameError)
+
+            vm.onNameChanged("  ")
+
+            assertNotNull(vm.uiState.value.visibleNameError)
+        }
+
+    @Test
     fun `onAddRowClicked appends an unselected row and onRemoveRowClicked removes it`() =
         runTest {
             Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))

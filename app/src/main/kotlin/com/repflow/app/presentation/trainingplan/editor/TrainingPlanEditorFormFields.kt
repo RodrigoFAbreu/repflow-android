@@ -97,7 +97,7 @@ private fun NameField(
     uiState: TrainingPlanEditorUiState,
     onNameChanged: (String) -> Unit,
 ) {
-    val error = fieldErrorText(uiState.nameError)
+    val error = fieldErrorText(uiState.visibleNameError)
     OutlinedTextField(
         value = uiState.name,
         onValueChange = onNameChanged,

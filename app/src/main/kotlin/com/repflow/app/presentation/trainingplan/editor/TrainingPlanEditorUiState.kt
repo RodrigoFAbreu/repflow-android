@@ -17,6 +17,8 @@ data class TrainingPlanEditorUiState(
     val loadStatus: TrainingPlanEditorLoadStatus = TrainingPlanEditorLoadStatus.READY,
     val name: String = "",
     val nameError: TrainingPlanEditorFieldError? = null,
+    /** Set once the user has typed in the name field (or it arrived non-empty); a pristine form shows no error. */
+    val nameTouched: Boolean = false,
     val availableExercises: List<TrainingPlanEditorExerciseOption> = emptyList(),
     val rows: List<PlannedExerciseRowUiState> = emptyList(),
     val rowsError: TrainingPlanEditorFieldError? = null,
@@ -26,6 +28,10 @@ data class TrainingPlanEditorUiState(
     val dismissed: Boolean = false,
     val submitError: TrainingPlanEditorSubmitError? = null,
 ) {
+    /** The name's validation error, shown only once the field has been touched. */
+    val visibleNameError: TrainingPlanEditorFieldError?
+        get() = nameError.takeIf { nameTouched }
+
     val isSaveEnabled: Boolean
         get() =
             !isSaving &&
