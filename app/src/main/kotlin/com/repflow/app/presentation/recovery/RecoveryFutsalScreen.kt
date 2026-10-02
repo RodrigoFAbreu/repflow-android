@@ -107,7 +107,9 @@ fun RecoveryFutsalScreen(
                 primaryText =
                     stringResource(if (uiState.isEntrySaved) R.string.recovery_futsal_saved else R.string.recovery_futsal_save_entry),
                 onPrimaryClick = onSaveEntry,
-                primaryEnabled = !uiState.isSaving,
+                // Not while a date's values load: Save would store the previous
+                // date's fields onto the new date (implementation-review revision 1's O8).
+                primaryEnabled = !uiState.isSaving && !uiState.isLoading,
                 primaryIcon = if (uiState.isEntrySaved) RepFlowIcons.checkFat else null,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )

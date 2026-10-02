@@ -3,6 +3,7 @@ package com.repflow.app.presentation.recovery
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -148,6 +149,16 @@ class RecoveryFutsalScreenTest {
 
         composeRule.onNodeWithText(string(R.string.recovery_futsal_save_entry)).assertIsDisplayed().performClick()
         assertEquals(1, saves)
+    }
+
+    /** O8: while a newly picked date's values load, `Save entry` cannot store the previous date's fields onto it. */
+    @Test
+    fun saveEntryIsDisabledWhileADateLoads() {
+        var saves = 0
+        setScreen(loaded().copy(isLoading = true), onSaveEntry = { saves++ })
+
+        composeRule.onNodeWithText(string(R.string.recovery_futsal_save_entry)).assertIsNotEnabled().performClick()
+        assertEquals(0, saves)
     }
 
     @Test
