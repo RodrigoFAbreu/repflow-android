@@ -33,3 +33,18 @@ fun NavController.openWorkoutDone(sessionId: String) {
         launchSingleTop = true
     }
 }
+
+/**
+ * Hands a just-saved exercise back from the exercise editor. When the editor
+ * was opened from the workout's picker (`Create a new exercise`, `D56`), the
+ * workout entry underneath receives the new id under
+ * [RepFlowDestinations.CREATED_EXERCISE_KEY] and adds it to the running
+ * workout; from anywhere else this is a plain pop.
+ */
+fun NavController.returnCreatedExercise(exerciseId: String) {
+    previousBackStackEntry
+        ?.takeIf { it.destination.route == RepFlowDestinations.WORKOUT_PATTERN }
+        ?.savedStateHandle
+        ?.set(RepFlowDestinations.CREATED_EXERCISE_KEY, exerciseId)
+    popBackStack()
+}

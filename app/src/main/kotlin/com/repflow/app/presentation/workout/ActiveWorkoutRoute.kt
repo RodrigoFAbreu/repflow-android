@@ -58,6 +58,8 @@ fun ActiveWorkoutRoute(
     onLeaveWorkout: () -> Unit,
     onWorkoutFinished: (WorkoutSessionId) -> Unit,
     raiseFinishFromHome: Boolean = false,
+    createdExerciseId: String? = null,
+    onCreatedExerciseHandled: () -> Unit = {},
     viewModel: ActiveWorkoutViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -94,6 +96,13 @@ fun ActiveWorkoutRoute(
         },
     )
 
+    CreatedExerciseEffect(
+        createdExerciseId = createdExerciseId,
+        availableExercises = uiState.availableExercises,
+        onAdd = viewModel::onAddExercise,
+        onHandled = onCreatedExerciseHandled,
+    )
+
     ActiveWorkoutScreen(
         uiState = uiState,
         dayContext = dayContext,
@@ -119,6 +128,34 @@ fun ActiveWorkoutRoute(
         confirmBeforeFinishing = settings?.confirmBeforeFinishing,
     )
 }
+
+/**
+ * `Create a new exercise` from the picker (`D56`): once the editor hands back
+ * the new exercise's id, adds it to the running workout - as soon as the
+ * picker's live list contains it - and reports it handled, so it is added
+ * exactly once. Until the list has it, nothing happens and the id stays.
+ */
+@Composable
+internal fun CreatedExerciseEffect(
+    createdExerciseId: String?,
+    availableExercises: List<ExercisePickerItem>,
+    onAdd: (ExercisePickerItem) -> Unit,
+    onHandled: () -> Unit,
+) {
+    val currentOnAdd by rememberUpdatedState(onAdd)
+    val currentOnHandled by rememberUpdatedState(onHandled)
+    LaunchedEffect(createdExerciseId, availableExercises) {
+        val item = createdExercisePickerItem(createdExerciseId, availableExercises) ?: return@LaunchedEffect
+        currentOnHandled()
+        currentOnAdd(item)
+    }
+}
+
+/** The picker item for the id the editor handed back, or null when there is none or the list does not hold it yet. */
+internal fun createdExercisePickerItem(
+    createdExerciseId: String?,
+    availableExercises: List<ExercisePickerItem>,
+): ExercisePickerItem? = createdExerciseId?.let { id -> availableExercises.firstOrNull { it.id.value == id } }
 
 /**
  * Asks for `POST_NOTIFICATIONS` when a rest is running and

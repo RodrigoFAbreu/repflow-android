@@ -5,6 +5,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -117,7 +118,7 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
                     ),
             ) {
                 ExerciseEditorRoute(
-                    onSaved = { navController.popBackStack() },
+                    onSaved = { id -> navController.returnCreatedExercise(id.value) },
                     onDismissed = { navController.popBackStack() },
                 )
             }
@@ -164,7 +165,12 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
                         },
                     ),
             ) { entry ->
+                val createdExerciseId by entry.savedStateHandle
+                    .getStateFlow<String?>(RepFlowDestinations.CREATED_EXERCISE_KEY, null)
+                    .collectAsStateWithLifecycle()
                 ActiveWorkoutRoute(
+                    createdExerciseId = createdExerciseId,
+                    onCreatedExerciseHandled = { entry.savedStateHandle[RepFlowDestinations.CREATED_EXERCISE_KEY] = null },
                     onOpenRecommendation = { id -> navController.navigate(RepFlowDestinations.progressionRoute(id.value)) },
                     onCreateExercise = { navController.navigate(RepFlowDestinations.EXERCISE_NEW) },
                     onLeaveWorkout = { navController.leaveWorkoutForHome() },

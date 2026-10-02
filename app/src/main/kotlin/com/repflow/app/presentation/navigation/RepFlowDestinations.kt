@@ -53,6 +53,12 @@ object RepFlowDestinations {
     const val WORKOUT_PATTERN = "$WORKOUT?$WORKOUT_FINISH_ARG={$WORKOUT_FINISH_ARG}"
     const val WORKOUT_WITH_FINISH_SHEET = "$WORKOUT?$WORKOUT_FINISH_ARG=true"
 
+    /**
+     * The key under which the exercise editor hands a just-created exercise's id
+     * back to the workout entry that opened it (`D56`).
+     */
+    const val CREATED_EXERCISE_KEY = "created_exercise_id"
+
     /** The done screen for one finished session (remediation-1 CP9, `4a` `nDone`). */
     const val WORKOUT_DONE_ARG = "sessionId"
     const val WORKOUT_DONE_PATTERN = "workout/done/{$WORKOUT_DONE_ARG}"
