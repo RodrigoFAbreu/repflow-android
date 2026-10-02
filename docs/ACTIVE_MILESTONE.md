@@ -158,8 +158,8 @@ fixing it would add behaviour the plan does not specify):
   reasons, which the screen also shows, explain the outcome correctly.
 - **O7 — focus mode drops the suggestion strip for an exercise archived
   mid-workout.** Looking the recommendation up independently of the picker
-  needs a new read path; the strip is advisory and `Why ›` stays reachable
-  from History.
+  needs a new read path; the strip is advisory, and the stored
+  recommendation itself is unaffected.
 - **O9 — optional plan-row values can be stepped to 0 but not back to
   blank.** Focus mode treats 0 and blank alike, so nothing visible changes.
 
