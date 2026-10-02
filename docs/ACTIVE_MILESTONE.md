@@ -1645,7 +1645,150 @@ then `/apply-implementation-review repflow-redesign-visual-foundation-remediatio
 decided by the user on 2026-10-01: they go to a later remediation child
 (`IMPROVEMENT_ROADMAP.md` §9.8).
 
-## `repflow-redesign-visual-foundation-remediation-1` — Functional review checklist, ROUND 2 (implementation revision 5)
+## `repflow-redesign-visual-foundation-remediation-1` — Functional review checklist, ROUND 3 (implementation revision 7)
+
+Round 3 of the functional review. Round 2 returned FAIL (six findings, outcome
+below under round 2); all six were fixed in this item, the implementation
+review of revision 6 found one Important (I-1, a `-15s` that ends the rest),
+that was fixed too, and technical approval of **revision 7** is recorded
+(commit `9e531a7`, basis `EXTERNAL_APPROVE`). This round re-tests **only what
+round 2 and the I-1 review changed** (P-1, I-1, R2-F-1 to R2-F-5) plus a short
+regression pass on the rest timer and both editors. Everything else: rounds 1
+and 2 stand and are not repeated. Findings go to
+`.ai-review/feedback/FUNCTIONAL_REVIEW.md` (the round-2 file was consumed;
+write a fresh one headed "round 3"). Every command names the child id
+explicitly (`active_work_item_id` still points at the grandparent).
+
+**Tags.** **[AVD]** the AVD `RepFlow_S24Ultra_384dp_API36` (`emulator-5554`),
+sample data from round 1 "Test data". **[PHONE]** the physical SM-S928B
+(`RFCXA0RLSVT`), a tester will use it this round with the user's permission and
+after a data backup. **[BOTH]** either; AVD first. Steps that write data say
+**WRITES** in bold; on the phone they write a test workout (finish or `Abandon`
+it afterwards).
+
+### R3 setup and automated state
+
+- Build and install on the AVD: `ANDROID_SERIAL=emulator-5554 ./gradlew
+  installDebug`; on the phone, install the same debug build only after the
+  backup. Restore the sample backup on the AVD first. Room 8, no flags, no
+  network. Notifications and `Alarms & reminders` must be allowed for the alert
+  steps (R3-P1, R3-I1); R3-F5 needs notifications denied.
+- **Automated verification is current and not re-run here.** The working tree
+  is clean and `git diff 8c4698f HEAD -- app` is empty (the last app change;
+  everything since is docs and `WORKFLOW_STATE.json`). Last full gate (revision
+  7, AVD): `spotlessCheck detekt lintDebug` clean, JVM unit tests 643, 0
+  failures, instrumented 306, 0 failures (`RestAlarmEffectTest` 6 tests).
+  Not run by anything yet: the physical-phone P-1 path through the real route.
+
+### R3-A. Rest alert fixes (P-1, I-1)
+
+- **R3-P1a [BOTH]** (P-1, back from `Why ›`) **WRITES** a workout. Log a set so
+  a rest starts; let it end (one alert, strip reads `Rest done`). Open `Why ›`
+  on an exercise, then Back. Expect: **no second alert** on returning.
+- **R3-P1b [BOTH]** (P-1, Leave then Resume) **WRITES**. Rest ended and
+  `Rest done` showing: `Leave` the workout to Home, then `Resume`. Expect: no
+  second alert.
+- **R3-P1c [BOTH]** (P-1, background then reopen) **WRITES**. Start a rest,
+  background the app (lock the screen on the phone), let it end: **exactly one**
+  alert. Reopen the app. Expect: no second alert, `Rest done` shown.
+- **R3-P1d [AVD]** (P-1 control) Reopen the app while a rest is **still
+  counting down**. Expect: its alert still fires once at the end.
+- **R3-I1a [BOTH]** (I-1) **WRITES**. Start a rest, wait until under 15 s
+  remain, tap `-15s`. Expect: the rest ends at once with **exactly one** alert,
+  immediately (not up to 15 s late), and no second one afterwards.
+- **R3-I1b [AVD]** (I-1) With more than 15 s left, tap `-15s`: the rest
+  shortens, alerts once at the new end. Tap `+15s`: alerts once at the later end.
+
+### R3-B. Round-2 editor and recovery fixes (R2-F-1 to R2-F-4)
+
+- **R3-F1a [AVD]** (R2-F-1) `Add exercise`: tap the name field, then tap away
+  or move focus **without typing**. Expect: the name error appears. Fresh open
+  shows none.
+- **R3-F1b [AVD]** (R2-F-1) Same on `New plan`: focus the name field and leave
+  it empty -> error appears.
+- **R3-F2a [AVD]** (R2-F-2) Plan editor, a plan with enough rows to scroll:
+  type a name that duplicates an existing plan, scroll to the bottom, `Save`.
+  Expect: the screen scrolls to the name field and the duplicate error reads
+  **under the name field** (not at the foot of the list).
+- **R3-F2b [AVD]** (R2-F-2) Exercise editor on a short screen or at large
+  font, name scrolled out of view, empty or duplicate name, `Save`: the name
+  field scrolls into view with its error.
+- **R3-F3 [AVD]** (R2-F-3) Home -> `Log recovery` at 384dp, nothing chosen.
+  Expect: the hint `Choose a value on each of the six scales to save.` sits
+  **directly above `Save entry`** inside the pinned bar, Save disabled. Choose
+  all six: hint gone, Save enabled. **WRITES** one check-in (AVD). Dark and
+  light.
+- **R3-F4 [AVD]** (R2-F-4) Plan editor: add a new exercise row, blank a
+  required field (set count or reps) -> the error reads **`Enter a value.`**,
+  not `Add at least one exercise.`.
+
+### R3-C. Notification prompt (R2-F-5)
+
+- **R3-F5a [AVD]** (R2-F-5) Fresh install (uninstall first), log a first set;
+  **deny** notifications. With the rest running tap `-15s` and `+15s` several
+  times. Expect: **no** notification prompt reappears mid-rest.
+- **R3-F5b [AVD]** (R2-F-5) After `Skip rest` (or leaving and re-entering the
+  workout) and starting a new rest, the prompt may ask again; logging a new set
+  while a rest is still running does not re-ask. **WRITES** a workout.
+
+### R3-D. Regression pass
+
+- **R3-R1 [AVD]** Rest timer: strip appears after a set, `Skip rest` (one line)
+  clears it with no alert, `+15s` extends, a new set restarts the rest, `Finish`
+  ends the workout with no alert afterwards and nothing left running.
+- **R3-R2 [AVD]** Plan editor: add, reorder, expand a row, steppers, `Save`
+  (new version); Back with edits asks `Discard changes?`; Back unedited does
+  not; no name error on open.
+- **R3-R3 [AVD]** Exercise editor: presets, save, duplicate-name error shows
+  after typing, no error on open.
+- **R3-R4 [AVD]** Workout: board -> focus -> log -> `Undo last` -> `Finish`
+  -> done -> `Back to Home`.
+
+### R3 for the phone tester
+
+Back up the phone's data first. Steps that write say so; they log a test
+workout, finish or `Abandon` it afterwards.
+
+1. **[PHONE] R3-P1a. WRITES a test workout.** Log a set, let the rest end
+   (one alert, `Rest done`), open `Why ›`, Back: no second alert.
+2. **[PHONE] R3-P1b. WRITES (same workout).** With `Rest done` showing, `Leave`
+   -> Home -> `Resume`: no second alert.
+3. **[PHONE] R3-P1c. WRITES (same workout).** Start a rest, lock the screen,
+   let it end: exactly one alert; unlock and reopen: no second alert.
+4. **[PHONE] R3-I1a. WRITES (same workout).** Start a rest, wait until under 15
+   s remain, tap `-15s`: one alert at once, no second.
+5. **[BOTH] R3-F1/F2/F3/F4** are look-only on the phone if the tester does not
+   `Save`; use the AVD for any step marked WRITES.
+
+### R3 known deferred (not findings)
+
+- **Group B (B1-B6) stays in the grandchild
+  `repflow-redesign-visual-foundation-remediation-1-remediation-1`**
+  (phase `PLANNING`): Settings 5c/5d, Progress 5b, set entry keeping its values
+  (D60), the three empty-state / search-field / ordering defects, and the
+  Settings entry point for the exact-alarm prompt. Do not report them here.
+- Review observations left as-is: O3 (exact-alarm prompt offered once), O4
+  (font scale for `Skip rest`), O5 (formatting), and implementation review O-3
+  (the P-1 test covers the effect, not the route; this round's phone steps
+  cover the real path).
+- Everything rounds 1 and 2 listed as deferred or accepted stays so.
+
+### R3 expected result and what happens next
+
+Every step behaves as stated, nothing crashes, no earlier area regressed. If
+clean: `/accept-milestone repflow-redesign-visual-foundation-remediation-1` is
+the only acceptance command; it needs every checkpoint in this item's registry
+`COMPLETE` (all sixteen are) and, per the workflow, the group-B child must also
+reach completion before this item can reach `MILESTONE_COMPLETE`. A checkpoint
+still outstanding goes to `/milestone-implement`; no command records acceptance
+of a partial round. Findings go to `.ai-review/feedback/FUNCTIONAL_REVIEW.md`,
+then `/apply-functional-review repflow-redesign-visual-foundation-remediation-1`
+(bounded branch for a same-scope fix, broad branch for a `...-remediation-<n>`
+child).
+
+---
+
+## `repflow-redesign-visual-foundation-remediation-1` — Functional review checklist, round 2 (implementation revision 5; superseded by round 3 above for the changed areas)
 
 Round 2 of the functional review. Round 1 (the longer checklist further down,
 now headed "round 1") returned FAIL; its group-A findings were fixed
