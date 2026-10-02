@@ -1481,7 +1481,7 @@
         "recorded_at": "2026-10-01T02:05:53+01:00"
       },
       "technical_approval": {
-        "status": "CURRENT",
+        "status": "STALE",
         "basis": "EXTERNAL_APPROVE",
         "reviewed_bundle_id": "3770b070d0af6d82b3709dde8e8b767a5438c1f6ad8230c3c82be9818e963c75",
         "approved_review_content_id": "a8daf7e468f4516615e77d6f99470e33fdec25bd8389949491ba930ae816644b",
@@ -3095,8 +3095,36 @@
       },
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 103,
-      "last_transition": "2026-10-02T17:35:51+01:00"
+      "state_revision": 104,
+      "last_transition": "2026-10-02T18:25:16Z"
+    },
+    "repflow-redesign-visual-foundation-remediation-1-remediation-1": {
+      "work_item_type": "product",
+      "work_item_kind": "product",
+      "work_item_id": "repflow-redesign-visual-foundation-remediation-1-remediation-1",
+      "parent_work_item_id": "repflow-redesign-visual-foundation-remediation-1",
+      "plan_path": "docs/milestones/repflow-redesign-visual-foundation-remediation-1-remediation-1-execution.md",
+      "registry_path": "docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-remediation-1-registry.json",
+      "mapping_path": null,
+      "governing_workflow_version": "2.1",
+      "phase": "PLANNING",
+      "plan_revision": 1,
+      "implementation_revision": null,
+      "functional_review_round": null,
+      "base_commit": "389608ee3a16e09565145673cd496953a9c3b091",
+      "reviewed_implementation_head": null,
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": null,
+      "checkpoints": {},
+      "current_bundle_id": null,
+      "plan_approval": null,
+      "technical_approval": null,
+      "technical_review_block_pins": [],
+      "plan_review_stages": null,
+      "functional_acceptance_status": null,
+      "blocking_decisions": [],
+      "state_revision": 1,
+      "last_transition": "2026-10-02T18:25:16Z"
     }
   }
 }
