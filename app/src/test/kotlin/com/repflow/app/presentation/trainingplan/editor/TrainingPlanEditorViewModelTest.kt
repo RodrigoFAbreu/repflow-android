@@ -22,6 +22,7 @@ import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.presentation.navigation.RepFlowDestinations
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -29,6 +30,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -318,6 +320,80 @@ class TrainingPlanEditorViewModelTest {
                     .single()
                     .exerciseId,
             )
+        }
+
+    private fun seedPlanAndOpenEditor(): TrainingPlanEditorViewModel {
+        val exerciseId = seedExercise()
+        val created =
+            runBlocking {
+                CreateTrainingPlan(planRepository, exerciseRepository, clock, ids)(
+                    CreateTrainingPlanCommand(
+                        name = "Push Pull Legs",
+                        plannedExercises =
+                            listOf(
+                                PlannedExerciseInput(
+                                    exerciseId = exerciseId.value,
+                                    order = 0,
+                                    targetSets = 3,
+                                    targetKind = PlannedExerciseTargetKind.REPS,
+                                    repMin = 8,
+                                    repMax = 12,
+                                    durationMinSeconds = null,
+                                    durationMaxSeconds = null,
+                                    restSeconds = 90,
+                                    isOptional = false,
+                                ),
+                            ),
+                    ),
+                )
+            }
+        check(created is DomainResult.Success)
+        return viewModel(planId = created.value.value)
+    }
+
+    @Test
+    fun `backing out of an unchanged existing plan does not ask to discard`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            val vm = seedPlanAndOpenEditor()
+            advanceUntilIdle()
+
+            vm.onBackRequested()
+
+            assertTrue(vm.uiState.value.dismissed)
+            assertFalse(vm.uiState.value.isDiscardDialogVisible)
+        }
+
+    @Test
+    fun `backing out of an edited existing plan asks to discard`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            val vm = seedPlanAndOpenEditor()
+            advanceUntilIdle()
+
+            vm.onNameChanged("Push Pull Legs 2")
+            vm.onBackRequested()
+
+            assertTrue(vm.uiState.value.isDiscardDialogVisible)
+            assertFalse(vm.uiState.value.dismissed)
+        }
+
+    @Test
+    fun `editing a row and then reverting it is not a change`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            val vm = seedPlanAndOpenEditor()
+            advanceUntilIdle()
+            val rowId =
+                vm.uiState.value.rows
+                    .single()
+                    .rowId
+
+            vm.onRowTargetSetsChanged(rowId, "4")
+            vm.onRowTargetSetsChanged(rowId, "3")
+            vm.onBackRequested()
+
+            assertTrue(vm.uiState.value.dismissed)
         }
 
     @Test

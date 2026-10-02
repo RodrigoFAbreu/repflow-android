@@ -59,6 +59,7 @@ class TrainingPlanEditorViewModel
             savedStateHandle.get<String>(RepFlowDestinations.PLAN_EDIT_ARG)?.let(::TrainingPlanId)
 
         private var loadedOverview: TrainingPlanOverview? = null
+        private var loadedSignature: DraftSignature? = null
         private var nextRowId = 0L
 
         private val _uiState =
@@ -94,6 +95,11 @@ class TrainingPlanEditorViewModel
 
         private fun onExistingLoaded(overview: TrainingPlanOverview) {
             loadedOverview = overview
+            loadedSignature =
+                DraftSignature(
+                    name = overview.plan.name.value,
+                    rows = overview.latestVersion.plannedExercises.map { rowSignature(toRow(it)) },
+                )
             if (savedStateHandle.get<Boolean>(KEY_DRAFT_INITIALIZED) != true) {
                 savedStateHandle[KEY_NAME] = overview.plan.name.value
                 savedStateHandle[KEY_DRAFT_INITIALIZED] = true
@@ -313,8 +319,29 @@ class TrainingPlanEditorViewModel
         private fun isDirty(state: TrainingPlanEditorUiState): Boolean =
             when (state.mode) {
                 is TrainingPlanEditorMode.Create -> state.name.isNotBlank() || state.rows.isNotEmpty()
-                is TrainingPlanEditorMode.Edit -> loadedOverview != null
+                is TrainingPlanEditorMode.Edit -> loadedSignature?.let { it != signatureOf(state) } ?: false
             }
+
+        private fun signatureOf(state: TrainingPlanEditorUiState) = DraftSignature(name = state.name, rows = state.rows.map(::rowSignature))
+
+        /** The user-editable content of a row, without its presentation-only id or derived display fields. */
+        private fun rowSignature(row: PlannedExerciseRowUiState): List<Any?> =
+            listOf(
+                row.exerciseId,
+                row.targetSetsText,
+                row.repMinText,
+                row.repMaxText,
+                row.durationMinText,
+                row.durationMaxText,
+                row.restSecondsText,
+                row.isOptional,
+                row.targetWarmupSetsText,
+            )
+
+        private data class DraftSignature(
+            val name: String,
+            val rows: List<List<Any?>>,
+        )
 
         private fun toSubmitError(error: TrainingPlanOperationError): TrainingPlanEditorSubmitError =
             when (error) {
