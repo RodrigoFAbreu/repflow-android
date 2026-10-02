@@ -46,9 +46,12 @@ import com.repflow.app.domain.trainingplan.TrainingPlanId
 import com.repflow.app.domain.trainingplan.TrainingPlanName
 import com.repflow.app.domain.trainingplan.TrainingPlanVersion
 import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
+import com.repflow.app.domain.workout.WorkoutSessionId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -69,7 +72,9 @@ class ActiveWorkoutViewModelTest {
     private val trainingPlanRepository = InMemoryTrainingPlanRepository()
     private val progressionRecommendationRepository = InMemoryProgressionRecommendationRepository()
     private val settingsRepository = InMemorySettingsRepository()
-    private val viewModel =
+    private val viewModel = newViewModel()
+
+    private fun newViewModel() =
         ActiveWorkoutViewModel(
             observeActiveWorkoutSession = ObserveActiveWorkoutSession(workoutRepository),
             observeExercises = ObserveExercises(exerciseRepository),
@@ -703,6 +708,47 @@ class ActiveWorkoutViewModelTest {
                 viewModel.onCompleteWorkout(active.sessionId)
 
                 assertEquals(ActiveWorkoutContent.NoActiveSession, awaitItem().content)
+            }
+        }
+
+    /**
+     * The finish sheet's confirm (remediation-1 CP9), implementation-review
+     * revision 1's missing test: success ends in `Finished` with the session's
+     * id, and a second confirm while the first is in flight is ignored - were
+     * it not, its certain failure would reset the first one's `Finished`.
+     */
+    @Test
+    fun `the finish confirm ends Finished with the session id and a second confirm in flight is ignored`() =
+        runTest {
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            // Built after Main is installed, so its own launches run on it.
+            val viewModel = newViewModel()
+            viewModel.onStartWorkout()
+            advanceUntilIdle()
+            val sessionId = requireNotNull(workoutRepository.findActiveSession()).id
+
+            viewModel.onCompleteWorkout(sessionId)
+            assertEquals(WorkoutFinishState.InFlight, viewModel.finish.value)
+            viewModel.onCompleteWorkout(sessionId)
+            advanceUntilIdle()
+
+            assertEquals(WorkoutFinishState.Finished(sessionId), viewModel.finish.value)
+        }
+
+    /** A failed finish returns the confirm to idle and reports the error as any other action does. */
+    @Test
+    fun `a failed finish returns to idle and reports the error`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                awaitItem() // Loading
+                awaitItem() // NoActiveSession
+
+                viewModel.onCompleteWorkout(WorkoutSessionId("missing"))
+
+                assertEquals(ActiveWorkoutErrorReason.NOT_FOUND, awaitItem().errorMessage)
+                assertEquals(WorkoutFinishState.Idle, viewModel.finish.value)
+                cancelAndIgnoreRemainingEvents()
             }
         }
 }
