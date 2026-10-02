@@ -103,16 +103,27 @@ fun RecoveryFutsalScreen(
         actions = { HistoryAction(onHistoryClick) },
         snackbarHost = { SnackbarHost(snackbarHostState) { RecoverySnackbar(it) } },
         bottomBar = {
-            RepFlowBottomActionBar(
-                primaryText =
-                    stringResource(if (uiState.isEntrySaved) R.string.recovery_futsal_saved else R.string.recovery_futsal_save_entry),
-                onPrimaryClick = onSaveEntry,
-                // Not while a date's values load: Save would store the previous
-                // date's fields onto the new date (implementation-review revision 1's O8).
-                primaryEnabled = !uiState.isSaving && !uiState.isLoading && uiState.hasAllScaleValues,
-                primaryIcon = if (uiState.isEntrySaved) RepFlowIcons.checkFat else null,
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            )
+            RepFlowBottomActionBar(modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
+                // Inside the bar, above Save: in the scrolling body it sat under the pinned bar
+                // at 384dp, leaving a disabled Save with no visible reason (functional review R2-F-3).
+                if (!uiState.hasAllScaleValues) {
+                    Text(
+                        text = stringResource(R.string.recovery_futsal_scales_incomplete),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
+                    )
+                }
+                RepFlowPrimaryButton(
+                    text =
+                        stringResource(if (uiState.isEntrySaved) R.string.recovery_futsal_saved else R.string.recovery_futsal_save_entry),
+                    onClick = onSaveEntry,
+                    // Not while a date's values load: Save would store the previous
+                    // date's fields onto the new date (implementation-review revision 1's O8).
+                    enabled = !uiState.isSaving && !uiState.isLoading && uiState.hasAllScaleValues,
+                    leadingIcon = if (uiState.isEntrySaved) RepFlowIcons.checkFat else null,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         },
     ) { padding ->
         Column(
@@ -134,14 +145,6 @@ fun RecoveryFutsalScreen(
                     highLabel = stringResource(spec.highLabelRes),
                     label = stringResource(spec.labelRes),
                     modifier = Modifier.fillMaxWidth().padding(bottom = ScaleRowGap),
-                )
-            }
-            if (!uiState.hasAllScaleValues) {
-                Text(
-                    text = stringResource(R.string.recovery_futsal_scales_incomplete),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
-                    modifier = Modifier.padding(bottom = ScaleRowGap),
                 )
             }
             FutsalSection(

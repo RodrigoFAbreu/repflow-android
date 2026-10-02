@@ -4,12 +4,14 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
 import com.repflow.app.presentation.RepFlowTheme
@@ -154,6 +156,18 @@ class RecoveryFutsalScreenTest {
         composeRule.onNodeWithText(string(R.string.recovery_futsal_scales_incomplete)).assertIsDisplayed()
         composeRule.onNodeWithText(string(R.string.recovery_futsal_save_entry)).assertIsNotEnabled().performClick()
         assertEquals(0, saves)
+    }
+
+    /** Functional review R2-F-3: the reason sits in the pinned bar, directly above Save, never under it. */
+    @Test
+    fun theIncompleteScalesHintSitsDirectlyAboveTheSaveButton() {
+        setScreen(loaded())
+
+        val hint = composeRule.onNodeWithText(string(R.string.recovery_futsal_scales_incomplete)).getBoundsInRoot()
+        val save = composeRule.onNodeWithText(string(R.string.recovery_futsal_save_entry)).getBoundsInRoot()
+
+        assertTrue("hint ${hint.bottom} must end above Save ${save.top}", hint.bottom <= save.top)
+        assertTrue("hint ${hint.bottom} must be adjacent to Save ${save.top}", save.top - hint.bottom < 40.dp)
     }
 
     @Test
