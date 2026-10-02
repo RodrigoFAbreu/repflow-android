@@ -7,10 +7,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
 import com.repflow.app.domain.exercise.ExerciseId
@@ -242,5 +245,70 @@ class ExerciseEditorScreenTest {
         composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.exercise_editor_submit_error_duplicate_name))
             .assertIsDisplayed()
+    }
+
+    /** Hosts the screen over real state, so typed text round-trips the way the ViewModel would echo it. */
+    private fun setStatefulContent(initial: ExerciseEditorUiState): () -> ExerciseEditorUiState {
+        var uiState by mutableStateOf(initial)
+        composeRule.setContent {
+            RepFlowTheme {
+                ExerciseEditorScreen(
+                    uiState = uiState,
+                    onNameChanged = {},
+                    onTrackingTypeChanged = {},
+                    onInstructionsChanged = {},
+                    onRestSecondsChanged = { uiState = uiState.copy(restSecondsText = it) },
+                    onLoadIncrementChanged = { uiState = uiState.copy(loadIncrementKgText = it) },
+                    onSaveClicked = {},
+                    onBackRequested = {},
+                    onDiscardConfirmed = {},
+                    onDiscardCancelled = {},
+                    onMessageShown = {},
+                )
+            }
+        }
+        return { uiState }
+    }
+
+    /**
+     * Self-review regression: `Other` used to close the moment the typed text
+     * matched a preset, so `600` could not be typed (`60` is `1:00`). It now
+     * stays open while typing, and a preset tap from it selects that preset
+     * rather than clearing the value.
+     */
+    @Test
+    fun otherRestFieldStaysOpenWhileTypingThroughAPresetValue() {
+        val state = setStatefulContent(ExerciseEditorUiState(trackingType = ExerciseTrackingType.REPS_ONLY))
+        val restLabel = composeRule.activity.getString(R.string.exercise_editor_rest_duration_label)
+
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.exercise_editor_preset_other)).performClick()
+        composeRule.onNodeWithText(restLabel).performTextInput("6")
+        composeRule.onNodeWithText(restLabel).performTextInput("0")
+        composeRule.onNodeWithText(restLabel).assertIsDisplayed()
+        composeRule.onNodeWithText(restLabel).performTextInput("0")
+
+        assertEquals("600", state().restSecondsText)
+
+        composeRule.onNodeWithText(restLabel).performTextReplacement("60")
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.exercise_rest_clock, 1, 0)).performClick()
+
+        assertEquals("60", state().restSecondsText)
+        composeRule.onNodeWithText(restLabel).assertDoesNotExist()
+    }
+
+    /** The same regression on `Load step`: `5.5` passes through the `5 kg` preset. */
+    @Test
+    fun otherLoadStepFieldStaysOpenWhileTypingThroughAPresetValue() {
+        val state = setStatefulContent(ExerciseEditorUiState(trackingType = ExerciseTrackingType.WEIGHT_AND_REPS))
+        val loadLabel = composeRule.activity.getString(R.string.exercise_editor_load_increment_label)
+        val other = composeRule.activity.getString(R.string.exercise_editor_preset_other)
+
+        // The rest row's `Other` comes first, the load step's second.
+        composeRule.onAllNodesWithText(other)[1].performScrollTo().performClick()
+        composeRule.onNodeWithText(loadLabel).performScrollTo().performTextInput("5")
+        composeRule.onNodeWithText(loadLabel).assertExists()
+        composeRule.onNodeWithText(loadLabel).performTextInput(".5")
+
+        assertEquals("5.5", state().loadIncrementKgText)
     }
 }

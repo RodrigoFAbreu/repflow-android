@@ -14,7 +14,93 @@ explicitly** — `active_work_item_id` still points at the parent.
   `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-registry.json`
   (CP1–CP16, executed in array order).
 - **Current checkpoint: CP16 — Verification, side-by-side validation, and
-  decision updates: complete. All sixteen checkpoints are done.**
+  decision updates: complete. All sixteen checkpoints are done.** The
+  self-review of the full milestone diff and the full gate are done (below);
+  next is the external implementation review of revision 1.
+
+### Self-review of the full milestone diff (2026-10-02)
+
+`/milestone-implement` step 2 over `17e7f32..6595108`, in four slices
+(persistence/settings/backup; domain and application read models with their
+ViewModels; the workout surfaces; every other converted screen, navigation
+and the design system), each read against the plan, the deviation register
+and the pre-milestone code. Mechanical checks first: no Android, coroutine
+or outer-layer import in `domain/`, no Room type outside `data/` and
+`infrastructure/`, no `.ordinal`, no broad `catch`, no destructive
+migration; the one schema change is CP14's planned `MIGRATION_7_8`, with its
+test. **Two Important findings, both fixed:**
+
+- **The rest alert fired for a workout that had already ended.** Only the
+  workout route cancels the rest alarm, and the milestone added ways to end a
+  session without that route on screen: Home's resume card `Abandon` (CP5)
+  and Settings' `Erase all data` (CP14) (a restore already could). The
+  "rest over" notification and buzz then fired for a session that no longer
+  existed, and the finish path depended on Room's update reaching the route
+  before it navigated to the done screen. Fixed at the one place every path
+  reaches: `RestTimerExpiryHandler` now alerts only while an active session
+  still has a rest timer (finished, abandoned, erased or skipped → nothing).
+  Tests: `RestTimerExpiryHandlerTest` seeds an active session with a running
+  rest, and has four new cases (abandoned, completed, skipped, erased: no
+  buzz, no notification, every switch on). `RestTimerReceiverDeliveryTest`
+  now gives the app's own database a running rest first, through a second
+  Room instance, and abandons or restores that session afterwards.
+- **The exercise editor's `Other` field closed while the user typed** (CP10).
+  It was shown only while the text matched no preset, so typing `600` closed
+  it at `60` (the `1:00` preset), and `5.5` closed it at `5` (the `5 kg`
+  preset). Rests of 600–609, 900–909, 1200–1209 and 1800 s, and load steps of
+  5.x and 50–59.x kg, could not be entered. `Other` now stays open once
+  chosen, until a preset is tapped. While it is open, tapping a preset selects
+  that preset rather than clearing the value. New `ExerciseEditorScreenTest`
+  cases `otherRestFieldStaysOpenWhileTypingThroughAPresetValue` and
+  `otherLoadStepFieldStaysOpenWhileTypingThroughAPresetValue`.
+
+Each new test fails with the fix reverted and passes with it (all six were
+re-run on the AVD both ways).
+
+**Rejected with evidence:** a `+0.0 kg` delta on Android, on the theory that
+libcore's `BigDecimal.stripTrailingZeros()` keeps a zero's scale. On the API
+36 AVD, `0.0`, `80.0 − 80.0` and `0.00` all strip to `0`, as on the JVM.
+
+**Minor, reported and not changed** (for the reviewer):
+
+- **A failed settings read can crash the app from the background.** The
+  receiver's coroutine has no handler, and its Room reads are new. The same
+  applies to `ActiveWorkoutViewModel`'s auto-start read after a set is
+  recorded.
+- **An already-expired rest is re-scheduled** whenever the route re-enters
+  composition, so AlarmManager fires it again. This is the same code as
+  before the milestone. A rest that is still running is the precondition
+  the fix above now enforces.
+- **Focus mode's warm-up hint always says `Ns rest`,** even with auto-start
+  off.
+- **Set RPE takes whole numbers only (`0–10`).** The old text field accepted
+  halves; `D11` names only the range.
+- **The focus keypad loses its typed text on rotation** across the 400 dp
+  `Row`/`Column` switch.
+- **Recovery's `Saved` can mark an edit made during an in-flight save,** a
+  window of milliseconds.
+- **A few non-tab navigations have no `launchSingleTop`,** so a fast double
+  tap can open a screen twice.
+- **System back on the History detail leaves the tab** instead of closing the
+  detail (as before the milestone).
+- **The recovery scale cells are announced without their scale's name.**
+- **`ProgressViewModel` has no `catch`,** like `HistoryViewModel` before it.
+
+**Full gate (step 3), after the fixes, on the tree committed with this
+record:**
+
+- `./gradlew --rerun-tasks spotlessCheck detekt lintDebug testDebugUnitTest
+  assembleDebug assembleDebugAndroidTest`: **BUILD SUCCESSFUL, 95/95 tasks
+  executed.**
+- JVM: **621 tests in 101 classes, 0 failures.**
+- Lint: **0 errors, 21 warnings, 1 hint** (the standing baseline).
+- detekt: **0 issues.**
+- `connectedDebugAndroidTest` on **`RepFlow_S24Ultra_384dp_API36`** (AVD),
+  in three package groups that together cover the whole suite
+  (`presentation.workout` 56; the rest of `presentation` 135; everything
+  outside `presentation` 84): **275 tests, 0 failures, 0 errors, 0 skipped**
+  (CP16's 269 plus the six new ones).
+- This is emulator evidence. The device coverage is CP16's SM-S928B runs.
 
 ### CP16 — what was done and verified (2026-10-02)
 
@@ -1474,11 +1560,13 @@ explicitly** — `active_work_item_id` still points at the parent.
 
 ### Next action
 
-`/milestone-implement repflow-redesign-visual-foundation-remediation-1` once
-more: every registry checkpoint is `COMPLETE` and the phase is
-`SELF_REVIEWING_IMPLEMENTATION`, so the next invocation runs the command's
-step 2 onward (self-review of the full milestone diff, the full gate, and the
-implementation review bundle). `O11`, `O12` and `D60`'s carry-over were
+External implementation review of the implementation-revision-1 bundle
+(`.ai-review/repflow-redesign-visual-foundation-remediation-1/current/`): a
+hard gate. The self-review, the full gate and the bundle are done; the
+reviewer's feedback goes to
+`.ai-review/repflow-redesign-visual-foundation-remediation-1/feedback/REVIEW_FEEDBACK.md`,
+then `/apply-implementation-review repflow-redesign-visual-foundation-remediation-1`
+(or `/approve-review` on a clean `APPROVE`). `O11`, `O12` and `D60`'s carry-over were
 decided by the user on 2026-10-01: they go to a later remediation child
 (`IMPROVEMENT_ROADMAP.md` §9.8).
 

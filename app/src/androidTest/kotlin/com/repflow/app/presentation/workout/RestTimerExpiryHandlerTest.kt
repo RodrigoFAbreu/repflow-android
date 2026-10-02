@@ -13,7 +13,13 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.repflow.app.R
 import com.repflow.app.application.settings.AppSettings
+import com.repflow.app.data.backup.LocalTrainingDataRepository
 import com.repflow.app.data.settings.LocalSettingsRepository
+import com.repflow.app.data.workout.LocalWorkoutRepository
+import com.repflow.app.domain.common.DomainResult
+import com.repflow.app.domain.workout.RestTimer
+import com.repflow.app.domain.workout.WorkoutSession
+import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.infrastructure.database.RepFlowDatabase
 import com.repflow.app.infrastructure.database.SETTINGS_SEED_CALLBACK
 import kotlinx.coroutines.runBlocking
@@ -40,6 +46,10 @@ import java.time.Instant
  * an upgraded install, which must survive. And it changes each switch after
  * the alarm is scheduled and before the rest ends, both ways, and asserts the
  * outcome follows the new value: the switches are read when the alarm fires.
+ *
+ * Each case starts with an active session whose rest is running, as when the
+ * alarm was scheduled; the self-review cases end that session or its rest
+ * first and assert that nothing alerts.
  */
 @RunWith(AndroidJUnit4::class)
 class RestTimerExpiryHandlerTest {
@@ -48,6 +58,7 @@ class RestTimerExpiryHandlerTest {
     private val vibrator = RecordingVibrator()
     private lateinit var database: RepFlowDatabase
     private lateinit var settings: LocalSettingsRepository
+    private lateinit var workouts: LocalWorkoutRepository
     private lateinit var handler: RestTimerExpiryHandler
 
     @Before
@@ -64,8 +75,11 @@ class RestTimerExpiryHandlerTest {
                 .addCallback(SETTINGS_SEED_CALLBACK)
                 .build()
         settings = LocalSettingsRepository(database)
-        handler = RestTimerExpiryHandler(settings, vibrator)
+        workouts =
+            LocalWorkoutRepository(database, database.workoutSessionDao(), database.workoutExerciseDao(), database.workoutSetDao())
+        handler = RestTimerExpiryHandler(settings, workouts, vibrator)
         manager.cancel(RestTimerExpiredReceiver.NOTIFICATION_ID)
+        runBlocking { workouts.insert(activeSessionWithRest()) }
     }
 
     @After
@@ -127,6 +141,59 @@ class RestTimerExpiryHandlerTest {
             it.copy(restTimerVibrate = true)
         }
         assertEquals(listOf(expectedUsage()), vibrator.usages)
+    }
+
+    /**
+     * Self-review: a rest that is no longer running never alerts, whatever the
+     * switches say - the session was abandoned (Home's resume card), erased,
+     * or had its rest skipped while the workout screen, the only place that
+     * cancels the alarm, was not shown.
+     */
+    @Test
+    fun anAbandonedSessionsRestDoesNotAlert() {
+        endTheActiveSession { it.abandon(Instant.now()) }
+        assertNoAlertWithEverySwitchOn()
+    }
+
+    @Test
+    fun aCompletedSessionsRestDoesNotAlert() {
+        endTheActiveSession { it.complete(Instant.now()) }
+        assertNoAlertWithEverySwitchOn()
+    }
+
+    @Test
+    fun aSkippedRestDoesNotAlert() {
+        endTheActiveSession { it.withClearedRestTimer() }
+        assertNoAlertWithEverySwitchOn()
+    }
+
+    @Test
+    fun erasedDataDoesNotAlert() {
+        runBlocking { LocalTrainingDataRepository(database).clearTrainingData() }
+        assertNoAlertWithEverySwitchOn()
+    }
+
+    private fun endTheActiveSession(change: (WorkoutSession) -> DomainResult<WorkoutSession, *>) {
+        runBlocking {
+            val active = checkNotNull(workouts.findActiveSession())
+            val changed = (change(active) as DomainResult.Success).value
+            assertTrue(workouts.update(changed) is DomainResult.Success)
+        }
+    }
+
+    private fun assertNoAlertWithEverySwitchOn() {
+        runBlocking {
+            settings.update { settingsWith(notification = true, vibrate = true) }
+            handler.onRestEnded(context, notificationPermitted = true)
+        }
+        assertEquals(emptyList<Int>(), vibrator.usages)
+        assertPosted(false)
+    }
+
+    private fun activeSessionWithRest(): WorkoutSession {
+        val started = WorkoutSession.start(WorkoutSessionId("rest-alert-session"), trainingPlanVersionId = null, startedAt = Instant.now())
+        val rest = RestTimer.start(durationSeconds = REST_SECONDS, now = Instant.now())
+        return (started.withStartedRestTimer(rest) as DomainResult.Success).value
     }
 
     private fun assertSwitchChangedAfterScheduling(
@@ -219,6 +286,7 @@ class RestTimerExpiryHandlerTest {
 
     private companion object {
         const val SCHEDULE_AHEAD_SECONDS = 600L
+        const val REST_SECONDS = 90
         const val TIMEOUT_MILLIS = 3_000L
         const val POLL_MILLIS = 50L
         const val SETTLE_MILLIS = 300L

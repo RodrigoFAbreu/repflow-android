@@ -31,7 +31,9 @@ import javax.inject.Inject
  *   switch is on - and since that needs no notification permission, it buzzes
  *   even when the permission is denied.
  *
- * With both switches off it does nothing. The in-app timer never depends on
+ * With both switches off it does nothing, and nothing happens either when no
+ * active session still has a running rest (the workout ended, or its rest was
+ * skipped, away from the workout screen). The in-app timer never depends on
  * this receiver.
  *
  * `onReceive` hands off to the handler on [Dispatchers.IO] through

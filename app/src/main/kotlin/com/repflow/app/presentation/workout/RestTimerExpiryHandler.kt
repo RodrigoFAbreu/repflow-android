@@ -7,6 +7,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.repflow.app.R
 import com.repflow.app.application.settings.SettingsRepository
+import com.repflow.app.application.workout.WorkoutRepository
 import javax.inject.Inject
 
 /**
@@ -28,6 +29,14 @@ import javax.inject.Inject
  *   Vibrate switch is on, with notification usage ([restAlertVibrationUsage]).
  *   It needs no notification permission, so it fires even when that is denied.
  *
+ * **Only a rest that is still running alerts.** Before anything else it reads
+ * the active session: no active session, or one with no rest timer, means the
+ * rest the alarm was scheduled for has gone - the workout was finished,
+ * abandoned from Home's resume card, erased from Settings or replaced by a
+ * restore, or its rest was skipped - so nothing is posted and nothing buzzes.
+ * Only the workout route cancels the alarm, and it is not on screen for those
+ * paths (remediation-1 self-review).
+ *
  * Known platform limit (accepted): in vibrate ringer mode Android turns the
  * channel's sound into a fallback vibration, so the phone can buzz with Vibrate
  * off while the notification is on.
@@ -36,12 +45,14 @@ class RestTimerExpiryHandler
     @Inject
     constructor(
         private val settingsRepository: SettingsRepository,
+        private val workoutRepository: WorkoutRepository,
         private val vibrator: RestAlertVibrator,
     ) {
         suspend fun onRestEnded(
             context: Context,
             notificationPermitted: Boolean,
         ) {
+            if (workoutRepository.findActiveSession()?.restTimer == null) return
             val settings = settingsRepository.get()
             val plan = restAlertPlan(settings.restTimerNotification, settings.restTimerVibrate)
             if (plan.postNotification && notificationPermitted) postNotification(context)

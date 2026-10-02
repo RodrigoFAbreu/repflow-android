@@ -224,6 +224,11 @@ private fun trackingTypeLabel(trackingType: ExerciseTrackingType): String =
  * setter typing does; tapping the selected preset again clears the optional
  * default. `Other` opens the typed field, and stays selected for any value
  * that is not a preset (so a restored or invalid draft is never hidden).
+ * Once chosen, `Other` stays open until a preset is tapped - even while the
+ * typed text passes through a preset's value (`60` on the way to `600`), so
+ * typing never closes the field under the user's fingers. While it is open, a
+ * preset tap selects that preset; only tapping the preset already shown as
+ * selected clears the default.
  */
 @Composable
 private fun RestDurationPresets(
@@ -232,7 +237,7 @@ private fun RestDurationPresets(
 ) {
     val presetIndex = REST_SECONDS_PRESETS.indexOfFirst { it.toString() == uiState.restSecondsText.trim() }
     var otherChosen by rememberSaveable { mutableStateOf(false) }
-    val showOther = presetIndex < 0 && (otherChosen || uiState.restSecondsText.isNotBlank())
+    val showOther = otherChosen || (presetIndex < 0 && uiState.restSecondsText.isNotBlank())
     val labels =
         REST_SECONDS_PRESETS.map { seconds ->
             stringResource(R.string.exercise_rest_clock, seconds / SECONDS_PER_MINUTE, seconds % SECONDS_PER_MINUTE)
@@ -246,7 +251,7 @@ private fun RestDurationPresets(
             } else {
                 otherChosen = false
                 val preset = REST_SECONDS_PRESETS[index].toString()
-                onRestSecondsChanged(if (index == presetIndex) "" else preset)
+                onRestSecondsChanged(if (!showOther && index == presetIndex) "" else preset)
             }
         },
         sizing = RepFlowPillPickerDefaults.scale,
@@ -275,7 +280,7 @@ private fun LoadStepPresets(
     val currentGrams = ExerciseUiFormatting.kgTextToGrams(uiState.loadIncrementKgText)
     val presetIndex = LOAD_INCREMENT_KG_PRESETS.indexOfFirst { ExerciseUiFormatting.kgTextToGrams(it) == currentGrams }
     var otherChosen by rememberSaveable { mutableStateOf(false) }
-    val showOther = presetIndex < 0 && (otherChosen || uiState.loadIncrementKgText.isNotBlank())
+    val showOther = otherChosen || (presetIndex < 0 && uiState.loadIncrementKgText.isNotBlank())
     val labels =
         LOAD_INCREMENT_KG_PRESETS.map { stringResource(R.string.exercise_editor_load_step_preset, it) } +
             stringResource(R.string.exercise_editor_preset_other)
@@ -287,7 +292,7 @@ private fun LoadStepPresets(
                 otherChosen = true
             } else {
                 otherChosen = false
-                onLoadIncrementChanged(if (index == presetIndex) "" else LOAD_INCREMENT_KG_PRESETS[index])
+                onLoadIncrementChanged(if (!showOther && index == presetIndex) "" else LOAD_INCREMENT_KG_PRESETS[index])
             }
         },
         sizing = RepFlowPillPickerDefaults.scale,

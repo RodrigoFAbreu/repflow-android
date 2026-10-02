@@ -12,10 +12,18 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.repflow.app.R
+import com.repflow.app.data.workout.LocalWorkoutRepository
+import com.repflow.app.domain.common.DomainResult
+import com.repflow.app.domain.workout.RestTimer
+import com.repflow.app.domain.workout.WorkoutSession
+import com.repflow.app.domain.workout.WorkoutSessionId
+import com.repflow.app.infrastructure.database.RepFlowDatabase
 import com.repflow.app.presentation.MainActivity
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -25,6 +33,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.time.Instant
+import java.util.UUID
 
 /**
  * Remediation-1 CP14 item 3: the real receiver delivers. In the app's own Hilt
@@ -42,6 +51,12 @@ import java.time.Instant
  * Each case cancels the notification first (the handler test posts the same
  * id), and afterwards cancels the alarm and the notification and restores the
  * switch.
+ *
+ * Since the self-review the handler alerts only while an active session still
+ * has a running rest, so each case first gives the app's own database one -
+ * written through a second Room instance on the same file, the app graph
+ * having no test hook - and afterwards abandons the session it started, or
+ * restores the one it found.
  */
 @RunWith(AndroidJUnit4::class)
 class RestTimerReceiverDeliveryTest {
@@ -50,6 +65,10 @@ class RestTimerReceiverDeliveryTest {
 
     private val manager: NotificationManager by lazy { composeRule.activity.getSystemService(NotificationManager::class.java) }
     private var originalNotificationSwitch: Boolean? = null
+    private lateinit var appDatabase: RepFlowDatabase
+    private lateinit var workouts: LocalWorkoutRepository
+    private var sessionFound: WorkoutSession? = null
+    private var sessionStarted: WorkoutSession? = null
 
     @Before
     fun grantNotifications() {
@@ -63,6 +82,7 @@ class RestTimerReceiverDeliveryTest {
         composeRule.onNodeWithContentDescription(string(R.string.home_settings_content_description)).performClick()
         composeRule.waitUntil(TIMEOUT_MILLIS) { switchIs(true) || switchIs(false) }
         originalNotificationSwitch = switchIs(true)
+        startARunningRest()
     }
 
     @After
@@ -70,7 +90,43 @@ class RestTimerReceiverDeliveryTest {
         RestTimerAlarmScheduler.cancel(composeRule.activity)
         manager.cancel(RestTimerExpiredReceiver.NOTIFICATION_ID)
         originalNotificationSwitch?.let(::setNotificationSwitch)
+        if (::appDatabase.isInitialized) {
+            runBlocking {
+                sessionStarted?.let { started -> workouts.update(started.abandon(Instant.now()).successValue()) }
+                sessionFound?.let { found -> workouts.update(found) }
+            }
+            appDatabase.close()
+        }
     }
+
+    private fun startARunningRest() {
+        appDatabase = Room.databaseBuilder(composeRule.activity, RepFlowDatabase::class.java, APP_DATABASE_NAME).build()
+        workouts =
+            LocalWorkoutRepository(
+                appDatabase,
+                appDatabase.workoutSessionDao(),
+                appDatabase.workoutExerciseDao(),
+                appDatabase.workoutSetDao(),
+            )
+        val rest = RestTimer.start(durationSeconds = REST_SECONDS, now = Instant.now())
+        runBlocking {
+            val found = workouts.findActiveSession()
+            if (found == null) {
+                val started =
+                    WorkoutSession
+                        .start(WorkoutSessionId(UUID.randomUUID().toString()), trainingPlanVersionId = null, startedAt = Instant.now())
+                        .withStartedRestTimer(rest)
+                        .successValue()
+                assertTrue(workouts.insert(started) is DomainResult.Success)
+                sessionStarted = started
+            } else {
+                sessionFound = found
+                assertTrue(workouts.update(found.withStartedRestTimer(rest).successValue()) is DomainResult.Success)
+            }
+        }
+    }
+
+    private fun DomainResult<WorkoutSession, *>.successValue(): WorkoutSession = (this as DomainResult.Success).value
 
     @Test
     fun offAtSchedulingOnAtDeliveryPostsTheNotification() {
@@ -137,6 +193,10 @@ class RestTimerReceiverDeliveryTest {
 
     private companion object {
         const val SCHEDULE_AHEAD_SECONDS = 600L
+        const val REST_SECONDS = 600
+
+        /** `DatabaseModule.DATABASE_NAME`, which is private to `infrastructure/di`. */
+        const val APP_DATABASE_NAME = "repflow.db"
         const val TIMEOUT_MILLIS = 5_000L
         const val POLL_MILLIS = 50L
     }
