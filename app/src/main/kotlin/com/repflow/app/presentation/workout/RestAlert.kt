@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.media.AudioAttributes
 import android.os.Build
 import android.os.VibrationAttributes
+import java.time.Instant
 
 /**
  * What happens when a rest ends, from Settings' two independent switches
@@ -39,6 +40,31 @@ fun shouldRequestNotificationPermission(
     sdkInt: Int,
     isPermissionGranted: Boolean,
 ): Boolean = notificationEnabled == true && sdkInt >= Build.VERSION_CODES.TIRAMISU && !isPermissionGranted
+
+/**
+ * Whether the `POST_NOTIFICATIONS` ask is still outstanding (functional review
+ * J9, `D114`): it is until the request has been *answered* - granted or denied
+ * - not until it is granted. A denial leaves the permission ungranted for good,
+ * so waiting for the grant would keep the exact-alarm explanation away from
+ * exactly the user who most needs the buzz to be on time.
+ */
+fun isNotificationAskPending(
+    notificationEnabled: Boolean?,
+    sdkInt: Int,
+    isPermissionGranted: Boolean,
+    requestAnswered: Boolean,
+): Boolean = !requestAnswered && shouldRequestNotificationPermission(notificationEnabled, sdkInt, isPermissionGranted)
+
+/**
+ * Whether coming back to the workout should re-arm the rest alarm (`D114`):
+ * only while the rest is still running. A finished rest stays in the session
+ * until the next set or `Skip rest`, and re-arming it would schedule a past
+ * trigger that fires - and alerts - again straight away.
+ */
+fun shouldRearmRestAlarm(
+    restEndAt: Instant?,
+    now: Instant,
+): Boolean = restEndAt != null && restEndAt.isAfter(now)
 
 /**
  * Whether to offer the exact-alarm explanation (functional review J9): only on

@@ -8,6 +8,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.Instant
 
 /** Remediation-1 CP14: the pure halves of the rest-end alert and the permission prompt. */
 class RestAlertTest {
@@ -38,6 +39,33 @@ class RestAlertTest {
         assertFalse(shouldOfferExactAlarmPrompt(36, canScheduleExactAlarms = true, alreadyPrompted = false))
         assertFalse(shouldOfferExactAlarmPrompt(36, canScheduleExactAlarms = false, alreadyPrompted = true))
         assertFalse(shouldOfferExactAlarmPrompt(Build.VERSION_CODES.R, canScheduleExactAlarms = false, alreadyPrompted = false))
+    }
+
+    @Test
+    fun `the notification ask is outstanding only until it has been answered, granted or denied`() {
+        val tiramisu = Build.VERSION_CODES.TIRAMISU
+        assertTrue(isNotificationAskPending(true, tiramisu, isPermissionGranted = false, requestAnswered = false))
+        // Denied: still not granted, but answered - the exact-alarm explanation must no longer wait.
+        assertFalse(isNotificationAskPending(true, tiramisu, isPermissionGranted = false, requestAnswered = true))
+        assertFalse(isNotificationAskPending(true, tiramisu, isPermissionGranted = true, requestAnswered = false))
+        assertFalse(isNotificationAskPending(false, tiramisu, isPermissionGranted = false, requestAnswered = false))
+        assertFalse(isNotificationAskPending(true, Build.VERSION_CODES.S_V2, isPermissionGranted = false, requestAnswered = false))
+    }
+
+    @Test
+    fun `a user who denied notifications is still offered the exact alarm explanation once`() {
+        val pending = isNotificationAskPending(true, 36, isPermissionGranted = false, requestAnswered = true)
+        assertFalse(pending)
+        assertTrue(!pending && shouldOfferExactAlarmPrompt(36, canScheduleExactAlarms = false, alreadyPrompted = false))
+    }
+
+    @Test
+    fun `resume re-arms a rest that is still running and never one that has ended`() {
+        val now = Instant.parse("2026-10-02T10:00:00Z")
+        assertTrue(shouldRearmRestAlarm(now.plusSeconds(30), now))
+        assertFalse(shouldRearmRestAlarm(now, now))
+        assertFalse(shouldRearmRestAlarm(now.minusSeconds(1), now))
+        assertFalse(shouldRearmRestAlarm(null, now))
     }
 
     @Test

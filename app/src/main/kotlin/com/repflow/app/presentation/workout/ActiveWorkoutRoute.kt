@@ -91,7 +91,9 @@ fun ActiveWorkoutRoute(
     }
     // Coming back from the system's `Alarms & reminders` screen with the grant: re-arm this rest exactly.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        restTimer?.let { RestTimerAlarmScheduler.schedule(context, it.endAt) }
+        if (shouldRearmRestAlarm(restTimer?.endAt, Instant.now())) {
+            RestTimerAlarmScheduler.schedule(context, checkNotNull(restTimer).endAt)
+        }
     }
     RestTimerPermissionPromptEffect(
         restTimerEndAt = restTimer?.endAt,
@@ -166,12 +168,13 @@ private fun ExactAlarmPrompt(
     LaunchedEffect(restTimerEndAt, notificationEnabled, notificationPromptResolved) {
         if (restTimerEndAt == null || notificationEnabled == null) return@LaunchedEffect
         val notificationAskPending =
-            shouldRequestNotificationPermission(
+            isNotificationAskPending(
                 notificationEnabled,
                 Build.VERSION.SDK_INT,
                 Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
                     ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
                     PackageManager.PERMISSION_GRANTED,
+                requestAnswered = notificationPromptResolved > 0,
             )
         if (!notificationAskPending &&
             shouldOfferExactAlarmPrompt(

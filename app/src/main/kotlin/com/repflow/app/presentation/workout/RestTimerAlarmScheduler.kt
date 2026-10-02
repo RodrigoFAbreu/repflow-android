@@ -4,10 +4,11 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.annotation.VisibleForTesting
+import androidx.core.content.edit
+import androidx.core.net.toUri
 import java.time.Instant
 
 /**
@@ -49,7 +50,7 @@ object RestTimerAlarmScheduler {
     /** The system screen where the user can allow exact alarms for this app (Android 12+); `null` below that. */
     fun exactAlarmSettingsIntent(context: Context): Intent? =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}"))
+            Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, "package:${context.packageName}".toUri())
         } else {
             null
         }
@@ -58,7 +59,7 @@ object RestTimerAlarmScheduler {
     fun exactAlarmPrompted(context: Context): Boolean = prefs(context).getBoolean(KEY_EXACT_PROMPTED, false)
 
     fun markExactAlarmPrompted(context: Context) {
-        prefs(context).edit().putBoolean(KEY_EXACT_PROMPTED, true).apply()
+        prefs(context).edit { putBoolean(KEY_EXACT_PROMPTED, true) }
     }
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
