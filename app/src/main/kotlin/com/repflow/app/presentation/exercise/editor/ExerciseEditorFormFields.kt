@@ -126,13 +126,10 @@ private fun NameField(
     onNameFocusLost: () -> Unit,
 ) {
     val duplicateName = uiState.submitError?.kind == ExerciseEditorSubmitErrorKind.DUPLICATE_NAME && !uiState.isSaving
-    val error =
-        fieldErrorText(uiState.visibleNameError)
-            ?: if (duplicateName) {
-                stringResource(R.string.exercise_editor_submit_error_duplicate_name)
-            } else {
-                null
-            }
+    // Read unconditionally: a composable call that comes and goes with the error shifts the
+    // field's slot and drops its focus and the keyboard (functional review R3-F-4).
+    val duplicateNameText = stringResource(R.string.exercise_editor_submit_error_duplicate_name)
+    val error = fieldErrorText(uiState.visibleNameError) ?: duplicateNameText.takeIf { duplicateName }
     OutlinedTextField(
         value = uiState.name,
         onValueChange = onNameChanged,

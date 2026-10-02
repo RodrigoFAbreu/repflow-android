@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -313,6 +314,62 @@ class ExerciseEditorScreenTest {
         composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.exercise_editor_submit_error_duplicate_name))
             .assertIsDisplayed()
+    }
+
+    /**
+     * Functional review R3-F-4: the name field keeps focus (and so the keyboard)
+     * while its error appears and disappears; no keystroke is lost.
+     */
+    @Test
+    fun theNameFieldKeepsFocusWhileItsErrorAppearsAndDisappears() {
+        var uiState by mutableStateOf(ExerciseEditorUiState(name = "Plank", nameTouched = true))
+        composeRule.setContent {
+            RepFlowTheme {
+                ExerciseEditorScreen(
+                    uiState = uiState,
+                    onNameChanged = { value ->
+                        uiState =
+                            uiState.copy(
+                                name = value,
+                                nameTouched = true,
+                                nameError =
+                                    if (value.isBlank()) {
+                                        ExerciseEditorFieldError.Domain(ExerciseValidationError.NameBlank)
+                                    } else {
+                                        null
+                                    },
+                            )
+                    },
+                    onNameFocusLost = {},
+                    onTrackingTypeChanged = {},
+                    onInstructionsChanged = {},
+                    onRestSecondsChanged = {},
+                    onLoadIncrementChanged = {},
+                    onSaveClicked = {},
+                    onBackRequested = {},
+                    onDiscardConfirmed = {},
+                    onDiscardCancelled = {},
+                    onMessageShown = {},
+                )
+            }
+        }
+        val name = composeRule.onNodeWithText(composeRule.activity.getString(R.string.exercise_editor_name_label))
+        val blankError = composeRule.activity.getString(R.string.exercise_editor_error_name_blank)
+
+        name.performClick()
+        name.assertIsFocused()
+        name.performTextReplacement("")
+        composeRule.waitForIdle()
+        name.assertIsFocused()
+        composeRule.onNodeWithText(blankError).assertIsDisplayed()
+
+        name.performTextInput("P")
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(blankError).assertDoesNotExist()
+        name.assertIsFocused()
+        name.performTextInput("l")
+        assertEquals("Pl", uiState.name)
+        name.assertIsFocused()
     }
 
     @Test

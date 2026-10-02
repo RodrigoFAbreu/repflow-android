@@ -8,6 +8,7 @@ import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -18,6 +19,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
@@ -192,6 +194,60 @@ class TrainingPlanEditorScreenTest {
         composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_error_name_blank))
             .assertIsDisplayed()
+    }
+
+    /**
+     * Functional review R3-F-4: the name field keeps focus (and so the keyboard)
+     * while its error appears and disappears; no keystroke is lost.
+     */
+    @Test
+    fun theNameFieldKeepsFocusWhileItsErrorAppearsAndDisappears() {
+        var uiState by mutableStateOf(TrainingPlanEditorUiState(name = "Legs A", nameTouched = true))
+        composeRule.setContent {
+            RepFlowTheme {
+                TrainingPlanEditorScreen(
+                    uiState = uiState,
+                    onNameChanged = { value ->
+                        uiState =
+                            uiState.copy(
+                                name = value,
+                                nameTouched = true,
+                                nameError =
+                                    if (value.isBlank()) {
+                                        TrainingPlanEditorFieldError.Domain(TrainingPlanValidationError.NameBlank)
+                                    } else {
+                                        null
+                                    },
+                            )
+                    },
+                    onNameFocusLost = {},
+                    rowActions = noOpRowActions(),
+                    onAddRowClicked = {},
+                    onSaveClicked = {},
+                    onBackRequested = {},
+                    onDiscardConfirmed = {},
+                    onDiscardCancelled = {},
+                    onCreateExerciseClick = {},
+                )
+            }
+        }
+        val name = composeRule.onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_name_label))
+        val blankError = composeRule.activity.getString(R.string.training_plan_editor_error_name_blank)
+
+        name.performClick()
+        name.assertIsFocused()
+        name.performTextReplacement("")
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(blankError).assertIsDisplayed()
+        name.assertIsFocused()
+
+        name.performTextInput("L")
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(blankError).assertDoesNotExist()
+        name.assertIsFocused()
+        name.performTextInput("e")
+        assertEquals("Le", uiState.name)
+        name.assertIsFocused()
     }
 
     @Test
