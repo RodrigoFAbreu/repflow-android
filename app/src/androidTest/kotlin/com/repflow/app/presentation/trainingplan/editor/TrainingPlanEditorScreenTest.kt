@@ -10,6 +10,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -17,6 +18,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
@@ -448,6 +450,29 @@ class TrainingPlanEditorScreenTest {
         composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_submit_error_duplicate_name))
             .assertIsDisplayed()
+    }
+
+    /** Functional review R3-F-2: a tap outside the name field and the keyboard's Done take focus off it. */
+    @Test
+    fun tappingOutsideTheNameFieldAndDoneClearFocusButTappingTheFieldDoesNot() {
+        setContent(TrainingPlanEditorUiState(name = "Legs A"))
+        val name = composeRule.onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_name_label))
+
+        name.performClick()
+        name.assertIsFocused()
+        name.performClick()
+        name.assertIsFocused()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_no_exercises)).performClick()
+        name.assertIsNotFocused()
+
+        name.performClick()
+        name.assertIsFocused()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_add_exercise)).performClick()
+        name.assertIsNotFocused()
+
+        name.performClick()
+        name.performImeAction()
+        name.assertIsNotFocused()
     }
 
     /** Functional review R3-F-3: a second refused save for the same reason brings the name into view again. */

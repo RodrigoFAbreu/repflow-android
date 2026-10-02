@@ -12,11 +12,13 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
@@ -370,6 +372,29 @@ class ExerciseEditorScreenTest {
         name.performTextInput("l")
         assertEquals("Pl", uiState.name)
         name.assertIsFocused()
+    }
+
+    /** Functional review R3-F-2: a tap outside the text fields and the keyboard's Done take focus off the name. */
+    @Test
+    fun tappingOutsideTheTextFieldsAndDoneClearFocusButTappingTheFieldDoesNot() {
+        setContent(ExerciseEditorUiState(name = "Plank"))
+        val name = composeRule.onNodeWithText(composeRule.activity.getString(R.string.exercise_editor_name_label))
+
+        name.performClick()
+        name.assertIsFocused()
+        name.performClick()
+        name.assertIsFocused()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.exercise_editor_default_rest_label)).performClick()
+        name.assertIsNotFocused()
+
+        name.performClick()
+        name.assertIsFocused()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.exercise_tracking_type_reps_only)).performClick()
+        name.assertIsNotFocused()
+
+        name.performClick()
+        name.performImeAction()
+        name.assertIsNotFocused()
     }
 
     /** Functional review R3-F-3: a second refused save for the same reason brings the name into view again. */

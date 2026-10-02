@@ -15,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
@@ -22,17 +23,21 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -79,25 +84,29 @@ internal fun EditorForm(
     onRestSecondsChanged: (String) -> Unit,
     onLoadIncrementChanged: (String) -> Unit,
 ) {
-    Column(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(top = RepFlowSpacing.gapSm, bottom = RepFlowSpacing.screenPadding),
-    ) {
-        NameField(uiState, onNameChanged, onNameFocusLost)
-        FieldLabel(stringResource(R.string.exercise_editor_tracking_type_label))
-        TrackingTypeSegments(uiState.trackingType, onTrackingTypeChanged)
-        FieldLabel(stringResource(R.string.exercise_editor_default_rest_label))
-        RestDurationPresets(uiState, onRestSecondsChanged)
-        if (uiState.trackingType.supportsLoad) {
-            FieldLabel(stringResource(R.string.exercise_editor_load_step_label))
-            LoadStepPresets(uiState, onLoadIncrementChanged)
-        }
-        InstructionsField(uiState, onInstructionsChanged)
-        if (uiState.submitError?.kind == ExerciseEditorSubmitErrorKind.UNAVAILABLE) {
-            Box(modifier = Modifier.padding(top = SectionGap)) { SubmitErrorText(uiState.submitError) }
+    val tapFocus = remember { TapFocusState() }
+    CompositionLocalProvider(LocalTapFocusState provides tapFocus) {
+        Column(
+            modifier =
+                modifier
+                    .clearFocusOnTapOutsideTextFields(tapFocus)
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(top = RepFlowSpacing.gapSm, bottom = RepFlowSpacing.screenPadding),
+        ) {
+            NameField(uiState, onNameChanged, onNameFocusLost)
+            FieldLabel(stringResource(R.string.exercise_editor_tracking_type_label))
+            TrackingTypeSegments(uiState.trackingType, onTrackingTypeChanged)
+            FieldLabel(stringResource(R.string.exercise_editor_default_rest_label))
+            RestDurationPresets(uiState, onRestSecondsChanged)
+            if (uiState.trackingType.supportsLoad) {
+                FieldLabel(stringResource(R.string.exercise_editor_load_step_label))
+                LoadStepPresets(uiState, onLoadIncrementChanged)
+            }
+            InstructionsField(uiState, onInstructionsChanged)
+            if (uiState.submitError?.kind == ExerciseEditorSubmitErrorKind.UNAVAILABLE) {
+                Box(modifier = Modifier.padding(top = SectionGap)) { SubmitErrorText(uiState.submitError) }
+            }
         }
     }
 }
@@ -130,12 +139,15 @@ private fun NameField(
     // field's slot and drops its focus and the keyboard (functional review R3-F-4).
     val duplicateNameText = stringResource(R.string.exercise_editor_submit_error_duplicate_name)
     val error = fieldErrorText(uiState.visibleNameError) ?: duplicateNameText.takeIf { duplicateName }
+    val focusManager = LocalFocusManager.current
     OutlinedTextField(
         value = uiState.name,
         onValueChange = onNameChanged,
         label = { Text(stringResource(R.string.exercise_editor_name_label)) },
         isError = error != null,
         supportingText = error?.let { { InlineError(it) } },
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
         singleLine = true,
         shape = FieldShape,
         colors = editorFieldColors(),
@@ -143,6 +155,7 @@ private fun NameField(
             Modifier
                 .fillMaxWidth()
                 .heightIn(min = NameFieldMinHeight)
+                .keepsFocusOnTap()
                 .notifyOnFocusLost(onNameFocusLost)
                 .bringIntoViewWhen(duplicateName, uiState.submitError),
     )
@@ -321,17 +334,19 @@ private fun OtherValueField(
     error: String?,
     keyboardType: KeyboardType,
 ) {
+    val focusManager = LocalFocusManager.current
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(label) },
         isError = error != null,
         supportingText = error?.let { { InlineError(it) } },
-        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
         singleLine = true,
         shape = FieldShape,
         colors = editorFieldColors(),
-        modifier = Modifier.fillMaxWidth().padding(top = RepFlowSpacing.gapSm),
+        modifier = Modifier.fillMaxWidth().padding(top = RepFlowSpacing.gapSm).keepsFocusOnTap(),
     )
 }
 
@@ -352,7 +367,12 @@ private fun InstructionsField(
         minLines = 3,
         shape = FieldShape,
         colors = editorFieldColors(),
-        modifier = Modifier.fillMaxWidth().padding(top = SectionGap).heightIn(min = NotesMinHeight),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(top = SectionGap)
+                .heightIn(min = NotesMinHeight)
+                .keepsFocusOnTap(),
     )
 }
 

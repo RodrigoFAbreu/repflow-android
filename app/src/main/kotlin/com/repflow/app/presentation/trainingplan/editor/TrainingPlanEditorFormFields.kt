@@ -12,17 +12,23 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,8 +41,12 @@ import com.repflow.app.presentation.designsystem.components.RepFlowSectionLabel
 import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
 import com.repflow.app.presentation.designsystem.repFlowSecondaryTextColor
 import com.repflow.app.presentation.exercise.editor.InlineError
+import com.repflow.app.presentation.exercise.editor.LocalTapFocusState
+import com.repflow.app.presentation.exercise.editor.TapFocusState
 import com.repflow.app.presentation.exercise.editor.bringIntoViewWhen
+import com.repflow.app.presentation.exercise.editor.clearFocusOnTapOutsideTextFields
 import com.repflow.app.presentation.exercise.editor.editorFieldColors
+import com.repflow.app.presentation.exercise.editor.keepsFocusOnTap
 import com.repflow.app.presentation.exercise.editor.notifyOnFocusLost
 
 /**
@@ -57,11 +67,43 @@ internal fun EditorForm(
     onChangeExerciseClick: (Long) -> Unit,
     onAddRowClicked: () -> Unit,
 ) {
+    val tapFocus = remember { TapFocusState() }
+    CompositionLocalProvider(LocalTapFocusState provides tapFocus) {
+        EditorFormColumn(
+            uiState,
+            contentPadding,
+            tapFocus,
+            onNameChanged,
+            onNameFocusLost,
+            rowActions,
+            expandedRowId,
+            onRowHeaderClick,
+            onChangeExerciseClick,
+            onAddRowClicked,
+        )
+    }
+}
+
+@Suppress("LongParameterList")
+@Composable
+private fun EditorFormColumn(
+    uiState: TrainingPlanEditorUiState,
+    contentPadding: PaddingValues,
+    tapFocus: TapFocusState,
+    onNameChanged: (String) -> Unit,
+    onNameFocusLost: () -> Unit,
+    rowActions: TrainingPlanEditorRowActions,
+    expandedRowId: Long?,
+    onRowHeaderClick: (PlannedExerciseRowUiState) -> Unit,
+    onChangeExerciseClick: (Long) -> Unit,
+    onAddRowClicked: () -> Unit,
+) {
     Column(
         modifier =
             Modifier
                 .padding(contentPadding)
                 .fillMaxSize()
+                .clearFocusOnTapOutsideTextFields(tapFocus)
                 .verticalScroll(rememberScrollState())
                 .padding(top = RepFlowSpacing.gapXs, bottom = RepFlowSpacing.gapLg),
     ) {
@@ -106,12 +148,15 @@ private fun NameField(
     // field's slot and drops its focus and the keyboard (functional review R3-F-4).
     val duplicateNameText = stringResource(R.string.training_plan_editor_submit_error_duplicate_name)
     val error = fieldErrorText(uiState.visibleNameError) ?: duplicateNameText.takeIf { duplicateName }
+    val focusManager = LocalFocusManager.current
     OutlinedTextField(
         value = uiState.name,
         onValueChange = onNameChanged,
         label = { Text(stringResource(R.string.training_plan_editor_name_label)) },
         isError = error != null,
         supportingText = error?.let { { InlineError(it) } },
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
         singleLine = true,
         shape = FieldShape,
         colors = editorFieldColors(),
@@ -119,6 +164,7 @@ private fun NameField(
             Modifier
                 .fillMaxWidth()
                 .heightIn(min = NameFieldMinHeight)
+                .keepsFocusOnTap()
                 .notifyOnFocusLost(onNameFocusLost)
                 .bringIntoViewWhen(duplicateName, uiState.submitError),
     )
