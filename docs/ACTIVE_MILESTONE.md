@@ -2053,6 +2053,58 @@ implementation repflow-redesign-visual-foundation-remediation-1` on a clean
 APPROVE), then `/prepare-functional-review
 repflow-redesign-visual-foundation-remediation-1` for round 3.
 
+### Functional review round 3 — outcome (2026-10-03)
+
+Round 3 returned **FAIL** (AVD: 16 of 18 steps passed; phone: the single-alert
+steps passed, R3-I1a and R3-F1b failed on timing). Every rest-alert fix from
+round 2 held. The user decided: R3-F-1 wording only (accept the delay), and fix
+R3-F-2 to R3-F-5 in this item. `/apply-functional-review` judged all five
+bounded (each is a contained change to the two editors or a wording correction),
+so nothing was routed to
+`repflow-redesign-visual-foundation-remediation-1-remediation-1`, which stays
+with group B only. Technical approval was marked `STALE` first (`df20b79`),
+before any source edit.
+
+| Finding | Class | Disposition | Commit |
+|---|---|---|---|
+| R3-F-4 name field loses focus when its error toggles (Important, older bug) | defect | cause found by bisecting on the AVD: the name's error string was read with `stringResource` inside the right-hand side of an elvis (`fieldErrorText(..) ?: if (duplicate) stringResource(..)`), so that composable call came and went with the error, shifted the slots after it and recreated the text field - focus, keyboard and the next keystroke were lost. A bare Material 3 field with the same error toggling keeps focus, which ruled out the library. The string is now read unconditionally in both editors. One Compose test per editor (focus, clear, still focused, type `P`, still focused) fails on the previous code | `b2cc2cd` |
+| R3-F-3 a repeated refused Save does not scroll to the name | defect | the scroll trigger was the boolean "duplicate-name error is showing", which does not change between two refusals once the intermediate `isSaving` state is conflated away. The submit error now carries a refusal count (`attempt`, one per refused save), and `bringIntoViewWhen` also keys on it, so every refusal scrolls. Compose tests repeat the refusal three times in a short viewport; ViewModel tests assert two refusals differ | `6209ecd` |
+| R3-F-5 duplicate-name error stays after the name is edited | defect | `onNameChanged` clears a `DUPLICATE_NAME` submit error in both ViewModels (other kinds are kept); Save checks again. ViewModel tests, both editors | `6209ecd` (shares the commit with R3-F-3: one ViewModel change and one test cover both) |
+| R3-F-2 touch and Done cannot take focus off the name field | usability | a tap that is not a drag and does not land on a text field clears focus in both editors, observed at the initial pointer pass without consuming it, so chips, steppers and buttons still get their click; the name and the exercise editor's other text fields keep focus when tapped (a marker set by each field before the form's handler reads it). The name and `Other` fields' IME action is Done and clears focus. The R2-F-1 touched-on-blur rule now works by touch, including on an empty `New plan`. Compose tests in both editors (tap on a label, a chip or `Add exercise`, Done, and tapping the field itself) | `faec518` |
+| R3-F-1 `-15s` alert "at once" (wording only) | no behaviour change | every claim that the alert fires "at once" or "immediately" now says within about 5 seconds (Android's alarm minimum): the `RestAlarmEffect` comment, the `RestAlarmEffectTest` name and comment, `D114`, and this file's checklist lines (the round-2 outcome's "now fires the alert at once" and the round-6 I-1 row). The test was renamed `...FiresTheAlertOnce` | `2eca96d` |
+
+Judgement calls, for the reviewer. R3-F-2: a screen-level tap observer was chosen
+over per-control `clearFocus` calls because the finding names every control
+(chips, steppers, `Add exercise`, adding a row) and new controls would
+otherwise each need the call; a drag, which scrolls the form, does not clear
+focus. The notes field is multi-line, so its keyboard action stays a newline.
+R3-F-4 was not fixed by dropping `isError` or the supporting text, which the
+bisect showed were not the cause, so the field's look is unchanged.
+
+**Gate (AVD `RepFlow_S24Ultra_384dp_API36`, `emulator-5554`):** `spotlessCheck`,
+`detekt`, `lintDebug` clean; JVM unit tests 644, 0 failures; instrumented 312, 0
+failures (data+infrastructure 85, presentation backup/design
+system/exercise/history/home/navigation/progress/progression/recovery/settings/
+trainingplan 148, workout 70, `MainActivityNavHostSmokeTest` 9). The AVD was
+stopped afterwards; the phone was not used.
+
+**Re-test (round 4):** [AVD] in both editors: delete the name one character at a
+time and type again - the keyboard stays up and no key is lost; tap blank space,
+a chip, a stepper, `Add exercise` and the keyboard's Done with the name focused
+(the field loses focus, and an empty name then shows its error, including on an
+empty `New plan`); a duplicate name saved repeatedly from the bottom of a long
+form scrolls to the name every time; editing a refused duplicate name clears the
+error and Save checks again. [BOTH] `-15s` that ends the rest: one alert within
+about 5 seconds.
+
+**Next action.** Technical approval is `STALE`, so the item re-enters
+`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` with a regenerated post-fix bundle:
+review it, then `/apply-implementation-review
+repflow-redesign-visual-foundation-remediation-1` (or `/approve-review
+implementation repflow-redesign-visual-foundation-remediation-1` on a clean
+APPROVE), then `/prepare-functional-review
+repflow-redesign-visual-foundation-remediation-1` for round 4.
+
 ---
 
 ## `repflow-redesign-visual-foundation-remediation-1` — Functional review checklist, round 1 (implementation revision 2; superseded by round 2 above for the changed areas)
