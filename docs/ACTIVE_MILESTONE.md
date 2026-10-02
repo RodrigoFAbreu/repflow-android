@@ -1645,7 +1645,201 @@ then `/apply-implementation-review repflow-redesign-visual-foundation-remediatio
 decided by the user on 2026-10-01: they go to a later remediation child
 (`IMPROVEMENT_ROADMAP.md` §9.8).
 
-## `repflow-redesign-visual-foundation-remediation-1` — Functional review checklist (implementation revision 2)
+## `repflow-redesign-visual-foundation-remediation-1` — Functional review checklist, ROUND 2 (implementation revision 5)
+
+Round 2 of the functional review. Round 1 (the longer checklist further down,
+now headed "round 1") returned FAIL; its group-A findings were fixed
+(`A1`–`A6`, `J1`–`J9`, the dash nit), two implementation-review rounds then
+corrected `J9`'s alarm flow and the done screen, and technical approval of
+revision 5 is recorded (commit `8b564e9`, basis `EXTERNAL_APPROVE`). This round
+re-tests **only what changed**, plus a short regression pass; for areas not
+named here, round 1's steps stand and are not repeated. Findings go to
+`.ai-review/repflow-redesign-visual-foundation-remediation-1/feedback/FUNCTIONAL_REVIEW.md`
+(the file round 1 used was consumed). Every command names the child id
+explicitly (`active_work_item_id` still points at the grandparent).
+
+**Tags.** **[AVD]** the AVD `RepFlow_S24Ultra_384dp_API36` (`emulator-5554`),
+loaded with round 1's sample data (see round 1 "Test data"; anything that
+writes, restores or erases is AVD-only). **[PHONE]** the physical SM-S928B,
+which holds **real data**: look only, and only what a step marks safe.
+**[BOTH]** either; AVD first. Steps that write data say **WRITES** in bold.
+
+### R2 setup and automated state
+
+- Build and install on the AVD: `ANDROID_SERIAL=emulator-5554 ./gradlew
+  installDebug`. Check dark and light where a step says so
+  (`adb -s <serial> shell cmd uimode night yes|no`). Schema, flags and test data
+  as round 1 (Room 7 -> 8, no flags, no network). Restore the sample backup on
+  the AVD first (Settings -> Restore from a file).
+- **Automated verification is current and not re-run here.** The working tree is
+  clean and `git diff b66677d HEAD -- app` is empty (everything since is docs and
+  `WORKFLOW_STATE.json`). Last runs, from the implementation bundle's
+  `TEST_RESULTS.md`: revision 5 (`b66677d`) `spotlessCheck detekt lintDebug
+  testDebugUnitTest` BUILD SUCCESSFUL, **641 JVM tests, 0 failures**; revision 4
+  instrumented on the AVD (`presentation.workout` 63, `presentation.navigation`
+  2, `MainActivityNavHostSmokeTest` 9, 0 failures); lint 0 errors, 21 warnings.
+  Not run by anything yet: the physical-phone J9 re-test (below).
+
+### R2-A. Group-A fixes (each: do the step, expect the result)
+
+- **R2-A1 [AVD]** (A1) Plans -> Open a plan -> `Add exercise` -> dismiss the
+  picker (swipe down / tap outside). Expect: no blank row appears in the plan.
+  Repeat with `Create a new exercise`, then Back out of the editor: still no
+  blank row.
+- **R2-A2 [BOTH]** (A2) In a workout, log a set so the rest strip shows. Expect:
+  `Skip rest` is on **one line** at 384dp, wider than `-15s` / `+15s`. **WRITES**
+  a workout: on the phone only if you accept a real session; use the AVD.
+- **R2-A3 [AVD]** (A3) Open an exercise whose load step is 1 (or set Load step
+  to `Other` = 1): the step caption reads `1 step`, not `1 steps`. In a plan
+  editor row with one warm-up set the row reads `1 warm-up`; with two,
+  `2 warm-ups`.
+- **R2-A4 [AVD]** (A4) Exercise editor (`Add exercise`) and plan editor (`New
+  plan`): on open, **no** name error is shown. Tap the name field and leave it
+  empty (or type then clear): the error appears. A duplicate name shows its
+  error after typing.
+- **R2-A5 [BOTH]** (A5) Progress -> an exercise with volume in the thousands:
+  figures are grouped (`12,450` or the locale's separator), including the
+  signed delta (`+1,250`) and the `Best:` line.
+- **R2-A6 [AVD]** (A6) Home -> `Log recovery` on a day with nothing logged: all
+  six scales start **unset** (no value pre-chosen), `Save entry` is disabled
+  and the hint `Choose a value on each of the six scales to save.` shows. Choose
+  each scale: Save enables once all six are set, then reads `Saved`. **WRITES**
+  one check-in (AVD).
+- **R2-J1 [BOTH]** (J1) Home -> recovery card -> `Details ›`. Intro reads "Your
+  check-in adds up to one score: a read on how recovered you are today. It never
+  limits what you can do."; gate note reads "Pain while walking counts the most.
+  If it is 3 or more, or heel stiffness is 4 or more, today is Protect whatever
+  the score." Each factor's dots fill to its `n/5` value (a 3/5 factor shows 3
+  filled dots). Dark and light.
+- **R2-J2 [BOTH]** (J2) Workout -> an exercise with history -> `Why ›`. Choose
+  screen line: "Pick what you'll do next session. RepFlow saves your choice next
+  to its suggestion."; after choosing: "Your choice is saved next to the
+  suggestion." The reason after the dash starts lower-case. Then finish a workout
+  that includes an exercise with **no working set** (only added, or warm-ups
+  only): its done-screen suggestion row is absent; an exercise with one working
+  set still shows `Not enough data yet`. **WRITES** a finished workout (AVD).
+- **R2-J3 [AVD]** (J3) Workout board -> `Add exercise` -> `Create a new exercise`
+  -> fill and `Save`. Expect: back on the board with the new exercise **already
+  added** to the running workout. From a plan editor the same route simply
+  returns to the plan (no auto-add). **WRITES** an exercise.
+- **R2-J4 [AVD]** (J4) Finish a workout where an exercise used the same load as
+  last time with more reps. Done screen `Versus last time` reads `same load, +2
+  reps` (or the count you did) and counts as a gain; same load and reps reads
+  `same load`. **WRITES** a finished workout.
+- **R2-J5 [BOTH]** (J5) History -> a workout -> `⋮` -> `Invalidate workout`. The
+  dialog reads "It's hidden from History and stops counting toward progress and
+  suggestions. This can't be undone. Nothing is deleted — turn on Show
+  invalidated to see it." **Look only: tap `Keep it`.** (Confirming writes; do it
+  on the AVD only.)
+- **R2-J6 [BOTH]** (J6) Progress -> an exercise whose best set has more than 12
+  reps -> `Est. 1RM`: the card says "Est. 1RM needs a set of 12 reps or fewer."
+  An exercise with sets of 12 or fewer still shows an estimate as before.
+- **R2-J7 [BOTH]** (J7) History -> open a workout -> **system Back**
+  (gesture/button). Expect: the detail closes and History stays; a second Back
+  leaves History as usual. Read-only, safe on the phone.
+- **R2-J8 [BOTH]** (J8) Plans -> Open an existing plan -> Back **with no edit**:
+  it leaves with **no** `Discard changes?` prompt. Edit a name or a stepper, then
+  Back: `Discard changes?` appears. Change a value and change it back: no prompt.
+  Look only on the phone (do not Save).
+- **R2-J9 [AVD]** (J9) Fresh install (uninstall `com.repflow.app` first, so the
+  one-time prompt state and the permissions reset): log a first set. On
+  API 33+ the notification prompt comes first; after it is answered (**allow or
+  deny**) the explanation `Allow exact rest alerts?` appears **once** with
+  `Allow` / `Not now`. `Allow` opens the system `Alarms & reminders` screen for
+  RepFlow; toggle it and return. `Not now` closes it and rest alerts still work.
+  The explanation does not return on the next rest. **WRITES** a workout.
+- **R2-J9b [AVD]** (review fix I1) With the rest running, background the app,
+  let it end (one alert), reopen the app: **no second alert** fires for the
+  finished rest. Reopening while a rest is still counting down keeps its alert.
+- **R2-J9c [AVD]** (review fix I2) Deny the notification permission, then reach
+  the first rest: the exact-alarm explanation **still shows** (it waits only
+  until the notification request is answered).
+- **R2-DASH [AVD]** (dash nit) Settings -> `Erase all data`: the body reads
+  "...recommendation on this device — including a workout that is still
+  running...", an em dash, not a hyphen. **Look only: `Keep my data`.**
+
+### R2-B. Review fix on the done screen
+
+- **R2-D1 [AVD]** (XI2-I1) Finish a workout that has the **same exercise twice**:
+  the first entry untrained, a later entry with a working set. The done screen
+  keeps the suggestion for that exercise (one row, not lost). **WRITES** a
+  finished workout.
+
+### R2-C. Short regression pass (flows the fixes touched)
+
+- **R2-R1 [AVD]** Plan editor: add, reorder, expand a row, change steppers and
+  `Save` (new version) work; Back with edits asks `Discard changes?`.
+- **R2-R2 [AVD]** Workout: board -> focus -> log a set (entry clears) -> `Undo
+  last` -> `Finish` -> done -> `Back to Home`; no workout left running.
+- **R2-R3 [AVD]** Recovery entry: set six scales, futsal toggles still work,
+  `Save entry` -> `Saved`; the recovery history chart shows the new day.
+- **R2-R4 [AVD]** History detail: sets, PR medal, zero-set `No sets logged`, `⋮`
+  absent on an invalidated workout.
+- **R2-R5 [AVD]** Progress: chips, the three metrics, the empty-trend copy for an
+  exercise with under two sessions.
+- **R2-R6 [AVD]** Exercise editor: presets, save, duplicate name error.
+- **R2-R7 [AVD]** Rest timer: strip, `-15s`/`+15s`, `Skip rest`, `Rest done`;
+  `Auto-start` off starts no strip.
+
+### For the user (phone)
+
+Only these need the real phone. The phone holds real data; nothing below
+restores, erases or exports.
+
+1. **[PHONE] J1 / J2 / J5 / J6 wording, look only.**
+   - Home -> recovery card -> `Details ›` (needs today's check-in; otherwise
+     skip and say so): read the intro and gate note, check the dots match `n/5`.
+   - A workout in progress is **not** needed: History -> any workout -> `⋮` ->
+     `Invalidate workout`: read the dialog, then tap **`Keep it`**.
+   - Progress -> a high-rep exercise -> `Est. 1RM`: read the new line.
+   - Recommendation wording (J2) needs a workout: **skip on the phone**, covered
+     on the AVD (R2-J2).
+2. **[PHONE] J7 History Back (safe).** History -> a workout -> system Back:
+   the detail closes and you stay in History.
+3. **[PHONE] J8 plan editor (only if a plan exists; safe).** Plans -> Open a plan
+   -> Back with no edit: no `Discard changes?`. Edit something and Back: the
+   prompt appears -> `Discard`. Do not tap `Save`.
+4. **[PHONE] J9 exact-alarm flow. WRITES data: it needs a workout and logs a
+   real set.** Only do this if you accept one real session (finish or abandon it
+   afterwards; `Abandon` removes it). Alternative: the AVD (R2-J9, R2-J9b,
+   R2-J9c) covers the same logic; the phone is for the real lock-screen timing.
+   - Expect the one-time `Allow exact rest alerts?` explanation after the first
+     rest on a build where `Alarms & reminders` is not yet allowed; `Allow` opens
+     the system `Alarms & reminders` screen -> allow or deny -> return.
+   - Then lock the screen during a rest: **exactly one** alert at rest end (not
+     two), and none when you reopen the app afterwards.
+
+### R2 known deferred (not findings)
+
+- **Group B (B1–B6) went to the grandchild
+  `repflow-redesign-visual-foundation-remediation-1-remediation-1`**
+  (phase `PLANNING`): Settings 5c/5d, Progress 5b, set entry keeping its values
+  (D60), and the three empty-state / search-field / ordering defects. Do not
+  report them against this item. That child also owns the Settings entry point
+  for the exact-alarm prompt (J9's "offered once" is the recorded judgement
+  call, review finding O3).
+- Review observations left as-is by decision: O3 (prompt offered once), O4
+  (font scale for `Skip rest`), O5 (formatting).
+- Everything round 1 listed as deferred or accepted stays so (see round 1's
+  "Known limitations" and "Functional review round 1 — outcome").
+
+### R2 expected result and what happens next
+
+Every step above behaves as stated, nothing crashes, and no round-1 area
+regressed. If clean: `/accept-milestone
+repflow-redesign-visual-foundation-remediation-1` is the only acceptance
+command; it needs every checkpoint in this item's registry `COMPLETE` (all
+sixteen are) and, per the workflow, the group-B child must also reach
+completion before this item can reach `MILESTONE_COMPLETE`. A checkpoint still
+outstanding goes to `/milestone-implement`; no command records acceptance of a
+partial round. Findings go to the file above and then
+`/apply-functional-review repflow-redesign-visual-foundation-remediation-1`
+(bounded branch for a same-scope fix, broad branch for a
+`...-remediation-<n>` child).
+
+---
+
+## `repflow-redesign-visual-foundation-remediation-1` — Functional review checklist, round 1 (implementation revision 2; superseded by round 2 above for the changed areas)
 
 Round 1 of this checklist returned FAIL and its findings are applied (see
 "Functional review round 1 — outcome" below); the item is back in external
