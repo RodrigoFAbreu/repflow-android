@@ -1647,8 +1647,10 @@ decided by the user on 2026-10-01: they go to a later remediation child
 
 ## `repflow-redesign-visual-foundation-remediation-1` — Functional review checklist (implementation revision 2)
 
-Awaiting manual functional review. Technical approval is recorded (commit
-`20a8d1f`, basis `EXTERNAL_APPROVE`, plan revision 20). Findings go to
+Round 1 of this checklist returned FAIL and its findings are applied (see
+"Functional review round 1 — outcome" below); the item is back in external
+implementation review. Technical approval had been recorded (commit `20a8d1f`,
+basis `EXTERNAL_APPROVE`, plan revision 20) and is now `STALE`. Findings go to
 `.ai-review/repflow-redesign-visual-foundation-remediation-1/feedback/FUNCTIONAL_REVIEW.md`.
 Every command names the child id explicitly (`active_work_item_id` still points
 at the parent). The deviation register is
@@ -2022,6 +2024,81 @@ appears in History, Progress and Home's last workout).
   group (`D5`), no override-streak line (`D33`), a per-set delete (`D66`).
 - **The physical phone** has real data and is not used by the command that
   wrote this checklist.
+
+### Functional review round 1 — outcome (2026-10-02)
+
+Round 1 returned **FAIL**: F1 itself is met (the screens follow the Claude
+Design layouts apart from registered deviations; nothing crashed; data shows
+everywhere), but the user decided every item below. `/apply-functional-review`
+classified each finding and took two branches.
+
+**Bounded branch — fixed in this item** (group A; technical approval marked
+`STALE` first, in `7b35f12`, before any source edit). Every fix has its own
+tests; all 16 are one commit each except A1–A3, which share one because they
+share test files:
+
+| Finding | Class | Disposition | Commit |
+|---|---|---|---|
+| A1 plan picker leaves a blank row | defect | dismissing the picker, or leaving for Create a new exercise, removes the blank row | `ebc7498` |
+| A2 `Skip rest` wraps at 384dp | defect | Skip takes 1.7x the width of the two nudges; a test asserts one line at 384dp | `ebc7498` |
+| A3 `1 steps` / `2 warm-up` | defect | singular/plural for the step caption and the warm-up count | `ebc7498` |
+| A4 errors before input | usability | the name error shows only once the field is touched (both editors) | `32061c0` |
+| A5 no thousands separator on Progress | defect | `plainNumber`/`signedNumber` group by locale | `8344b8f` |
+| A6 recovery starts at 2 | defect (data quality) | scales start unset; Save needs all six; no schema change (`D113`) | `29026eb` |
+| J1 readiness copy and dots (D42) | usability | reviewed wording; dots fill to the `n/5` value | `af3ed7d` |
+| J2 recommendation copy (D52) | usability | reviewed wording; reason lower-cased after the dash; no done-screen suggestion for an exercise with no working set | `27cc1eb` |
+| J3 Create a new exercise (D56) | usability | the new exercise is added to the running workout on Save | `1ab0e6a` |
+| J4 Versus last time (D67) | usability | same load compares reps: `same load, +2 reps` as a gain | `cec87b3` |
+| J5 Invalidate copy (D93) | usability | reviewed wording | `c3e279b` |
+| J6 Est. 1RM above 12 reps (D109) | usability | "Est. 1RM needs a set of 12 reps or fewer."; formula and ceiling unchanged | `c553c34` |
+| J7 History detail system Back | defect | `BackHandler` closes the detail | `0f9049b` |
+| J8 Discard changes on an unchanged plan | defect | dirty only when the draft differs from the loaded plan | `507b712` |
+| J9 exact rest alerts | missing requirement | one-time explanation and system-screen hand-off, inexact fallback kept (`D114`) | `4d645cb` |
+| dash nit (D105) | enhancement, trivial | `-` becomes `—` in the Erase dialog | `eb07ac1` |
+
+Judgement calls made while fixing, for the reviewer: J2's "once per exercise
+that needs it" is read as "no suggestion row for an exercise with no working
+set in that workout" (an exercise with one working set still shows its `Not
+enough data yet`); A6 makes Save wait for all six scales rather than saving a
+partial entry, because `RecoveryEntry` requires all six; J9's explanation is
+shown once, with no Settings row (a Settings entry point is left to the B1
+Settings work).
+
+**Broad branch — deferred, group B:** B1–B6 (Settings 5c/5d, Progress 5b, set
+entry keeping its values, the three empty-state/search-field/ordering
+defects) go to the new child
+**`repflow-redesign-visual-foundation-remediation-1-remediation-1`**
+(`create_remediation_child_work_item` with this item as parent, so the id is a
+child of this item; registered in `7b35f12`, phase `PLANNING`, base commit
+`389608e`). Its next action is `/milestone-plan
+repflow-redesign-visual-foundation-remediation-1-remediation-1`. This item
+cannot reach `MILESTONE_COMPLETE` until that child does, and the parent
+(`repflow-redesign-visual-foundation`) not until this item does.
+
+**Accepted as built, no change:** D47, D55, D57, D73, D76, D77, D82, D85, D98,
+D101, D105 (apart from the dash), D110, D38, D103, the workout-mode system Back
+behaviour, and the double top-padding check. **Not graded:** the five
+observations in the review.
+
+**Re-test after the fix round** (the AVD, then the phone for the first four):
+the rest strip's `Skip rest` on a real rest; Home -> Log recovery on a day
+with nothing logged (all six unset, Save disabled until each is chosen); the
+readiness sheet's wording and dots; History -> a workout -> system Back;
+Plans -> Open -> Back with no edit; Plans -> Add exercise -> back out and
+Create a new exercise; workout -> Add exercise -> Create a new exercise ->
+Save; Progress -> a high-rep exercise -> Est. 1RM, and the grouped figures;
+the done screen with a same-load rep gain; the Invalidate dialog. J9 needs
+the phone: a first rest on a build without `Alarms & reminders` shows the
+explanation once.
+
+**Next action.** Technical approval went `STALE`, so the item re-enters
+`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` with a regenerated post-fix bundle:
+review it, then `/apply-implementation-review
+repflow-redesign-visual-foundation-remediation-1` (or `/approve-review
+implementation repflow-redesign-visual-foundation-remediation-1` on a clean
+APPROVE), then `/prepare-functional-review
+repflow-redesign-visual-foundation-remediation-1` for round 2. The group-B
+child is planned separately, naming its own id on every command.
 
 ### Reporting
 
