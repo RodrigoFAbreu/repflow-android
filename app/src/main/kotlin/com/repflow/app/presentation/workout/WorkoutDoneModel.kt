@@ -95,6 +95,15 @@ sealed interface RecapDelta {
         val kg: BigDecimal,
     ) : RecapDelta
 
+    /**
+     * The best set is at the same load as last time but with a different rep
+     * count (`D67`): `same load, +2 reps`. Never zero - equal load and equal
+     * reps is [Load] of zero.
+     */
+    data class SameLoadReps(
+        val reps: Int,
+    ) : RecapDelta
+
     data class Reps(
         val reps: Int,
     ) : RecapDelta
@@ -192,7 +201,17 @@ internal fun recapDelta(
     when {
         best == null -> RecapDelta.NoWorkingSets
         lastTime == null || !best.isComparableTo(lastTime) -> RecapDelta.FirstTime
-        best is BestSet.Load -> RecapDelta.Load(BigDecimal.valueOf(best.kg).subtract(BigDecimal.valueOf((lastTime as BestSet.Load).kg)))
+        best is BestSet.Load -> loadDelta(best, lastTime as BestSet.Load)
         best is BestSet.Reps -> RecapDelta.Reps(best.reps - (lastTime as BestSet.Reps).reps)
         else -> RecapDelta.Seconds((best as BestSet.Seconds).seconds - (lastTime as BestSet.Seconds).seconds)
     }
+
+/** A load change reads as kg; at the same load, the reps at that load say whether the session moved on (`D67`). */
+private fun loadDelta(
+    best: BestSet.Load,
+    lastTime: BestSet.Load,
+): RecapDelta {
+    val kg = BigDecimal.valueOf(best.kg).subtract(BigDecimal.valueOf(lastTime.kg))
+    val reps = best.reps - lastTime.reps
+    return if (kg.signum() == 0 && reps != 0) RecapDelta.SameLoadReps(reps) else RecapDelta.Load(kg)
+}

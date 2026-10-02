@@ -43,13 +43,14 @@ private fun groupText(group: RecapGroup): String =
         is RecapGroup.Timed -> stringResource(R.string.workout_done_recap_seconds_group, group.seconds.joinToString())
     }
 
-/** `+2.5 kg`, `−1 rep`, `same time`, `first time`, or `—`. */
+/** `+2.5 kg`, `same load, +2 reps`, `−1 rep`, `same time`, `first time`, or `—`. */
 @Composable
 internal fun deltaText(delta: RecapDelta): String =
     when (delta) {
         RecapDelta.NoWorkingSets -> stringResource(R.string.workout_done_delta_none)
         RecapDelta.FirstTime -> stringResource(R.string.workout_done_delta_first)
         is RecapDelta.Load -> loadDeltaText(delta.kg)
+        is RecapDelta.SameLoadReps -> sameLoadRepsText(delta.reps)
         is RecapDelta.Reps -> repsDeltaText(delta.reps)
         is RecapDelta.Seconds -> secondsDeltaText(delta.seconds)
     }
@@ -60,6 +61,14 @@ private fun loadDeltaText(kg: BigDecimal): String =
         1 -> stringResource(R.string.workout_done_delta_load_up, kgText(kg))
         -1 -> stringResource(R.string.workout_done_delta_load_down, kgText(kg.negate()))
         else -> stringResource(R.string.workout_done_delta_load_same)
+    }
+
+@Composable
+private fun sameLoadRepsText(reps: Int): String =
+    if (reps > 0) {
+        pluralStringResource(R.plurals.workout_done_delta_same_load_reps_up, reps, reps)
+    } else {
+        pluralStringResource(R.plurals.workout_done_delta_same_load_reps_down, -reps, -reps)
     }
 
 @Composable
@@ -91,6 +100,7 @@ internal fun bestSetText(set: BestSet): String =
 internal fun RecapDelta.isGain(): Boolean =
     when (this) {
         is RecapDelta.Load -> kg.signum() > 0
+        is RecapDelta.SameLoadReps -> reps > 0
         is RecapDelta.Reps -> reps > 0
         is RecapDelta.Seconds -> seconds > 0
         RecapDelta.FirstTime, RecapDelta.NoWorkingSets -> false

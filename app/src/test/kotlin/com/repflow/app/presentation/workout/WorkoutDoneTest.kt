@@ -31,6 +31,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.math.BigDecimal
 import java.time.Instant
@@ -82,6 +84,13 @@ class WorkoutDoneTest {
         assertEquals(RecapDelta.FirstTime, recapDelta(BestSet.Load(20.0, 5), BestSet.Reps(8)))
         assertEquals(RecapDelta.Load(BigDecimal("2.5")), recapDelta(BestSet.Load(82.5, 6), BestSet.Load(80.0, 8)))
         assertEquals(RecapDelta.Load(BigDecimal("-0.1")), recapDelta(BestSet.Load(80.0, 6), BestSet.Load(80.1, 6)))
+        // Same load: the reps at that load decide (D67), so a rep gain is a gain, not a grey "same load".
+        assertEquals(RecapDelta.SameLoadReps(2), recapDelta(BestSet.Load(80.0, 10), BestSet.Load(80.0, 8)))
+        assertEquals(RecapDelta.SameLoadReps(-1), recapDelta(BestSet.Load(80.0, 7), BestSet.Load(80.0, 8)))
+        assertEquals(0, (recapDelta(BestSet.Load(80.0, 8), BestSet.Load(80.0, 8)) as RecapDelta.Load).kg.signum())
+        assertEquals(RecapDelta.Load(BigDecimal("2.5")), recapDelta(BestSet.Load(82.5, 3), BestSet.Load(80.0, 8)))
+        assertTrue(RecapDelta.SameLoadReps(2).isGain())
+        assertFalse(RecapDelta.SameLoadReps(-1).isGain())
         assertEquals(RecapDelta.Reps(-2), recapDelta(BestSet.Reps(8), BestSet.Reps(10)))
         assertEquals(RecapDelta.Seconds(0), recapDelta(BestSet.Seconds(60), BestSet.Seconds(60)))
     }

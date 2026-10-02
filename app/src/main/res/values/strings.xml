@@ -591,6 +591,14 @@
         <item quantity="one">−%d rep</item>
         <item quantity="other">−%d reps</item>
     </plurals>
+    <plurals name="workout_done_delta_same_load_reps_up">
+        <item quantity="one">same load, +%d rep</item>
+        <item quantity="other">same load, +%d reps</item>
+    </plurals>
+    <plurals name="workout_done_delta_same_load_reps_down">
+        <item quantity="one">same load, −%d rep</item>
+        <item quantity="other">same load, −%d reps</item>
+    </plurals>
     <string name="workout_done_delta_reps_same">same reps</string>
     <string name="workout_done_delta_seconds_up">+%1$d s</string>
     <string name="workout_done_delta_seconds_down">−%1$d s</string>
