@@ -222,6 +222,37 @@ class ExerciseProgressTest {
     }
 
     @Test
+    fun `the estimate asks for a shorter set only when every loaded set is past the rep ceiling`() {
+        val allLong =
+            exerciseProgressOf(
+                listOf(session(0, benchEntry(loaded(15.0, 15))), session(3, benchEntry(loaded(15.0, 14)))),
+            ).of(bench)
+        assertTrue(
+            allLong.series
+                .getValue(ProgressMetric.ESTIMATED_ONE_REP_MAX)
+                .points
+                .isEmpty(),
+        )
+        assertTrue(allLong.estimateNeedsShorterSet)
+
+        val oneShort =
+            exerciseProgressOf(
+                listOf(session(0, benchEntry(loaded(15.0, 15))), session(3, benchEntry(loaded(60.0, 8)))),
+            ).of(bench)
+        assertFalse(oneShort.estimateNeedsShorterSet)
+
+        val unloaded =
+            exerciseProgressOf(listOf(session(0, benchEntry(set(ExerciseTrackingType.WEIGHT_AND_REPS, reps = 12))))).of(bench)
+        assertFalse(unloaded.estimateNeedsShorterSet)
+
+        val repsOnly =
+            exerciseProgressOf(
+                listOf(session(0, Entry(pullUps, ExerciseTrackingType.REPS_ONLY, listOf(set(ExerciseTrackingType.REPS_ONLY, reps = 15))))),
+            ).of(pullUps)
+        assertFalse(repsOnly.estimateNeedsShorterSet)
+    }
+
+    @Test
     fun `a session whose working sets carry no load contributes no point to any metric`() {
         val progress =
             exerciseProgressOf(

@@ -100,6 +100,18 @@ data class ExerciseProgress(
     val series: Map<ProgressMetric, ProgressSeries>,
 ) {
     val offeredMetrics: List<ProgressMetric> get() = ProgressMetric.offeredFor(trackingType)
+
+    /**
+     * `Est. 1RM` has no point although the exercise has loaded working sets:
+     * every one is longer than [EstimatedOneRepMax.MAX_REPS] reps, so no
+     * session can ever give it a value however many are logged. That is not
+     * "not enough sessions", and the card says what is actually missing.
+     */
+    val estimateNeedsShorterSet: Boolean
+        get() =
+            ProgressMetric.ESTIMATED_ONE_REP_MAX in series &&
+                series[ProgressMetric.ESTIMATED_ONE_REP_MAX]?.points.isNullOrEmpty() &&
+                !series[ProgressMetric.VOLUME]?.points.isNullOrEmpty()
 }
 
 /**

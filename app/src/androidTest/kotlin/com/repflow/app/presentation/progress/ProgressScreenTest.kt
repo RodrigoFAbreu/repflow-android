@@ -152,6 +152,31 @@ class ProgressScreenTest {
         composeRule.onNodeWithText(string(R.string.progress_delta, "+570", "kg", "5 May")).assertIsDisplayed()
     }
 
+    /** Functional review J6: when every set is past the 12-rep ceiling the card says what is missing, not "not enough sessions". */
+    @Test
+    fun estimatedOneRepMaxNamesTheRepCeilingWhenNoSetCanGiveOne() {
+        val curl =
+            benchProgress.copy(
+                series =
+                    mapOf(
+                        ProgressMetric.TOP_SET to series("15", "15"),
+                        ProgressMetric.ESTIMATED_ONE_REP_MAX to ProgressSeries(emptyList()),
+                        ProgressMetric.VOLUME to series("675", "630"),
+                    ),
+            )
+        setScreen(
+            ProgressUiState(
+                isLoading = false,
+                exercises = listOf(curl),
+                selectedExerciseId = bench,
+                selectedMetric = ProgressMetric.ESTIMATED_ONE_REP_MAX,
+            ),
+        )
+
+        composeRule.onNodeWithText(string(R.string.progress_estimate_needs_shorter_set)).assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.progress_metric_empty)).assertDoesNotExist()
+    }
+
     @Test
     fun aRepsOnlyExerciseOffersTopSetAloneAndSaysWhy() {
         setScreen(loaded(selected = pullUps, metric = ProgressMetric.VOLUME))

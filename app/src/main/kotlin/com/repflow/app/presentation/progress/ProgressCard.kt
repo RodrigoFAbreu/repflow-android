@@ -1,5 +1,6 @@
 package com.repflow.app.presentation.progress
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -116,7 +117,15 @@ internal fun ProgressCard(
                 modifier = Modifier.padding(top = RepFlowSpacing.gapMd),
             )
         } else {
-            MetricEmptyState(Modifier.padding(top = ChartTopGap))
+            MetricEmptyState(
+                messageRes =
+                    if (metric == ProgressMetric.ESTIMATED_ONE_REP_MAX && exercise.estimateNeedsShorterSet) {
+                        R.string.progress_estimate_needs_shorter_set
+                    } else {
+                        R.string.progress_metric_empty
+                    },
+                modifier = Modifier.padding(top = ChartTopGap),
+            )
         }
         if (showsLoadMetricsUnavailable) {
             Text(
@@ -270,7 +279,10 @@ private fun BarChart(
 
 /** Fewer than two points for an offered metric (plan item 7): `1d`'s glyph at 35% and one line. */
 @Composable
-private fun MetricEmptyState(modifier: Modifier = Modifier) {
+private fun MetricEmptyState(
+    @StringRes messageRes: Int,
+    modifier: Modifier = Modifier,
+) {
     Column(
         modifier = modifier.fillMaxWidth().padding(vertical = RepFlowSpacing.gapLg),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -283,7 +295,7 @@ private fun MetricEmptyState(modifier: Modifier = Modifier) {
             modifier = Modifier.size(EmptyGlyphSize),
         )
         Text(
-            text = stringResource(R.string.progress_metric_empty),
+            text = stringResource(messageRes),
             style = MaterialTheme.typography.bodyMedium.copy(fontSize = EmptyTextSize),
             textAlign = TextAlign.Center,
         )
