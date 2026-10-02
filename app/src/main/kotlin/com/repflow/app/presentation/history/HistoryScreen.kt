@@ -126,7 +126,7 @@ fun HistoryScreen(
                 }
 
                 uiState.sessions.isEmpty() -> {
-                    RepFlowEmptyState(message = stringResource(R.string.history_empty))
+                    RepFlowEmptyState(message = stringResource(R.string.history_empty), icon = RepFlowIcons.clockCounterClockwise)
                 }
 
                 else -> {

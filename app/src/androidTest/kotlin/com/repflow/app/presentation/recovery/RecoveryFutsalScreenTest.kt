@@ -11,6 +11,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
+import com.repflow.app.presentation.RepFlowTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -47,20 +48,22 @@ class RecoveryFutsalScreenTest {
         onSaveEntry: () -> Unit = {},
     ) {
         composeRule.setContent {
-            RecoveryFutsalScreen(
-                uiState = uiState,
-                onBack = onBack,
-                onHistoryClick = onHistoryClick,
-                onDateChanged = {},
-                onScaleFieldChanged = onScaleFieldChanged,
-                onFutsalPreviousToggled = onFutsalPreviousToggled,
-                onFutsalNextToggled = {},
-                onNotesChanged = {},
-                onDurationChanged = onDurationChanged,
-                onSessionRpeChanged = {},
-                onSaveEntry = onSaveEntry,
-                onMessageShown = {},
-            )
+            RepFlowTheme {
+                RecoveryFutsalScreen(
+                    uiState = uiState,
+                    onBack = onBack,
+                    onHistoryClick = onHistoryClick,
+                    onDateChanged = {},
+                    onScaleFieldChanged = onScaleFieldChanged,
+                    onFutsalPreviousToggled = onFutsalPreviousToggled,
+                    onFutsalNextToggled = {},
+                    onNotesChanged = {},
+                    onDurationChanged = onDurationChanged,
+                    onSessionRpeChanged = {},
+                    onSaveEntry = onSaveEntry,
+                    onMessageShown = {},
+                )
+            }
         }
     }
 

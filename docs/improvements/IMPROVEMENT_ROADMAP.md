@@ -8,7 +8,10 @@ implemented as part of this review — it is a plan for future sessions.
 
 None identified. The one known integrity risk (transactional
 `clearAllTables()` during backup restore) has been instrumented-tested
-and confirmed safe.
+and confirmed safe. *(Since `repflow-redesign-visual-foundation-remediation-1`
+CP14 the restore clears the ten training tables through
+`TrainingDataRepository.clearTrainingData()` instead, so the settings row
+survives; `LocalBackupRepositoryAtomicityTest` was retargeted to that clear.)*
 
 ## 2. High-value maintainability improvements
 
@@ -221,6 +224,11 @@ to. None of them is a defect in the shipped foundation.
 
 ### 8.1 Consume `RepFlowStepper` on Active Workout set entry
 
+> **Delivered** by `repflow-redesign-visual-foundation-remediation-1` CP8:
+> focus mode logs weight, reps and seconds with steppers (step from the
+> exercise's `defaultLoadIncrement`, falling back to 2.5 kg) and the keypad,
+> and RPE, pain and technique with scale rows. Kept for its history.
+
 - **Problem:** the approved visual-foundation plan specifies steppers for
   load/reps (CP3 introduces `RepFlowStepper` as the primitive "used by CP6's
   weight/reps entry"; CP6's file description names "the load/reps/duration
@@ -261,6 +269,12 @@ to. None of them is a defect in the shipped foundation.
   exists.
 
 ### 8.2 Bring the remaining surfaces onto the foundation, starting with the second FAB
+
+> **Delivered** by `repflow-redesign-visual-foundation-remediation-1`
+> CP10–CP14: every listed surface was converted to the design's composition
+> on the foundation's primitives; both FABs gave way to
+> `RepFlowBottomActionBar`, and the Backup screen was folded into Settings.
+> `ROLE_AUDIT.md` was re-run at that milestone's CP16. Kept for its history.
 
 - **Problem:** the visual foundation deliberately reskins three surfaces, so
   touched and untouched surfaces now diverge. The most visible instance is
@@ -318,6 +332,133 @@ to. None of them is a defect in the shipped foundation.
   light-theme check on the Exercise list filter row.
 - **Changes:** `presentation/designsystem/` only.
 
+## 9. Deferred product capabilities (future milestones)
+
+Added by `repflow-redesign-visual-foundation-remediation-1` CP16. The
+Claude Design project draws each of these, and that milestone deliberately
+did not build them because the domain has no concept to back them (the
+user's scope decision at its planning gate: "Do not expand remediation-1
+into capabilities for which RepFlow currently has no domain support …
+Capture those as future product milestones instead"). Each item names its
+deviation-register rows in
+`docs/milestones/repflow-redesign-visual-foundation-remediation-1-inventory.md`.
+None is a defect in the shipped app. Every one needs a domain change, and
+every domain change that touches persistence needs a Room migration with a
+migration test and, where it adds training data, a backup-schema decision.
+
+### 9.1 Supersets
+
+- **Design:** `Superset A`/`B` grouping on the workout board, in focus mode
+  and in the plan editor; the board row sheet's `Superset with the next
+  exercise` (`D1`).
+- **Scope:** a grouping concept on planned exercises (and its snapshot on a
+  workout's exercises); board, focus and editor rendering; rest between
+  grouped exercises.
+- **Preconditions:** a product decision on how rest and set order work
+  inside a group; a schema change (new column or table) under an explicit
+  migration; backup schema version bump.
+
+### 9.2 Exercise swap / substitute (and skip)
+
+- **Design:** the swap sheet with same-muscle-group alternatives, and the
+  board row sheet's `Swap for another exercise`, `Skip for today`, `Do this
+  later` and `Remove from this workout` (`D2`, `D13`, `D14`, `D15`, `D20`);
+  `docs/UX_FLOWS.md`'s "Skip or substitute the exercise".
+- **Scope:** a status on a workout's exercise (skipped), a substitution
+  record, a reorder and a removal operation, each with a use case.
+- **Preconditions:** the open decision **"How substitutions affect
+  progression history"** (`docs/TECHNICAL_DECISIONS.md`) must be settled
+  first; same-muscle-group alternatives also need 9.6's taxonomy.
+
+### 9.3 Per-exercise and per-session notes
+
+- **Design:** the note sheet, note chips on board rows, the session note on
+  the finish sheet and in workout detail (`D3`); `docs/UX_FLOWS.md`'s
+  "Optional workout notes" on completion.
+- **Scope:** a nullable note on a workout's exercise and on a session;
+  entry on the board/finish sheet; display in History.
+- **Preconditions:** additive nullable columns under an explicit migration;
+  backup schema bump with a null-safe optional read (the convention in
+  `TECHNICAL_DECISIONS.md` "Backup").
+
+### 9.4 An active plan and multi-day plans
+
+- **Design:** the `Active plan` badge, `Day 1..4` tabs, "day 2 of 4",
+  "Week 3", `Make active`, `Start day 2`, and Home's "This week — 2 of 4
+  sessions" (`D4`, `D9`, `D45`, `D77`).
+- **Scope:** a day dimension inside a plan version, one active plan, a
+  weekly target; Home's start card and the start sheet offering the next
+  day.
+- **Preconditions:** a product decision on how days interact with plan
+  versioning (a new version per day edit, or per plan); schema change and
+  backup schema bump; Home's recommended-workout rule rewritten around it.
+
+### 9.5 kg / lb unit switching
+
+- **Design:** Settings' `Units` group (`D5`).
+- **Scope:** a display-unit preference (an additive column on the CP14
+  `settings` row, persisted by stable string), conversion at every load
+  display and entry point, and a lb load step.
+- **Preconditions:** a decision that storage stays in kilograms (only
+  display converts); every load-formatting site found and routed through one
+  formatter first.
+
+### 9.6 Other design surfaces with no domain backing
+
+Recorded together because each is smaller or blocked on a decision:
+
+- **Deload planning** — the "Plan a deload week" card and the deload state
+  (`D6`). Needs a programme-level concept.
+- **Editing a completed workout's sets** — `3b`'s set pencil (`D7`).
+  Blocked by the open decision **"Whether completed workouts may be
+  manually corrected"**.
+- **Muscle-group taxonomy** — the library's group filter and
+  `Chest · Weight & reps` meta (`D8`). Needs a field on `Exercise`.
+- **First-run onboarding** — drawn nowhere, listed by the design as a "try
+  next".
+- **Ad-hoc workout naming** (`D30`) and **backup history / safety snapshot /
+  restore undo** (`D34`, `D104`).
+
+### 9.7 `docs/UX_FLOWS.md` rows kept as declared intent
+
+`docs/UX_FLOWS.md` keeps every requirement the app does not yet meet,
+marked *declared intent* and pointing here. The ones not already covered
+by 9.1–9.6 or 9.8:
+
+- **Pre-start preview** — planned exercises, expected duration, recovery
+  warning, recent futsal context and suggested adjustments before starting
+  (`D12`, `D44`). "Suggested adjustments" is the per-exercise readiness
+  decision list (`D27`–`D29`), which needs a rule that acts on the
+  readiness band; none exists.
+- **Suggested load as a figure** — the recommendation names an outcome
+  (increase / maintain / reduce), not a load (`D49`); a figure would be a new
+  `ProgressionPolicyV1` output.
+- **Recovery or pain warnings on the completion screen** — no warning rule
+  exists in the domain or application layers.
+
+### 9.8 Next remediation child: `5b`, `5c` / `5d`, and set-entry carry-over
+
+Decided by the user on 2026-10-01 during
+`repflow-redesign-visual-foundation-remediation-1`: its CP14 and CP15 built
+the plan's `4a` Settings and Progress, and the newer design turns go to a
+later remediation child.
+
+- **`5c` / `5d` Settings** (`O11`): `Theme` System / Light / Dark, an
+  app-level `Default rest`, `Extra set fields` (always / collapsed / off),
+  `Archived exercises and plans`, and `Backup and restore` as its own screen
+  with backup metadata. Each preference is an additive column on the
+  `settings` row (a `MIGRATION_8_9`).
+- **`5b` Progress** (`O12`): exercise picker, line chart with selectable
+  points, `3m` / `6m` / `All` range, `Sessions` / `Avg RPE` tiles, `Training
+  frequency`, `Records`.
+- **Set-entry carry-over** (`D60`): weight and reps staying in place after
+  `Log set` and starting from the last session's values, with "Last time:
+  82.5 kg × 8" before the first set — which also delivers
+  `docs/UX_FLOWS.md`'s "Previous performance" and "Reuse the previous set".
+  Precondition: revisit the Milestone 8 rule that recording a set clears
+  the entry (`tappingAddSetClearsTheEntryFields`), and add a read model for
+  the previous session's sets.
+
 ---
 
 ## Prioritization summary (recommended execution order)
@@ -343,3 +484,7 @@ Section 8 sits outside that order: 8.1 and 8.2 are the next *application*
 milestone's own scope rather than standalone cleanups, and 8.3 is gated on a
 design decision. Within section 8 the order is 8.3 (unblocks nothing but is
 cheapest once the value exists), then 8.1, then 8.2.
+
+Section 9 is product scope, not cleanup: each item is its own future
+milestone, ordered by the product owner. 9.8 is the one already decided to
+come next, as a remediation child of the redesign.

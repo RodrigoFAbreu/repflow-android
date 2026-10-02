@@ -241,9 +241,12 @@ private const val LIGHT_SURFACE_LUMINANCE_FLOOR = 0.5f
  *
  * `surfaceContainer` is the bottom nav's own bar fill and is a value of its
  * own, distinct from both `background` and `surface`. `surfaceContainerHigh`
- * (dialog/date-picker container) and `surfaceContainerHighest` (the plan
- * editor's row card) are both reassigned to `surface` so the `primary`-coloured
- * text those containers carry clears 4.5:1 - see ROLE_AUDIT.md.
+ * (the `AlertDialog` container, and `DatePicker`'s own container inside
+ * `RepFlowSheet`) is reassigned to `surface` so the `primary`-coloured text it
+ * carries clears 4.5:1 - see ROLE_AUDIT.md. `surfaceContainerHighest` keeps
+ * the same reassignment but has **no consumer** since remediation-1 CP11
+ * rebuilt the plan editor's bare `Card` (its only reader); the value stays so
+ * a future stock reader of the role starts from an accessible one.
  */
 val RepFlowDarkColorScheme =
     darkColorScheme(
@@ -267,7 +270,8 @@ val RepFlowDarkColorScheme =
  * would measure 2.60:1 on this lighter fill.
  *
  * `surfaceContainerHighest` is deliberately left at the Material 3 baseline -
- * light `primary` already clears 4.5:1 on it, so there is nothing to fix.
+ * light `primary` already cleared 4.5:1 on it when the plan editor's bare
+ * `Card` read it; since remediation-1 CP11 nothing reads it at all.
  */
 val RepFlowLightColorScheme =
     lightColorScheme(

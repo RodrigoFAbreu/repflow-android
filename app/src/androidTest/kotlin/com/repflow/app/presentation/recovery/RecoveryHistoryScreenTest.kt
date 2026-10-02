@@ -14,6 +14,7 @@ import com.repflow.app.domain.recovery.FutsalSession
 import com.repflow.app.domain.recovery.FutsalSessionId
 import com.repflow.app.domain.recovery.RecoveryEntry
 import com.repflow.app.domain.recovery.RecoveryEntryId
+import com.repflow.app.presentation.RepFlowTheme
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -81,7 +82,7 @@ class RecoveryHistoryScreenTest {
         uiState: RecoveryHistoryUiState,
         onBackClick: () -> Unit = {},
     ) {
-        composeRule.setContent { RecoveryHistoryScreen(uiState = uiState, onBackClick = onBackClick) }
+        composeRule.setContent { RepFlowTheme { RecoveryHistoryScreen(uiState = uiState, onBackClick = onBackClick) } }
     }
 
     private fun withData(): RecoveryHistoryUiState =

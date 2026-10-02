@@ -1,5 +1,13 @@
 # RepFlow UX Flows
 
+This document describes the flows the app delivers. A requirement the app
+does not yet meet is **kept** and marked *declared intent*, with a pointer
+to the `docs/improvements/IMPROVEMENT_ROADMAP.md` entry that owns it — a
+requirement is never removed by rewriting the document around it. The
+visual source of truth is the Claude Design project; every place the built
+app differs from it, and why, is in the deviation register of
+`docs/milestones/repflow-redesign-visual-foundation-remediation-1-inventory.md`.
+
 ## UX principles
 
 RepFlow is primarily used during workouts, often while standing, tired, and
@@ -18,107 +26,151 @@ The UI should prioritize:
 Important workout actions should normally require no more than two or three
 taps.
 
+## Navigation
+
+The bottom navigation carries four top-level destinations, in this order:
+**Home** (where the app opens), **Plans**, **History** and **Progress**
+(`docs/TECHNICAL_DECISIONS.md`, "Navigation structure").
+
+- **Settings** opens from Home's gear. It is not a tab and shows no bottom
+  navigation. The **exercise library** opens from Settings, and backup
+  export, restore and CSV export are rows in its `Data` group.
+- **Recovery entry** opens from Home's recovery card (`Log`); recovery and
+  futsal history open from the entry screen.
+- **Workout mode replaces the navigation.** The workout board, focus mode
+  and the done screen draw no bottom navigation; leaving (`X`) or `Finish`
+  are the only ways out.
+
 ## Home
 
-The home screen should show:
+The home screen shows:
 
-1. Recommended workout for today
-2. Resume active workout, when one exists
-3. Recent workout summary
-4. Relevant recovery or futsal context
-5. Quick access to plans, history, and settings
+1. The recommended workout for today — a plan, with its exercise and
+   working-set counts and `Start workout` — or, with no plan yet, `Create a
+   plan` and `Empty workout`. `Train something else` opens a sheet listing
+   every active plan and `Empty workout`.
+2. Resume active workout, when one exists — a resume card with `Resume`,
+   `Finish it` and abandon, replacing the start card.
+3. Recent workout summary — the last workout and its recent load increases.
+4. Relevant recovery context — today's readiness score and band from the
+   recovery check-in, with `Details` (how the score was set) and `Log`.
+5. Quick access to plans, history and progress (the bottom navigation) and
+   settings (the gear).
 
-The active workout action must have the strongest visual priority.
+The active workout action has the strongest visual priority: while a
+workout is running, `Resume` is the screen's one primary action.
 
 ## Start workout
 
-The user selects or accepts a training plan.
+The user selects or accepts a training plan (Home's start card, the start
+sheet, or a plan's `Start workout` on the Plans tab), or starts an empty
+workout and adds exercises as they go.
 
-Before starting, RepFlow may show:
+Before starting, RepFlow may show *(declared intent — not built; see
+`IMPROVEMENT_ROADMAP.md` §9.7)*:
 
-- Planned exercises
+- Planned exercises *(Home's start card shows only their count)*
 - Expected duration
 - Recovery warning
-- Recent futsal context
+- Recent futsal context *(shown once the workout has started, on the board)*
 - Suggested adjustments
 
 Starting a workout creates and immediately persists an active workout session.
 
 ## Active workout
 
-The primary screen focuses on one exercise at a time.
+The workout opens on a **board**: every exercise with its set status, the
+next one marked `Up next`, progress across the session, recent recovery and
+futsal context, and `Add exercise`. Tapping an exercise opens **focus
+mode**, which works on one exercise at a time.
 
-It should show:
+Focus mode shows:
 
 - Exercise name
 - Technique notes
-- Previous performance
-- Current set number
+- Current set number, and each planned set's target and rest
 - Target sets and repetition range
-- Suggested load
+- The progression suggestion for the exercise — the outcome (increase,
+  maintain or reduce the load, or not enough data yet) with its top reason,
+  and `Why ›` to the full recommendation
 - Current rest status
-- Completed sets
+- Completed sets, and the set just logged
+- Previous performance *(declared intent — focus mode shows nothing from an
+  earlier session before the first set; `IMPROVEMENT_ROADMAP.md` §9.8)*
+- Suggested load as a figure *(declared intent — the suggestion names an
+  outcome, not a load; `IMPROVEMENT_ROADMAP.md` §9.7)*
 
-The user should be able to:
+The user can:
 
-- Increase or decrease load
-- Increase or decrease repetitions
-- Reuse the previous set
+- Increase or decrease load (a stepper by the exercise's load step, or the
+  keypad)
+- Increase or decrease repetitions (or seconds, for a timed exercise)
+- Reuse the previous set *(declared intent — every logged set clears the
+  entry; `IMPROVEMENT_ROADMAP.md` §9.8)*
 - Record RPE
 - Record optional technique quality
 - Record optional pain
-- Save the set
+- Save the set (`Log set`)
 - Mark a warm-up set
-- Add an extra set
-- Skip or substitute the exercise
+- Add an extra set beyond the plan's target
+- Undo or correct the most recently logged set
+- Skip or substitute the exercise *(declared intent — no domain backing;
+  `IMPROVEMENT_ROADMAP.md` §9.2)*
 
-Saving a set should immediately persist the result.
+Saving a set immediately persists the result.
 
 ## Rest timer
 
-After saving a working set:
+After saving a set, while Settings' `Start rest timer automatically` is on:
 
-1. Start the configured rest timer.
+1. Start the rest timer for the exercise's planned rest (or the app default).
 2. Store the absolute timer end timestamp.
-3. Display the remaining duration.
-4. Allow adding or removing time.
+3. Display the remaining duration, on the board and in focus mode.
+4. Allow adding or removing time (`+15s` / `−15s`).
 5. Allow skipping the timer.
-6. Notify the user when rest ends, where permissions allow.
+6. When rest ends, notify the user (while `Rest timer notification` is on,
+   and only where the notification permission is granted) and vibrate
+   (while `Vibrate when rest ends` is on).
 
-Returning to the application must reconstruct the timer from the stored end
+Returning to the application reconstructs the timer from the stored end
 timestamp.
 
 ## Interrupted workout
 
 When the application is reopened and an incomplete workout exists, the home
-screen should prominently offer:
+screen prominently offers:
 
-- Resume workout
-- End workout
-- Discard workout, with confirmation
+- Resume workout (`Resume`)
+- End workout (`Finish it`, which opens the finish sheet)
+- Abandon this workout, with confirmation — the session is marked abandoned
+  and its logged sets stay stored; nothing is deleted
 
-The workout must resume at the correct exercise, set, values, and rest state.
+The workout resumes at the correct exercise, set, values and rest state.
 
 ## Complete workout
 
-On completion, show:
+`Finish` opens a sheet listing anything unfinished (while Settings'
+`Confirm before finishing` is on), then saves. On completion, the done
+screen shows:
 
 - Duration
 - Exercises completed
 - Total working sets
-- Relevant progression recommendations
-- Recovery or pain warnings
-- Optional workout notes
+- Each exercise's change versus the last comparable session, and any best
+  set
+- Relevant progression recommendations, each with `Why`
+- Recovery or pain warnings *(declared intent — no warning rule exists;
+  `IMPROVEMENT_ROADMAP.md` §9.7)*
+- Optional workout notes *(declared intent — no notes field exists;
+  `IMPROVEMENT_ROADMAP.md` §9.3)*
 
 The completed workout becomes historical data and must not be changed by later
 training-plan edits.
 
 ## Recovery entry
 
-Recovery input should be quick and use scales or selectable options where
-possible.
-
-Possible fields:
+Recovery input is quick and uses `0–5` scale rows and toggles. One screen
+records, for today or a chosen past date:
 
 - Sleep quality
 - Energy
@@ -126,16 +178,20 @@ Possible fields:
 - Heel stiffness
 - Pain while walking
 - Heavy legs
-- Futsal in previous 24 hours
+- Futsal in previous 24 hours, and that session's minutes and RPE
 - Futsal expected in next 24 hours
 
-Free text should remain optional.
+Free text (notes) remains optional. The check-in sets that day's readiness
+score (`docs/TECHNICAL_DECISIONS.md`, "Readiness score").
 
 ## Error and destructive actions
 
-Destructive actions should:
+Destructive actions:
 
-- Be clearly labeled
-- Require confirmation when data loss is possible
-- Offer undo when practical
-- Never silently remove completed workout history
+- Are clearly labeled
+- Require confirmation when data loss is possible — abandoning a workout,
+  invalidating a completed workout, restoring a backup, and erasing all data
+  (which also asks the user to type a confirmation word)
+- Offer undo when practical (archiving an exercise or a plan)
+- Never silently remove completed workout history — invalidating keeps the
+  workout stored and hides it from History unless `Show invalidated` is on

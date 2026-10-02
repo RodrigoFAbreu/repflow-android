@@ -842,7 +842,7 @@ listing each converted package's `app/src/test` directory; method counts are
 Every row is a place the built app differs from the design. **D1–D24 are
 seeded verbatim from the execution plan's "Deviation register — seeded";
 D25–D38 are added by CP1** from the full read above. Later checkpoints append
-here — the next free id is **D112** (CP3 added D39–D40, CP4 D41–D43, CP5 D44–D48, CP6 D49–D54, CP7 D55–D59, CP8 D60–D66, CP9 D67–D69, CP10 D70–D75, CP11 D76–D87, CP12 D88–D96, CP13 D97–D102, CP14 D103–D107, CP15 D108–D111) — and never renumber. Reasons use the
+here — the next free id is **D113** (CP3 added D39–D40, CP4 D41–D43, CP5 D44–D48, CP6 D49–D54, CP7 D55–D59, CP8 D60–D66, CP9 D67–D69, CP10 D70–D75, CP11 D76–D87, CP12 D88–D96, CP13 D97–D102, CP14 D103–D107, CP15 D108–D111, CP16 D112) — and never renumber. Reasons use the
 plan's four categories: `no domain backing`, `blocked by open decision`,
 `platform convention`, `deliberate product call`.
 
@@ -959,6 +959,7 @@ plan's four categories: `no domain backing`, `blocked by open decision`,
 | D109 | `Est. 1RM` with no formula stated (`4a`'s `PROGRESS` sample; `1c`'s `82.5 × 7` → `99 kg`, `:2959–2960`) | **Brzycki**, `load × 36 / (37 − reps)` (it reproduces `1c`'s 99 exactly), in `domain/progression/EstimatedOneRepMax.kt`: the best per-set estimate over a session's working sets of **1 to 12 reps**, in whole kilograms; a set of more than 12 reps has no estimate, so a session whose loaded sets are all longer gives no `Est. 1RM` point (its `Top set` and `Volume` still count) | deliberate product call (plan CP15 item 2 leaves the formula to the checkpoint): rep-max formulas lose their meaning on long sets, and a light high-rep set would otherwise out-score the heavy sets the estimate describes. **Formula and the 12-rep ceiling flagged for the reviewer** | CP15 |
 | D110 | `4a`'s sample: always twelve bars, `+N kg since 5 May`, `Best: N kg · 12-session window`, three fixed exercise chips | The window is the **last up to twelve valid sessions that have a value for the metric**, one bar each; the best line names the window's real size (`4-session window`); the delta runs from the window's first session (`since 5 May`, with the year when that session was in an earlier year than the latest); chips are every trained exercise, most recently trained first, named as the latest session recorded it; a session recorded under an earlier tracking type of the same exercise gives no point. An offered metric with fewer than two points shows `1d`'s empty treatment in the card (`Not enough sessions yet. A trend needs at least two.`) above the latest value if there is one; no history at all shows `1d`'s empty state for the tab (the CP2 placeholder's words). Value `kg` / `kg total` (volume) / `reps` / `s`; the delta and best line use `kg` / `reps` / `s`, as `4a` uses `kg` for volume's | deliberate product call: the sample's fixed twelve and its three exercises have no meaning against a real history; the empty-state copy is CP15's. **Empty-state copy flagged for the reviewer** | CP15 |
 | D111 | Older bars `#5d5294` under a `#9184d9` latest bar; text at 40% (month labels), 45% (best line), 50% (unit, note) and 60% (exercise name); the card at radius 14; the delta `#d2cefd` when up | Older bars are the theme's `primary` at 50% (about `#5a5485` on the dark card, and still distinct in light, where `primary` is `#5d5294`); every text tier above at the secondary tier (`D39`); the card is CP3's `RepFlowCard` (radius 16); the delta in the selected-pill label tone (`#d2cefd` dark) when up or level and `error` when down, always signed (`+10`, `−2.5`); one spoken description stands for the bars (`Top set over the last 4 sessions, from 72.5 kg to 82.5 kg`) | platform convention (WCAG, as `D39`) for the tiers; the design system's own card for the radius; a fixed `#5d5294` would equal the light theme's latest bar | CP15 |
+| D112 | The finish sheet's footnote "…Home shows a Resume banner until you finish or discard it." (`4a` `nFinishSheet`, `:1761`) | "…until you finish or abandon it." | deliberate product call: `D18` names the action `Abandon this workout`, and the footnote points at that action, so it uses the same word (found by CP16's side-by-side pass) | CP16 |
 
 **Status-chip audit (`6b`, "never colour alone"; CP3).** Every chip the
 design draws pairs its tone with an icon or a word (§2). On the built
@@ -976,6 +977,31 @@ scale cannot render without them, and its selected cell is a digit. CP3 also
 gave `UpNext` the colour `6b` draws (accent fill, accent-300 word, no ring),
 settling the parent's open note that it differed from `Outline` by type
 alone. No register row is added for the audit.
+
+**CP16 review of the register, end to end (plan CP16 item 3).** Every row
+D1–D112 was re-read, and the rows the side-by-side pass's screens show
+(physical SM-S928B dark, 384 dp AVD light) were checked against what those
+screens draw. None needed rewording, and each is still justified as
+written; three findings were fixed rather than recorded:
+
+- **`D57`** quoted the board's context line as `Heavy legs: n/4 · Leg DOMS:
+  n/4`. The recovery scales have been `0–5` since Milestone 8
+  (`RecoveryEntry.SCALE_RANGE`), so the `/4` was a stale denominator carried
+  into the converted board; the two strings now read `/5`. The row's reason
+  is unchanged.
+- **`D18`'s** naming now also covers the finish sheet's footnote (`D112`).
+- **`3.19`'s** empty treatment (`1d`: a 26 glyph at 35% over a 13.5 line)
+  was drawn by Home, Plans and Progress but not by `RepFlowEmptyState`, the
+  shared primitive History's, the library's and recovery history's empty
+  states use; the primitive now draws it (optional glyph; History passes its
+  tab glyph). Not a register row: it was a conversion gap, now closed.
+
+Rows flagged for the reviewer by the checkpoint that wrote them stay
+flagged — CP16 does not accept or reword its own milestone's copy: `D38`,
+`D42`, `D47`, `D52`, `D67`, `D73`, `D76`, `D77`, `D82`, `D85`, `D98`, `D101`,
+`D103`, `D105`, `D109`, `D110`. `O11` and `O12` are closed by the user's
+2026-10-01 decision, and that decision also defers `D60`'s carry-over to the
+same later remediation child (`IMPROVEMENT_ROADMAP.md` §9.8).
 
 ---
 

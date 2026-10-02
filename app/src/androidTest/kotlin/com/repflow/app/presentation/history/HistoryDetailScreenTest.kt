@@ -22,6 +22,7 @@ import com.repflow.app.domain.workout.WorkoutSession
 import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.domain.workout.WorkoutSet
 import com.repflow.app.domain.workout.WorkoutSetId
+import com.repflow.app.presentation.RepFlowTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -81,12 +82,14 @@ class HistoryDetailScreenTest {
         onBackClick: () -> Unit = {},
     ) {
         composeRule.setContent {
-            HistoryDetailScreen(
-                summary = summary,
-                planLabel = null,
-                onBackClick = onBackClick,
-                onInvalidateConfirmed = {},
-            )
+            RepFlowTheme {
+                HistoryDetailScreen(
+                    summary = summary,
+                    planLabel = null,
+                    onBackClick = onBackClick,
+                    onInvalidateConfirmed = {},
+                )
+            }
         }
     }
 

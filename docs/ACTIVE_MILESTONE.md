@@ -13,8 +13,107 @@ explicitly** — `active_work_item_id` still points at the parent.
   (revision 20). Registry:
   `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-registry.json`
   (CP1–CP16, executed in array order).
-- **Current checkpoint: CP15 — Progress tab: complete.**
-  CP1–CP14 complete; CP16 not started.
+- **Current checkpoint: CP16 — Verification, side-by-side validation, and
+  decision updates: complete. All sixteen checkpoints are done.**
+
+### CP16 — what was done and verified (2026-10-02)
+
+- **Device run of every instrumented test (plan item 1, F1 acceptance
+  criterion 5).** The CP2–CP15 instrumented tests had only been compiled.
+  On the physical **SM-S928B** (`RFCXA0RLSVT`, Android 16, 384 dp) the first
+  full `connectedDebugAndroidTest` surfaced three kinds of failure, all
+  fixed in this checkpoint:
+  - **Eight screen tests rendered without `RepFlowTheme`**
+    (`ExerciseEditorScreenTest`, `HistoryScreenTest`, `HistoryDetailScreenTest`,
+    `ProgressScreenTest`, `RecoveryFutsalScreenTest`, `RecoveryHistoryScreenTest`,
+    `TrainingPlanEditorScreenTest`, `TrainingPlanListScreenTest`): the
+    converted screens read `LocalRepFlowExtraColors`, whose default throws
+    outside the theme. Each `setContent` now wraps the screen in
+    `RepFlowTheme`, as `ExerciseListScreenTest` already did. Test-only.
+  - **A real defect in CP14's Settings** (`BackupRouteUnreadableRestoreFileTest`):
+    `SettingsMessages` consumed a message *before* showing it, which cleared
+    the key its `LaunchedEffect` is keyed on, so the restart cancelled the
+    snackbar — no backup or Settings message (`Backup restored`, the failure
+    message, `All data erased`) ever stayed on screen. Now shown first,
+    consumed after, as every other screen does; new
+    `SettingsScreenTest.aMessageStaysOnScreenAfterItIsConsumed` pins it.
+  - **`ProgressScreenTest.theChipsAndSegmentsReportTheChoice`** matched two
+    nodes (the card repeats the selected exercise's name); it now selects the
+    selectable chip.
+  - The smoke test's `historyTab…`/`progressTab…` need an empty database: the
+    first run was over the phone's own data. The app was uninstalled before
+    the later runs (the orchestrator had backed the data up).
+- **Side-by-side validation (plan item 2: F1 required remediation 5 and 6,
+  acceptance criterion 4).** The design was captured from the live project
+  (headless Chromium over `render_preview`): every static artboard plus `4a`'s
+  prototype driven through 23 states. The app was captured on the phone
+  (dark, every converted surface, with a synthetic history restored through
+  `Restore from a file` and live workouts) and, once the user needed the phone
+  back, on the 384 dp AVD for the populated light-theme pass (supporting
+  evidence). Contact sheets: `.ai-review/repflow-redesign-visual-foundation-remediation-1/cp16-side-by-side/`
+  (`INDEX.txt`; gitignored). Every surface matches its artboard's
+  composition apart from registered deviations. **Fixed** from the pass:
+  - Settings and Progress applied the scaffold's padding *inside* their
+    scroll, so content scrolled under the top bar (Settings' rows ran through
+    its title). The padding is now applied outside the scroll.
+  - The board's context line read `Heavy legs: n/4 · Leg DOMS: n/4`; the
+    scales are `0–5` since Milestone 8. Now `/5` (`D57`'s text).
+  - The finish sheet's footnote said "finish or discard it"; the action is
+    `Abandon this workout` (`D18`). Now "abandon" (new `D112`).
+  - `RepFlowEmptyState` drew a bare body-large line; it now draws `1d`'s
+    empty treatment (optional 26dp glyph at 35% over a 13.5 line), and
+    History's empty state passes its tab glyph.
+  **Observed, not changed** (outside this checkpoint's scope, reported):
+  the plan editor asks `Discard changes?` on back even with no edit (its
+  edit-mode `isDirty` is `true` once loaded — unchanged since Milestone 2);
+  on a fresh install the rest-end alarm is inexact (`setAndAllowWhileIdle`,
+  up to ~2 min late) unless exact alarms are allowed — Milestone 4's
+  scheduler, unchanged here.
+- **Deviation register (item 3)** reviewed end to end in the inventory, with
+  the review written under its table: every row still justified; `D57`'s
+  denominator fixed; `D112` added. Next free id: **D113**. Rows their
+  checkpoints flagged for the reviewer stay flagged.
+- **Decisions (item 4).** `docs/TECHNICAL_DECISIONS.md`: `Navigation
+  structure` **resolved** (the four-destination IA, new section); a new
+  resolved row and section for the **readiness score** (the user's
+  2026-09-30 adoption of the prototype's engine); every other open row
+  untouched — `Whether completed workouts may be manually corrected` and
+  `How substitutions affect progression history` included.
+- **`docs/UX_FLOWS.md` (item 5)** rewritten to the delivered IA and the
+  board/focus split. Rows still unimplemented are kept and marked *declared
+  intent* with an `IMPROVEMENT_ROADMAP.md` pointer: the pre-start preview
+  (`:39–43` before), previous performance, suggested load as a figure, reuse
+  the previous set, skip or substitute, recovery or pain warnings and
+  workout notes on completion. `Discard workout` became `Abandon this
+  workout`, with confirmation (`D18`).
+- **`docs/improvements/IMPROVEMENT_ROADMAP.md` (item 6):** new §9 — the five
+  deferred capabilities (supersets, swap/substitute, notes, active plan and
+  multi-day plans, kg/lb) as named future milestones with scope and
+  preconditions, the other no-domain surfaces, the declared-intent rows, and
+  §9.8 the decided next remediation child (`5b`, `5c`/`5d`, `D60`'s set-entry
+  carry-over). §8.1 and §8.2 marked delivered.
+- **ADR-0003's snapshot (item 7)** names the fourth Hilt module,
+  `RestAlertModule` in `presentation/workout/`, and the new packages.
+- **`ROLE_AUDIT.md` re-run by its own method (item 8)** over the converted
+  tree: 17 imported components (ten retired), 0 colour literals outside
+  `designsystem/`, direct reads in 41 files, all of assigned roles; the
+  `Consumers` column re-derived — `surfaceContainer` is now the nav bar alone,
+  `surfaceContainerHighest`, `secondaryContainer`, `primaryContainer` and
+  `outlineVariant` have no consumer, `onSurfaceVariant` is stock-only. No value
+  changed, so no ratio was recomputed. `RepFlowColor.kt`'s KDoc no longer
+  names the plan editor's row card as `surfaceContainerHighest`'s consumer.
+- **Checks run (item 1's forced gate), final, on the AVD after every change:**
+  `./gradlew --rerun-tasks spotlessCheck detekt lintDebug testDebugUnitTest
+  assembleDebug assembleDebugAndroidTest connectedDebugAndroidTest` —
+  **BUILD SUCCESSFUL, 96/96 tasks executed**; **621 JVM tests (101 classes),
+  0 failures**; **269 instrumented tests on `RepFlow_S24Ultra_384dp_API36`,
+  0 failures**; lint 0 errors, 21 warnings, 1 hint (the standing baseline).
+  **Device runs on the SM-S928B, earlier in the checkpoint:** the full suite
+  (269 tests, 268 passed, 1 failed — the `ProgressScreenTest` match, fixed),
+  then that class with `SettingsScreenTest` and both backup route tests
+  (13 tests, 0 failures). The final AVD run is emulator evidence and is not
+  claimed as device coverage: the three later presentation fixes (scroll
+  padding, the two strings, the empty state) ran on the AVD only.
 
 ### CP15 — what was done and verified (2026-10-01)
 
@@ -1375,11 +1474,13 @@ explicitly** — `active_work_item_id` still points at the parent.
 
 ### Next action
 
-`/milestone-implement repflow-redesign-visual-foundation-remediation-1` —
-CP16 (verification, side-by-side design validation, and decision/doc
-updates). `O11` and `O12` were decided by the user on 2026-10-01: CP14 and
-CP15 built the approved plan's `4a` designs; `5c`/`5d`/`5b` go to a later
-remediation child.
+`/milestone-implement repflow-redesign-visual-foundation-remediation-1` once
+more: every registry checkpoint is `COMPLETE` and the phase is
+`SELF_REVIEWING_IMPLEMENTATION`, so the next invocation runs the command's
+step 2 onward (self-review of the full milestone diff, the full gate, and the
+implementation review bundle). `O11`, `O12` and `D60`'s carry-over were
+decided by the user on 2026-10-01: they go to a later remediation child
+(`IMPROVEMENT_ROADMAP.md` §9.8).
 
 ---
 

@@ -102,8 +102,8 @@ private fun ProgressContent(
         modifier =
             Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
                 .padding(padding)
+                .verticalScroll(rememberScrollState())
                 .padding(top = TitleGap, bottom = RepFlowSpacing.gapSm),
     ) {
         ExerciseChips(exercises = uiState.exercises, selectedId = exercise.exerciseId, onSelect = onExerciseSelected)

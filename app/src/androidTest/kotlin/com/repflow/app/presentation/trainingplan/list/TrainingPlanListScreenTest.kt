@@ -10,6 +10,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
 import com.repflow.app.application.trainingplan.TrainingPlanStatusFilter
 import com.repflow.app.domain.trainingplan.TrainingPlanId
+import com.repflow.app.presentation.RepFlowTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -42,18 +43,20 @@ class TrainingPlanListScreenTest {
         onMessageShown: (Long) -> Unit = {},
     ) {
         composeRule.setContent {
-            TrainingPlanListScreen(
-                uiState = uiState,
-                onRetry = onRetry,
-                onPlanClick = onPlanClick,
-                onStartClick = onStartClick,
-                onCreateClick = onCreateClick,
-                onFilterChanged = onFilterChanged,
-                onArchiveClicked = onArchiveClicked,
-                onRestoreClicked = onRestoreClicked,
-                onUndoArchiveClicked = onUndoArchiveClicked,
-                onMessageShown = onMessageShown,
-            )
+            RepFlowTheme {
+                TrainingPlanListScreen(
+                    uiState = uiState,
+                    onRetry = onRetry,
+                    onPlanClick = onPlanClick,
+                    onStartClick = onStartClick,
+                    onCreateClick = onCreateClick,
+                    onFilterChanged = onFilterChanged,
+                    onArchiveClicked = onArchiveClicked,
+                    onRestoreClicked = onRestoreClicked,
+                    onUndoArchiveClicked = onUndoArchiveClicked,
+                    onMessageShown = onMessageShown,
+                )
+            }
         }
     }
 

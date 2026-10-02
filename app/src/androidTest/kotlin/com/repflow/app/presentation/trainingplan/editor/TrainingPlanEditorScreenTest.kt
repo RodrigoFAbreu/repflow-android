@@ -17,6 +17,7 @@ import com.repflow.app.R
 import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.trainingplan.TrainingPlanId
 import com.repflow.app.domain.trainingplan.TrainingPlanValidationError
+import com.repflow.app.presentation.RepFlowTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -46,17 +47,19 @@ class TrainingPlanEditorScreenTest {
         onCreateExerciseClick: () -> Unit = {},
     ) {
         composeRule.setContent {
-            TrainingPlanEditorScreen(
-                uiState = uiState,
-                onNameChanged = onNameChanged,
-                rowActions = rowActions,
-                onAddRowClicked = onAddRowClicked,
-                onSaveClicked = onSaveClicked,
-                onBackRequested = onBackRequested,
-                onDiscardConfirmed = onDiscardConfirmed,
-                onDiscardCancelled = onDiscardCancelled,
-                onCreateExerciseClick = onCreateExerciseClick,
-            )
+            RepFlowTheme {
+                TrainingPlanEditorScreen(
+                    uiState = uiState,
+                    onNameChanged = onNameChanged,
+                    rowActions = rowActions,
+                    onAddRowClicked = onAddRowClicked,
+                    onSaveClicked = onSaveClicked,
+                    onBackRequested = onBackRequested,
+                    onDiscardConfirmed = onDiscardConfirmed,
+                    onDiscardCancelled = onDiscardCancelled,
+                    onCreateExerciseClick = onCreateExerciseClick,
+                )
+            }
         }
     }
 
@@ -318,17 +321,19 @@ class TrainingPlanEditorScreenTest {
         var selected: Pair<Long, String>? = null
         // A stateful host: the ViewModel's new empty row has to actually appear for the sheet to open for it.
         composeRule.setContent {
-            TrainingPlanEditorScreen(
-                uiState = state,
-                onNameChanged = {},
-                rowActions = noOpRowActions().copy(onExerciseSelected = { rowId, exerciseId -> selected = rowId to exerciseId }),
-                onAddRowClicked = { state = state.copy(rows = state.rows + PlannedExerciseRowUiState(rowId = 3L)) },
-                onSaveClicked = {},
-                onBackRequested = {},
-                onDiscardConfirmed = {},
-                onDiscardCancelled = {},
-                onCreateExerciseClick = {},
-            )
+            RepFlowTheme {
+                TrainingPlanEditorScreen(
+                    uiState = state,
+                    onNameChanged = {},
+                    rowActions = noOpRowActions().copy(onExerciseSelected = { rowId, exerciseId -> selected = rowId to exerciseId }),
+                    onAddRowClicked = { state = state.copy(rows = state.rows + PlannedExerciseRowUiState(rowId = 3L)) },
+                    onSaveClicked = {},
+                    onBackRequested = {},
+                    onDiscardConfirmed = {},
+                    onDiscardCancelled = {},
+                    onCreateExerciseClick = {},
+                )
+            }
         }
 
         composeRule

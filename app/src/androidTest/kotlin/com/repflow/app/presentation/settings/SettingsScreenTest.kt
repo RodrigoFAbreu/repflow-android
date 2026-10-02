@@ -1,6 +1,11 @@
 package com.repflow.app.presentation.settings
 
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
@@ -14,6 +19,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
 import com.repflow.app.application.settings.AppSettings
 import com.repflow.app.presentation.RepFlowTheme
+import com.repflow.app.presentation.backup.BackupStatusMessage
 import com.repflow.app.presentation.backup.BackupUiState
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -118,5 +124,58 @@ class SettingsScreenTest {
 
         assertEquals(1, eraseConfirms)
         composeRule.onNodeWithText(string(R.string.settings_erase_confirm_title)).assertDoesNotExist()
+    }
+
+    /**
+     * Remediation-1 CP16: both messages are consumed only once their snackbar
+     * has been shown. Consuming first cleared the key the showing effect is
+     * keyed on, and the restart cancelled the snackbar before it was ever on
+     * screen - found by the device run of the backup route tests.
+     */
+    @Test
+    fun aMessageStaysOnScreenAfterItIsConsumed() {
+        var backupShown = 0
+        var settingsShown = 0
+        composeRule.setContent {
+            var backupState by remember { mutableStateOf(BackupUiState(statusMessage = BackupStatusMessage.OperationFailed)) }
+            var uiState by remember { mutableStateOf(SettingsUiState(settings = AppSettings.DEFAULT)) }
+            RepFlowTheme {
+                SettingsScreen(
+                    uiState = uiState,
+                    backupState = backupState,
+                    versionName = "0.1",
+                    actions =
+                        SettingsActions(
+                            onBack = {},
+                            onLibraryClick = {},
+                            onToggle = { _, _ -> },
+                            onExportBackup = {},
+                            onRestoreBackup = {},
+                            onExportCsv = {},
+                            onRestoreConfirmed = {},
+                            onRestoreCancelled = {},
+                            onBackupStatusShown = {
+                                backupShown++
+                                backupState = backupState.copy(statusMessage = null)
+                                uiState = uiState.copy(message = SettingsMessage.ERASED)
+                            },
+                            onEraseAllDataConfirmed = {},
+                            onSettingsMessageShown = {
+                                settingsShown++
+                                uiState = uiState.copy(message = null)
+                            },
+                        ),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText(string(R.string.backup_message_operation_failed)).assertIsDisplayed()
+        composeRule.waitUntil(SNACKBAR_WAIT_MILLIS) { backupShown == 1 }
+        composeRule.onNodeWithText(string(R.string.settings_message_erased)).assertIsDisplayed()
+        composeRule.waitUntil(SNACKBAR_WAIT_MILLIS) { settingsShown == 1 }
+    }
+
+    private companion object {
+        const val SNACKBAR_WAIT_MILLIS = 10_000L
     }
 }

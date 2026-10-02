@@ -93,8 +93,8 @@
     <string name="training_plan_list_message_archived_undo">Undo</string>
     <string name="training_plan_list_message_operation_failed">Something went wrong. Try again.</string>
 
-    <string name="workout_day_context_heavy_legs">Heavy legs: %1$d/4</string>
-    <string name="workout_day_context_leg_doms">Leg DOMS: %1$d/4</string>
+    <string name="workout_day_context_heavy_legs">Heavy legs: %1$d/5</string>
+    <string name="workout_day_context_leg_doms">Leg DOMS: %1$d/5</string>
     <string name="workout_day_context_futsal_load">Futsal in the last 24h (load %1$.0f)</string>
     <string name="progression_overridden">overridden</string>
     <string name="progression_result_increase_load">Increase load</string>
@@ -546,7 +546,7 @@
     </plurals>
     <string name="workout_finish_confirm">Finish and save</string>
     <string name="workout_finish_keep_training">Keep training</string>
-    <string name="workout_finish_footnote">Leaving keeps the session open — the clock runs from its start time, everything logged is already saved, and Home shows a Resume banner until you finish or discard it.</string>
+    <string name="workout_finish_footnote">Leaving keeps the session open — the clock runs from its start time, everything logged is already saved, and Home shows a Resume banner until you finish or abandon it.</string>
     <string name="workout_done_label">%1$s · finished</string>
     <string name="workout_done_stat_time">Time</string>
     <string name="workout_done_stat_sets">Sets</string>

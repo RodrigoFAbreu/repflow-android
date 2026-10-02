@@ -3,6 +3,8 @@ package com.repflow.app.presentation.progress
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -17,6 +19,7 @@ import com.repflow.app.application.progress.ProgressSeries
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.workout.WorkoutSessionId
+import com.repflow.app.presentation.RepFlowTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -83,7 +86,9 @@ class ProgressScreenTest {
         onMetricSelected: (ProgressMetric) -> Unit = {},
     ) {
         composeRule.setContent {
-            ProgressScreen(uiState = uiState, onExerciseSelected = onExerciseSelected, onMetricSelected = onMetricSelected)
+            RepFlowTheme {
+                ProgressScreen(uiState = uiState, onExerciseSelected = onExerciseSelected, onMetricSelected = onMetricSelected)
+            }
         }
     }
 
@@ -124,7 +129,8 @@ class ProgressScreenTest {
         var metric: ProgressMetric? = null
         setScreen(loaded(), onExerciseSelected = { exercise = it }, onMetricSelected = { metric = it })
 
-        composeRule.onNodeWithText("Barbell Bench Press").assertIsSelected()
+        // The card repeats the selected exercise's name, so the chip is the selectable one.
+        composeRule.onNode(hasText("Barbell Bench Press") and isSelectable()).assertIsSelected()
         composeRule.onNodeWithText(string(R.string.progress_metric_top_set)).assertIsSelected()
 
         composeRule.onNodeWithText("Pull-up").performScrollTo().performClick()

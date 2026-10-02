@@ -16,6 +16,7 @@ import com.repflow.app.R
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.exercise.ExerciseValidationError
+import com.repflow.app.presentation.RepFlowTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -45,19 +46,21 @@ class ExerciseEditorScreenTest {
         onMessageShown: (Long) -> Unit = {},
     ) {
         composeRule.setContent {
-            ExerciseEditorScreen(
-                uiState = uiState,
-                onNameChanged = onNameChanged,
-                onTrackingTypeChanged = onTrackingTypeChanged,
-                onInstructionsChanged = onInstructionsChanged,
-                onRestSecondsChanged = onRestSecondsChanged,
-                onLoadIncrementChanged = onLoadIncrementChanged,
-                onSaveClicked = onSaveClicked,
-                onBackRequested = onBackRequested,
-                onDiscardConfirmed = onDiscardConfirmed,
-                onDiscardCancelled = onDiscardCancelled,
-                onMessageShown = onMessageShown,
-            )
+            RepFlowTheme {
+                ExerciseEditorScreen(
+                    uiState = uiState,
+                    onNameChanged = onNameChanged,
+                    onTrackingTypeChanged = onTrackingTypeChanged,
+                    onInstructionsChanged = onInstructionsChanged,
+                    onRestSecondsChanged = onRestSecondsChanged,
+                    onLoadIncrementChanged = onLoadIncrementChanged,
+                    onSaveClicked = onSaveClicked,
+                    onBackRequested = onBackRequested,
+                    onDiscardConfirmed = onDiscardConfirmed,
+                    onDiscardCancelled = onDiscardCancelled,
+                    onMessageShown = onMessageShown,
+                )
+            }
         }
     }
 
@@ -150,19 +153,21 @@ class ExerciseEditorScreenTest {
     fun loadIncrementFieldIsHiddenForATrackingTypeThatDoesNotSupportLoad() {
         var uiState by mutableStateOf(ExerciseEditorUiState(trackingType = ExerciseTrackingType.WEIGHT_AND_REPS))
         composeRule.setContent {
-            ExerciseEditorScreen(
-                uiState = uiState,
-                onNameChanged = {},
-                onTrackingTypeChanged = {},
-                onInstructionsChanged = {},
-                onRestSecondsChanged = {},
-                onLoadIncrementChanged = {},
-                onSaveClicked = {},
-                onBackRequested = {},
-                onDiscardConfirmed = {},
-                onDiscardCancelled = {},
-                onMessageShown = {},
-            )
+            RepFlowTheme {
+                ExerciseEditorScreen(
+                    uiState = uiState,
+                    onNameChanged = {},
+                    onTrackingTypeChanged = {},
+                    onInstructionsChanged = {},
+                    onRestSecondsChanged = {},
+                    onLoadIncrementChanged = {},
+                    onSaveClicked = {},
+                    onBackRequested = {},
+                    onDiscardConfirmed = {},
+                    onDiscardCancelled = {},
+                    onMessageShown = {},
+                )
+            }
         }
         val loadStepLabel = composeRule.activity.getString(R.string.exercise_editor_load_step_label)
         val loadStepPreset = composeRule.activity.getString(R.string.exercise_editor_load_step_preset, "2.5")

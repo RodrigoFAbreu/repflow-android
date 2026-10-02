@@ -100,8 +100,8 @@ fun SettingsScreen(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
                     .padding(padding)
+                    .verticalScroll(rememberScrollState())
                     .padding(top = 4.dp, bottom = 20.dp),
         ) {
             SectionLabel(R.string.settings_section_library, first = true)
@@ -165,9 +165,10 @@ private fun SettingsMessages(
                 BackupStatusMessage.InvalidBackup -> invalidBackup
                 BackupStatusMessage.OperationFailed -> operationFailed
             }
-        if (text == null) onExportSaved()
+        // Shown first, consumed after: consuming clears the key this effect is
+        // keyed on, and the restart would cancel a snackbar still on screen.
+        if (text == null) onExportSaved() else snackbarHostState.showSnackbar(text)
         actions.onBackupStatusShown()
-        if (text != null) snackbarHostState.showSnackbar(text)
     }
     LaunchedEffect(uiState.message) {
         val message = uiState.message ?: return@LaunchedEffect
@@ -177,8 +178,8 @@ private fun SettingsMessages(
                 SettingsMessage.ERASED -> erased
                 SettingsMessage.ERASE_FAILED -> eraseFailed
             }
-        actions.onSettingsMessageShown()
         snackbarHostState.showSnackbar(text)
+        actions.onSettingsMessageShown()
     }
 }
 

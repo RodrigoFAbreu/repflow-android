@@ -15,6 +15,7 @@ import com.repflow.app.domain.workout.WorkoutExercise
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSession
 import com.repflow.app.domain.workout.WorkoutSessionId
+import com.repflow.app.presentation.RepFlowTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Rule
@@ -59,19 +60,21 @@ class HistoryScreenTest {
         onMessageShown: (Long) -> Unit = {},
     ) {
         composeRule.setContent {
-            HistoryScreen(
-                uiState = uiState,
-                onSessionClick = onSessionClick,
-                onDetailDismissed = onDetailDismissed,
-                onInvalidateClicked = onInvalidateClicked,
-                onExerciseFilterChanged = onExerciseFilterChanged,
-                onPlanFilterChanged = onPlanFilterChanged,
-                onStartDateChanged = onStartDateChanged,
-                onEndDateChanged = onEndDateChanged,
-                onShowInvalidatedChanged = onShowInvalidatedChanged,
-                onSortOrderChanged = onSortOrderChanged,
-                onMessageShown = onMessageShown,
-            )
+            RepFlowTheme {
+                HistoryScreen(
+                    uiState = uiState,
+                    onSessionClick = onSessionClick,
+                    onDetailDismissed = onDetailDismissed,
+                    onInvalidateClicked = onInvalidateClicked,
+                    onExerciseFilterChanged = onExerciseFilterChanged,
+                    onPlanFilterChanged = onPlanFilterChanged,
+                    onStartDateChanged = onStartDateChanged,
+                    onEndDateChanged = onEndDateChanged,
+                    onShowInvalidatedChanged = onShowInvalidatedChanged,
+                    onSortOrderChanged = onSortOrderChanged,
+                    onMessageShown = onMessageShown,
+                )
+            }
         }
     }
 
