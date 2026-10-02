@@ -1374,12 +1374,12 @@
       "registry_path": "docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/repflow-redesign-visual-foundation-remediation-1-mapping.json",
       "governing_workflow_version": "2.1",
-      "phase": "AWAITING_FUNCTIONAL_REVIEW",
+      "phase": "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
       "plan_revision": 20,
-      "implementation_revision": 5,
+      "implementation_revision": 6,
       "functional_review_round": null,
       "base_commit": "3257ee03d3d12c7b1412cf3a09e2cbda2179b868",
-      "reviewed_implementation_head": "b66677d631d1a41b46641fe90f73e0697e54fca8",
+      "reviewed_implementation_head": "311d79119e40ffffc4c164f7f719925db7398a6f",
       "current_checkpoint_id": null,
       "last_completed_checkpoint_id": "CP16",
       "checkpoints": {
@@ -3143,8 +3143,8 @@
       },
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 111,
-      "last_transition": "2026-10-02T21:35:54+01:00"
+      "state_revision": 112,
+      "last_transition": "2026-10-02T21:52:36+01:00"
     },
     "repflow-redesign-visual-foundation-remediation-1-remediation-1": {
       "work_item_type": "product",
