@@ -1,5 +1,6 @@
 package com.repflow.app.presentation.history
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -91,6 +92,8 @@ fun HistoryDetailScreen(
 ) {
     val session = summary.session
     var confirmingInvalidation by rememberSaveable { mutableStateOf(false) }
+    // System Back closes the detail to the list, exactly as the bar's arrow does (it would otherwise leave History).
+    BackHandler(onBack = onBackClick)
     RepFlowScreenScaffold(
         title = "",
         modifier = modifier,

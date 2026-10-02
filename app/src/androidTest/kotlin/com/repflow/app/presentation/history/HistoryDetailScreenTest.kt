@@ -279,4 +279,33 @@ class HistoryDetailScreenTest {
 
         assertEquals(true, backClicked)
     }
+
+    /** Functional review J7: system Back closes the detail, as the bar's arrow does. */
+    @Test
+    fun systemBackInvokesOnBackClick() {
+        val set =
+            (
+                WorkoutSet.create(
+                    id = WorkoutSetId("set-1"),
+                    order = 0,
+                    trackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
+                    load = 60.0,
+                    reps = 8,
+                    durationSeconds = null,
+                    rpe = null,
+                    isWarmup = false,
+                    createdAt = Instant.parse("2026-01-01T00:10:00Z"),
+                    updatedAt = Instant.parse("2026-01-01T00:10:00Z"),
+                    pain = null,
+                    techniqueQuality = null,
+                ) as DomainResult.Success
+            ).value
+        var backClicked = false
+        setDetail(summaryOf(sessionWithSet(set)), onBackClick = { backClicked = true })
+
+        composeRule.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        composeRule.waitForIdle()
+
+        assertEquals(true, backClicked)
+    }
 }
