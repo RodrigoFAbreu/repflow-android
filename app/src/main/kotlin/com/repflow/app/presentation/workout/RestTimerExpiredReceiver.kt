@@ -5,10 +5,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import androidx.core.app.ActivityCompat
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -37,9 +40,9 @@ import javax.inject.Inject
  * this receiver.
  *
  * `onReceive` hands off to the handler on [Dispatchers.IO] through
- * [goAsync], finishing the pending result whatever happens. It uses
- * `Dispatchers.IO` directly because the `@IoDispatcher` qualifier lives in
- * `infrastructure/di`, which `presentation` may not import.
+ * [goAsync] and [launchRestAlert], finishing the pending result whatever
+ * happens. It uses `Dispatchers.IO` directly because the `@IoDispatcher`
+ * qualifier lives in `infrastructure/di`, which `presentation` may not import.
  */
 @AndroidEntryPoint
 class RestTimerExpiredReceiver : BroadcastReceiver() {
@@ -53,12 +56,8 @@ class RestTimerExpiredReceiver : BroadcastReceiver() {
         val pendingResult = goAsync()
         val appContext = context.applicationContext
         val notificationPermitted = hasNotificationPermission(appContext)
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                expiryHandler.onRestEnded(appContext, notificationPermitted)
-            } finally {
-                pendingResult.finish()
-            }
+        launchRestAlert(onDone = pendingResult::finish) {
+            expiryHandler.onRestEnded(appContext, notificationPermitted)
         }
     }
 
@@ -72,3 +71,34 @@ class RestTimerExpiredReceiver : BroadcastReceiver() {
         const val NOTIFICATION_ID = 1001
     }
 }
+
+private const val LOG_TAG = "RestTimerExpired"
+
+/**
+ * Where a failed rest alert ends (implementation-review revision 1's O1): the
+ * alert runs in a background coroutine with no screen to report to, so a
+ * failure - in practice a storage error reading the session or the switches
+ * when the alarm fires - is logged and the alert skipped, instead of crashing
+ * the backgrounded process. This is the root coroutine's failure sink, not a
+ * `catch` around the suspend work: cancellation never reaches it. The
+ * `SQLiteException` family cannot be named here, as `presentation` may not
+ * import `android.database`.
+ */
+private val restAlertFailureHandler =
+    CoroutineExceptionHandler { _, failure -> Log.w(LOG_TAG, "Rest alert skipped", failure) }
+
+/**
+ * Runs [alert] on [Dispatchers.IO], calling [onDone] when it ends - completed
+ * or failed - and sending a failure to [restAlertFailureHandler].
+ */
+internal fun launchRestAlert(
+    onDone: () -> Unit,
+    alert: suspend () -> Unit,
+): Job =
+    CoroutineScope(Dispatchers.IO + restAlertFailureHandler).launch {
+        try {
+            alert()
+        } finally {
+            onDone()
+        }
+    }

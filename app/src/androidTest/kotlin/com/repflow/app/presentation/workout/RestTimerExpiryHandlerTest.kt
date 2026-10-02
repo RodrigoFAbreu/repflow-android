@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.database.sqlite.SQLiteDiskIOException
 import android.media.AudioAttributes
 import android.os.Build
 import android.os.VibrationAttributes
@@ -13,6 +14,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.repflow.app.R
 import com.repflow.app.application.settings.AppSettings
+import com.repflow.app.application.settings.SettingsRepository
+import com.repflow.app.application.workout.WorkoutRepository
 import com.repflow.app.data.backup.LocalTrainingDataRepository
 import com.repflow.app.data.settings.LocalSettingsRepository
 import com.repflow.app.data.workout.LocalWorkoutRepository
@@ -171,6 +174,45 @@ class RestTimerExpiryHandlerTest {
     fun erasedDataDoesNotAlert() {
         runBlocking { LocalTrainingDataRepository(database).clearTrainingData() }
         assertNoAlertWithEverySwitchOn()
+    }
+
+    /**
+     * Implementation-review revision 1's O1: a storage failure while reading
+     * the session when the alarm fires reaches the receiver's coroutine, which
+     * skips the alert and still finishes the pending broadcast - it does not
+     * crash the backgrounded process (an uncaught failure on that IO thread
+     * would kill this test's process too).
+     */
+    @Test
+    fun aFailedSessionReadInTheReceiversCoroutineSkipsTheAlertAndStillFinishes() {
+        val failing =
+            object : WorkoutRepository by workouts {
+                override suspend fun findActiveSession(): WorkoutSession? = throw SQLiteDiskIOException("disk I/O error")
+            }
+        assertTheReceiversCoroutineSkipsTheAlert(RestTimerExpiryHandler(settings, failing, vibrator))
+    }
+
+    /** O1's second read: the switches themselves cannot be read when the rest ends. */
+    @Test
+    fun aFailedSettingsReadInTheReceiversCoroutineSkipsTheAlertAndStillFinishes() {
+        val failing =
+            object : SettingsRepository by settings {
+                override suspend fun get(): AppSettings = throw SQLiteDiskIOException("disk I/O error")
+            }
+        assertTheReceiversCoroutineSkipsTheAlert(RestTimerExpiryHandler(failing, workouts, vibrator))
+    }
+
+    private fun assertTheReceiversCoroutineSkipsTheAlert(failingHandler: RestTimerExpiryHandler) {
+        runBlocking { settings.update { settingsWith(notification = true, vibrate = true) } }
+        var finished = false
+
+        val job = launchRestAlert(onDone = { finished = true }) { failingHandler.onRestEnded(context, notificationPermitted = true) }
+        runBlocking { job.join() }
+
+        assertTrue("the pending broadcast must still be finished", finished)
+        assertTrue("the alert's coroutine ended in failure, handled", job.isCancelled)
+        assertEquals(emptyList<Int>(), vibrator.usages)
+        assertPosted(false)
     }
 
     private fun endTheActiveSession(change: (WorkoutSession) -> DomainResult<WorkoutSession, *>) {
