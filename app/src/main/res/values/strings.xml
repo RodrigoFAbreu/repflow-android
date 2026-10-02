@@ -643,7 +643,7 @@
     <string name="settings_erase_body">Erasing removes every workout, plan and exercise on this device. Export a backup first.</string>
     <string name="settings_erase_action">Erase all data</string>
     <string name="settings_erase_confirm_title">Erase all data?</string>
-    <string name="settings_erase_confirm_body">This deletes every exercise, plan, workout, recovery entry and recommendation on this device - including a workout that is still running. Your settings stay, and backup files you have already exported are not touched. It can\'t be undone.</string>
+    <string name="settings_erase_confirm_body">This deletes every exercise, plan, workout, recovery entry and recommendation on this device — including a workout that is still running. Your settings stay, and backup files you have already exported are not touched. It can\'t be undone.</string>
     <string name="settings_erase_confirm_prompt">Type %1$s to confirm</string>
     <string name="settings_erase_confirm_word">ERASE</string>
     <string name="settings_erase_confirm_action">Erase everything</string>
