@@ -1635,7 +1635,7 @@ fixing it would add behaviour the plan does not specify):
 
 ### Next action
 
-External implementation review of the implementation-revision-1 bundle
+*(Superseded: technical approval is recorded and the item is at `AWAITING_FUNCTIONAL_REVIEW`; see the "Functional review checklist" section below. Historical text follows.)* External implementation review of the implementation-revision-1 bundle
 (`.ai-review/repflow-redesign-visual-foundation-remediation-1/current/`): a
 hard gate. The self-review, the full gate and the bundle are done; the
 reviewer's feedback goes to
@@ -1644,6 +1644,398 @@ then `/apply-implementation-review repflow-redesign-visual-foundation-remediatio
 (or `/approve-review` on a clean `APPROVE`). `O11`, `O12` and `D60`'s carry-over were
 decided by the user on 2026-10-01: they go to a later remediation child
 (`IMPROVEMENT_ROADMAP.md` §9.8).
+
+## `repflow-redesign-visual-foundation-remediation-1` — Functional review checklist (implementation revision 2)
+
+Awaiting manual functional review. Technical approval is recorded (commit
+`20a8d1f`, basis `EXTERNAL_APPROVE`, plan revision 20). Findings go to
+`.ai-review/repflow-redesign-visual-foundation-remediation-1/feedback/FUNCTIONAL_REVIEW.md`.
+Every command names the child id explicitly (`active_work_item_id` still points
+at the parent). The deviation register is
+`docs/milestones/repflow-redesign-visual-foundation-remediation-1-inventory.md`
+section 4; "register rows" below are its `D<n>` ids.
+
+**Where each step can be verified** (the tag in front of every step):
+
+- **[AVD]** the AVD `RepFlow_S24Ultra_384dp_API36` (`emulator-5554`), loaded with
+  sample data through Settings -> Restore from a file. Anything that writes data,
+  restores or erases is AVD-only.
+- **[PHONE]** the physical SM-S928B (`RFCXA0RLSVT`). It holds **real data**:
+  only look, and only do what is marked non-destructive. **Never** use Restore
+  from a file, Erase all data, or Export-then-restore on it, and avoid starting
+  or finishing workouts there unless you accept new real rows.
+- **[BOTH]** reachable on either; run on the AVD first.
+
+### Setup
+
+- **Build and install on the AVD.** Start the AVD, then
+  `./gradlew installDebug` with `ANDROID_SERIAL=emulator-5554` (or
+  `adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk`
+  after `./gradlew assembleDebug`). Nothing was run against a device by the
+  command that wrote this checklist.
+- **Phone:** the same APK is yours to install, or not, when you choose. The
+  full instrumented suite ran on this phone earlier in CP16 (see "Automated
+  verification").
+- **Theme.** The app follows the system theme (there is no in-app Theme setting;
+  that is `5c`, deferred). Switch with
+  `adb -s <serial> shell cmd uimode night yes|no`. Check **both** dark and light.
+- **Schema.** This build migrates Room 7 -> 8 (a new `settings` table). An
+  upgrade over an older install keeps all data; the phone upgrade is covered by
+  `RepFlowDatabaseMigrationTest`.
+- No feature flags, no network.
+
+### Automated verification (current, deliberately not re-run)
+
+Nothing under `app/` changed since the last forced full run: `git diff 093956d
+HEAD -- app` is empty (the commits since are docs and `WORKFLOW_STATE.json`
+only) and the working tree was clean. Evidence from CP16:
+
+```
+./gradlew --rerun-tasks spotlessCheck detekt lintDebug testDebugUnitTest \
+  assembleDebug assembleDebugAndroidTest connectedDebugAndroidTest
+```
+
+BUILD SUCCESSFUL, 96/96 tasks; **621 JVM tests (101 classes), 0 failures**;
+**269 instrumented tests on `RepFlow_S24Ultra_384dp_API36`, 0 failures**; lint 0
+errors (21 warnings, 1 hint, the standing baseline). The physical phone ran the
+full suite earlier in CP16 (268/269, the one failure fixed) and then the changed
+classes. The three last presentation fixes (scroll padding, two strings, the
+empty state) ran on the AVD only.
+
+### Test data
+
+Seed the AVD, not the phone. Generate a backup file (`BackupSnapshot`, the app's
+versioned transfer schema) with: three exercises, one per tracking type (`Bench
+Press` weight and reps with a load step, `Pull Up` reps only, `Plank` duration),
+one archived exercise, two active plans and one archived plan (one plan with a
+reps row and a duration row, one warm-up set), at least **six completed
+workouts across at least two months** (so History month sections, PR badges,
+Progress bars and the done screen's "Versus last time" have content; include one
+invalidated workout and one with a heavier set than before), recovery check-ins
+for the last ~14 days with a gap or two, and two futsal sessions. `adb -s
+emulator-5554 push <file> /sdcard/Download/`, then Settings -> Restore from a
+file (steps A8-A9). Also keep a **fresh install** (no data) for the empty
+states (step B1).
+
+---
+
+### A. The shell, navigation and Home (F1: four-tab IA, Home) — CP2, CP4, CP5
+
+- **A1 [BOTH]** Launch. Bottom bar shows exactly **Home, Plans, History,
+  Progress**; Home is the start tab; the selected tab uses the filled glyph.
+  Expect: no Exercises or Recovery tab.
+- **A2 [BOTH]** Home header: the date in small caps over "Ready when you are", and
+  a round gear button (`Open settings`) top right -> Settings. Expect: no tab
+  bar on Settings; back arrow returns.
+- **A3 [AVD]** (with data, no running workout) Start card: "Today", a plan, `N
+  exercises · N working sets`, `Start workout`, and `Train something else ›` ->
+  a sheet "Your plans" with every active plan then `Empty workout`. Expect the
+  plan shown is the one last trained.
+- **A4 [AVD]** Recovery card (with today's check-in): score in a band colour and
+  word, `Details ›` opens the readiness sheet (score, bar, driver sentence, one
+  row per factor with `v/5 · pulling the score down | fine`, gate note,
+  `Close`). Without a check-in: the empty state and `Log recovery`.
+- **A5 [AVD]** "Last workout" card: name, weekday and minutes, `N load
+  increases` or `No load increases`.
+- **A6 [AVD]** Start a workout, then go Home (leave it running): the **resume
+  card** (accent, "<plan> - still running", elapsed and sets logged ticking,
+  `Resume`, `Finish it`, trash). Trash -> `Abandon this workout?` (`Keep it` /
+  `Abandon`).
+- **A7 [BOTH]** Light theme: Home, the start card, readiness sheet are legible; the
+  accent resume card stays dark in light theme (a parent decision, not a bug).
+- **A8 [AVD]** Settings -> Data -> `Restore from a file` with the generated backup:
+  confirm sheet, then `Backup restored`. Expect the message stays on screen long
+  enough to read (a CP16 fix) and the tabs fill with the sample data.
+- **A9 [AVD]** Run A3-A5 again after the restore.
+
+### B. Empty states and first run — CP5, CP10, CP12, CP15 (`1d`)
+
+- **B1 [AVD, fresh install]** With no data: Home shows the first-run card (`Create a
+  plan`, `Empty workout`); Plans, History, Progress and the library each show
+  the empty treatment (26dp glyph at low opacity over one line). Expect no
+  crash, no blank screen.
+
+### C. Workout mode: board, focus, rest, finish, done — CP6-CP9, CP14
+
+- **C1 [AVD]** Home -> `Start workout`. The **board**: `X` (Leave workout), plan
+  name, clock, `Finish`, progress `N of M exercises · S/T sets`, one row per
+  exercise with `UP NEXT` on the first unfinished and a status chip that always
+  carries a word and a glyph. **No tab bar** during the workout.
+- **C2 [AVD]** `Add exercise` -> picker sheet with search; pick one. An exercise
+  added here (not from a plan) shows `No sets yet`, then `N sets` once logged
+  (register row D55).
+- **C3 [AVD]** Tap a row -> **focus mode**: `Board`, elapsed, `Finish`; `Exercise N
+  of M`, the name, `X of Y sets done`, collapsed technique notes (if any),
+  `Last: ...` and `Undo last`, pending rows `Set N: not logged · Target: ...`.
+- **C4 [AVD]** Steppers: weight steps by the exercise's load step (2.5 kg if none),
+  reps by 1, seconds by 5; tap a value -> keypad (`1-9 . 0 backspace`, max 6
+  characters). Open the extra-detail disclosure: RPE 0-10, pain 0-5, technique
+  0-5 scale rows, tap the chosen cell to clear; warm-up chip.
+- **C5 [AVD]** `Log set`: the entry **clears** to `—` afterwards (register row D60,
+  deferred carry-over, see Known limitations). `Log warm-up` does not count
+  toward the set count.
+- **C6 [AVD]** Pencil on the **last** set only -> correction sheet (weight / reps /
+  seconds); `Undo last` removes it.
+- **C7 [AVD]** Rest: after a set a strip appears (`Resting`, `-15s`, `+15s`, `Skip
+  rest`, dismiss). Let it hit zero: it says `Rest done`. With the app in the
+  background the end-of-rest notification and buzz fire (the notification
+  permission prompt appears the first time, API 33+).
+- **C8 [AVD]** Suggestion strip + `Why ›` (needs a prior session of that exercise):
+  opens the recommendation screen. Check the three states: suggestion
+  (`Go with the suggestion`, `Pick another load`, `Keep the same load`),
+  `Your call` (Increase / Maintain / Reduce, selected one marked), and the
+  recorded state (`You overrode this` / `You went with the suggestion`, `Change
+  my mind`). Also `Not enough data yet`.
+- **C9 [AVD]** `X` -> leave sheet: `Leave it running and go Home`, `Finish and save it
+  now`, `Abandon this workout` (asks to confirm), `Keep training`. Leaving lands
+  on Home with the resume card.
+- **C10 [AVD]** `Finish` -> `Finish this workout?` sheet: elapsed + progress,
+  `N still unfinished` list, `Finish and save`, `Keep training`, `Leave it
+  running and go Home`. `Next ›` on the last unfinished exercise raises it too.
+  Home's `Finish it` raises the same sheet; dismissing it returns Home.
+- **C11 [AVD]** Confirm -> **done screen**: `<day> · finished`, name, Time / Sets /
+  Trained tiles, best-set cards, `Versus last time` rows (`+2.5 kg`, `same
+  load`, `first time`, ...), `Suggestions for next time` with `Why ›`, `Saved to
+  History as ...`, `Back to Home`. Back Home leaves no workout on the back stack.
+- **C12 [PHONE, non-destructive]** If you want a device look at workout mode
+  without data risk: open the workout screen only if a workout is already running;
+  otherwise skip. Starting one on the phone writes a real session.
+- **C13 [AVD]** Light theme pass over the board, focus, sheets and the done screen.
+
+### D. Exercises (library and editor) — CP10
+
+- **D1 [AVD]** Settings -> `Exercise library`: back arrow, a 48 search field,
+  `Active` / `Archived` chips, rows `<type> · rest m:ss · in N plans | not in
+  any plan`, archived rows dimmed with an `archived` badge, `⋮` -> row sheet
+  (Edit; Archive or Restore), snackbar with `Undo` after archiving.
+- **D2 [AVD]** Search a name with no match: `Not here? Create "<query>"` opens the
+  editor with the name prefilled. While searching, `N matches` shows.
+- **D3 [AVD]** `Add exercise` (bottom bar) -> editor: name field, tracking-type
+  three-segment control, `Default rest` presets 1:00 1:30 2:00 3:00 Other, `Load
+  step` presets 1.25 2.5 5 Other, technique notes, `Save` on the bottom bar.
+  A duplicate name shows an inline error under the field. Tap a selected preset
+  again to clear it (flagged in the register, see the judgement section).
+
+### E. Plans — CP11
+
+- **E1 [AVD]** Plans tab: `Active` / `Archived` pills; a card per plan (`N exercises ·
+  vN`), `Archive`/`Restore` on the card face, `Start workout` (active) and
+  `Open`; footnote `Archiving never touches completed workouts.`; `New plan` on
+  the bottom bar.
+- **E2 [AVD]** `Start workout` on a card starts that plan's workout and opens the
+  board. With one already running it says `A workout is already running.`
+  (register row D77).
+- **E3 [AVD]** Open a plan: name field; rows with stacked up/down carets, `3 x 8-12
+  reps · 1 warm-up · 90s rest`, `optional` badge, trash. Tap a row to expand
+  steppers (working sets, warm-up sets, reps or seconds, rest with presets,
+  `Optional`, `Change exercise`). Values open the keypad. `Add exercise` opens
+  the picker sheet (`Add to plan`, search, `Create a new exercise`).
+- **E4 [AVD]** Existing plan note: "Changes apply to the next session you start
+  from this plan. Past workouts keep the version they were run on." Save writes
+  a new version; Back with edits asks `Discard changes?`.
+
+### F. History and workout detail — CP12
+
+- **F1 [AVD]** History: `N workouts · newest first` (the order word toggles), filter
+  chips (plan sheet, `Show invalidated`, from / to date sheets, exercise sheet),
+  month section labels, rows with `PR` and `invalidated` badges and the meta
+  line.
+- **F2 [AVD]** Open a workout: `<plan> · version N`, Time / Volume / Sets tiles,
+  per-exercise blocks with the change against last time, a medal for a personal
+  best, every set (warm-ups marked), a timed set reads `45 s`; a zero-set
+  exercise reads `No sets logged`.
+- **F3 [AVD]** Detail `⋮` -> `Invalidate workout` -> `Invalidate this workout?` (`Keep
+  it` / `Invalidate workout`). After invalidating, the detail closes and
+  `Show invalidated` shows it with its badge; the `⋮` is absent on it.
+
+### G. Recovery — CP13
+
+- **G1 [AVD]** Reach Recovery from Home's recovery card (`Log ›`): back arrow, a date
+  row with `Change` (sheet, today or earlier only), six scale rows each with end
+  labels (DOMS, heel stiffness, pain and heavy legs run None -> Severe; sleep
+  Terrible -> Great, energy Flat -> Fresh), futsal toggles, minutes and RPE
+  steppers while `Played in last 24h` is on, `Training load N`, notes.
+- **G2 [AVD]** `Save entry` is the one pinned save: reads `Saved` with a check until
+  the next edit. With `Played` on and both futsal fields empty it saves the
+  check-in alone; one filled without the other shows "Some values need attention
+  before saving."
+- **G3 [AVD]** Recovery history (`History` link on the entry): `Sleep & energy · 14
+  days` chart, gaps break the lines, tap a day for its readout, futsal dots,
+  `Entries` rows, `Futsal sessions`.
+
+### H. Settings and the behaviours it gates — CP14
+
+- **H1 [BOTH]** Settings screen: `Library`; `Rest timer` (Auto-start, Vibrate,
+  Notification); `During a workout` (Keep screen awake, Confirm before
+  finishing); `Data` (`Export a backup`, `Restore from a file`, `Workout history
+  as CSV`); `Irreversible` card with `Erase all data`; footer. Each row toggles
+  as a whole and announces as a switch. The top bar title no longer has content
+  running through it (a CP16 fix); scroll to check.
+- **H2 [AVD]** Turn `Auto-start` off: logging a set starts no rest strip. On again:
+  it does. `Confirm before finishing` off: every finish entry point (board,
+  focus, leave sheet, `Next ›`, Home's `Finish it`) completes at once and lands
+  on the done screen. Turn it back on.
+- **H3 [AVD]** `Keep screen awake` on: the screen stays on during a workout (set the
+  screen timeout to 15 s to see).
+- **H4 [AVD]** `Export a backup` writes a file (`Saved`); `Restore from a file` on a
+  corrupt file shows the failure message and changes nothing; `Workout history
+  as CSV` exports.
+- **H5 [AVD only, never the phone]** `Erase all data` -> typed confirmation (`Type ERASE
+  to confirm`, `Erase everything`, `Keep my data`) -> `All data erased`.
+  Settings survive; every training table is empty; exported files untouched.
+
+### I. Progress — CP15
+
+- **I1 [AVD]** Progress: title, sideways-scrolling exercise chips (most recently
+  trained first), a Top set / Est. 1RM / Volume control (reps-only and timed
+  exercises offer Top set alone), a card with a signed delta, the value, bars
+  (latest in the accent, month labels), `Best: N kg · N-session window`, and the
+  note "Only valid sessions count...". An exercise with under two sessions shows
+  "Not enough sessions yet. A trend needs at least two." Invalidating a workout
+  removes its bar.
+
+### J. Side-by-side with the design (F1's headline criterion)
+
+- **J1 [BOTH]** Compare each converted screen to its Claude Design artboard
+  (`4a` Home/Plans/History/Progress/Settings and workout mode, `6a`/`6c`
+  recommendation, `6b` rules, `3a`/`3b` History, `3c`/`3d` Recovery, `2a`-`2c`
+  Plans and library, `1d` empty and light states). CP16's contact sheets are
+  at `.ai-review/repflow-redesign-visual-foundation-remediation-1/cp16-side-by-side/`
+  (`INDEX.txt`, gitignored, local). Expect the same composition apart from the
+  registered deviations; anything else is a finding.
+- **J2 [BOTH]** Touch targets (>= 44dp), "never colour alone" (every state has a
+  word or glyph), dark and light both legible.
+- **J3 [PHONE]** The physical device is the authoritative width (384dp); anything
+  clipped or cramped there but not on the AVD is a finding.
+
+---
+
+### For the user's judgement
+
+Items the plan or the checkpoints flagged for you. None is accepted or reworded
+by the milestone itself. Reach each on the AVD after restoring the sample data
+unless stated.
+
+**Copy (accept or reword)**
+
+- **D42** readiness sheet title "How today's score was set" and its two lines
+  ("...never a limit on what you are allowed to do"; gate note names heel
+  stiffness >= 4). Home -> recovery card -> `Details ›`.
+- **D47** recovery card `Details ›` and the empty state "Nothing logged today.
+  Pain while walking and heavy legs shape the load suggestions." / `Log
+  recovery`. Home with and without today's check-in.
+- **D52** recommendation screen's footnote, "Whatever you pick is kept on record
+  as your final say...", "Your choice wins...", `You went with the
+  suggestion`, and `Not enough data yet`. Focus mode -> `Why ›`.
+- **D67** done-screen `Versus last time` words (`+2.5 kg`, `same load`, `first
+  time`, `N warm-ups only`, `no sets recorded`, ...) and the label `Suggestions
+  for next time`. Finish a workout.
+- **D93** the detail `⋮` is named `Invalidate workout` and opens the dialog
+  ("It leaves History and stops counting toward progression. Nothing is
+  deleted - turn on Show invalidated to see it again."). History -> a workout.
+- **D105** the Erase all data dialog's wording (blast radius, what stays, `Type
+  ERASE to confirm`, `Couldn't erase. Nothing was changed.`). Settings (AVD).
+
+**Product calls (accept or reject)**
+
+- **D55** an exercise added during a workout has no set target: `No sets yet` /
+  `N sets`, finished after one working set. Board -> `Add exercise`.
+- **D56** `Create a new exercise` from the workout picker opens the full
+  exercise editor instead of the design's inline sheet. Board -> `Add
+  exercise` -> `Create a new exercise`.
+- **D57** the board keeps the `Heavy legs: n/5 · Leg DOMS: n/5 · Futsal in the
+  last 24h (load n)` context line the design does not draw. Board, with a
+  check-in or futsal entry for today.
+- **D73** the library's second filter chip (`Weight & reps`) is not built; only
+  `Active` / `Archived`. Library.
+- **D77** `Start workout` on every active plan's card starts it directly (design
+  has `Start day 2` / `Make active`). Plans tab.
+- **D82** plan-editor row: trash and reorder carets stay on the collapsed row;
+  the carets are 44 x 32, below the 44 floor. Plan editor.
+- **D98** one `Save entry` on Recovery; futsal optional; `Saved` replaces the
+  snackbar. Recovery entry.
+- **D101** the futsal insight card is not built (its claim is false against the
+  policy). Recovery history.
+- **D109** Est. 1RM uses Brzycki with a 12-rep ceiling (sets over 12 reps give no
+  estimate). Progress -> Est. 1RM.
+- **D110** Progress window (last up to 12 valid sessions with a value), chips,
+  delta and the empty-state copy "Not enough sessions yet. A trend needs at
+  least two." Progress.
+
+**Other register rows flagged by their checkpoints** (not in your minimum list,
+still waiting): **D38** (`1b` plan detail and `1c` exercise detail not built),
+**D76** (plan cards have no "last used" line), **D85** (plan editor `Save` bar
+and the version note instead of "Save as version N"), **D103** (Backup screen
+retired, its rows inline in Settings, CSV row kept). Reach each on the screen
+named in its row.
+
+**Platform behaviour: system Back**
+
+- **System back in workout mode (plan-flagged for explicit sign-off).** On the
+  board and in focus mode the system back gesture/button opens the leave sheet
+  instead of leaving. [AVD] Start a workout, press Back. Accept or reject.
+- **Detail-screen system back.** In History's workout detail, the system Back
+  leaves History altogether; only the bar's back arrow closes the detail
+  (pre-existing, not intercepted). [AVD] History -> a workout -> system Back.
+
+**CP16 out-of-scope observations (reported, not changed)**
+
+- **Plan editor always asks `Discard changes?` on Back**, even with no edit, when
+  editing an existing plan (edit-mode `isDirty` is true once loaded; unchanged
+  since Milestone 2). [AVD] Plans -> Open a plan -> Back.
+- **Rest-end alarm can be ~2 minutes late on a fresh install** (inexact
+  `setAndAllowWhileIdle` unless exact alarms are allowed; Milestone 4's
+  scheduler). [AVD or PHONE] fresh install, log a set, leave the app, time the
+  notification.
+- **Double top-padding check.** Settings and Progress apply the scaffold padding
+  outside their scroll (fixed in CP16). Look for any other screen with a double
+  gap under the top bar or content scrolling under it, especially Library, Plans,
+  History and Recovery. [BOTH]
+
+---
+
+### Expected result
+
+Every step above behaves as described; every difference from the design is a
+register row (section "For the user's judgement" or the inventory); nothing
+crashes; data written by one step is visible in the others (a finished workout
+appears in History, Progress and Home's last workout).
+
+### Known limitations and deferred items (not new findings)
+
+- **Deferred by you to a later remediation child** (`docs/improvements/IMPROVEMENT_ROADMAP.md`
+  section 9.8): `5c`/`5d` Settings (Theme System/Light/Dark, app-level Default
+  rest, Extra set fields, `Archived exercises and plans`, a dedicated Backup and
+  restore screen with metadata); `5b` Progress (exercise picker sheet, line chart,
+  `3m`/`6m`/`All`, `Sessions`/`Avg RPE` tiles, `Training frequency`, `Records`);
+  **D60** set-entry carry-over (weight and reps staying in place after `Log set`,
+  `Last time: 82.5 kg x 8`, which also delivers "Previous performance").
+- **The five deferred capabilities** (IMPROVEMENT_ROADMAP section 9): 9.1
+  supersets, 9.2 exercise swap / substitute (and skip), 9.3 per-exercise and
+  per-session notes, 9.4 an active plan and multi-day plans, 9.5 kg / lb
+  switching. Also 9.6 other no-domain design surfaces and 9.7 `docs/UX_FLOWS.md`
+  rows kept as declared intent (pre-start preview, previous performance, suggested
+  load figure, reuse the previous set, recovery or pain warnings, workout notes).
+- **Not built, by register row:** the readiness chips on set entry and decision
+  list (`D29`), no session note on the done screen (`D3`), no set-edit pencil
+  on History detail (`D7`), no rename of an ad-hoc workout (`D30`), no `Units`
+  group (`D5`), no override-streak line (`D33`), a per-set delete (`D66`).
+- **The physical phone** has real data and is not used by the command that
+  wrote this checklist.
+
+### Reporting
+
+Put findings in
+`.ai-review/repflow-redesign-visual-foundation-remediation-1/feedback/FUNCTIONAL_REVIEW.md`,
+one per item, naming the step id (for example `C10`) or the register row, the
+device, the theme and what you saw. If testing is clean, `/accept-milestone
+repflow-redesign-visual-foundation-remediation-1` is the only acceptance command
+and it needs every checkpoint in this item's registry to be `COMPLETE` (all
+sixteen are). A checkpoint still outstanding goes back to `/milestone-implement`.
+No command records acceptance of a partial round. Findings go to
+`/apply-functional-review repflow-redesign-visual-foundation-remediation-1`,
+which routes each to its bounded branch (same-scope fix) or its broad branch (a
+`repflow-redesign-visual-foundation-remediation-1-remediation-<n>` child).
 
 ---
 
