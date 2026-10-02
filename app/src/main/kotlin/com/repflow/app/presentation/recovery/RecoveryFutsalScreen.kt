@@ -109,7 +109,7 @@ fun RecoveryFutsalScreen(
                 onPrimaryClick = onSaveEntry,
                 // Not while a date's values load: Save would store the previous
                 // date's fields onto the new date (implementation-review revision 1's O8).
-                primaryEnabled = !uiState.isSaving && !uiState.isLoading,
+                primaryEnabled = !uiState.isSaving && !uiState.isLoading && uiState.hasAllScaleValues,
                 primaryIcon = if (uiState.isEntrySaved) RepFlowIcons.checkFat else null,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )
@@ -134,6 +134,14 @@ fun RecoveryFutsalScreen(
                     highLabel = stringResource(spec.highLabelRes),
                     label = stringResource(spec.labelRes),
                     modifier = Modifier.fillMaxWidth().padding(bottom = ScaleRowGap),
+                )
+            }
+            if (!uiState.hasAllScaleValues) {
+                Text(
+                    text = stringResource(R.string.recovery_futsal_scales_incomplete),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
+                    modifier = Modifier.padding(bottom = ScaleRowGap),
                 )
             }
             FutsalSection(

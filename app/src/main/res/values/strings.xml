@@ -248,6 +248,7 @@
     <string name="recovery_futsal_energy">Energy</string>
     <string name="recovery_futsal_leg_doms">Leg DOMS</string>
     <string name="recovery_futsal_heel_stiffness">Heel stiffness</string>
+    <string name="recovery_futsal_scales_incomplete">Choose a value on each of the six scales to save.</string>
     <string name="recovery_futsal_pain_while_walking">Pain while walking</string>
     <string name="recovery_futsal_heavy_legs">Heavy legs</string>
     <string name="recovery_scale_sleep_low">Terrible</string>

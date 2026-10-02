@@ -20,12 +20,12 @@ data class RecoveryFutsalUiState(
     val isLoading: Boolean = true,
     val date: LocalDate = LocalDate.now(),
     val today: LocalDate? = null,
-    val sleepQuality: Int = DEFAULT_SCALE_VALUE,
-    val energy: Int = DEFAULT_SCALE_VALUE,
-    val legDoms: Int = DEFAULT_SCALE_VALUE,
-    val heelStiffness: Int = DEFAULT_SCALE_VALUE,
-    val painWhileWalking: Int = DEFAULT_SCALE_VALUE,
-    val heavyLegs: Int = DEFAULT_SCALE_VALUE,
+    val sleepQuality: Int? = null,
+    val energy: Int? = null,
+    val legDoms: Int? = null,
+    val heelStiffness: Int? = null,
+    val painWhileWalking: Int? = null,
+    val heavyLegs: Int? = null,
     val futsalInPrevious24h: Boolean = false,
     val futsalExpectedNext24h: Boolean = false,
     val notes: String = "",
@@ -42,8 +42,16 @@ data class RecoveryFutsalUiState(
             return duration * rpe
         }
 
-    /** The value currently entered on [field]'s 0-5 scale. */
-    fun valueOf(field: RecoveryScaleField): Int =
+    /**
+     * Every scale holds a value the user chose (or one loaded from a saved
+     * entry). A day with nothing logged starts with all six unset, so `Save
+     * entry` can never record values nobody picked.
+     */
+    val hasAllScaleValues: Boolean
+        get() = RecoveryScaleField.entries.all { valueOf(it) != null }
+
+    /** The value currently entered on [field]'s 0-5 scale, or null while the user has not chosen one. */
+    fun valueOf(field: RecoveryScaleField): Int? =
         when (field) {
             RecoveryScaleField.SLEEP_QUALITY -> sleepQuality
             RecoveryScaleField.ENERGY -> energy
@@ -54,7 +62,6 @@ data class RecoveryFutsalUiState(
         }
 
     companion object {
-        const val DEFAULT_SCALE_VALUE = 2
         const val SCALE_MIN = 0
 
         /** Milestone 8, CP3: widened from 4 to match [com.repflow.app.domain.recovery.RecoveryEntry]'s 0..5 range. */

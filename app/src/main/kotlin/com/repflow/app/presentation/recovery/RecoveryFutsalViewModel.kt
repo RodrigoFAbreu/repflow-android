@@ -56,12 +56,12 @@ class RecoveryFutsalViewModel
                     isLoading = false,
                     date = date,
                     today = today(),
-                    sleepQuality = recovery?.sleepQuality ?: RecoveryFutsalUiState.DEFAULT_SCALE_VALUE,
-                    energy = recovery?.energy ?: RecoveryFutsalUiState.DEFAULT_SCALE_VALUE,
-                    legDoms = recovery?.legDoms ?: RecoveryFutsalUiState.DEFAULT_SCALE_VALUE,
-                    heelStiffness = recovery?.heelStiffness ?: RecoveryFutsalUiState.DEFAULT_SCALE_VALUE,
-                    painWhileWalking = recovery?.painWhileWalking ?: RecoveryFutsalUiState.DEFAULT_SCALE_VALUE,
-                    heavyLegs = recovery?.heavyLegs ?: RecoveryFutsalUiState.DEFAULT_SCALE_VALUE,
+                    sleepQuality = recovery?.sleepQuality,
+                    energy = recovery?.energy,
+                    legDoms = recovery?.legDoms,
+                    heelStiffness = recovery?.heelStiffness,
+                    painWhileWalking = recovery?.painWhileWalking,
+                    heavyLegs = recovery?.heavyLegs,
                     futsalInPrevious24h = recovery?.futsalInPrevious24h ?: false,
                     futsalExpectedNext24h = recovery?.futsalExpectedNext24h ?: false,
                     notes = recovery?.notes.orEmpty(),
@@ -123,7 +123,7 @@ class RecoveryFutsalViewModel
          */
         fun onSaveEntry() {
             val state = _uiState.value
-            if (state.isSaving) return
+            if (state.isSaving || state.isLoading || !state.hasAllScaleValues) return
             val futsal = if (state.futsalInPrevious24h) state.futsalInput() else FutsalInput.None
             if (futsal is FutsalInput.Invalid) {
                 _uiState.update { it.copy(errorMessage = MESSAGE_INVALID) }
@@ -148,12 +148,12 @@ class RecoveryFutsalViewModel
                 recordRecoveryEntry(
                     RecordRecoveryEntryCommand(
                         date = state.date,
-                        sleepQuality = state.sleepQuality,
-                        energy = state.energy,
-                        legDoms = state.legDoms,
-                        heelStiffness = state.heelStiffness,
-                        painWhileWalking = state.painWhileWalking,
-                        heavyLegs = state.heavyLegs,
+                        sleepQuality = requireNotNull(state.sleepQuality),
+                        energy = requireNotNull(state.energy),
+                        legDoms = requireNotNull(state.legDoms),
+                        heelStiffness = requireNotNull(state.heelStiffness),
+                        painWhileWalking = requireNotNull(state.painWhileWalking),
+                        heavyLegs = requireNotNull(state.heavyLegs),
                         futsalInPrevious24h = state.futsalInPrevious24h,
                         futsalExpectedNext24h = state.futsalExpectedNext24h,
                         notes = state.notes.ifBlank { null },

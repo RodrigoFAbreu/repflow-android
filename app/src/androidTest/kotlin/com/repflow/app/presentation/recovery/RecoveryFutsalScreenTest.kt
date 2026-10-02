@@ -142,10 +142,24 @@ class RecoveryFutsalScreenTest {
         assertEquals("5", duration)
     }
 
+    private fun loadedWithAllScales(): RecoveryFutsalUiState =
+        loaded().copy(sleepQuality = 3, energy = 3, legDoms = 1, heelStiffness = 1, painWhileWalking = 0, heavyLegs = 2)
+
+    /** Functional review A6: a day with nothing chosen cannot be saved, and the screen says why. */
+    @Test
+    fun saveEntryIsDisabledUntilEveryScaleHasAValue() {
+        var saves = 0
+        setScreen(loaded(), onSaveEntry = { saves++ })
+
+        composeRule.onNodeWithText(string(R.string.recovery_futsal_scales_incomplete)).assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.recovery_futsal_save_entry)).assertIsNotEnabled().performClick()
+        assertEquals(0, saves)
+    }
+
     @Test
     fun saveEntryIsThePinnedAction() {
         var saves = 0
-        setScreen(loaded(), onSaveEntry = { saves++ })
+        setScreen(loadedWithAllScales(), onSaveEntry = { saves++ })
 
         composeRule.onNodeWithText(string(R.string.recovery_futsal_save_entry)).assertIsDisplayed().performClick()
         assertEquals(1, saves)

@@ -51,6 +51,11 @@ class RecoveryFutsalViewModelTest {
             clock = clock,
         )
 
+    /** Save needs every scale chosen (functional review A6), so tests that save pick all six first. */
+    private fun fillAllScales(viewModel: RecoveryFutsalViewModel) {
+        RecoveryScaleField.entries.forEach { viewModel.onScaleFieldChanged(it, 2) }
+    }
+
     private fun today(): LocalDate = clock.now().atZone(ZoneId.systemDefault()).toLocalDate()
 
     @Test
@@ -58,6 +63,7 @@ class RecoveryFutsalViewModelTest {
         runTest {
             val viewModel = createViewModel()
             dispatcher.scheduler.advanceUntilIdle()
+            fillAllScales(viewModel)
 
             viewModel.onScaleFieldChanged(RecoveryScaleField.SLEEP_QUALITY, 4)
             viewModel.onSaveEntry()
@@ -69,10 +75,44 @@ class RecoveryFutsalViewModelTest {
         }
 
     @Test
+    fun `a day with nothing logged starts with every scale unset`() =
+        runTest {
+            val viewModel = createViewModel()
+            dispatcher.scheduler.advanceUntilIdle()
+
+            RecoveryScaleField.entries.forEach { assertEquals(it.name, null, viewModel.uiState.value.valueOf(it)) }
+            assertFalse(viewModel.uiState.value.hasAllScaleValues)
+        }
+
+    @Test
+    fun `onSaveEntry records nothing until every scale has been chosen`() =
+        runTest {
+            val viewModel = createViewModel()
+            dispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.onSaveEntry()
+            dispatcher.scheduler.advanceUntilIdle()
+            assertEquals(null, recoveryRepository.findForDate(today()))
+            assertFalse(viewModel.uiState.value.isEntrySaved)
+
+            RecoveryScaleField.entries.dropLast(1).forEach { viewModel.onScaleFieldChanged(it, 3) }
+            viewModel.onSaveEntry()
+            dispatcher.scheduler.advanceUntilIdle()
+            assertEquals(null, recoveryRepository.findForDate(today()))
+
+            viewModel.onScaleFieldChanged(RecoveryScaleField.entries.last(), 3)
+            viewModel.onSaveEntry()
+            dispatcher.scheduler.advanceUntilIdle()
+            assertEquals(3, recoveryRepository.findForDate(today())?.heavyLegs)
+            assertTrue(viewModel.uiState.value.isEntrySaved)
+        }
+
+    @Test
     fun `onSaveEntry with played in last 24h persists duration and rpe and computes load`() =
         runTest {
             val viewModel = createViewModel()
             dispatcher.scheduler.advanceUntilIdle()
+            fillAllScales(viewModel)
 
             viewModel.onFutsalPreviousToggled(true)
             viewModel.onDurationChanged("60")
@@ -92,6 +132,7 @@ class RecoveryFutsalViewModelTest {
         runTest {
             val viewModel = createViewModel()
             dispatcher.scheduler.advanceUntilIdle()
+            fillAllScales(viewModel)
 
             viewModel.onFutsalPreviousToggled(true)
             viewModel.onDurationChanged("not-a-number")
@@ -109,6 +150,7 @@ class RecoveryFutsalViewModelTest {
         runTest {
             val viewModel = createViewModel()
             dispatcher.scheduler.advanceUntilIdle()
+            fillAllScales(viewModel)
 
             viewModel.onSaveEntry()
             assertTrue(viewModel.uiState.value.isSaving)
@@ -124,6 +166,7 @@ class RecoveryFutsalViewModelTest {
         runTest {
             val viewModel = createViewModel()
             dispatcher.scheduler.advanceUntilIdle()
+            fillAllScales(viewModel)
             viewModel.onFutsalPreviousToggled(true)
             viewModel.onDurationChanged("60")
             viewModel.onSessionRpeChanged("7")
@@ -147,6 +190,7 @@ class RecoveryFutsalViewModelTest {
             dispatcher.scheduler.advanceUntilIdle()
             setupViewModel.onDateChanged(yesterday)
             dispatcher.scheduler.advanceUntilIdle()
+            fillAllScales(setupViewModel)
             setupViewModel.onScaleFieldChanged(RecoveryScaleField.ENERGY, 5)
             setupViewModel.onSaveEntry()
             dispatcher.scheduler.advanceUntilIdle()
@@ -165,6 +209,7 @@ class RecoveryFutsalViewModelTest {
         runTest {
             val viewModel = createViewModel()
             dispatcher.scheduler.advanceUntilIdle()
+            fillAllScales(viewModel)
             viewModel.onScaleFieldChanged(RecoveryScaleField.ENERGY, 5)
             viewModel.onSaveEntry()
             dispatcher.scheduler.advanceUntilIdle()
@@ -172,7 +217,7 @@ class RecoveryFutsalViewModelTest {
             viewModel.onDateChanged(LocalDate.of(2020, 1, 1))
             dispatcher.scheduler.advanceUntilIdle()
 
-            assertEquals(RecoveryFutsalUiState.DEFAULT_SCALE_VALUE, viewModel.uiState.value.energy)
+            assertEquals(null, viewModel.uiState.value.energy)
         }
 
     @Test
@@ -180,6 +225,7 @@ class RecoveryFutsalViewModelTest {
         runTest {
             val viewModel = createViewModel()
             dispatcher.scheduler.advanceUntilIdle()
+            fillAllScales(viewModel)
 
             viewModel.onScaleFieldChanged(RecoveryScaleField.SLEEP_QUALITY, 5)
             assertEquals(5, viewModel.uiState.value.sleepQuality)
@@ -196,6 +242,7 @@ class RecoveryFutsalViewModelTest {
             val today = clock.now().atZone(java.time.ZoneId.systemDefault()).toLocalDate()
             val firstViewModel = createViewModel()
             dispatcher.scheduler.advanceUntilIdle()
+            fillAllScales(firstViewModel)
             firstViewModel.onScaleFieldChanged(RecoveryScaleField.ENERGY, 4)
             firstViewModel.onSaveEntry()
             dispatcher.scheduler.advanceUntilIdle()
@@ -212,6 +259,7 @@ class RecoveryFutsalViewModelTest {
         runTest {
             val viewModel = createViewModel()
             dispatcher.scheduler.advanceUntilIdle()
+            fillAllScales(viewModel)
 
             viewModel.onFutsalPreviousToggled(true)
             viewModel.onSaveEntry()
@@ -228,6 +276,7 @@ class RecoveryFutsalViewModelTest {
         runTest {
             val viewModel = createViewModel()
             dispatcher.scheduler.advanceUntilIdle()
+            fillAllScales(viewModel)
 
             viewModel.onDurationChanged("60")
             viewModel.onSessionRpeChanged("7")
@@ -243,6 +292,7 @@ class RecoveryFutsalViewModelTest {
         runTest {
             val viewModel = createViewModel()
             dispatcher.scheduler.advanceUntilIdle()
+            fillAllScales(viewModel)
             viewModel.onSaveEntry()
             dispatcher.scheduler.advanceUntilIdle()
             assertTrue(viewModel.uiState.value.isEntrySaved)
