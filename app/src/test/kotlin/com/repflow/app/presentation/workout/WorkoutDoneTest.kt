@@ -142,6 +142,39 @@ class WorkoutDoneTest {
         }
 
     @Test
+    fun aTrainedLaterEntryOfARepeatedExerciseKeepsItsRecommendation() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            val workouts = InMemoryWorkoutRepository()
+            val recommendations = InMemoryProgressionRecommendationRepository()
+            val session =
+                session(
+                    exercises =
+                        listOf(
+                            exercise(0, squat, ExerciseTrackingType.WEIGHT_AND_REPS, emptyList()),
+                            exercise(1, squat, ExerciseTrackingType.WEIGHT_AND_REPS, listOf(set(0, 100.0, 5))),
+                        ),
+                )
+            workouts.insert(session)
+            recommendations.insert(recommendation("current", squat, endedAt.plusSeconds(1)))
+            val viewModel =
+                WorkoutDoneViewModel(
+                    savedStateHandle = SavedStateHandle(mapOf(RepFlowDestinations.WORKOUT_DONE_ARG to session.id.value)),
+                    observeWorkoutSummary = ObserveWorkoutSummary(workouts),
+                    observeTrainingPlanVersionLabels = ObserveTrainingPlanVersionLabels(InMemoryTrainingPlanRepository()),
+                    progressionRecommendationRepository = recommendations,
+                )
+
+            viewModel.uiState.test {
+                var content = awaitItem().content
+                while (content !is WorkoutDoneContent.Loaded) content = awaitItem().content
+
+                assertEquals(listOf(squat), content.recommendations.map { it.exerciseId })
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
     fun aReasonContinuesTheLineAfterTheDashInLowerCase() {
         assertEquals("fewer than 2 working sets recorded", reasonAfterDash("Fewer than 2 working sets recorded"))
         assertEquals("pain while walking is elevated (4/5)", reasonAfterDash("Pain while walking is elevated (4/5)"))

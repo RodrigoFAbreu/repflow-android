@@ -86,10 +86,12 @@ class WorkoutDoneViewModel
         private suspend fun recommendationsFor(summary: WorkoutSummary): List<DoneRecommendationUi> {
             val endedAt = checkNotNull(summary.session.endedAt)
             return summary.session.exercises
-                .distinctBy { it.exerciseId }
                 // An exercise with no working set this time has nothing to suggest about: its
                 // `Not enough data yet` row is noise, repeated for every exercise left untouched.
+                // Filtered before deduplicating, so a trained later entry of a repeated exercise
+                // is not shadowed by an untrained earlier one.
                 .filter { exercise -> exercise.sets.any { !it.isWarmup } }
+                .distinctBy { it.exerciseId }
                 .mapNotNull { exercise ->
                     progressionRecommendationRepository
                         .findLatestForExercise(exercise.exerciseId)
