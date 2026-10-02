@@ -450,6 +450,37 @@ class TrainingPlanEditorScreenTest {
             .assertIsDisplayed()
     }
 
+    /** Functional review R3-F-3: a second refused save for the same reason brings the name into view again. */
+    @Test
+    fun aRepeatedDuplicateNameRefusalScrollsTheNameIntoViewAgain() {
+        var uiState by mutableStateOf(longPlan())
+        composeRule.setContent {
+            RepFlowTheme {
+                TrainingPlanEditorScreen(
+                    uiState = uiState,
+                    onNameChanged = {},
+                    onNameFocusLost = {},
+                    rowActions = noOpRowActions(),
+                    onAddRowClicked = {},
+                    onSaveClicked = {},
+                    onBackRequested = {},
+                    onDiscardConfirmed = {},
+                    onDiscardCancelled = {},
+                    onCreateExerciseClick = {},
+                )
+            }
+        }
+        val duplicate = composeRule.activity.getString(R.string.training_plan_editor_submit_error_duplicate_name)
+
+        repeat(3) { attempt ->
+            composeRule.onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_add_exercise)).performScrollTo()
+            uiState =
+                longPlan(TrainingPlanEditorSubmitError(TrainingPlanEditorSubmitErrorKind.DUPLICATE_NAME, attempt + 1))
+            composeRule.waitForIdle()
+            composeRule.onNodeWithText(duplicate).assertIsDisplayed()
+        }
+    }
+
     /** Functional review R2-F-4: a blank field on a new row asks for a value; it never says to add an exercise. */
     @Test
     fun aBlankRowFieldAsksForAValueNotForAnExercise() {

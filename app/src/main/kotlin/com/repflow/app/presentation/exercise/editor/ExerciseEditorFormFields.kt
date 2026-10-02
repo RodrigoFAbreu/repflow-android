@@ -144,7 +144,7 @@ private fun NameField(
                 .fillMaxWidth()
                 .heightIn(min = NameFieldMinHeight)
                 .notifyOnFocusLost(onNameFocusLost)
-                .bringIntoViewWhen(duplicateName),
+                .bringIntoViewWhen(duplicateName, uiState.submitError),
     )
 }
 

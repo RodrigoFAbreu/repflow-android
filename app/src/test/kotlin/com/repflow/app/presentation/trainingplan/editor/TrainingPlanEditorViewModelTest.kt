@@ -31,6 +31,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -288,6 +289,18 @@ class TrainingPlanEditorViewModelTest {
                 vm.uiState.value.submitError
                     ?.kind,
             )
+
+            // Functional review R3-F-5: editing the name answers the refusal; Save checks it again (R3-F-3: a new value).
+            val first = vm.uiState.value.submitError
+            vm.onNameChanged("Push Pull Legs 2")
+            assertNull(vm.uiState.value.submitError)
+            vm.onNameChanged("Push Pull Legs")
+            vm.onSaveClicked()
+            advanceUntilIdle()
+            val second = vm.uiState.value.submitError
+            requireNotNull(second)
+            assertEquals(TrainingPlanEditorSubmitErrorKind.DUPLICATE_NAME, second.kind)
+            assertNotEquals(first, second)
         }
 
     @Test

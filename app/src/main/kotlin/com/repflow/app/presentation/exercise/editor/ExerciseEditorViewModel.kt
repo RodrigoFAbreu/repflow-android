@@ -66,6 +66,7 @@ class ExerciseEditorViewModel
 
         private var loadedExercise: Exercise? = null
         private var nextMessageId = 0L
+        private var refusedSaves = 0
 
         private val _uiState = MutableStateFlow(revalidate(initialState(editingId)))
         val uiState: StateFlow<ExerciseEditorUiState> = _uiState.asStateFlow()
@@ -141,7 +142,11 @@ class ExerciseEditorViewModel
 
         fun onNameChanged(value: String) {
             savedStateHandle[KEY_NAME] = value
-            _uiState.update { revalidate(it.copy(name = value, nameTouched = true)) }
+            _uiState.update { state ->
+                // Editing the name answers a duplicate-name refusal; `Save` checks it again (functional review R3-F-5).
+                val submitError = state.submitError?.takeUnless { it.kind == ExerciseEditorSubmitErrorKind.DUPLICATE_NAME }
+                revalidate(state.copy(name = value, nameTouched = true, submitError = submitError))
+            }
         }
 
         fun onInstructionsChanged(value: String) {
@@ -303,11 +308,11 @@ class ExerciseEditorViewModel
         private fun toSubmitError(error: ExerciseOperationError): ExerciseEditorSubmitError =
             when (error) {
                 ExerciseOperationError.DuplicateName -> {
-                    ExerciseEditorSubmitError(ExerciseEditorSubmitErrorKind.DUPLICATE_NAME)
+                    ExerciseEditorSubmitError(ExerciseEditorSubmitErrorKind.DUPLICATE_NAME, ++refusedSaves)
                 }
 
                 else -> {
-                    ExerciseEditorSubmitError(ExerciseEditorSubmitErrorKind.UNAVAILABLE)
+                    ExerciseEditorSubmitError(ExerciseEditorSubmitErrorKind.UNAVAILABLE, ++refusedSaves)
                 }
             }
 

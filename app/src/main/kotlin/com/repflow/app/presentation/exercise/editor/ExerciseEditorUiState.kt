@@ -81,8 +81,14 @@ enum class ExerciseEditorSubmitErrorKind {
     UNAVAILABLE,
 }
 
+/**
+ * A refused save's reason. [attempt] counts the refused saves in this editor, so two
+ * refusals for the same reason are two different values: the screen reacts to each
+ * (functional review R3-F-3), not only the first.
+ */
 data class ExerciseEditorSubmitError(
     val kind: ExerciseEditorSubmitErrorKind,
+    val attempt: Int = 0,
 )
 
 /**

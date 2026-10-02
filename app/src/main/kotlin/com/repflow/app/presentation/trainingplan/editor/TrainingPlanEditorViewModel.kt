@@ -61,6 +61,7 @@ class TrainingPlanEditorViewModel
         private var loadedOverview: TrainingPlanOverview? = null
         private var loadedSignature: DraftSignature? = null
         private var nextRowId = 0L
+        private var refusedSaves = 0
 
         private val _uiState =
             MutableStateFlow(
@@ -136,7 +137,11 @@ class TrainingPlanEditorViewModel
 
         fun onNameChanged(value: String) {
             savedStateHandle[KEY_NAME] = value
-            _uiState.update { revalidate(it.copy(name = value, nameTouched = true)) }
+            _uiState.update { state ->
+                // Editing the name answers a duplicate-name refusal; `Save` checks it again (functional review R3-F-5).
+                val submitError = state.submitError?.takeUnless { it.kind == TrainingPlanEditorSubmitErrorKind.DUPLICATE_NAME }
+                revalidate(state.copy(name = value, nameTouched = true, submitError = submitError))
+            }
         }
 
         fun onAddRowClicked() {
@@ -351,15 +356,15 @@ class TrainingPlanEditorViewModel
         private fun toSubmitError(error: TrainingPlanOperationError): TrainingPlanEditorSubmitError =
             when (error) {
                 TrainingPlanOperationError.DuplicateName -> {
-                    TrainingPlanEditorSubmitError(TrainingPlanEditorSubmitErrorKind.DUPLICATE_NAME)
+                    TrainingPlanEditorSubmitError(TrainingPlanEditorSubmitErrorKind.DUPLICATE_NAME, ++refusedSaves)
                 }
 
                 is TrainingPlanOperationError.ValidationFailed, is TrainingPlanOperationError.PlannedExerciseInvalid -> {
-                    TrainingPlanEditorSubmitError(TrainingPlanEditorSubmitErrorKind.INVALID)
+                    TrainingPlanEditorSubmitError(TrainingPlanEditorSubmitErrorKind.INVALID, ++refusedSaves)
                 }
 
                 else -> {
-                    TrainingPlanEditorSubmitError(TrainingPlanEditorSubmitErrorKind.UNAVAILABLE)
+                    TrainingPlanEditorSubmitError(TrainingPlanEditorSubmitErrorKind.UNAVAILABLE, ++refusedSaves)
                 }
             }
 

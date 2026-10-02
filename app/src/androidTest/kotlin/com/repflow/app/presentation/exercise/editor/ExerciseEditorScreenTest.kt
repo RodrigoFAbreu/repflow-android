@@ -372,6 +372,41 @@ class ExerciseEditorScreenTest {
         name.assertIsFocused()
     }
 
+    /** Functional review R3-F-3: a second refused save for the same reason brings the name into view again. */
+    @Test
+    fun aRepeatedDuplicateNameRefusalScrollsTheNameIntoViewAgain() {
+        var uiState by mutableStateOf(ExerciseEditorUiState(name = "Squat"))
+        composeRule.setContent {
+            RepFlowTheme {
+                Box(Modifier.height(260.dp)) {
+                    ExerciseEditorScreen(
+                        uiState = uiState,
+                        onNameChanged = {},
+                        onNameFocusLost = {},
+                        onTrackingTypeChanged = {},
+                        onInstructionsChanged = {},
+                        onRestSecondsChanged = {},
+                        onLoadIncrementChanged = {},
+                        onSaveClicked = {},
+                        onBackRequested = {},
+                        onDiscardConfirmed = {},
+                        onDiscardCancelled = {},
+                        onMessageShown = {},
+                    )
+                }
+            }
+        }
+        val instructions = composeRule.activity.getString(R.string.exercise_editor_instructions_label)
+        val duplicate = composeRule.activity.getString(R.string.exercise_editor_submit_error_duplicate_name)
+
+        repeat(3) { attempt ->
+            composeRule.onNodeWithText(instructions).performScrollTo()
+            uiState = uiState.copy(submitError = ExerciseEditorSubmitError(ExerciseEditorSubmitErrorKind.DUPLICATE_NAME, attempt + 1))
+            composeRule.waitForIdle()
+            composeRule.onNodeWithText(duplicate).assertIsDisplayed()
+        }
+    }
+
     @Test
     fun submitErrorTextIsDisplayed() {
         setContent(

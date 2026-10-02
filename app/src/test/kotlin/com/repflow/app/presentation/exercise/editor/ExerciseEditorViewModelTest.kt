@@ -30,6 +30,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -242,6 +243,31 @@ class ExerciseEditorViewModelTest {
                     ?.kind,
             )
             assertNull(viewModel.uiState.value.savedExerciseId)
+        }
+
+    /** Functional review R3-F-5 and R3-F-3. */
+    @Test
+    fun `editing the name clears a duplicate-name refusal and each refusal is a new value`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            seedExercise(name = "Deadlift")
+            val viewModel = viewModel()
+            viewModel.onNameChanged("Deadlift")
+            viewModel.onSaveClicked()
+            advanceUntilIdle()
+            val first = viewModel.uiState.value.submitError
+            requireNotNull(first)
+
+            viewModel.onNameChanged("Deadlifts")
+            assertNull(viewModel.uiState.value.submitError)
+
+            viewModel.onNameChanged("Deadlift")
+            viewModel.onSaveClicked()
+            advanceUntilIdle()
+            val second = viewModel.uiState.value.submitError
+            requireNotNull(second)
+            assertEquals(ExerciseEditorSubmitErrorKind.DUPLICATE_NAME, second.kind)
+            assertNotEquals(first, second)
         }
 
     @Test

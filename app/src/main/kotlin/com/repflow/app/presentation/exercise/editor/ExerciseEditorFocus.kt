@@ -28,13 +28,18 @@ internal fun Modifier.notifyOnFocusLost(onFocusLost: () -> Unit): Modifier {
 }
 
 /**
- * Scrolls this field into view whenever [show] turns true (functional review
- * R2-F-2): a refused save reports against the name field, which may be scrolled
- * off-screen when `Save` is tapped, so the reason has to be brought to the user.
+ * Scrolls this field into view whenever [show] turns true, and again whenever [trigger]
+ * changes while it is true (functional review R2-F-2, R3-F-3): a refused save reports
+ * against the name field, which may be scrolled off-screen when `Save` is tapped, so the
+ * reason has to be brought to the user - on every refusal, not only the first. [trigger]
+ * is the refusal itself, so a second refusal for the same reason still counts.
  */
 @Composable
-internal fun Modifier.bringIntoViewWhen(show: Boolean): Modifier {
+internal fun Modifier.bringIntoViewWhen(
+    show: Boolean,
+    trigger: Any? = null,
+): Modifier {
     val requester = remember { BringIntoViewRequester() }
-    LaunchedEffect(show) { if (show) requester.bringIntoView() }
+    LaunchedEffect(show, trigger) { if (show) requester.bringIntoView() }
     return bringIntoViewRequester(requester)
 }
