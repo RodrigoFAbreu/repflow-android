@@ -1374,7 +1374,7 @@
       "registry_path": "docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/repflow-redesign-visual-foundation-remediation-1-mapping.json",
       "governing_workflow_version": "2.1",
-      "phase": "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+      "phase": "AWAITING_FUNCTIONAL_REVIEW",
       "plan_revision": 20,
       "implementation_revision": 2,
       "functional_review_round": null,
@@ -1480,7 +1480,1603 @@
         "waived_guarantees": [],
         "recorded_at": "2026-10-01T02:05:53+01:00"
       },
-      "technical_approval": null,
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "EXTERNAL_APPROVE",
+        "reviewed_bundle_id": "3770b070d0af6d82b3709dde8e8b767a5438c1f6ad8230c3c82be9818e963c75",
+        "approved_review_content_id": "a8daf7e468f4516615e77d6f99470e33fdec25bd8389949491ba930ae816644b",
+        "review_content_manifest": [
+          {
+            "path": "app/schemas/com.repflow.app.infrastructure.database.RepFlowDatabase/8.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "12e2855a80b882ff1278f1fbee7bbfa1962ecd3d"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/backup/LocalBackupRepositoryAtomicityTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ecd0c6a1f7d7b7e0781ce7e818262810eae06ba4"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/backup/LocalBackupRepositoryVersionCompatibilityTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "bfff2006da90151c457d77e3280098bad68d0223"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/settings/SettingsPersistenceTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b8e35c0ee216625865d7bc5ad0a399683edf9574"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/trainingplan/LocalTrainingPlanRepositoryPlanUsageTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b9bc1001408957350443549fb901e3e9e41932df"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/infrastructure/database/RepFlowDatabaseMigrationTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b8b3d6b581d135fe6c344a4990f503703d9777c5"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/infrastructure/database/recovery/RecoveryDaoTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "804813ef18d104467d28e189160981cc24f3ec62"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/MainActivityNavHostSmokeTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b96f09538dd2891bdcf7043157deaab2c5ca1123"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/backup/BackupRouteSafCancellationTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ab7978b789d77244e1fe258f09330f7fed7511e4"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/backup/BackupRouteUnreadableRestoreFileTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2788f1200f6a6ca81464ccac8bc5f29db38e1e4b"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowStructuralPrimitivesTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "65727e7aa71f121e39a2563305f6c906f9534a1b"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/exercise/editor/ExerciseEditorScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "fd964572263f8364990a9c7bb292833afbe627e8"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/exercise/list/ExerciseListScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0bf5e3605c0348b76b4710d3144e3ddcd24dd73f"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/history/HistoryDetailScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9c47ce3f9fe9d8ca8b563ac0c58e10dce3d37c49"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/history/HistoryScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "03508c02b29b1b3a9b5564daed4d88b06b16e378"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/home/HomeRouteLifecycleTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9a489b26172354b5f416020aba2a38d2ef9d0afb"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/home/HomeScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "03b90d474fbdb8598f59beb914149c3b47109680"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/home/ReadinessDetailTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a7ba163cca68cf96adc0c9fd9ac0badb9441d4ce"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/progress/ProgressScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "cf6e8488c44ceb7e4b0ab68a901bff4dfd9ede8f"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/progression/ProgressionRecommendationRouteTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9dd2da1f195f5a46b1bc9e32b80e662bda7f28e9"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/progression/ProgressionRecommendationScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "bed138f0df1b393b40fba5b0dd18e6ff7baf6027"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/recovery/RecoveryFutsalScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5ee6b1a6ca2f2bbb69a8521ffd20827dbf1b2246"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/recovery/RecoveryHistoryScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "040edb8c599c77cb545e787bc1a0209b17d699f4"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/settings/SettingsScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f5b656fd88b35040fbf2d74ba1719c48741a052c"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/trainingplan/editor/TrainingPlanEditorScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7f286e33744cdb6cf580c085976ed29da376661d"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/trainingplan/list/TrainingPlanListScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "aa3fb1d20f2cdef6f74b4a3d50343a7e197fb527"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutLeaveRouteTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d01eacc22a9cbc36c7109af10c601c4bb0321c6d"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ab196bba746cb855d19ac6ffea3ee131aaeb928b"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/KeepScreenAwakeTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "4356d6f9d1d9d4d38803ef1bd3c5783f52af2657"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/RestTimerExpiryHandlerTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "907e48e528088cedefa2380ecb8b84c22e4a4106"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/RestTimerPermissionPromptEffectTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "157ee40c870c9c0d6e72d50ed55aa62cd8608200"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/RestTimerReceiverDeliveryTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "e5ac43137f8ffae7917cc471187dc8fea745607f"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/backup/BackupRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a212204dd4605a0c793fca2a7a6114add63ed9f1"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/backup/EraseAllData.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "bebe5918420de43e4dd4c584632534a497c9cc3b"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/backup/RestoreBackup.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "eef43a21663bfbfb898135232a229e1632d47f49"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/backup/TrainingDataRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6aa853a1f3b5ba8ba2f001fcd7d7c80c1b75231b"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/history/ObserveRecentTraining.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d8279601d0ca4b933c17c685b2b67c62afb73673"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/history/ObserveWorkoutSummary.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2a8a0e401affae0a8c190bd721b53691c38c1d16"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/progress/ExerciseProgress.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7783cdb4206988caf2a55bc7d545e13b3de86605"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/progress/ObserveExerciseProgress.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "89a975e26c837668ebe732883a0c81f7475f21c3"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/recovery/ObserveReadiness.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "960ec49311984c3ba6ebd6a50ef7ed1783727c44"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/recovery/RecoveryRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "46e9b97805a31f3bd2ead7f1bb10be1f4b497efd"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/settings/AppSettings.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "41e6f3ed84d3c82d80c98c12df6d0f817a6e5371"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/settings/SettingsRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ea5a6ba1afe1ff1ba8e6aaba28fcb17c0537958d"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/trainingplan/ObserveExercisePlanUsage.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f65b4d972a83f727aea0adf10bdae07868663b1b"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/trainingplan/ObserveTrainingPlanVersionLabels.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0bd172a4a8d77cda1a97494c46541723345d5721"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/trainingplan/TrainingPlanRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b5c992398330057d6fc4b0d6d31c7a8e6442f1c1"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/backup/LocalBackupRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "facdb4cf327e88bc18202a2071904c0c7d3ca0a3"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/backup/LocalTrainingDataRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6fe7ad978af0077a8efa883b60c765a837271229"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/recovery/LocalRecoveryRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5ef7988649d9d7871692b5d03f78dffaf02bdb8d"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/settings/LocalSettingsRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "625b80cc6a6e6e11c12ac0165fdf8ee3377cab60"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/trainingplan/LocalTrainingPlanRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f9c9c0b73abfebfe59667900c6f043477a635086"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/domain/backup/BackupSnapshot.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3eb8b9d13e679d31e61db7702c35b0e16cacbf80"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/domain/progression/EstimatedOneRepMax.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "230830e241c50376e174c1b315596bd860da1dc7"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/domain/recovery/ReadinessScore.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "443cf573c218221087a36242da97375ca54180da"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/database/RepFlowDatabase.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "1d09b1275a30e3f96530b29b882fc62500f928ae"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/database/RepFlowMigrations.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0b67a25b50ab7e81da6cc694567dddfbb7fc95ca"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/database/TrainingDataDao.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d88e3ebcff243de6aae2e9ae8044aab9d74d580b"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/database/recovery/RecoveryEntryDao.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ef4063fbf454f2c5099a81b2f8d2059aa5607e76"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/database/settings/SettingsDao.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f5868cecae5323eb44e224c1ef0ada5f3b8a8a1b"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/database/settings/SettingsEntity.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5030bc60963bbdde0c8ec7ea71354aee4b03b886"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/database/trainingplan/ExercisePlanUsageRow.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ad3eaf9bd52649e2e30153be28e6ea8797fe5680"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/database/trainingplan/PlannedExerciseDao.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "e759c1f158608bc39a058281217dc286139b3ae9"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/di/DatabaseModule.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "42bd14e3aad5245c01ee2181fbba7bfda93c2729"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/di/RepositoryModule.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7865fe9c2e6ec495793e35fa98dedd5b965e3bd5"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupFileActions.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "73d0b31e544d2a36eddcb492b70ea64ffd078fb5"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupScreen.kt",
+            "exists": false,
+            "mode": null,
+            "blob": null
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupUiState.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "e9826a47f859aace5908bd9993ea30283a167ba3"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f0b4ce1834588021bcf58bd69c8e47f3c24fe745"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/ROLE_AUDIT.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a600c1f0968253164e68f38f87484f81eb2ca673"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/RepFlowColor.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6f4d105bf30da0d5d87b24736f6edfcee43d0978"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowBottomActionBar.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "336b67ca8b50f410ba1a347a40bd5ef8434e2099"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowListRow.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5854c288e07c41ab72223a452cf5cababd182bcd"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowNumericKeypad.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3903ccadbe9bb6029107bc834a19ef395261f4fc"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowScreenScaffold.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "1b4ee003c8f3a1699038d119067556f042b02181"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowSectionLabel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "44f4cde1e7545a9aaf828d0f1a4a5f055688f7bc"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowSheet.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7b78a13133fcef27d28d97f65aec435711534139"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowStatTile.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f38bcf9051dacc3c210fe1f5596d25e1527e4a8f"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowStateComposables.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "cf8a0586f7e252fd3086e0eed9c5cb25f9a873e6"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowStepper.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a74971d0b71dc845b7b6087d7e8161c8b0354d70"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowTag.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ab4b72d4b654e9e9d3fd0261d5ccf230930f1c82"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/icons/RepFlowIcons.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0d28632c780df36cd37aab256c1fb1df60ae1845"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/exercise/editor/ExerciseEditorFieldErrorText.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2a6afc5d4028203b850b6b5921b5bd689a63319c"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/exercise/editor/ExerciseEditorFormFields.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0ff42b7dbdb6c3f5037289bd21949781d75ba5ef"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/exercise/editor/ExerciseEditorScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "12dd7e78bca129de842c2c05401c6cb0b0f24e4b"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/exercise/editor/ExerciseEditorViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8e7aa0b212605d306acee6c8390c780431b7f3da"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/exercise/list/ExerciseListItem.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2fb697e71192407b7a0aa2c8749c3e5496dbacf6"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/exercise/list/ExerciseListRoute.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "cda6633ff6f9bbb25cb0cf326ff5c7ca7725adc8"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/exercise/list/ExerciseListRows.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7473e79638ee291a6963e98472e2257989659c7f"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/exercise/list/ExerciseListScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "72466094b27b8eb35e2ba9cbd7c7fee4f6ef1664"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/exercise/list/ExerciseListViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "379d10e34ade7f309b277e13356284f9f566895c"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/history/HistoryDetailScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "70c3478f6fa645f1d460737d9fd9263792421b1d"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/history/HistoryFilterChips.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6197143595077a57469e0c6f4c4b2a8d48578e7a"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/history/HistoryModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b52eb814690e6b2772d640870936709519d8772e"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/history/HistoryScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "1f4fb7016839e8ce84c44b3ac27fbeb2220580a0"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/history/HistoryUiState.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "4897c40bc3aa0bcc8614561f1079aa9be0b790ea"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/history/HistoryViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "71871f1ff892b1c92acb5ea8e90c903c69ff2dcb"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeCards.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7dfc4e3bbb2ee89bfeb660833db240658df0d424"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeFormatting.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3059fce66308a5abdc019bcff188db7387184e8a"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeRecoveryCard.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "28455f0b4fcaf1159193e7d23d7b12cf8bca4135"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeResumeCard.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5c4d108dde0c07c81993816c9bd0fea139702194"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeRoute.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "252c2a86175937657ea263c362df8bea01cfa3a7"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5c6df1f3de354999b908ba0b9894a955cd3e2170"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeStartCard.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0295ff6533b0597a10ab3a4a9df39e8ec02812af"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeUiState.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "68490f0e2f8273ff7edf77dc232978e1063bf809"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0bee5c8cf17a78b3fde30b80c69219c2ab0000d1"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/ReadinessBandStyle.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a8691a75ee9349719dbece790cdc931ef1427091"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/ReadinessSheet.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8517e5cfda2d83dae6f001117f5124ee6b0e4031"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/navigation/RepFlowBottomNavigationBar.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "67582877f2e4c253cf436c4bea6ddb1829d91580"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/navigation/RepFlowDestinations.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "062d78b28427c6daa5d20330e6f060bfe44af68b"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/navigation/RepFlowNavHost.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ac71eb6710589b9db4a80bc723e2e3fda93a291f"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/navigation/RepFlowNavigationActions.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b8d759022cccc81b3e3c6df710a3ab0aab190e81"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/progress/ProgressCard.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7b78dee7afbc7b14c423ac84cf66d3180da5b48e"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/progress/ProgressModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "874716e594c6cbe98b865780904217cae21340ce"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/progress/ProgressRoute.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8ec224bb2f3efa2e67db02b40f4161de6cc2a4be"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/progress/ProgressScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9bf2dbc7096f48b1d43d2088c8818b5646365f59"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/progress/ProgressUiState.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8f4761705fb88874e16d717c72e9ab21ae19ab5b"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/progress/ProgressViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "cd47b9908e43314d188bfcb8d7618901a396eb3e"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/progression/ProgressionOutcomeStyle.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "52f843afdc7f73f80f9a59a9eb7e3796264dd325"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/progression/ProgressionRecommendationRoute.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "269da13d098639345621e42ea9f0cce5eb8cf368"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/progression/ProgressionRecommendationScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7251b7893903a5c639f3150abaa369b1d29f8309"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/progression/ProgressionRecommendationUi.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "04c1a67caadd1c5f0ca77632b11cb3d9694346af"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/progression/ProgressionRecommendationUiState.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "65c8b82152c8ecef6b3ddc8e0cfea37f2bdad2b7"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/progression/ProgressionRecommendationViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "debe103f05a74f48a91e67363137afd6f704e0f1"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/recovery/RecoveryFutsalBlock.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "49635375c03721250a0ba091a3b18a9cff6a73c1"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/recovery/RecoveryFutsalRoute.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "670e5d09e118b16be0ba114783bac20673658806"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/recovery/RecoveryFutsalScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "fd1538e1a3dc60a5ca9284a96cb41094ea2f581b"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/recovery/RecoveryFutsalUiState.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "e042b10810fb93719fc7c1271ea0745a8d9fe1ca"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/recovery/RecoveryFutsalViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f57e76a1d8aa832629c7a3bfead07dbe27457e44"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/recovery/RecoveryHistoryModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "e252df71528f37c905940bf36c86f03c35a290dd"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/recovery/RecoveryHistoryScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6d7bcb3cba042cc75c7f99b59392f1cad5e9efdd"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/recovery/RecoveryHistoryUiState.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f5e2686c93948a28861e28202a03897ebd76bb52"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/recovery/RecoveryHistoryViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7957624f1f9778bb4c8c5cf7423d121352379f3d"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/recovery/RecoveryScales.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "c9d85522d926345affc16745b6b6e3d25d51ac87"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/recovery/RecoveryTrendChart.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d68f0edea7665dffe0d6ccb48e3b6d5833625113"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/recovery/RecoveryTrendDrawing.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "cc99190ddb86e4c77f3ee3318a80239a1a085870"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/settings/SettingsActions.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "09b16f463391c7d5ead9ca2b74663641a8d282c1"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/settings/SettingsErase.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "16c9319c61f269c90bcf78b06f11132b067aa7bd"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/settings/SettingsRoute.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "fdff766d93c8d56a9c733ae7f3c90357b4bfb968"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/settings/SettingsRows.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d49c2cdf7ff2a279e86af552bbd722e62064db67"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/settings/SettingsScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "12caacfbfe0468827699a13d6b5f4e17787267bf"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/settings/SettingsViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ec3829742f82276b8c3c4787cf74409c56b50ef9"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/trainingplan/editor/TrainingPlanEditorFormFields.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "c26f075fcf639dccb85550bf42516ef78e0c12aa"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/trainingplan/editor/TrainingPlanEditorPicker.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "aab420a50c2d81797ea50bc61d56e8b213426e82"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/trainingplan/editor/TrainingPlanEditorRoute.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "87a0bf47a6d17d36b96e6e2d9c949401ac6d9f8c"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/trainingplan/editor/TrainingPlanEditorRowModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "22e4f3819e52d664bbad8250190de55928bd5707"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/trainingplan/editor/TrainingPlanEditorRows.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "fcd7cfbc78c483500d7bb9fea0cdf9bb1182e3a7"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/trainingplan/editor/TrainingPlanEditorScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "639cd54d8ec8c4235c7126831a71984e68c5ba04"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/trainingplan/editor/TrainingPlanEditorTargets.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "fc821e8869b910688030c73742949443595f60b3"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/trainingplan/list/TrainingPlanListCards.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "41d3863488cb790d3aad1dbafe3fd691ab7a133c"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/trainingplan/list/TrainingPlanListItem.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "fd1e950e2204628626053cb49240711983c03305"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/trainingplan/list/TrainingPlanListRoute.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "88b0da581a47ce87e8c5a6485a06fb2374bdbe7b"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/trainingplan/list/TrainingPlanListScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ef761a6c3a9136e86e84d32b1e930bec6a7b5b34"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/trainingplan/list/TrainingPlanListUiState.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "29e2ed594528439682a48a9efe40518df1a93078"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/trainingplan/list/TrainingPlanListViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6df1cf0acb347f13dc1eaf0762176f8053088082"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/AbandonWorkoutDialog.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b0bc56b58070d1aa7aaba10491b693e2726a8fc2"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutExerciseCard.kt",
+            "exists": false,
+            "mode": null,
+            "blob": null
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutRoute.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "26dfa64a8da53b742b5f1f52fbea97c99e5cb6a9"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "018d12a831ca7f6939dd7b2039c6ddae3e5b9ea4"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutUiState.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d43bef74fa56016ee9536cab41512bdde65a8075"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b24d18fa06a5c662a4edae4ec427e17d7d745088"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/RestAlert.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "36724a107c563118660ae116627cc92cb2a839e9"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/RestTimerAlarmScheduler.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d21e1b58cb9678c5a5e3a4fd7223cbb7c983bb8f"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/RestTimerExpiredReceiver.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7a1da7040086190bd89d57b3a97b0ce44caad400"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/RestTimerExpiryHandler.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "e761cc219fca4cb9b0cd4d8d70caab1640cc16da"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/SystemRestAlertVibrator.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "01265d7dbe3b7cfc3c7059c106dd1ba8e65fa4ae"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutBoard.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "eba3da9b280426ce90fb53a1c4fbe36b9a4c3d82"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutBoardModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7950f9d0d47da3cf47a3a4262a5027994ea92244"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutDoneModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0c22e0e787776ea5f827004dbfab2067bcf18d83"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutDoneScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "55c4671058c00df20542b687987af8818c902e47"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutDoneText.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2c2c838c44e7bddfd3c9d3a0b5aca4675816f31b"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutDoneViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3a1614b355db2021a0f82dae184ed7807fd1edab"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutFinishSheet.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "49e9bccb1b3566e5721d9f02151bb6d80d8fe82c"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutFocus.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "cee11ba31f4189d17fa3c952616324e85bdc0f03"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutFocusEntry.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "54cdfe58e07524be6773898051b09dca0a86988b"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutFocusModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "89d726f64a85a4babc1e88755f8901c202b4c37b"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutFocusSets.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0cd7d67b0e234ecdeeca7a814314725978499bd3"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutSheets.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5924612eb8672773c86b27cb15eb1eff8bf0e592"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_arrow_down.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "770c5af8b8c2f94e06d36bc6652ca6649c742b87"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_arrow_right.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "02fa093597f637630ac00e4e6eb871157d5e7ac9"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_calendar_blank.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6c2f0f75d0ddd1389568c364887c943a5c6e34aa"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_calendar_check.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8ebc98704ef66554ebf1cef90acd473f74d9456c"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_caret_right.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7c9b595f017f5cd2f0fe137c92a9d14eeaac4c52"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_chart_line_up.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "dac4b657393826a94cf6d2321b6dce5d2b9747ad"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_chart_line_up_fill.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "cb90ad4c4321d366dd1a2f51e1fc68a36424cd4d"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_check.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "4cbfd26aa60d22fb88126cf252ee7af3e799bfdf"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_check_circle.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5cd257ac819abc9278ac8a3395a183465ee7226c"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_check_fat.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "def03a2ee2eb79a059a9bf3cb17aa6e684eb9ba3"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_circle.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d058eb819b75465e543349b14abdad62b89aa67b"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_clock_counter_clockwise_fill.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "e10751e0fa358f9bbe7d066442bdf9f742713b57"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_cloud_arrow_up.xml",
+            "exists": false,
+            "mode": null,
+            "blob": null
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_database.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "1ade4d688b6f04fc3eddc6f47d7cf91d80409f93"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_dot_outline.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b3965b4788efafd654d7b34982d0a6f74eb6aa02"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_gear_six.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0b41a032a8eeb92746fc4b20ba9c61e5627bb062"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_heartbeat.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8110471e67d4d01a75e7edddc1e109f459ae9be4"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_hourglass_medium.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a0a030764980d2e4da9345d2cf9cd663cb6fdf45"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_house.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "29576f13d5ef5b0a0e8c4d773fd8301f01adb809"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_house_fill.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b8c1419be1491165505a208db955f24f3a21512e"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_lightning.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "e4b6465f313daa65dcf2de0a4c596a0483cf2c0a"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_list_bullets.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "286ef3e326ece88e19359cceab86f72ab9d348af"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_list_checks_fill.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "57eaf51dd13dd20b7fd5701ddbbef9680f3d9a4e"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_list_plus.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "96e2bf765ec9199c1a9065aff7c40ad707920427"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_medal_fill.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2f8b96edf51a6ea69ffd45f2be22a1c5e30e31f4"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_play_fill.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "082347cfcddd39bd830483696d23d299221bba70"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_plus_circle.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "cbca51f4d5203e000f91cbf78dcc7623781e50fc"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_prohibit.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a66899f46819e12382bcd40419b324214b149da3"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_pulse.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "e95bf94eeaf90fd6779eed6de5c8ce0883c7fe58"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_record_fill.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "1b2b75ad68f7b94725f4ed330ed7fb661ad2970a"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_soccer_ball.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "840bb6fc3398c4e535f2bdfa3d7ad2dca777a5e9"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_table.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "84643d448b792c0231551162e1eedf4d9eb9b67e"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_timer.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9929f0cb85eff65ac879793c7edc79d134b8ecbe"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_trash.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "810f5622070fe7c71abe5ed9e185b8e7cc093f58"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_trend_down.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6a98006f16efe89fef60d0b7d8b514611e6e1300"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_trend_up.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2956515b8d8caaaf5807a5de142217dc1ec8f596"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_user_circle.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "78c38fa67739ff0465c57109b070fe60275a9903"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_warning.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "512c9fe5fa29a187451b3787fd9ff4c507c911de"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_warning_circle.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d9af99f49be321e1b02672eb9bc9d4f9f748e876"
+          },
+          {
+            "path": "app/src/main/res/values/strings.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9c39393af44a7cc58c8fff8241a8e57bf6b9e275"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/backup/EraseAllDataTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "e437aedda9ba6cad84e22f2dc2508d35a016b95a"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/backup/InMemoryTrainingDataRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3b604f402924a604af2a8338da975617ba2aa12b"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/history/ObserveRecentTrainingTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "868872db7d5cc055b5e80f280e8b10e68b334e2f"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/history/ObserveWorkoutSummaryTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "260010daa11912529837d09033f8d2b4f4dc12ff"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/progress/ExerciseProgressTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d6df3c6e55668c5e390456a312ecaee75aee96f4"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/recovery/InMemoryRecoveryRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "117e545fc5d5555d6e2ece8752e9a4a80e24757b"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/recovery/ObserveReadinessTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "72cb0847c0d1bfdc9fb23a67c8b234b2df13fb05"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/settings/InMemorySettingsRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b6e63b012d38b31de5b688507b598e42cbe730d0"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/trainingplan/InMemoryTrainingPlanRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ffbf57295e73f47bb3efb51928d699d3fb894ea4"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/trainingplan/ObserveTrainingPlanVersionLabelsTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "977d13265b29b26f34a4ab68136c9561fab6bbcc"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/domain/progression/EstimatedOneRepMaxTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3b0c3504047e951b4d7ecd07c7eb2b6dda284e57"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/domain/recovery/ReadinessScoreTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2c684729130411b2e8e9a582faaa91daefb25caf"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowKeypadInputTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "934fd3e7829956a43e3805df7f61bde94647ad2b"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowPrimitivesTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a4cf27b5cd19d3a024b2d809ff14e554b4ca7b69"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowStepperMathTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7112e85441d90234deb20bba8f23ae7fea01edda"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/designsystem/icons/RepFlowIconsTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "dbfafe30c8a6f69ba73254f67b4e27b0f76a538a"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/exercise/editor/ExerciseEditorViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "4e21261f57e6e5e0ef81cede18799271f29b9a8c"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/exercise/list/ExerciseListScreenWiringTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7f971a3a63d448059fe2feaedb77d59fbbcb84cc"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/exercise/list/ExerciseListViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d67302d8e1225e3297d055e58b9503c43debff79"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/history/HistoryModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ee04bd758cc9ffd48432eff367d69ef88b328386"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/history/HistoryUiStateTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "48626c3f3da1fda313406d40453e130e77a487a6"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/home/HomeFormattingTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "65a626f7cb131204c8a054b8c8d0d8b1d5359800"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/home/HomeViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f755dce6475851f01ad673f38f145cb9b350af5c"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/home/ReadinessBandStyleTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3adb8455a10205945a658e370fdb3a161ce259cd"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/navigation/RepFlowBottomNavigationBarTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3b68f24c30e33aec5d0fb9aeabc59c799331b49c"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/progress/ProgressModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "67b91a031f927da250906d51a4e29f017eed9835"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/progress/ProgressViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "07269036ef75570a51c73b29c6710792812114b3"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/progression/ProgressionRecommendationViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9bf8ba98544e1e71632efacf7eea5180809d884e"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/recovery/RecoveryFutsalViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "83bcdd5338667c7e495423dc3e81166676abf69f"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/recovery/RecoveryHistoryModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "78050c72a635cfcee3e565bddbb46808064ed931"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/recovery/RecoveryHistoryViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9b01fd5b2e1ddd13d1068873a5a47b6372c9a694"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/recovery/RecoveryScalesTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "08c4839b9e722391a8f965c3c67e51c547a77c6e"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/settings/SettingsViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "77b689355367f589bac8abb71359d5a1d68b4d72"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/trainingplan/editor/PlanRowSteppingTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "299c1335393d0d5103bb32e8c787aadc4922d356"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/trainingplan/list/TrainingPlanListViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "389f575072f287f8edf050b7927e2319378f37dc"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutFocusPlumbingTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "918f62aa81a4c222e2b0da8214b96469678ce5ee"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5bb3bc3e5891f32a95d056e7bdb86deb78e15b06"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/workout/RestAlertTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ee0edba190031102f1fe35e47577ffee528574f6"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/workout/WorkoutBoardModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3e3f76f58948a13e6c4e6050ca9b84a9120bd462"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/workout/WorkoutDoneTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8c10e007c91caec23e4e869eaf2edc7fdf858bfc"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/workout/WorkoutFocusModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "41e28ce30781739e913abe7e6b99fe1d3e2307c5"
+          },
+          {
+            "path": "docs/TECHNICAL_DECISIONS.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "566674255fdf1de346bf01de3012f71e42351627"
+          },
+          {
+            "path": "docs/UX_FLOWS.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "70894b2d294763add945c745c4280021fdb00bfd"
+          },
+          {
+            "path": "docs/adr/0003-layered-modular-architecture.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d01a95310f08c28f54f1894bf4c56db65eb570f6"
+          },
+          {
+            "path": "docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "c44392b12cb0465dbacc06d8b1c3c49a7e804bf5"
+          },
+          {
+            "path": "docs/milestones/repflow-redesign-visual-foundation-remediation-1-inventory.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f7b0ec45a1f7f2afd4c7b02f04323d04eb09a0a0"
+          }
+        ],
+        "reviewed_content_commit": "093956dc3a9efd9314a0dfcbc840d68770151f7e",
+        "legacy_evidence": null,
+        "user_confirmation": "implementation repflow-redesign-visual-foundation-remediation-1",
+        "waived_guarantees": [],
+        "recorded_at": "2026-10-02T17:35:51+01:00"
+      },
       "technical_review_block_pins": [],
       "plan_review_stages": {
         "review_content_id": "a1632e6f97b68405dcab1ac666e7bd4af50b8ff955b73dcde74ab07239a1b271",
@@ -1499,8 +3095,8 @@
       },
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 102,
-      "last_transition": "2026-10-02T12:51:36Z"
+      "state_revision": 103,
+      "last_transition": "2026-10-02T17:35:51+01:00"
     }
   }
 }
