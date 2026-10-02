@@ -1374,7 +1374,7 @@
       "registry_path": "docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/repflow-redesign-visual-foundation-remediation-1-mapping.json",
       "governing_workflow_version": "2.1",
-      "phase": "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+      "phase": "AWAITING_FUNCTIONAL_REVIEW",
       "plan_revision": 20,
       "implementation_revision": 8,
       "functional_review_round": null,
@@ -1481,10 +1481,10 @@
         "recorded_at": "2026-10-01T02:05:53+01:00"
       },
       "technical_approval": {
-        "status": "STALE",
+        "status": "CURRENT",
         "basis": "EXTERNAL_APPROVE",
-        "reviewed_bundle_id": "e8483f0cfa65a3857b55c7cb7d67688ae5c8039698166f6766f42a33b2071eb0",
-        "approved_review_content_id": "52de5d4134c36f45b7cdb4e68f2ca7ac9dc4616ab79e592243b8160b8c88e4cf",
+        "reviewed_bundle_id": "f3d92940df7da2b4432e9df756894f1b41ee9f473798fcfe5f3015b981818435",
+        "approved_review_content_id": "dabc13c68217bb607c56ad500eeba2ad7de3191dab11257c918cfbd0c66aff46",
         "review_content_manifest": [
           {
             "path": "app/schemas/com.repflow.app.infrastructure.database.RepFlowDatabase/8.json",
@@ -1556,7 +1556,7 @@
             "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/exercise/editor/ExerciseEditorScreenTest.kt",
             "exists": true,
             "mode": "100644",
-            "blob": "b79686c9ed7a505c2bed3a83572db01843b2dc70"
+            "blob": "857e28e2d0a72907f86735007f5681e00bb7147e"
           },
           {
             "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/exercise/list/ExerciseListScreenTest.kt",
@@ -1640,7 +1640,7 @@
             "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/trainingplan/editor/TrainingPlanEditorScreenTest.kt",
             "exists": true,
             "mode": "100644",
-            "blob": "3f59cc1875f7830fde6e60c75b9f01325139f100"
+            "blob": "1adf8f4975223108213a64c68c05a94e46483a71"
           },
           {
             "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/trainingplan/list/TrainingPlanListScreenTest.kt",
@@ -1676,7 +1676,7 @@
             "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/RestAlarmEffectTest.kt",
             "exists": true,
             "mode": "100644",
-            "blob": "be0a4f3f14be65bbae0117991bb45081e39ac34a"
+            "blob": "c33da5a93dab2e48f60488aeef0f8f71cc1e226b"
           },
           {
             "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/RestTimerExpiryHandlerTest.kt",
@@ -2006,13 +2006,13 @@
             "path": "app/src/main/kotlin/com/repflow/app/presentation/exercise/editor/ExerciseEditorFocus.kt",
             "exists": true,
             "mode": "100644",
-            "blob": "6f32645afd4293b0d2797b268a4bbce06e07b7a9"
+            "blob": "3cf46600cb981ec4dacbc04199f4983828bad8a0"
           },
           {
             "path": "app/src/main/kotlin/com/repflow/app/presentation/exercise/editor/ExerciseEditorFormFields.kt",
             "exists": true,
             "mode": "100644",
-            "blob": "c2c0e741ca38c81f1143f6ee55d662e122e86dab"
+            "blob": "68540443129663fe959c4adde90a020915bd4ee0"
           },
           {
             "path": "app/src/main/kotlin/com/repflow/app/presentation/exercise/editor/ExerciseEditorRoute.kt",
@@ -2030,13 +2030,13 @@
             "path": "app/src/main/kotlin/com/repflow/app/presentation/exercise/editor/ExerciseEditorUiState.kt",
             "exists": true,
             "mode": "100644",
-            "blob": "57db5aefb7d62643695527e9acdf058abcce08c1"
+            "blob": "0fb8aa8f6959471e13b192fb23261fb6882d6cc3"
           },
           {
             "path": "app/src/main/kotlin/com/repflow/app/presentation/exercise/editor/ExerciseEditorViewModel.kt",
             "exists": true,
             "mode": "100644",
-            "blob": "9dbe5aa8aab16b34278bd480e9ead19d32c7d503"
+            "blob": "3e64c4d0ed1801fc50a5d71bd55b0742cb4e7726"
           },
           {
             "path": "app/src/main/kotlin/com/repflow/app/presentation/exercise/list/ExerciseListItem.kt",
@@ -2378,7 +2378,7 @@
             "path": "app/src/main/kotlin/com/repflow/app/presentation/trainingplan/editor/TrainingPlanEditorFormFields.kt",
             "exists": true,
             "mode": "100644",
-            "blob": "79ea5baeb5d893a452fe3551a2eacb9f238d6ef3"
+            "blob": "eef28cfeba8b9f1c7501a127c0b9ae0999be6802"
           },
           {
             "path": "app/src/main/kotlin/com/repflow/app/presentation/trainingplan/editor/TrainingPlanEditorPicker.kt",
@@ -2420,13 +2420,13 @@
             "path": "app/src/main/kotlin/com/repflow/app/presentation/trainingplan/editor/TrainingPlanEditorUiState.kt",
             "exists": true,
             "mode": "100644",
-            "blob": "b96330a5cb55ad7dbc44a566fd9040a7552f2269"
+            "blob": "7bca2dced47775cbcd357d046ef19736181317a6"
           },
           {
             "path": "app/src/main/kotlin/com/repflow/app/presentation/trainingplan/editor/TrainingPlanEditorViewModel.kt",
             "exists": true,
             "mode": "100644",
-            "blob": "262bc33f7b779118c41f50d55daed2acdb459d8b"
+            "blob": "9f0798beae1e104c3fc69beb527315df615a8aa7"
           },
           {
             "path": "app/src/main/kotlin/com/repflow/app/presentation/trainingplan/list/TrainingPlanListCards.kt",
@@ -2480,7 +2480,7 @@
             "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutRoute.kt",
             "exists": true,
             "mode": "100644",
-            "blob": "43a5f35c53906c44867d333e0fe0b1a4956de6c5"
+            "blob": "4a2a6c0bff7dc0bbabfae22016514522849bfb8b"
           },
           {
             "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutScreen.kt",
@@ -2942,7 +2942,7 @@
             "path": "app/src/test/kotlin/com/repflow/app/presentation/exercise/editor/ExerciseEditorViewModelTest.kt",
             "exists": true,
             "mode": "100644",
-            "blob": "e17935ca6d3e644993ebb1158eb90f02d5a7efb7"
+            "blob": "414ef519994619c8920bc7170b5a50dd3710b0d7"
           },
           {
             "path": "app/src/test/kotlin/com/repflow/app/presentation/exercise/list/ExerciseListScreenWiringTest.kt",
@@ -3056,7 +3056,7 @@
             "path": "app/src/test/kotlin/com/repflow/app/presentation/trainingplan/editor/TrainingPlanEditorViewModelTest.kt",
             "exists": true,
             "mode": "100644",
-            "blob": "2be0d445ee433017ca5ad1fb59af2ff69ca71547"
+            "blob": "d68d0116241387edaa57712edf6d8221d3bbe9cf"
           },
           {
             "path": "app/src/test/kotlin/com/repflow/app/presentation/trainingplan/list/TrainingPlanListViewModelTest.kt",
@@ -3134,14 +3134,14 @@
             "path": "docs/milestones/repflow-redesign-visual-foundation-remediation-1-inventory.md",
             "exists": true,
             "mode": "100644",
-            "blob": "6a1e6de5ef3fe447572f4c968236ddbe987bfe79"
+            "blob": "6a3ced5c230ffa6ac841023fb86ed2be80c1e881"
           }
         ],
-        "reviewed_content_commit": "2a7fa988726e4524bada2008d964ec96882511bb",
+        "reviewed_content_commit": "e10e1abc86c7791f6deb20fd5aa5319d39142d5a",
         "legacy_evidence": null,
         "user_confirmation": "implementation repflow-redesign-visual-foundation-remediation-1",
         "waived_guarantees": [],
-        "recorded_at": "2026-10-02T22:28:23+01:00"
+        "recorded_at": "2026-10-03T00:56:22+01:00"
       },
       "technical_review_block_pins": [],
       "plan_review_stages": {
@@ -3161,8 +3161,8 @@
       },
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 117,
-      "last_transition": "2026-10-03T00:40:10+01:00"
+      "state_revision": 118,
+      "last_transition": "2026-10-03T00:56:22+01:00"
     },
     "repflow-redesign-visual-foundation-remediation-1-remediation-1": {
       "work_item_type": "product",
