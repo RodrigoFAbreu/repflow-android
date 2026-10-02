@@ -255,7 +255,7 @@ private fun FactorRow(
                     color = secondary,
                 )
             }
-            Dots(filled = reading.normalized, filledColor = if (reading.isFlagged) bandColor else scheme.primary)
+            Dots(filled = factorDotsFilled(reading), filledColor = if (reading.isFlagged) bandColor else scheme.primary)
             Text(
                 text = stringResource(R.string.readiness_factor_weight, weight / WEIGHT_TENTHS, weight % WEIGHT_TENTHS),
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, fontFeatureSettings = "tnum"),
@@ -268,7 +268,14 @@ private fun FactorRow(
     }
 }
 
-/** Five dots filled to the normalized value. Decorative: the `v/5` line carries the number. */
+/**
+ * How many of the five dots a factor fills: the value the row's `v/5` states,
+ * for every factor, whichever way its polarity runs (D42 follow-up: `Leg DOMS
+ * 1/5` once drew four dots because the dots showed goodness, not the value).
+ */
+internal fun factorDotsFilled(reading: ReadinessFactorReading): Int = reading.value.coerceIn(0, SCALE_DOTS)
+
+/** Five dots filled to the shown `v/5` value. Decorative: the `v/5` line carries the number. */
 @Composable
 private fun Dots(
     filled: Int,

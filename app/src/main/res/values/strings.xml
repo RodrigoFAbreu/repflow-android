@@ -680,13 +680,13 @@
     <string name="readiness_band_back_off">Back off</string>
     <string name="readiness_band_protect">Protect</string>
     <string name="readiness_sheet_title">How today\'s score was set</string>
-    <string name="readiness_sheet_intro">Your check-in sets one score. It is a read on today — never a limit on what you are allowed to do.</string>
+    <string name="readiness_sheet_intro">Your check-in adds up to one score: a read on how recovered you are today. It never limits what you can do.</string>
     <string name="readiness_sheet_out_of">out of 100</string>
     <string name="readiness_sheet_inputs_label">The inputs and what they weigh</string>
     <string name="readiness_factor_reading">%1$d/5 · %2$s</string>
     <string name="readiness_factor_flagged">pulling the score down</string>
     <string name="readiness_factor_fine">fine</string>
     <string name="readiness_factor_weight">×%1$d.%2$d</string>
-    <string name="readiness_sheet_gate_note">Pain while walking carries the most weight and acts as a gate: at 3 or more, or heel stiffness at 4 or more, the band is Protect regardless of the score.</string>
+    <string name="readiness_sheet_gate_note">Pain while walking counts the most. If it is 3 or more, or heel stiffness is 4 or more, today is Protect whatever the score.</string>
     <string name="readiness_sheet_close">Close</string>
 </resources>
