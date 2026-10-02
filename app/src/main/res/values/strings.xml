@@ -341,7 +341,7 @@
     <string name="history_detail_set_rpe">RPE %1$s</string>
     <string name="history_session_invalidate_action">Invalidate workout</string>
     <string name="history_invalidate_dialog_title">Invalidate this workout?</string>
-    <string name="history_invalidate_dialog_message">It leaves History and stops counting toward progression. Nothing is deleted — turn on Show invalidated to see it again.</string>
+    <string name="history_invalidate_dialog_message">It\'s hidden from History and stops counting toward progress and suggestions. This can\'t be undone. Nothing is deleted — turn on Show invalidated to see it.</string>
     <string name="history_invalidate_dialog_confirm">Invalidate workout</string>
     <string name="history_invalidate_dialog_cancel">Keep it</string>
     <string name="history_message_invalidated">Workout invalidated.</string>
