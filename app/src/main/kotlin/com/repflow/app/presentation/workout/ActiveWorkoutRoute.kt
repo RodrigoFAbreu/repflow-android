@@ -152,13 +152,15 @@ fun ActiveWorkoutRoute(
  * rest, and schedules it for a rest that is still running - never for one whose
  * end has already passed (functional review P-1). A finished rest stays in the
  * session until the next set or `Skip rest`, and a past-due exact alarm fires -
- * and alerts - again at once, whenever the workout is composed again.
+ * and alerts - again, within about 5 seconds (Android's alarm minimum), whenever the
+ * workout is composed again.
  *
  * The one exception is within a single visit: a `-15s` that moves the end from
  * the future into the past while the alarm for the old end is still pending
  * (implementation review round 6, I-1). The rest is over now, so the alert is
  * due now: the single alarm is rescheduled to that past end and fires once,
- * at once, instead of up to 15 s late. The previous end is tracked per
+ * within about 5 seconds (Android's alarm minimum for an alarm set in the past),
+ * instead of up to 15 s late. The previous end is tracked per
  * composition, so re-entering a screen whose rest had already ended has none
  * and schedules nothing. [now] is overridable so a test can pin the clock.
  */

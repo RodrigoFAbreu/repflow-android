@@ -15,7 +15,8 @@ import java.time.Instant
  * Functional review round 2, P-1: composing the workout while the rest has
  * already ended - going back from `Why >`, or `Resume` from Home - must not
  * schedule the OS alarm again, whatever path composes it. A past-due exact
- * alarm fires at once and alerts a second time.
+ * alarm fires again, within about 5 seconds (Android's alarm minimum), and alerts a
+ * second time.
  */
 @RunWith(AndroidJUnit4::class)
 class RestAlarmEffectTest {
@@ -70,7 +71,7 @@ class RestAlarmEffectTest {
 
     /** Implementation review round 6, I-1: the pending alarm is for the old end, so it is brought forward, once. */
     @Test
-    fun anAdjustmentThatCutsARunningRestShortFiresTheAlertOnceAtOnce() {
+    fun anAdjustmentThatCutsARunningRestShortFiresTheAlertOnce() {
         val end = now.plusSeconds(10)
         var endAt by mutableStateOf<Instant?>(end)
         setContent { endAt }

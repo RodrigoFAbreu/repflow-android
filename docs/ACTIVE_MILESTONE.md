@@ -1695,7 +1695,8 @@ it afterwards).
   counting down**. Expect: its alert still fires once at the end.
 - **R3-I1a [BOTH]** (I-1) **WRITES**. Start a rest, wait until under 15 s
   remain, tap `-15s`. Expect: the rest ends at once with **exactly one** alert,
-  immediately (not up to 15 s late), and no second one afterwards.
+  within about 5 seconds (Android's alarm minimum; not up to 15 s late), and no
+  second one afterwards.
 - **R3-I1b [AVD]** (I-1) With more than 15 s left, tap `-15s`: the rest
   shortens, alerts once at the new end. Tap `+15s`: alerts once at the later end.
 
@@ -1756,7 +1757,7 @@ workout, finish or `Abandon` it afterwards.
 3. **[PHONE] R3-P1c. WRITES (same workout).** Start a rest, lock the screen,
    let it end: exactly one alert; unlock and reopen: no second alert.
 4. **[PHONE] R3-I1a. WRITES (same workout).** Start a rest, wait until under 15
-   s remain, tap `-15s`: one alert at once, no second.
+   s remain, tap `-15s`: one alert within about 5 seconds, no second.
 5. **[BOTH] R3-F1/F2/F3/F4** are look-only on the phone if the tester does not
    `Save`; use the AVD for any step marked WRITES.
 
@@ -2007,7 +2008,7 @@ taken, because the handler's documented behaviour is to alert for the rest it
 finds, and the scheduling guard closes every path that creates a past-due alarm.
 A `-15s` tap that moves the end into the past neither schedules nor cancels; the
 alarm already pending for the old end is left alone. (Superseded by the
-implementation review round 6, I-1 below: that case now fires the alert at once.) R2-F-4: the message is
+implementation review round 6, I-1 below: that case now fires one alert, within about 5 seconds (round 3, R3-F-1).) R2-F-4: the message is
 corrected rather than hidden until touched. J9's decisions (exact alarm, the
 one-time explanation, the inexact fallback, the `rest_timer` sound, explicit
 vibration) are unchanged.
@@ -2026,7 +2027,7 @@ Optional** on the round 2 fixes. The orchestrator chose the behaviour for I-1
 
 | Finding | Disposition | Commit |
 |---|---|---|
-| I-1 `-15s` that ends the rest leaves the old alarm pending (alert up to 15 s late) | validated: `RestTimer.withRemovedSeconds` clamps to the domain clock, so by the time the effect runs the new end is past and the old alarm (for the old, future end) stayed. `RestAlarmEffect` now remembers the previous end within the composition; when it was still in the future and the new end is not, it reschedules the single alarm to the past end, which fires once, at once (revision 5's behaviour). Re-entry has no previous end and still schedules nothing (P-1). `RestAlarmEffectTest` asserts both (6 tests); the I-1 test fails on the previous code (`D114` amended) | `982868c` |
+| I-1 `-15s` that ends the rest leaves the old alarm pending (alert up to 15 s late) | validated: `RestTimer.withRemovedSeconds` clamps to the domain clock, so by the time the effect runs the new end is past and the old alarm (for the old, future end) stayed. `RestAlarmEffect` now remembers the previous end within the composition; when it was still in the future and the new end is not, it reschedules the single alarm to the past end, which fires once, within about 5 seconds because of Android's alarm minimum (revision 5's behaviour; wording corrected in round 3, R3-F-1). Re-entry has no previous end and still schedules nothing (P-1). `RestAlarmEffectTest` asserts both (6 tests); the I-1 test fails on the previous code (`D114` amended) | `982868c` |
 | O-1 "the next rest start asks again" overstated | reworded in the route KDoc, `D114` and the test name: a new set replaces a rest that is still in the session, so the ask repeats only after the rest has gone away and come back (`Skip rest`, or leaving and re-entering the workout) | `946c8f5` |
 | O-2 exercise-editor scroll test could not fail | the screen is composed in a 260 dp box so the name scrolls away; verified to fail with `bringIntoViewWhen` removed | `8c4698f` |
 | O-3 P-1 test covers the effect, not the route's use of it | no change, as the reviewer says; round 3's phone re-test covers the real path | - |
