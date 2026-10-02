@@ -6,12 +6,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
 import com.repflow.app.domain.exercise.ExerciseTrackingType
@@ -313,6 +315,66 @@ class TrainingPlanEditorScreenTest {
         composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_picker_title))
             .assertDoesNotExist()
+    }
+
+    @Test
+    fun aRowsWarmupCountAgreesInNumber() {
+        fun row(
+            id: Long,
+            warmups: String,
+        ) = PlannedExerciseRowUiState(
+            rowId = id,
+            exerciseId = "ex-$id",
+            exerciseName = "Exercise $id",
+            trackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
+            targetSetsText = "3",
+            repMinText = "8",
+            repMaxText = "12",
+            targetWarmupSetsText = warmups,
+        )
+        setContent(TrainingPlanEditorUiState(rows = listOf(row(1L, "1"), row(2L, "2"))))
+
+        composeRule.onNode(hasText("1 warm-up", substring = true) and !hasText("warm-ups", substring = true)).assertIsDisplayed()
+        composeRule.onNode(hasText("2 warm-ups", substring = true)).assertIsDisplayed()
+    }
+
+    @Test
+    fun dismissingThePickerWithoutAChoiceRemovesTheBlankRow() {
+        var removed: Long? = null
+        val row = PlannedExerciseRowUiState(rowId = 7L)
+        setContent(
+            TrainingPlanEditorUiState(rows = listOf(row), availableExercises = pickerOptions()),
+            rowActions = noOpRowActions().copy(onRemove = { removed = it }),
+        )
+
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_select_exercise_placeholder))
+            .performClick()
+        // The sheet is its own window, so the key event goes through Espresso rather than the activity's dispatcher.
+        Espresso.pressBack()
+        composeRule.waitForIdle()
+
+        assertEquals(7L, removed)
+    }
+
+    @Test
+    fun creatingANewExerciseFromThePickerRemovesTheBlankRow() {
+        var removed: Long? = null
+        var created = false
+        val row = PlannedExerciseRowUiState(rowId = 7L)
+        setContent(
+            TrainingPlanEditorUiState(rows = listOf(row), availableExercises = pickerOptions()),
+            rowActions = noOpRowActions().copy(onRemove = { removed = it }),
+            onCreateExerciseClick = { created = true },
+        )
+
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_select_exercise_placeholder))
+            .performClick()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_picker_create)).performClick()
+
+        assertEquals(7L, removed)
+        assertEquals(true, created)
     }
 
     @Test

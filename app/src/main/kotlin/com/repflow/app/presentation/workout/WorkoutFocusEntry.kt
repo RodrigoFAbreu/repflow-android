@@ -201,7 +201,17 @@ private fun WeightCard(
     val label = stringResource(R.string.workout_active_load_label)
     StepperCard(
         label = label,
-        caption = stringResource(R.string.workout_focus_weight_caption, RepFlowStepperMath.format(step)),
+        caption =
+            stringResource(
+                if (step.compareTo(BigDecimal.ONE) ==
+                    0
+                ) {
+                    R.string.workout_focus_weight_caption_one
+                } else {
+                    R.string.workout_focus_weight_caption
+                },
+                RepFlowStepperMath.format(step),
+            ),
         modifier = modifier,
     ) {
         RepFlowStepper(

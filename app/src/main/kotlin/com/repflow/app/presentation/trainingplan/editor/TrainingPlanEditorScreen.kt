@@ -110,24 +110,54 @@ fun TrainingPlanEditorScreen(
 
     val pickingFor = pickerRowId
     if (isReady && pickingFor != null) {
-        ExercisePickerSheet(
-            options = uiState.availableExercises,
-            onSelect = { exerciseId ->
-                rowActions.onExerciseSelected(pickingFor, exerciseId)
+        PickerHost(
+            uiState = uiState,
+            rowId = pickingFor,
+            rowActions = rowActions,
+            onChosen = {
                 expandedRowId = pickingFor
                 pickerRowId = null
             },
-            onCreateExerciseClick = {
-                pickerRowId = null
-                onCreateExerciseClick()
-            },
-            onDismissRequest = { pickerRowId = null },
+            onClosed = { pickerRowId = null },
+            onCreateExerciseClick = onCreateExerciseClick,
         )
     }
 
     if (uiState.isDiscardDialogVisible) {
         DiscardDialog(onDiscardConfirmed, onDiscardCancelled)
     }
+}
+
+/**
+ * The exercise picker for [rowId]. Closing it without a choice - dismissing it,
+ * or leaving for `Create a new exercise` - removes that row if it is still
+ * blank, so no empty "Select an exercise" row is left behind (functional review A1).
+ */
+@Composable
+private fun PickerHost(
+    uiState: TrainingPlanEditorUiState,
+    rowId: Long,
+    rowActions: TrainingPlanEditorRowActions,
+    onChosen: () -> Unit,
+    onClosed: () -> Unit,
+    onCreateExerciseClick: () -> Unit,
+) {
+    fun closeWithoutChoice() {
+        if (uiState.rows.any { it.rowId == rowId && it.exerciseId == null }) rowActions.onRemove(rowId)
+        onClosed()
+    }
+    ExercisePickerSheet(
+        options = uiState.availableExercises,
+        onSelect = { exerciseId ->
+            rowActions.onExerciseSelected(rowId, exerciseId)
+            onChosen()
+        },
+        onCreateExerciseClick = {
+            closeWithoutChoice()
+            onCreateExerciseClick()
+        },
+        onDismissRequest = ::closeWithoutChoice,
+    )
 }
 
 private fun editorTitleRes(mode: TrainingPlanEditorMode): Int =

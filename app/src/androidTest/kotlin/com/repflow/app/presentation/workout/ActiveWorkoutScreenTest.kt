@@ -2,6 +2,10 @@ package com.repflow.app.presentation.workout
 
 import androidx.activity.ComponentActivity
 import androidx.annotation.StringRes
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -20,6 +24,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.width
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
@@ -774,5 +780,49 @@ class ActiveWorkoutScreenTest {
 
         node(R.string.workout_finish_title).assertIsDisplayed()
         assertTrue(completed.isEmpty())
+    }
+
+    /** `Skip rest` must read in full on a 384dp phone, not wrap to "Skip" (functional review A2). */
+    @Test
+    fun theRestStripsSkipLabelFitsOnOneLineAt384dp() {
+        composeRule.setContent {
+            RepFlowTheme {
+                Box(Modifier.width(384.dp)) {
+                    RestTimerBar(
+                        timer = RestTimerUi(endAt = Instant.now().plusSeconds(90), totalDurationSeconds = 90),
+                        onAddRestTime = {},
+                        onRemoveRestTime = {},
+                        onSkipRestTimer = {},
+                    )
+                }
+            }
+        }
+
+        val results = mutableListOf<TextLayoutResult>()
+        val node = composeRule.onNodeWithText(composeRule.activity.getString(R.string.workout_rest_skip))
+        node.assertIsDisplayed()
+        node
+            .fetchSemanticsNode()
+            .config[SemanticsActions.GetTextLayoutResult]
+            .action
+            ?.invoke(results)
+        assertEquals(1, results.single().lineCount)
+    }
+
+    /** A one-kilo step reads "1 step", not "1 steps" (functional review A3). */
+    @Test
+    fun theWeightCaptionIsSingularForAOneKiloStep() {
+        val base = exercise(ExerciseTrackingType.WEIGHT_AND_REPS)
+        setContent(base.copy(defaultLoadIncrement = java.math.BigDecimal.ONE))
+
+        composeRule.onNodeWithText("kg · 1 step").assertIsDisplayed()
+    }
+
+    @Test
+    fun theWeightCaptionStaysPluralForOtherSteps() {
+        val base = exercise(ExerciseTrackingType.WEIGHT_AND_REPS)
+        setContent(base.copy(defaultLoadIncrement = java.math.BigDecimal("2.5")))
+
+        composeRule.onNodeWithText("kg · 2.5 steps").assertIsDisplayed()
     }
 }

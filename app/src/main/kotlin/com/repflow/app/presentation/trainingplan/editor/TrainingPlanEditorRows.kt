@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -179,8 +180,8 @@ private fun RowMeta(row: PlannedExerciseRowUiState) {
     val parts =
         listOfNotNull(
             target,
-            row.targetWarmupSetsText.trim().takeIf { (it.toIntOrNull() ?: 0) > 0 }?.let {
-                stringResource(R.string.training_plan_editor_row_meta_warmup, it)
+            row.targetWarmupSetsText.trim().toIntOrNull()?.takeIf { it > 0 }?.let {
+                pluralStringResource(R.plurals.training_plan_editor_row_meta_warmup, it, it)
             },
             row.restSecondsText.trim().takeIf { it.isNotEmpty() }?.let {
                 stringResource(R.string.training_plan_editor_row_meta_rest, it)

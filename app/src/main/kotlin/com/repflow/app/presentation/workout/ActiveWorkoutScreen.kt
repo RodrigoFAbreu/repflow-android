@@ -407,7 +407,7 @@ private fun WorkoutMode(
  * complete` banner (`D58`).
  */
 @Composable
-private fun RestTimerBar(
+internal fun RestTimerBar(
     timer: RestTimerUi,
     onAddRestTime: () -> Unit,
     onRemoveRestTime: () -> Unit,
@@ -516,7 +516,8 @@ private fun RestTimerBar(
                 RepFlowPrimaryButton(
                     text = stringResource(R.string.workout_rest_skip),
                     onClick = onSkipRestTimer,
-                    modifier = Modifier.weight(1f).height(RestStripButtonHeight),
+                    // Wider than the two nudges so `Skip rest` stays on one line at 384dp.
+                    modifier = Modifier.weight(REST_STRIP_SKIP_WEIGHT).height(RestStripButtonHeight),
                 )
             }
         }
@@ -562,6 +563,8 @@ private val RestTimerTrackHeight = 4.dp
 private val RestTimerTrackGap = 0.dp
 
 /** `margin:0 12px 10px` and `padding:12px 14px`. */
+private const val REST_STRIP_SKIP_WEIGHT = 1.7f
+
 private val RestStripSideMargin = 12.dp
 private val RestStripBottomMargin = 10.dp
 private val RestStripHorizontalPadding = 14.dp

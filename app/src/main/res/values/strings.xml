@@ -208,7 +208,10 @@
     <string name="training_plan_editor_exercises_count">%1$s · %2$s</string>
     <string name="training_plan_editor_row_meta_reps">%1$s × %2$s–%3$s reps</string>
     <string name="training_plan_editor_row_meta_duration">%1$s × %2$s–%3$s s</string>
-    <string name="training_plan_editor_row_meta_warmup">%1$s warm-up</string>
+    <plurals name="training_plan_editor_row_meta_warmup">
+        <item quantity="one">%d warm-up</item>
+        <item quantity="other">%d warm-ups</item>
+    </plurals>
     <string name="training_plan_editor_row_meta_rest">%1$ss rest</string>
     <string name="training_plan_editor_row_needs_attention">Check this exercise\'s targets.</string>
     <string name="training_plan_editor_row_optional_badge">optional</string>
@@ -498,6 +501,7 @@
     <string name="workout_focus_correct_title">Set %1$d</string>
     <string name="workout_focus_correct_subtitle">%1$s · correct what you actually lifted</string>
     <string name="workout_focus_correct_save">Save the correction</string>
+    <string name="workout_focus_weight_caption_one">kg · %1$s step</string>
     <string name="workout_focus_weight_caption">kg · %1$s steps</string>
     <string name="workout_focus_reps_target">target %1$d–%2$d</string>
     <string name="workout_focus_seconds_target">target %1$d–%2$d s</string>
