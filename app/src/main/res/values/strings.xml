@@ -442,6 +442,10 @@
     <string name="home_error_plan_not_found">That plan is no longer available.</string>
     <string name="home_error_unknown">Something went wrong. Try again.</string>
 
+    <string name="workout_exact_alarm_title">Allow exact rest alerts?</string>
+    <string name="workout_exact_alarm_message">Without Alarms &amp; reminders, Android can delay the end-of-rest alert by minutes while your phone is locked. Allow it for RepFlow so the buzz arrives on time. If you skip this, rest alerts still work, just less precisely.</string>
+    <string name="workout_exact_alarm_allow">Allow</string>
+    <string name="workout_exact_alarm_not_now">Not now</string>
     <string name="workout_abandon_confirm_title">Abandon this workout?</string>
     <string name="workout_abandon_confirm_message">It will be marked abandoned and left out of History. The sets logged so far stay stored on this device. This can\'t be undone.</string>
     <string name="workout_abandon_confirm_action">Abandon</string>

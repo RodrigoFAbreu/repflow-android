@@ -41,6 +41,18 @@ fun shouldRequestNotificationPermission(
 ): Boolean = notificationEnabled == true && sdkInt >= Build.VERSION_CODES.TIRAMISU && !isPermissionGranted
 
 /**
+ * Whether to offer the exact-alarm explanation (functional review J9): only on
+ * Android 12+, where the grant exists, while exact alarms are not allowed, and
+ * only once - a refusal is respected, and the alert keeps working, inexactly,
+ * without it.
+ */
+fun shouldOfferExactAlarmPrompt(
+    sdkInt: Int,
+    canScheduleExactAlarms: Boolean,
+    alreadyPrompted: Boolean,
+): Boolean = sdkInt >= Build.VERSION_CODES.S && !canScheduleExactAlarms && !alreadyPrompted
+
+/**
  * The usage the rest-end buzz carries: notification usage, so a backgrounded
  * app's vibration is not dropped and the system's own silent-mode and
  * notification-intensity settings still apply. API 33+ takes it as a

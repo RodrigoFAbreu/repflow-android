@@ -5,19 +5,26 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.repflow.app.R
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSessionId
@@ -70,8 +77,9 @@ fun ActiveWorkoutRoute(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val notificationEnabled by viewModel.notificationEnabled.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    var notificationPromptResolved by remember { mutableIntStateOf(0) }
     val notificationPermissionLauncher =
-        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { notificationPromptResolved++ }
 
     val restTimer = (uiState.content as? ActiveWorkoutContent.Active)?.restTimer
     LaunchedEffect(restTimer?.endAt) {
@@ -80,6 +88,10 @@ fun ActiveWorkoutRoute(
             return@LaunchedEffect
         }
         RestTimerAlarmScheduler.schedule(context, restTimer.endAt)
+    }
+    // Coming back from the system's `Alarms & reminders` screen with the grant: re-arm this rest exactly.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        restTimer?.let { RestTimerAlarmScheduler.schedule(context, it.endAt) }
     }
     RestTimerPermissionPromptEffect(
         restTimerEndAt = restTimer?.endAt,
@@ -94,6 +106,12 @@ fun ActiveWorkoutRoute(
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         },
+    )
+
+    ExactAlarmPrompt(
+        restTimerEndAt = restTimer?.endAt,
+        notificationEnabled = notificationEnabled,
+        notificationPromptResolved = notificationPromptResolved,
     )
 
     CreatedExerciseEffect(
@@ -126,6 +144,67 @@ fun ActiveWorkoutRoute(
         onWorkoutFinished = onWorkoutFinished,
         keepScreenAwake = settings?.keepScreenAwake == true,
         confirmBeforeFinishing = settings?.confirmBeforeFinishing,
+    )
+}
+
+/**
+ * Explains and offers the `Alarms & reminders` grant (functional review J9):
+ * without it the rest-end alert is scheduled inexactly and can arrive minutes
+ * late - exactly when the phone is locked between sets. Offered **once**, when
+ * a rest first runs and exact alarms are not allowed, after any
+ * `POST_NOTIFICATIONS` request has been answered so the two never stack.
+ * `Not now` is respected for good; the alert keeps working, inexactly.
+ */
+@Composable
+private fun ExactAlarmPrompt(
+    restTimerEndAt: Instant?,
+    notificationEnabled: Boolean?,
+    notificationPromptResolved: Int,
+) {
+    val context = LocalContext.current
+    var visible by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(restTimerEndAt, notificationEnabled, notificationPromptResolved) {
+        if (restTimerEndAt == null || notificationEnabled == null) return@LaunchedEffect
+        val notificationAskPending =
+            shouldRequestNotificationPermission(
+                notificationEnabled,
+                Build.VERSION.SDK_INT,
+                Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                    PackageManager.PERMISSION_GRANTED,
+            )
+        if (!notificationAskPending &&
+            shouldOfferExactAlarmPrompt(
+                Build.VERSION.SDK_INT,
+                RestTimerAlarmScheduler.canScheduleExact(context),
+                RestTimerAlarmScheduler.exactAlarmPrompted(context),
+            )
+        ) {
+            visible = true
+        }
+    }
+    if (!visible) return
+
+    fun close() {
+        RestTimerAlarmScheduler.markExactAlarmPrompted(context)
+        visible = false
+    }
+    AlertDialog(
+        onDismissRequest = ::close,
+        title = { Text(stringResource(R.string.workout_exact_alarm_title)) },
+        text = { Text(stringResource(R.string.workout_exact_alarm_message)) },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val settings = RestTimerAlarmScheduler.exactAlarmSettingsIntent(context)
+                    close()
+                    settings?.let { runCatching { context.startActivity(it) } }
+                },
+            ) { Text(stringResource(R.string.workout_exact_alarm_allow)) }
+        },
+        dismissButton = {
+            TextButton(onClick = ::close) { Text(stringResource(R.string.workout_exact_alarm_not_now)) }
+        },
     )
 }
 

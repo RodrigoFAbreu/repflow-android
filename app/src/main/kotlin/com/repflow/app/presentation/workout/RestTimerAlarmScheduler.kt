@@ -4,7 +4,9 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.annotation.VisibleForTesting
 import java.time.Instant
 
@@ -20,6 +22,8 @@ import java.time.Instant
  */
 object RestTimerAlarmScheduler {
     private const val REQUEST_CODE = 2001
+    private const val PREFS_NAME = "rest_alert"
+    private const val KEY_EXACT_PROMPTED = "exact_alarm_prompted"
 
     fun schedule(
         context: Context,
@@ -27,9 +31,7 @@ object RestTimerAlarmScheduler {
     ) {
         val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return
         val pendingIntent = pendingIntent(context)
-        val canScheduleExact =
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
-        if (canScheduleExact) {
+        if (canScheduleExact(context)) {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, endAt.toEpochMilli(), pendingIntent)
         } else {
             // No SCHEDULE_EXACT_ALARM grant: fall back to an inexact alarm rather than crashing or
@@ -37,6 +39,29 @@ object RestTimerAlarmScheduler {
             alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, endAt.toEpochMilli(), pendingIntent)
         }
     }
+
+    /** Whether the alarm will fire at the exact second: below Android 12 always, otherwise only with the `Alarms & reminders` grant. */
+    fun canScheduleExact(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+        return context.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() == true
+    }
+
+    /** The system screen where the user can allow exact alarms for this app (Android 12+); `null` below that. */
+    fun exactAlarmSettingsIntent(context: Context): Intent? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}"))
+        } else {
+            null
+        }
+
+    /** Whether the explanation has already been offered once (a plain flag on this device; no schema). */
+    fun exactAlarmPrompted(context: Context): Boolean = prefs(context).getBoolean(KEY_EXACT_PROMPTED, false)
+
+    fun markExactAlarmPrompted(context: Context) {
+        prefs(context).edit().putBoolean(KEY_EXACT_PROMPTED, true).apply()
+    }
+
+    private fun prefs(context: Context) = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     fun cancel(context: Context) {
         val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return

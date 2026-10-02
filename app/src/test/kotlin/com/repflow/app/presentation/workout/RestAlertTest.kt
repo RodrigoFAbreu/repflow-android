@@ -31,6 +31,16 @@ class RestAlertTest {
     }
 
     @Test
+    fun `the exact alarm explanation is offered once, on Android 12 and later, only while exact alarms are not allowed`() {
+        assertTrue(shouldOfferExactAlarmPrompt(Build.VERSION_CODES.S, canScheduleExactAlarms = false, alreadyPrompted = false))
+        assertTrue(shouldOfferExactAlarmPrompt(36, canScheduleExactAlarms = false, alreadyPrompted = false))
+        // Already allowed, already offered, or no such grant below Android 12: never.
+        assertFalse(shouldOfferExactAlarmPrompt(36, canScheduleExactAlarms = true, alreadyPrompted = false))
+        assertFalse(shouldOfferExactAlarmPrompt(36, canScheduleExactAlarms = false, alreadyPrompted = true))
+        assertFalse(shouldOfferExactAlarmPrompt(Build.VERSION_CODES.R, canScheduleExactAlarms = false, alreadyPrompted = false))
+    }
+
+    @Test
     fun `with notification on, a prompt only on API 33 and later without the grant`() {
         assertTrue(shouldRequestNotificationPermission(true, Build.VERSION_CODES.TIRAMISU, isPermissionGranted = false))
         assertTrue(shouldRequestNotificationPermission(true, 35, isPermissionGranted = false))
