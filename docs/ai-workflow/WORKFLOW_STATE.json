@@ -1481,7 +1481,7 @@
         "recorded_at": "2026-10-01T02:05:53+01:00"
       },
       "technical_approval": {
-        "status": "CURRENT",
+        "status": "STALE",
         "basis": "EXTERNAL_APPROVE",
         "reviewed_bundle_id": "e8483f0cfa65a3857b55c7cb7d67688ae5c8039698166f6766f42a33b2071eb0",
         "approved_review_content_id": "52de5d4134c36f45b7cdb4e68f2ca7ac9dc4616ab79e592243b8160b8c88e4cf",
@@ -3161,8 +3161,8 @@
       },
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 115,
-      "last_transition": "2026-10-02T22:28:23+01:00"
+      "state_revision": 116,
+      "last_transition": "2026-10-03T00:20:15+01:00"
     },
     "repflow-redesign-visual-foundation-remediation-1-remediation-1": {
       "work_item_type": "product",
