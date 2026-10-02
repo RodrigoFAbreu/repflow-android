@@ -55,8 +55,9 @@ import java.util.UUID
  * Since the self-review the handler alerts only while an active session still
  * has a running rest, so each case first gives the app's own database one -
  * written through a second Room instance on the same file, the app graph
- * having no test hook - and afterwards abandons the session it started, or
- * restores the one it found.
+ * having no test hook - and afterwards deletes the session it started, so no
+ * row is left behind in the installed app's database, or restores the one it
+ * found (implementation-review revision 1's O2).
  */
 @RunWith(AndroidJUnit4::class)
 class RestTimerReceiverDeliveryTest {
@@ -92,8 +93,16 @@ class RestTimerReceiverDeliveryTest {
         originalNotificationSwitch?.let(::setNotificationSwitch)
         if (::appDatabase.isInitialized) {
             runBlocking {
-                sessionStarted?.let { started -> workouts.update(started.abandon(Instant.now()).successValue()) }
                 sessionFound?.let { found -> workouts.update(found) }
+            }
+            // The session this case inserted has no exercises or sets, so its
+            // one row is all there is to remove. The app has no single-session
+            // delete, hence plain SQL on the test's own connection.
+            sessionStarted?.let { started ->
+                appDatabase.openHelper.writableDatabase.execSQL(
+                    "DELETE FROM workout_sessions WHERE id = ?",
+                    arrayOf<Any>(started.id.value),
+                )
             }
             appDatabase.close()
         }

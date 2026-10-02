@@ -113,6 +113,28 @@ class SettingsPersistenceTest {
             assertEquals(customised, settings.get())
         }
 
+    /**
+     * Implementation-review revision 1's O3: [TRAINING_TABLES] - and so the
+     * erase and restore tests above, and `TrainingDataDao`'s hand-listed
+     * deletes they exercise - must cover every table the schema registers
+     * except `settings` and SQLite's/Room's own bookkeeping. A training table
+     * added later fails here until it joins the list, and then fails the erase
+     * test until the scoped clear deletes it.
+     */
+    @Test
+    fun theTrainingTablesAreEveryRegisteredTableButTheSettings() {
+        val registered =
+            database.openHelper.readableDatabase
+                .query("SELECT name FROM sqlite_master WHERE type = 'table'")
+                .use { cursor -> generateSequence { if (cursor.moveToNext()) cursor.getString(0) else null }.toSet() }
+        val bookkeeping = setOf("settings", "room_master_table", "android_metadata")
+
+        assertEquals(
+            TRAINING_TABLES.toSet(),
+            registered.filterNot { it in bookkeeping || it.startsWith("sqlite_") }.toSet(),
+        )
+    }
+
     private fun count(tableAndWhere: String): Int =
         database.openHelper.readableDatabase.query("SELECT COUNT(*) FROM $tableAndWhere").use { cursor ->
             cursor.moveToFirst()
