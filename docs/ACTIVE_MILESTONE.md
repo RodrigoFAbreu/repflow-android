@@ -15,8 +15,10 @@ explicitly** — `active_work_item_id` still points at the parent.
   (CP1–CP16, executed in array order).
 - **Current checkpoint: CP16 — Verification, side-by-side validation, and
   decision updates: complete. All sixteen checkpoints are done.** The
-  self-review of the full milestone diff and the full gate are done (below);
-  next is the external implementation review of revision 1.
+  self-review of the full milestone diff and the full gate are done (below).
+  Implementation review of revision 1 returned REVISE (0 Blocking, 1
+  Important, 9 Optional); it is applied (below), and next is the review of
+  revision 2.
 
 ### Self-review of the full milestone diff (2026-10-02)
 
@@ -101,6 +103,77 @@ record:**
   outside `presentation` 84): **275 tests, 0 failures, 0 errors, 0 skipped**
   (CP16's 269 plus the six new ones).
 - This is emulator evidence. The device coverage is CP16's SM-S928B runs.
+
+### Implementation review of revision 1 — applied (2026-10-02)
+
+`/review-implementation`'s verdict on revision 1 (bundle `73268b76`,
+`review_content_id` `aee0ca19`): **REVISE, 0 Blocking, 1 Important, 9
+Optional**, plus missing-test notes. Each finding was checked against the
+code before acting.
+
+**Fixed:**
+
+- **I1 — focus `Next ›` was a dead button on the last unfinished exercise**
+  (`7c530e0`). Reproduced: `nextUnfinishedExercise` wrapped round to the
+  focused exercise itself, and `WorkoutFocusModelTest` pinned that. Plan CP8
+  item 9 says `Next ›` there returns to the board with the finish sheet
+  (CP9 item 1). The function now never answers the current exercise, so
+  `Next ›` sends the one finish request when no *other* exercise is
+  unfinished. New screen test
+  `nextOnTheLastUnfinishedExerciseReturnsToTheBoardWithTheFinishSheetRaised`
+  fails against the old function.
+- **O1 — a failed read in the rest receiver crashed the backgrounded app**
+  (`b619334`). The receiver now launches through `launchRestAlert`, whose
+  scope has a `CoroutineExceptionHandler` that logs the failure and skips
+  the alert; the pending broadcast is still finished. The reviewer's narrow
+  `SQLiteException` catch inside the handler was tried first and failed
+  `LayerBoundaryTest`: `presentation` may not import `android.database`.
+  This is the root coroutine's failure sink, not a `catch` around suspend
+  work, and cancellation never reaches it. Two new `RestTimerExpiryHandlerTest`
+  cases cover a failed session read and a failed settings read.
+- **O2 — the delivery test left an `ABANDONED` row in the installed app's
+  database** (`c0d890f`). It now deletes the session it inserted.
+- **O3 — no guard that the scoped clear covers every training table**
+  (`c0d890f`). `SettingsPersistenceTest` now compares `TRAINING_TABLES` with
+  every table in `sqlite_master` except `settings` and the bookkeeping
+  tables.
+- **O8 — recovery `Save entry` was enabled while a new date loaded**
+  (`51031b1`). It is now disabled while loading; new screen test.
+- **Missing test — the finish confirm's state machine** (`eaa3401`). Two JVM
+  tests: success ends `Finished(id)` with a second in-flight confirm ignored
+  (fails with the guard removed), and a failure returns to `Idle` with
+  `NOT_FOUND`.
+
+**Not changed, recorded for the functional review** (each is optional, and
+fixing it would add behaviour the plan does not specify):
+
+- **O4 — Home shows the start card when the active-session read fails.** A
+  distinct failure state is a new Home state with its own copy. It needs a
+  storage failure; `Start workout` then fails with "already active", so no
+  data is lost.
+- **O5 — a failed readiness read leaves the recovery card without a
+  message.** A message or retry is new copy and behaviour.
+- **O6 — the recommendation screen's readiness block reads today's
+  check-in,** while the policy uses the latest entry. The policy's own
+  reasons, which the screen also shows, explain the outcome correctly.
+- **O7 — focus mode drops the suggestion strip for an exercise archived
+  mid-workout.** Looking the recommendation up independently of the picker
+  needs a new read path; the strip is advisory and `Why ›` stays reachable
+  from History.
+- **O9 — optional plan-row values can be stepped to 0 but not back to
+  blank.** Focus mode treats 0 and blank alike, so nothing visible changes.
+
+**Gate after the fixes, on the committed tree:**
+
+- `./gradlew --rerun-tasks spotlessCheck detekt lintDebug testDebugUnitTest
+  assembleDebugAndroidTest`: **BUILD SUCCESSFUL.**
+- JVM: **623 tests in 101 classes, 0 failures** (621 plus the two
+  finish-state tests).
+- Lint: **0 errors, 21 warnings, 1 hint** (the baseline). detekt: **0**.
+- `connectedDebugAndroidTest` on **`RepFlow_S24Ultra_384dp_API36`** (AVD), in
+  three package groups covering all 40 classes: `data` + `infrastructure` 85,
+  `presentation.workout` 59, the rest of `presentation` 136. **280 tests, 0
+  failures, 0 errors, 0 skipped** (275 plus the five new tests).
 
 ### CP16 — what was done and verified (2026-10-02)
 
