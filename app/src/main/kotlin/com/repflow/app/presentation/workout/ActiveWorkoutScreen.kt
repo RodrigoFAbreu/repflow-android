@@ -59,6 +59,7 @@ import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
 import com.repflow.app.presentation.designsystem.repFlowSecondaryTextColor
 import com.repflow.app.presentation.progression.ProgressionRecommendationUi
 import com.repflow.app.presentation.progression.labelRes
+import com.repflow.app.presentation.progression.reasonAfterDash
 
 /**
  * Stateless workout surface: state in, events out. Since remediation-1 CP7 it
@@ -616,7 +617,7 @@ internal fun RecommendationRow(
 @Composable
 internal fun recommendationSummary(recommendation: ProgressionRecommendationUi): String =
     stringResource(recommendation.result.labelRes()) +
-        (recommendation.topReason?.let { " — $it" } ?: "") +
+        (recommendation.topReason?.let { " — ${reasonAfterDash(it)}" } ?: "") +
         if (recommendation.isOverridden) " (${stringResource(R.string.progression_overridden)})" else ""
 
 /** `6b`'s 44 tap-target floor. */

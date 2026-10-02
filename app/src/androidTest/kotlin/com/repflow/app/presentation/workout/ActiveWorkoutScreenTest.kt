@@ -451,7 +451,7 @@ class ActiveWorkoutScreenTest {
         composeRule.onNodeWithText(composeRule.activity.getString(R.string.workout_active_add_exercise)).performScrollTo().performClick()
         composeRule
             .onNodeWithText(
-                composeRule.activity.getString(R.string.progression_result_increase_load) + " — Every working set reached 8+ reps",
+                composeRule.activity.getString(R.string.progression_result_increase_load) + " — every working set reached 8+ reps",
             ).assertIsDisplayed()
         composeRule.onNodeWithText(composeRule.activity.getString(R.string.progression_result_maintain_load)).assertDoesNotExist()
         composeRule.onNodeWithText(composeRule.activity.getString(R.string.progression_result_reduce_load)).assertDoesNotExist()
@@ -590,7 +590,7 @@ class ActiveWorkoutScreenTest {
 
         composeRule
             .onNodeWithText(
-                composeRule.activity.getString(R.string.progression_result_increase_load) + " — Every working set reached 8+ reps",
+                composeRule.activity.getString(R.string.progression_result_increase_load) + " — every working set reached 8+ reps",
             ).performScrollTo()
             .assertIsDisplayed()
         composeRule

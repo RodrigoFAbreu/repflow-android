@@ -22,6 +22,7 @@ import com.repflow.app.domain.workout.WorkoutSessionStatus
 import com.repflow.app.domain.workout.WorkoutSet
 import com.repflow.app.domain.workout.WorkoutSetId
 import com.repflow.app.presentation.navigation.RepFlowDestinations
+import com.repflow.app.presentation.progression.reasonAfterDash
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -107,6 +108,8 @@ class WorkoutDoneTest {
             workouts.insert(session)
             recommendations.insert(recommendation("current", squat, endedAt.plusSeconds(1)))
             recommendations.insert(recommendation("stale", plank, endedAt.minusSeconds(86_400)))
+            // Computed at completion for an exercise nothing was logged on: not listed (functional review J2).
+            recommendations.insert(recommendation("untrained", plank, endedAt.plusSeconds(1), ProgressionResult.WaitForMoreData))
             val viewModel =
                 WorkoutDoneViewModel(
                     savedStateHandle = SavedStateHandle(mapOf(RepFlowDestinations.WORKOUT_DONE_ARG to session.id.value)),
@@ -128,6 +131,13 @@ class WorkoutDoneTest {
                 cancelAndIgnoreRemainingEvents()
             }
         }
+
+    @Test
+    fun aReasonContinuesTheLineAfterTheDashInLowerCase() {
+        assertEquals("fewer than 2 working sets recorded", reasonAfterDash("Fewer than 2 working sets recorded"))
+        assertEquals("pain while walking is elevated (4/5)", reasonAfterDash("Pain while walking is elevated (4/5)"))
+        assertEquals("", reasonAfterDash(""))
+    }
 
     @Test
     fun anIdWithNoCompletedSessionIsNotFound() =
@@ -224,12 +234,13 @@ class WorkoutDoneTest {
         id: String,
         exerciseId: ExerciseId,
         computedAt: Instant,
+        result: ProgressionResult = ProgressionResult.MaintainLoad,
     ): ProgressionRecommendation =
         success(
             ProgressionRecommendation.create(
                 id = ProgressionRecommendationId(id),
                 exerciseId = exerciseId,
-                result = ProgressionResult.MaintainLoad,
+                result = result,
                 reasons = listOf("Average RPE was 8."),
                 policyVersion = 1,
                 computedAt = computedAt,

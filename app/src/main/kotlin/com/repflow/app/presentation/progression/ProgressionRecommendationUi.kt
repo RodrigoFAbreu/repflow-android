@@ -79,3 +79,10 @@ fun ProgressionResultUi.labelRes(): Int =
         ProgressionResultUi.RECOVERY_ADJUSTMENT -> R.string.progression_result_recovery_adjustment
         ProgressionResultUi.WAIT_FOR_MORE_DATA -> R.string.progression_result_wait_for_more_data
     }
+
+/**
+ * The policy writes each reason as its own sentence (`Fewer than 2 working
+ * sets recorded`); after a dash it continues the line, so its first letter
+ * drops to lower case: `Not enough data yet — fewer than 2 working sets recorded`.
+ */
+internal fun reasonAfterDash(reason: String): String = reason.replaceFirstChar { it.lowercase() }

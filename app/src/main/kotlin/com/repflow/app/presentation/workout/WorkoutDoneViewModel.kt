@@ -87,6 +87,9 @@ class WorkoutDoneViewModel
             val endedAt = checkNotNull(summary.session.endedAt)
             return summary.session.exercises
                 .distinctBy { it.exerciseId }
+                // An exercise with no working set this time has nothing to suggest about: its
+                // `Not enough data yet` row is noise, repeated for every exercise left untouched.
+                .filter { exercise -> exercise.sets.any { !it.isWarmup } }
                 .mapNotNull { exercise ->
                     progressionRecommendationRepository
                         .findLatestForExercise(exercise.exerciseId)
