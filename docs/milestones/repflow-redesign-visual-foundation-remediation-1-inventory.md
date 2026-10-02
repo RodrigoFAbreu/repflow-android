@@ -1001,7 +1001,7 @@ written; three findings were fixed rather than recorded:
 Rows flagged for the reviewer by the checkpoint that wrote them stay
 flagged — CP16 does not accept or reword its own milestone's copy: `D38`,
 `D42`, `D47`, `D52`, `D67`, `D73`, `D76`, `D77`, `D82`, `D85`, `D98`, `D101`,
-`D103`, `D105`, `D109`, `D110`. The functional-review fix round (round 1) amended `D42`, `D52`, `D56`, `D67`, `D93` and `D109` in place (each row says so) and added `D113` and `D114`; round 2 amended `D113` and `D114` again, and round 6 amended `D114` (no new id); next free id: **D115**. `O11` and `O12` are closed by the user's
+`D103`, `D105`, `D109`, `D110`. The functional-review fix round (round 1) amended `D42`, `D52`, `D56`, `D67`, `D93` and `D109` in place (each row says so) and added `D113` and `D114`; round 2 amended `D113` and `D114` again, and round 6 amended `D114`, and round 3 of the functional review reworded its alert timing (no new id); next free id: **D115**. `O11` and `O12` are closed by the user's
 2026-10-01 decision, and that decision also defers `D60`'s carry-over to the
 same later remediation child (`IMPROVEMENT_ROADMAP.md` §9.8).
 
