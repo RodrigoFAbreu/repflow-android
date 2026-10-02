@@ -283,8 +283,10 @@ internal fun createdExercisePickerItem(
  * while the Notification switch is on, never before it has loaded, and only
  * on Android 13+ without the grant. Keyed on the rest's end and the switch,
  * so a switch that loads (or turns) on while a rest runs still asks once. A rest
- * that is merely adjusted (`+/-15s`) keeps running and never asks again; the
- * next rest start does (functional review R2-F-5).
+ * that is merely adjusted (`+/-15s`) keeps running and never asks again. It
+ * asks again when the rest goes away and comes back - `Skip rest`, or leaving
+ * and re-entering the workout - not when a new set replaces a rest that is
+ * still in the session, so it is once per visit (functional review R2-F-5).
  * [sdkInt] is the running device's, overridable so a test can drive both
  * sides of the API 33 line on one device.
  */

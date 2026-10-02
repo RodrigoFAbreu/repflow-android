@@ -83,7 +83,7 @@ class RestTimerPermissionPromptEffectTest {
 
     /** Functional review R2-F-5: `+/-15s` changes the rest's end but must not ask again after a denial. */
     @Test
-    fun adjustingARunningRestNeverRequestsAgainButTheNextRestDoes() {
+    fun adjustingARunningRestNeverRequestsAgainButARestThatComesBackAfterSkipDoes() {
         var requests = 0
         var endAt by mutableStateOf<Instant?>(restEnd)
         composeRule.setContent {
