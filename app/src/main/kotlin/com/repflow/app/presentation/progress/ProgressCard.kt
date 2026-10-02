@@ -88,7 +88,7 @@ internal fun ProgressCard(
                 horizontalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapXs),
             ) {
                 Text(
-                    text = plainNumber(latest.value),
+                    text = plainNumber(latest.value, currentLocale()),
                     style = MaterialTheme.typography.displaySmall.copy(fontSize = ValueFontSize, fontFeatureSettings = "tnum"),
                     letterSpacing = ValueLetterSpacing,
                     modifier = Modifier.alignByBaseline(),
@@ -107,7 +107,7 @@ internal fun ProgressCard(
                 text =
                     stringResource(
                         R.string.progress_best,
-                        plainNumber(requireNotNull(series.best)),
+                        plainNumber(requireNotNull(series.best), currentLocale()),
                         units.short,
                         series.window.size,
                     ),
@@ -149,7 +149,13 @@ private fun CardHeader(
         )
         if (delta != null && since != null) {
             Text(
-                text = stringResource(R.string.progress_delta, signedNumber(delta), deltaUnit, sinceDate(since.startedAt, series)),
+                text =
+                    stringResource(
+                        R.string.progress_delta,
+                        signedNumber(delta, currentLocale()),
+                        deltaUnit,
+                        sinceDate(since.startedAt, series),
+                    ),
                 style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
                 color = deltaColor(delta),
                 maxLines = 1,
@@ -206,8 +212,8 @@ private fun BarChart(
             window.size,
             metricLabel(metric),
             window.size,
-            stringResource(R.string.progress_value_with_unit, plainNumber(window.first().value), unit),
-            stringResource(R.string.progress_value_with_unit, plainNumber(window.last().value), unit),
+            stringResource(R.string.progress_value_with_unit, plainNumber(window.first().value, currentLocale()), unit),
+            stringResource(R.string.progress_value_with_unit, plainNumber(window.last().value, currentLocale()), unit),
         )
     Column(modifier = modifier.fillMaxWidth()) {
         Canvas(

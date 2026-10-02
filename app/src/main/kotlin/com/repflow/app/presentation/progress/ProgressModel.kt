@@ -3,8 +3,10 @@ package com.repflow.app.presentation.progress
 import com.repflow.app.application.progress.ProgressPoint
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.text.NumberFormat
 import java.time.YearMonth
 import java.time.ZoneId
+import java.util.Locale
 
 /*
  * The Progress card's plain values (remediation-1 CP15, `4a`), kept out of the
@@ -41,13 +43,23 @@ internal fun barMonthLabels(
     return months.mapIndexed { index, month -> if (index == 0 || month != months[index - 1]) month else null }
 }
 
-/** `82.5`, `80`, `2310` - never `80.0` or `8.25E+1`. */
-internal fun plainNumber(value: BigDecimal): String = value.stripTrailingZeros().toPlainString()
+/** `82.5`, `80`, `2,310` - grouped as History groups its volume, never `80.0` or `8.25E+1`. */
+internal fun plainNumber(
+    value: BigDecimal,
+    locale: Locale,
+): String =
+    NumberFormat
+        .getNumberInstance(locale)
+        .apply { maximumFractionDigits = MAX_FRACTION_DIGITS }
+        .format(value.stripTrailingZeros())
 
 /** The delta always carries its sign, so its direction never rests on colour: `+10`, `+0`, `−2.5` (U+2212, as the done screen writes it). */
-internal fun signedNumber(delta: BigDecimal): String =
-    if (delta.signum() < 0) "$MINUS${plainNumber(delta.negate())}" else "+${plainNumber(delta)}"
+internal fun signedNumber(
+    delta: BigDecimal,
+    locale: Locale,
+): String = if (delta.signum() < 0) "$MINUS${plainNumber(delta.negate(), locale)}" else "+${plainNumber(delta, locale)}"
 
+private const val MAX_FRACTION_DIGITS = 6
 private const val MINUS = "−"
 private const val NORMALISE_SCALE = 6
 private const val MIN_BAR_PERCENT = 6

@@ -8,6 +8,7 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneOffset
+import java.util.Locale
 
 class ProgressModelTest {
     @Test
@@ -38,9 +39,11 @@ class ProgressModelTest {
 
     @Test
     fun `a delta always carries its sign`() {
-        assertEquals("+10", signedNumber(BigDecimal("10.0")))
-        assertEquals("+0", signedNumber(BigDecimal.ZERO))
-        assertEquals("−2.5", signedNumber(BigDecimal("-2.50")))
-        assertEquals("2310", plainNumber(BigDecimal("2310")))
+        assertEquals("+10", signedNumber(BigDecimal("10.0"), Locale.US))
+        assertEquals("+0", signedNumber(BigDecimal.ZERO, Locale.US))
+        assertEquals("−2.5", signedNumber(BigDecimal("-2.50"), Locale.US))
+        assertEquals("2,310", plainNumber(BigDecimal("2310"), Locale.US))
+        assertEquals("82.5", plainNumber(BigDecimal("82.50"), Locale.US))
+        assertEquals("−1,997", signedNumber(BigDecimal("-1997"), Locale.US))
     }
 }

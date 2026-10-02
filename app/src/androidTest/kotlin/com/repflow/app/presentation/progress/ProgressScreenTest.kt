@@ -25,8 +25,10 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.math.BigDecimal
+import java.text.NumberFormat
 import java.time.Duration
 import java.time.Instant
+import java.util.Locale
 
 /**
  * Stateless Compose coverage for [ProgressScreen] on `4a`'s Progress tab
@@ -144,7 +146,8 @@ class ProgressScreenTest {
     fun volumeReadsInKilogramsTotal() {
         setScreen(loaded(metric = ProgressMetric.VOLUME))
 
-        composeRule.onNodeWithText("2310").assertIsDisplayed()
+        // Grouped as History groups its volume (functional review A5).
+        composeRule.onNodeWithText(NumberFormat.getIntegerInstance(Locale.getDefault()).format(2310)).assertIsDisplayed()
         composeRule.onNodeWithText(string(R.string.progress_unit_kg_total)).assertIsDisplayed()
         composeRule.onNodeWithText(string(R.string.progress_delta, "+570", "kg", "5 May")).assertIsDisplayed()
     }
