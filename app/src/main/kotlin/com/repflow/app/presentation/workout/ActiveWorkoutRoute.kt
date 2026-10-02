@@ -82,13 +82,11 @@ fun ActiveWorkoutRoute(
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { notificationPromptResolved++ }
 
     val restTimer = (uiState.content as? ActiveWorkoutContent.Active)?.restTimer
-    LaunchedEffect(restTimer?.endAt) {
-        if (restTimer == null) {
-            RestTimerAlarmScheduler.cancel(context)
-            return@LaunchedEffect
-        }
-        RestTimerAlarmScheduler.schedule(context, restTimer.endAt)
-    }
+    RestAlarmEffect(
+        restEndAt = restTimer?.endAt,
+        schedule = { RestTimerAlarmScheduler.schedule(context, it) },
+        cancel = { RestTimerAlarmScheduler.cancel(context) },
+    )
     // Coming back from the system's `Alarms & reminders` screen with the grant: re-arm this rest exactly.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         if (shouldRearmRestAlarm(restTimer?.endAt, Instant.now())) {
@@ -147,6 +145,32 @@ fun ActiveWorkoutRoute(
         keepScreenAwake = settings?.keepScreenAwake == true,
         confirmBeforeFinishing = settings?.confirmBeforeFinishing,
     )
+}
+
+/**
+ * Keeps the OS alarm in step with the rest timer: cancels it when there is no
+ * rest, and schedules it for a rest that is still running - never for one whose
+ * end has already passed (functional review P-1). A finished rest stays in the
+ * session until the next set or `Skip rest`, and a past-due exact alarm fires -
+ * and alerts - again at once, whenever the workout is composed again.
+ * [now] is overridable so a test can pin the clock.
+ */
+@Composable
+internal fun RestAlarmEffect(
+    restEndAt: Instant?,
+    schedule: (Instant) -> Unit,
+    cancel: () -> Unit,
+    now: () -> Instant = Instant::now,
+) {
+    val currentSchedule by rememberUpdatedState(schedule)
+    val currentCancel by rememberUpdatedState(cancel)
+    LaunchedEffect(restEndAt) {
+        if (restEndAt == null) {
+            currentCancel()
+        } else if (shouldRearmRestAlarm(restEndAt, now())) {
+            currentSchedule(restEndAt)
+        }
+    }
 }
 
 /**
