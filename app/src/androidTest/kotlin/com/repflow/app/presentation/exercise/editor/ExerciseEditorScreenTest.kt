@@ -276,6 +276,38 @@ class ExerciseEditorScreenTest {
         assertEquals(true, backRequested)
     }
 
+    /** Functional review R2-F-2: a refused save while scrolled down brings the name error back into view. */
+    @Test
+    fun aDuplicateNameErrorScrollsTheNameIntoView() {
+        var uiState by mutableStateOf(ExerciseEditorUiState(name = "Squat"))
+        composeRule.setContent {
+            RepFlowTheme {
+                ExerciseEditorScreen(
+                    uiState = uiState,
+                    onNameChanged = {},
+                    onNameFocusLost = {},
+                    onTrackingTypeChanged = {},
+                    onInstructionsChanged = {},
+                    onRestSecondsChanged = {},
+                    onLoadIncrementChanged = {},
+                    onSaveClicked = {},
+                    onBackRequested = {},
+                    onDiscardConfirmed = {},
+                    onDiscardCancelled = {},
+                    onMessageShown = {},
+                )
+            }
+        }
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.exercise_editor_instructions_label)).performScrollTo()
+
+        uiState = uiState.copy(submitError = ExerciseEditorSubmitError(ExerciseEditorSubmitErrorKind.DUPLICATE_NAME))
+        composeRule.waitForIdle()
+
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.exercise_editor_submit_error_duplicate_name))
+            .assertIsDisplayed()
+    }
+
     @Test
     fun submitErrorTextIsDisplayed() {
         setContent(

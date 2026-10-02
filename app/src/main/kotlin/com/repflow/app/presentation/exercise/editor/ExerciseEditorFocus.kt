@@ -1,6 +1,9 @@
 package com.repflow.app.presentation.exercise.editor
 
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,4 +25,16 @@ internal fun Modifier.notifyOnFocusLost(onFocusLost: () -> Unit): Modifier {
         if (hadFocus && !state.isFocused) currentOnFocusLost()
         hadFocus = state.isFocused
     }
+}
+
+/**
+ * Scrolls this field into view whenever [show] turns true (functional review
+ * R2-F-2): a refused save reports against the name field, which may be scrolled
+ * off-screen when `Save` is tapped, so the reason has to be brought to the user.
+ */
+@Composable
+internal fun Modifier.bringIntoViewWhen(show: Boolean): Modifier {
+    val requester = remember { BringIntoViewRequester() }
+    LaunchedEffect(show) { if (show) requester.bringIntoView() }
+    return bringIntoViewRequester(requester)
 }

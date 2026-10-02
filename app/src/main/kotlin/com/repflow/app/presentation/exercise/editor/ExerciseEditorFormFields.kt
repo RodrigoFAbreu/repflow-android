@@ -125,9 +125,10 @@ private fun NameField(
     onNameChanged: (String) -> Unit,
     onNameFocusLost: () -> Unit,
 ) {
+    val duplicateName = uiState.submitError?.kind == ExerciseEditorSubmitErrorKind.DUPLICATE_NAME && !uiState.isSaving
     val error =
         fieldErrorText(uiState.visibleNameError)
-            ?: if (uiState.submitError?.kind == ExerciseEditorSubmitErrorKind.DUPLICATE_NAME) {
+            ?: if (duplicateName) {
                 stringResource(R.string.exercise_editor_submit_error_duplicate_name)
             } else {
                 null
@@ -141,7 +142,12 @@ private fun NameField(
         singleLine = true,
         shape = FieldShape,
         colors = editorFieldColors(),
-        modifier = Modifier.fillMaxWidth().heightIn(min = NameFieldMinHeight).notifyOnFocusLost(onNameFocusLost),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = NameFieldMinHeight)
+                .notifyOnFocusLost(onNameFocusLost)
+                .bringIntoViewWhen(duplicateName),
     )
 }
 

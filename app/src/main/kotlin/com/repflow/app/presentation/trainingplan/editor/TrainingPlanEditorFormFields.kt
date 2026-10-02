@@ -35,6 +35,7 @@ import com.repflow.app.presentation.designsystem.components.RepFlowSectionLabel
 import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
 import com.repflow.app.presentation.designsystem.repFlowSecondaryTextColor
 import com.repflow.app.presentation.exercise.editor.InlineError
+import com.repflow.app.presentation.exercise.editor.bringIntoViewWhen
 import com.repflow.app.presentation.exercise.editor.editorFieldColors
 import com.repflow.app.presentation.exercise.editor.notifyOnFocusLost
 
@@ -100,7 +101,10 @@ private fun NameField(
     onNameChanged: (String) -> Unit,
     onNameFocusLost: () -> Unit,
 ) {
-    val error = fieldErrorText(uiState.visibleNameError)
+    val duplicateName = uiState.submitError?.kind == TrainingPlanEditorSubmitErrorKind.DUPLICATE_NAME && !uiState.isSaving
+    val error =
+        fieldErrorText(uiState.visibleNameError)
+            ?: if (duplicateName) stringResource(R.string.training_plan_editor_submit_error_duplicate_name) else null
     OutlinedTextField(
         value = uiState.name,
         onValueChange = onNameChanged,
@@ -110,7 +114,12 @@ private fun NameField(
         singleLine = true,
         shape = FieldShape,
         colors = editorFieldColors(),
-        modifier = Modifier.fillMaxWidth().heightIn(min = NameFieldMinHeight).notifyOnFocusLost(onNameFocusLost),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = NameFieldMinHeight)
+                .notifyOnFocusLost(onNameFocusLost)
+                .bringIntoViewWhen(duplicateName),
     )
 }
 
@@ -186,9 +195,13 @@ private fun VersionNote() {
 private fun SubmitErrorText(submitError: TrainingPlanEditorSubmitError?) {
     val text =
         when (submitError?.kind) {
-            TrainingPlanEditorSubmitErrorKind.DUPLICATE_NAME -> stringResource(R.string.training_plan_editor_submit_error_duplicate_name)
+            TrainingPlanEditorSubmitErrorKind.DUPLICATE_NAME -> null
+
+            // reported against the name field, see NameField
             TrainingPlanEditorSubmitErrorKind.INVALID -> stringResource(R.string.training_plan_editor_submit_error_invalid)
+
             TrainingPlanEditorSubmitErrorKind.UNAVAILABLE -> stringResource(R.string.training_plan_editor_submit_error_unavailable)
+
             null -> null
         }
     text?.let {

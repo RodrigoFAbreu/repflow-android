@@ -14,6 +14,7 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -327,6 +328,64 @@ class TrainingPlanEditorScreenTest {
                 submitError = TrainingPlanEditorSubmitError(TrainingPlanEditorSubmitErrorKind.DUPLICATE_NAME),
             ),
         )
+
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_submit_error_duplicate_name))
+            .assertIsDisplayed()
+    }
+
+    private fun longPlan(submitError: TrainingPlanEditorSubmitError? = null) =
+        TrainingPlanEditorUiState(
+            name = "Push",
+            rows =
+                (1L..12L).map {
+                    PlannedExerciseRowUiState(
+                        rowId = it,
+                        exerciseId = "exercise-$it",
+                        exerciseName = "Exercise $it",
+                        trackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
+                        targetSetsText = "3",
+                        repMinText = "8",
+                        repMaxText = "12",
+                    )
+                },
+            submitError = submitError,
+        )
+
+    /** Functional review R2-F-2: the reason is beside the name, not at the foot of a long list. */
+    @Test
+    fun aDuplicateNameErrorShowsNextToTheNameEvenWithALongList() {
+        setContent(longPlan(TrainingPlanEditorSubmitError(TrainingPlanEditorSubmitErrorKind.DUPLICATE_NAME)))
+
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_submit_error_duplicate_name))
+            .assertIsDisplayed()
+    }
+
+    /** Functional review R2-F-2: a refused save while scrolled down scrolls the name back into view. */
+    @Test
+    fun aDuplicateNameErrorScrollsTheNameIntoView() {
+        var uiState by mutableStateOf(longPlan())
+        composeRule.setContent {
+            RepFlowTheme {
+                TrainingPlanEditorScreen(
+                    uiState = uiState,
+                    onNameChanged = {},
+                    onNameFocusLost = {},
+                    rowActions = noOpRowActions(),
+                    onAddRowClicked = {},
+                    onSaveClicked = {},
+                    onBackRequested = {},
+                    onDiscardConfirmed = {},
+                    onDiscardCancelled = {},
+                    onCreateExerciseClick = {},
+                )
+            }
+        }
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_add_exercise)).performScrollTo()
+
+        uiState = longPlan(TrainingPlanEditorSubmitError(TrainingPlanEditorSubmitErrorKind.DUPLICATE_NAME))
+        composeRule.waitForIdle()
 
         composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_submit_error_duplicate_name))
