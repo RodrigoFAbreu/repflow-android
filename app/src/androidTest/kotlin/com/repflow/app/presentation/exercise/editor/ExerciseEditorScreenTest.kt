@@ -1,9 +1,12 @@
 package com.repflow.app.presentation.exercise.editor
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.test.assertIsDisplayed
@@ -16,6 +19,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
 import com.repflow.app.domain.exercise.ExerciseId
@@ -282,20 +286,23 @@ class ExerciseEditorScreenTest {
         var uiState by mutableStateOf(ExerciseEditorUiState(name = "Squat"))
         composeRule.setContent {
             RepFlowTheme {
-                ExerciseEditorScreen(
-                    uiState = uiState,
-                    onNameChanged = {},
-                    onNameFocusLost = {},
-                    onTrackingTypeChanged = {},
-                    onInstructionsChanged = {},
-                    onRestSecondsChanged = {},
-                    onLoadIncrementChanged = {},
-                    onSaveClicked = {},
-                    onBackRequested = {},
-                    onDiscardConfirmed = {},
-                    onDiscardCancelled = {},
-                    onMessageShown = {},
-                )
+                // A short viewport, so the form really scrolls and the name can leave the screen.
+                Box(Modifier.height(260.dp)) {
+                    ExerciseEditorScreen(
+                        uiState = uiState,
+                        onNameChanged = {},
+                        onNameFocusLost = {},
+                        onTrackingTypeChanged = {},
+                        onInstructionsChanged = {},
+                        onRestSecondsChanged = {},
+                        onLoadIncrementChanged = {},
+                        onSaveClicked = {},
+                        onBackRequested = {},
+                        onDiscardConfirmed = {},
+                        onDiscardCancelled = {},
+                        onMessageShown = {},
+                    )
+                }
             }
         }
         composeRule.onNodeWithText(composeRule.activity.getString(R.string.exercise_editor_instructions_label)).performScrollTo()
