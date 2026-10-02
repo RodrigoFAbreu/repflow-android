@@ -1837,6 +1837,58 @@ partial round. Findings go to the file above and then
 (bounded branch for a same-scope fix, broad branch for a
 `...-remediation-<n>` child).
 
+### Functional review round 2 — outcome (2026-10-02)
+
+Round 2 returned **FAIL** (AVD: 23 of 25 steps passed; phone: J5, J6, J7, J9
+passed, one new Important). The user decided to fix all six findings in this
+item. `/apply-functional-review` judged all six bounded (none is multi-checkpoint
+or cross-cutting), so nothing was routed to
+`repflow-redesign-visual-foundation-remediation-1-remediation-1`, which stays
+with group B only. Technical approval was marked `STALE` first (`62fd98a`),
+before any source edit. One commit per finding; every new test was run against
+the pre-fix code where it could be (P-1, R2-F-5, R2-F-2, R2-F-3 fail there;
+R2-F-1 and R2-F-4 fail at compile or on assertion against it).
+
+| Finding | Class | Disposition | Commit |
+|---|---|---|---|
+| P-1 duplicate rest-end alert on re-entry | defect | the `LaunchedEffect(restEndAt)` path scheduled a past-due exact alarm. It is now `RestAlarmEffect`, behind the same `shouldRearmRestAlarm` guard as `ON_RESUME`; it still cancels when there is no rest. `RestAlarmEffectTest` (5, instrumented) fails 3 of 5 with the guard removed | `f89f3c5` |
+| R2-F-1 name error on focus-and-leave | defect | both editors mark the name touched when the field loses focus after having had it (`onNameFocusLost`) | `62044cc` |
+| R2-F-2 duplicate-name error invisible | usability | the plan editor now reports it under the name field (was the foot of the list); both editors scroll the name field into view when Save is refused for it | `7cce1f2` |
+| R2-F-3 recovery hint under Save | usability | the hint is inside the pinned bar, directly above Save (`D113` amended) | `f1bba20` |
+| R2-F-4 wrong text on a new plan row | defect | the `Required` field error reads "Enter a value." (it was mapped to "Add at least one exercise.") | `8b92020` |
+| R2-F-5 notification prompt mid-rest | defect | the permission effect is keyed on whether a rest is running, so `+/-15s` and Skip never re-ask; the next rest start does (`D114` amended) | `0e591a4` |
+
+Judgement calls, for the reviewer. P-1: the expiry handler was left as it is -
+the defence-in-depth idea (ignore a rest whose `endAt` is long past) was not
+taken, because the handler's documented behaviour is to alert for the rest it
+finds, and the scheduling guard closes every path that creates a past-due alarm.
+A `-15s` tap that moves the end into the past neither schedules nor cancels; the
+alarm already pending for the old end is left alone. R2-F-4: the message is
+corrected rather than hidden until touched. J9's decisions (exact alarm, the
+one-time explanation, the inexact fallback, the `rest_timer` sound, explicit
+vibration) are unchanged.
+
+**Gate (AVD `RepFlow_S24Ultra_384dp_API36`, `emulator-5554`):** `spotlessCheck`,
+`detekt`, `lintDebug` clean; JVM unit tests 643, 0 failures; instrumented 305,
+0 failures (data+infrastructure 85, workout 69, presentation backup/design
+system/exercise/history/home 64, navigation/progress/progression/recovery/
+settings/trainingplan 78, `MainActivityNavHostSmokeTest` 9).
+
+**Re-test (round 3):** [PHONE] P-1: with `Rest done` showing, open `Why ›` and
+come back, and `Leave` then `Resume` - no second alert; [AVD] a plan or exercise
+with the name field tapped and left empty; a duplicate plan name saved from the
+bottom of a long plan; Log recovery at 384dp with Save disabled (the hint above
+the bar); a new plan row's blank fields; a notification denial followed by `-15s`
+taps.
+
+**Next action.** Technical approval is `STALE`, so the item re-enters
+`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` with a regenerated post-fix bundle:
+review it, then `/apply-implementation-review
+repflow-redesign-visual-foundation-remediation-1` (or `/approve-review
+implementation repflow-redesign-visual-foundation-remediation-1` on a clean
+APPROVE), then `/prepare-functional-review
+repflow-redesign-visual-foundation-remediation-1` for round 3.
+
 ---
 
 ## `repflow-redesign-visual-foundation-remediation-1` — Functional review checklist, round 1 (implementation revision 2; superseded by round 2 above for the changed areas)
