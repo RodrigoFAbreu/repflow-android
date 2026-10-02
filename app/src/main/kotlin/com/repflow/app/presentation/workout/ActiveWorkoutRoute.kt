@@ -268,7 +268,9 @@ internal fun createdExercisePickerItem(
  * [shouldRequestNotificationPermission] says so (remediation-1 CP14): only
  * while the Notification switch is on, never before it has loaded, and only
  * on Android 13+ without the grant. Keyed on the rest's end and the switch,
- * so a switch that loads (or turns) on while a rest runs still asks once.
+ * so a switch that loads (or turns) on while a rest runs still asks once. A rest
+ * that is merely adjusted (`+/-15s`) keeps running and never asks again; the
+ * next rest start does (functional review R2-F-5).
  * [sdkInt] is the running device's, overridable so a test can drive both
  * sides of the API 33 line on one device.
  */
@@ -282,8 +284,9 @@ internal fun RestTimerPermissionPromptEffect(
 ) {
     val currentIsPermissionGranted by rememberUpdatedState(isPermissionGranted)
     val currentRequestPermission by rememberUpdatedState(requestPermission)
-    LaunchedEffect(restTimerEndAt, notificationEnabled) {
-        if (restTimerEndAt != null &&
+    val restRunning = restTimerEndAt != null
+    LaunchedEffect(restRunning, notificationEnabled) {
+        if (restRunning &&
             shouldRequestNotificationPermission(notificationEnabled, sdkInt, currentIsPermissionGranted())
         ) {
             currentRequestPermission()

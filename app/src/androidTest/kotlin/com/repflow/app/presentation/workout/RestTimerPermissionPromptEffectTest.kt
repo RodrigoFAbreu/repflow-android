@@ -80,4 +80,34 @@ class RestTimerPermissionPromptEffectTest {
         composeRule.waitForIdle()
         assertEquals(1, requests)
     }
+
+    /** Functional review R2-F-5: `+/-15s` changes the rest's end but must not ask again after a denial. */
+    @Test
+    fun adjustingARunningRestNeverRequestsAgainButTheNextRestDoes() {
+        var requests = 0
+        var endAt by mutableStateOf<Instant?>(restEnd)
+        composeRule.setContent {
+            RestTimerPermissionPromptEffect(
+                restTimerEndAt = endAt,
+                notificationEnabled = true,
+                isPermissionGranted = { false },
+                requestPermission = { requests++ },
+                sdkInt = Build.VERSION_CODES.TIRAMISU,
+            )
+        }
+        composeRule.waitForIdle()
+        assertEquals(1, requests)
+
+        endAt = restEnd.minusSeconds(15)
+        composeRule.waitForIdle()
+        endAt = restEnd.plusSeconds(15)
+        composeRule.waitForIdle()
+        assertEquals(1, requests)
+
+        endAt = null
+        composeRule.waitForIdle()
+        endAt = restEnd
+        composeRule.waitForIdle()
+        assertEquals(2, requests)
+    }
 }
