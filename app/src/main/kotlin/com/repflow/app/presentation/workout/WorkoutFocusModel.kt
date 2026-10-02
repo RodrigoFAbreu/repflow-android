@@ -78,21 +78,24 @@ internal fun ActiveExerciseUi.focusSetRows(): List<FocusSetRow> {
 
 /**
  * `Next ›`'s target: the next unfinished exercise after [currentId] in board
- * order, wrapping round and reaching [currentId] itself last - the prototype's
- * `nextUnfinished`. `null` when every exercise is finished, in which case
- * `Next ›` returns to the board with the finish sheet raised (remediation-1
- * CP9).
+ * order, wrapping round - the prototype's `nextUnfinished`. [currentId] itself
+ * is never the answer: `null` when no *other* exercise is unfinished, so on
+ * the last unfinished exercise `Next ›` returns to the board with the finish
+ * sheet raised (remediation-1 CP8 item 9, CP9 item 1), and the sheet names
+ * whatever that exercise still has left.
  */
 internal fun nextUnfinishedExercise(
     exercises: List<ActiveExerciseUi>,
     currentId: WorkoutExerciseId,
 ): WorkoutExerciseId? {
     val from = exercises.indexOfFirst { it.id == currentId }
-    if (exercises.isEmpty()) return null
-    return (1..exercises.size)
-        .map { step -> exercises[(from + step).mod(exercises.size)] }
-        .firstOrNull { !it.isFinished() }
-        ?.id
+    val others =
+        if (from < 0) {
+            exercises
+        } else {
+            (1 until exercises.size).map { step -> exercises[(from + step) % exercises.size] }
+        }
+    return others.firstOrNull { !it.isFinished() }?.id
 }
 
 /**

@@ -728,6 +728,37 @@ class ActiveWorkoutScreenTest {
         node(R.string.workout_finish_title).assertIsDisplayed()
     }
 
+    /**
+     * Plan CP8 item 9: on the last unfinished exercise - the focused one still
+     * has sets pending and every other exercise is finished - `Next ›` returns
+     * to the board with the finish sheet raised, which names that exercise's
+     * remaining sets. It completes nothing by itself.
+     */
+    @Test
+    fun nextOnTheLastUnfinishedExerciseReturnsToTheBoardWithTheFinishSheetRaised() {
+        val focusRequests = mutableListOf<WorkoutExerciseId?>()
+        val completed = mutableListOf<WorkoutSessionId>()
+        val exercises =
+            listOf(
+                boardExercise("e1", "Bench Press", sets = listOf(set(1, 60.0, 8)), targetWorkingSets = 3),
+                boardExercise("e2", "Row", sets = listOf(set(1, 50.0, 10)), targetWorkingSets = 1),
+            )
+        setContent(
+            exercises.first(),
+            exercises = exercises,
+            onFocusExercise = { focusRequests += it },
+            onCompleteWorkout = { completed += it },
+        )
+
+        node(R.string.workout_focus_next).performClick()
+
+        assertEquals(listOf<WorkoutExerciseId?>(null), focusRequests)
+        node(R.string.workout_finish_title).assertIsDisplayed()
+        composeRule.onNodeWithText(plural(R.plurals.workout_finish_unfinished_count, 1, 1)).assertIsDisplayed()
+        composeRule.onNodeWithText(plural(R.plurals.workout_finish_sets_left, 2, 2)).assertIsDisplayed()
+        assertTrue("Next completes nothing before the sheet's confirm", completed.isEmpty())
+    }
+
     /** The leave sheet's `Finish and save it now` raises the finish sheet rather than completing anything itself. */
     @Test
     fun theLeaveSheetsFinishNowRaisesTheFinishSheet() {

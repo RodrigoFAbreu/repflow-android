@@ -107,7 +107,7 @@ class WorkoutFocusModelTest {
     }
 
     @Test
-    fun nextGoesToTheNextUnfinishedExerciseWrappingRoundAndEndsOnTheBoardWhenAllAreFinished() {
+    fun nextGoesToTheNextUnfinishedExerciseWrappingRoundAndEndsOnTheBoardWhenNoOtherIsUnfinished() {
         val done = exercise("done", sets = listOf(set()), target = target(working = 1))
         val first = exercise("first", target = target(working = 2))
         val current = exercise("current", target = target(working = 2))
@@ -116,8 +116,11 @@ class WorkoutFocusModelTest {
 
         assertEquals(later.id, nextUnfinishedExercise(exercises, current.id))
         assertEquals(first.id, nextUnfinishedExercise(exercises, later.id))
-        // The only unfinished exercise left is the current one: Next stays on it.
-        assertEquals(current.id, nextUnfinishedExercise(listOf(done, current), current.id))
+        // The only unfinished exercise left is the current one: Next returns
+        // to the board with the finish sheet (plan CP8 item 9), never to itself.
+        assertNull(nextUnfinishedExercise(listOf(done, current), current.id))
+        // A one-exercise ad-hoc workout with nothing logged: the same.
+        assertNull(nextUnfinishedExercise(listOf(exercise("adHoc")), WorkoutExerciseId("adHoc")))
         assertNull(nextUnfinishedExercise(listOf(done), done.id))
     }
 

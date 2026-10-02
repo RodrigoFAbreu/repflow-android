@@ -902,7 +902,9 @@ record:**
     and top reason, `ph-pulse`, `Why ›` → CP6's screen (plan item 5, `D27`),
     absent without a recommendation; the type note; the pinned bar — `Log set`
     / `Log warm-up` (primary, check glyph) and `Next ›` (next unfinished
-    exercise in board order, wrapping; the board when none is left). The
+    exercise in board order, wrapping; the board with the finish sheet when
+    no *other* exercise is unfinished — implementation-review revision 1's
+    I1). The
     shared rest strip (tick loop untouched, `D58`) sits above the bar.
   - `WorkoutFocusSets.kt`: logged rows (26dp disc — check on accent / flame
     on hairline — the unchanged one-node summary with `(warm-up)` /
