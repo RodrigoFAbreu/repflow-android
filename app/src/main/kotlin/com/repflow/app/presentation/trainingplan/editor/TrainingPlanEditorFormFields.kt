@@ -216,7 +216,7 @@ internal fun fieldErrorText(error: TrainingPlanEditorFieldError?): String? =
     when (error) {
         is TrainingPlanEditorFieldError.Domain -> domainErrorText(error.error)
         TrainingPlanEditorFieldError.InvalidNumber -> stringResource(R.string.training_plan_editor_error_invalid_number)
-        TrainingPlanEditorFieldError.Required -> stringResource(R.string.training_plan_editor_error_no_exercises)
+        TrainingPlanEditorFieldError.Required -> stringResource(R.string.training_plan_editor_error_required)
         null -> null
     }
 

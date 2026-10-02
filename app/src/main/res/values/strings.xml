@@ -186,7 +186,7 @@
     <string name="training_plan_editor_error_name_blank">Plan name is required.</string>
     <string name="training_plan_editor_error_name_too_long">Plan name is too long.</string>
     <string name="training_plan_editor_error_invalid_number">Enter a valid number.</string>
-    <string name="training_plan_editor_error_no_exercises">Add at least one exercise.</string>
+    <string name="training_plan_editor_error_required">Enter a value.</string>
     <string name="training_plan_editor_submit_error_duplicate_name">A plan with this name already exists.</string>
     <string name="training_plan_editor_submit_error_invalid">Some exercises need attention before saving.</string>
     <string name="training_plan_editor_submit_error_unavailable">Couldn\'t save this plan. Try again.</string>

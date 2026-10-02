@@ -6,11 +6,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -390,6 +392,32 @@ class TrainingPlanEditorScreenTest {
         composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_submit_error_duplicate_name))
             .assertIsDisplayed()
+    }
+
+    /** Functional review R2-F-4: a blank field on a new row asks for a value; it never says to add an exercise. */
+    @Test
+    fun aBlankRowFieldAsksForAValueNotForAnExercise() {
+        val blank = TrainingPlanEditorFieldError.Required
+        setContent(
+            TrainingPlanEditorUiState(
+                rows =
+                    listOf(
+                        PlannedExerciseRowUiState(
+                            rowId = 1L,
+                            exerciseId = "exercise-1",
+                            exerciseName = "Bench Press",
+                            trackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
+                            targetSetsError = blank,
+                            targetRangeError = blank,
+                        ),
+                    ),
+            ),
+        )
+
+        composeRule.onNodeWithText("Bench Press").performClick()
+
+        composeRule.onAllNodesWithText(composeRule.activity.getString(R.string.training_plan_editor_error_required)).assertCountEquals(2)
+        composeRule.onNodeWithText("Add at least one exercise.").assertDoesNotExist()
     }
 
     @Test
