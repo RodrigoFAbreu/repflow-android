@@ -2100,6 +2100,20 @@ APPROVE), then `/prepare-functional-review
 repflow-redesign-visual-foundation-remediation-1` for round 2. The group-B
 child is planned separately, naming its own id on every command.
 
+#### Implementation review of revision 3 - dispositions (2026-10-02)
+
+`/review-implementation` on revision 3: REVISE, 0 Blocking, 2 Important, 5 Optional.
+
+| Finding | Disposition | Commit |
+|---|---|---|
+| I1 resume re-arms a finished rest (`D114`) | fixed: `shouldRearmRestAlarm` re-arms only while `endAt` is in the future; JVM test | `5fa3456` |
+| I2 exact-alarm explanation never shown after a notification denial | fixed: `isNotificationAskPending` waits only until the request is answered; JVM tests include the denied case | `5fa3456` |
+| O1 no test for J3's id hand-back | fixed: `ReturnCreatedExerciseTest` (workout hands the id back, plan editor is a plain pop) | `0f2c812` |
+| O2 two `UseKtx` lint warnings | fixed in `RestTimerAlarmScheduler.kt`; lint 23 -> 21 warnings | `5fa3456` |
+| O3 prompt only offered once | not changed: within the recorded J9 judgement call; left to the B1 Settings work | - |
+| O4 font scale not covered for `Skip rest` | not changed: design-row level, no defect reproduced | - |
+| O5 leftover formatting | not changed: formatting only, spotless-clean | - |
+
 ### Reporting
 
 Put findings in
