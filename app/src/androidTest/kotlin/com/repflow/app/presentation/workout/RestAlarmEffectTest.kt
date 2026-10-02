@@ -68,16 +68,31 @@ class RestAlarmEffectTest {
         assertEquals(emptyList<Instant>(), scheduled)
     }
 
+    /** Implementation review round 6, I-1: the pending alarm is for the old end, so it is brought forward, once. */
     @Test
-    fun anAdjustmentThatPutsTheEndInThePastIsNotScheduledEither() {
+    fun anAdjustmentThatCutsARunningRestShortFiresTheAlertOnceAtOnce() {
         val end = now.plusSeconds(10)
         var endAt by mutableStateOf<Instant?>(end)
         setContent { endAt }
         assertEquals(listOf(end), scheduled)
 
-        endAt = now.minusSeconds(5)
+        val newEnd = now.minusSeconds(5)
+        endAt = newEnd
         composeRule.waitForIdle()
 
-        assertEquals(listOf(end), scheduled)
+        assertEquals(listOf(end, newEnd), scheduled)
+        assertEquals(0, cancels)
+    }
+
+    @Test
+    fun anAdjustmentOfARestThatHadAlreadyEndedInThisVisitSchedulesNothing() {
+        val end = now.minusSeconds(5)
+        var endAt by mutableStateOf<Instant?>(end)
+        setContent { endAt }
+
+        endAt = end.minusSeconds(15)
+        composeRule.waitForIdle()
+
+        assertEquals(emptyList<Instant>(), scheduled)
     }
 }

@@ -153,7 +153,14 @@ fun ActiveWorkoutRoute(
  * end has already passed (functional review P-1). A finished rest stays in the
  * session until the next set or `Skip rest`, and a past-due exact alarm fires -
  * and alerts - again at once, whenever the workout is composed again.
- * [now] is overridable so a test can pin the clock.
+ *
+ * The one exception is within a single visit: a `-15s` that moves the end from
+ * the future into the past while the alarm for the old end is still pending
+ * (implementation review round 6, I-1). The rest is over now, so the alert is
+ * due now: the single alarm is rescheduled to that past end and fires once,
+ * at once, instead of up to 15 s late. The previous end is tracked per
+ * composition, so re-entering a screen whose rest had already ended has none
+ * and schedules nothing. [now] is overridable so a test can pin the clock.
  */
 @Composable
 internal fun RestAlarmEffect(
@@ -164,10 +171,17 @@ internal fun RestAlarmEffect(
 ) {
     val currentSchedule by rememberUpdatedState(schedule)
     val currentCancel by rememberUpdatedState(cancel)
+    val previousEnd = remember { arrayOfNulls<Instant>(1) }
     LaunchedEffect(restEndAt) {
+        val previous = previousEnd[0]
+        previousEnd[0] = restEndAt
+        val current = now()
         if (restEndAt == null) {
             currentCancel()
-        } else if (shouldRearmRestAlarm(restEndAt, now())) {
+        } else if (shouldRearmRestAlarm(restEndAt, current)) {
+            currentSchedule(restEndAt)
+        } else if (previous != null && previous.isAfter(current)) {
+            // The rest was cut short in this visit; its pending alarm is for the old end. Fire it now, once.
             currentSchedule(restEndAt)
         }
     }
