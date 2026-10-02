@@ -73,6 +73,7 @@ internal fun EditorForm(
     uiState: ExerciseEditorUiState,
     modifier: Modifier,
     onNameChanged: (String) -> Unit,
+    onNameFocusLost: () -> Unit,
     onTrackingTypeChanged: (ExerciseTrackingType) -> Unit,
     onInstructionsChanged: (String) -> Unit,
     onRestSecondsChanged: (String) -> Unit,
@@ -85,7 +86,7 @@ internal fun EditorForm(
                 .verticalScroll(rememberScrollState())
                 .padding(top = RepFlowSpacing.gapSm, bottom = RepFlowSpacing.screenPadding),
     ) {
-        NameField(uiState, onNameChanged)
+        NameField(uiState, onNameChanged, onNameFocusLost)
         FieldLabel(stringResource(R.string.exercise_editor_tracking_type_label))
         TrackingTypeSegments(uiState.trackingType, onTrackingTypeChanged)
         FieldLabel(stringResource(R.string.exercise_editor_default_rest_label))
@@ -122,6 +123,7 @@ private fun FieldLabel(text: String) {
 private fun NameField(
     uiState: ExerciseEditorUiState,
     onNameChanged: (String) -> Unit,
+    onNameFocusLost: () -> Unit,
 ) {
     val error =
         fieldErrorText(uiState.visibleNameError)
@@ -139,7 +141,7 @@ private fun NameField(
         singleLine = true,
         shape = FieldShape,
         colors = editorFieldColors(),
-        modifier = Modifier.fillMaxWidth().heightIn(min = NameFieldMinHeight),
+        modifier = Modifier.fillMaxWidth().heightIn(min = NameFieldMinHeight).notifyOnFocusLost(onNameFocusLost),
     )
 }
 

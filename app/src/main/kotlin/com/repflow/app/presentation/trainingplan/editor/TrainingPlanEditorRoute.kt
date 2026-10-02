@@ -55,6 +55,7 @@ fun TrainingPlanEditorRoute(
     TrainingPlanEditorScreen(
         uiState = uiState,
         onNameChanged = viewModel::onNameChanged,
+        onNameFocusLost = viewModel::onNameFocusLost,
         rowActions = rowActions,
         onAddRowClicked = viewModel::onAddRowClicked,
         onSaveClicked = viewModel::onSaveClicked,

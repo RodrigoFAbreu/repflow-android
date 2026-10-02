@@ -41,6 +41,7 @@ import com.repflow.app.presentation.designsystem.components.RepFlowScreenScaffol
 fun TrainingPlanEditorScreen(
     uiState: TrainingPlanEditorUiState,
     onNameChanged: (String) -> Unit,
+    onNameFocusLost: () -> Unit,
     rowActions: TrainingPlanEditorRowActions,
     onAddRowClicked: () -> Unit,
     onSaveClicked: () -> Unit,
@@ -89,6 +90,7 @@ fun TrainingPlanEditorScreen(
                     uiState = uiState,
                     contentPadding = padding,
                     onNameChanged = onNameChanged,
+                    onNameFocusLost = onNameFocusLost,
                     rowActions = rowActions,
                     expandedRowId = expandedRowId,
                     onRowHeaderClick = { row ->

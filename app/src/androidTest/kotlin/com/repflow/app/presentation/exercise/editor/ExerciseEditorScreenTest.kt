@@ -4,6 +4,8 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -38,6 +40,7 @@ class ExerciseEditorScreenTest {
     private fun setContent(
         uiState: ExerciseEditorUiState,
         onNameChanged: (String) -> Unit = {},
+        onNameFocusLost: () -> Unit = {},
         onTrackingTypeChanged: (ExerciseTrackingType) -> Unit = {},
         onInstructionsChanged: (String) -> Unit = {},
         onRestSecondsChanged: (String) -> Unit = {},
@@ -53,6 +56,7 @@ class ExerciseEditorScreenTest {
                 ExerciseEditorScreen(
                     uiState = uiState,
                     onNameChanged = onNameChanged,
+                    onNameFocusLost = onNameFocusLost,
                     onTrackingTypeChanged = onTrackingTypeChanged,
                     onInstructionsChanged = onInstructionsChanged,
                     onRestSecondsChanged = onRestSecondsChanged,
@@ -120,6 +124,42 @@ class ExerciseEditorScreenTest {
         assertEquals("Squat", name)
     }
 
+    /** Functional review R2-F-1: tapping the name field and leaving it counts as touching it. */
+    @Test
+    fun leavingTheFocusedNameFieldReportsFocusLost() {
+        var focusLost = 0
+        lateinit var focusManager: FocusManager
+        composeRule.setContent {
+            RepFlowTheme {
+                focusManager = LocalFocusManager.current
+                ExerciseEditorScreen(
+                    uiState = ExerciseEditorUiState(),
+                    onNameChanged = {},
+                    onNameFocusLost = { focusLost++ },
+                    onTrackingTypeChanged = {},
+                    onInstructionsChanged = {},
+                    onRestSecondsChanged = {},
+                    onLoadIncrementChanged = {},
+                    onSaveClicked = {},
+                    onBackRequested = {},
+                    onDiscardConfirmed = {},
+                    onDiscardCancelled = {},
+                    onMessageShown = {},
+                )
+            }
+        }
+        composeRule.waitForIdle()
+        assertEquals(0, focusLost)
+
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.exercise_editor_name_label)).performClick()
+        composeRule.waitForIdle()
+        assertEquals(0, focusLost)
+
+        composeRule.runOnIdle { focusManager.clearFocus() }
+        composeRule.waitForIdle()
+        assertEquals(1, focusLost)
+    }
+
     @Test
     fun nameFieldShowsTheBlankNameError() {
         setContent(
@@ -161,6 +201,7 @@ class ExerciseEditorScreenTest {
                 ExerciseEditorScreen(
                     uiState = uiState,
                     onNameChanged = {},
+                    onNameFocusLost = {},
                     onTrackingTypeChanged = {},
                     onInstructionsChanged = {},
                     onRestSecondsChanged = {},
@@ -256,6 +297,7 @@ class ExerciseEditorScreenTest {
                 ExerciseEditorScreen(
                     uiState = uiState,
                     onNameChanged = {},
+                    onNameFocusLost = {},
                     onTrackingTypeChanged = {},
                     onInstructionsChanged = {},
                     onRestSecondsChanged = { uiState = uiState.copy(restSecondsText = it) },

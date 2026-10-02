@@ -4,6 +4,8 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasText
@@ -40,6 +42,7 @@ class TrainingPlanEditorScreenTest {
     private fun setContent(
         uiState: TrainingPlanEditorUiState,
         onNameChanged: (String) -> Unit = {},
+        onNameFocusLost: () -> Unit = {},
         rowActions: TrainingPlanEditorRowActions = noOpRowActions(),
         onAddRowClicked: () -> Unit = {},
         onSaveClicked: () -> Unit = {},
@@ -53,6 +56,7 @@ class TrainingPlanEditorScreenTest {
                 TrainingPlanEditorScreen(
                     uiState = uiState,
                     onNameChanged = onNameChanged,
+                    onNameFocusLost = onNameFocusLost,
                     rowActions = rowActions,
                     onAddRowClicked = onAddRowClicked,
                     onSaveClicked = onSaveClicked,
@@ -136,6 +140,40 @@ class TrainingPlanEditorScreenTest {
             .performTextInput("Push Pull Legs")
 
         assertEquals("Push Pull Legs", name)
+    }
+
+    /** Functional review R2-F-1: tapping the name field and leaving it counts as touching it. */
+    @Test
+    fun leavingTheFocusedNameFieldReportsFocusLost() {
+        var focusLost = 0
+        lateinit var focusManager: FocusManager
+        composeRule.setContent {
+            RepFlowTheme {
+                focusManager = LocalFocusManager.current
+                TrainingPlanEditorScreen(
+                    uiState = TrainingPlanEditorUiState(),
+                    onNameChanged = {},
+                    onNameFocusLost = { focusLost++ },
+                    rowActions = noOpRowActions(),
+                    onAddRowClicked = {},
+                    onSaveClicked = {},
+                    onBackRequested = {},
+                    onDiscardConfirmed = {},
+                    onDiscardCancelled = {},
+                    onCreateExerciseClick = {},
+                )
+            }
+        }
+        composeRule.waitForIdle()
+        assertEquals(0, focusLost)
+
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_name_label)).performClick()
+        composeRule.waitForIdle()
+        assertEquals(0, focusLost)
+
+        composeRule.runOnIdle { focusManager.clearFocus() }
+        composeRule.waitForIdle()
+        assertEquals(1, focusLost)
     }
 
     @Test
@@ -388,6 +426,7 @@ class TrainingPlanEditorScreenTest {
                 TrainingPlanEditorScreen(
                     uiState = state,
                     onNameChanged = {},
+                    onNameFocusLost = {},
                     rowActions = noOpRowActions().copy(onExerciseSelected = { rowId, exerciseId -> selected = rowId to exerciseId }),
                     onAddRowClicked = { state = state.copy(rows = state.rows + PlannedExerciseRowUiState(rowId = 3L)) },
                     onSaveClicked = {},

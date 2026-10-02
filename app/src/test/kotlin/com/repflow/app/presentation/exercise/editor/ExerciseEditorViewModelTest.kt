@@ -115,6 +115,20 @@ class ExerciseEditorViewModelTest {
         )
     }
 
+    /** Functional review R2-F-1: focusing the name field and leaving it empty must show the required error. */
+    @Test
+    fun `leaving the name field empty counts as touching it`() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        val viewModel = viewModel()
+
+        viewModel.onNameFocusLost()
+
+        assertEquals(
+            ExerciseEditorFieldError.Domain(ExerciseValidationError.NameBlank),
+            viewModel.uiState.value.visibleNameError,
+        )
+    }
+
     @Test
     fun `blank name reports a domain NameBlank error`() {
         Dispatchers.setMain(UnconfinedTestDispatcher())

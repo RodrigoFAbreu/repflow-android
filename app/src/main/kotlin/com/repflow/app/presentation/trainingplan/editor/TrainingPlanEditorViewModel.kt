@@ -129,6 +129,11 @@ class TrainingPlanEditorViewModel
                 targetWarmupSetsText = exercise.targetWarmupSets?.toString() ?: "",
             )
 
+        /** The name field lost focus: it now counts as touched, so an empty name shows its error (functional review R2-F-1). */
+        fun onNameFocusLost() {
+            _uiState.update { it.copy(nameTouched = true) }
+        }
+
         fun onNameChanged(value: String) {
             savedStateHandle[KEY_NAME] = value
             _uiState.update { revalidate(it.copy(name = value, nameTouched = true)) }

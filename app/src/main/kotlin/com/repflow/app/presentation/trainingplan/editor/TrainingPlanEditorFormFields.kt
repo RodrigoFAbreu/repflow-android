@@ -36,6 +36,7 @@ import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
 import com.repflow.app.presentation.designsystem.repFlowSecondaryTextColor
 import com.repflow.app.presentation.exercise.editor.InlineError
 import com.repflow.app.presentation.exercise.editor.editorFieldColors
+import com.repflow.app.presentation.exercise.editor.notifyOnFocusLost
 
 /**
  * The editor's scrolling body (remediation-1 CP11): the plan name, `4a`'s
@@ -48,6 +49,7 @@ internal fun EditorForm(
     uiState: TrainingPlanEditorUiState,
     contentPadding: PaddingValues,
     onNameChanged: (String) -> Unit,
+    onNameFocusLost: () -> Unit,
     rowActions: TrainingPlanEditorRowActions,
     expandedRowId: Long?,
     onRowHeaderClick: (PlannedExerciseRowUiState) -> Unit,
@@ -62,7 +64,7 @@ internal fun EditorForm(
                 .verticalScroll(rememberScrollState())
                 .padding(top = RepFlowSpacing.gapXs, bottom = RepFlowSpacing.gapLg),
     ) {
-        NameField(uiState, onNameChanged)
+        NameField(uiState, onNameChanged, onNameFocusLost)
         ExercisesHeader(uiState.rows)
         if (uiState.rows.isEmpty()) {
             NoExercisesHint()
@@ -96,6 +98,7 @@ internal fun EditorForm(
 private fun NameField(
     uiState: TrainingPlanEditorUiState,
     onNameChanged: (String) -> Unit,
+    onNameFocusLost: () -> Unit,
 ) {
     val error = fieldErrorText(uiState.visibleNameError)
     OutlinedTextField(
@@ -107,7 +110,7 @@ private fun NameField(
         singleLine = true,
         shape = FieldShape,
         colors = editorFieldColors(),
-        modifier = Modifier.fillMaxWidth().heightIn(min = NameFieldMinHeight),
+        modifier = Modifier.fillMaxWidth().heightIn(min = NameFieldMinHeight).notifyOnFocusLost(onNameFocusLost),
     )
 }
 

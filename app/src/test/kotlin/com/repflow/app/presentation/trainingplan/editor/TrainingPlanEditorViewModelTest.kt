@@ -119,6 +119,18 @@ class TrainingPlanEditorViewModelTest {
             assertNotNull(vm.uiState.value.visibleNameError)
         }
 
+    /** Functional review R2-F-1: focusing the name field and leaving it empty must show the required error. */
+    @Test
+    fun `leaving the name field empty counts as touching it`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            val vm = viewModel()
+
+            vm.onNameFocusLost()
+
+            assertNotNull(vm.uiState.value.visibleNameError)
+        }
+
     @Test
     fun `onAddRowClicked appends an unselected row and onRemoveRowClicked removes it`() =
         runTest {
