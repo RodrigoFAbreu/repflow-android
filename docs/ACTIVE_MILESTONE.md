@@ -1856,14 +1856,15 @@ R2-F-1 and R2-F-4 fail at compile or on assertion against it).
 | R2-F-2 duplicate-name error invisible | usability | the plan editor now reports it under the name field (was the foot of the list); both editors scroll the name field into view when Save is refused for it | `7cce1f2` |
 | R2-F-3 recovery hint under Save | usability | the hint is inside the pinned bar, directly above Save (`D113` amended) | `f1bba20` |
 | R2-F-4 wrong text on a new plan row | defect | the `Required` field error reads "Enter a value." (it was mapped to "Add at least one exercise.") | `8b92020` |
-| R2-F-5 notification prompt mid-rest | defect | the permission effect is keyed on whether a rest is running, so `+/-15s` and Skip never re-ask; the next rest start does (`D114` amended) | `0e591a4` |
+| R2-F-5 notification prompt mid-rest | defect | the permission effect is keyed on whether a rest is running, so `+/-15s` never re-asks; it asks again once the rest has gone away and come back (`Skip rest`, or leaving and re-entering), not when a new set replaces a rest still in the session (`D114` amended; wording corrected in round 6, O-1) | `0e591a4` |
 
 Judgement calls, for the reviewer. P-1: the expiry handler was left as it is -
 the defence-in-depth idea (ignore a rest whose `endAt` is long past) was not
 taken, because the handler's documented behaviour is to alert for the rest it
 finds, and the scheduling guard closes every path that creates a past-due alarm.
 A `-15s` tap that moves the end into the past neither schedules nor cancels; the
-alarm already pending for the old end is left alone. R2-F-4: the message is
+alarm already pending for the old end is left alone. (Superseded by the
+implementation review round 6, I-1 below: that case now fires the alert at once.) R2-F-4: the message is
 corrected rather than hidden until touched. J9's decisions (exact alarm, the
 one-time explanation, the inexact fallback, the `rest_timer` sound, explicit
 vibration) are unchanged.
@@ -1873,6 +1874,25 @@ vibration) are unchanged.
 0 failures (data+infrastructure 85, workout 69, presentation backup/design
 system/exercise/history/home 64, navigation/progress/progression/recovery/
 settings/trainingplan 78, `MainActivityNavHostSmokeTest` 9).
+
+### Implementation review of revision 6 - outcome (2026-10-02)
+
+`/review-implementation` returned **REVISE: 0 Blocking, 1 Important, 3
+Optional** on the round 2 fixes. The orchestrator chose the behaviour for I-1
+(fire at once); the user may overrule it.
+
+| Finding | Disposition | Commit |
+|---|---|---|
+| I-1 `-15s` that ends the rest leaves the old alarm pending (alert up to 15 s late) | validated: `RestTimer.withRemovedSeconds` clamps to the domain clock, so by the time the effect runs the new end is past and the old alarm (for the old, future end) stayed. `RestAlarmEffect` now remembers the previous end within the composition; when it was still in the future and the new end is not, it reschedules the single alarm to the past end, which fires once, at once (revision 5's behaviour). Re-entry has no previous end and still schedules nothing (P-1). `RestAlarmEffectTest` asserts both (6 tests); the I-1 test fails on the previous code (`D114` amended) | `982868c` |
+| O-1 "the next rest start asks again" overstated | reworded in the route KDoc, `D114` and the test name: a new set replaces a rest that is still in the session, so the ask repeats only after the rest has gone away and come back (`Skip rest`, or leaving and re-entering the workout) | `946c8f5` |
+| O-2 exercise-editor scroll test could not fail | the screen is composed in a 260 dp box so the name scrolls away; verified to fail with `bringIntoViewWhen` removed | `8c4698f` |
+| O-3 P-1 test covers the effect, not the route's use of it | no change, as the reviewer says; round 3's phone re-test covers the real path | - |
+
+**Gate (AVD `RepFlow_S24Ultra_384dp_API36`):** `spotlessCheck`, `detekt`,
+`lintDebug` clean; JVM unit tests 643, 0 failures (one earlier run had a
+Turbine timeout in `TrainingPlanListViewModelTest`, a file this round did not
+touch, and passed on rerun - the same flake class already disclosed); instrumented
+306, 0 failures (305 plus the new `RestAlarmEffectTest` case).
 
 **Re-test (round 3):** [PHONE] P-1: with `Rest done` showing, open `Why ›` and
 come back, and `Leave` then `Resume` - no second alert; [AVD] a plan or exercise
