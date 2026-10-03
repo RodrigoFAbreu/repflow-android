@@ -1645,7 +1645,176 @@ then `/apply-implementation-review repflow-redesign-visual-foundation-remediatio
 decided by the user on 2026-10-01: they go to a later remediation child
 (`IMPROVEMENT_ROADMAP.md` §9.8).
 
-## `repflow-redesign-visual-foundation-remediation-1` — Functional review checklist, ROUND 3 (implementation revision 7)
+## `repflow-redesign-visual-foundation-remediation-1` — Functional review checklist, ROUND 4 (implementation revision 8)
+
+Round 4 of the functional review. Round 3 returned FAIL (outcome above, under
+"Functional review round 3 — outcome"); R3-F-2 to R3-F-5 were fixed in this
+item, R3-F-1 was a wording change (the user accepted the delay), and technical
+re-approval of **revision 8** is recorded (commit `8561a43`, basis
+`EXTERNAL_APPROVE`). This round re-tests **only what round 3 changed** plus a
+short regression pass. Rounds 1 to 3 stand for everything else and are not
+repeated. Findings go to `.ai-review/feedback/FUNCTIONAL_REVIEW.md` (the round-3
+file was consumed; write a fresh one headed "round 4"). Every command names the
+child id explicitly (`active_work_item_id` still points at the grandparent).
+
+**Tags.** **[AVD]** the AVD `RepFlow_S24Ultra_384dp_API36` (`emulator-5554`),
+sample data from round 1 "Test data". **[PHONE]** the physical SM-S928B
+(`RFCXA0RLSVT`); a tester will use it this round with the user's permission and
+after a data backup. **[BOTH]** either; AVD first. Steps that write data say
+**WRITES** in bold. Phone steps never `Save` in the editors on the user's real
+exercises or plans: every Save-based step is on the AVD.
+
+### R4 setup and automated state
+
+- Build and install on the AVD: `ANDROID_SERIAL=emulator-5554 ./gradlew
+  installDebug`; restore the sample backup on the AVD first (the editors need
+  at least one existing exercise and two existing plans, one with enough rows
+  to scroll). On the phone install the same debug build only after the backup.
+  Room 8, no flags, no network. R4-I1 needs notifications and
+  `Alarms & reminders` allowed.
+- **Automated verification is current and not re-run here.** The working tree
+  is clean and `git diff faec518 HEAD -- app` is empty (faec518 is the last app
+  change; everything since is docs and `WORKFLOW_STATE.json`). Last full gate
+  (round-3 fixes, AVD): `spotlessCheck detekt lintDebug` clean, JVM unit tests
+  644, 0 failures, instrumented 312, 0 failures.
+
+### R4-A. R3-F-4: the name keeps focus while its error toggles
+
+Do this in the exercise editor (`Add exercise`) and the plan editor
+(`New plan`). Software keyboard on.
+
+- **R4-F4a [AVD]** Exercise editor. Tap the name, type `Abc`, then delete one
+  character at a time to empty. Expect: the field keeps focus and the keyboard
+  stays up the whole time, and the `required` error appears when it is empty.
+- **R4-F4b [AVD]** Exercise editor, immediately after F4a (still empty and
+  focused) type `P`. Expect: `P` appears (no keystroke lost), focus and keyboard
+  stay, the error clears. Keep typing a few characters: none are lost.
+- **R4-F4c [AVD]** Exercise editor. Type the exact name of an existing exercise.
+  Expect: the duplicate-name error shows (after `Save`, or live where it
+  already did) with focus and keyboard kept. Add and delete one character so the
+  duplicate error toggles on and off several times: focus and keyboard stay,
+  no keystroke is lost. Toggle between the `required` and the duplicate error
+  by emptying and retyping the duplicate name.
+- **R4-F4d [AVD]** Plan editor: repeat F4a, F4b and F4c (an existing plan's
+  name as the duplicate).
+- **R4-F4e [PHONE]** Look-only, no Save, nothing written. Exercise editor and
+  plan editor: delete the name to empty and type again; keyboard and focus stay,
+  no keystroke lost. Leave with Back and discard.
+
+### R4-B. R3-F-2: touch and Done take focus off the name
+
+In each editor focus the name field first, then perform the action.
+
+- **R4-F2a [AVD]** Exercise editor, name focused and **empty**: tap blank space
+  (a label or the gap between sections). Expect: focus leaves (keyboard hides)
+  and the `required` error shows.
+- **R4-F2b [AVD]** Same, tapping a chip (muscle group, equipment or similar).
+  Expect: the chip toggles (its action happens) and focus leaves the name.
+- **R4-F2c [AVD]** Same, tapping a stepper (a numeric stepper in the form, where
+  the exercise editor has one). Expect: the value changes and focus leaves.
+  If the exercise editor has no stepper, record "n/a" and do it in the plan
+  editor (F2f).
+- **R4-F2d [AVD]** Name focused, press the keyboard's **Done**. Expect: focus
+  leaves, keyboard hides, an empty name shows `required`.
+- **R4-F2e [AVD]** Name focused: tap another text field (`Other`, notes). Expect:
+  focus moves to that field, keyboard stays up; scroll the form by dragging:
+  scrolling works and does not by itself clear focus; move between text fields
+  with the keyboard's Next/Done action where one is offered.
+- **R4-F2f [AVD]** Plan editor, `New plan`, name focused and **empty**: tap blank
+  space. Expect: focus leaves and `required` shows on the empty `New plan`.
+  Repeat tapping a chip, a stepper (sets or reps on a row) and `Add exercise`
+  (the picker opens or a row is added: the tap's action happens), then Done.
+- **R4-F2g [PHONE]** Look-only, no Save: in both editors with an empty name
+  focused, tap blank space, a chip or stepper and press Done. Focus leaves,
+  `required` shows, the tapped control worked. Leave with Back and discard.
+
+### R4-C. R3-F-3: every refused duplicate Save scrolls to the name
+
+- **R4-F3a [AVD]** Plan editor with a plan that has enough rows to scroll. Type
+  a name that duplicates an existing plan. Scroll to the bottom, `Save`. Expect:
+  refused, the screen scrolls to the name, duplicate error under the name.
+  Scroll away to the bottom again, `Save` again. Repeat at least 3 times in
+  total, each time scrolling away first. Expect: it scrolls to the name every
+  time, not only the first.
+- **R4-F3b [AVD]** Exercise editor, large font or a short view so the name can
+  be scrolled out of view, duplicate name: repeat the refusal at least 3 times,
+  scrolling away in between. Expect: it scrolls to the name every time.
+
+### R4-D. R3-F-5: editing the name clears the duplicate error
+
+- **R4-F5a [AVD]** Plan editor: after a refused duplicate Save, type one more
+  character (or change the name to a free one). Expect: the duplicate error
+  clears as soon as the name is edited. `Save` again with a free name: it
+  saves (**WRITES** a plan on the AVD). `Save` with the duplicate name restored
+  is refused again.
+- **R4-F5b [AVD]** Exercise editor: same (**WRITES** one exercise on the AVD).
+  A different error (for example a required field) is not cleared by editing
+  the name.
+
+### R4-E. R3-F-1: a `-15s` that ends the rest gives one alert
+
+- **R4-F1 [BOTH]** **WRITES** a test workout (phone: finish or `Abandon` it
+  afterwards). Log a set so a rest starts, wait until under 15 s remain, tap
+  `-15s`. Expect: the rest ends and **exactly one** alert arrives within about
+  5 seconds (Android's alarm minimum; not at the old end time). No second
+  alert afterwards. That delay is accepted; this step only confirms it is still
+  a single alert.
+
+### R4-F. Regression pass (short)
+
+- **R4-R1 [AVD]** Rest timer: `Skip rest` clears the strip with no alert;
+  `+15s` extends the rest; a new set restarts it; `Finish` ends the workout with
+  no alert afterwards; leaving and re-entering the workout (`Leave`, then
+  `Resume`) after the rest ended gives no second alert. **WRITES** a workout.
+- **R4-R2 [AVD]** Plan editor: `Save` of a valid **new** plan and of an
+  **existing** plan (new version); Back with edits asks `Discard changes?` and
+  discarding leaves the plan unchanged; Back unedited does not ask. No name
+  error on a fresh open. **WRITES** on the AVD.
+- **R4-R3 [AVD]** Exercise editor: `Save` of a valid **new** exercise and of an
+  **existing** exercise; Back with edits asks to discard and discarding keeps
+  the saved values. No name error on a fresh open. **WRITES** on the AVD.
+
+### R4 for the phone tester
+
+Back up the phone's data first. Do **not** `Save` in the editors on the phone.
+
+1. **[PHONE] R4-F4e. Nothing written.** Both editors: empty the name, type
+   again; keyboard and focus stay, no key lost. Back, discard.
+2. **[PHONE] R4-F2g. Nothing written.** Both editors, empty name focused: tap
+   blank space, a chip or stepper, press Done. Focus leaves, `required` shows,
+   the tapped control worked. Back, discard.
+3. **[BOTH] R4-F1. WRITES a test workout.** Log a set, wait until under 15 s of
+   rest remain, tap `-15s`: exactly one alert within about 5 seconds, no second.
+   Finish or `Abandon` the workout afterwards.
+
+### R4 known deferred (not findings)
+
+- **Group B (B1-B6) stays in the grandchild
+  `repflow-redesign-visual-foundation-remediation-1-remediation-1`**
+  (phase `PLANNING`): Settings 5c/5d, Progress 5b, set entry keeping its values
+  (D60), the three empty-state / search-field / ordering defects, and the
+  Settings entry point for the exact-alarm prompt. Do not report them here.
+- R3-F-1's delay (the `-15s` alert within about 5 seconds, not instant) is
+  ACCEPTED by the user.
+- Review observations left as-is: O3, O4, O5, and O-3 (see round 3's list).
+- Everything rounds 1 to 3 listed as deferred or accepted stays so.
+
+### R4 expected result and what happens next
+
+Every step behaves as stated, nothing crashes, no earlier area regressed. If
+clean: `/accept-milestone repflow-redesign-visual-foundation-remediation-1` is
+the only acceptance command; it needs every checkpoint in this item's registry
+`COMPLETE` (all sixteen are) and, per the workflow, the group-B child must also
+reach completion before this item can reach `MILESTONE_COMPLETE`. A checkpoint
+still outstanding goes to `/milestone-implement`; no command records acceptance
+of a partial round. Findings go to `.ai-review/feedback/FUNCTIONAL_REVIEW.md`,
+then `/apply-functional-review repflow-redesign-visual-foundation-remediation-1`
+(bounded branch for a same-scope fix, broad branch for a `...-remediation-<n>`
+child).
+
+---
+
+## `repflow-redesign-visual-foundation-remediation-1` — Functional review checklist, round 3 (implementation revision 7; superseded by round 4 above for the changed areas)
 
 Round 3 of the functional review. Round 2 returned FAIL (six findings, outcome
 below under round 2); all six were fixed in this item, the implementation
