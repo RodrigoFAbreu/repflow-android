@@ -22,6 +22,7 @@ import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
 import com.repflow.app.domain.workout.WorkoutSession
 import com.repflow.app.domain.workout.WorkoutSessionId
+import com.repflow.app.presentation.workout.RestNotificationCanceller
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -74,6 +75,7 @@ class HomeViewModel
         private val startWorkoutSession: StartWorkoutSession,
         private val startWorkoutSessionFromPlan: StartWorkoutSessionFromPlan,
         private val abandonWorkoutSession: AbandonWorkoutSession,
+        private val restNotificationCanceller: RestNotificationCanceller,
     ) : ViewModel() {
         private val today = MutableStateFlow(currentDate())
         private val historyRetry = MutableStateFlow(0)
@@ -178,8 +180,10 @@ class HomeViewModel
         /** The resume card's abandon, after its destructive confirmation: the session is marked abandoned, nothing is deleted. */
         fun onAbandonWorkout(sessionId: WorkoutSessionId) {
             viewModelScope.launch {
-                val result = abandonWorkoutSession(sessionId)
-                if (result is DomainResult.Failure) error.value = HomeErrorReason.UNKNOWN
+                when (abandonWorkoutSession(sessionId)) {
+                    is DomainResult.Success -> restNotificationCanceller.cancel()
+                    is DomainResult.Failure -> error.value = HomeErrorReason.UNKNOWN
+                }
             }
         }
 

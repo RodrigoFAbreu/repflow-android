@@ -6,6 +6,7 @@ import com.repflow.app.application.backup.TrainingDataError
 import com.repflow.app.application.settings.AppSettings
 import com.repflow.app.application.settings.InMemorySettingsRepository
 import com.repflow.app.application.settings.SettingsPersistenceError
+import com.repflow.app.presentation.workout.RecordingRestNotificationCanceller
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -23,12 +24,13 @@ import org.junit.Test
 class SettingsViewModelTest {
     private val settingsRepository = InMemorySettingsRepository()
     private val trainingData = InMemoryTrainingDataRepository()
+    private val restNotificationCanceller = RecordingRestNotificationCanceller()
     private lateinit var viewModel: SettingsViewModel
 
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        viewModel = SettingsViewModel(settingsRepository, EraseAllData(trainingData))
+        viewModel = SettingsViewModel(settingsRepository, EraseAllData(trainingData), restNotificationCanceller)
     }
 
     @After
@@ -80,6 +82,7 @@ class SettingsViewModelTest {
             viewModel.onEraseAllDataConfirmed()
 
             assertEquals(1, trainingData.clearCount)
+            assertEquals(1, restNotificationCanceller.cancelCount)
             assertEquals(SettingsMessage.ERASED, viewModel.uiState.value.message)
             assertFalse(viewModel.uiState.value.isErasing)
             assertFalse(settingsRepository.get().confirmBeforeFinishing)
@@ -93,6 +96,7 @@ class SettingsViewModelTest {
             viewModel.onEraseAllDataConfirmed()
 
             assertEquals(SettingsMessage.ERASE_FAILED, viewModel.uiState.value.message)
+            assertEquals(0, restNotificationCanceller.cancelCount)
             assertFalse(viewModel.uiState.value.isErasing)
         }
 

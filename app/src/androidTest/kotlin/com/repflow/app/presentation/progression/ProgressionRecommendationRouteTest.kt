@@ -65,6 +65,7 @@ import com.repflow.app.presentation.RepFlowTheme
 import com.repflow.app.presentation.navigation.RepFlowDestinations
 import com.repflow.app.presentation.workout.ActiveWorkoutRoute
 import com.repflow.app.presentation.workout.ActiveWorkoutViewModel
+import com.repflow.app.presentation.workout.RestNotificationCanceller
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -310,6 +311,7 @@ class ProgressionRecommendationRouteTest {
                 ),
             abandonWorkoutSession = AbandonWorkoutSession(workouts, clock),
             settingsRepository = LocalSettingsRepository(database),
+            restNotificationCanceller = RestNotificationCanceller { },
         )
     }
 

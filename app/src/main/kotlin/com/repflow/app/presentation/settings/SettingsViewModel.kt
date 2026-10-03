@@ -6,6 +6,7 @@ import com.repflow.app.application.backup.EraseAllData
 import com.repflow.app.application.settings.AppSettings
 import com.repflow.app.application.settings.SettingsRepository
 import com.repflow.app.domain.common.DomainResult
+import com.repflow.app.presentation.workout.RestNotificationCanceller
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -75,6 +76,7 @@ class SettingsViewModel
     constructor(
         private val settingsRepository: SettingsRepository,
         private val eraseAllData: EraseAllData,
+        private val restNotificationCanceller: RestNotificationCanceller,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(SettingsUiState())
         val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
@@ -107,8 +109,14 @@ class SettingsViewModel
             viewModelScope.launch {
                 val message =
                     when (eraseAllData()) {
-                        is DomainResult.Success -> SettingsMessage.ERASED
-                        is DomainResult.Failure -> SettingsMessage.ERASE_FAILED
+                        is DomainResult.Success -> {
+                            restNotificationCanceller.cancel()
+                            SettingsMessage.ERASED
+                        }
+
+                        is DomainResult.Failure -> {
+                            SettingsMessage.ERASE_FAILED
+                        }
                     }
                 _uiState.update { it.copy(isErasing = false, message = message) }
             }

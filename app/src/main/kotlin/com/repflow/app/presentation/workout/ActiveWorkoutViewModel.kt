@@ -101,6 +101,7 @@ class ActiveWorkoutViewModel
         private val completeWorkoutSession: CompleteWorkoutSession,
         private val abandonWorkoutSession: AbandonWorkoutSession,
         private val settingsRepository: SettingsRepository,
+        private val restNotificationCanceller: RestNotificationCanceller,
     ) : ViewModel() {
         private val error = MutableStateFlow<ActiveWorkoutErrorReason?>(null)
         private val _dayContext = MutableStateFlow<WorkoutDayContextUi?>(null)
@@ -384,6 +385,7 @@ class ActiveWorkoutViewModel
             viewModelScope.launch {
                 when (val result = completeWorkoutSession(sessionId)) {
                     is DomainResult.Success -> {
+                        restNotificationCanceller.cancel()
                         _finish.value = WorkoutFinishState.Finished(sessionId)
                     }
 
@@ -396,7 +398,12 @@ class ActiveWorkoutViewModel
         }
 
         fun onAbandonWorkout(sessionId: WorkoutSessionId) {
-            launchAction { abandonWorkoutSession(sessionId) }
+            viewModelScope.launch {
+                when (val result = abandonWorkoutSession(sessionId)) {
+                    is DomainResult.Success -> restNotificationCanceller.cancel()
+                    is DomainResult.Failure -> error.update { result.error.toReason() }
+                }
+            }
         }
 
         fun onErrorShown() {

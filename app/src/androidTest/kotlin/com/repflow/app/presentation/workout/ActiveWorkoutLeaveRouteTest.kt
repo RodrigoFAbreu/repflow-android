@@ -467,6 +467,7 @@ class ActiveWorkoutLeaveRouteTest {
             startWorkoutSessionFromPlan =
                 StartWorkoutSessionFromPlan(workouts, GetExercise(LocalExerciseRepository(database.exerciseDao())), clock, ids),
             abandonWorkoutSession = AbandonWorkoutSession(workouts, clock),
+            restNotificationCanceller = RestNotificationCanceller { },
         )
     }
 
@@ -513,6 +514,7 @@ class ActiveWorkoutLeaveRouteTest {
                 ),
             abandonWorkoutSession = AbandonWorkoutSession(workouts, clock),
             settingsRepository = LocalSettingsRepository(database),
+            restNotificationCanceller = RestNotificationCanceller { },
         )
     }
 

@@ -1,5 +1,6 @@
 package com.repflow.app.presentation.backup
 
+import com.repflow.app.application.backup.BackupRestoreError
 import com.repflow.app.application.backup.ExportBackup
 import com.repflow.app.application.backup.ExportWorkoutHistoryCsv
 import com.repflow.app.application.backup.InMemoryBackupRepository
@@ -11,6 +12,7 @@ import com.repflow.app.application.recovery.InMemoryRecoveryRepository
 import com.repflow.app.application.trainingplan.InMemoryTrainingPlanRepository
 import com.repflow.app.application.trainingplan.ObserveTrainingPlanVersionLabels
 import com.repflow.app.application.workout.InMemoryWorkoutRepository
+import com.repflow.app.presentation.workout.RecordingRestNotificationCanceller
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -49,7 +51,8 @@ class BackupViewModelTest {
     private val exportWorkoutHistoryCsv =
         ExportWorkoutHistoryCsv(workoutRepository, ObserveTrainingPlanVersionLabels(trainingPlanRepository))
 
-    private val viewModel = BackupViewModel(exportBackup, restoreBackup, exportWorkoutHistoryCsv)
+    private val restNotificationCanceller = RecordingRestNotificationCanceller()
+    private val viewModel = BackupViewModel(exportBackup, restoreBackup, exportWorkoutHistoryCsv, restNotificationCanceller)
 
     @Before
     fun setUp() {
@@ -140,6 +143,7 @@ class BackupViewModelTest {
 
             assertNull(viewModel.uiState.value.pendingRestoreJson)
             assertEquals(BackupStatusMessage.RestoreSucceeded, viewModel.uiState.value.statusMessage)
+            assertEquals(1, restNotificationCanceller.cancelCount)
         }
 
     @Test
@@ -162,6 +166,21 @@ class BackupViewModelTest {
             viewModel.onRestoreConfirmed()
 
             assertEquals(BackupStatusMessage.InvalidBackup, viewModel.uiState.value.statusMessage)
+            assertEquals(0, restNotificationCanceller.cancelCount)
+        }
+
+    @Test
+    fun `a restore that fails leaves the rest notification`() =
+        runTest {
+            var exported: String? = null
+            viewModel.onExportBackupRequested { exported = it }
+            backupRepository.nextReplaceAllFailure = BackupRestoreError.Unavailable
+            viewModel.onRestoreFilePicked(exported!!)
+
+            viewModel.onRestoreConfirmed()
+
+            assertEquals(BackupStatusMessage.OperationFailed, viewModel.uiState.value.statusMessage)
+            assertEquals(0, restNotificationCanceller.cancelCount)
         }
 
     @Test

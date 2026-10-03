@@ -1,5 +1,35 @@
 # Active Milestone
 
+## In implementation: `repflow-redesign-visual-foundation-remediation-1-remediation-1`
+
+Second remediation child (group B of the parent's functional review round 1).
+Workflow v2.1; plan revision 4 (approval commit `79abb9d`). Plan:
+`docs/milestones/repflow-redesign-visual-foundation-remediation-1-remediation-1-execution.md`;
+registry `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-remediation-1-registry.json`
+(CP1-CP10, array order). Every command names this id explicitly;
+`active_work_item_id` still points at the top-level parent.
+
+- **CP1 (B7) complete, 2026-10-03.** New seam
+  `presentation/workout/RestNotificationCanceller` (`SystemRestNotificationCanceller`
+  cancels notification id 1001 only; channel kept; Hilt `@Binds` in
+  `RestNotificationModule`). `ActiveWorkoutViewModel` (finish and abandon),
+  `HomeViewModel.onAbandonWorkout`, `SettingsViewModel.onEraseAllDataConfirmed`
+  and `BackupViewModel.onRestoreConfirmed` call it after the use case returns
+  `Success`; a failure leaves the notification. Tests: JVM
+  `ActiveWorkoutRestNotificationTest` (new class, because
+  `ActiveWorkoutViewModelTest` is at detekt's `LargeClass` limit),
+  `HomeViewModelTest`, `SettingsViewModelTest`, `BackupViewModelTest` (restore
+  success cancels; invalid backup and an `Unavailable` failure do not);
+  instrumented `RestTimerExpiryHandlerTest.theRealCancellerClearsAPostedRestDoneNotification`.
+  Gate: spotlessCheck, detekt, lintDebug (0 errors, 21 warnings, 1 hint),
+  testDebugUnitTest (648 tests, 104 classes, 0 failures), assembleDebugAndroidTest
+  all green; AVD run of `RestTimerExpiryHandlerTest`, `HomeRouteLifecycleTest`,
+  `ActiveWorkoutLeaveRouteTest`, `ProgressionRecommendationRouteTest`:
+  26 tests, 0 failures. CP1 builds no screen, so no design artboard was read.
+- **Next: CP2** (B6 and B2 read model).
+
+---
+
 ## In implementation: `repflow-redesign-visual-foundation-remediation-1`
 
 The remediation child that discharges the parent's functional-review finding

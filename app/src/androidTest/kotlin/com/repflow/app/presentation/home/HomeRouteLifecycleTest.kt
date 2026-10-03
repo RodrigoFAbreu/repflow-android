@@ -32,6 +32,7 @@ import com.repflow.app.data.workout.LocalWorkoutRepository
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.infrastructure.database.RepFlowDatabase
 import com.repflow.app.presentation.RepFlowTheme
+import com.repflow.app.presentation.workout.RestNotificationCanceller
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertTrue
@@ -171,6 +172,7 @@ class HomeRouteLifecycleTest {
                     ids,
                 ),
             abandonWorkoutSession = AbandonWorkoutSession(workoutRepository, clock),
+            restNotificationCanceller = RestNotificationCanceller { },
         )
     }
 

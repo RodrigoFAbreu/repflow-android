@@ -7,6 +7,7 @@ import com.repflow.app.application.backup.ExportBackup
 import com.repflow.app.application.backup.ExportWorkoutHistoryCsv
 import com.repflow.app.application.backup.RestoreBackup
 import com.repflow.app.domain.common.DomainResult
+import com.repflow.app.presentation.workout.RestNotificationCanceller
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,6 +29,7 @@ class BackupViewModel
         private val exportBackup: ExportBackup,
         private val restoreBackup: RestoreBackup,
         private val exportWorkoutHistoryCsv: ExportWorkoutHistoryCsv,
+        private val restNotificationCanceller: RestNotificationCanceller,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(BackupUiState())
         val uiState = _uiState.asStateFlow()
@@ -104,6 +106,7 @@ class BackupViewModel
             viewModelScope.launch {
                 when (val result = restoreBackup(json)) {
                     is DomainResult.Success -> {
+                        restNotificationCanceller.cancel()
                         _uiState.update { it.copy(isBusy = false, statusMessage = BackupStatusMessage.RestoreSucceeded) }
                     }
 

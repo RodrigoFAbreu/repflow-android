@@ -250,6 +250,20 @@ class RestTimerExpiryHandlerTest {
         }
     }
 
+    /** B7: the real canceller removes a posted "Rest done" notification, as finishing or abandoning a workout does. */
+    @Test
+    fun theRealCancellerClearsAPostedRestDoneNotification() {
+        runBlocking {
+            settings.update { settingsWith(notification = true, vibrate = false) }
+            handler.onRestEnded(context, notificationPermitted = true)
+        }
+        assertPosted(true)
+
+        SystemRestNotificationCanceller(context).cancel()
+
+        assertTrue("expected the notification to be gone", awaitPosted(false))
+    }
+
     private fun assertEveryCombination() {
         for (notification in listOf(true, false)) {
             for (vibrate in listOf(true, false)) {

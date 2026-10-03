@@ -38,6 +38,7 @@ import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
 import com.repflow.app.domain.workout.WorkoutSession
 import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.domain.workout.WorkoutSessionStatus
+import com.repflow.app.presentation.workout.RecordingRestNotificationCanceller
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestCoroutineScheduler
@@ -72,6 +73,7 @@ class HomeViewModelTest {
 
     private val recoveryRepository = InMemoryRecoveryRepository()
     private val workoutRepository = InMemoryWorkoutRepository()
+    private val restNotificationCanceller = RecordingRestNotificationCanceller()
     private val exerciseRepository = InMemoryExerciseRepository()
     private val trainingPlanRepository = InMemoryTrainingPlanRepository()
 
@@ -244,6 +246,26 @@ class HomeViewModelTest {
             }
         }
 
+    @Test
+    fun `abandoning from Home cancels the rest notification and a failed abandon does not`() =
+        runTest {
+            val viewModel = viewModel(startAt(day.atTime(10, 0)))
+
+            viewModel.uiState.test {
+                awaitUntil { it.start != HomeStartCard.Loading }
+                viewModel.onAbandonWorkout(WorkoutSessionId("missing"))
+                awaitUntil { it.error != null }
+                assertEquals(0, restNotificationCanceller.cancelCount)
+
+                viewModel.onStartWorkout(null)
+                val sessionId = awaitUntil { it.activeWorkout != null }.activeWorkout!!.sessionId
+                viewModel.onAbandonWorkout(sessionId)
+
+                awaitUntil { it.activeWorkout == null }
+                assertEquals(1, restNotificationCanceller.cancelCount)
+            }
+        }
+
     // --- fixtures ---------------------------------------------------------------------------
 
     /** A [Clock] on the test scheduler's virtual time, plus a wall-clock jump that uptime never sees. */
@@ -279,6 +301,7 @@ class HomeViewModelTest {
             startWorkoutSession = StartWorkoutSession(workoutRepository, clock, ids),
             startWorkoutSessionFromPlan = StartWorkoutSessionFromPlan(workoutRepository, GetExercise(exerciseRepository), clock, ids),
             abandonWorkoutSession = AbandonWorkoutSession(workoutRepository, clock),
+            restNotificationCanceller = restNotificationCanceller,
         )
     }
 
