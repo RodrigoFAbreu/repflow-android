@@ -447,6 +447,20 @@ registry `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediati
   untouched. Gate: spotlessCheck, detekt, lintDebug (0 errors, 22 warnings),
   testDebugUnitTest 729 tests 0 failures; AVD instrumented 378 tests
   (94 + 87 + 197) 0 failures.
+- **External implementation review round 1 applied, 2026-10-03** (manual
+  Codex review of revision 2, REVISE, 0 Blocking, 1 Important, 0 Optional).
+  **GXI-I1** fixed in `663090b`: the `last_backup_at` stamp after a successful
+  backup export ran in `viewModelScope`, so leaving the Backup route could
+  cancel it. It now runs inside `withContext(NonCancellable)`: no new scope or
+  dependency (the app has no application-scoped `CoroutineScope`), and the
+  write is one short Room update. Rules unchanged: stamp only after a
+  successful backup export; CSV, cancel and failure never stamp; a failed stamp
+  never fails the export. New test `BackupViewModelTest` "a suspended
+  last_backup_at write still lands after the ViewModel is cleared" (cancels
+  `viewModelScope` mid-write) failed before the fix and passes after. The
+  functional-review items are untouched. Gate: spotlessCheck, detekt,
+  lintDebug, testDebugUnitTest 730 tests 0 failures; AVD instrumented 378
+  tests 0 failures.
 
 ---
 
