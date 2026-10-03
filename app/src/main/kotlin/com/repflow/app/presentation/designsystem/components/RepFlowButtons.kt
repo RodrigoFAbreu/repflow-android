@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.repflow.app.presentation.designsystem.RepFlowColor
@@ -108,10 +109,11 @@ fun RepFlowPrimaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     @DrawableRes leadingIcon: Int? = null,
+    minHeight: Dp = RepFlowButtonDefaults.primaryMinHeight,
 ) {
     Button(
         onClick = onClick,
-        modifier = modifier.heightIn(min = RepFlowButtonDefaults.primaryMinHeight),
+        modifier = modifier.heightIn(min = minHeight),
         enabled = enabled,
         shape = RepFlowButtonDefaults.primaryShape,
         colors =

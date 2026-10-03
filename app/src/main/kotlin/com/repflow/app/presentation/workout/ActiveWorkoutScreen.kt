@@ -526,7 +526,7 @@ internal fun RestTimerBar(
                 RepFlowPrimaryButton(
                     text = stringResource(R.string.workout_rest_skip),
                     onClick = onSkipRestTimer,
-                    modifier = Modifier.heightIn(min = RestStripButtonHeight),
+                    minHeight = RestStripButtonHeight,
                 )
             }
         }

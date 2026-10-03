@@ -31,6 +31,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.height
 import androidx.compose.ui.unit.width
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
@@ -40,6 +41,7 @@ import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.domain.workout.WorkoutSetId
 import com.repflow.app.presentation.RepFlowTheme
+import com.repflow.app.presentation.assertButtonLabelWhole
 import com.repflow.app.presentation.progression.ProgressionRecommendationUi
 import com.repflow.app.presentation.progression.ProgressionResultUi
 import org.junit.Assert.assertEquals
@@ -861,13 +863,35 @@ class ActiveWorkoutScreenTest {
         assertEquals(1, results.single().lineCount)
     }
 
-    /** At 1.3x and 2.0x font the strip's button labels stay whole: one line, no overflow (design 9f, P2-F-2). */
+    /** At 384dp and font 1.0 the strip's three buttons share one row at one height (the 44dp floor, P2-F-2 / I1). */
     @Test
-    fun theRestStripsButtonLabelsStayWholeAtLargeFontSizes() {
-        val scale = mutableStateOf(LARGE_FONT_SCALE_MEDIUM)
+    fun theRestStripsThreeButtonsShareOneRowAndHeightAtDefaultFont() {
+        showRestStrip(fontScale = 1f)
+        val bounds =
+            REST_STRIP_LABELS.map { label ->
+                composeRule.onNode(hasClickAction() and hasText(string(label))).getUnclippedBoundsInRoot()
+            }
+        assertTrue("buttons do not share one top: $bounds", bounds.all { kotlin.math.abs(it.top.value - bounds.first().top.value) < 0.5f })
+        assertTrue(
+            "buttons differ in height: $bounds",
+            bounds.all { kotlin.math.abs(it.height.value - bounds.first().height.value) < 0.5f },
+        )
+        // Pixel rounding makes 44dp read 44.09dp, so compare with a half-dp tolerance.
+        assertTrue("buttons are not the 44dp floor: $bounds", kotlin.math.abs(bounds.first().height.value - 44f) < 0.5f)
+    }
+
+    /** At 1.3x the strip's button labels are fully rendered (design 9f, P2-F-2). */
+    @Test
+    fun theRestStripsButtonLabelsStayWholeAt1point3xFont() = assertRestStripLabelsWhole(LARGE_FONT_SCALE_MEDIUM)
+
+    /** At 2.0x the strip's button labels are fully rendered (design 9f, P2-F-2). */
+    @Test
+    fun theRestStripsButtonLabelsStayWholeAt2xFont() = assertRestStripLabelsWhole(LARGE_FONT_SCALE_MAX)
+
+    private fun showRestStrip(fontScale: Float) {
         composeRule.setContent {
             val base = LocalDensity.current
-            CompositionLocalProvider(LocalDensity provides Density(base.density, scale.value)) {
+            CompositionLocalProvider(LocalDensity provides Density(base.density, fontScale)) {
                 RepFlowTheme {
                     Box(Modifier.width(384.dp)) {
                         RestTimerBar(
@@ -880,27 +904,17 @@ class ActiveWorkoutScreenTest {
                 }
             }
         }
-        listOf(LARGE_FONT_SCALE_MEDIUM, LARGE_FONT_SCALE_MAX).forEach { fontScale ->
-            composeRule.runOnIdle { scale.value = fontScale }
-            composeRule.waitForIdle()
-            listOf(
-                R.string.workout_active_rest_timer_remove,
-                R.string.workout_active_rest_timer_add,
-                R.string.workout_rest_skip,
-            ).forEach { label ->
-                val results = mutableListOf<TextLayoutResult>()
-                val node = node(label)
-                node.assertIsDisplayed()
-                node
-                    .fetchSemanticsNode()
-                    .config[SemanticsActions.GetTextLayoutResult]
-                    .action
-                    ?.invoke(results)
-                val layout = results.single()
-                assertEquals("label $label wraps at font $fontScale", 1, layout.lineCount)
-                val bounds = node.getUnclippedBoundsInRoot()
-                assertTrue("label $label is clipped at font $fontScale: $bounds", bounds.left >= 0.dp && bounds.right <= 384.dp)
-            }
+    }
+
+    private fun string(
+        @StringRes id: Int,
+    ) = composeRule.activity.getString(id)
+
+    private fun assertRestStripLabelsWhole(fontScale: Float) {
+        showRestStrip(fontScale)
+        composeRule.waitForIdle()
+        REST_STRIP_LABELS.forEach { label ->
+            composeRule.assertButtonLabelWhole(string(label), "font $fontScale")
         }
     }
 
@@ -949,6 +963,13 @@ class ActiveWorkoutScreenTest {
         composeRule.onNodeWithText("kg · 2.5 steps").assertIsDisplayed()
     }
 }
+
+private val REST_STRIP_LABELS =
+    listOf(
+        R.string.workout_active_rest_timer_remove,
+        R.string.workout_active_rest_timer_add,
+        R.string.workout_rest_skip,
+    )
 
 private const val LARGE_FONT_SCALE_MEDIUM = 1.3f
 private const val LARGE_FONT_SCALE_MAX = 2.0f
