@@ -103,7 +103,9 @@ internal fun WorkoutFocus(
     // [entry] is held above focus mode (GF-1), already seeded when first created, so a reopened exercise
     // keeps what was typed and never flashes empty steppers.
     // The seed may arrive (or change) after focus opened; an untouched entry takes it, a touched one never does.
-    LaunchedEffect(exercise.seed) { entry.applySeed(exercise.seed) }
+    // Keyed by [entry] too (GXI4-I1): switching to another exercise's cached entry must apply the current
+    // seed even when it equals the previous exercise's, which would not restart a seed-only key.
+    LaunchedEffect(entry, exercise.seed) { entry.applySeed(exercise.seed) }
     var detailExpanded by rememberSaveable(exercise.id.value) { mutableStateOf(false) }
     var correcting by rememberSaveable(exercise.id.value) { mutableStateOf(false) }
     val header = focusHeader(content.exercises, exercise)

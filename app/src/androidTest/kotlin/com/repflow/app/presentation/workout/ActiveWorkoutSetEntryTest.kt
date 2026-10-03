@@ -354,4 +354,41 @@ class ActiveWorkoutSetEntryTest {
 
         assertSteppers("82.5", "8")
     }
+
+    /**
+     * GXI4-I1: two cached untouched entries that receive the same late seed each take it - the seed effect
+     * must restart on the entry change, not only on a seed change. A touched entry stays as typed.
+     */
+    @Test
+    fun equalLateSeedsReachEveryCachedUntouchedEntryAndNeverATouchedOne() {
+        start(
+            exercise(id = "e1", name = "Bench Press"),
+            exercise(id = "e2", name = "Row"),
+        )
+        // Visit both before any history arrives: two untouched entries, null seeds.
+        composeRule.onNodeWithText(text(R.string.workout_focus_next)).performClick()
+        composeRule.runOnIdle { assertEquals(WorkoutExerciseId("e2"), focusedId) }
+        composeRule.runOnIdle { focusedId = WorkoutExerciseId("e1") }
+        composeRule.onAllNodesWithText(text(R.string.workout_focus_value_empty)).assertCountEquals(2)
+
+        // History arrives for both, with identical seeds, while A is focused.
+        composeRule.runOnIdle {
+            exercises =
+                listOf(
+                    exercise(id = "e1", name = "Bench Press", last = lastTime, seed = lastTimeSeed),
+                    exercise(id = "e2", name = "Row", last = lastTime, seed = lastTimeSeed),
+                )
+        }
+        assertSteppers("80", "8")
+
+        composeRule.runOnIdle { focusedId = WorkoutExerciseId("e2") }
+        assertSteppers("80", "8")
+
+        // B is now touched; a later, different seed does not replace it.
+        stepWeightUp()
+        composeRule.onNodeWithText("82.5").performScrollTo().assertIsDisplayed()
+        composeRule.runOnIdle { focusedId = WorkoutExerciseId("e1") }
+        composeRule.runOnIdle { focusedId = WorkoutExerciseId("e2") }
+        composeRule.onNodeWithText("82.5").performScrollTo().assertIsDisplayed()
+    }
 }
