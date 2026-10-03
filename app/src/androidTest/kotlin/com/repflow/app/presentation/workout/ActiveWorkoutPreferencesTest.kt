@@ -2,7 +2,12 @@ package com.repflow.app.presentation.workout
 
 import androidx.activity.ComponentActivity
 import androidx.annotation.StringRes
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -14,7 +19,7 @@ import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.presentation.RepFlowTheme
-import org.junit.Assert.assertNull
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -30,13 +35,17 @@ class ActiveWorkoutPreferencesTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
+    /** Read inside the composition, so a test can switch the mode the way Settings does while focus mode keeps its entry. */
+    private var extraSetFieldsMode by mutableStateOf(ExtraSetFields.COLLAPSED)
+
     private fun setContent(
         extraSetFields: ExtraSetFields = ExtraSetFields.COLLAPSED,
         appDefaultRestSeconds: Int = 90,
         exerciseDefaultRestSeconds: Int? = null,
         plannedRestSeconds: Int? = null,
-        onRecordRpe: (Double?) -> Unit = {},
+        onRecordExtras: (rpe: Double?, pain: Int?, technique: Int?) -> Unit = { _, _, _ -> },
     ) {
+        extraSetFieldsMode = extraSetFields
         val exercise =
             ActiveExerciseUi(
                 id = WorkoutExerciseId("exercise-1"),
@@ -62,7 +71,7 @@ class ActiveWorkoutPreferencesTest {
                                     startedAt = Instant.parse("2026-01-01T00:00:00Z"),
                                     exercises = listOf(exercise),
                                     appDefaultRestSeconds = appDefaultRestSeconds,
-                                    extraSetFields = extraSetFields,
+                                    extraSetFields = extraSetFieldsMode,
                                 ),
                         ),
                     dayContext = null,
@@ -71,7 +80,7 @@ class ActiveWorkoutPreferencesTest {
                     onAddExercise = {},
                     onCreateExercise = {},
                     onOpenRecommendation = {},
-                    onRecordSet = { _, _, _, _, rpe, _, _, _ -> onRecordRpe(rpe) },
+                    onRecordSet = { _, _, _, _, rpe, _, pain, technique -> onRecordExtras(rpe, pain, technique) },
                     onUndoLastSet = {},
                     onEditLastSet = { _, _, _, _, _, _, _, _ -> },
                     onAddRestTime = {},
@@ -108,10 +117,24 @@ class ActiveWorkoutPreferencesTest {
         node(R.string.workout_active_technique_quality_label).performScrollTo().assertIsDisplayed()
     }
 
+    /**
+     * The values are entered while the section is on and `Off` is chosen
+     * afterwards (the reachable path: Settings, then back). The entry keeps
+     * them, and a hidden section must submit none of them (Q2, CP6 item 3).
+     */
     @Test
-    fun offDrawsNeitherTheDisclosureNorTheRowsAndSubmitsNoRpe() {
-        var recordedRpe: Double? = 5.0
-        setContent(ExtraSetFields.OFF, onRecordRpe = { recordedRpe = it })
+    fun offDrawsNeitherTheDisclosureNorTheRowsAndSubmitsNoExtraFieldEnteredEarlier() {
+        var recorded: Triple<Double?, Int?, Int?>? = null
+        setContent(ExtraSetFields.COLLAPSED, onRecordExtras = { rpe, pain, technique -> recorded = Triple(rpe, pain, technique) })
+
+        node(R.string.workout_active_set_detail_toggle).performScrollTo().performClick()
+        // RPE's row is the only one with an 8; the three rows each have a 2, in the order RPE, pain, technique.
+        composeRule.onNode(hasText("8") and isSelectable()).performScrollTo().performClick()
+        composeRule.onAllNodes(hasText("2") and isSelectable())[1].performScrollTo().performClick()
+        composeRule.onAllNodes(hasText("2") and isSelectable())[2].performScrollTo().performClick()
+
+        composeRule.runOnIdle { extraSetFieldsMode = ExtraSetFields.OFF }
+        composeRule.waitForIdle()
 
         node(R.string.workout_active_set_detail_toggle).assertDoesNotExist()
         node(R.string.workout_active_rpe_label).assertDoesNotExist()
@@ -119,7 +142,7 @@ class ActiveWorkoutPreferencesTest {
         node(R.string.workout_active_technique_quality_label).assertDoesNotExist()
         node(R.string.workout_focus_log_set).performClick()
 
-        assertNull(recordedRpe)
+        assertEquals(Triple<Double?, Int?, Int?>(null, null, null), recorded)
     }
 
     private fun hint(seconds: Int) = composeRule.activity.getString(R.string.workout_focus_warmup_hint_off, seconds)
