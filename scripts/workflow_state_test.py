@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import ast
 import copy
+import hashlib
 import json
 import os
 import subprocess
@@ -1719,7 +1720,9 @@ class TestWorkItemRouting(unittest.TestCase):
         self.assertEqual(state, _base_state())
 
     def test_resuming_existing_non_terminal_entry_only_advances_revision_fields(self):
-        state = _base_state(wi=_base_work_item(governing_workflow_version="2.1"))
+        # workflow-2.6.0: a two-stage item's resume branch runs only at a
+        # non-ready plan-stage phase (`D-Plan-Review-Bundle-Binding`).
+        state = _base_state(wi=_base_work_item(governing_workflow_version="2.1", phase="PLANNING"))
         config = ws.default_config()
         new_state = ws.route_work_item(
             state, config, work_item_id="wi", work_item_type="process",
@@ -1815,15 +1818,24 @@ class TestPublishPlanRevision(unittest.TestCase):
         registry = {"work_item_id": "wi", "plan_revision": 63, "checkpoints": []}
         ws.validate_state(new_state, registry=registry)
 
-    def test_v21_governed_enters_awaiting_local_plan_review(self):
-        """Item 371(d): a `"2.1"`-governed item's target phase is
-        `AWAITING_LOCAL_PLAN_REVIEW`, never `AWAITING_EXTERNAL_PLAN_REVIEW`
-        -- `D-Plan-Review-Stages` always enters local review first."""
+    def test_v21_governed_publish_is_mirror_only(self):
+        """Item 371(d), re-pointed by workflow-2.6.0
+        (`D-Plan-Review-Bundle-Binding` item 1): a `"2.1"`-governed item's
+        publish advances the mirror and records `PUBLISHED`, but leaves the
+        phase alone -- `bind_plan_review_bundle` alone writes
+        `AWAITING_LOCAL_PLAN_REVIEW`, and never `AWAITING_EXTERNAL_PLAN_REVIEW`
+        (`D-Plan-Review-Stages` always enters local review first)."""
         wi = _v21_work_item(phase="REVISING_PLAN", plan_revision=4, state_revision=2)
-        new_state = ws.publish_plan_revision(_base_state(wi=wi), "wi", 5, "t1")
+        wi["plan_review_binding"] = {
+            "status": "CONSUMED", "at": "t0", "published": None, "bound": None,
+            "consumed": {"review_content_id": "b" * 64, "plan_revision": 4, "legacy": False},
+        }
+        new_state = ws.publish_plan_revision(_base_state(wi=wi), "wi", 5, "t1", review_content_id="a" * 64)
         item = new_state["work_items"]["wi"]
         self.assertEqual(item["plan_revision"], 5)
-        self.assertEqual(item["phase"], "AWAITING_LOCAL_PLAN_REVIEW")
+        self.assertEqual(item["phase"], "REVISING_PLAN")
+        self.assertEqual(item["plan_review_binding"]["status"], "PUBLISHED")
+        self.assertEqual(item["plan_review_binding"]["published"], {"review_content_id": "a" * 64, "plan_revision": 5})
 
     def test_idempotent_retry_is_a_true_no_op(self):
         """Item 371(b): re-running with the same `plan_revision` and the
@@ -2293,18 +2305,24 @@ class TestApprovalGateReachability(unittest.TestCase):
         self.assertFalse(ws.technical_approval_gate_reachable(
             latest_round_status="APPROVE", protected_path_dirty=True,
             head_matches_reviewed_implementation_head=True,
+            governing_workflow_version=None, implementation_review_stages=None,
+            current_review_content_id=None,
         ))
 
     def test_technical_gate_blocked_by_head_mismatch(self):
         self.assertFalse(ws.technical_approval_gate_reachable(
             latest_round_status="APPROVE", protected_path_dirty=False,
             head_matches_reviewed_implementation_head=False,
+            governing_workflow_version=None, implementation_review_stages=None,
+            current_review_content_id=None,
         ))
 
     def test_technical_gate_reachable_when_clean_and_matching(self):
         self.assertTrue(ws.technical_approval_gate_reachable(
             latest_round_status="REVISE", protected_path_dirty=False,
             head_matches_reviewed_implementation_head=True,
+            governing_workflow_version=None, implementation_review_stages=None,
+            current_review_content_id=None,
         ))
 
     def test_technical_gate_pinned_block_refuses_even_when_otherwise_reachable(self):
@@ -2315,6 +2333,8 @@ class TestApprovalGateReachability(unittest.TestCase):
         self.assertFalse(ws.technical_approval_gate_reachable(
             latest_round_status="APPROVE", protected_path_dirty=False,
             head_matches_reviewed_implementation_head=True, pinned_block=True,
+            governing_workflow_version=None, implementation_review_stages=None,
+            current_review_content_id=None,
         ))
 
     def test_technical_gate_pinned_block_defaults_false(self):
@@ -2323,6 +2343,8 @@ class TestApprovalGateReachability(unittest.TestCase):
         self.assertTrue(ws.technical_approval_gate_reachable(
             latest_round_status="REVISE", protected_path_dirty=False,
             head_matches_reviewed_implementation_head=True,
+            governing_workflow_version=None, implementation_review_stages=None,
+            current_review_content_id=None,
         ))
 
     def test_technical_gate_missing_or_block_feedback_never_reaches_regardless_of_other_conditions(self):
@@ -2339,10 +2361,14 @@ class TestApprovalGateReachability(unittest.TestCase):
         self.assertFalse(ws.technical_approval_gate_reachable(
             latest_round_status=None, protected_path_dirty=False,
             head_matches_reviewed_implementation_head=True,
+            governing_workflow_version=None, implementation_review_stages=None,
+            current_review_content_id=None,
         ))
         self.assertFalse(ws.technical_approval_gate_reachable(
             latest_round_status="BLOCK", protected_path_dirty=False,
             head_matches_reviewed_implementation_head=True,
+            governing_workflow_version=None, implementation_review_stages=None,
+            current_review_content_id=None,
         ))
 
     def test_technical_gate_reachable_for_first_pass_approve_round(self):
@@ -2359,6 +2385,8 @@ class TestApprovalGateReachability(unittest.TestCase):
         self.assertTrue(ws.technical_approval_gate_reachable(
             latest_round_status="APPROVE", protected_path_dirty=False,
             head_matches_reviewed_implementation_head=True,
+            governing_workflow_version=None, implementation_review_stages=None,
+            current_review_content_id=None,
         ))
 
     def test_v1_plan_gate_ignores_plan_review_stages(self):
@@ -3526,6 +3554,92 @@ class TestImplementingEntryReachableSecondItem(unittest.TestCase):
             self.assertNotEqual(approval_sha, repo.head())
 
 
+class TestImplementingEntryReachableAfterInstallationRecordUpdate(unittest.TestCase):
+    """workflow-2.6.0, `D-Tooling-Ambient-Classification` (the legacy-item
+    half of `v2.4.0-001`): a 2.3.1-shaped item -- whose plan-stage
+    declaration predates `.workflow-manager/` and so never classifies it --
+    stays `implementing_entry_reachable` after a committed `workflow_manager
+    update` that rewrote only `.workflow-manager/installation.json`. Under
+    `2.5.1` the same call raised `UnclassifiedPathError` (control arm)."""
+
+    INSTALLATION = ".workflow-manager/installation.json"
+
+    def test_legacy_item_stays_reachable_after_committed_installation_record_change(self):
+        from unittest import mock
+
+        with ScratchRepo() as repo:
+            installation = repo.root / self.INSTALLATION
+            installation.parent.mkdir(parents=True)
+            installation.write_text('{"release": "2.3.1"}\n')
+            _run(["git", "add", self.INSTALLATION], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "workflow_manager install"], cwd=repo.root)
+            repo.base = repo.head()
+
+            work_item_id = "legacy-item"
+            plan_path_rel = f"docs/ai-workflow/{work_item_id}-plan.md"
+            registry_rel = f"docs/ai-workflow/registry/{work_item_id}-registry.json"
+            mapping_rel = f"docs/ai-workflow/requirements/{work_item_id}-mapping.json"
+            artifacts_rel = f"docs/ai-workflow/registry/{work_item_id}-artifacts.json"
+            state_rel = "docs/ai-workflow/WORKFLOW_STATE.json"
+            protected = frozenset({plan_path_rel, registry_rel, mapping_rel})
+            excluded_paths = {state_rel: "runtime-mutable state", artifacts_rel: "non-immutable registry artifact"}
+            excluded_prefixes = {"scripts/": "checkpoint scaffolding"}
+            for rel, content in (
+                (plan_path_rel, "# Plan (Revision 1)\n\nplan v1\n"),
+                (registry_rel, json.dumps({"work_item_id": work_item_id, "plan_revision": 1, "checkpoints": []})),
+                (mapping_rel, json.dumps({"work_item_id": work_item_id, "requirements": {}})),
+                (artifacts_rel, json.dumps({
+                    "schema_version": 2, "work_item_id": work_item_id,
+                    "plan_stage": {
+                        "protected_paths": sorted(protected),
+                        "excluded_paths": excluded_paths,
+                        "excluded_prefixes": excluded_prefixes,
+                    },
+                })),
+                (state_rel, json.dumps({
+                    "schema_version": 1, "active_work_item_id": work_item_id,
+                    "work_items": {
+                        work_item_id: {
+                            "work_item_id": work_item_id, "work_item_type": "process",
+                            "plan_path": plan_path_rel, "registry_path": registry_rel,
+                            "mapping_path": mapping_rel, "base_commit": repo.base,
+                        },
+                    },
+                })),
+            ):
+                full = repo.root / rel
+                full.parent.mkdir(parents=True, exist_ok=True)
+                full.write_text(content)
+                _run(["git", "add", rel], cwd=repo.root)
+
+            review_content_id, _ = fingerprint.compute_review_content_id_plan_stage(
+                repo.root, repo.base, "process", work_item_id, 1, protected, excluded_paths, excluded_prefixes,
+            )
+            _run(
+                ["git", "commit", "-q", "-m",
+                 f"approve plan\n\nWorkflow-Plan-Approval: {review_content_id}\n"
+                 f"Workflow-Work-Item: {work_item_id}"],
+                cwd=repo.root,
+            )
+            work_item = {
+                "work_item_id": work_item_id, "work_item_type": "process", "plan_revision": 1,
+                "plan_approval": {"status": "CURRENT", "approved_review_content_id": review_content_id},
+            }
+            self.assertTrue(ws.implementing_entry_reachable(repo.root, work_item, repo.base))
+
+            installation.write_text('{"release": "2.5.1"}\n')
+            _run(["git", "add", self.INSTALLATION], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "chore(workflow): update installed workflow"], cwd=repo.root)
+
+            self.assertTrue(
+                ws.implementing_entry_reachable(repo.root, work_item, repo.base),
+                "the committed installation-record change must neither raise nor stale the approval",
+            )
+            with mock.patch.object(fingerprint, "TOOLING_AMBIENT_EXCLUDED_PATHS", frozenset()):
+                with self.assertRaises(fingerprint.UnclassifiedPathError):
+                    ws.implementing_entry_reachable(repo.root, work_item, repo.base)
+
+
 # ---------------------------------------------------------------------------
 # WF4a-iii: "no protected path is dirty" gate condition (D-States;
 # missing-test item 16)
@@ -3897,13 +4011,26 @@ class TestTransitionToAwaitingLocalPlanReview(unittest.TestCase):
         """Missing-test item 89: whether the edit was driven by a local or
         manual-external REVISE, the next required stage is always
         AWAITING_LOCAL_PLAN_REVIEW -- never directly back to manual-external
-        review or to AWAITING_PLAN_APPROVAL."""
+        review or to AWAITING_PLAN_APPROVAL.
+
+        workflow-2.6.0: `transition_to_awaiting_local_plan_review` is
+        retired (it refuses, writing nothing); the same edge is now written
+        by `bind_plan_review_bundle` for the published content, which is
+        what this test drives."""
         wi = _v21_work_item(phase="REVISING_PLAN", state_revision=3, plan_review_stages={
             "review_content_id": "stale",
             "LOCAL_MODEL_PLAN_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
             "MANUAL_EXTERNAL_PLAN_REVIEW": None,
+        }, plan_revision=2, plan_review_binding={
+            "status": "PUBLISHED", "at": "t1", "bound": None,
+            "consumed": {"review_content_id": "b" * 64, "plan_revision": 1, "legacy": False},
+            "published": {"review_content_id": "a" * 64, "plan_revision": 2},
         })
-        new_state = ws.transition_to_awaiting_local_plan_review(_base_state(wi=wi), "wi", now="t2")
+        with self.assertRaises(ws.PlanReviewWriterRetiredError):
+            ws.transition_to_awaiting_local_plan_review(_base_state(wi=wi), "wi", now="t2")
+        new_state = ws.bind_plan_review_bundle(_base_state(wi=wi), "wi", binding={
+            "review_content_id": "a" * 64, "bundle_id": "c" * 64, "plan_revision": 2,
+        }, now="t2")
         item = new_state["work_items"]["wi"]
         self.assertEqual(item["phase"], "AWAITING_LOCAL_PLAN_REVIEW")
         self.assertEqual(item["state_revision"], 4)
@@ -4263,6 +4390,36 @@ class TestCheckpointStateTransitions(unittest.TestCase):
         self.assertEqual(item["current_checkpoint_id"], "A")
         self.assertEqual(item["state_revision"], 2)
         # Original state is untouched (functions return a new dict).
+        self.assertEqual(state["work_items"]["wi"]["checkpoints"], {})
+
+    def test_transition_to_in_progress_refuses_once_the_work_item_has_left_implementing(self):
+        """XMODEL-R4-B1, missing-tests item 3: this is the second,
+        independent half of the amendment-vs-checkpoint-start race fix. A
+        checkpoint claim published before an amendment transition's own
+        state_transaction committed must not be able to publish
+        IN_PROGRESS once the work item has moved on to `AMENDING_PLAN` --
+        or, more generally, to any phase outside
+        `CHECKPOINT_START_LEGAL_PHASES`.
+
+        Also pins that this guard is not made redundant by
+        `claim_checkpoint`'s own newer, round-8 phase check (missing-test
+        item 3, round 9 external implementation review): this call goes
+        directly through `transition_checkpoint_in_progress` with no
+        `claim_checkpoint` call anywhere in this test, which is exactly the
+        shape three real call sites take in production --
+        `.claude/commands/milestone-implement.md`'s `CONTINUE_CLAIM`/
+        `RESUME` branches (the claim already exists from an earlier step
+        1c, so `claim_checkpoint` is never called again), `adopt_claim`
+        (publishes through `_claim_or_refuse` directly), and
+        `take_over_claim` (publishes through `_publish_claim_replacing`).
+        Removing this guard on the theory that `claim_checkpoint`'s own
+        check "already covers it" would silently reopen the
+        `IN_PROGRESS`-after-`AMENDING_PLAN` write on all three."""
+        wi = _base_work_item(phase="AMENDING_PLAN", current_checkpoint_id=None, checkpoints={})
+        state = _base_state(wi=wi)
+        with self.assertRaises(ws.IllegalCheckpointStartPhaseError):
+            ws.transition_checkpoint_in_progress(state, "wi", "A", "deadbeef", now="t1")
+        # Refused before any write: the original checkpoints map is untouched.
         self.assertEqual(state["work_items"]["wi"]["checkpoints"], {})
 
     def test_complete_checkpoint_stays_implementing_when_others_remain(self):
@@ -5103,6 +5260,50 @@ class TestEnterApplyingReviewFeedback(unittest.TestCase):
         new_state = ws.enter_applying_review_feedback(state, "wi", now="t1")
         self.assertEqual(new_state["work_items"]["wi"]["phase"], "APPLYING_REVIEW_FEEDBACK")
 
+    def test_version_independent_escape_from_terminal_phase_for_22_item(self):
+        """Missing-tests item (I3, round 4): the writer itself never
+        checked `governing_workflow_version` -- only
+        `apply-implementation-review.md`'s own prose told the operator to
+        skip calling it for a `"2.2"` item. Pinning that a `"2.2"` item
+        which reached the terminal `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`
+        phase (both implementation-review stages already `APPROVE`d, then a
+        late fix is committed after `/approve-review implementation` closed
+        the gate) can still call this writer and land back in
+        `APPLYING_REVIEW_FEEDBACK` -- the escape the command file's
+        phase-conditional fix now actually exercises."""
+        wi = _v22_work_item(
+            phase="AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+            implementation_review_stages={
+                "review_content_id": "c1",
+                "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t0"},
+                "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t0"},
+            },
+        )
+        state = _base_state(wi=wi)
+        new_state = ws.enter_applying_review_feedback(state, "wi", now="t1")
+        self.assertEqual(new_state["work_items"]["wi"]["phase"], "APPLYING_REVIEW_FEEDBACK")
+
+    def test_refused_from_applying_review_feedback_phase_for_a_1_item(self):
+        """Missing-tests item (I2, round 5): the writer's own refusal from
+        `APPLYING_REVIEW_FEEDBACK` does not distinguish `governing_workflow_
+        version` at all -- `apply-implementation-review.md`'s step 0 is what
+        decides, by `phase` alone, never by version, whether to call this
+        writer. This pins the primitive's own half of that contract for a
+        `"1"` item explicitly: if the command were ever to call this writer
+        from `APPLYING_REVIEW_FEEDBACK` (the re-invocation case the prose's
+        phase-conditional skip instead avoids calling into for every
+        version), it still refuses -- exactly as the `"2.2"` escape test
+        above shows the same primitive firing successfully from the
+        terminal phase. Together the two tests show the primitive is
+        version-blind, so the skip a `"1"`/`"2.1"` re-invocation gets under
+        the new contract is a deliberate command-prose decision, not
+        something this function enforces."""
+        wi = _base_work_item(governing_workflow_version="1", phase="APPLYING_REVIEW_FEEDBACK")
+        state = _base_state(wi=wi)
+        with self.assertRaises(ws.IllegalApplyingReviewFeedbackEntryPhaseError) as ctx:
+            ws.enter_applying_review_feedback(state, "wi", now="t1")
+        self.assertIn("APPLYING_REVIEW_FEEDBACK", str(ctx.exception))
+
     def test_refused_from_illegal_source_phase(self):
         state = _base_state(wi=_base_work_item(phase="IMPLEMENTING"))
         with self.assertRaises(ws.IllegalApplyingReviewFeedbackEntryPhaseError) as ctx:
@@ -5368,6 +5569,8 @@ class TestImplementationProvenanceInterval(unittest.TestCase):
             self.assertTrue(ws.technical_approval_gate_reachable(
                 latest_round_status="APPROVE", protected_path_dirty=False,
                 head_matches_reviewed_implementation_head=head_matches,
+                governing_workflow_version=None, implementation_review_stages=None,
+                current_review_content_id=None,
             ))
 
     def test_one_excluded_commit_between_p_and_t_is_reachable(self):
@@ -6582,7 +6785,10 @@ class TestValidateTechnicalApprovalCommit(unittest.TestCase):
     own exhaustive field-mutation check, mirroring items 267/254's
     generation-record coverage for the technical-approval commit
     (`apply_technical_approval`'s own `{"technical_approval", "phase",
-    "state_revision", "last_transition"}` exact field set)."""
+    "state_revision", "last_transition"}` exact field set, widened
+    workflow-2.5.0 CP12 with `implementation_review_stages` -- see
+    `TestTechnicalApprovalCommitAdmitsImplementationReviewStagesResidue`
+    below for why)."""
 
     WI = "wi"
 
@@ -6699,6 +6905,82 @@ class TestValidateTechnicalApprovalCommit(unittest.TestCase):
             commit = _commit_state_only(repo, self.WI, phase_only, "phase only")
             with self.assertRaises(ws.MalformedTechnicalApprovalCommitError):
                 ws.validate_technical_approval_commit(repo.root, commit, self.WI)
+
+
+class TestTechnicalApprovalCommitAdmitsImplementationReviewStagesResidue(unittest.TestCase):
+    """workflow-2.5.0 CP12 (disposable-repository functional validation):
+    `TECHNICAL_APPROVAL_COMMIT_FIELDS`' own widening, found live -- not
+    hand-derived -- by CP12's own end-to-end `"2.2"` scenario, whose
+    `/review-implementation` (local) then `/record-manual-implementation-
+    review` (manual) rounds leave `implementation_review_stages` uncommitted
+    (neither writer creates its own durability commit -- see `review-
+    implementation.md`'s "2.2" authoritative branch step A6 and
+    `record-manual-implementation-review.md`'s identical shape) until the
+    very next commit, which for a `"2.2"` item's ordinary positive path is
+    always `/approve-review implementation`'s own technical-approval commit.
+    Before this widening, that commit's own field diff always included
+    `implementation_review_stages` and `validate_technical_approval_commit`
+    always refused it outright -- the mainline, first-round positive path
+    for *every* `"2.2"` item, not an edge case."""
+
+    WI = "wi"
+
+    def test_technical_approval_commit_with_ledger_residue_passes(self):
+        with ScratchRepo() as repo:
+            _seed_base_provenance_state(repo, self.WI)
+            parent_state = {
+                "work_item_id": self.WI, "work_item_type": "process",
+                "phase": "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+                "technical_approval": None, "state_revision": 5, "last_transition": "t5",
+                "implementation_review_stages": {
+                    "review_content_id": "c-1",
+                    "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
+                        "bundle_id": "b-1", "verdict": "APPROVE", "round": 1, "completed_at": "t3",
+                    },
+                    "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": None,
+                },
+            }
+            _commit_state_only(repo, self.WI, parent_state, "parent")
+            # The manual-approve round's own ledger write, uncommitted --
+            # exactly the residue a real /record-manual-implementation-review
+            # invocation leaves behind, riding into the very next commit.
+            child_state = parent_state | {
+                "technical_approval": {"status": "CURRENT"},
+                "phase": "AWAITING_FUNCTIONAL_REVIEW", "state_revision": 6, "last_transition": "t6",
+                "implementation_review_stages": {
+                    **parent_state["implementation_review_stages"],
+                    "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": {
+                        "bundle_id": "b-1", "verdict": "APPROVE", "round": 1, "completed_at": "t6",
+                    },
+                },
+            }
+            commit = _commit_state_only(repo, self.WI, child_state, "technical approval")
+            ws.validate_technical_approval_commit(repo.root, commit, self.WI)  # must not raise
+
+    def test_a_1_or_21_item_never_carries_this_residue_so_the_widening_is_moot_for_it(self):
+        """Safety argument, made concrete: `"1"`/`"2.1"`'s own state
+        mutators never write `implementation_review_stages` at all, so
+        widening this set can never let a genuinely unrelated field slip
+        through for them -- the field is simply always absent from their
+        own diffs."""
+        with ScratchRepo() as repo:
+            _seed_base_provenance_state(repo, self.WI)
+            parent_state = {
+                "work_item_id": self.WI, "work_item_type": "process",
+                "phase": "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+                "technical_approval": None, "state_revision": 5, "last_transition": "t5",
+            }
+            _commit_state_only(repo, self.WI, parent_state, "parent")
+            child_state = parent_state | {
+                "technical_approval": {"status": "CURRENT"},
+                "phase": "AWAITING_FUNCTIONAL_REVIEW", "state_revision": 6, "last_transition": "t6",
+            }
+            commit = _commit_state_only(repo, self.WI, child_state, "technical approval")
+            ws.validate_technical_approval_commit(repo.root, commit, self.WI)  # must not raise
+            self.assertNotIn(
+                "implementation_review_stages",
+                ws._work_item_field_diff(repo.root, commit, self.WI),
+            )
 
 
 class TestApplyImplementationProvenanceRecovery(unittest.TestCase):
@@ -7331,7 +7613,9 @@ class TestRemediationChildWorkItem(unittest.TestCase):
         version `create_remediation_child_work_item` fixed from the config
         default at creation. Under this repository's own default (`"2.1"`)
         that is `AWAITING_LOCAL_PLAN_REVIEW`; only a `"1"` default produces
-        the phase the diagram named."""
+        the phase the diagram named. workflow-2.6.0: for `"2.1"` the
+        publish is mirror-only, and the bind of the published bundle writes
+        that phase."""
         for default_version, expected_phase in (
             ("2.1", "AWAITING_LOCAL_PLAN_REVIEW"),
             ("1", "AWAITING_EXTERNAL_PLAN_REVIEW"),
@@ -7347,7 +7631,12 @@ class TestRemediationChildWorkItem(unittest.TestCase):
                 child = created["work_items"][child_id]
                 self.assertEqual(child["governing_workflow_version"], default_version)
                 self.assertEqual(child["phase"], "PLANNING")
-                planned = ws.publish_plan_revision(created, child_id, 1, "t2")
+                planned = ws.publish_plan_revision(created, child_id, 1, "t2", review_content_id="a" * 64)
+                if default_version == "2.1":
+                    self.assertEqual(planned["work_items"][child_id]["phase"], "PLANNING")
+                    planned = ws.bind_plan_review_bundle(planned, child_id, binding={
+                        "review_content_id": "a" * 64, "bundle_id": "c" * 64, "plan_revision": 1,
+                    }, now="t3")
                 self.assertEqual(planned["work_items"][child_id]["phase"], expected_phase)
                 # And planning the child never repoints focus away from the
                 # parent, which is why every command driving it needs an
@@ -8502,11 +8791,15 @@ class TestCheckpointMutationGuard(unittest.TestCase):
         with ScratchRepo() as repo:
             claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
             token = claim["owner_token"]
-            ws.acquire_guard(repo.root, "wi", holder_owner_token=token, checkpoint_id="CP",
-                             step="1f-commit", step_class=ws.DESTRUCTIVE, now="t2")
+            lease = ws.acquire_guard(repo.root, "wi", holder_owner_token=token, checkpoint_id="CP",
+                                     step="1f-commit", step_class=ws.DESTRUCTIVE, now="t2")
             with self.assertRaises(ws.CheckpointOwnershipUnavailableError):
                 ws.acquire_guard(repo.root, "wi", holder_owner_token="a-different-token",
                                  checkpoint_id="CP", step="1d", step_class=ws.ORDINARY, now="t3")
+            # workflow-2.6.0: release the lease this process acquired to stand
+            # in for a live holder, so the process-local held-set
+            # (`D-Repo-Global-Lifecycle`) does not carry it into later tests.
+            ws.release_guard(repo.root, "wi", lease)
 
     def test_unknown_step_class_refuses(self):
         with ScratchRepo() as repo:
@@ -8875,7 +9168,9 @@ class TestGlobalLockOrderItem372h(unittest.TestCase):
         )
 
     def test_completeness_arm_discovery_resolution_and_predicate_are_correct(self):
-        """The eight-primitive forward-direction comparison (discovery +
+        """The nine-primitive forward-direction comparison (eight through
+        workflow-2.5.1; (9), the lifecycle lock, since workflow-2.6.0 --
+        discovery +
         pathname resolution + the mechanically-decided `releasable`
         conjunct), plus both required non-vacuousness regressions
         (`release_checkpoint` made an unconditional release,
@@ -8892,10 +9187,12 @@ class TestGlobalLockOrderItem372h(unittest.TestCase):
         self.assertEqual(failures, [], "\n".join(failures))
 
     def test_graph_arm_edges_acyclicity_and_single_attempt_discriminator(self):
-        """The six code-derivable raw edges rediscovered exactly and
-        bidirectionally (shared `os.link` statement attributed
-        caller-aware), the four command-orchestrated edges checked against
-        the plan's own independently-parsed ten-edge table, the blocking
+        """The code-derivable raw edges (twelve since workflow-2.6.0's five
+        `(9)` edges) rediscovered exactly and bidirectionally (shared
+        `os.link` statement attributed caller-aware), the four
+        command-orchestrated edges checked against the plan's own
+        independently-parsed sixteen-edge table (9 blocking, 7
+        non-blocking), the blocking
         sub-order's acyclicity, the call-chain-aware single-attempt
         discriminator, and all required non-vacuousness regressions --
         `verify_372h_raw_edge_derivation.main()`'s own checks, as
@@ -9230,13 +9527,18 @@ class TestExplicitTakeover(unittest.TestCase):
     def test_takeover_refuses_on_destructive_guard(self):
         with ScratchRepo() as repo:
             claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
-            ws.acquire_guard(repo.root, "wi", holder_owner_token=claim["owner_token"],
-                             checkpoint_id="CP", step="1f-commit", step_class=ws.DESTRUCTIVE, now="t2")
+            lease = ws.acquire_guard(repo.root, "wi", holder_owner_token=claim["owner_token"],
+                                     checkpoint_id="CP", step="1f-commit", step_class=ws.DESTRUCTIVE,
+                                     now="t2")
             wt2 = repo.worktree("b")
             evidence = ws.takeover_evidence(wt2, "wi")
             literal = ws.takeover_authorization_literal("wi", evidence, "CP")
             with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
                 ws.take_over_claim(wt2, "wi", "CP", now="t3", user_authorization=literal, evidence=evidence)
+            # workflow-2.6.0: release the lease this process acquired to stand
+            # in for a live holder, so the process-local held-set
+            # (`D-Repo-Global-Lifecycle`) does not carry it into later tests.
+            ws.release_guard(repo.root, "wi", lease)
 
     def test_takeover_refuses_on_stale_evidence(self):
         """Item 369(b): a claim that changes between the evidence
@@ -9427,26 +9729,36 @@ class TestAbandonedDestructiveGuardRecovery(unittest.TestCase):
     def test_recovery_refuses_while_holder_still_registered(self):
         with ScratchRepo() as repo:
             claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
-            ws.acquire_guard(repo.root, "wi", holder_owner_token=claim["owner_token"],
-                             checkpoint_id="CP", step="1f-commit", step_class=ws.DESTRUCTIVE, now="t2")
+            lease = ws.acquire_guard(repo.root, "wi", holder_owner_token=claim["owner_token"],
+                                     checkpoint_id="CP", step="1f-commit", step_class=ws.DESTRUCTIVE,
+                                     now="t2")
             wt2 = repo.worktree("b")
             evidence = ws.takeover_evidence(wt2, "wi")
             literal = ws.abandoned_guard_recovery_authorization_literal("wi", evidence)
             with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
                 ws.recover_abandoned_destructive_guard(wt2, "wi", "CP", now="t3",
                                                         user_authorization=literal, evidence=evidence)
+            # workflow-2.6.0: release the lease this process acquired to stand
+            # in for a live holder, so the process-local held-set
+            # (`D-Repo-Global-Lifecycle`) does not carry it into later tests.
+            ws.release_guard(repo.root, "wi", lease)
 
     def test_recovery_refuses_on_non_destructive_guard(self):
         with ScratchRepo() as repo:
             claim = ws.claim_checkpoint(repo.root, "wi", "CP", now="t1")
-            ws.acquire_guard(repo.root, "wi", holder_owner_token=claim["owner_token"],
-                             checkpoint_id="CP", step="1d", step_class=ws.ORDINARY, now="t2")
+            lease = ws.acquire_guard(repo.root, "wi", holder_owner_token=claim["owner_token"],
+                                     checkpoint_id="CP", step="1d", step_class=ws.ORDINARY, now="t2")
             wt2 = repo.worktree("b")
             evidence = ws.takeover_evidence(wt2, "wi")
             literal = ws.abandoned_guard_recovery_authorization_literal("wi", evidence)
             with self.assertRaises(ws.CheckpointClaimTakeoverRefusedError):
                 ws.recover_abandoned_destructive_guard(wt2, "wi", "CP", now="t3",
                                                         user_authorization=literal, evidence=evidence)
+            # workflow-2.6.0: this process genuinely holds the lease it
+            # acquired to stand in for a live holder; release it, so the
+            # process-local held-set (`D-Repo-Global-Lifecycle`) does not
+            # carry it into later tests' lifecycle-lock acquisitions.
+            ws.release_guard(repo.root, "wi", lease)
 
     def test_recovery_succeeds_once_holder_worktree_is_deregistered(self):
         with ScratchRepo() as repo:
@@ -10110,12 +10422,21 @@ def _persisted_phase_writers() -> dict[str, set[str]]:
     `workflow_state.py`'s own AST, never from a hand-maintained list, so a
     new writer (or a removed one) moves this census by construction.
 
-    Recognizes the two shapes the module uses: a direct
-    `<subject>["phase"] = "<CONST>"` assignment, and a `"phase": "<CONST>"`
-    entry in a dict literal (`default_work_item`'s fresh-item shape). A
-    constant bound to a local name first (`publish_plan_revision`'s
-    `target_phase`) is resolved through that binding, so its two
-    version-keyed targets are counted rather than lost as "dynamic"."""
+    Recognizes the three shapes the module uses: a direct
+    `<subject>["phase"] = "<CONST>"` assignment, a `"phase": "<CONST>"`
+    entry in a dict literal (`default_work_item`'s fresh-item shape), and
+    a call to a module-level *resolver function* whose own body returns
+    only string constants (`record_bundle_generation`'s
+    `bundle_generation_target_phase(stage, governing_workflow_version)`,
+    workflow-2.5.0 CP3) -- every such literal `return "<CONST>"` in the
+    resolver's own body is counted as one of its possible outputs,
+    resolved through the call exactly like a constant bound to a local
+    name first (`publish_plan_revision`'s `target_phase`) is resolved
+    through that binding -- so a version-keyed resolver's targets are
+    counted rather than lost as "dynamic", whether it branches via
+    if/elif-bound locals (`publish_plan_revision`) or via a separate,
+    reusable resolver function called from the assignment site
+    (`record_bundle_generation`)."""
     tree = ast.parse(Path(ws.__file__).read_text())
     writers: dict[str, set[str]] = {}
 
@@ -10126,6 +10447,23 @@ def _persisted_phase_writers() -> dict[str, set[str]]:
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
             return node.value
         return None
+
+    # Module-level resolver functions: name -> every string constant any
+    # `return` statement in its own body yields, directly or (recursively)
+    # through an `if`/`elif`/`else` chain -- never following a call to
+    # *another* function, only literal returns of its own.
+    resolver_returns: dict[str, set[str]] = {}
+    for node in tree.body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        literals: set[str] = set()
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.Return) and inner.value is not None:
+                literal = const_str(inner.value)
+                if literal is not None:
+                    literals.add(literal)
+        if literals:
+            resolver_returns[node.name] = literals
 
     for fn in ast.walk(tree):
         if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -10150,6 +10488,13 @@ def _persisted_phase_writers() -> dict[str, set[str]]:
                         record(value, fn.name)
                     elif isinstance(node.value, ast.Name):
                         for candidate in local_consts.get(node.value.id, ()):
+                            record(candidate, fn.name)
+                    elif (
+                        isinstance(node.value, ast.Call)
+                        and isinstance(node.value.func, ast.Name)
+                        and node.value.func.id in resolver_returns
+                    ):
+                        for candidate in resolver_returns[node.value.func.id]:
                             record(candidate, fn.name)
                     else:  # pragma: no cover -- guarded by the test below
                         record(f"<unresolved:{ast.unparse(node.value)}>", fn.name)
@@ -10177,15 +10522,24 @@ class TestPersistedPhaseWriterCensus(unittest.TestCase):
     are now checked against. It fails if a phase gains or loses a writer,
     which is exactly when those documents need re-checking."""
 
-    #: The four phases `KNOWN_PHASES` declares that nothing persists.
-    #: Narrative/compatibility vocabulary only -- three of them are named
-    #: by `MILESTONE_WORKFLOW.md`'s v1 state list, and
+    #: The phases `KNOWN_PHASES` declares that nothing persists.
+    #: Narrative/compatibility vocabulary only -- three of the original
+    #: four are named by `MILESTONE_WORKFLOW.md`'s v1 state list, and
     #: `AWAITING_TECHNICAL_APPROVAL`/`AWAITING_PLAN_APPROVAL` have
     #: *computed reachability* predicates
     #: (`technical_approval_gate_reachable`/`plan_approval_gate_reachable`)
     #: instead; `AWAITING_PLAN_APPROVAL` happens to also be persisted (by
     #: `record_manual_plan_review`) and `AWAITING_TECHNICAL_APPROVAL` is
     #: not, which is precisely the asymmetry the documents flattened.
+    #:
+    #: workflow-2.5.0 CP2 added `AWAITING_LOCAL_IMPLEMENTATION_REVIEW`/
+    #: `AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW` to `KNOWN_PHASES`
+    #: (D-Implementation-Review-Stages) ahead of their own writers. CP3
+    #: is where `bundle_generation_target_phase`'s version-dependent
+    #: resolver (called from `record_bundle_generation`) and
+    #: `record_local_implementation_review`/`record_manual_implementation_review`
+    #: actually persist them, so this census shrinks by two here -- both
+    #: moved to `EXPECTED_WRITERS` below.
     DECLARED_BUT_UNWRITTEN = frozenset({
         "SELF_REVIEWING_PLAN",
         "AWAITING_TECHNICAL_APPROVAL",
@@ -10196,21 +10550,41 @@ class TestPersistedPhaseWriterCensus(unittest.TestCase):
     EXPECTED_WRITERS = {
         "PLANNING": {"default_work_item"},
         "AWAITING_EXTERNAL_PLAN_REVIEW": {"publish_plan_revision"},
-        "AWAITING_LOCAL_PLAN_REVIEW": {
-            "publish_plan_revision", "transition_to_awaiting_local_plan_review",
-        },
+        # workflow-2.6.0 (D-Plan-Review-Bundle-Binding): the bind is the sole
+        # writer -- `publish_plan_revision` is mirror-only for a two-stage
+        # item and `transition_to_awaiting_local_plan_review` is retired.
+        "AWAITING_LOCAL_PLAN_REVIEW": {"bind_plan_review_bundle"},
         "AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW": {"record_local_plan_review"},
-        "REVISING_PLAN": {"record_local_plan_review", "record_manual_plan_review"},
+        "REVISING_PLAN": {
+            "record_local_plan_review", "record_manual_plan_review", "withdraw_plan_review",
+        },
         "AWAITING_PLAN_APPROVAL": {"record_manual_plan_review"},
         "IMPLEMENTING": {"apply_plan_approval"},
         "SELF_REVIEWING_IMPLEMENTATION": {
             "complete_checkpoint", "enter_self_reviewing_implementation",
         },
-        "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW": {"record_bundle_generation"},
-        "APPLYING_REVIEW_FEEDBACK": {"enter_applying_review_feedback"},
+        # workflow-2.5.0 CP3: record_bundle_generation's own phase write is
+        # now the version-dependent bundle_generation_target_phase(stage,
+        # governing_workflow_version) resolver -- its two possible outputs
+        # are both counted against record_bundle_generation, exactly like
+        # publish_plan_revision's own two version-keyed literals above.
+        "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW": {
+            "record_bundle_generation", "record_manual_implementation_review",
+        },
+        "AWAITING_LOCAL_IMPLEMENTATION_REVIEW": {"record_bundle_generation"},
+        "AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": {"record_local_implementation_review"},
+        "APPLYING_REVIEW_FEEDBACK": {
+            "enter_applying_review_feedback", "record_local_implementation_review",
+            "record_manual_implementation_review",
+        },
         "AWAITING_FUNCTIONAL_REVIEW": {"apply_technical_approval", "promote_legacy_work_item"},
         "MILESTONE_COMPLETE": {"complete_work_item"},
         "LEGACY_READY": {"import_legacy_work_item"},
+        # workflow-2.4.0, D-Plan-Amendment-1: real and persisted, unlike
+        # DECLARED_BUT_UNWRITTEN's four -- the mechanism must survive an
+        # interruption between the request and the first post-request
+        # /milestone-plan call.
+        "AMENDING_PLAN": {"request_plan_amendment", "withdraw_plan_review"},
     }
 
     def test_every_write_site_resolves_to_a_named_phase(self):
@@ -10228,7 +10602,7 @@ class TestPersistedPhaseWriterCensus(unittest.TestCase):
     def test_every_written_phase_is_a_known_phase(self):
         self.assertTrue(set(_persisted_phase_writers()).issubset(ws.KNOWN_PHASES))
 
-    def test_exactly_four_known_phases_are_declared_but_never_written(self):
+    def test_exactly_six_known_phases_are_declared_but_never_written(self):
         unwritten = ws.KNOWN_PHASES - set(_persisted_phase_writers())
         self.assertEqual(unwritten, self.DECLARED_BUT_UNWRITTEN)
 
@@ -10260,6 +10634,7446 @@ class TestPersistedPhaseWriterCensus(unittest.TestCase):
             "AWAITING_TECHNICAL_APPROVAL",
             {wi["phase"] for wi in new_state["work_items"].values()},
         )
+
+
+# ---------------------------------------------------------------------------
+# CP8 (`plan-amendment-mechanism`): D-Plan-Amendment-1..8's own unit-level
+# coverage -- CP2/CP3 authored request_plan_amendment/reconcile_checkpoints_
+# after_amendment/apply_plan_approval's amendment branch/the anchor grammar,
+# but (plan revision 34, section 4's own "items 11-15" note) deliberately
+# deferred their dedicated tests to this checkpoint. Every class below tests
+# functions that previously had zero coverage in this suite.
+# ---------------------------------------------------------------------------
+
+
+class TestCheckpointIdSupportsAnchor(unittest.TestCase):
+    """`checkpoint_id_supports_anchor`'s `CP<digits>[A-Z]?` shape gate
+    (D-Plan-Amendment-4, widened by workflow-2.5.1's
+    `D-Checkpoint-Id-Anchor-Grammar-Widening`)."""
+
+    def test_plain_cp_digits_is_supported(self):
+        self.assertTrue(ws.checkpoint_id_supports_anchor("CP1"))
+        self.assertTrue(ws.checkpoint_id_supports_anchor("CP123"))
+
+    def test_non_cp_digits_shape_is_unsupported(self):
+        self.assertFalse(ws.checkpoint_id_supports_anchor("WF4a-i"))
+
+    def test_trailing_newline_is_unsupported(self):
+        """IMPL4-O3: Python's `$` matches immediately before a trailing
+        `\\n` as well as at the true end of string, so `"CP1\\n"` would
+        otherwise pass this shape gate while remaining unsatisfiable by
+        `_CHECKPOINT_ANCHOR_RE`'s own anchor-tag parser, which has no such
+        allowance. `\\Z` closes it."""
+        self.assertFalse(ws.checkpoint_id_supports_anchor("CP1\n"))
+
+    def test_legacy_letter_suffixed_ids_are_supported(self):
+        """workflow-2.5.1's own reported defect: `workflow-controller-
+        generation-1`'s real, pre-2.4.0 inserted-checkpoint lettering
+        convention (`CP4B`/`CP6B`, an id inserted between two numbered
+        ids without renumbering everything after it) must be accepted,
+        not refused, by the widened grammar."""
+        for checkpoint_id in (
+            "CP1", "CP2", "CP3", "CP4", "CP4B", "CP5", "CP6", "CP6B",
+            "CP7", "CP8", "CP9",
+        ):
+            with self.subTest(checkpoint_id=checkpoint_id):
+                self.assertTrue(ws.checkpoint_id_supports_anchor(checkpoint_id))
+
+    def test_lowercase_letter_suffix_is_unsupported(self):
+        """Scope boundary: exactly one *uppercase* letter, never
+        lowercase (`D-Checkpoint-Id-Anchor-Grammar-Widening`)."""
+        self.assertFalse(ws.checkpoint_id_supports_anchor("CP4b"))
+
+    def test_two_letter_suffix_is_unsupported(self):
+        """Scope boundary: exactly one letter, never more."""
+        self.assertFalse(ws.checkpoint_id_supports_anchor("CP4BC"))
+
+    def test_letter_before_digit_shape_is_unsupported(self):
+        """Scope boundary: the letter must trail the digits, never
+        precede them."""
+        self.assertFalse(ws.checkpoint_id_supports_anchor("CPB4"))
+
+    def test_letter_followed_by_another_digit_is_unsupported(self):
+        """Scope boundary: no digit may follow the trailing letter."""
+        self.assertFalse(ws.checkpoint_id_supports_anchor("CP4B1"))
+
+
+class TestCheckpointAnchorSpans(unittest.TestCase):
+    """`parse_checkpoint_anchor_spans`'s closed, non-nesting, per-id
+    balanced-tag grammar (D-Plan-Amendment-4, B5-new/I5-new)."""
+
+    def test_two_disjoint_pairs_for_the_same_id_are_legal(self):
+        text = "<!-- CP1 -->a<!-- /CP1 -->mid<!-- CP1 -->b<!-- /CP1 -->"
+        spans = ws.parse_checkpoint_anchor_spans(text)
+        self.assertEqual(len(spans["CP1"]), 2)
+
+    def test_nested_open_tag_is_malformed_in_strict_mode(self):
+        text = "<!-- CP1 --><!-- CP1 -->x<!-- /CP1 --><!-- /CP1 -->"
+        with self.assertRaises(ws.AmendmentAnchorMalformedError):
+            ws.parse_checkpoint_anchor_spans(text, strict=True)
+
+    def test_orphan_close_tag_is_malformed_in_strict_mode(self):
+        with self.assertRaises(ws.AmendmentAnchorMalformedError):
+            ws.parse_checkpoint_anchor_spans("<!-- /CP2 -->", strict=True)
+
+    def test_unterminated_open_tag_is_malformed_in_strict_mode(self):
+        with self.assertRaises(ws.AmendmentAnchorMalformedError):
+            ws.parse_checkpoint_anchor_spans("<!-- CP3 -->dangling", strict=True)
+
+    def test_non_strict_mode_omits_only_the_malformed_id_never_raises(self):
+        text = "<!-- CP1 -->ok<!-- /CP1 --><!-- /CP2 -->"
+        spans = ws.parse_checkpoint_anchor_spans(text, strict=False)
+        self.assertIn("CP1", spans)
+        self.assertNotIn("CP2", spans)
+
+    def test_a_letter_suffixed_id_is_recognized_exactly_as_a_numeric_one(self):
+        """D-Checkpoint-Id-Anchor-Grammar-Widening: a well-formed anchor
+        pair for `CP4B` is recognized exactly as one for `CP4` is -- the
+        tag grammar and the id-shape grammar widened together."""
+        text = "<!-- CP4B -->legacy inserted checkpoint<!-- /CP4B -->"
+        spans = ws.parse_checkpoint_anchor_spans(text)
+        self.assertIn("CP4B", spans)
+        self.assertEqual(len(spans["CP4B"]), 1)
+
+
+class TestCheckpointContentHash(unittest.TestCase):
+    def test_none_when_the_id_has_no_well_formed_spans(self):
+        self.assertIsNone(ws.checkpoint_content_hash("no anchors here", "CP1"))
+
+    def test_changes_when_the_span_content_changes(self):
+        h1 = ws.checkpoint_content_hash("<!-- CP1 -->a<!-- /CP1 -->", "CP1", strict=True)
+        h2 = ws.checkpoint_content_hash("<!-- CP1 -->b<!-- /CP1 -->", "CP1", strict=True)
+        self.assertNotEqual(h1, h2)
+
+    def test_identical_when_the_span_content_is_identical_despite_surrounding_prose(self):
+        h1 = ws.checkpoint_content_hash("<!-- CP1 -->same<!-- /CP1 -->", "CP1", strict=True)
+        h2 = ws.checkpoint_content_hash("prefix <!-- CP1 -->same<!-- /CP1 --> suffix", "CP1", strict=True)
+        self.assertEqual(h1, h2)
+
+    def test_a_letter_suffixed_id_hashes_exactly_as_a_numeric_one_does(self):
+        """`CP4B` is hashed exactly as `CP1` is -- the widening only
+        changes which strings the id portion of a tag matches, never the
+        hashing mechanics."""
+        h1 = ws.checkpoint_content_hash("<!-- CP4B -->a<!-- /CP4B -->", "CP4B", strict=True)
+        h2 = ws.checkpoint_content_hash("<!-- CP4B -->b<!-- /CP4B -->", "CP4B", strict=True)
+        self.assertNotEqual(h1, h2)
+        h3 = ws.checkpoint_content_hash("<!-- CP4B -->same<!-- /CP4B -->", "CP4B", strict=True)
+        h4 = ws.checkpoint_content_hash("prefix <!-- CP4B -->same<!-- /CP4B --> suffix", "CP4B", strict=True)
+        self.assertEqual(h3, h4)
+
+
+class TestCheckpointIdAnchorTagShapeCouplingInvariant(unittest.TestCase):
+    """`LOCAL_MODEL_PLAN_REVIEW` round 1, optional finding OPT-2: pins
+    §3's own hazard that the anchor **tag** grammar
+    (`_CHECKPOINT_ANCHOR_RE`) and the anchor **id-shape** grammar
+    (`_ANCHOR_COMPATIBLE_CHECKPOINT_ID_RE`, via
+    `checkpoint_id_supports_anchor`) are two separate regex literals that
+    must widen together -- for every candidate id below, a checkpoint id
+    is anchor-supported if and only if a well-formed anchor pair using
+    that exact id text as its tag is actually recognized as one."""
+
+    _CANDIDATES = (
+        "CP1", "CP2", "CP3", "CP4", "CP4B", "CP5", "CP6", "CP6B", "CP7", "CP8", "CP9",
+        "CP4b", "CP4BC", "CPB4", "CP4B1", "WF4a-i", "CP1\n",
+        "CP0", "CP04A", "CP12Z", "CP999A", "CP4-B", "CP4_B", "cp4", "CPB",
+    )
+
+    def test_shape_and_tag_recognition_agree_for_every_candidate(self):
+        for candidate in self._CANDIDATES:
+            with self.subTest(candidate=repr(candidate)):
+                text = f"<!-- {candidate} -->x<!-- /{candidate} -->"
+                recognized = candidate in ws.parse_checkpoint_anchor_spans(text, strict=False)
+                self.assertEqual(ws.checkpoint_id_supports_anchor(candidate), recognized)
+
+
+class TestValidatePostAnchorCoverage(unittest.TestCase):
+    @staticmethod
+    def _registry(ids):
+        return {"checkpoints": [{"id": cid} for cid in ids]}
+
+    def test_a_missing_anchor_pair_is_refused(self):
+        with self.assertRaises(ws.AmendmentAnchorCoverageError):
+            ws.validate_post_anchor_coverage(
+                "<!-- CP1 -->x<!-- /CP1 -->", self._registry(["CP1", "CP2"]),
+            )
+
+    def test_two_disjoint_pairs_for_the_same_id_are_legal_not_malformed(self):
+        text = "<!-- CP1 -->a<!-- /CP1 -->mid<!-- CP1 -->b<!-- /CP1 -->"
+        ws.validate_post_anchor_coverage(text, self._registry(["CP1"]))  # must not raise
+
+    def test_an_orphan_close_tag_anywhere_is_malformed(self):
+        with self.assertRaises(ws.AmendmentAnchorMalformedError):
+            ws.validate_post_anchor_coverage("<!-- /CP1 -->", self._registry(["CP1"]))
+
+    def test_an_overlapping_open_tag_anywhere_is_malformed(self):
+        text = "<!-- CP1 --><!-- CP1 -->x<!-- /CP1 --><!-- /CP1 -->"
+        with self.assertRaises(ws.AmendmentAnchorMalformedError):
+            ws.validate_post_anchor_coverage(text, self._registry(["CP1"]))
+
+    def test_the_full_legacy_letter_suffixed_set_passes_when_every_id_has_an_anchor(self):
+        """The full user-supplied legacy set (`CP1`..`CP9` plus `CP4B`/
+        `CP6B`) passes coverage once every id has a well-formed anchor
+        pair -- exactly as a purely numeric set already did."""
+        ids = ("CP1", "CP2", "CP3", "CP4", "CP4B", "CP5", "CP6", "CP6B", "CP7", "CP8", "CP9")
+        text = "".join(f"<!-- {cid} -->design for {cid}<!-- /{cid} -->" for cid in ids)
+        ws.validate_post_anchor_coverage(text, self._registry(ids))  # must not raise
+
+    def test_malformed_letter_suffixed_checkpoint_ids_are_refused_by_shape(self):
+        """The post side's own shape guard (IMPL3-O1) refuses the same
+        near-miss shapes `request_plan_amendment`'s pre-side precondition
+        refuses -- lowercase suffix, multi-letter suffix, letter-before-digit,
+        and a digit trailing the letter -- raising
+        `AmendmentCheckpointIdShapeError`, never the unactionable
+        `AmendmentAnchorCoverageError`, even when no anchor for the id is
+        present in the plan text at all."""
+        for bad_id in ("CP4b", "CP4BC", "CPB4", "CP4B1"):
+            with self.subTest(bad_id=bad_id):
+                with self.assertRaises(ws.AmendmentCheckpointIdShapeError) as ctx:
+                    ws.validate_post_anchor_coverage("", self._registry([bad_id]))
+                self.assertIn(bad_id, str(ctx.exception))
+
+
+class TestReconcileCheckpointsAfterAmendment(unittest.TestCase):
+    """`reconcile_checkpoints_after_amendment`'s three-outcome algorithm
+    plus its own dependency-closure pass -- pure and directly testable with
+    no repository at all."""
+
+    @staticmethod
+    def _row(cid, depends_on=(), name=None):
+        return {
+            "id": cid, "name": name or f"checkpoint {cid}",
+            "depends_on": list(depends_on), "complexity": 1, "session_target": 1,
+        }
+
+    @staticmethod
+    def _registry(rows):
+        return {"checkpoints": rows}
+
+    def test_retained_when_row_and_content_are_both_unchanged(self):
+        pre = self._registry([self._row("CP1")])
+        post = self._registry([self._row("CP1")])
+        text = "<!-- CP1 -->same<!-- /CP1 -->"
+        checkpoints = {"CP1": {"status": "COMPLETE", "start_commit": "x"}}
+        result = ws.reconcile_checkpoints_after_amendment(pre, post, text, text, checkpoints)
+        self.assertEqual(result["outcome"]["CP1"], "retained")
+        self.assertEqual(result["checkpoints"]["CP1"]["status"], "COMPLETE")
+
+    def test_needs_revalidation_when_the_registry_row_changed(self):
+        pre = self._registry([self._row("CP1", name="old name")])
+        post = self._registry([self._row("CP1", name="new name")])
+        text = "<!-- CP1 -->same<!-- /CP1 -->"
+        checkpoints = {"CP1": {"status": "COMPLETE", "start_commit": "x"}}
+        result = ws.reconcile_checkpoints_after_amendment(pre, post, text, text, checkpoints)
+        self.assertEqual(result["outcome"]["CP1"], "needs_revalidation")
+        self.assertEqual(result["checkpoints"]["CP1"]["status"], "NEEDS_REVALIDATION")
+
+    def test_needs_revalidation_when_the_row_is_byte_identical_but_content_changed(self):
+        """B6.2: the discriminator must see a redefinition the registry row
+        alone would miss."""
+        pre_row = self._row("CP1")
+        pre = self._registry([pre_row])
+        post = self._registry([dict(pre_row)])
+        pre_text = "<!-- CP1 -->old design<!-- /CP1 -->"
+        post_text = "<!-- CP1 -->new design<!-- /CP1 -->"
+        checkpoints = {"CP1": {"status": "COMPLETE", "start_commit": "x"}}
+        result = ws.reconcile_checkpoints_after_amendment(pre, post, pre_text, post_text, checkpoints)
+        self.assertEqual(result["outcome"]["CP1"], "needs_revalidation")
+
+    def test_a_pre_text_with_no_anchors_anywhere_is_conservative(self):
+        """B4-new.1: the legacy/no-anchor case flips every shared id rather
+        than ever silently treating it as unchanged."""
+        pre = self._registry([self._row("CP1")])
+        post = self._registry([self._row("CP1")])
+        pre_text = "plain legacy plan text with no anchors at all"
+        post_text = "<!-- CP1 -->new<!-- /CP1 -->"
+        checkpoints = {"CP1": {"status": "COMPLETE", "start_commit": "x"}}
+        result = ws.reconcile_checkpoints_after_amendment(pre, post, pre_text, post_text, checkpoints)
+        self.assertEqual(result["outcome"]["CP1"], "needs_revalidation")
+
+    def test_a_checkpoint_removed_from_the_registry_is_dropped(self):
+        pre = self._registry([self._row("CP1"), self._row("CP2", depends_on=["CP1"])])
+        post = self._registry([self._row("CP1")])
+        pre_text = "<!-- CP1 -->a<!-- /CP1 --><!-- CP2 -->b<!-- /CP2 -->"
+        post_text = "<!-- CP1 -->a<!-- /CP1 -->"
+        checkpoints = {"CP1": {"status": "COMPLETE"}, "CP2": {"status": "COMPLETE"}}
+        result = ws.reconcile_checkpoints_after_amendment(pre, post, pre_text, post_text, checkpoints)
+        self.assertEqual(result["outcome"]["CP2"], "dropped")
+        self.assertNotIn("CP2", result["checkpoints"])
+        self.assertEqual(result["dropped"], ["CP2"])
+
+    def test_a_checkpoint_new_to_the_registry_is_reported_new(self):
+        pre = self._registry([self._row("CP1")])
+        post = self._registry([self._row("CP1"), self._row("CP2", depends_on=["CP1"])])
+        pre_text = "<!-- CP1 -->a<!-- /CP1 -->"
+        post_text = "<!-- CP1 -->a<!-- /CP1 --><!-- CP2 -->b<!-- /CP2 -->"
+        checkpoints = {"CP1": {"status": "COMPLETE"}}
+        result = ws.reconcile_checkpoints_after_amendment(pre, post, pre_text, post_text, checkpoints)
+        self.assertEqual(result["outcome"]["CP2"], "new")
+        self.assertNotIn("CP2", result["checkpoints"])
+
+    def test_dependency_closure_flips_an_otherwise_unchanged_dependent(self):
+        """B6.3: CPj changed -> NEEDS_REVALIDATION; CPk depends_on CPj, CPk
+        itself unchanged -- CPk is also flipped by the closure pass."""
+        pre = self._registry([self._row("CP1"), self._row("CP2", depends_on=["CP1"])])
+        post = self._registry([self._row("CP1", name="changed"), self._row("CP2", depends_on=["CP1"])])
+        text = "<!-- CP1 -->a<!-- /CP1 --><!-- CP2 -->b<!-- /CP2 -->"
+        checkpoints = {"CP1": {"status": "COMPLETE"}, "CP2": {"status": "COMPLETE"}}
+        result = ws.reconcile_checkpoints_after_amendment(pre, post, text, text, checkpoints)
+        self.assertEqual(result["outcome"]["CP1"], "needs_revalidation")
+        self.assertEqual(result["outcome"]["CP2"], "needs_revalidation_dependency")
+        self.assertEqual(result["checkpoints"]["CP2"]["status"], "NEEDS_REVALIDATION")
+
+    def test_closure_derived_flip_is_reported_with_a_distinct_token(self):
+        """IMPL6-B1: a closure-derived demotion must be distinguishable in
+        the reported outcome from a direct row/content demotion -- both
+        leave `status` at `NEEDS_REVALIDATION`, but only the outcome token
+        says which pass caused it."""
+        pre = self._registry([self._row("CP1"), self._row("CP2", depends_on=["CP1"])])
+        post = self._registry([self._row("CP1", name="changed"), self._row("CP2", depends_on=["CP1"])])
+        text = "<!-- CP1 -->a<!-- /CP1 --><!-- CP2 -->b<!-- /CP2 -->"
+        checkpoints = {"CP1": {"status": "COMPLETE"}, "CP2": {"status": "COMPLETE"}}
+        result = ws.reconcile_checkpoints_after_amendment(pre, post, text, text, checkpoints)
+        self.assertNotEqual(result["outcome"]["CP1"], result["outcome"]["CP2"])
+        self.assertEqual(result["outcome"]["CP1"], "needs_revalidation")
+        self.assertEqual(result["outcome"]["CP2"], "needs_revalidation_dependency")
+
+    def test_a_non_complete_status_is_left_alone_by_needs_revalidation(self):
+        """"any other status is left as-is (nothing to revalidate that has
+        not already completed)"."""
+        pre = self._registry([self._row("CP1", name="old")])
+        post = self._registry([self._row("CP1", name="new")])
+        text = "<!-- CP1 -->same<!-- /CP1 -->"
+        checkpoints = {"CP1": {"status": "IN_PROGRESS", "start_commit": "x"}}
+        result = ws.reconcile_checkpoints_after_amendment(pre, post, text, text, checkpoints)
+        self.assertEqual(result["outcome"]["CP1"], "needs_revalidation")
+        self.assertEqual(result["checkpoints"]["CP1"]["status"], "IN_PROGRESS")
+
+
+def _request_plan_amendment_holding_lifecycle_lock(state, work_item_id, reason, *, repo_root, now):
+    """The pure `request_plan_amendment` mutator, called the one way it
+    accepts since workflow-2.6.0: with the repository-global lifecycle
+    lock (9) held for the work item (`D-Repo-Global-Lifecycle`, "No
+    bypass"). Unit tests of the mutator's own preconditions use this; the
+    production entry point is `request_plan_amendment_transaction`."""
+    with ws.lifecycle_lock(repo_root, work_item_id):
+        return ws.request_plan_amendment(state, work_item_id, reason, repo_root=repo_root, now=now)
+
+
+class TestRequestPlanAmendment(unittest.TestCase):
+    """`/request-plan-amendment`'s sole writer (D-Plan-Amendment-1/2/3).
+
+    workflow-2.6.0 (`D-Repo-Global-Lifecycle`): the pure mutator refuses
+    unless the lifecycle lock (9) is held, so every unit test here calls it
+    through `_request_plan_amendment_holding_lifecycle_lock`; the
+    no-bypass refusal itself is asserted below and in
+    `TestRepoGlobalLifecycleClaimAndAmendment`."""
+
+    def test_the_pure_mutator_refuses_without_the_lifecycle_lock(self):
+        with ScratchRepo() as repo:
+            state, _ = self._state_with_approved_plan(repo)
+            with self.assertRaises(ws.LifecycleLockNotHeldError):
+                ws.request_plan_amendment(
+                    state, "wi", "reason", repo_root=repo.root, now="2026-01-01T00:00:00Z",
+                )
+
+    @staticmethod
+    def _state_with_approved_plan(repo, work_item_id="wi", phase="IMPLEMENTING",
+                                  review_content_id="rc-1"):
+        approval_commit = repo.commit(
+            "approve plan",
+            trailers={"Workflow-Plan-Approval": review_content_id, "Workflow-Work-Item": work_item_id},
+        )
+        work_item = {
+            "work_item_id": work_item_id, "phase": phase, "plan_revision": 1,
+            "base_commit": repo.base,
+            "plan_approval": {"status": "CURRENT", "approved_review_content_id": review_content_id},
+            "checkpoints": {"CP1": {"status": "COMPLETE", "start_commit": approval_commit}},
+            "current_checkpoint_id": None, "last_completed_checkpoint_id": "CP1",
+        }
+        state = {"schema_version": 1, "active_work_item_id": work_item_id,
+                 "work_items": {work_item_id: work_item}}
+        return state, approval_commit
+
+    def test_success_supersedes_the_approval_and_enters_amending_plan(self):
+        with ScratchRepo() as repo:
+            state, approval_commit = self._state_with_approved_plan(repo)
+            head = repo.head()
+            new_state = _request_plan_amendment_holding_lifecycle_lock(
+                state, "wi", "amend for a real reason", repo_root=repo.root,
+                now="2026-01-01T00:00:00Z",
+            )
+            wi = new_state["work_items"]["wi"]
+            self.assertEqual(wi["phase"], "AMENDING_PLAN")
+            self.assertEqual(wi["plan_approval"]["status"], "SUPERSEDED")
+            self.assertEqual(wi["amendment_base_commit"], head)
+            self.assertEqual(len(wi["amendment_history"]), 1)
+            entry = wi["amendment_history"][0]
+            self.assertEqual(entry["pre_amendment_approval_commit"], approval_commit)
+            self.assertIsNone(entry["resolved_at_plan_revision"])
+            self.assertEqual(entry["requested_from_phase"], "IMPLEMENTING")
+            # The original input state is never mutated in place.
+            self.assertEqual(state["work_items"]["wi"]["phase"], "IMPLEMENTING")
+
+    def test_self_reviewing_implementation_is_also_an_allowed_phase(self):
+        with ScratchRepo() as repo:
+            state, _ = self._state_with_approved_plan(repo, phase="SELF_REVIEWING_IMPLEMENTATION")
+            new_state = _request_plan_amendment_holding_lifecycle_lock(
+                state, "wi", "reason", repo_root=repo.root, now="2026-01-01T00:00:00Z",
+            )
+            self.assertEqual(new_state["work_items"]["wi"]["phase"], "AMENDING_PLAN")
+
+    def test_wrong_phase_is_refused(self):
+        with ScratchRepo() as repo:
+            state, _ = self._state_with_approved_plan(repo, phase="PLANNING")
+            with self.assertRaises(ws.WrongPhaseForAmendmentRequestError):
+                _request_plan_amendment_holding_lifecycle_lock(
+                    state, "wi", "reason", repo_root=repo.root, now="2026-01-01T00:00:00Z",
+                )
+
+    def test_unreachable_approval_commit_is_refused_before_superseding_anything(self):
+        with ScratchRepo() as repo:
+            state, _ = self._state_with_approved_plan(repo, review_content_id="rc-real")
+            state["work_items"]["wi"]["plan_approval"]["approved_review_content_id"] = "rc-nonexistent"
+            with self.assertRaises(ws.AmendmentApprovalCommitUnreachableError):
+                _request_plan_amendment_holding_lifecycle_lock(
+                    state, "wi", "reason", repo_root=repo.root, now="2026-01-01T00:00:00Z",
+                )
+            self.assertEqual(state["work_items"]["wi"]["plan_approval"]["status"], "CURRENT")
+
+    def test_a_second_request_against_an_already_amending_item_is_refused(self):
+        with ScratchRepo() as repo:
+            state, _ = self._state_with_approved_plan(repo)
+            amended = _request_plan_amendment_holding_lifecycle_lock(
+                state, "wi", "first", repo_root=repo.root, now="2026-01-01T00:00:00Z",
+            )
+            with self.assertRaises(ws.WrongPhaseForAmendmentRequestError):
+                _request_plan_amendment_holding_lifecycle_lock(
+                    amended, "wi", "second", repo_root=repo.root, now="2026-01-01T00:00:01Z",
+                )
+
+    def test_non_cp_digit_checkpoint_id_is_refused_before_superseding_anything(self):
+        """IMPL2-R1: `workflow-v2-1-core`'s own real checkpoint id shape
+        (`WF4a-i`) can never be given a well-formed `<!-- CPn -->` anchor
+        pair -- `validate_post_anchor_coverage` would refuse the amended
+        plan for it unconditionally, two review stages later, with no
+        anchor text able to fix it. `request_plan_amendment` must refuse by
+        name instead, before `plan_approval` is superseded."""
+        with ScratchRepo() as repo:
+            registry_path = "registry.json"
+            _write(repo, registry_path, json.dumps({
+                "work_item_id": "wi", "plan_revision": 1,
+                "checkpoints": [{"id": "WF4a-i", "depends_on": []}],
+            }))
+            _commit_paths(repo, [registry_path], "add registry")
+            work_item = _base_work_item(
+                base_commit=repo.base,
+                registry_path=registry_path,
+                plan_approval=_current_plan_approval_covering(repo, registry_path),
+                checkpoints={}, current_checkpoint_id=None, last_completed_checkpoint_id=None,
+            )
+            state = _base_state(wi=work_item)
+            with self.assertRaises(ws.AmendmentCheckpointIdShapeError) as ctx:
+                _request_plan_amendment_holding_lifecycle_lock(
+                    state, "wi", "reason", repo_root=repo.root, now="2026-01-01T00:00:00Z",
+                )
+            self.assertIn("WF4a-i", str(ctx.exception))
+            # Refused before any write: plan_approval is never superseded.
+            self.assertEqual(state["work_items"]["wi"]["plan_approval"]["status"], "CURRENT")
+
+    def test_all_cp_digit_checkpoint_ids_are_unaffected(self):
+        """The shape check is additive: a registry whose ids are already
+        all `CP<digits>` (the only shape this milestone's own registries
+        use) proceeds exactly as before."""
+        with ScratchRepo() as repo:
+            registry_path = "registry.json"
+            _write(repo, registry_path, json.dumps({
+                "work_item_id": "wi", "plan_revision": 1,
+                "checkpoints": [{"id": "CP1", "depends_on": []}],
+            }))
+            approval_commit = _commit_paths(
+                repo, [registry_path], "add registry",
+                trailers={"Workflow-Plan-Approval": "rc-1", "Workflow-Work-Item": "wi"},
+            )
+            plan_approval = _current_plan_approval_covering(repo, registry_path)
+            plan_approval["approved_review_content_id"] = "rc-1"
+            work_item = _base_work_item(
+                base_commit=repo.base,
+                registry_path=registry_path,
+                plan_approval=plan_approval,
+                checkpoints={}, current_checkpoint_id=None, last_completed_checkpoint_id=None,
+            )
+            state = _base_state(wi=work_item)
+            new_state = _request_plan_amendment_holding_lifecycle_lock(
+                state, "wi", "reason", repo_root=repo.root, now="2026-01-01T00:00:00Z",
+            )
+            self.assertEqual(new_state["work_items"]["wi"]["phase"], "AMENDING_PLAN")
+            self.assertEqual(new_state["work_items"]["wi"]["amendment_history"][0]
+                              ["pre_amendment_approval_commit"], approval_commit)
+
+    def test_legacy_letter_suffixed_checkpoint_ids_are_no_longer_refused(self):
+        """workflow-2.5.1's own reported defect: a registry carrying the
+        real, pre-2.4.0 `workflow-controller-generation-1` id set (`CP1`
+        through `CP9`, including the inserted, lettered `CP4B`/`CP6B`)
+        must no longer raise `AmendmentCheckpointIdShapeError` -- it is
+        exactly the `D-Checkpoint-Id-Anchor-Grammar-Widening` shape this
+        milestone widens the grammar to admit."""
+        with ScratchRepo() as repo:
+            registry_path = "registry.json"
+            ids = ("CP1", "CP2", "CP3", "CP4", "CP4B", "CP5", "CP6", "CP6B", "CP7", "CP8", "CP9")
+            _write(repo, registry_path, json.dumps({
+                "work_item_id": "wi", "plan_revision": 1,
+                "checkpoints": [{"id": cid, "depends_on": []} for cid in ids],
+            }))
+            _commit_paths(
+                repo, [registry_path], "add registry",
+                trailers={"Workflow-Plan-Approval": "rc-1", "Workflow-Work-Item": "wi"},
+            )
+            plan_approval = _current_plan_approval_covering(repo, registry_path)
+            plan_approval["approved_review_content_id"] = "rc-1"
+            work_item = _base_work_item(
+                base_commit=repo.base,
+                registry_path=registry_path,
+                plan_approval=plan_approval,
+                checkpoints={}, current_checkpoint_id=None, last_completed_checkpoint_id=None,
+            )
+            state = _base_state(wi=work_item)
+            new_state = _request_plan_amendment_holding_lifecycle_lock(
+                state, "wi", "reason", repo_root=repo.root, now="2026-01-01T00:00:00Z",
+            )
+            self.assertEqual(new_state["work_items"]["wi"]["phase"], "AMENDING_PLAN")
+
+    def test_malformed_letter_suffixed_checkpoint_ids_still_refuse(self):
+        """Scope boundary: a shape the widening deliberately does not
+        admit (lowercase suffix, multi-letter suffix, letter-before-digit)
+        still refuses, exactly as before."""
+        for bad_id in ("CP4b", "CP4BC", "CPB4", "CP4B1"):
+            with self.subTest(bad_id=bad_id):
+                with ScratchRepo() as repo:
+                    registry_path = "registry.json"
+                    _write(repo, registry_path, json.dumps({
+                        "work_item_id": "wi", "plan_revision": 1,
+                        "checkpoints": [{"id": bad_id, "depends_on": []}],
+                    }))
+                    _commit_paths(repo, [registry_path], "add registry")
+                    work_item = _base_work_item(
+                        base_commit=repo.base,
+                        registry_path=registry_path,
+                        plan_approval=_current_plan_approval_covering(repo, registry_path),
+                        checkpoints={}, current_checkpoint_id=None, last_completed_checkpoint_id=None,
+                    )
+                    state = _base_state(wi=work_item)
+                    with self.assertRaises(ws.AmendmentCheckpointIdShapeError) as ctx:
+                        _request_plan_amendment_holding_lifecycle_lock(
+                            state, "wi", "reason", repo_root=repo.root, now="2026-01-01T00:00:00Z",
+                        )
+                    self.assertIn(bad_id, str(ctx.exception))
+                    self.assertEqual(state["work_items"]["wi"]["plan_approval"]["status"], "CURRENT")
+
+    def test_dirty_plan_stage_document_does_not_refuse_the_amendment_request(self):
+        """IMPL3-R1: a work item with a `registry_path` whose plan-stage
+        protected `plan_path` carries an uncommitted edit -- the single
+        most likely working-tree state for an operator about to request a
+        plan amendment -- must not be refused by
+        `_assert_registry_covered_by_current_plan_approval`'s coverage
+        check. `.claude/commands/request-plan-amendment.md` step 1 says in
+        as many words that this command does not refuse on digest-only
+        staleness (`D-Plan-Amendment-1`, `B-R12-1`); IMPL2-R1's fix
+        reintroduced exactly that refusal through
+        `_load_authoritative_registry_or_none`'s default coverage check.
+        `require_plan_approval_coverage=False` (this round's fix) restores
+        the narrower, id-shape-only read."""
+        with ScratchRepo() as repo:
+            registry_path = "registry.json"
+            plan_path = "plan.md"
+            _write(repo, registry_path, json.dumps({
+                "work_item_id": "wi", "plan_revision": 1,
+                "checkpoints": [{"id": "CP1", "depends_on": []}],
+            }))
+            _write(repo, plan_path, "original plan content\n")
+            approval_commit = _commit_paths(
+                repo, [registry_path, plan_path], "add registry and plan",
+                trailers={"Workflow-Plan-Approval": "rc-1", "Workflow-Work-Item": "wi"},
+            )
+            plan_approval = _current_plan_approval_covering(repo, registry_path, plan_path)
+            plan_approval["approved_review_content_id"] = "rc-1"
+            work_item = _base_work_item(
+                base_commit=repo.base,
+                registry_path=registry_path,
+                plan_path=plan_path,
+                plan_approval=plan_approval,
+                checkpoints={}, current_checkpoint_id=None, last_completed_checkpoint_id=None,
+            )
+            state = _base_state(wi=work_item)
+
+            # Dirty the plan-stage protected plan_path in the working tree,
+            # uncommitted -- the exact IMPL3-R1 scenario.
+            (repo.root / plan_path).write_text("edited, not yet committed\n")
+
+            new_state = _request_plan_amendment_holding_lifecycle_lock(
+                state, "wi", "reason", repo_root=repo.root, now="2026-01-01T00:00:00Z",
+            )
+            self.assertEqual(new_state["work_items"]["wi"]["phase"], "AMENDING_PLAN")
+            self.assertEqual(new_state["work_items"]["wi"]["amendment_history"][0]
+                              ["pre_amendment_approval_commit"], approval_commit)
+
+    def test_legacy_v1_basis_plan_approval_does_not_refuse_the_amendment_request(self):
+        """IMPL3-R1, second arm: a `LEGACY_V1`-basis `plan_approval`
+        (`review_content_manifest: None`, schema-sanctioned per
+        `validate_approval_record`) must not be refused either -- the
+        coverage check's `registry_path` "not named in the manifest" arm
+        fires unconditionally for this basis whenever a `registry_path` is
+        declared, so a registry-bearing `LEGACY_V1` item was wrongly
+        refused before this round's fix."""
+        with ScratchRepo() as repo:
+            registry_path = "registry.json"
+            _write(repo, registry_path, json.dumps({
+                "work_item_id": "wi", "plan_revision": 1,
+                "checkpoints": [{"id": "CP1", "depends_on": []}],
+            }))
+            approval_commit = _commit_paths(
+                repo, [registry_path], "add registry",
+                trailers={"Workflow-Plan-Approval": "rc-1", "Workflow-Work-Item": "wi"},
+            )
+            work_item = _base_work_item(
+                base_commit=repo.base,
+                registry_path=registry_path,
+                plan_approval={
+                    "status": "CURRENT", "basis": "LEGACY_V1",
+                    "approved_review_content_id": "rc-1",
+                    "review_content_manifest": None,
+                    "reviewed_bundle_id": None, "reviewed_content_commit": None,
+                    "legacy_evidence": {"note": "pre-2.1 import"},
+                },
+                checkpoints={}, current_checkpoint_id=None, last_completed_checkpoint_id=None,
+            )
+            state = _base_state(wi=work_item)
+            new_state = _request_plan_amendment_holding_lifecycle_lock(
+                state, "wi", "reason", repo_root=repo.root, now="2026-01-01T00:00:00Z",
+            )
+            self.assertEqual(new_state["work_items"]["wi"]["phase"], "AMENDING_PLAN")
+            self.assertEqual(new_state["work_items"]["wi"]["amendment_history"][0]
+                              ["pre_amendment_approval_commit"], approval_commit)
+
+    def test_registry_checkpoint_missing_id_key_is_a_named_refusal(self):
+        """IMPL3-O2, renamed IMPL4-O2: `_load_authoritative_registry_or_none`
+        validates the registry's envelope but never its checkpoint-row
+        shape, so a row missing `id` must be named here rather than
+        escaping as an unnamed `KeyError` from the id-shape comprehension.
+        Raises the amendment-specific `AmendmentRegistryMissingIdError`,
+        not the completion-accounting-flavored `RegistryCoverageError`
+        (IMPL4-O2)."""
+        with ScratchRepo() as repo:
+            registry_path = "registry.json"
+            _write(repo, registry_path, json.dumps({
+                "work_item_id": "wi", "plan_revision": 1,
+                "checkpoints": [{"depends_on": []}],  # no "id" key at all
+            }))
+            _commit_paths(repo, [registry_path], "add registry")
+            work_item = _base_work_item(
+                base_commit=repo.base,
+                registry_path=registry_path,
+                plan_approval=_current_plan_approval_covering(repo, registry_path),
+                checkpoints={}, current_checkpoint_id=None, last_completed_checkpoint_id=None,
+            )
+            state = _base_state(wi=work_item)
+            with self.assertRaises(ws.AmendmentRegistryMissingIdError) as ctx:
+                _request_plan_amendment_holding_lifecycle_lock(
+                    state, "wi", "reason", repo_root=repo.root, now="2026-01-01T00:00:00Z",
+                )
+            self.assertIn("no 'id' key", str(ctx.exception))
+            self.assertEqual(state["work_items"]["wi"]["plan_approval"]["status"], "CURRENT")
+
+    def test_checkpoint_already_in_progress_refuses(self):
+        """XMODEL-R4-B1, missing-tests item 1: `request_plan_amendment`
+        must refuse outright while a checkpoint is already IN_PROGRESS in
+        WORKFLOW_STATE.json, rather than superseding `plan_approval` with
+        live implementation state underneath it."""
+        with ScratchRepo() as repo:
+            state, _ = self._state_with_approved_plan(repo)
+            state["work_items"]["wi"]["checkpoints"]["CP2"] = {
+                "status": "IN_PROGRESS", "start_commit": repo.base,
+            }
+            state["work_items"]["wi"]["current_checkpoint_id"] = "CP2"
+            with self.assertRaises(ws.AmendmentCheckpointActiveError):
+                _request_plan_amendment_holding_lifecycle_lock(
+                    state, "wi", "reason", repo_root=repo.root, now="2026-01-01T00:00:00Z",
+                )
+            self.assertEqual(state["work_items"]["wi"]["plan_approval"]["status"], "CURRENT")
+
+    def test_outstanding_checkpoint_claim_with_no_local_in_progress_refuses(self):
+        """XMODEL-R4-B1, missing-tests item 2 -- the actual reported race:
+        `claim_checkpoint` (step 1d) is published to the filesystem claims
+        directory *before* `transition_checkpoint_in_progress` writes
+        `WORKFLOW_STATE.json`, so a claim can be outstanding while state
+        still looks completely idle (`resolve_checkpoint_ownership`'s own
+        supported `CONTINUE_CLAIM` window). A state-only IN_PROGRESS check
+        would miss this window entirely; `request_plan_amendment` must
+        also consult the shared claim record directly, exercising the real
+        claim mechanism rather than only a sequential command-level
+        precheck."""
+        with ScratchRepo() as repo:
+            state, _ = self._state_with_approved_plan(repo)
+            # The checkpoint claim is real and published (`claim_checkpoint`),
+            # but nothing in `state` reflects it -- CP2 is absent from
+            # `checkpoints` entirely, exactly the "claimed but not yet
+            # started in state" window.
+            ws.claim_checkpoint(repo.root, "wi", "CP2", now="2026-01-01T00:00:00Z")
+            with self.assertRaises(ws.AmendmentCheckpointActiveError):
+                _request_plan_amendment_holding_lifecycle_lock(
+                    state, "wi", "reason", repo_root=repo.root, now="2026-01-01T00:00:01Z",
+                )
+            self.assertEqual(state["work_items"]["wi"]["plan_approval"]["status"], "CURRENT")
+
+    def test_amendment_succeeds_once_the_claim_is_properly_released(self):
+        """XMODEL-R4-B1, missing-tests item 4: the ordinary quiescent
+        amendment path is unaffected once the checkpoint claim has been
+        released (step 1f, the normal end of a checkpoint's own
+        lifecycle) -- the new guard is additive, not a regression for the
+        uncontended case."""
+        with ScratchRepo() as repo:
+            state, _ = self._state_with_approved_plan(repo)
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP2", now="2026-01-01T00:00:00Z")
+            ws.release_checkpoint(
+                repo.root, "wi", "CP2", owner_token=claim["owner_token"],
+                now="2026-01-01T00:00:01Z",
+            )
+            new_state = _request_plan_amendment_holding_lifecycle_lock(
+                state, "wi", "reason", repo_root=repo.root, now="2026-01-01T00:00:02Z",
+            )
+            self.assertEqual(new_state["work_items"]["wi"]["phase"], "AMENDING_PLAN")
+
+    def test_claim_checkpoint_refuses_once_amending_plan_is_already_durable(self):
+        """XMODEL-R8-B1: `claim_checkpoint`'s own new pre-publication phase
+        check (under `WORKFLOW_STATE.lock`) refuses, and publishes nothing,
+        once the work item has already committed `AMENDING_PLAN` -- the half
+        of the closed race in which the amendment side won the shared lock
+        first. Deterministic, no concurrency needed: the on-disk state
+        already shows `AMENDING_PLAN` before `claim_checkpoint` is ever
+        called, exactly what a claim attempt arriving after the amendment's
+        own critical section has already closed would observe."""
+        with ScratchRepo() as repo:
+            state_path = repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json"
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state_path.write_text(json.dumps({
+                "schema_version": 1, "active_work_item_id": "wi",
+                "work_items": {"wi": {"work_item_id": "wi", "phase": "AMENDING_PLAN"}},
+            }))
+            with self.assertRaises(ws.IllegalCheckpointStartPhaseError):
+                ws.claim_checkpoint(repo.root, "wi", "CP2", now="2026-01-01T00:00:00Z")
+            self.assertIsNone(ws.resolve_claim(repo.root, "wi"))
+
+    def test_claim_checkpoint_with_no_state_entry_is_unaffected(self):
+        """The phase check is skipped entirely for a work item with no
+        `WORKFLOW_STATE.json` entry at all -- no amendment mechanism could
+        ever race a claim for a work item state does not track, matching
+        every other state-aware precondition in this module (`D1`)."""
+        with ScratchRepo() as repo:
+            state_path = repo.root / "docs" / "ai-workflow" / "WORKFLOW_STATE.json"
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state_path.write_text(json.dumps({
+                "schema_version": 1, "active_work_item_id": "someone-else",
+                "work_items": {"someone-else": {"work_item_id": "someone-else", "phase": "IMPLEMENTING"}},
+            }))
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP2", now="2026-01-01T00:00:00Z")
+            self.assertEqual(claim["checkpoint_id"], "CP2")
+
+
+_AMENDMENT_RACE_CLAIMER_SOURCE = """
+import json
+import sys
+import time
+from pathlib import Path
+
+import workflow_state as ws
+
+repo_root = Path(sys.argv[1])
+work_item_id = sys.argv[2]
+checkpoint_id = sys.argv[3]
+now = sys.argv[4]
+ready_path = Path(sys.argv[5])
+go_path = Path(sys.argv[6])
+out_path = Path(sys.argv[7])
+
+ready_path.write_text("ready")
+deadline = time.monotonic() + 15
+while not go_path.exists():
+    if time.monotonic() > deadline:
+        out_path.write_text(json.dumps({"outcome": "timeout"}))
+        sys.exit(0)
+    time.sleep(0.001)
+
+# workflow-2.6.0: a claim refused because an amendment is in flight
+# anywhere in the repository raises `AmendmentInFlightError` (a
+# `LifecycleRefusalError`) before the local phase check that raises
+# `IllegalCheckpointStartPhaseError`; both are refusals.
+try:
+    claim = ws.claim_checkpoint(repo_root, work_item_id, checkpoint_id, now=now)
+    out_path.write_text(json.dumps({"outcome": "success", "owner_token": claim["owner_token"]}))
+except (ws.IllegalCheckpointStartPhaseError, ws.LifecycleRefusalError) as exc:
+    out_path.write_text(json.dumps({"outcome": "refused", "error": type(exc).__name__,
+                                    "detail": str(exc)}))
+"""
+
+_AMENDMENT_RACE_AMENDER_SOURCE = """
+import json
+import sys
+import time
+from pathlib import Path
+
+import workflow_state as ws
+
+repo_root = Path(sys.argv[1])
+work_item_id = sys.argv[2]
+reason = sys.argv[3]
+now = sys.argv[4]
+hold_seconds = float(sys.argv[5])
+ready_path = Path(sys.argv[6])
+go_path = Path(sys.argv[7])
+out_path = Path(sys.argv[8])
+
+ready_path.write_text("ready")
+deadline = time.monotonic() + 15
+while not go_path.exists():
+    if time.monotonic() > deadline:
+        out_path.write_text(json.dumps({"outcome": "timeout"}))
+        sys.exit(0)
+    time.sleep(0.001)
+
+# workflow-2.6.0: the only sanctioned entry point is
+# `request_plan_amendment_transaction` (lifecycle lock (9), then
+# `state_transaction`). The pure mutator it calls by module-global name is
+# wrapped so it sleeps for `hold_seconds` before doing any of its own work,
+# inside both locks -- simulating the real, non-zero wall-clock time its
+# git/registry reads take, so a concurrent claim_checkpoint issued during
+# this window has a real chance to block on the shared locks rather than
+# merely run before or after them.
+_real_request_plan_amendment = ws.request_plan_amendment
+
+
+def _slow_request_plan_amendment(state, *args, **kwargs):
+    time.sleep(hold_seconds)
+    return _real_request_plan_amendment(state, *args, **kwargs)
+
+
+ws.request_plan_amendment = _slow_request_plan_amendment
+
+try:
+    ws.request_plan_amendment_transaction(repo_root, work_item_id, reason, now=now)
+    out_path.write_text(json.dumps({"outcome": "success"}))
+except (ws.AmendmentCheckpointActiveError, ws.LifecycleRefusalError) as exc:
+    out_path.write_text(json.dumps({"outcome": "refused", "error": type(exc).__name__,
+                                    "detail": str(exc)}))
+"""
+
+_AMENDMENT_RACE_AMENDER_POST_RESOLVE_CLAIM_SOURCE = """
+import json
+import sys
+import time
+from pathlib import Path
+
+import workflow_state as ws
+
+repo_root = Path(sys.argv[1])
+work_item_id = sys.argv[2]
+reason = sys.argv[3]
+now = sys.argv[4]
+hold_seconds = float(sys.argv[5])
+ready_path = Path(sys.argv[6])
+go_path = Path(sys.argv[7])
+out_path = Path(sys.argv[8])
+paused_path = Path(sys.argv[9]) if len(sys.argv) > 9 else None
+
+# Places the delay exactly where `XMODEL-R9-B1`'s external review placed
+# it: immediately after `request_plan_amendment`'s own authoritative
+# `resolve_claim(...)` read returns, standing in for the git rev-parse /
+# discover_plan_approval_commit / registry-load work that really follows
+# it -- the genuine window a claim from another worktree landed in
+# undetected before workflow-2.6.0. `paused_path`, when given, is written
+# the moment that pause begins, so the parent starts the contender
+# provably inside the window.
+_real_resolve_claim = ws.resolve_claim
+
+
+def _slow_resolve_claim(repo_root_arg, work_item_id_arg):
+    result = _real_resolve_claim(repo_root_arg, work_item_id_arg)
+    if paused_path is not None:
+        paused_path.write_text("paused")
+    time.sleep(hold_seconds)
+    return result
+
+
+ws.resolve_claim = _slow_resolve_claim
+
+ready_path.write_text("ready")
+deadline = time.monotonic() + 15
+while not go_path.exists():
+    if time.monotonic() > deadline:
+        out_path.write_text(json.dumps({"outcome": "timeout"}))
+        sys.exit(0)
+    time.sleep(0.001)
+
+try:
+    ws.request_plan_amendment_transaction(repo_root, work_item_id, reason, now=now)
+    out_path.write_text(json.dumps({"outcome": "success"}))
+except (ws.AmendmentCheckpointActiveError, ws.LifecycleRefusalError) as exc:
+    out_path.write_text(json.dumps({"outcome": "refused", "error": type(exc).__name__,
+                                    "detail": str(exc)}))
+"""
+
+_AMENDMENT_RACE_SLOW_CLAIMER_SOURCE = """
+import contextlib
+import json
+import sys
+import time
+from pathlib import Path
+
+import workflow_state as ws
+
+repo_root = Path(sys.argv[1])
+work_item_id = sys.argv[2]
+checkpoint_id = sys.argv[3]
+now = sys.argv[4]
+hold_seconds = float(sys.argv[5])
+ready_path = Path(sys.argv[6])
+go_path = Path(sys.argv[7])
+out_path = Path(sys.argv[8])
+paused_path = Path(sys.argv[9]) if len(sys.argv) > 9 else None
+
+# Holds the real `state_lock` -- which `claim_checkpoint` acquires by bare
+# name, nested inside the lifecycle lock (9) since workflow-2.6.0 -- for
+# `hold_seconds`, so the claimer's whole critical section (both locks) is
+# extended to something a concurrent process can reliably observe blocking
+# on, while the real production function still runs.
+_real_state_lock = ws.state_lock
+
+
+@contextlib.contextmanager
+def _slow_state_lock(*a, **kw):
+    with _real_state_lock(*a, **kw):
+        if paused_path is not None:
+            paused_path.write_text("paused")
+        time.sleep(hold_seconds)
+        yield
+
+
+ws.state_lock = _slow_state_lock
+
+ready_path.write_text("ready")
+deadline = time.monotonic() + 15
+while not go_path.exists():
+    if time.monotonic() > deadline:
+        out_path.write_text(json.dumps({"outcome": "timeout"}))
+        sys.exit(0)
+    time.sleep(0.001)
+
+try:
+    claim = ws.claim_checkpoint(repo_root, work_item_id, checkpoint_id, now=now)
+    out_path.write_text(json.dumps({"outcome": "success", "owner_token": claim["owner_token"]}))
+except (ws.IllegalCheckpointStartPhaseError, ws.LifecycleRefusalError) as exc:
+    out_path.write_text(json.dumps({"outcome": "refused", "error": type(exc).__name__,
+                                    "detail": str(exc)}))
+"""
+
+_LIFECYCLE_KILL_BEFORE_STATE_PUBLISH_SOURCE = """
+import os
+import signal
+import sys
+from pathlib import Path
+
+import workflow_state as ws
+
+repo_root = Path(sys.argv[1])
+work_item_id = sys.argv[2]
+now = sys.argv[3]
+
+
+def _die_before_publishing(*_args, **_kwargs):
+    # CP6 test 7: SIGKILL between the OPEN witness publication and the
+    # state publication -- the witness is on disk, WORKFLOW_STATE.json is
+    # not, and nothing runs after this line.
+    os.kill(os.getpid(), signal.SIGKILL)
+
+
+ws._publish_state_file = _die_before_publishing
+ws.request_plan_amendment_transaction(repo_root, work_item_id, "reason", now=now)
+"""
+
+_LIFECYCLE_LOCK_HOLDER_SOURCE = """
+import sys
+import time
+from pathlib import Path
+
+import workflow_state as ws
+
+repo_root = Path(sys.argv[1])
+work_item_id = sys.argv[2]
+ready_path = Path(sys.argv[3])
+
+with ws.lifecycle_lock(repo_root, work_item_id):
+    ready_path.write_text("held")
+    time.sleep(60)
+"""
+
+
+def _spawn_worker(source: str, *args) -> subprocess.Popen:
+    """One real OS process running `source` with this directory's
+    `workflow_state` importable -- two holders of one `fcntl.flock` must be
+    two processes, since a single process cannot contend with itself."""
+    worker_dir = Path(tempfile.mkdtemp(prefix="wf-lifecycle-worker-"))
+    worker = worker_dir / "_worker.py"
+    worker.write_text(source)
+    env = dict(os.environ)
+    scripts_dir = Path(__file__).resolve().parent
+    env["PYTHONPATH"] = str(scripts_dir) + (
+        os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    return subprocess.Popen([sys.executable, str(worker), *[str(a) for a in args]], env=env)
+
+
+def _wait_for_path(path: Path, what: str, timeout: float = 15) -> None:
+    deadline = time.monotonic() + timeout
+    while not path.exists():
+        if time.monotonic() > deadline:
+            raise AssertionError(f"{what} did not become ready in time")
+        time.sleep(0.001)
+
+
+def _reap(*procs) -> None:
+    for proc in procs:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(timeout=5)
+
+
+# --- workflow-2.6.0, `D-Repo-Global-Lifecycle` (CP6) shared fixtures -------
+
+_STATE_REL = "docs/ai-workflow/WORKFLOW_STATE.json"
+
+
+def _git_in(root, *args) -> str:
+    return subprocess.run(["git", *args], cwd=str(root), check=True, capture_output=True,
+                          text=True).stdout
+
+
+def _primary_branch(root) -> str:
+    """The branch `ScratchRepo`'s `git init` checked out in `root`. Never
+    hardcoded: `git init` names it from `init.defaultBranch`, which the
+    conformance harness isolates away (`GIT_CONFIG_GLOBAL=/dev/null`)."""
+    return _git_in(root, "symbolic-ref", "--short", "HEAD").strip()
+
+
+def _install_release(root, version="2.6.0"):
+    """Commit a `.workflow-manager/installation.json` naming `version` on
+    `root`'s current branch -- the record the lag probe reads from each
+    worktree's `HEAD`. `2.6.0` makes the worktree current; anything older
+    (or no record at all) makes it lag."""
+    path = Path(root) / ".workflow-manager" / "installation.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"schema_version": 1, "workflow_version": version}) + "\n")
+    _git_in(root, "add", ".workflow-manager/installation.json")
+    _git_in(root, "commit", "-q", "-m", f"install workflow {version}")
+
+
+def _approved_state(repo, approval_commit, *, phase="IMPLEMENTING"):
+    return {
+        "schema_version": 1, "active_work_item_id": "wi",
+        "work_items": {"wi": {
+            "work_item_id": "wi", "work_item_type": "process", "phase": phase,
+            "plan_revision": 1, "base_commit": repo.base,
+            "plan_approval": {"status": "CURRENT", "approved_review_content_id": "rc-1"},
+            "checkpoints": {"CP1": {"status": "COMPLETE", "start_commit": approval_commit}},
+            "current_checkpoint_id": None, "last_completed_checkpoint_id": "CP1",
+        }},
+    }
+
+
+def _write_state(root, state) -> Path:
+    path = Path(root) / _STATE_REL
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state, indent=2) + "\n")
+    return path
+
+
+def _read_state(root) -> dict:
+    return json.loads((Path(root) / _STATE_REL).read_text())
+
+
+def _commit_lifecycle_state(root, subject="state", trailers=None) -> str:
+    _git_in(root, "add", _STATE_REL)
+    body = subject
+    if trailers:
+        body += "\n\n" + "\n".join(f"{k}: {v}" for k, v in trailers.items())
+    _git_in(root, "commit", "-q", "-m", body)
+    return _git_in(root, "rev-parse", "HEAD").strip()
+
+
+def _lifecycle_repo(repo, *, install="2.6.0", commit_state=True):
+    """The shared starting point: an installed release (`install=None`
+    leaves every worktree lagging), a discoverable plan-approval commit,
+    and an `IMPLEMENTING` state for `wi` -- committed, so every linked
+    worktree created afterwards carries it on its own branch."""
+    if install is not None:
+        _install_release(repo.root, install)
+    approval_commit = repo.commit(
+        "approve plan", trailers={"Workflow-Plan-Approval": "rc-1", "Workflow-Work-Item": "wi"},
+    )
+    _write_state(repo.root, _approved_state(repo, approval_commit))
+    if commit_state:
+        _commit_lifecycle_state(repo.root, "record the approved state")
+    return approval_commit
+
+
+def _witness_bytes(root, work_item_id="wi"):
+    return ws.read_amendment_witness_bytes(Path(root), work_item_id)
+
+
+def _amend(root, *, now="2026-01-01T00:00:00Z", commit=True):
+    """`/request-plan-amendment` steps 2-3: the transaction, then the state
+    write committed alone on the requester's branch."""
+    ws.request_plan_amendment_transaction(Path(root), "wi", "amend for a reason", now=now)
+    if commit:
+        _commit_lifecycle_state(root, "request plan amendment", {"Workflow-Work-Item": "wi"})
+
+
+def _resolve_in_head(root, *, revision=2, outcome=None, review_content_id="rc-2",
+                     legacy=False, trailer=None):
+    """Commit a resolution of `wi`'s last amendment_history entry on
+    `root`'s branch, as an approval commit would -- `legacy=True` omits
+    `resolved_review_content_id`, as `2.5.1` did. Returns the commit."""
+    state = _read_state(root)
+    item = state["work_items"]["wi"]
+    entry = item["amendment_history"][-1]
+    entry["resolved_at_plan_revision"] = revision
+    entry["reconciliation_outcome"] = outcome if outcome is not None else {"CP1": "retained"}
+    if not legacy:
+        entry["resolved_review_content_id"] = review_content_id
+    item["phase"] = "IMPLEMENTING"
+    item["plan_revision"] = revision
+    item["plan_approval"] = {"status": "CURRENT", "approved_review_content_id": review_content_id}
+    _write_state(root, state)
+    trailers = {"Workflow-Plan-Approval": trailer or review_content_id, "Workflow-Work-Item": "wi"}
+    return _commit_lifecycle_state(root, "plan-stage approval", trailers)
+
+
+class TestAmendmentClaimRaceRealProcesses(unittest.TestCase):
+    """`XMODEL-R8-B1`: `request_plan_amendment`'s authoritative
+    `resolve_claim(...)` read and `claim_checkpoint`'s own publication are
+    serialized, run as genuinely separate OS processes racing on it -- a
+    single-process or threaded fixture cannot reproduce two independent
+    holders contending for the same `fcntl.flock` (`TestRealProcessConcurrentTakeover`'s
+    own reasoning, applied to this pair).
+
+    workflow-2.6.0 (CP6 test 16): the same-worktree behavior still holds
+    through the new entry point. Both sides now take the repository-global
+    lifecycle lock (9) first and `WORKFLOW_STATE.lock` inside it; exactly
+    one side wins, the other genuinely blocks for the held interval and
+    then correctly refuses. A claim refused because the amendment won now
+    names the in-flight amendment (`AmendmentInFlightError`, the witness
+    check that runs before the local phase check)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._scripts_dir = Path(__file__).resolve().parent
+        cls._worker_dir = Path(tempfile.mkdtemp(prefix="wf-amend-race-worker-"))
+        cls._claimer = cls._worker_dir / "_amend_race_claimer.py"
+        cls._claimer.write_text(_AMENDMENT_RACE_CLAIMER_SOURCE)
+        cls._amender = cls._worker_dir / "_amend_race_amender.py"
+        cls._amender.write_text(_AMENDMENT_RACE_AMENDER_SOURCE)
+        cls._slow_claimer = cls._worker_dir / "_amend_race_slow_claimer.py"
+        cls._slow_claimer.write_text(_AMENDMENT_RACE_SLOW_CLAIMER_SOURCE)
+
+    @classmethod
+    def tearDownClass(cls):
+        import shutil
+        shutil.rmtree(cls._worker_dir, ignore_errors=True)
+
+    def _spawn(self, worker: Path, *args) -> subprocess.Popen:
+        env = dict(os.environ)
+        env["PYTHONPATH"] = str(self._scripts_dir) + (
+            os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+        return subprocess.Popen(
+            [sys.executable, str(worker), *[str(a) for a in args]], env=env,
+        )
+
+    @staticmethod
+    def _wait_for(path: Path, what: str) -> None:
+        _wait_for_path(path, what)
+
+    def _state_with_approved_plan(self, repo):
+        approval_commit = repo.commit(
+            "approve plan", trailers={"Workflow-Plan-Approval": "rc-1", "Workflow-Work-Item": "wi"},
+        )
+        return _write_state(repo.root, _approved_state(repo, approval_commit))
+
+    def test_amendment_holds_the_lock_and_the_concurrent_claim_genuinely_blocks_then_correctly_refuses(self):
+        with ScratchRepo() as repo:
+            state_path = self._state_with_approved_plan(repo)
+            with tempfile.TemporaryDirectory(prefix="wf-amend-race-io-") as scratch:
+                scratch_path = Path(scratch)
+                ready_amend, go_amend, out_amend = (
+                    scratch_path / "ready_amend", scratch_path / "go_amend", scratch_path / "out_amend.json")
+                ready_claim, go_claim, out_claim = (
+                    scratch_path / "ready_claim", scratch_path / "go_claim", scratch_path / "out_claim.json")
+
+                hold_seconds = 1.0
+                amender = self._spawn(
+                    self._amender, repo.root, "wi", "reason", "2026-01-01T00:00:00Z", hold_seconds,
+                    ready_amend, go_amend, out_amend,
+                )
+                claimer = self._spawn(
+                    self._claimer, repo.root, "wi", "CP2", "2026-01-01T00:00:01Z",
+                    ready_claim, go_claim, out_claim,
+                )
+                try:
+                    self._wait_for(ready_amend, "amender")
+                    self._wait_for(ready_claim, "claimer")
+
+                    # Release the amender first, and give it a moment to
+                    # actually win the flock acquisition and enter its
+                    # sleep -- then release the claimer while the amender
+                    # is provably still inside its held critical section.
+                    go_amend.write_text("go")
+                    time.sleep(0.2)
+                    started_blocking_at = time.monotonic()
+                    go_claim.write_text("go")
+
+                    self.assertEqual(amender.wait(timeout=15), 0)
+                    self.assertEqual(claimer.wait(timeout=15), 0)
+                    blocked_for = time.monotonic() - started_blocking_at
+
+                    amend_result = json.loads(out_amend.read_text())
+                    claim_result = json.loads(out_claim.read_text())
+
+                    self.assertEqual(amend_result["outcome"], "success", amend_result)
+                    self.assertEqual(claim_result["outcome"], "refused", claim_result)
+                    self.assertEqual(claim_result["error"], "AmendmentInFlightError", claim_result)
+
+                    # The claimer, released 0.2s into the amender's 1.0s
+                    # held interval, could not have resolved in a few
+                    # milliseconds the way an unheld acquisition would --
+                    # proof it genuinely blocked on the shared lock rather
+                    # than racing past an unheld one.
+                    self.assertGreaterEqual(
+                        blocked_for, 0.5,
+                        "the claimer resolved too quickly to have actually blocked on the "
+                        "shared lifecycle lock")
+                finally:
+                    _reap(amender, claimer)
+
+            final_state = json.loads(state_path.read_text())
+            final_phase = final_state["work_items"]["wi"]["phase"]
+            claim = ws.resolve_claim(repo.root, "wi")
+
+            self.assertEqual(final_phase, "AMENDING_PLAN")
+            self.assertIsNone(
+                claim, "a checkpoint claim survived alongside a committed AMENDING_PLAN phase -- "
+                "exactly the XMODEL-R8-B1 defect this fix closes")
+
+    def test_claimer_wins_the_lock_and_the_concurrent_amendment_genuinely_blocks_then_correctly_refuses(self):
+        """The claimer-wins ordering under real contention: the claimer is
+        released first and holds the real shared locks for a measurable
+        interval; a concurrent amendment issued against the identical
+        locks genuinely blocks for the held duration, then correctly
+        refuses rather than superseding a plan approval a live claim
+        already stands against."""
+        with ScratchRepo() as repo:
+            state_path = self._state_with_approved_plan(repo)
+            with tempfile.TemporaryDirectory(prefix="wf-amend-race-io-") as scratch:
+                scratch_path = Path(scratch)
+                ready_claim, go_claim, out_claim = (
+                    scratch_path / "ready_claim", scratch_path / "go_claim", scratch_path / "out_claim.json")
+                ready_amend, go_amend, out_amend = (
+                    scratch_path / "ready_amend", scratch_path / "go_amend", scratch_path / "out_amend.json")
+
+                hold_seconds = 1.0
+                claimer = self._spawn(
+                    self._slow_claimer, repo.root, "wi", "CP2", "2026-01-01T00:00:00Z", hold_seconds,
+                    ready_claim, go_claim, out_claim,
+                )
+                amender = self._spawn(
+                    self._amender, repo.root, "wi", "reason", "2026-01-01T00:00:01Z", 0.0,
+                    ready_amend, go_amend, out_amend,
+                )
+                try:
+                    self._wait_for(ready_claim, "claimer")
+                    self._wait_for(ready_amend, "amender")
+
+                    go_claim.write_text("go")
+                    time.sleep(0.2)
+                    started_blocking_at = time.monotonic()
+                    go_amend.write_text("go")
+
+                    self.assertEqual(claimer.wait(timeout=15), 0)
+                    self.assertEqual(amender.wait(timeout=15), 0)
+                    blocked_for = time.monotonic() - started_blocking_at
+
+                    claim_result = json.loads(out_claim.read_text())
+                    amend_result = json.loads(out_amend.read_text())
+
+                    self.assertEqual(claim_result["outcome"], "success", claim_result)
+                    self.assertEqual(amend_result["outcome"], "refused", amend_result)
+                    self.assertEqual(amend_result["error"], "AmendmentCheckpointActiveError", amend_result)
+
+                    self.assertGreaterEqual(
+                        blocked_for, 0.5,
+                        "the amender resolved too quickly to have actually blocked on the "
+                        "shared lifecycle lock")
+                finally:
+                    _reap(claimer, amender)
+
+            final_state = json.loads(state_path.read_text())
+            final_item = final_state["work_items"]["wi"]
+            claim = ws.resolve_claim(repo.root, "wi")
+
+            self.assertEqual(final_item["phase"], "IMPLEMENTING")
+            self.assertEqual(final_item["plan_approval"]["status"], "CURRENT")
+            self.assertIsNotNone(
+                claim, "the claim published first must survive an amendment that lost the race "
+                "for the shared lifecycle lock")
+
+
+class TestCrossWorktreeAmendmentClaimRaceIsClosed(unittest.TestCase):
+    """`v2.4.0-002` / `XMODEL-R9-B1`, closed by workflow-2.6.0's
+    `D-Repo-Global-Lifecycle` (CP6 tests 1-4). Through `2.5.1` this class
+    was `TestCrossWorktreeAmendmentClaimResidualXModelR9B1` and pinned the
+    open boundary -- an amendment in worktree A and a claim in worktree B
+    both succeeding. Inverted here: each test now asserts the closed
+    property, for both of the defect's independent causes.
+
+    - Cause 2 (B cannot see A's `AMENDING_PLAN`): the amendment witness,
+      readable from every worktree, refuses B's claim while B's own local
+      state still says `IMPLEMENTING`.
+    - Cause 1 (the per-worktree `WORKFLOW_STATE.lock` serializes nothing
+      across worktrees): the lifecycle lock (9) lives under the git common
+      dir; racing the two sides from two worktrees, exactly one succeeds
+      and the other genuinely blocks on (9)."""
+
+    def test_amendment_first_refuses_the_other_worktrees_claim_while_its_local_state_says_implementing(self):
+        """CP6 test 1."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_b = repo.worktree("b")
+            _amend(repo.root, commit=False)
+            witness_before = _witness_bytes(repo.root)
+            self.assertEqual(_read_state(wt_b)["work_items"]["wi"]["phase"], "IMPLEMENTING")
+
+            with self.assertRaises(ws.AmendmentInFlightError) as refused:
+                ws.claim_checkpoint(wt_b, "wi", "CP2", now="t1")
+
+            self.assertEqual(refused.exception.evidence["seq"], 1)
+            self.assertNotIn("literal", refused.exception.evidence)
+            self.assertIsNone(ws.resolve_claim(wt_b, "wi"), "nothing may be published")
+            self.assertEqual(_witness_bytes(repo.root), witness_before)
+            self.assertEqual(_read_state(repo.root)["work_items"]["wi"]["phase"], "AMENDING_PLAN")
+
+    def test_claim_first_refuses_the_other_worktrees_amendment_naming_the_foreign_claim(self):
+        """CP6 test 2."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_b = repo.worktree("b")
+            ws.claim_checkpoint(wt_b, "wi", "CP2", now="t1")
+            witness_before = _witness_bytes(repo.root)
+
+            with self.assertRaises(ws.AmendmentCheckpointActiveError) as refused:
+                ws.request_plan_amendment_transaction(repo.root, "wi", "reason", now="t2")
+
+            self.assertIn(os.path.realpath(wt_b), str(refused.exception))
+            self.assertEqual(_read_state(repo.root)["work_items"]["wi"]["phase"], "IMPLEMENTING")
+            self.assertEqual(_witness_bytes(repo.root), witness_before)
+            self.assertEqual(ws.read_amendment_witness(repo.root, "wi")["status"], ws.AMENDMENT_WITNESS_NONE)
+
+    def _race(self, repo, first, second, *, expect_first, expect_second):
+        """Start `first`, wait until it is provably paused inside its (9)
+        critical section, start `second`, and require exactly the given
+        outcomes -- with `second` genuinely blocked for the held interval."""
+        with tempfile.TemporaryDirectory(prefix="wf-xwt-race-io-") as scratch:
+            io = Path(scratch)
+            hold = 1.0
+            procs = []
+            try:
+                source, root, argv = first
+                p1 = _spawn_worker(source, root, *argv(hold, io / "r1", io / "g1", io / "o1.json",
+                                                    io / "paused1"))
+                procs.append(p1)
+                source2, root2, argv2 = second
+                p2 = _spawn_worker(source2, root2, *argv2(0.0, io / "r2", io / "g2", io / "o2.json",
+                                                       None))
+                procs.append(p2)
+                _wait_for_path(io / "r1", "first worker")
+                _wait_for_path(io / "r2", "second worker")
+                (io / "g1").write_text("go")
+                _wait_for_path(io / "paused1", "first worker's held window")
+                started = time.monotonic()
+                (io / "g2").write_text("go")
+                self.assertEqual(p1.wait(timeout=20), 0)
+                self.assertEqual(p2.wait(timeout=20), 0)
+                blocked_for = time.monotonic() - started
+                r1 = json.loads((io / "o1.json").read_text())
+                r2 = json.loads((io / "o2.json").read_text())
+                self.assertEqual((r1["outcome"], r1.get("error")), expect_first, r1)
+                self.assertEqual((r2["outcome"], r2.get("error")), expect_second, r2)
+                self.assertGreaterEqual(
+                    blocked_for, 0.5, "the second worker did not block on the lifecycle lock")
+            finally:
+                _reap(*procs)
+
+    def test_racing_an_amendment_in_one_worktree_and_a_claim_in_another_serializes_on_the_lifecycle_lock(self):
+        """CP6 test 3: the amender is paused right after its `resolve_claim`
+        quiescence read (the exact `XMODEL-R9-B1` window) and the claimer
+        is started in another worktree inside that pause. Exactly one
+        succeeds -- the amender -- and the claimer blocks on (9), then
+        refuses on the witness the amender published."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_b = repo.worktree("b")
+            self._race(
+                repo,
+                (_AMENDMENT_RACE_AMENDER_POST_RESOLVE_CLAIM_SOURCE, repo.root,
+                 lambda hold, r, g, o, p: ["wi", "reason", "2026-01-01T00:00:00Z", hold, r, g, o, p]),
+                (_AMENDMENT_RACE_CLAIMER_SOURCE, wt_b,
+                 lambda hold, r, g, o, p: ["wi", "CP2", "2026-01-01T00:00:01Z", r, g, o]),
+                expect_first=("success", None),
+                expect_second=("refused", "AmendmentInFlightError"),
+            )
+            self.assertEqual(_read_state(repo.root)["work_items"]["wi"]["phase"], "AMENDING_PLAN")
+            self.assertIsNone(ws.resolve_claim(wt_b, "wi"))
+
+    def test_racing_a_claim_in_one_worktree_and_an_amendment_in_another_serializes_on_the_lifecycle_lock(self):
+        """CP6 test 4: the reverse order. The claimer in B holds (9) (its
+        whole critical section extended), the amender in A is started
+        inside it, blocks on (9), then refuses on the claim B published."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_b = repo.worktree("b")
+            self._race(
+                repo,
+                (_AMENDMENT_RACE_SLOW_CLAIMER_SOURCE, wt_b,
+                 lambda hold, r, g, o, p: ["wi", "CP2", "2026-01-01T00:00:00Z", hold, r, g, o, p]),
+                (_AMENDMENT_RACE_AMENDER_SOURCE, repo.root,
+                 lambda hold, r, g, o, p: ["wi", "reason", "2026-01-01T00:00:01Z", hold, r, g, o]),
+                expect_first=("success", None),
+                expect_second=("refused", "AmendmentCheckpointActiveError"),
+            )
+            self.assertEqual(_read_state(repo.root)["work_items"]["wi"]["phase"], "IMPLEMENTING")
+            self.assertIsNotNone(ws.resolve_claim(wt_b, "wi"))
+
+
+class TestRepoGlobalLifecycleClaimAndAmendment(unittest.TestCase):
+    """`D-Repo-Global-Lifecycle`'s claim and amendment sides across real
+    linked worktrees (CP6 tests 5, 6, 11, 12, 13a, 13e)."""
+
+    def test_a_stale_worktree_is_refused_until_it_merges_the_resolved_amendment(self):
+        """CP6 test 5."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_b = repo.worktree("b")
+            _amend(repo.root)
+            _resolve_in_head(repo.root)
+            # The first (9) holder that sees the resolution binds it.
+            ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")
+            witness = ws.read_amendment_witness(repo.root, "wi")
+            self.assertEqual(witness["status"], ws.AMENDMENT_WITNESS_RESOLVED)
+
+            with self.assertRaises(ws.StaleLifecycleStateError) as refused:
+                ws.claim_checkpoint(wt_b, "wi", "CP3", now="t2")
+            self.assertIn("merge the resolved amendment first", str(refused.exception))
+            self.assertIsNotNone(ws.resolve_claim(repo.root, "wi"))
+
+            ws.release_checkpoint(repo.root, "wi", "CP2",
+                                  owner_token=ws.resolve_claim(repo.root, "wi")["owner_token"])
+            _git_in(wt_b, "merge", "-q", "--no-edit", _primary_branch(repo.root))
+            claim = ws.claim_checkpoint(wt_b, "wi", "CP3", now="t3")
+            self.assertEqual(claim["checkpoint_id"], "CP3")
+
+    def test_two_worktrees_requesting_amendments_concurrently_exactly_one_succeeds(self):
+        """CP6 test 6, real processes: the first requester is paused inside
+        its (9) critical section; the second, started inside that pause,
+        blocks on (9) and then refuses, since two amendments would fork
+        `amendment_history`."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_b = repo.worktree("b")
+            with tempfile.TemporaryDirectory(prefix="wf-two-amenders-") as scratch:
+                io = Path(scratch)
+                first = _spawn_worker(_AMENDMENT_RACE_AMENDER_POST_RESOLVE_CLAIM_SOURCE, repo.root, "wi",
+                                      "from A", "2026-01-01T00:00:00Z", 1.0,
+                                      io / "r1", io / "g1", io / "o1.json", io / "p1")
+                second = _spawn_worker(_AMENDMENT_RACE_AMENDER_POST_RESOLVE_CLAIM_SOURCE, wt_b, "wi",
+                                       "from B", "2026-01-01T00:00:01Z", 0.0,
+                                       io / "r2", io / "g2", io / "o2.json")
+                try:
+                    _wait_for_path(io / "r1", "first amender")
+                    _wait_for_path(io / "r2", "second amender")
+                    (io / "g1").write_text("go")
+                    _wait_for_path(io / "p1", "first amender's held window")
+                    (io / "g2").write_text("go")
+                    self.assertEqual(first.wait(timeout=20), 0)
+                    self.assertEqual(second.wait(timeout=20), 0)
+                    outcomes = sorted(json.loads((io / name).read_text())["outcome"]
+                                      for name in ("o1.json", "o2.json"))
+                    self.assertEqual(outcomes, ["refused", "success"])
+                    self.assertEqual(json.loads((io / "o2.json").read_text())["error"],
+                                     "AmendmentInFlightError")
+                finally:
+                    _reap(first, second)
+            self.assertEqual(_read_state(repo.root)["work_items"]["wi"]["phase"], "AMENDING_PLAN")
+            self.assertEqual(_read_state(wt_b)["work_items"]["wi"]["phase"], "IMPLEMENTING")
+            witness = ws.read_amendment_witness(repo.root, "wi")
+            self.assertEqual((witness["status"], witness["amendment_seq"]), (ws.AMENDMENT_WITNESS_OPEN, 1))
+
+    def test_absent_claim_takeover_and_adoption_refuse_while_an_amendment_is_open(self):
+        """CP6 test 11: the two other claim publishers take (9) and run the
+        witness check too."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_b = repo.worktree("b")
+            _amend(repo.root, commit=False)
+            witness_before = _witness_bytes(repo.root)
+
+            evidence = ws.takeover_evidence(wt_b, "wi")
+            self.assertIsNone(evidence["claim"])
+            literal = ws.takeover_authorization_literal("wi", evidence, "CP2")
+            with self.assertRaises(ws.AmendmentInFlightError):
+                ws.take_over_claim(wt_b, "wi", "CP2", now="t1", user_authorization=literal,
+                                   evidence=evidence)
+            self.assertIsNone(ws.resolve_claim(wt_b, "wi"))
+
+            ws.write_worktree_identity(wt_b, "wi", now="t2")
+            state_b = _read_state(wt_b)
+            state_b["work_items"]["wi"]["checkpoints"]["CP2"] = {"status": "IN_PROGRESS"}
+            state_b["work_items"]["wi"]["current_checkpoint_id"] = "CP2"
+            _write_state(wt_b, state_b)
+            with self.assertRaises(ws.AmendmentInFlightError):
+                ws.adopt_claim(wt_b, "wi", "CP2", now="t3")
+            self.assertIsNone(ws.resolve_claim(wt_b, "wi"))
+            self.assertEqual(_witness_bytes(repo.root), witness_before)
+
+    def test_a_direct_state_transaction_of_the_pure_mutator_refuses_without_the_lifecycle_lock(self):
+        """CP6 test 12 ("No bypass")."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            before = (repo.root / _STATE_REL).read_bytes()
+            with self.assertRaises(ws.LifecycleLockNotHeldError):
+                ws.state_transaction(repo.root, lambda state: ws.request_plan_amendment(
+                    state, "wi", "reason", repo_root=repo.root, now="t1"))
+            self.assertEqual((repo.root / _STATE_REL).read_bytes(), before)
+            self.assertIsNone(_witness_bytes(repo.root))
+
+    def test_self_heal_advances_open_to_resolved_before_any_in_flight_refusal(self):
+        """CP6 test 13a: the witness is `OPEN` at seq N and the evaluating
+        `HEAD` shows N resolved (a resolution landed but its witness
+        advance was lost). A claim advances it to `RESOLVED` and proceeds;
+        before that, a worktree whose `HEAD` lacks the resolution refuses
+        the ordinary way."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_b = repo.worktree("b")
+            _amend(repo.root)
+            _resolve_in_head(repo.root)
+            self.assertEqual(ws.read_amendment_witness(repo.root, "wi")["status"], ws.AMENDMENT_WITNESS_OPEN)
+            with self.assertRaises(ws.AmendmentInFlightError):
+                ws.claim_checkpoint(wt_b, "wi", "CP2", now="t1")
+            self.assertEqual(ws.read_amendment_witness(repo.root, "wi")["status"], ws.AMENDMENT_WITNESS_OPEN)
+
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP2", now="t2")
+            self.assertEqual(claim["checkpoint_id"], "CP2")
+            witness = ws.read_amendment_witness(repo.root, "wi")
+            self.assertEqual(witness["status"], ws.AMENDMENT_WITNESS_RESOLVED)
+            head_entry = _read_state(repo.root)["work_items"]["wi"]["amendment_history"][0]
+            self.assertEqual(witness["resolution_projection_sha256"],
+                             ws.amendment_resolution_projection_sha256(head_entry))
+
+    def test_self_heal_also_runs_first_on_the_amendment_side(self):
+        """CP6 test 13a, amendment side: the next request advances the lost
+        witness advance first, then publishes seq N+1."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            _amend(repo.root)
+            _resolve_in_head(repo.root)
+            _amend(repo.root, now="2026-01-02T00:00:00Z", commit=False)
+            witness = ws.read_amendment_witness(repo.root, "wi")
+            self.assertEqual((witness["status"], witness["amendment_seq"]), (ws.AMENDMENT_WITNESS_OPEN, 2))
+            self.assertEqual(witness["previous"]["status"], ws.AMENDMENT_WITNESS_RESOLVED)
+            self.assertEqual(witness["previous"]["amendment_seq"], 1)
+
+    def test_the_amendment_side_reads_head_not_the_working_tree_under_a_resolved_witness(self):
+        """CP6 test 13e: a worktree whose working tree shows seq N resolved
+        but whose `HEAD` does not is refused under a `RESOLVED` witness."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_b = repo.worktree("b")
+            _amend(repo.root)
+            _resolve_in_head(repo.root)
+            ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")  # binds RESOLVED
+            # B copies the resolved state into its working tree without
+            # merging it.
+            _write_state(wt_b, _read_state(repo.root))
+            with self.assertRaises(ws.StaleLifecycleStateError):
+                ws.request_plan_amendment_transaction(wt_b, "wi", "reason", now="t2")
+
+
+class TestAmendmentWitnessCrashRecovery(unittest.TestCase):
+    """The witness's crash table (CP6 tests 7, 7a, 9, 10)."""
+
+    def test_sigkill_between_witness_and_state_publication_is_a_provable_orphan_rolled_back(self):
+        """CP6 test 7: the requester is killed after publishing the `OPEN`
+        witness and before publishing the state. The next (9) holder proves
+        the orphan -- the requester worktree is registered, still on its
+        branch, and neither it, its branch tip nor any worktree holds seq 1
+        -- and rolls the witness back to its `previous` (`NONE`)."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_a = repo.worktree("a")
+            worker = _spawn_worker(_LIFECYCLE_KILL_BEFORE_STATE_PUBLISH_SOURCE, wt_a, "wi", "t1")
+            self.assertEqual(worker.wait(timeout=30), -9)
+            self.assertEqual(ws.read_amendment_witness(repo.root, "wi")["status"], ws.AMENDMENT_WITNESS_OPEN)
+            self.assertEqual(_read_state(wt_a)["work_items"]["wi"]["phase"], "IMPLEMENTING")
+
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP2", now="t2")
+            self.assertEqual(claim["checkpoint_id"], "CP2")
+            self.assertEqual(ws.read_amendment_witness(repo.root, "wi")["status"], ws.AMENDMENT_WITNESS_NONE)
+
+    def test_a_state_publish_that_raises_rolls_the_open_witness_back(self):
+        """Implementation review round 1, Optional 8: the state publish
+        raising (not a SIGKILL) after the `OPEN` witness was published
+        rolls the witness back to its `previous` in-process, so no orphan
+        is left for the next holder -- and the state is unchanged."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            ws.release_checkpoint(repo.root, "wi", "CP2", owner_token=ws.claim_checkpoint(
+                repo.root, "wi", "CP2", now="t0")["owner_token"])  # writes NONE
+            state_before = (repo.root / _STATE_REL).read_bytes()
+
+            def refuse_to_publish(*_args, **_kwargs):
+                raise OSError("disk full")
+
+            original = ws._publish_state_file
+            ws._publish_state_file = refuse_to_publish
+            try:
+                with self.assertRaises(OSError):
+                    ws.request_plan_amendment_transaction(repo.root, "wi", "reason", now="t1")
+            finally:
+                ws._publish_state_file = original
+            self.assertEqual(ws.read_amendment_witness(repo.root, "wi"), ws._none_witness("wi"))
+            self.assertEqual((repo.root / _STATE_REL).read_bytes(), state_before)
+            ws.claim_checkpoint(repo.root, "wi", "CP2", now="t2")
+
+    def test_sigkill_orphan_with_the_requester_worktree_removed_requires_the_literal(self):
+        """CP6 test 7, second half: the test cannot complete, so it refuses
+        and offers `clear amendment witness <wi> <sha256>`; a wrong digest
+        refuses; the right one restores `previous`."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_a = repo.worktree("a")
+            worker = _spawn_worker(_LIFECYCLE_KILL_BEFORE_STATE_PUBLISH_SOURCE, wt_a, "wi", "t1")
+            self.assertEqual(worker.wait(timeout=30), -9)
+            repo.remove_worktree(wt_a)
+            witness_before = _witness_bytes(repo.root)
+
+            with self.assertRaises(ws.AmendmentInFlightError) as refused:
+                ws.claim_checkpoint(repo.root, "wi", "CP2", now="t2")
+            literal = refused.exception.evidence["literal"]
+            self.assertEqual(literal, ws.amendment_witness_clear_literal(
+                "wi", hashlib.sha256(witness_before).hexdigest()))
+            self.assertEqual(_witness_bytes(repo.root), witness_before)
+
+            with self.assertRaises(ws.AmendmentWitnessClearRefusedError):
+                ws.clear_amendment_witness(repo.root, "wi",
+                                           user_authorization=f"clear amendment witness wi {'0' * 64}")
+            self.assertEqual(_witness_bytes(repo.root), witness_before)
+            ws.clear_amendment_witness(repo.root, "wi", user_authorization=literal)
+            self.assertEqual(ws.read_amendment_witness(repo.root, "wi")["status"], ws.AMENDMENT_WITNESS_NONE)
+            ws.claim_checkpoint(repo.root, "wi", "CP2", now="t3")
+
+    def test_an_unreadable_requester_state_offers_the_literal_and_the_literal_clears_it(self):
+        """Review finding (crash table, row 1): a state file that cannot be
+        read is a test that cannot be completed -- the literal is offered,
+        never a bare refusal, and the literal itself can clear."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_a = repo.worktree("a")
+            _amend(wt_a, commit=False)
+            (wt_a / _STATE_REL).write_text("{torn")
+            witness_before = _witness_bytes(repo.root)
+            with self.assertRaises(ws.AmendmentInFlightError) as refused:
+                ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")
+            literal = refused.exception.evidence["literal"]
+            self.assertEqual(_witness_bytes(repo.root), witness_before)
+            ws.clear_amendment_witness(repo.root, "wi", user_authorization=literal)
+            self.assertEqual(ws.read_amendment_witness(repo.root, "wi")["status"],
+                             ws.AMENDMENT_WITNESS_NONE)
+
+    def test_an_unreadable_committed_state_in_an_unrelated_worktree_offers_the_literal(self):
+        """Implementation review round 1, Important 2 (`OPEN`): a worktree
+        that has nothing to do with the amendment commits an unreadable
+        `WORKFLOW_STATE.json`. The orphan test cannot be completed, so the
+        claim refuses with the evidence-bound literal -- never a bare
+        `LifecycleStateUnreadableError` -- and the literal clears it."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_a = repo.worktree("a")
+            wt_b = repo.worktree("b")
+            _amend(wt_a, commit=False)
+            _git_in(wt_a, "checkout", "--", _STATE_REL)  # the request is abandoned
+            (wt_b / _STATE_REL).write_text("{torn")
+            _commit_lifecycle_state(wt_b, "an unrelated, broken state")
+            witness_before = _witness_bytes(repo.root)
+            with self.assertRaises(ws.AmendmentInFlightError) as refused:
+                ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")
+            literal = refused.exception.evidence["literal"]
+            self.assertEqual(literal, ws.amendment_witness_clear_literal(
+                "wi", hashlib.sha256(witness_before).hexdigest()))
+            self.assertEqual(_witness_bytes(repo.root), witness_before)
+            ws.clear_amendment_witness(repo.root, "wi", user_authorization=literal)
+            self.assertEqual(ws.read_amendment_witness(repo.root, "wi")["status"],
+                             ws.AMENDMENT_WITNESS_NONE)
+            ws.claim_checkpoint(repo.root, "wi", "CP2", now="t2")
+
+    def test_an_unreadable_requester_branch_tip_offers_the_literal(self):
+        """Implementation review round 1, Important 2 (`OPEN`, the
+        branch-tip read that runs before the per-worktree scan): the
+        requester's branch tip commits an unreadable state. Undecidable,
+        so the literal is offered, and it clears."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_a = repo.worktree("a")
+            _amend(wt_a, commit=False)
+            (wt_a / _STATE_REL).write_text("{torn")
+            _commit_lifecycle_state(wt_a, "a broken state on the requester branch")
+            witness_before = _witness_bytes(repo.root)
+            with self.assertRaises(ws.AmendmentInFlightError) as refused:
+                ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")
+            literal = refused.exception.evidence["literal"]
+            self.assertEqual(_witness_bytes(repo.root), witness_before)
+            ws.clear_amendment_witness(repo.root, "wi", user_authorization=literal)
+            self.assertEqual(ws.read_amendment_witness(repo.root, "wi")["status"],
+                             ws.AMENDMENT_WITNESS_NONE)
+
+    def test_a_branch_switch_never_rolls_back_a_live_amendment(self):
+        """CP6 test 7a: A requests an amendment, commits it on its branch
+        (`request-plan-amendment.md` step 3), then checks out another
+        branch. B's claim refuses naming the branch that holds seq N,
+        offers no literal, and the witness bytes are unchanged."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_a = repo.worktree("a")
+            _amend(wt_a)
+            _git_in(wt_a, "checkout", "-q", "-b", "elsewhere", _primary_branch(repo.root))
+            witness_before = _witness_bytes(repo.root)
+            with self.assertRaises(ws.AmendmentInFlightError) as refused:
+                ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")
+            self.assertIn("refs/heads/a", refused.exception.evidence["holder"])
+            self.assertNotIn("literal", refused.exception.evidence)
+            self.assertEqual(_witness_bytes(repo.root), witness_before)
+
+    def test_a_branch_switch_with_the_branch_checked_out_in_a_third_worktree_is_still_live(self):
+        """CP6 test 7a, variant (d): A's branch is checked out in a third
+        worktree instead; separately, a third worktree holds the committed
+        amendment while A's branch tip no longer does."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_a = repo.worktree("a")
+            _amend(wt_a)
+            _git_in(wt_a, "checkout", "-q", "-b", "elsewhere", _primary_branch(repo.root))
+            wt_c = repo.root.parent / f"{repo.root.name}-c"
+            _git_in(repo.root, "worktree", "add", "-q", str(wt_c), "a")
+            repo._extra_worktrees.append(wt_c)
+            witness_before = _witness_bytes(repo.root)
+            with self.assertRaises(ws.AmendmentInFlightError) as refused:
+                ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")
+            self.assertNotIn("literal", refused.exception.evidence)
+            self.assertEqual(_witness_bytes(repo.root), witness_before)
+
+            # Isolate condition (d): rewind branch `a` below the amendment;
+            # only worktree C's own HEAD (detached at it) still holds seq 1.
+            _git_in(wt_c, "checkout", "-q", "--detach")
+            _git_in(repo.root, "branch", "-f", "a", _primary_branch(repo.root))
+            with self.assertRaises(ws.AmendmentInFlightError) as refused:
+                ws.claim_checkpoint(repo.root, "wi", "CP2", now="t2")
+            self.assertIn(os.path.realpath(wt_c), refused.exception.evidence["holder"])
+            self.assertNotIn("literal", refused.exception.evidence)
+            self.assertEqual(_witness_bytes(repo.root), witness_before)
+
+    def test_a_requester_left_on_a_detached_head_offers_the_literal_and_never_rolls_back(self):
+        """CP6 test 7a, detached variant: no branch records the requester,
+        so the orphan test cannot complete -- the literal is offered, and
+        there is still no automatic rollback."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_a = repo.worktree("a")
+            _git_in(wt_a, "checkout", "-q", "--detach")
+            _amend(wt_a)
+            self.assertIsNone(ws.read_amendment_witness(repo.root, "wi")["requester_branch"])
+            _git_in(wt_a, "checkout", "-q", "-b", "elsewhere", _primary_branch(repo.root))
+            witness_before = _witness_bytes(repo.root)
+            with self.assertRaises(ws.AmendmentInFlightError) as refused:
+                ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")
+            self.assertIn("literal", refused.exception.evidence)
+            self.assertEqual(_witness_bytes(repo.root), witness_before)
+
+    def test_sigkill_of_a_lifecycle_lock_holder_lets_the_next_contender_proceed(self):
+        """CP6 test 9: the kernel releases a killed holder's `flock`."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            with tempfile.TemporaryDirectory(prefix="wf-lifecycle-holder-") as scratch:
+                ready = Path(scratch) / "held"
+                holder = _spawn_worker(_LIFECYCLE_LOCK_HOLDER_SOURCE, repo.root, "wi", ready)
+                try:
+                    _wait_for_path(ready, "lifecycle lock holder")
+                    holder.send_signal(9)
+                    holder.wait(timeout=10)
+                    started = time.monotonic()
+                    claim = ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")
+                    self.assertLess(time.monotonic() - started, 10)
+                    self.assertEqual(claim["checkpoint_id"], "CP2")
+                finally:
+                    _reap(holder)
+
+    def test_a_symlinked_torn_or_unknown_schema_witness_refuses(self):
+        """CP6 test 10 (INV-3): never read as absent."""
+        cases = {
+            "torn": b'{"schema_version": 1, "status": "OP',
+            "unknown schema": json.dumps({"schema_version": 99, "work_item_id": "wi"}).encode(),
+            "unknown status": json.dumps(dict(ws._none_witness("wi"), status="PAUSED")).encode(),
+            "RESOLVING without a reservation": json.dumps(dict(
+                ws._none_witness("wi"), status="RESOLVING", amendment_seq=1,
+                request_projection_sha256="a" * 64, previous=ws._none_witness("wi"))).encode(),
+            "RESOLVED without a digest": json.dumps(dict(
+                ws._none_witness("wi"), status="RESOLVED", amendment_seq=1,
+                request_projection_sha256="a" * 64)).encode(),
+        }
+        for label, raw in cases.items():
+            with self.subTest(label), ScratchRepo() as repo:
+                _lifecycle_repo(repo)
+                path = ws.amendment_witness_path(repo.root, "wi")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(raw)
+                with self.assertRaises(ws.AmendmentWitnessUnavailableError):
+                    ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")
+                self.assertIsNone(ws.resolve_claim(repo.root, "wi"))
+                self.assertEqual(path.read_bytes(), raw)
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            path = ws.amendment_witness_path(repo.root, "wi")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            target = repo.root / "elsewhere.json"
+            target.write_text(json.dumps(ws._none_witness("wi")))
+            path.symlink_to(target)
+            with self.assertRaises(ws.AmendmentWitnessUnavailableError):
+                ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")
+            self.assertIsNone(ws.resolve_claim(repo.root, "wi"))
+
+
+class TestLifecycleLockIsAPureSource(unittest.TestCase):
+    """(9) is acquired only while this process holds no other primitive,
+    and is never left held (CP6 test 23, the state-module half; the
+    `/approve-review plan` step-boundary half is in the acceptance
+    matrix)."""
+
+    def test_taking_the_lifecycle_lock_inside_any_other_primitive_is_refused(self):
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")
+            holders = {
+                "state_lock (2)": lambda: ws.state_lock(repo.root),
+                "identity_document_lock (3)": lambda: ws.identity_document_lock(repo.root),
+                "guard_mutation_lock (6)": lambda: ws.guard_mutation_lock(repo.root, "wi"),
+                "owner_mutation (5)": lambda: ws.owner_mutation(
+                    repo.root, "wi", claim["owner_token"], checkpoint_id="CP2", step="1d",
+                    step_class=ws.ORDINARY, now="t2"),
+                "lifecycle_lock (9)": lambda: ws.lifecycle_lock(repo.root, "wi"),
+            }
+            for label, open_window in holders.items():
+                with self.subTest(label):
+                    with open_window():
+                        with self.assertRaises(ws.LifecycleLockOrderError):
+                            with ws.lifecycle_lock(repo.root, "wi"):
+                                pass
+                    self.assertEqual(ws.held_primitives(), ())
+
+    def test_no_primitive_is_left_held_after_the_lifecycle_entry_points(self):
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_b = repo.worktree("b")
+            claim = ws.claim_checkpoint(wt_b, "wi", "CP2", now="t1")
+            self.assertEqual(ws.held_primitives(), ())
+            with self.assertRaises(ws.AmendmentCheckpointActiveError):
+                ws.request_plan_amendment_transaction(repo.root, "wi", "reason", now="t2")
+            self.assertEqual(ws.held_primitives(), ())
+            ws.release_checkpoint(wt_b, "wi", "CP2", owner_token=claim["owner_token"])
+            ws.request_plan_amendment_transaction(repo.root, "wi", "reason", now="t3")
+            self.assertEqual(ws.held_primitives(), ())
+            with self.assertRaises(ws.AmendmentInFlightError):
+                ws.claim_checkpoint(wt_b, "wi", "CP2", now="t4")
+            self.assertEqual(ws.held_primitives(), ())
+
+
+def _amend_without_witness(root, *, now="2026-01-01T00:00:00Z", reason="amend for a reason",
+                           commit=True):
+    """An amendment exactly as `2.5.1` wrote one: the same pure mutator,
+    the same `amendment_history` entry, and no witness (a `2.5.1` process
+    never takes (9) and never writes one)."""
+    root = Path(root)
+    with ws.lifecycle_lock(root, "wi"):
+        ws.state_transaction(root, lambda state: ws.request_plan_amendment(
+            state, "wi", reason, repo_root=root, now=now))
+    if commit:
+        _commit_lifecycle_state(root, "request plan amendment (2.5.1)", {"Workflow-Work-Item": "wi"})
+
+
+def _reference_version_key(name: str) -> tuple:
+    """A verbatim copy of `src/workflow_manager/release.py`'s
+    `_version_key`, which the payload cannot import. CP6 pins the
+    payload-local helper against it on a table of versions (and against
+    the real one too, when `workflow_manager` is importable)."""
+    import re
+    return tuple(
+        (0, int(part), "") if part.isdigit() else (1, 0, part)
+        for part in re.split(r"[.\-_]", name)
+    )
+
+
+class TestAmendmentWitnessUpgradeBootstrap(unittest.TestCase):
+    """The upgrade-bootstrap scan, the lag probe and the `NONE` sentinel
+    (INV-7; CP6 tests 13, 13b-13i, 20)."""
+
+    def test_an_amending_item_with_no_witness_in_another_worktree_is_discovered_and_refused(self):
+        """CP6 test 13."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_a = repo.worktree("a")
+            _amend_without_witness(wt_a, commit=False)
+            self.assertIsNone(_witness_bytes(repo.root))
+            with self.assertRaises(ws.AmendmentInFlightError):
+                ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")
+            witness = ws.read_amendment_witness(repo.root, "wi")
+            self.assertEqual((witness["status"], witness["amendment_seq"]), (ws.AMENDMENT_WITNESS_OPEN, 1))
+            self.assertEqual(os.path.realpath(witness["requester_worktree_root"]), os.path.realpath(wt_a))
+            self.assertEqual(witness["requester_branch"], "a")
+            self.assertEqual(witness["previous"], ws._none_witness("wi"))
+
+    def test_a_stale_linked_worktree_bootstraps_to_resolved_and_refuses_as_stale(self):
+        """CP6 test 13b: a `2.5.1` amendment resolved on main, and a stale
+        linked worktree whose `HEAD` still shows it unresolved. The scan
+        writes `RESOLVED`, not `OPEN`, so there is no orphan wedge."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            _amend_without_witness(repo.root)
+            wt_b = repo.worktree("b")
+            main_head = _resolve_in_head(repo.root, legacy=True)
+            with self.assertRaises(ws.StaleLifecycleStateError):
+                ws.claim_checkpoint(wt_b, "wi", "CP2", now="t1")
+            witness = ws.read_amendment_witness(repo.root, "wi")
+            self.assertEqual(witness["status"], ws.AMENDMENT_WITNESS_RESOLVED)
+            self.assertEqual(witness["resolved_commit"], main_head)
+            ws.claim_checkpoint(repo.root, "wi", "CP2", now="t2")
+
+    def test_disagreeing_amendment_base_commits_refuse_and_write_nothing(self):
+        """CP6 test 13c, first case."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_b = repo.worktree("b")
+            _amend_without_witness(repo.root, commit=False)
+            forked = _read_state(repo.root)
+            forked["work_items"]["wi"]["amendment_base_commit"] = repo.base
+            _write_state(wt_b, forked)
+            with self.assertRaises(ws.AmendmentBootstrapConflictError) as refused:
+                ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")
+            self.assertIn("amendment_base_commit", str(refused.exception))
+            self.assertIn(os.path.realpath(wt_b), str(refused.exception))
+            self.assertIsNone(_witness_bytes(repo.root))
+
+    def test_a_resolved_head_and_a_different_unresolved_entry_is_a_fork_not_a_stale_worktree(self):
+        """CP6 test 13c, second case: reported as the fork it is, never as
+        `StaleLifecycleStateError` (whose remedy would be wrong)."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_b = repo.worktree("b")
+            _amend_without_witness(repo.root)
+            _resolve_in_head(repo.root, legacy=True)
+            _amend_without_witness(wt_b, reason="a different amendment",
+                                   now="2026-01-05T00:00:00Z", commit=False)
+            with self.assertRaises(ws.AmendmentBootstrapConflictError):
+                ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")
+            self.assertIsNone(_witness_bytes(repo.root))
+
+    def test_the_none_sentinel_is_written_once_and_later_holders_read_no_other_state(self):
+        """CP6 test 13d."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_b = repo.worktree("b")
+            claim = ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")
+            self.assertEqual(ws.read_amendment_witness(repo.root, "wi"), ws._none_witness("wi"))
+            ws.release_checkpoint(repo.root, "wi", "CP2", owner_token=claim["owner_token"])
+
+            reads = []
+            real_worktree_view, real_committed_view = ws._worktree_item_view, ws._committed_item_view
+            real_bootstrap = ws._bootstrap_amendment_witness
+            bootstraps = []
+            ws._worktree_item_view = lambda root, *a: reads.append(("working", str(root))) or real_worktree_view(root, *a)
+            ws._committed_item_view = lambda cwd, *a: reads.append(("committed", str(cwd))) or real_committed_view(cwd, *a)
+            ws._bootstrap_amendment_witness = lambda *a: bootstraps.append(a) or real_bootstrap(*a)
+            try:
+                ws.claim_checkpoint(repo.root, "wi", "CP2", now="t2")
+            finally:
+                ws._worktree_item_view, ws._committed_item_view = real_worktree_view, real_committed_view
+                ws._bootstrap_amendment_witness = real_bootstrap
+            self.assertEqual(bootstraps, [])
+            other = os.path.realpath(wt_b)
+            self.assertEqual([r for r in reads if os.path.realpath(r[1]) == other], [],
+                             "a later (9) holder must not read another worktree's state file")
+            ws.release_checkpoint(repo.root, "wi", "CP2",
+                                  owner_token=ws.resolve_claim(repo.root, "wi")["owner_token"])
+
+            # The first amendment replaces the sentinel with OPEN at seq 1 ...
+            _amend(repo.root, commit=False)
+            witness = ws.read_amendment_witness(repo.root, "wi")
+            self.assertEqual((witness["status"], witness["amendment_seq"]), (ws.AMENDMENT_WITNESS_OPEN, 1))
+            self.assertEqual(witness["previous"], ws._none_witness("wi"))
+            # ... and an orphan rollback (the state write discarded)
+            # restores NONE, never "absent".
+            _git_in(repo.root, "checkout", "-q", "--", _STATE_REL)
+            ws.claim_checkpoint(wt_b, "wi", "CP2", now="t3")
+            self.assertEqual(ws.read_amendment_witness(repo.root, "wi"), ws._none_witness("wi"))
+
+    def test_a_lagging_worktree_suppresses_the_sentinel_until_it_merges_the_update(self):
+        """CP6 test 13f."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_b = repo.worktree("b")
+            _install_release(wt_b, "2.5.1")
+            bootstraps = []
+            real_bootstrap = ws._bootstrap_amendment_witness
+            ws._bootstrap_amendment_witness = lambda *a: bootstraps.append(a) or real_bootstrap(*a)
+            try:
+                first = ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")
+                self.assertIsNone(_witness_bytes(repo.root), "no sentinel while a worktree lags")
+                ws.release_checkpoint(repo.root, "wi", "CP2", owner_token=first["owner_token"])
+                second = ws.claim_checkpoint(repo.root, "wi", "CP2", now="t2")
+                self.assertEqual(len(bootstraps), 2, "the scan runs again on the next (9) holder")
+                ws.release_checkpoint(repo.root, "wi", "CP2", owner_token=second["owner_token"])
+            finally:
+                ws._bootstrap_amendment_witness = real_bootstrap
+            _install_release(wt_b, "2.6.0")
+            ws.claim_checkpoint(repo.root, "wi", "CP2", now="t3")
+            self.assertEqual(ws.read_amendment_witness(repo.root, "wi"), ws._none_witness("wi"))
+
+    def test_a_worktree_whose_head_has_no_installation_record_lags(self):
+        """CP6 test 13f: an absent record counts as lagging."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_b = repo.worktree("b")
+            _git_in(wt_b, "rm", "-q", ".workflow-manager/installation.json")
+            _git_in(wt_b, "commit", "-q", "-m", "no record")
+            probe = ws._probe_worktrees(repo.root)
+            lagging = {os.path.realpath(w["path"]) for w in probe["lagging"]}
+            self.assertEqual(lagging, {os.path.realpath(wt_b)})
+
+    def test_a_lagging_worktrees_unrecorded_amendment_refuses_and_leaves_the_witness(self):
+        """CP6 test 13g: witness absent, and witness `RESOLVED` at seq 1,
+        each with a lagging worktree holding an unresolved amendment the
+        witness does not record."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_b = repo.worktree("b")
+            _install_release(wt_b, "2.5.1")
+            _amend_without_witness(wt_b, commit=False)
+            with self.assertRaises(ws.LaggingWorktreeAmendmentError) as refused:
+                ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")
+            self.assertEqual(os.path.realpath(refused.exception.evidence["worktree"]), os.path.realpath(wt_b))
+            self.assertEqual(refused.exception.evidence["branch"], "b")
+            self.assertEqual(refused.exception.evidence["installed_version"], "2.5.1")
+            self.assertIsNone(_witness_bytes(repo.root))
+
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            _amend(repo.root)
+            _resolve_in_head(repo.root)
+            ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")  # binds RESOLVED at 1
+            ws.release_checkpoint(repo.root, "wi", "CP2",
+                                  owner_token=ws.resolve_claim(repo.root, "wi")["owner_token"])
+            wt_b = repo.worktree("b")
+            _install_release(wt_b, "2.5.1")
+            _amend_without_witness(wt_b, now="2026-01-03T00:00:00Z", commit=False)
+            witness_before = _witness_bytes(repo.root)
+            with self.assertRaises(ws.LaggingWorktreeAmendmentError) as refused:
+                ws.claim_checkpoint(repo.root, "wi", "CP2", now="t2")
+            self.assertEqual(refused.exception.evidence["seq"], 2)
+            self.assertEqual(_witness_bytes(repo.root), witness_before)
+
+    def test_an_updated_worktree_names_its_own_unrecorded_amendment(self):
+        """Review finding (a plan-level gap, recorded in
+        docs/ACTIVE_MILESTONE.md): once a worktree holding a `2.5.1`
+        amendment merges the update it no longer lags, and a `NONE` witness
+        does not record its amendment. Its own request and reservation
+        refuse naming that amendment, never the misleading "merge the
+        resolved amendment first"."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_b = repo.worktree("b")
+            ws.release_checkpoint(repo.root, "wi", "CP2", owner_token=ws.claim_checkpoint(
+                repo.root, "wi", "CP2", now="t0")["owner_token"])
+            _install_release(wt_b, "2.5.1")
+            _amend_without_witness(wt_b)
+            _install_release(wt_b, "2.6.0")
+            self.assertEqual(ws.read_amendment_witness(repo.root, "wi"), ws._none_witness("wi"))
+            with self.assertRaises(ws.StaleLifecycleStateError) as refused:
+                ws.reserve_amendment_resolution(wt_b, "wi", _open_amendment_approval(repo, wt_b),
+                                                now="t1")
+            self.assertIn("does not record", str(refused.exception))
+            self.assertNotIn("merge the resolved amendment first", str(refused.exception))
+
+    def test_an_amendment_predating_the_update_carried_into_a_lagging_worktree_does_not_wedge(self):
+        """Implementation review round 1, Important 3, first topology: under
+        `2.5.1`, an amendment is opened and committed on the primary branch;
+        worktree `b` branches afterwards and so carries the same entry.
+        The `2.6.0` update is then committed on the primary branch only, so
+        `b` lags while holding that entry. The primary worktree's own
+        resolution must reach the bootstrap -- which records exactly that
+        entry -- rather than refuse as an unrecorded `2.5.1` amendment in
+        `b` (whose "finish or discard it there" remedy would be wrong: it
+        is the same amendment)."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo, install="2.5.1")
+            _amend_without_witness(repo.root)
+            wt_b = repo.worktree("b")
+            _install_release(repo.root, "2.6.0")
+            self.assertIsNone(_witness_bytes(repo.root))
+            journal = _open_amendment_approval(repo, repo.root)
+            ws.reserve_amendment_resolution(repo.root, "wi", journal, now="t1")
+            witness = ws.read_amendment_witness(repo.root, "wi")
+            self.assertEqual((witness["status"], witness["amendment_seq"]),
+                             (ws.AMENDMENT_WITNESS_RESOLVING, 1))
+            entry = _read_state(wt_b)["work_items"]["wi"]["amendment_history"][0]
+            self.assertEqual(witness["request_projection_sha256"],
+                             ws.amendment_request_projection_sha256(entry))
+            commit = _commit_journal_approval(repo.root, journal)
+            ws.advance_amendment_witness(repo.root, "wi", journal=journal, commit=commit)
+            ws.close_plan_approval_journal(repo.root)
+            self.assertEqual(ws.read_amendment_witness(repo.root, "wi")["status"],
+                             ws.AMENDMENT_WITNESS_RESOLVED)
+            # `b` still lags and still holds the (now resolved elsewhere)
+            # entry unresolved: recorded, so a claim here is not refused
+            # as lagging.
+            ws.claim_checkpoint(repo.root, "wi", "CP2", now="t2")
+
+    def test_an_uncommitted_update_in_the_amending_worktree_does_not_wedge_it(self):
+        """Important 3, single-worktree topology: `workflow_manager update`
+        does not commit, so the amending worktree's committed installation
+        record still says `2.5.1` while its working tree (and the process
+        evaluating it) runs `2.6.0`. It lags against itself, but its own
+        amendment is exactly what the bootstrap records -- never "merge the
+        update into that branch"."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo, install="2.5.1")
+            _amend_without_witness(repo.root)
+            record = repo.root / ".workflow-manager" / "installation.json"
+            record.write_text(json.dumps({"schema_version": 1, "workflow_version": "2.6.0"}) + "\n")
+            self.assertTrue(ws._probe_worktrees(repo.root)["lagging"])
+            journal = _open_amendment_approval(repo, repo.root)
+            ws.reserve_amendment_resolution(repo.root, "wi", journal, now="t1")
+            self.assertEqual(ws.read_amendment_witness(repo.root, "wi")["status"],
+                             ws.AMENDMENT_WITNESS_RESOLVING)
+
+    def test_a_lagging_worktree_with_an_uncommitted_update_is_told_to_commit_it(self):
+        """Important 3, the remedy text: a lagging worktree whose working
+        tree already carries the update, holding an amendment of its own
+        that nothing else records, still refuses (plan test 13g) -- but
+        names committing the update, not merging it."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_b = repo.worktree("b")
+            _install_release(wt_b, "2.5.1")
+            _amend_without_witness(wt_b, commit=False)
+            (wt_b / ".workflow-manager" / "installation.json").write_text(
+                json.dumps({"schema_version": 1, "workflow_version": "2.6.0"}) + "\n")
+            with self.assertRaises(ws.LaggingWorktreeAmendmentError) as refused:
+                ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")
+            self.assertIn("commit the 2.6.0 update in that worktree", str(refused.exception))
+            self.assertIsNone(_witness_bytes(repo.root))
+
+    def test_a_lagging_worktree_without_an_unresolved_amendment_does_not_block(self):
+        """CP6 test 13g: a lagging worktree alone is not a refusal."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            wt_b = repo.worktree("b")
+            _install_release(wt_b, "2.5.1")
+            self.assertEqual(ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")["checkpoint_id"], "CP2")
+
+    def test_a_same_seq_fork_in_a_lagging_worktree_refuses_and_the_same_entry_does_not(self):
+        """CP6 test 13g, same-seq fork: the witness is `OPEN` at seq 2 from
+        an updated worktree; a lagging worktree holding a *different*
+        unresolved entry 2 refuses as lagging, and one holding the *same*
+        entry 2 refuses only as the ordinary in-flight amendment."""
+        for same in (False, True):
+            with self.subTest(same_entry=same), ScratchRepo() as repo:
+                _lifecycle_repo(repo)
+                _amend(repo.root)
+                _resolve_in_head(repo.root)
+                wt_b = repo.worktree("b")
+                wt_c = repo.worktree("c")
+                _install_release(wt_b, "2.5.1")
+                _amend(repo.root, now="2026-01-02T00:00:00Z", commit=False)  # OPEN at 2
+                if same:
+                    _write_state(wt_b, _read_state(repo.root))
+                else:
+                    _amend_without_witness(wt_b, reason="lagging fork", now="2026-01-04T00:00:00Z",
+                                           commit=False)
+                expected = ws.AmendmentInFlightError if same else ws.LaggingWorktreeAmendmentError
+                with self.assertRaises(expected) as refused:
+                    ws.claim_checkpoint(wt_c, "wi", "CP2", now="t1")
+                self.assertIs(type(refused.exception), expected)
+
+    def test_predicate_totality_bare_entries_and_the_version_helper(self):
+        """CP6 test 13h."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")
+            ws.release_checkpoint(repo.root, "wi", "CP2",
+                                  owner_token=ws.resolve_claim(repo.root, "wi")["owner_token"])
+            _amend(repo.root, commit=False)
+            witness = ws.read_amendment_witness(repo.root, "wi")
+            self.assertEqual((witness["status"], witness["amendment_seq"]), (ws.AMENDMENT_WITNESS_OPEN, 1))
+            self.assertEqual(witness["previous"], ws._none_witness("wi"))
+
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            bare = repo.root.parent / f"{repo.root.name}-bare.git"
+            linked = repo.root.parent / f"{repo.root.name}-bare-linked"
+            repo._extra_worktrees.extend([bare, linked])
+            _git_in(repo.root.parent, "clone", "-q", "--bare", str(repo.root), str(bare))
+            _git_in(bare, "worktree", "add", "-q", str(linked), _primary_branch(repo.root))
+            entries = ws.registered_worktrees(linked)
+            self.assertTrue(any("bare" in entry for entry in entries))
+            probe = ws._probe_worktrees(linked)
+            self.assertEqual([os.path.realpath(w["path"]) for w in probe["worktrees"]], [os.path.realpath(linked)])
+            self.assertEqual(probe["lagging"], [])
+            ws.claim_checkpoint(linked, "wi", "CP2", now="t1")
+            self.assertEqual(ws.read_amendment_witness(linked, "wi"), ws._none_witness("wi"))
+
+        table = ["2.3.1", "2.4.0", "2.5.0", "2.5.1", "2.6.0", "2.6.1", "2.9.9", "2.10.0", "3.0.0", "10.0.0"]
+        by_helper = sorted(table, key=ws.workflow_release_version_key)
+        self.assertEqual(by_helper, sorted(table, key=_reference_version_key))
+        self.assertLess(ws.workflow_release_version_key("2.6.0"), ws.workflow_release_version_key("2.10.0"))
+        self.assertFalse(ws.workflow_release_lags("2.10.0"))
+        self.assertFalse(ws.workflow_release_lags("2.6.0"))
+        self.assertTrue(ws.workflow_release_lags("2.5.1"))
+        for unorderable in (None, "", "2.6.0-rc1", "two", "2..6", 260, "2.6.x"):
+            with self.subTest(unorderable=unorderable):
+                self.assertIsNone(ws.workflow_release_version_key(unorderable))
+                self.assertTrue(ws.workflow_release_lags(unorderable))
+
+    def test_the_version_helper_agrees_with_the_real_release_version_key(self):
+        """CP6 test 13h, against `release._version_key` itself -- runnable
+        only where `workflow_manager` is importable (this repository's own
+        test runs); a target repository has only the reference copy."""
+        try:
+            from workflow_manager import release
+        except ImportError:
+            self.skipTest("workflow_manager is not importable here")
+        table = ["2.3.1", "2.4.0", "2.5.0", "2.5.1", "2.6.0", "2.6.1", "2.9.9", "2.10.0", "3.0.0", "10.0.0"]
+        self.assertEqual(sorted(table, key=ws.workflow_release_version_key),
+                         sorted(table, key=release._version_key))
+        for version in table:
+            self.assertEqual(release._version_key(version), _reference_version_key(version))
+
+    def test_one_request_projection_function_ignores_exactly_the_resolution_keys(self):
+        """CP6 test 13i."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            _amend(repo.root, commit=False)
+            entry = _read_state(repo.root)["work_items"]["wi"]["amendment_history"][0]
+            witness = ws.read_amendment_witness(repo.root, "wi")
+            digest = ws.amendment_request_projection_sha256(entry)
+            self.assertEqual(witness["request_projection_sha256"], digest)
+            resolved = dict(entry, resolved_at_plan_revision=2, reconciliation_outcome={"CP1": "retained"},
+                            resolved_review_content_id="rc-2")
+            self.assertEqual(ws.amendment_request_projection_sha256(resolved), digest)
+            self.assertEqual(ws.AMENDMENT_RESOLUTION_TIME_KEYS,
+                             {"resolved_at_plan_revision", "reconciliation_outcome",
+                              "resolved_review_content_id"})
+            for key in entry:
+                if key in ws.AMENDMENT_RESOLUTION_TIME_KEYS:
+                    continue
+                with self.subTest(key=key):
+                    changed = dict(entry, **{key: "changed"})
+                    self.assertNotEqual(ws.amendment_request_projection_sha256(changed), digest)
+
+
+def _resolution_fork_repo(repo, resolve_a, resolve_b):
+    """No witness; worktrees `a` and `b` share one unresolved `2.5.1`
+    amendment, and each commits its own resolution of it."""
+    _lifecycle_repo(repo)
+    _amend_without_witness(repo.root)
+    wt_a, wt_b = repo.worktree("a"), repo.worktree("b")
+    resolve_a(wt_a)
+    resolve_b(wt_b)
+    return wt_a, wt_b
+
+
+class TestAmendmentBootstrapResolutionFork(unittest.TestCase):
+    """CP6 test 20: request agreement is not resolution agreement. The
+    scan compares resolutions at every shared seq, writes nothing on a
+    fork, and never chooses one resolution."""
+
+    def _assert_fork(self, repo, *names):
+        with self.assertRaises(ws.AmendmentBootstrapConflictError) as refused:
+            ws.claim_checkpoint(repo.root, "wi", "CP2", now="t9")
+        for name in names:
+            self.assertIn(os.path.realpath(name), str(refused.exception))
+        self.assertIsNone(_witness_bytes(repo.root))
+
+    def test_different_reconciliation_outcomes(self):
+        with ScratchRepo() as repo:
+            wt_a, wt_b = _resolution_fork_repo(
+                repo, lambda wt: _resolve_in_head(wt, outcome={"CP1": "retained"}),
+                lambda wt: _resolve_in_head(wt, outcome={"CP1": "needs_revalidation"}))
+            self._assert_fork(repo, wt_a, wt_b)
+
+    def test_different_resolved_revisions(self):
+        with ScratchRepo() as repo:
+            wt_a, wt_b = _resolution_fork_repo(
+                repo, lambda wt: _resolve_in_head(wt, revision=2),
+                lambda wt: _resolve_in_head(wt, revision=3))
+            self._assert_fork(repo, wt_a, wt_b)
+
+    def test_equal_legacy_resolutions_with_disjoint_approval_trailers(self):
+        with ScratchRepo() as repo:
+            wt_a, wt_b = _resolution_fork_repo(
+                repo, lambda wt: _resolve_in_head(wt, legacy=True, trailer="rc-plan-a"),
+                lambda wt: _resolve_in_head(wt, legacy=True, trailer="rc-plan-b"))
+            self._assert_fork(repo, wt_a, wt_b)
+
+    def test_a_divergence_at_an_older_seq_with_agreeing_latest_entries(self):
+        with ScratchRepo() as repo:
+            wt_a, wt_b = _resolution_fork_repo(
+                repo, lambda wt: _resolve_in_head(wt, outcome={"CP1": "retained"}),
+                lambda wt: _resolve_in_head(wt, outcome={"CP1": "needs_revalidation"}))
+            # An identical, unresolved seq 2 on both branches.
+            seq2 = {"amendment_id": "1", "requested_at": "t2", "requested_from_phase": "IMPLEMENTING",
+                    "reason": "second", "superseded_plan_revision": 2, "superseded_plan_approval": None,
+                    "checkpoints_snapshot": {}, "pre_amendment_approval_commit": repo.base,
+                    "resolved_at_plan_revision": None}
+            for wt in (wt_a, wt_b):
+                state = _read_state(wt)
+                state["work_items"]["wi"]["amendment_history"].append(copy.deepcopy(seq2))
+                state["work_items"]["wi"]["amendment_base_commit"] = repo.base
+                state["work_items"]["wi"]["phase"] = "AMENDING_PLAN"
+                _write_state(wt, state)
+                _commit_lifecycle_state(wt, "second amendment")
+            self._assert_fork(repo, wt_a, wt_b)
+
+    def test_a_working_tree_resolution_its_head_does_not_show_refuses(self):
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            _amend_without_witness(repo.root)
+            state = _read_state(repo.root)
+            entry = state["work_items"]["wi"]["amendment_history"][0]
+            entry.update(resolved_at_plan_revision=2, reconciliation_outcome={"CP1": "retained"},
+                         resolved_review_content_id="rc-2")
+            _write_state(repo.root, state)
+            with self.assertRaises(ws.AmendmentBootstrapConflictError) as refused:
+                ws.claim_checkpoint(repo.root, "wi", "CP2", now="t1")
+            self.assertIn("in flight at update time", str(refused.exception))
+            self.assertIsNone(_witness_bytes(repo.root))
+
+    def test_one_resolution_visible_in_many_worktrees_bootstraps_to_resolved(self):
+        """CP6 test 21's bootstrap half: the same approval commit, merged
+        into one branch and cherry-picked onto another, is one resolution."""
+        with ScratchRepo() as repo:
+            _lifecycle_repo(repo)
+            _amend_without_witness(repo.root)
+            wt_b, wt_c = repo.worktree("b"), repo.worktree("c")
+            approval = _resolve_in_head(repo.root)
+            _git_in(wt_b, "merge", "-q", "--no-edit", _primary_branch(repo.root))
+            _git_in(wt_c, "cherry-pick", approval)
+            ws.claim_checkpoint(wt_c, "wi", "CP2", now="t1")
+            witness = ws.read_amendment_witness(repo.root, "wi")
+            self.assertEqual(witness["status"], ws.AMENDMENT_WITNESS_RESOLVED)
+            head_entry = _read_state(repo.root)["work_items"]["wi"]["amendment_history"][0]
+            self.assertEqual(witness["resolution_projection_sha256"],
+                             ws.amendment_resolution_projection_sha256(head_entry))
+            ws.release_checkpoint(wt_c, "wi", "CP2",
+                                  owner_token=ws.resolve_claim(wt_c, "wi")["owner_token"])
+            for root in (repo.root, wt_b):
+                claim = ws.claim_checkpoint(root, "wi", "CP2", now="t2")
+                ws.release_checkpoint(root, "wi", "CP2", owner_token=claim["owner_token"])
+
+
+_AMENDMENT_PLAN_TEXT = "<!-- CP1 -->\nCP1 -- first.\n<!-- /CP1 -->\n"
+_AMENDMENT_REGISTRY = {"checkpoints": [
+    {"id": "CP1", "name": "first", "depends_on": [], "complexity": 1, "session_target": 1},
+]}
+
+
+def _open_amendment_approval(repo, root, *, review_content_id="rc-2"):
+    """`/approve-review plan` step 4c on an item with an open amendment:
+    the real journal, whose pinned `expected_post_state` resolves the
+    amendment exactly as the eventual approval commit will."""
+    record = ws.build_approval_record(
+        basis="EXTERNAL_APPROVE", stage="plan", user_confirmation="approve wi",
+        now="2026-01-09T00:00:00Z", reviewed_bundle_id="b" * 64,
+        approved_review_content_id=review_content_id,
+        review_content_manifest=[{"path": "docs/plan.md", "sha256": "d" * 64}],
+    )
+    return ws.open_plan_approval_journal(
+        Path(root), work_item_id="wi", base_commit=repo.base, pre_state=_read_state(root),
+        record=record, approval_now="2026-01-09T00:00:00Z", expected_bundle_id="b" * 64,
+        expected_review_content_id=review_content_id, applicable_paths=(_STATE_REL,),
+        fifth_member_applies=False, fifth_member_sha256=None, user_confirmation="approve wi",
+        quiescence_authorization="lifecycle unit test",
+        pre_registry=_AMENDMENT_REGISTRY, pre_plan_text=_AMENDMENT_PLAN_TEXT,
+        post_registry=_AMENDMENT_REGISTRY, post_plan_text=_AMENDMENT_PLAN_TEXT,
+    )
+
+
+def _commit_journal_approval(root, journal) -> str:
+    """The approval commit the journal describes: its pinned post-state,
+    with the plan-approval trailers."""
+    import base64
+    (Path(root) / _STATE_REL).write_bytes(base64.b64decode(journal["expected_post_state_b64"]))
+    return _commit_lifecycle_state(root, "plan-stage approval", {
+        "Workflow-Plan-Approval": journal["expected_review_content_id"], "Workflow-Work-Item": "wi"})
+
+
+def _plant_witness(root, witness: dict) -> bytes:
+    path = ws.amendment_witness_path(Path(root), "wi")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    raw = (json.dumps(witness, indent=2, sort_keys=True) + "\n").encode()
+    path.write_bytes(raw)
+    return raw
+
+
+class TestAmendmentResolutionReservation(unittest.TestCase):
+    """One resolution per amendment sequence (INV-10): the reservation, the
+    advance, the release, 6a1's held check and the staging modes, driven
+    against real plan-approval journals in real linked worktrees (CP6 tests
+    8, 13i, 19, 21, 22(c)-(e), 24, 27, 28; the command-flow halves are in
+    the acceptance matrix)."""
+
+    def _amended(self, repo):
+        """`a` is the resolver's linked worktree; both it and `main` carry
+        the committed, unresolved amendment seq 1 (witness `OPEN`)."""
+        _lifecycle_repo(repo)
+        _amend(repo.root)
+        wt_a = repo.worktree("a")
+        return wt_a
+
+    def test_apply_plan_approval_records_the_approved_identity_and_the_digests_agree(self):
+        """CP6 test 24, and 13i's "identical before and after
+        `apply_plan_approval` resolves it". The `2.5.1` half -- its
+        `validate_state` has no `amendment_history` entry-key check and
+        ignores `resolved_review_content_id` -- cannot run here (a target
+        repository has no `2.5.1` payload); it was established against
+        `distribution/workflow/2.5.1/` and is recorded in the
+        milestone's CP6 pre-edit evidence."""
+        with ScratchRepo() as repo:
+            wt_a = self._amended(repo)
+            before = _read_state(wt_a)["work_items"]["wi"]["amendment_history"][0]
+            journal = _open_amendment_approval(repo, wt_a, review_content_id="rc-approved")
+            import base64
+            post = json.loads(base64.b64decode(journal["expected_post_state_b64"]))
+            entry = post["work_items"]["wi"]["amendment_history"][0]
+            self.assertEqual(entry["resolved_review_content_id"], "rc-approved")
+            ws.validate_state(post)
+            self.assertEqual(ws.amendment_request_projection_sha256(entry),
+                             ws.amendment_request_projection_sha256(before))
+            ws.reserve_amendment_resolution(wt_a, "wi", journal, now="t1")
+            _commit_journal_approval(wt_a, journal)
+            committed = json.loads(_git_in(wt_a, "show", f"HEAD:{_STATE_REL}"))
+            committed_entry = committed["work_items"]["wi"]["amendment_history"][0]
+            reserved = ws.read_amendment_witness(wt_a, "wi")["resolution_reservation"]
+            self.assertEqual(ws.amendment_resolution_projection_sha256(committed_entry),
+                             reserved["resolution_projection_sha256"])
+
+    def test_an_unreadable_committed_state_elsewhere_offers_the_resolution_literal(self):
+        """Implementation review round 1, Important 2 (`RESOLVING`): the
+        approval that reserved the resolution was abandoned, and an
+        unrelated worktree `b` commits an unreadable `WORKFLOW_STATE.json`.
+        The reservation's orphan test cannot be completed (`b` might hold
+        the resolution), so a claim refuses with the evidence-bound
+        `clear amendment resolution` literal -- never a bare
+        `LifecycleStateUnreadableError` with empty evidence -- and the
+        literal clears the reservation back to `OPEN`."""
+        with ScratchRepo() as repo:
+            wt_a = self._amended(repo)
+            wt_b = repo.worktree("b")
+            (wt_b / _STATE_REL).write_text("{torn")
+            _commit_lifecycle_state(wt_b, "an unrelated, broken state")
+            journal = _open_amendment_approval(repo, wt_a)
+            ws.reserve_amendment_resolution(wt_a, "wi", journal, now="t1")
+            ws.close_plan_approval_journal(wt_a)  # the approval is abandoned
+            witness_before = _witness_bytes(repo.root)
+            with self.assertRaises(ws.AmendmentInFlightError) as refused:
+                ws.claim_checkpoint(repo.root, "wi", "CP2", now="t2")
+            literal = refused.exception.evidence["literal"]
+            self.assertEqual(literal, ws.amendment_resolution_clear_literal(
+                "wi", hashlib.sha256(witness_before).hexdigest()))
+            self.assertEqual(_witness_bytes(repo.root), witness_before)
+            ws.clear_amendment_resolution(repo.root, "wi", user_authorization=literal)
+            self.assertEqual(ws.read_amendment_witness(repo.root, "wi")["status"],
+                             ws.AMENDMENT_WITNESS_OPEN)
+
+    def test_an_unreadable_resolver_head_offers_the_resolution_literal(self):
+        """Important 2, predicate step 1's own read: the resolver
+        worktree's `HEAD` itself commits an unreadable state after its
+        approval was abandoned."""
+        with ScratchRepo() as repo:
+            wt_a = self._amended(repo)
+            journal = _open_amendment_approval(repo, wt_a)
+            ws.reserve_amendment_resolution(wt_a, "wi", journal, now="t1")
+            ws.close_plan_approval_journal(wt_a)
+            (wt_a / _STATE_REL).write_text("{torn")
+            _commit_lifecycle_state(wt_a, "a broken state on the resolver branch")
+            witness_before = _witness_bytes(repo.root)
+            with self.assertRaises(ws.AmendmentInFlightError) as refused:
+                ws.claim_checkpoint(repo.root, "wi", "CP2", now="t2")
+            literal = refused.exception.evidence["literal"]
+            self.assertEqual(_witness_bytes(repo.root), witness_before)
+            ws.clear_amendment_resolution(repo.root, "wi", user_authorization=literal)
+            self.assertEqual(ws.read_amendment_witness(repo.root, "wi")["status"],
+                             ws.AMENDMENT_WITNESS_OPEN)
+
+    def test_reserve_and_advance_are_idempotent_byte_for_byte(self):
+        """CP6 test 21: re-running `reserve_amendment_resolution` on its own
+        journal's token before the commit, and `advance_amendment_witness`
+        after it, change no witness byte."""
+        with ScratchRepo() as repo:
+            wt_a = self._amended(repo)
+            journal = _open_amendment_approval(repo, wt_a)
+            ws.reserve_amendment_resolution(wt_a, "wi", journal, now="t1")
+            reserved = _witness_bytes(wt_a)
+            ws.reserve_amendment_resolution(wt_a, "wi", journal, now="t2")
+            self.assertEqual(_witness_bytes(wt_a), reserved)
+            commit = _commit_journal_approval(wt_a, journal)
+            ws.advance_amendment_witness(wt_a, "wi", journal=journal, commit=commit)
+            advanced = _witness_bytes(wt_a)
+            self.assertEqual(ws.read_amendment_witness(wt_a, "wi")["status"], ws.AMENDMENT_WITNESS_RESOLVED)
+            ws.advance_amendment_witness(wt_a, "wi", journal=journal, commit=commit)
+            ws.advance_amendment_witness(wt_a, "wi")
+            self.assertEqual(_witness_bytes(wt_a), advanced)
+            self.assertEqual(ws.held_primitives(), ())
+
+    def test_a_lost_advance_self_heals_from_the_resolvers_head_or_its_branch_tip(self):
+        """CP6 test 8 (the claim-side half; the resolver's own resumed run
+        is in the acceptance matrix): the approval is committed but the
+        witness is still `RESOLVING`. A claim in another worktree advances
+        it from the resolver's `HEAD` -- and, with the resolver worktree
+        switched away, from the `resolver_branch` tip -- before refusing
+        as stale (its own `HEAD` lacks the resolution)."""
+        for via in ("resolver HEAD", "branch tip"):
+            with self.subTest(via=via), ScratchRepo() as repo:
+                wt_a = self._amended(repo)
+                journal = _open_amendment_approval(repo, wt_a)
+                ws.reserve_amendment_resolution(wt_a, "wi", journal, now="t1")
+                _commit_journal_approval(wt_a, journal)
+                ws.close_plan_approval_journal(wt_a)
+                if via == "branch tip":
+                    _git_in(wt_a, "checkout", "-q", "--detach", _primary_branch(repo.root))
+                reserved = ws.read_amendment_witness(repo.root, "wi")["resolution_reservation"]
+                with self.assertRaises(ws.StaleLifecycleStateError):
+                    ws.claim_checkpoint(repo.root, "wi", "CP2", now="t2")
+                witness = ws.read_amendment_witness(repo.root, "wi")
+                self.assertEqual(witness["status"], ws.AMENDMENT_WITNESS_RESOLVED)
+                self.assertEqual(witness["resolution_projection_sha256"],
+                                 reserved["resolution_projection_sha256"])
+
+    def test_a_divergent_resolution_is_never_collapsed_into_the_recorded_one(self):
+        """CP6 test 19: a committed, unreserved divergent resolution on
+        another branch refuses with `AmendmentResolutionConflictError`
+        naming both digests -- under `RESOLVED`, and under `RESOLVING`,
+        where predicate step 1 refuses rather than advancing. The witness
+        bytes are unchanged in both cases."""
+        for status in ("RESOLVED", "RESOLVING"):
+            with self.subTest(witness=status), ScratchRepo() as repo:
+                wt_a = self._amended(repo)
+                wt_b = repo.worktree("b")
+                journal = _open_amendment_approval(repo, wt_a)
+                ws.reserve_amendment_resolution(wt_a, "wi", journal, now="t1")
+                if status == "RESOLVED":
+                    commit = _commit_journal_approval(wt_a, journal)
+                    ws.advance_amendment_witness(wt_a, "wi", journal=journal, commit=commit)
+                    ws.close_plan_approval_journal(wt_a)
+                _resolve_in_head(wt_b, review_content_id="rc-divergent")
+                witness_before = _witness_bytes(repo.root)
+                with self.assertRaises(ws.AmendmentResolutionConflictError) as refused:
+                    ws.claim_checkpoint(wt_b, "wi", "CP2", now="t2")
+                divergent = ws.amendment_resolution_projection_sha256(
+                    _read_state(wt_b)["work_items"]["wi"]["amendment_history"][0])
+                self.assertIn(divergent, str(refused.exception))
+                recorded = (ws.read_amendment_witness(repo.root, "wi").get("resolution_projection_sha256")
+                            or ws.read_amendment_witness(repo.root, "wi")["resolution_reservation"][
+                                "resolution_projection_sha256"])
+                self.assertIn(recorded, str(refused.exception))
+                self.assertEqual(_witness_bytes(repo.root), witness_before)
+
+    def test_a_second_reservation_refuses_while_the_first_is_live(self):
+        """CP6 test 17's deterministic core: one reservation per seq."""
+        with ScratchRepo() as repo:
+            wt_a = self._amended(repo)
+            wt_b = repo.worktree("b")
+            journal_a = _open_amendment_approval(repo, wt_a, review_content_id="rc-a")
+            journal_b = _open_amendment_approval(repo, wt_b, review_content_id="rc-b")
+            ws.reserve_amendment_resolution(wt_a, "wi", journal_a, now="t1")
+            reserved = _witness_bytes(repo.root)
+            with self.assertRaises(ws.AmendmentResolutionReservedError) as refused:
+                ws.reserve_amendment_resolution(wt_b, "wi", journal_b, now="t2")
+            self.assertEqual(refused.exception.evidence["approved_review_content_id"], "rc-a")
+            self.assertEqual(os.path.realpath(refused.exception.evidence["resolver_worktree"]),
+                             os.path.realpath(wt_a))
+            self.assertEqual(_witness_bytes(repo.root), reserved)
+
+    def test_a_rollback_crash_before_the_release_is_a_provable_orphan_reservation(self):
+        """CP6 test 22(c): the journal is gone (6b's rollback closed it)
+        and no resolution exists anywhere, so the next (9) holder rolls
+        the reservation back to `OPEN`, after which another worktree can
+        reserve."""
+        with ScratchRepo() as repo:
+            wt_a = self._amended(repo)
+            wt_b = repo.worktree("b")
+            journal_a = _open_amendment_approval(repo, wt_a, review_content_id="rc-a")
+            ws.reserve_amendment_resolution(wt_a, "wi", journal_a, now="t1")
+            ws.close_plan_approval_journal(wt_a)  # 6b completed; the release was lost
+            journal_b = _open_amendment_approval(repo, wt_b, review_content_id="rc-b")
+            witness = ws.reserve_amendment_resolution(wt_b, "wi", journal_b, now="t2")
+            self.assertEqual(witness["status"], ws.AMENDMENT_WITNESS_RESOLVING)
+            self.assertEqual(witness["resolution_reservation"]["approved_review_content_id"], "rc-b")
+
+    def test_an_undecidable_orphan_reservation_requires_the_literal(self):
+        """CP6 test 22(d): the resolver worktree removed, or left on a
+        detached `HEAD` -- the literal `clear amendment resolution <wi>
+        <sha256>` is required, and a wrong digest refuses."""
+        for how in ("removed", "detached"):
+            with self.subTest(resolver=how), ScratchRepo() as repo:
+                wt_a = self._amended(repo)
+                if how == "detached":
+                    _git_in(wt_a, "checkout", "-q", "--detach")
+                journal_a = _open_amendment_approval(repo, wt_a)
+                ws.reserve_amendment_resolution(wt_a, "wi", journal_a, now="t1")
+                ws.close_plan_approval_journal(wt_a)
+                if how == "removed":
+                    repo.remove_worktree(wt_a)
+                witness_before = _witness_bytes(repo.root)
+                with self.assertRaises(ws.AmendmentInFlightError) as refused:
+                    ws.claim_checkpoint(repo.root, "wi", "CP2", now="t2")
+                literal = refused.exception.evidence["literal"]
+                self.assertEqual(literal, ws.amendment_resolution_clear_literal(
+                    "wi", hashlib.sha256(witness_before).hexdigest()))
+                with self.assertRaises(ws.AmendmentWitnessClearRefusedError):
+                    ws.clear_amendment_resolution(
+                        repo.root, "wi", user_authorization=f"clear amendment resolution wi {'0' * 64}")
+                self.assertEqual(_witness_bytes(repo.root), witness_before)
+                restored = ws.clear_amendment_resolution(repo.root, "wi", user_authorization=literal)
+                self.assertEqual(restored["status"], ws.AMENDMENT_WITNESS_OPEN)
+
+    def test_a_taken_over_journal_keeps_its_reservation_live_through_previous_owner_tokens(self):
+        """CP6 test 22(e), reservation half: after a takeover of A's
+        journal the reservation's token is only in `previous_owner_tokens`,
+        and it still refuses B (predicate step 2a, orphan test (b))."""
+        with ScratchRepo() as repo:
+            wt_a = self._amended(repo)
+            wt_b = repo.worktree("b")
+            journal_a = _open_amendment_approval(repo, wt_a, review_content_id="rc-a")
+            ws.reserve_amendment_resolution(wt_a, "wi", journal_a, now="t1")
+            evidence = ws.plan_approval_takeover_evidence(wt_a)
+            new_token = ws.take_over_plan_approval_transaction(
+                wt_a, work_item_id="wi", now="t2",
+                user_authorization=ws.plan_approval_takeover_authorization_literal(evidence),
+                evidence=evidence)
+            self.assertNotEqual(new_token, journal_a["owner_token"])
+            journal_b = _open_amendment_approval(repo, wt_b, review_content_id="rc-b")
+            with self.assertRaises(ws.AmendmentResolutionReservedError):
+                ws.reserve_amendment_resolution(wt_b, "wi", journal_b, now="t3")
+            with self.assertRaises(ws.AmendmentInFlightError):
+                ws.claim_checkpoint(repo.root, "wi", "CP2", now="t4")
+            self.assertEqual(ws.read_amendment_witness(repo.root, "wi")["status"],
+                             ws.AMENDMENT_WITNESS_RESOLVING)
+            # The taken-over transaction still holds it for 6a1.
+            proof = ws.assert_amendment_resolution_held(wt_a, "wi", ws.read_plan_approval_journal(wt_a))
+            self.assertEqual(proof["seq"], 1)
+
+    def test_the_held_check_refuses_any_witness_it_cannot_hold_and_writes_nothing(self):
+        """CP6 test 27: `OPEN`, `NONE`, another seq, a foreign token's
+        `RESOLVING`, and a `RESOLVED` with a different digest each raise
+        `AmendmentResolutionHeldError`; the witness bytes, `HEAD`, the
+        index and the journal are unchanged. The step-5 staging entry
+        refuses the same way in `first_commit` mode without a 4d
+        reservation and in `amend_recovery` mode without a passing held
+        check."""
+        with ScratchRepo() as repo:
+            wt_a = self._amended(repo)
+            journal = _open_amendment_approval(repo, wt_a)
+            ws.reserve_amendment_resolution(wt_a, "wi", journal, now="t1")
+            reserving = ws.read_amendment_witness(wt_a, "wi")
+            open_witness = reserving["previous"]
+            foreign = copy.deepcopy(reserving)
+            foreign["resolution_reservation"]["journal_owner_token"] = "f" * 32
+            other_seq = dict(open_witness, amendment_seq=2)
+            resolved_elsewhere = ws._resolved_witness_from(
+                open_witness, entry=dict(_read_state(wt_a)["work_items"]["wi"]["amendment_history"][0],
+                                         resolved_at_plan_revision=9,
+                                         reconciliation_outcome={}, resolved_review_content_id="rc-x"),
+                commit=None)
+            planted = {"OPEN": open_witness, "NONE": ws._none_witness("wi"), "another seq": other_seq,
+                       "foreign RESOLVING": foreign, "RESOLVED, other digest": resolved_elsewhere}
+            head = _git_in(wt_a, "rev-parse", "HEAD")
+            journal_bytes = ws.plan_approval_journal_path(wt_a).read_bytes()
+            for label, witness in planted.items():
+                with self.subTest(label):
+                    raw = _plant_witness(wt_a, witness)
+                    with self.assertRaises(ws.AmendmentResolutionHeldError):
+                        ws.assert_amendment_resolution_held(wt_a, "wi", journal)
+                    self.assertEqual(_witness_bytes(wt_a), raw)
+            _plant_witness(wt_a, open_witness)
+            with self.assertRaises(ws.AmendmentResolutionHeldError):
+                ws.stage_plan_approval_members(wt_a, journal, mode=ws.PLAN_APPROVAL_STAGING_FIRST_COMMIT)
+            _plant_witness(wt_a, reserving)
+            with self.assertRaises(ws.AmendmentResolutionHeldError):
+                ws.stage_plan_approval_members(wt_a, journal, mode=ws.PLAN_APPROVAL_STAGING_AMEND_RECOVERY)
+            with self.assertRaises(ws.AmendmentResolutionHeldError):
+                ws.stage_plan_approval_members(
+                    wt_a, journal, mode=ws.PLAN_APPROVAL_STAGING_AMEND_RECOVERY,
+                    resolution_held={"work_item_id": "wi", "owner_token": "f" * 32, "seq": 1,
+                                     "resolution_projection_sha256": "0" * 64})
+            self.assertEqual(_git_in(wt_a, "rev-parse", "HEAD"), head)
+            self.assertEqual(_git_in(wt_a, "diff", "--name-only", "--cached", "HEAD"), "")
+            self.assertEqual(ws.plan_approval_journal_path(wt_a).read_bytes(), journal_bytes)
+            # With the evidence each mode requires, both stage.
+            ws.stage_plan_approval_members(wt_a, journal, mode=ws.PLAN_APPROVAL_STAGING_FIRST_COMMIT)
+            proof = ws.assert_amendment_resolution_held(wt_a, "wi", journal)
+            ws.stage_plan_approval_members(wt_a, journal, mode=ws.PLAN_APPROVAL_STAGING_AMEND_RECOVERY,
+                                           resolution_held=proof)
+            self.assertEqual(ws.held_primitives(), ())
+
+    def test_a_takeover_then_not_committed_rollback_releases_in_band(self):
+        """CP6 test 28: the release matches the reservation's token among
+        the `journal_tokens` captured before the rollback closed the
+        journal, and restores `OPEN` -- on an attached branch and on a
+        detached `HEAD` alike, with no orphan test and no literal. Passing
+        only the current token (revision 7's defect) leaves `RESOLVING`
+        behind."""
+        for detached in (False, True):
+            for only_current in (False, True):
+                with self.subTest(detached=detached, only_current_token=only_current), \
+                        ScratchRepo() as repo:
+                    wt_a = self._amended(repo)
+                    if detached:
+                        _git_in(wt_a, "checkout", "-q", "--detach")
+                    journal = _open_amendment_approval(repo, wt_a)
+                    ws.reserve_amendment_resolution(wt_a, "wi", journal, now="t1")
+                    evidence = ws.plan_approval_takeover_evidence(wt_a)
+                    new_token = ws.take_over_plan_approval_transaction(
+                        wt_a, work_item_id="wi", now="t2",
+                        user_authorization=ws.plan_approval_takeover_authorization_literal(evidence),
+                        evidence=evidence)
+                    taken = ws.read_plan_approval_journal(wt_a)
+                    self.assertEqual(ws.classify_plan_approval_outcome(wt_a, taken),
+                                     ws.PLAN_APPROVAL_OUTCOME_NOT_COMMITTED)
+                    tokens = [new_token] if only_current else [taken["owner_token"],
+                                                               *taken["previous_owner_tokens"]]
+                    ws.rollback_plan_approval_transaction(wt_a, owner_token=new_token)
+                    ws.release_amendment_resolution(wt_a, "wi", tokens)
+                    status = ws.read_amendment_witness(wt_a, "wi")["status"]
+                    self.assertEqual(status, ws.AMENDMENT_WITNESS_RESOLVING if only_current
+                                     else ws.AMENDMENT_WITNESS_OPEN)
+                    if not only_current:
+                        wt_b = repo.worktree("b")
+                        journal_b = _open_amendment_approval(repo, wt_b, review_content_id="rc-b")
+                        ws.reserve_amendment_resolution(wt_b, "wi", journal_b, now="t3")
+
+    def test_the_journal_refuses_to_open_over_a_live_claim_on_an_open_amendment(self):
+        """Defense in depth (section 5.6, resolution side): a claim a
+        lagging worktree published past the witness is caught at
+        approval."""
+        with ScratchRepo() as repo:
+            wt_a = self._amended(repo)
+            with ws.lifecycle_lock(repo.root, "wi"):
+                ws._claim_or_refuse(repo.root, "wi",
+                                    ws._build_claim_record(repo.root, "wi", "CP2", "t1"))
+            with self.assertRaises(ws.AmendmentCheckpointActiveError):
+                _open_amendment_approval(repo, wt_a)
+            self.assertIsNone(ws.read_plan_approval_journal(wt_a))
+
+
+class TestApplyPlanApprovalAmendmentBranch(unittest.TestCase):
+    """`apply_plan_approval`'s four new, optional, keyword-only reconciliation
+    parameters (D-Plan-Amendment-4)."""
+
+    @staticmethod
+    def _approval_record(review_content_id="rc-2"):
+        return ws.build_approval_record(
+            basis="EXTERNAL_APPROVE", stage="plan", user_confirmation="approve wi",
+            now="2026-01-01T00:00:00Z", reviewed_bundle_id="b" * 64,
+            approved_review_content_id=review_content_id,
+            review_content_manifest=[{"path": "docs/plan.md", "sha256": "d" * 64}],
+        )
+
+    @staticmethod
+    def _open_amendment_state():
+        return {
+            "schema_version": 1, "active_work_item_id": "wi",
+            "work_items": {"wi": {
+                "work_item_id": "wi", "phase": "AMENDING_PLAN", "plan_revision": 2,
+                "checkpoints": {"CP1": {"status": "COMPLETE"}},
+                "current_checkpoint_id": None, "last_completed_checkpoint_id": "CP1",
+                "amendment_history": [{
+                    "amendment_id": "0", "resolved_at_plan_revision": None,
+                    "pre_amendment_approval_commit": "a" * 40,
+                }],
+            }},
+        }
+
+    def test_an_open_amendment_with_missing_reconciliation_inputs_is_refused(self):
+        state = self._open_amendment_state()
+        with self.assertRaises(ws.AmendmentReconciliationInputsMissingError):
+            ws.apply_plan_approval(state, "wi", self._approval_record(), "2026-01-01T00:00:01Z")
+
+    def test_an_already_resolved_amendment_is_refused(self):
+        state = self._open_amendment_state()
+        state["work_items"]["wi"]["amendment_history"][0]["resolved_at_plan_revision"] = 2
+        registry = {"checkpoints": [
+            {"id": "CP1", "name": "n", "depends_on": [], "complexity": 1, "session_target": 1},
+        ]}
+        text = "<!-- CP1 -->a<!-- /CP1 -->"
+        with self.assertRaises(ws.AmendmentAlreadyResolvedError):
+            ws.apply_plan_approval(
+                state, "wi", self._approval_record(), "2026-01-01T00:00:01Z",
+                pre_registry=registry, pre_plan_text=text,
+                post_registry=registry, post_plan_text=text,
+            )
+
+    def test_missing_post_anchor_coverage_is_refused_before_any_reconciliation(self):
+        state = self._open_amendment_state()
+        pre_registry = {"checkpoints": [
+            {"id": "CP1", "name": "n", "depends_on": [], "complexity": 1, "session_target": 1},
+        ]}
+        post_registry = {"checkpoints": [
+            {"id": "CP1", "name": "n", "depends_on": [], "complexity": 1, "session_target": 1},
+            {"id": "CP2", "name": "new", "depends_on": ["CP1"], "complexity": 1, "session_target": 1},
+        ]}
+        pre_text = "<!-- CP1 -->a<!-- /CP1 -->"
+        post_text = "<!-- CP1 -->a<!-- /CP1 -->"  # CP2 has no anchor pair at all
+        with self.assertRaises(ws.AmendmentAnchorCoverageError):
+            ws.apply_plan_approval(
+                state, "wi", self._approval_record(), "2026-01-01T00:00:01Z",
+                pre_registry=pre_registry, pre_plan_text=pre_text,
+                post_registry=post_registry, post_plan_text=post_text,
+            )
+        # Refused before any write: the input work item is untouched.
+        self.assertEqual(state["work_items"]["wi"]["phase"], "AMENDING_PLAN")
+
+    def test_post_registry_only_non_cp_digit_id_is_a_named_shape_refusal(self):
+        """IMPL3-O1: an id introduced *by the amendment itself* (absent from
+        the pre-amendment registry, so `request_plan_amendment`'s own early
+        shape check never saw it) that is not of the shape
+        `CP<digits>[A-Z]?` must raise `AmendmentCheckpointIdShapeError`
+        here, not the unactionable `AmendmentAnchorCoverageError` -- no
+        anchor text could ever satisfy the latter for this id."""
+        state = self._open_amendment_state()
+        pre_registry = {"checkpoints": [
+            {"id": "CP1", "name": "n", "depends_on": [], "complexity": 1, "session_target": 1},
+        ]}
+        post_registry = {"checkpoints": [
+            {"id": "CP1", "name": "n", "depends_on": [], "complexity": 1, "session_target": 1},
+            {"id": "WF-New", "name": "new", "depends_on": ["CP1"], "complexity": 1, "session_target": 1},
+        ]}
+        pre_text = "<!-- CP1 -->a<!-- /CP1 -->"
+        post_text = "<!-- CP1 -->a<!-- /CP1 -->"  # WF-New has no anchor either -- shape wins first
+        with self.assertRaises(ws.AmendmentCheckpointIdShapeError) as ctx:
+            ws.apply_plan_approval(
+                state, "wi", self._approval_record(), "2026-01-01T00:00:01Z",
+                pre_registry=pre_registry, pre_plan_text=pre_text,
+                post_registry=post_registry, post_plan_text=post_text,
+            )
+        self.assertIn("WF-New", str(ctx.exception))
+        self.assertEqual(state["work_items"]["wi"]["phase"], "AMENDING_PLAN")
+
+    def test_post_registry_missing_checkpoints_key_is_a_named_refusal(self):
+        """IMPL2-O2: a `post_registry` with no `"checkpoints"` key at all
+        (e.g. a caller-side `json.loads` of a malformed on-disk registry)
+        must raise a named error, not an unnamed `KeyError` from inside
+        `validate_registry_topological_order` -- `validate_post_anchor_
+        coverage` alone would pass this input vacuously via its own
+        `.get("checkpoints", [])`."""
+        state = self._open_amendment_state()
+        pre_registry = {"checkpoints": [
+            {"id": "CP1", "name": "n", "depends_on": [], "complexity": 1, "session_target": 1},
+        ]}
+        post_registry = {"no_checkpoints_key": True}
+        pre_text = "<!-- CP1 -->a<!-- /CP1 -->"
+        post_text = "<!-- CP1 -->a<!-- /CP1 -->"
+        with self.assertRaises(ws.AmendmentPostRegistryMalformedError):
+            ws.apply_plan_approval(
+                state, "wi", self._approval_record(), "2026-01-01T00:00:01Z",
+                pre_registry=pre_registry, pre_plan_text=pre_text,
+                post_registry=post_registry, post_plan_text=post_text,
+            )
+        self.assertEqual(state["work_items"]["wi"]["phase"], "AMENDING_PLAN")
+
+    def test_post_registry_checkpoint_missing_id_key_is_a_named_refusal(self):
+        """IMPL4-O1: `validate_post_anchor_coverage` and
+        `reconcile_checkpoints_after_amendment` both directly read
+        `entry["id"]` from `post_registry["checkpoints"]` -- a row with no
+        `id` key at all must raise a named error here, before either call,
+        rather than escape as a bare, unnamed `KeyError` from whichever one
+        happens to run first."""
+        state = self._open_amendment_state()
+        pre_registry = {"checkpoints": [
+            {"id": "CP1", "name": "n", "depends_on": [], "complexity": 1, "session_target": 1},
+        ]}
+        post_registry = {"checkpoints": [
+            {"id": "CP1", "name": "n", "depends_on": [], "complexity": 1, "session_target": 1},
+            {"name": "no id at all", "depends_on": ["CP1"], "complexity": 1, "session_target": 1},
+        ]}
+        pre_text = "<!-- CP1 -->a<!-- /CP1 -->"
+        post_text = "<!-- CP1 -->a<!-- /CP1 -->"
+        with self.assertRaises(ws.AmendmentPostRegistryMalformedError) as ctx:
+            ws.apply_plan_approval(
+                state, "wi", self._approval_record(), "2026-01-01T00:00:01Z",
+                pre_registry=pre_registry, pre_plan_text=pre_text,
+                post_registry=post_registry, post_plan_text=post_text,
+            )
+        self.assertIn("no 'id' key", str(ctx.exception))
+        self.assertEqual(state["work_items"]["wi"]["phase"], "AMENDING_PLAN")
+
+    def test_successful_reconciliation_resolves_the_amendment_and_enters_implementing(self):
+        state = self._open_amendment_state()
+        pre_registry = {"checkpoints": [
+            {"id": "CP1", "name": "n", "depends_on": [], "complexity": 1, "session_target": 1},
+        ]}
+        post_registry = {"checkpoints": [
+            {"id": "CP1", "name": "n", "depends_on": [], "complexity": 1, "session_target": 1},
+            {"id": "CP2", "name": "new", "depends_on": ["CP1"], "complexity": 1, "session_target": 1},
+        ]}
+        pre_text = "<!-- CP1 -->a<!-- /CP1 -->"
+        post_text = "<!-- CP1 -->a<!-- /CP1 --><!-- CP2 -->b<!-- /CP2 -->"
+        new_state = ws.apply_plan_approval(
+            state, "wi", self._approval_record(), "2026-01-01T00:00:01Z",
+            pre_registry=pre_registry, pre_plan_text=pre_text,
+            post_registry=post_registry, post_plan_text=post_text,
+        )
+        wi = new_state["work_items"]["wi"]
+        self.assertEqual(wi["phase"], "IMPLEMENTING")
+        self.assertEqual(wi["checkpoints"]["CP1"]["status"], "COMPLETE")
+        self.assertNotIn("CP2", wi["checkpoints"])
+        self.assertEqual(wi["amendment_history"][-1]["resolved_at_plan_revision"], 2)
+        self.assertEqual(wi["plan_approval"]["approved_review_content_id"], "rc-2")
+        # IMPL6-B1: the reconciliation outcome itself is recorded onto the
+        # resolved amendment_history entry -- the durable field
+        # `/approve-review plan` step 7 reports from, distinct from the
+        # `checkpoints`/`dropped` fields this function already consumed.
+        self.assertEqual(wi["amendment_history"][-1]["reconciliation_outcome"], {"CP1": "retained", "CP2": "new"})
+
+    def test_reconciliation_outcome_distinguishes_direct_from_closure_derived_flips(self):
+        """IMPL6-B1: the recorded `reconciliation_outcome` must retain the
+        distinction `reconcile_checkpoints_after_amendment` computes
+        between a direct demotion and a dependency-closure-derived one --
+        `apply_plan_approval` stores the map verbatim, never collapsing
+        it."""
+        state = self._open_amendment_state()
+        state["work_items"]["wi"]["checkpoints"]["CP2"] = {"status": "COMPLETE"}
+        pre_registry = {"checkpoints": [
+            {"id": "CP1", "name": "n", "depends_on": [], "complexity": 1, "session_target": 1},
+            {"id": "CP2", "name": "n2", "depends_on": ["CP1"], "complexity": 1, "session_target": 1},
+        ]}
+        post_registry = {"checkpoints": [
+            {"id": "CP1", "name": "changed", "depends_on": [], "complexity": 1, "session_target": 1},
+            {"id": "CP2", "name": "n2", "depends_on": ["CP1"], "complexity": 1, "session_target": 1},
+        ]}
+        text = "<!-- CP1 -->a<!-- /CP1 --><!-- CP2 -->b<!-- /CP2 -->"
+        new_state = ws.apply_plan_approval(
+            state, "wi", self._approval_record(), "2026-01-01T00:00:01Z",
+            pre_registry=pre_registry, pre_plan_text=text,
+            post_registry=post_registry, post_plan_text=text,
+        )
+        outcome = new_state["work_items"]["wi"]["amendment_history"][-1]["reconciliation_outcome"]
+        self.assertEqual(outcome["CP1"], "needs_revalidation")
+        self.assertEqual(outcome["CP2"], "needs_revalidation_dependency")
+
+    def test_a_dropped_current_or_last_completed_checkpoint_id_is_nulled(self):
+        state = self._open_amendment_state()
+        state["work_items"]["wi"]["checkpoints"]["CP2"] = {"status": "IN_PROGRESS"}
+        state["work_items"]["wi"]["current_checkpoint_id"] = "CP2"
+        state["work_items"]["wi"]["last_completed_checkpoint_id"] = "CP2"
+        pre_registry = {"checkpoints": [
+            {"id": "CP1", "name": "n", "depends_on": [], "complexity": 1, "session_target": 1},
+            {"id": "CP2", "name": "n2", "depends_on": ["CP1"], "complexity": 1, "session_target": 1},
+        ]}
+        post_registry = {"checkpoints": [
+            {"id": "CP1", "name": "n", "depends_on": [], "complexity": 1, "session_target": 1},
+        ]}
+        pre_text = "<!-- CP1 -->a<!-- /CP1 --><!-- CP2 -->b<!-- /CP2 -->"
+        post_text = "<!-- CP1 -->a<!-- /CP1 -->"
+        new_state = ws.apply_plan_approval(
+            state, "wi", self._approval_record(), "2026-01-01T00:00:01Z",
+            pre_registry=pre_registry, pre_plan_text=pre_text,
+            post_registry=post_registry, post_plan_text=post_text,
+        )
+        wi = new_state["work_items"]["wi"]
+        self.assertIsNone(wi["current_checkpoint_id"])
+        self.assertIsNone(wi["last_completed_checkpoint_id"])
+        self.assertNotIn("CP2", wi["checkpoints"])
+
+    def test_with_no_open_amendment_the_four_parameters_are_never_consulted(self):
+        """For a work item with no open amendment, behavior is byte-for-byte
+        unchanged from v2.3.1 -- no existing call site needs to change."""
+        state = {
+            "schema_version": 1, "active_work_item_id": "wi",
+            "work_items": {"wi": {
+                "work_item_id": "wi", "phase": "PLANNING", "plan_revision": 1,
+                "checkpoints": {},
+            }},
+        }
+        new_state = ws.apply_plan_approval(state, "wi", self._approval_record(), "2026-01-01T00:00:01Z")
+        wi = new_state["work_items"]["wi"]
+        self.assertEqual(wi["phase"], "IMPLEMENTING")
+        self.assertNotIn("amendment_history", wi)
+
+    def test_a_resolved_amendment_history_never_re_triggers_reconciliation(self):
+        """`amendment_history` present but its last entry already resolved
+        -- `has_open_amendment` is false, so the four parameters stay
+        optional here too."""
+        state = self._open_amendment_state()
+        state["work_items"]["wi"]["amendment_history"][0]["resolved_at_plan_revision"] = 2
+        new_state = ws.apply_plan_approval(state, "wi", self._approval_record(), "2026-01-01T00:00:01Z")
+        self.assertEqual(new_state["work_items"]["wi"]["phase"], "IMPLEMENTING")
+
+    def test_real_caller_shape_after_a_resolved_amendment_is_never_refused(self):
+        """`OPUS-R145-001` regression: `approve-review.md` step 4c reads and
+        forwards `post_plan_text`/`post_registry` *unconditionally* on every
+        plan-stage approval, from the working tree, regardless of amendment
+        state -- only `pre_registry`/`pre_plan_text` are gated there on an
+        open amendment. Reproduces exactly that call shape (post-side
+        supplied, pre-side `None`) against a work item whose last amendment
+        is already resolved: the guard must key on the pre-side pair alone,
+        never on "any of the four", or this ordinary, non-re-run call --
+        the only shape the real caller ever produces once a work item has
+        amended once -- would be wrongly refused forever after."""
+        state = self._open_amendment_state()
+        state["work_items"]["wi"]["amendment_history"][0]["resolved_at_plan_revision"] = 2
+        registry = {"checkpoints": [
+            {"id": "CP1", "name": "n", "depends_on": [], "complexity": 1, "session_target": 1},
+        ]}
+        text = "<!-- CP1 -->a<!-- /CP1 -->"
+        new_state = ws.apply_plan_approval(
+            state, "wi", self._approval_record(), "2026-01-01T00:00:01Z",
+            post_registry=registry, post_plan_text=text,
+        )
+        self.assertEqual(new_state["work_items"]["wi"]["phase"], "IMPLEMENTING")
+        # Reconciliation itself never ran (no open amendment) -- the last
+        # amendment_history entry is untouched.
+        self.assertEqual(
+            new_state["work_items"]["wi"]["amendment_history"][0]["resolved_at_plan_revision"], 2,
+        )
+
+    def test_non_topological_post_registry_is_refused_before_reconciliation(self):
+        """IMPL-O2: `reconcile_checkpoints_after_amendment`'s single
+        forward-pass dependency closure relies on `post_registry`'s own
+        order already being a valid topological order of `depends_on`
+        (B6.3) -- a precondition `write_registry_and_mapping` enforces at
+        write time, but `/approve-review plan` step 4c reads `post_registry`
+        straight off the working tree, which a hand-edited (reviewed, but
+        not mechanically re-checked) registry could violate. Now enforced
+        directly inside `apply_plan_approval`, alongside the existing
+        anchor-coverage validation, before any reconciliation runs."""
+        state = self._open_amendment_state()
+        pre_registry = {"checkpoints": [
+            {"id": "CP1", "name": "n", "depends_on": [], "complexity": 1, "session_target": 1},
+        ]}
+        pre_text = "<!-- CP1 -->a<!-- /CP1 -->"
+        # CP2 depends on CP1 but is listed *before* it -- not a valid
+        # topological order.
+        post_registry = {"checkpoints": [
+            {"id": "CP2", "name": "n2", "depends_on": ["CP1"], "complexity": 1, "session_target": 1},
+            {"id": "CP1", "name": "n", "depends_on": [], "complexity": 1, "session_target": 1},
+        ]}
+        post_text = "<!-- CP1 -->a<!-- /CP1 --><!-- CP2 -->b<!-- /CP2 -->"
+        with self.assertRaises(ws.NonTopologicalRegistryOrderError):
+            ws.apply_plan_approval(
+                state, "wi", self._approval_record(), "2026-01-01T00:00:01Z",
+                pre_registry=pre_registry, pre_plan_text=pre_text,
+                post_registry=post_registry, post_plan_text=post_text,
+            )
+
+
+class ReviewMaterialLifecycleMarkerTest(unittest.TestCase):
+    """`workflow-2.5.0` CP1's canonical review-material-lifecycle marker:
+    the sole representation `D-Review-Material-Lifecycle` (a later
+    `workflow-2.5.0` design section) imports and reuses, never
+    re-derived. See `docs/ai-workflow/WORKFLOW_V2_PLAN.md`'s
+    `D-Implementation-Review-Stages` `2.5.0 disposition record`
+    subsection."""
+
+    def test_render_marker_exact_bytes(self):
+        self.assertEqual(
+            ws.render_marker("HISTORICAL"),
+            "<!-- review-material-lifecycle: HISTORICAL -->",
+        )
+        self.assertEqual(
+            ws.render_marker("CURRENT"),
+            "<!-- review-material-lifecycle: CURRENT -->",
+        )
+
+    def test_render_marker_rejects_third_state(self):
+        with self.assertRaises(ValueError):
+            ws.render_marker("WEIRD")
+
+    def test_parse_marker_roundtrips_render_marker_output(self):
+        for state in ws.REVIEW_MATERIAL_LIFECYCLE_STATES:
+            self.assertEqual(ws.parse_marker(ws.render_marker(state)), state)
+
+    def test_parse_marker_explicit_current_distinct_from_absent(self):
+        # An explicit CURRENT marker parses to "CURRENT", the same value
+        # the fail-closed default also produces for absent/malformed
+        # input -- these are two different code paths a caller must not
+        # conflate (this test only pins parse_marker's own return value
+        # for each; the already-marked-nested-unit and marker-presence
+        # fixtures D-Review-Material-Lifecycle names cover the caller-side
+        # distinction).
+        self.assertEqual(ws.parse_marker(ws.render_marker("CURRENT")), "CURRENT")
+        self.assertIsNone(ws.parse_marker("no marker in this text at all"))
+
+    def test_parse_marker_rejects_malformed_forms(self):
+        historical = ws.render_marker("HISTORICAL")
+        self.assertIsNone(ws.parse_marker(""))
+        self.assertIsNone(ws.parse_marker("<!-- review-material-lifecycle: HISTORICAL -"))
+        self.assertIsNone(ws.parse_marker("<!-- review-material-lifecycle: HISTORICALLY -->"))
+        self.assertIsNone(ws.parse_marker("<!-- review-material-lifecycle: THIRD_STATE -->"))
+        # Duplicated marker text in the same field is ambiguous, not two
+        # independent HISTORICAL findings -- rejected, never averaged or
+        # first-wins.
+        self.assertIsNone(ws.parse_marker(historical + "\n" + historical))
+
+    def test_parse_marker_accepts_marker_embedded_in_surrounding_prose(self):
+        text = f"Some heading\n\n{ws.render_marker('HISTORICAL')}\n\nSome body text."
+        self.assertEqual(ws.parse_marker(text), "HISTORICAL")
+
+
+# ---------------------------------------------------------------------------
+# workflow-2.5.0 CP2: KNOWN_PHASES additions, generalized WF-Activate
+# helpers for a "2.2" target, the version-aware activation/rollback event
+# model, TWO_STAGE_PLAN_REVIEW_VERSIONS' plan-review-gate inheritance
+# widening, and implementation_review_stages' normalize/read plumbing.
+# ---------------------------------------------------------------------------
+
+
+class TestKnownPhases22Additions(unittest.TestCase):
+    def test_the_two_new_implementation_review_phases_are_known(self):
+        self.assertIn("AWAITING_LOCAL_IMPLEMENTATION_REVIEW", ws.KNOWN_PHASES)
+        self.assertIn("AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW", ws.KNOWN_PHASES)
+
+    def test_a_work_item_may_be_persisted_at_either_new_phase(self):
+        for phase in ("AWAITING_LOCAL_IMPLEMENTATION_REVIEW", "AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW"):
+            wi = _base_work_item(governing_workflow_version="2.1", phase=phase)
+            ws.validate_state(_base_state(wi=wi))  # must not raise
+
+
+class TestActivationHelpersGeneralizedTargetVersion(unittest.TestCase):
+    """`build_activated_config`/`build_rolled_back_config` generalized to a
+    `target_version` parameter (default `"2.1"`, preserving the original
+    `"1"` <-> `"2.1"` call shape byte-for-byte) rather than the prior
+    hard-coded `"2.1"` literal."""
+
+    def test_default_target_version_still_flips_only_default_workflow_version(self):
+        """Regression: the pre-2.5.0 call shape (no target_version) must
+        keep behaving exactly as before -- `supported_versions` already
+        contains "2.1", so activating leaves it byte-unchanged."""
+        config = ws.default_config()
+        activated = ws.build_activated_config(config)
+        self.assertEqual(activated["default_workflow_version"], "2.1")
+        self.assertEqual(activated["supported_versions"], config["supported_versions"])
+        self.assertEqual(config["default_workflow_version"], "1")  # input untouched
+
+    def test_default_target_version_rollback_still_flips_to_v1(self):
+        config = {**ws.default_config(), "default_workflow_version": "2.1"}
+        rolled_back = ws.build_rolled_back_config(config)
+        self.assertEqual(rolled_back["default_workflow_version"], "1")
+
+    def test_activate_2_2_appends_to_supported_versions(self):
+        config = {**ws.default_config(), "default_workflow_version": "2.1"}
+        activated = ws.build_activated_config(config, target_version="2.2")
+        self.assertEqual(activated["default_workflow_version"], "2.2")
+        self.assertEqual(activated["supported_versions"], ["1", "2.1", "2.2"])
+        self.assertEqual(config["default_workflow_version"], "2.1")  # input untouched
+
+    def test_activate_2_2_is_idempotent_on_supported_versions_if_already_present(self):
+        config = {
+            "schema_version": ws.SCHEMA_VERSION,
+            "default_workflow_version": "2.1",
+            "supported_versions": ["1", "2.1", "2.2"],
+        }
+        activated = ws.build_activated_config(config, target_version="2.2")
+        self.assertEqual(activated["supported_versions"], ["1", "2.1", "2.2"])
+
+    def test_activate_2_2_rejects_already_activated(self):
+        config = {**ws.default_config(), "default_workflow_version": "2.2"}
+        with self.assertRaises(ws.AlreadyActivatedError):
+            ws.build_activated_config(config, target_version="2.2")
+
+    def test_activate_rejects_unsupported_target_version(self):
+        with self.assertRaises(ValueError):
+            ws.build_activated_config(ws.default_config(), target_version="3")
+
+    def test_rollback_2_2_flips_back_to_2_1_never_a_fixed_1_literal(self):
+        """The rollback destination is the version activation superseded,
+        not a fixed "1" literal: "2.2" rolls back to "2.1", never to "1"."""
+        config = {**ws.default_config(), "default_workflow_version": "2.2",
+                  "supported_versions": ["1", "2.1", "2.2"]}
+        rolled_back = ws.build_rolled_back_config(config, target_version="2.2")
+        self.assertEqual(rolled_back["default_workflow_version"], "2.1")
+
+    def test_rollback_2_2_does_not_remove_2_2_from_supported_versions(self):
+        config = {**ws.default_config(), "default_workflow_version": "2.2",
+                  "supported_versions": ["1", "2.1", "2.2"]}
+        rolled_back = ws.build_rolled_back_config(config, target_version="2.2")
+        self.assertEqual(rolled_back["supported_versions"], ["1", "2.1", "2.2"])
+
+    def test_rollback_2_2_rejects_not_activated(self):
+        config = {**ws.default_config(), "default_workflow_version": "2.1"}
+        with self.assertRaises(ws.NotActivatedError):
+            ws.build_rolled_back_config(config, target_version="2.2")
+
+    def test_activate_then_rollback_2_2_then_2_1_reaches_v1(self):
+        config = ws.default_config()
+        activated_2_1 = ws.build_activated_config(config)
+        activated_2_2 = ws.build_activated_config(activated_2_1, target_version="2.2")
+        rolled_back_to_2_1 = ws.build_rolled_back_config(activated_2_2, target_version="2.2")
+        self.assertEqual(rolled_back_to_2_1["default_workflow_version"], "2.1")
+        rolled_back_to_1 = ws.build_rolled_back_config(rolled_back_to_2_1)
+        self.assertEqual(rolled_back_to_1["default_workflow_version"], "1")
+
+
+class TestVersionAwareActivationEventModel(unittest.TestCase):
+    """`find_latest_activation_event`/`is_activated` read each event's own
+    resolved destination version rather than a binary activated/not-
+    activated trailer-kind check."""
+
+    def test_is_activated_true_after_workflow_activation_2_2(self):
+        with ScratchRepo() as repo:
+            repo.commit("activate 2.2", trailers={"Workflow-Activation": "2.2"})
+            self.assertTrue(ws.is_activated(repo.root))
+
+    def test_load_config_raises_and_names_2_2_after_activation_2_2_missing_config(self):
+        with ScratchRepo() as repo:
+            repo.commit("activate 2.2", trailers={"Workflow-Activation": "2.2"})
+            with self.assertRaises(ws.ConfigMissingAfterActivationError) as ctx:
+                ws.load_config(repo.root, config_path=Path("nonexistent.json"))
+            self.assertIn("Workflow 2.2", str(ctx.exception))
+
+    def test_blank_activation_trailer_value_reports_activated_true(self):
+        """Missing-tests item (round 2 of round 1's own O3): activation-side
+        twin of `test_unresolvable_rollback_trailer_value_reports_activated_
+        bare` below -- `_activation_event_description`'s branch selection
+        moved from `is not None` to truthiness, plus a trailer-name split,
+        so a blank `Workflow-Activation` trailer (`destination_version ==
+        ""`, falsy but not `None`) must still resolve fail-closed as
+        activated, never fall through to not-activated."""
+        with ScratchRepo() as repo:
+            repo.commit("activate bare", trailers={"Workflow-Activation": ""})
+            self.assertTrue(ws.is_activated(repo.root))
+
+    def test_load_config_names_blank_activation_trailer_value_verbatim(self):
+        """The blank trailer's own raw value (`''`) is named verbatim in the
+        recovery message, never `"Workflow ''"` -- `_activation_event_
+        description`'s unresolvable-miss branch, not its resolved-
+        destination branch."""
+        with ScratchRepo() as repo:
+            repo.commit("activate bare", trailers={"Workflow-Activation": ""})
+            with self.assertRaises(ws.ConfigMissingAfterActivationError) as ctx:
+                ws.load_config(repo.root, config_path=Path("nonexistent.json"))
+            message = str(ctx.exception)
+            self.assertIn("an unresolvable Workflow-Activation trailer value ''", message)
+            self.assertNotIn("Workflow ''", message)
+
+    def test_workflow_activation_1_trailer_resolves_activated_true(self):
+        """Missing-tests item (I2): the activation-direction twin of
+        `test_a_typo_d_rollback_trailer_value_resolves_activated_fail_closed`
+        above and of the round-2 blank-activation-trailer pair just above --
+        `Workflow-Activation: 1` is the one trailer value a naive
+        `destination_version != "1"` reading answers differently from
+        `2.4.0`'s own binary `kind == "activation"` check, which reports
+        activated for every activation trailer value. The activation
+        direction must stay fail-closed like every other direction: only a
+        *resolved rollback* destination may ever report not-activated."""
+        with ScratchRepo() as repo:
+            repo.commit("activate one", trailers={"Workflow-Activation": "1"})
+            self.assertTrue(ws.is_activated(repo.root))
+
+    def test_rollback_2_1_still_resolves_not_activated(self):
+        """Reproduces today's binary behavior exactly at the boundary it
+        already covers."""
+        with ScratchRepo() as repo:
+            repo.commit("activate", trailers={"Workflow-Activation": "2.1"})
+            repo.commit("rollback", trailers={"Workflow-Rollback": "2.1"})
+            self.assertFalse(ws.is_activated(repo.root))
+            config = ws.load_config(repo.root, config_path=Path("nonexistent.json"))
+            self.assertEqual(config["default_workflow_version"], "1")
+
+    def test_rollback_2_2_still_resolves_activated(self):
+        """A Workflow-Rollback: 2.2 commit resolves to destination "2.1",
+        which is still activated -- the repository is still "2.1"-
+        configured and ConfigMissingAfterActivationError's hard stop must
+        stay armed. Left binary, this would silently disarm."""
+        with ScratchRepo() as repo:
+            repo.commit("activate 2.2", trailers={"Workflow-Activation": "2.2"})
+            repo.commit("rollback 2.2", trailers={"Workflow-Rollback": "2.2"})
+            self.assertTrue(ws.is_activated(repo.root))
+
+    def test_load_config_missing_config_behavior_unchanged_after_rollback_2_2(self):
+        with ScratchRepo() as repo:
+            repo.commit("activate 2.2", trailers={"Workflow-Activation": "2.2"})
+            repo.commit("rollback 2.2", trailers={"Workflow-Rollback": "2.2"})
+            with self.assertRaises(ws.ConfigMissingAfterActivationError) as ctx:
+                ws.load_config(repo.root, config_path=Path("nonexistent.json"))
+            self.assertIn("Workflow 2.1", str(ctx.exception))
+
+    def test_unresolvable_rollback_trailer_value_reports_activated_bare(self):
+        """Rollback-trailer-value miss resolves fail-closed: a bare/empty
+        value never silently falls through to not-activated."""
+        with ScratchRepo() as repo:
+            repo.commit("rollback bare", trailers={"Workflow-Rollback": ""})
+            self.assertTrue(ws.is_activated(repo.root))
+
+    def test_unresolvable_rollback_trailer_value_reports_activated_unknown_version(self):
+        with ScratchRepo() as repo:
+            repo.commit("rollback unknown", trailers={"Workflow-Rollback": "2.9"})
+            self.assertTrue(ws.is_activated(repo.root))
+
+    def test_unresolvable_rollback_trailer_never_raises_keyerror(self):
+        with ScratchRepo() as repo:
+            repo.commit("rollback unknown", trailers={"Workflow-Rollback": "2.9"})
+            # Must resolve cleanly, never raise -- fail-closed as
+            # activated, not a bare uncaught KeyError.
+            ws.is_activated(repo.root)
+
+    def test_load_config_names_unresolvable_rollback_trailer_value_verbatim(self):
+        with ScratchRepo() as repo:
+            repo.commit("rollback unknown", trailers={"Workflow-Rollback": "2.9"})
+            with self.assertRaises(ws.ConfigMissingAfterActivationError) as ctx:
+                ws.load_config(repo.root, config_path=Path("nonexistent.json"))
+            self.assertIn("2.9", str(ctx.exception))
+
+    def test_find_latest_activation_event_resolves_activation_destination_directly(self):
+        with ScratchRepo() as repo:
+            commit = repo.commit("activate 2.2", trailers={"Workflow-Activation": "2.2"})
+            event = ws.find_latest_activation_event(repo.root)
+            self.assertEqual(event, ("activation", "2.2", commit))
+
+    def test_find_latest_activation_event_resolves_rollback_destination_via_mapping(self):
+        with ScratchRepo() as repo:
+            commit = repo.commit("rollback 2.2", trailers={"Workflow-Rollback": "2.2"})
+            event = ws.find_latest_activation_event(repo.root)
+            self.assertEqual(event, ("rollback", "2.1", commit))
+
+    def test_find_latest_activation_event_destination_none_for_unresolvable_rollback(self):
+        with ScratchRepo() as repo:
+            commit = repo.commit("rollback unknown", trailers={"Workflow-Rollback": "2.9"})
+            event = ws.find_latest_activation_event(repo.root)
+            self.assertEqual(event, ("rollback", None, commit))
+
+
+class TestTwoStagePlanReviewVersionsInheritance(unittest.TestCase):
+    """`TWO_STAGE_PLAN_REVIEW_VERSIONS = {"2.1", "2.2"}` replaces the exact
+    `governing_workflow_version == "2.1"` literal at every plan-review gate
+    site -- parametrized over ("1", "2.1", "2.2"), pinning that "1" and
+    "2.1" stay byte-unchanged."""
+
+    def test_publish_plan_revision_target_phase_per_version(self):
+        """workflow-2.6.0: `"1"` is unchanged; a two-stage item's publish is
+        mirror-only, so its phase stays `PLANNING` (the bind writes
+        `AWAITING_LOCAL_PLAN_REVIEW`)."""
+        expected = {
+            "1": "AWAITING_EXTERNAL_PLAN_REVIEW",
+            "2.1": "PLANNING",
+            "2.2": "PLANNING",
+        }
+        for version, target_phase in expected.items():
+            with self.subTest(version=version):
+                wi = _base_work_item(governing_workflow_version=version, phase="PLANNING", plan_revision=1)
+                new_state = ws.publish_plan_revision(_base_state(wi=wi), "wi", 2, "t1", review_content_id="a" * 64)
+                self.assertEqual(new_state["work_items"]["wi"]["phase"], target_phase)
+
+    def test_publish_plan_revision_rejects_unsupported_version(self):
+        wi = _base_work_item(governing_workflow_version="3", phase="PLANNING", plan_revision=1)
+        with self.assertRaises(ws.UnsupportedGoverningVersionError):
+            ws.publish_plan_revision(_base_state(wi=wi), "wi", 2, "t1")
+
+    def test_plan_approval_gate_reachable_per_version(self):
+        # "1": the shared rule alone, no ledger involved.
+        self.assertTrue(ws.plan_approval_gate_reachable(
+            latest_round_status="APPROVE", governing_workflow_version="1",
+            plan_review_stages=None, current_review_content_id="c1",
+        ))
+        # "2.1"/"2.2": both stages must be recorded APPROVE against the
+        # current review_content_id.
+        stages = {
+            "review_content_id": "c1",
+            ws.LOCAL_MODEL_PLAN_REVIEW: {"bundle_id": "b", "verdict": "APPROVE", "round": 1, "completed_at": "t"},
+            ws.MANUAL_EXTERNAL_PLAN_REVIEW: {"bundle_id": "b", "verdict": "APPROVE", "round": 1, "completed_at": "t"},
+        }
+        for version in ("2.1", "2.2"):
+            with self.subTest(version=version):
+                self.assertTrue(ws.plan_approval_gate_reachable(
+                    latest_round_status="APPROVE", governing_workflow_version=version,
+                    plan_review_stages=stages, current_review_content_id="c1",
+                ))
+                self.assertFalse(ws.plan_approval_gate_reachable(
+                    latest_round_status="APPROVE", governing_workflow_version=version,
+                    plan_review_stages=None, current_review_content_id="c1",
+                ))
+
+    def test_validate_local_plan_review_preconditions_accepts_2_2(self):
+        wi = _base_work_item(governing_workflow_version="2.2", phase="AWAITING_LOCAL_PLAN_REVIEW")
+        ws.validate_local_plan_review_preconditions(wi)  # must not raise
+
+    def test_record_local_plan_review_rejects_wrong_version_1(self):
+        wi = _base_work_item(governing_workflow_version="1", phase="AWAITING_LOCAL_PLAN_REVIEW")
+        with self.assertRaises(ws.WrongGoverningVersionForPlanReviewStageError):
+            ws.record_local_plan_review(
+                _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b1",
+                review_content_id="c1", round=1, now="t1",
+            )
+
+    def test_record_local_plan_review_accepts_2_2(self):
+        wi = _base_work_item(governing_workflow_version="2.2", phase="AWAITING_LOCAL_PLAN_REVIEW")
+        new_state = ws.record_local_plan_review(
+            _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b1",
+            review_content_id="c1", round=1, now="t1",
+        )
+        self.assertEqual(new_state["work_items"]["wi"]["phase"], "AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW")
+
+    def test_validate_plan_review_stages_per_version(self):
+        stages = {
+            "review_content_id": "c1",
+            ws.LOCAL_MODEL_PLAN_REVIEW: {"bundle_id": "b", "verdict": "APPROVE", "round": 1, "completed_at": "t"},
+            ws.MANUAL_EXTERNAL_PLAN_REVIEW: None,
+        }
+        for version in ("2.1", "2.2"):
+            with self.subTest(version=version):
+                wi = _base_work_item(governing_workflow_version=version, plan_review_stages=stages)
+                ws.validate_state(_base_state(wi=wi))  # must not raise
+        wi = _base_work_item(governing_workflow_version="1", plan_review_stages=stages)
+        with self.assertRaises(ws.PlanReviewStagesInvalidForVersionError):
+            ws.validate_state(_base_state(wi=wi))
+
+    def test_transition_to_awaiting_local_plan_review_works_for_2_2(self):
+        """workflow-2.6.0: the retired writer refuses for `"2.2"` exactly as
+        for `"2.1"`; the bind is the `"2.2"` writer of the same edge."""
+        wi = _base_work_item(governing_workflow_version="2.2", phase="REVISING_PLAN", plan_revision=2,
+                             plan_review_binding={
+                                 "status": "PUBLISHED", "at": "t0", "bound": None,
+                                 "consumed": {"review_content_id": "b" * 64, "plan_revision": 1, "legacy": False},
+                                 "published": {"review_content_id": "a" * 64, "plan_revision": 2},
+                             })
+        with self.assertRaises(ws.PlanReviewWriterRetiredError):
+            ws.transition_to_awaiting_local_plan_review(_base_state(wi=wi), "wi", "t1")
+        new_state = ws.bind_plan_review_bundle(_base_state(wi=wi), "wi", binding={
+            "review_content_id": "a" * 64, "bundle_id": "c" * 64, "plan_revision": 2,
+        }, now="t1")
+        self.assertEqual(new_state["work_items"]["wi"]["phase"], "AWAITING_LOCAL_PLAN_REVIEW")
+
+
+class TestImplementationReviewStagesLedgerPlumbing(unittest.TestCase):
+    """`implementation_review_stages` normalize/read helpers, mirroring
+    `normalize_plan_review_stages`/`_validate_plan_review_stages`."""
+
+    def test_normalize_passes_through_canonical_keys_and_review_content_id(self):
+        stages = {
+            "review_content_id": "c1",
+            ws.LOCAL_MODEL_IMPLEMENTATION_REVIEW: {"verdict": "APPROVE"},
+            ws.MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW: None,
+        }
+        self.assertEqual(ws.normalize_implementation_review_stages(stages), stages)
+
+    def test_normalize_key_helper_is_the_identity_mapping_today(self):
+        """No legacy lowercase variant has ever existed for this ledger
+        (unlike `plan_review_stages`), so `_normalize_implementation_
+        review_stage_key` is the identity function today -- and therefore
+        `AmbiguousImplementationReviewStageKeyError` is unreachable through
+        any two distinct raw keys a real caller could ever pass (two
+        distinct dict keys can never both equal the same canonical name
+        while the mapping is the identity). This test pins that identity
+        mapping directly, since a genuine-conflict fixture cannot be
+        constructed without it changing."""
+        for key in (ws.LOCAL_MODEL_IMPLEMENTATION_REVIEW, ws.MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW, "review_content_id"):
+            self.assertEqual(ws._normalize_implementation_review_stage_key(key), key)
+
+    def test_normalize_never_raises_on_ordinary_canonical_input(self):
+        stages = {ws.LOCAL_MODEL_IMPLEMENTATION_REVIEW: {"v": 1}, ws.MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW: {"v": 2}}
+        ws.normalize_implementation_review_stages(stages)  # must not raise
+
+    def test_validate_implementation_review_stages_none_is_fine_for_any_version(self):
+        for version in ("1", "2.1", "2.2"):
+            wi = _base_work_item(governing_workflow_version=version)
+            wi["implementation_review_stages"] = None
+            ws.validate_state(_base_state(wi=wi))  # must not raise
+
+    def test_validate_implementation_review_stages_wrong_version_rejected(self):
+        for version in ("1", "2.1"):
+            with self.subTest(version=version):
+                wi = _base_work_item(governing_workflow_version=version)
+                wi["implementation_review_stages"] = {
+                    "review_content_id": "c1",
+                    ws.LOCAL_MODEL_IMPLEMENTATION_REVIEW: None,
+                    ws.MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW: None,
+                }
+                with self.assertRaises(ws.ImplementationReviewStagesInvalidForVersionError):
+                    ws.validate_state(_base_state(wi=wi))
+
+    def test_validate_implementation_review_stages_manual_without_local_rejected(self):
+        wi = _base_work_item(governing_workflow_version="2.2")
+        wi["implementation_review_stages"] = {
+            "review_content_id": "c1",
+            ws.LOCAL_MODEL_IMPLEMENTATION_REVIEW: None,
+            ws.MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW: {"bundle_id": "b", "verdict": "APPROVE", "round": 1, "completed_at": "t"},
+        }
+        with self.assertRaises(ws.ManualImplementationStageWithoutLocalStageError):
+            ws.validate_state(_base_state(wi=wi))
+
+    def test_validate_implementation_review_stages_non_approve_verdict_rejected(self):
+        wi = _base_work_item(governing_workflow_version="2.2")
+        wi["implementation_review_stages"] = {
+            "review_content_id": "c1",
+            ws.LOCAL_MODEL_IMPLEMENTATION_REVIEW: {"bundle_id": "b", "verdict": "REVISE", "round": 1, "completed_at": "t"},
+            ws.MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW: None,
+        }
+        with self.assertRaises(ws.StageVerdictNotApproveError):
+            ws.validate_state(_base_state(wi=wi))
+
+    def test_validate_implementation_review_stages_both_approve_accepted(self):
+        wi = _base_work_item(governing_workflow_version="2.2")
+        wi["implementation_review_stages"] = {
+            "review_content_id": "c1",
+            ws.LOCAL_MODEL_IMPLEMENTATION_REVIEW: {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+            ws.MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW: {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"},
+        }
+        ws.validate_state(_base_state(wi=wi))  # must not raise
+
+
+class TestActivatingDoesNotMutateExistingWorkItems(unittest.TestCase):
+    """Regression (MANUAL_EXTERNAL_PLAN_REVIEW round 1, finding I1's own
+    required test): activating "2.2" changes only `default_work_item`'s
+    own output for a *subsequently* created work item or remediation
+    child, and mutates no already-existing `work_items[...]` entry's
+    `governing_workflow_version`."""
+
+    def test_route_work_item_leaves_existing_entries_governing_version_untouched(self):
+        existing = _base_work_item(governing_workflow_version="2.1", phase="IMPLEMENTING")
+        state = _base_state(existing=existing)
+        config_2_2_default = {
+            "schema_version": ws.SCHEMA_VERSION,
+            "default_workflow_version": "2.2",
+            "supported_versions": ["1", "2.1", "2.2"],
+        }
+        new_state = ws.route_work_item(
+            state, config_2_2_default, work_item_id="fresh", work_item_type="process",
+            work_item_kind="process", plan_path="p", registry_path="r",
+            plan_revision=1, now="t1",
+        )
+        # The pre-existing item's own governing version is untouched.
+        self.assertEqual(new_state["work_items"]["existing"]["governing_workflow_version"], "2.1")
+        # A genuinely new item picks up the repository's current default.
+        self.assertEqual(new_state["work_items"]["fresh"]["governing_workflow_version"], "2.2")
+
+    def test_route_work_item_resume_branch_also_leaves_governing_version_untouched(self):
+        # workflow-2.6.0: the resume branch runs at a plan-stage phase.
+        existing = _base_work_item(governing_workflow_version="2.1", phase="REVISING_PLAN", plan_revision=1)
+        state = _base_state(existing=existing)
+        config_2_2_default = {
+            "schema_version": ws.SCHEMA_VERSION,
+            "default_workflow_version": "2.2",
+            "supported_versions": ["1", "2.1", "2.2"],
+        }
+        new_state = ws.route_work_item(
+            state, config_2_2_default, work_item_id="existing", work_item_type="process",
+            work_item_kind="process", plan_path="p", registry_path="r",
+            plan_revision=2, now="t1",
+        )
+        self.assertEqual(new_state["work_items"]["existing"]["governing_workflow_version"], "2.1")
+
+
+# ---------------------------------------------------------------------------
+# workflow-2.5.0 CP3: D-Implementation-Review-Stages' own review-stage
+# writers and gate widening, mirroring the plan-review-stage suite's
+# coverage shape (`TestRecordLocalPlanReview`/`TestRecordManualPlanReview`/
+# `TestTwoStagePlanReviewVersionsInheritance`) exactly, substituted for the
+# implementation stage.
+# ---------------------------------------------------------------------------
+
+
+def _v22_work_item(**overrides) -> dict:
+    defaults = {"governing_workflow_version": "2.2", "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW"}
+    defaults.update(overrides)
+    return _base_work_item(**defaults)
+
+
+class TestRecordLocalImplementationReview(unittest.TestCase):
+    def test_wrong_governing_version_rejected(self):
+        for version in ("1", "2.1"):
+            with self.subTest(version=version):
+                wi = _base_work_item(governing_workflow_version=version, phase="AWAITING_LOCAL_IMPLEMENTATION_REVIEW")
+                with self.assertRaises(ws.WrongGoverningVersionForImplementationReviewStageError):
+                    ws.record_local_implementation_review(
+                        _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b1",
+                        review_content_id="c1", round=1, now="t1",
+                    )
+
+    def test_wrong_phase_rejected(self):
+        wi = _v22_work_item(phase="AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW")
+        with self.assertRaises(ws.WrongPhaseForImplementationReviewStageError):
+            ws.record_local_implementation_review(
+                _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b1",
+                review_content_id="c1", round=1, now="t1",
+            )
+
+    def test_unknown_verdict_rejected(self):
+        wi = _v22_work_item()
+        with self.assertRaises(ws.UnknownImplementationReviewVerdictError):
+            ws.record_local_implementation_review(
+                _base_state(wi=wi), "wi", verdict="MAYBE", bundle_id="b1",
+                review_content_id="c1", round=1, now="t1",
+            )
+
+    def test_approve_records_ledger_and_transitions_to_manual_stage(self):
+        wi = _v22_work_item(state_revision=1)
+        new_state = ws.record_local_implementation_review(
+            _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b1",
+            review_content_id="c1", round=1, now="t1",
+        )
+        item = new_state["work_items"]["wi"]
+        self.assertEqual(item["phase"], "AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW")
+        self.assertEqual(item["implementation_review_stages"], {
+            "review_content_id": "c1",
+            "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+            "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": None,
+        })
+        self.assertEqual(item["state_revision"], 2)
+
+    def test_revise_transitions_directly_to_applying_review_feedback_with_no_ledger_write(self):
+        """Unlike the plan side's REVISING_PLAN: this writer itself sets
+        APPLYING_REVIEW_FEEDBACK directly, so /apply-implementation-review's
+        step 0 finds the phase already set and skips its own
+        enter_applying_review_feedback call under the phase-conditional
+        guard -- not because of a "1"/"2.1" vs "2.2" version branch; there
+        is no version branch at step 0 any more."""
+        wi = _v22_work_item(state_revision=1, implementation_review_stages=None)
+        new_state = ws.record_local_implementation_review(
+            _base_state(wi=wi), "wi", verdict="REVISE", bundle_id="b1",
+            review_content_id="c1", round=1, now="t1",
+        )
+        item = new_state["work_items"]["wi"]
+        self.assertEqual(item["phase"], "APPLYING_REVIEW_FEEDBACK")
+        self.assertIsNone(item["implementation_review_stages"])
+
+    def test_block_is_a_true_no_op(self):
+        wi = _v22_work_item(state_revision=1, implementation_review_stages=None)
+        state = _base_state(wi=wi)
+        new_state = ws.record_local_implementation_review(
+            state, "wi", verdict="BLOCK", bundle_id="b1",
+            review_content_id="c1", round=1, now="t1",
+        )
+        self.assertEqual(new_state, state)
+        self.assertEqual(new_state["work_items"]["wi"]["phase"], "AWAITING_LOCAL_IMPLEMENTATION_REVIEW")
+
+
+class TestRecordManualImplementationReview(unittest.TestCase):
+    def _local_approved_wi(self, **overrides):
+        defaults = {
+            "phase": "AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW",
+            "implementation_review_stages": {
+                "review_content_id": "c1",
+                "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+                "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": None,
+            },
+        }
+        defaults.update(overrides)
+        return _v22_work_item(**defaults)
+
+    def test_wrong_governing_version_rejected(self):
+        wi = self._local_approved_wi(governing_workflow_version="2.1")
+        with self.assertRaises(ws.WrongGoverningVersionForImplementationReviewStageError):
+            ws.record_manual_implementation_review(
+                _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
+                current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW",
+                feedback_review_content_id="c1",
+            )
+
+    def test_wrong_phase_rejected(self):
+        wi = self._local_approved_wi(phase="APPLYING_REVIEW_FEEDBACK")
+        with self.assertRaises(ws.WrongPhaseForImplementationReviewStageError):
+            ws.record_manual_implementation_review(
+                _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
+                current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW",
+                feedback_review_content_id="c1",
+            )
+
+    def test_wrong_role_rejected(self):
+        wi = self._local_approved_wi()
+        with self.assertRaises(ws.WrongReviewerRoleError):
+            ws.record_manual_implementation_review(
+                _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
+                current_review_content_id="c1", feedback_role="LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+                feedback_review_content_id="c1",
+            )
+
+    def test_stale_review_content_id_is_hard_blocked(self):
+        wi = self._local_approved_wi()
+        with self.assertRaises(ws.StaleReviewContentIdError):
+            ws.record_manual_implementation_review(
+                _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
+                current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW",
+                feedback_review_content_id="stale",
+            )
+
+    def test_missing_local_approval_rejected(self):
+        wi = self._local_approved_wi(implementation_review_stages={
+            "review_content_id": "c1",
+            "LOCAL_MODEL_IMPLEMENTATION_REVIEW": None,
+            "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": None,
+        })
+        with self.assertRaises(ws.MissingLocalApprovalForManualImplementationStageError):
+            ws.record_manual_implementation_review(
+                _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
+                current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW",
+                feedback_review_content_id="c1",
+            )
+
+    def test_duplicate_ingestion_rejected(self):
+        wi = self._local_approved_wi(implementation_review_stages={
+            "review_content_id": "c1",
+            "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE", "round": 1, "completed_at": "t1"},
+            "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": {"bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2"},
+        })
+        with self.assertRaises(ws.DuplicateManualImplementationStageIngestionError):
+            ws.record_manual_implementation_review(
+                _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b3", round=2, now="t3",
+                current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW",
+                feedback_review_content_id="c1",
+            )
+
+    def test_approve_completes_ledger_and_transitions_to_terminal_phase(self):
+        """Unlike the plan side's manual-APPROVE exit (a distinct
+        AWAITING_PLAN_APPROVAL gate phase): the implementation side reuses
+        the pre-existing AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW name as
+        its own terminal "ready for approval" phase."""
+        wi = self._local_approved_wi(state_revision=1)
+        new_state = ws.record_manual_implementation_review(
+            _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t2",
+            current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW",
+            feedback_review_content_id="c1",
+        )
+        item = new_state["work_items"]["wi"]
+        self.assertEqual(item["phase"], "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW")
+        self.assertEqual(item["implementation_review_stages"]["MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW"], {
+            "bundle_id": "b2", "verdict": "APPROVE", "round": 1, "completed_at": "t2",
+        })
+        self.assertEqual(item["state_revision"], 2)
+        self.assertTrue(ws.technical_approval_gate_reachable(
+            latest_round_status="APPROVE", protected_path_dirty=False,
+            head_matches_reviewed_implementation_head=True,
+            governing_workflow_version="2.2",
+            implementation_review_stages=item["implementation_review_stages"],
+            current_review_content_id="c1",
+        ))
+
+    def test_approve_records_actual_bundle_id_even_when_mismatched(self):
+        wi = self._local_approved_wi()
+        warning = ws.check_manual_stage_bundle_id_advisory(
+            feedback_bundle_id="stale-wrapper-bundle", current_bundle_id="fresh-wrapper-bundle",
+        )
+        self.assertIsNotNone(warning)
+        new_state = ws.record_manual_implementation_review(
+            _base_state(wi=wi), "wi", verdict="APPROVE", bundle_id="stale-wrapper-bundle", round=1, now="t2",
+            current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW",
+            feedback_review_content_id="c1",
+        )
+        self.assertEqual(
+            new_state["work_items"]["wi"]["implementation_review_stages"]["MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW"]["bundle_id"],
+            "stale-wrapper-bundle",
+        )
+
+    def test_revise_transitions_directly_to_applying_review_feedback_with_no_ledger_write(self):
+        wi = self._local_approved_wi(state_revision=1)
+        new_state = ws.record_manual_implementation_review(
+            _base_state(wi=wi), "wi", verdict="REVISE", bundle_id="b2", round=1, now="t2",
+            current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW",
+            feedback_review_content_id="c1",
+        )
+        item = new_state["work_items"]["wi"]
+        self.assertEqual(item["phase"], "APPLYING_REVIEW_FEEDBACK")
+        self.assertIsNone(item["implementation_review_stages"]["MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW"])
+
+    def test_block_is_a_true_no_op(self):
+        wi = self._local_approved_wi(state_revision=1)
+        state = _base_state(wi=wi)
+        new_state = ws.record_manual_implementation_review(
+            state, "wi", verdict="BLOCK", bundle_id="b2", round=1, now="t2",
+            current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW",
+            feedback_review_content_id="c1",
+        )
+        self.assertEqual(new_state, state)
+        self.assertEqual(new_state["work_items"]["wi"]["phase"], "AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW")
+
+
+# ---------------------------------------------------------------------------
+# workflow-2.5.0 CP5: the §2.3 convergence/token-efficiency disposable-repo
+# fixture -- REQ-4 (no bundle regeneration between the local-approve and
+# manual-external stages) and REQ-5 (a single reviewer pass can no longer,
+# by itself, exhaust a manual-external round on an issue the local pass
+# would have caught for free), demonstrated end to end against a real Git
+# history rather than asserted only structurally.
+# ---------------------------------------------------------------------------
+
+
+class TestLocalStageCatchesPlantedDefectWithoutManualRound(unittest.TestCase):
+    """§2.3 point 4's disposable-repo fixture: a realistic planted defect,
+    caught by the `LOCAL_MODEL_IMPLEMENTATION_REVIEW` stage, never reaches
+    -- and never opens or consumes a round of -- the manual-external
+    stage."""
+
+    def test_planted_defect_is_caught_locally_without_opening_a_manual_round(self):
+        with ScratchRepo() as repo:
+            # The disposable repo's own planted defect: a commit standing in
+            # for an implementation checkpoint that a careful reviewer
+            # should catch (e.g. a missing test, or a layering violation) --
+            # the fixture only needs the review-stage state machine's own
+            # reaction to a REVISE verdict, not a real static-analysis
+            # finding.
+            repo.commit("implement checkpoint with a planted defect", filename="src/planted_defect.py")
+            wi = _v22_work_item(base_commit=repo.base, implementation_review_stages={
+                "review_content_id": "c-defect",
+                "LOCAL_MODEL_IMPLEMENTATION_REVIEW": None,
+                "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": None,
+            })
+            state = _base_state(wi=wi)
+
+            # LOCAL_MODEL_IMPLEMENTATION_REVIEW catches the planted defect on
+            # its very first round.
+            new_state = ws.record_local_implementation_review(
+                state, "wi", verdict="REVISE", bundle_id="b-defect",
+                review_content_id="c-defect", round=1, now="t1",
+            )
+            item = new_state["work_items"]["wi"]
+
+            # The defect is routed straight back for a fix -- it never
+            # reached, and never consumed a round of, the manual-external
+            # stage. This is REQ-5's convergence claim demonstrated, not
+            # merely the structural argument that the split makes it
+            # possible.
+            self.assertEqual(item["phase"], "APPLYING_REVIEW_FEEDBACK")
+            self.assertNotEqual(item["phase"], "AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW")
+            self.assertIsNone(item["implementation_review_stages"]["MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW"])
+
+
+class TestNoBundleRegenerationBetweenImplementationReviewStages(unittest.TestCase):
+    """REQ-4: the same bundle, `bundle_id`, and `review_content_id` the
+    local stage approved is what the manual-external stage is fed -- mirrors
+    the plan side, which already has this property structurally
+    (`D-Plan-Review-Stages`). Demonstrated two ways against the same
+    disposable-repo fixture: the ordinary carry-through succeeds unchanged,
+    and a simulated regeneration between the two stages is hard-blocked
+    rather than silently accepted under the stale local approval."""
+
+    def _locally_approved_wi(self, repo, **overrides):
+        defaults = {
+            "base_commit": repo.base,
+            "phase": "AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW",
+            "implementation_review_stages": {
+                "review_content_id": "c-original",
+                "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
+                    "bundle_id": "b-original", "verdict": "APPROVE", "round": 1, "completed_at": "t1",
+                },
+                "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": None,
+            },
+        }
+        defaults.update(overrides)
+        return _v22_work_item(**defaults)
+
+    def test_ordinary_carry_through_ingests_the_same_bundle_unchanged(self):
+        with ScratchRepo() as repo:
+            repo.commit("implement checkpoint", filename="src/feature.py")
+            state = _base_state(wi=self._locally_approved_wi(repo))
+            new_state = ws.record_manual_implementation_review(
+                state, "wi", verdict="APPROVE", bundle_id="b-original", round=1, now="t2",
+                current_review_content_id="c-original",
+                feedback_role="MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW",
+                feedback_review_content_id="c-original",
+            )
+            self.assertEqual(new_state["work_items"]["wi"]["phase"], "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW")
+
+    def test_regeneration_between_stages_is_hard_blocked_not_silently_ingested(self):
+        with ScratchRepo() as repo:
+            repo.commit("implement checkpoint", filename="src/feature.py")
+            state = _base_state(wi=self._locally_approved_wi(repo))
+
+            # A bundle-refresh step run between the two stages (exactly the
+            # accident §2.3 point 1 warns is "easy to accidentally regress
+            # by adding... where none belongs") changes the protected
+            # content the manual stage would see, so its own live
+            # review_content_id no longer matches what
+            # LOCAL_MODEL_IMPLEMENTATION_REVIEW actually approved. The
+            # reviewer's own feedback still carries the value they were
+            # shown -- the now-stale one -- which is exactly what makes this
+            # a hard block rather than a silent re-approval of different
+            # content under the old ledger entry.
+            repo.commit("accidental bundle regeneration", filename="src/feature.py")
+            with self.assertRaises(ws.StaleReviewContentIdError):
+                ws.record_manual_implementation_review(
+                    state, "wi", verdict="APPROVE", bundle_id="b-regenerated", round=1, now="t2",
+                    current_review_content_id="c-regenerated",
+                    feedback_role="MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW",
+                    feedback_review_content_id="c-original",
+                )
+            # No regeneration-tolerant fallback exists: the work item is left
+            # exactly where it was, still awaiting a genuine, matching manual
+            # round.
+            self.assertEqual(state["work_items"]["wi"]["phase"], "AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW")
+            self.assertIsNone(
+                state["work_items"]["wi"]["implementation_review_stages"]["MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW"]
+            )
+
+    def test_recomputed_fresh_regeneration_is_hard_blocked_via_the_ledger_check(self):
+        """Missing-tests item (O1, round 4): the other half of the
+        no-regeneration rule -- the operator's own recomputed-fresh
+        `review_content_id` can agree with the reviewer's feedback-carried
+        one (no `StaleReviewContentIdError`) while *both* disagree with the
+        ledger's own recorded `review_content_id`, because the bundle
+        regenerated after `LOCAL_MODEL_IMPLEMENTATION_REVIEW`'s own
+        approval and the reviewer was handed -- and reviewed against -- the
+        new content throughout. This falls through to the restated-invariant
+        check instead, raising `MissingLocalApprovalForManualImplementation
+        StageError`, not `StaleReviewContentIdError` -- the exception
+        `docs/ai-workflow/REVIEW_PROTOCOL.md`'s no-regeneration section now
+        names for this half."""
+        with ScratchRepo() as repo:
+            repo.commit("implement checkpoint", filename="src/feature.py")
+            state = _base_state(wi=self._locally_approved_wi(repo))
+            with self.assertRaises(ws.MissingLocalApprovalForManualImplementationStageError):
+                ws.record_manual_implementation_review(
+                    state, "wi", verdict="APPROVE", bundle_id="b-regenerated", round=1, now="t2",
+                    current_review_content_id="c-regenerated",
+                    feedback_role="MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW",
+                    feedback_review_content_id="c-regenerated",
+                )
+
+
+class TestBundleGenerationTargetPhaseResolver(unittest.TestCase):
+    """`bundle_generation_target_phase`/`bundle_generation_recovered_role_
+    legal_committed_phases` -- both version-dependent resolvers CP3
+    introduces, tested directly (independent of `record_bundle_generation`/
+    `validate_bundle_generation_record_commit`, which merely call them)."""
+
+    def test_target_phase_per_version_and_stage(self):
+        for version in ("1", "2.1", None):
+            for stage in ("implementation", "post-fix"):
+                with self.subTest(version=version, stage=stage):
+                    self.assertEqual(
+                        ws.bundle_generation_target_phase(stage, version),
+                        "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+                    )
+        for stage in ("implementation", "post-fix"):
+            with self.subTest(stage=stage):
+                self.assertEqual(
+                    ws.bundle_generation_target_phase(stage, "2.2"),
+                    "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+                )
+
+    def test_target_phase_rejects_unknown_stage(self):
+        with self.assertRaises(ws.InvalidBundleGenerationStageError):
+            ws.bundle_generation_target_phase("plan", "2.2")
+
+    def test_recovered_role_legal_committed_phases_per_version(self):
+        for version in ("1", "2.1", None):
+            with self.subTest(version=version):
+                self.assertEqual(
+                    ws.bundle_generation_recovered_role_legal_committed_phases(version),
+                    frozenset({"AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW"}),
+                )
+        self.assertEqual(
+            ws.bundle_generation_recovered_role_legal_committed_phases("2.2"),
+            frozenset({
+                "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+                "AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW",
+                "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+            }),
+        )
+
+    def test_recovered_role_legal_committed_phases_is_a_subset_of_legal_source_phases(self):
+        """The stated invariant: for every version, the recovered-role
+        committed-phase set is a subset of the additively-widened
+        RECOVERED_BUNDLE_GENERATION_RECORD_LEGAL_SOURCE_PHASES."""
+        for version in ("1", "2.1", "2.2", None):
+            with self.subTest(version=version):
+                self.assertTrue(
+                    ws.bundle_generation_recovered_role_legal_committed_phases(version)
+                    <= ws.RECOVERED_BUNDLE_GENERATION_RECORD_LEGAL_SOURCE_PHASES,
+                )
+
+
+class TestTechnicalApprovalGateReachableImplementationReviewWidening(unittest.TestCase):
+    """workflow-2.5.0 CP3: `technical_approval_gate_reachable` widened
+    exactly like `plan_approval_gate_reachable` already is, mirroring
+    `TestTwoStagePlanReviewVersionsInheritance.test_plan_approval_gate_
+    reachable_per_version`."""
+
+    def _reachable(self, **overrides):
+        kwargs = dict(
+            latest_round_status="APPROVE", protected_path_dirty=False,
+            head_matches_reviewed_implementation_head=True,
+            # round 7's I1: these three are required keyword-only
+            # parameters now (no longer defaulted to None inside the
+            # function itself) -- this helper still supplies its own
+            # `None` defaults so most test cases below only need to
+            # override the ones they care about, but every actual call
+            # this helper makes states all three explicitly.
+            governing_workflow_version=None, implementation_review_stages=None,
+            current_review_content_id=None,
+        )
+        kwargs.update(overrides)
+        return ws.technical_approval_gate_reachable(**kwargs)
+
+    def test_absent_and_1_and_2_1_ignore_the_ledger(self):
+        for version in (None, "1", "2.1"):
+            with self.subTest(version=version):
+                self.assertTrue(self._reachable(
+                    governing_workflow_version=version, implementation_review_stages=None,
+                ))
+
+    def test_2_2_requires_both_stages_approved_against_current_content_id(self):
+        stages = {
+            "review_content_id": "c1",
+            ws.LOCAL_MODEL_IMPLEMENTATION_REVIEW: {"bundle_id": "b", "verdict": "APPROVE", "round": 1, "completed_at": "t"},
+            ws.MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW: {"bundle_id": "b", "verdict": "APPROVE", "round": 1, "completed_at": "t"},
+        }
+        self.assertTrue(self._reachable(
+            governing_workflow_version="2.2", implementation_review_stages=stages,
+            current_review_content_id="c1",
+        ))
+        self.assertFalse(self._reachable(
+            governing_workflow_version="2.2", implementation_review_stages=None,
+            current_review_content_id="c1",
+        ))
+        self.assertFalse(self._reachable(
+            governing_workflow_version="2.2", implementation_review_stages=stages,
+            current_review_content_id="stale",
+        ))
+
+    def test_2_2_still_honors_dirty_path_head_mismatch_and_pinned_block(self):
+        stages = {
+            "review_content_id": "c1",
+            ws.LOCAL_MODEL_IMPLEMENTATION_REVIEW: {"bundle_id": "b", "verdict": "APPROVE", "round": 1, "completed_at": "t"},
+            ws.MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW: {"bundle_id": "b", "verdict": "APPROVE", "round": 1, "completed_at": "t"},
+        }
+        self.assertFalse(self._reachable(
+            protected_path_dirty=True, governing_workflow_version="2.2",
+            implementation_review_stages=stages, current_review_content_id="c1",
+        ))
+        self.assertFalse(self._reachable(
+            head_matches_reviewed_implementation_head=False, governing_workflow_version="2.2",
+            implementation_review_stages=stages, current_review_content_id="c1",
+        ))
+        self.assertFalse(self._reachable(
+            pinned_block=True, governing_workflow_version="2.2",
+            implementation_review_stages=stages, current_review_content_id="c1",
+        ))
+
+    def test_explicit_none_for_the_three_new_parameters_matches_pre_cp3(self):
+        """Passing `None` explicitly for all three new parameters (a `"1"`/
+        `"2.1"` item's actual call shape) behaves exactly like pre-CP3
+        `technical_approval_gate_reachable`, which never had these
+        parameters at all."""
+        self.assertTrue(self._reachable())
+        self.assertFalse(self._reachable(protected_path_dirty=True))
+
+    def test_omitting_governing_workflow_version_now_raises_instead_of_silently_opening_the_gate(self):
+        """workflow-2.5.0 REVISE round 7's own `I1`: before this round, a
+        caller that omitted `governing_workflow_version` (its old default
+        was `None`) fell through the `!= "2.2"` branch and returned `True`
+        with the `"2.2"` ledger never consulted -- fail *open*, reachable
+        in practice by a caller that correctly passed
+        `implementation_review_stages`/`current_review_content_id` for a
+        real `"2.2"` item but simply forgot the version kwarg. Removing the
+        default turns that omission into an immediate `TypeError`, for
+        every caller, not merely the one this repository ships
+        (`approve-review.md`, corrected separately this round)."""
+        with self.assertRaises(TypeError):
+            ws.technical_approval_gate_reachable(
+                latest_round_status="APPROVE", protected_path_dirty=False,
+                head_matches_reviewed_implementation_head=True,
+                implementation_review_stages=None, current_review_content_id="c1",
+            )
+
+    def test_omitting_implementation_review_stages_or_review_content_id_also_raises(self):
+        """The same structural guarantee for the other two: `plan_approval_
+        gate_reachable`'s own three widening parameters are all required,
+        and this function now mirrors that exactly, not just for the one
+        parameter round 7's reproduction happened to omit."""
+        with self.assertRaises(TypeError):
+            ws.technical_approval_gate_reachable(
+                latest_round_status="APPROVE", protected_path_dirty=False,
+                head_matches_reviewed_implementation_head=True,
+                governing_workflow_version="2.2", current_review_content_id="c1",
+            )
+        with self.assertRaises(TypeError):
+            ws.technical_approval_gate_reachable(
+                latest_round_status="APPROVE", protected_path_dirty=False,
+                head_matches_reviewed_implementation_head=True,
+                governing_workflow_version="2.2", implementation_review_stages=None,
+            )
+
+    def test_a_22_call_that_forgets_only_the_version_kwarg_no_longer_silently_approves(self):
+        """Round 7's own reproduction, reasserted directly: a call for a
+        real `"2.2"` item's ledger state that passes `implementation_review_
+        stages`/`current_review_content_id` correctly but omits
+        `governing_workflow_version` must never again return `True` --
+        before this fix it did, with the ledger below plainly incomplete
+        (no `MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW` entry at all)."""
+        incomplete_stages = {
+            "review_content_id": "c1",
+            ws.LOCAL_MODEL_IMPLEMENTATION_REVIEW: {
+                "bundle_id": "b", "verdict": "APPROVE", "round": 1, "completed_at": "t",
+            },
+        }
+        with self.assertRaises(TypeError):
+            ws.technical_approval_gate_reachable(
+                latest_round_status="APPROVE", protected_path_dirty=False,
+                head_matches_reviewed_implementation_head=True,
+                implementation_review_stages=incomplete_stages,
+                current_review_content_id="c1",
+            )
+
+
+class TestRecordBundleGenerationImplementationReviewTargetPhase(unittest.TestCase):
+    """`record_bundle_generation` reaches `AWAITING_LOCAL_IMPLEMENTATION_
+    REVIEW` for a "2.2" item, at both bundle-generation stages -- the
+    resolver's own sole call site."""
+
+    def test_first_implementation_stage_call_for_2_2_reaches_local_review(self):
+        state = _base_state(wi=_base_work_item(
+            governing_workflow_version="2.2", phase="SELF_REVIEWING_IMPLEMENTATION",
+            reviewed_implementation_head=None, implementation_revision=None,
+        ))
+        new_state = ws.record_bundle_generation(state, "wi", stage="implementation", head="abc123", now="t1")
+        wi = new_state["work_items"]["wi"]
+        self.assertEqual(wi["phase"], "AWAITING_LOCAL_IMPLEMENTATION_REVIEW")
+        self.assertEqual(wi["reviewed_implementation_head"], "abc123")
+        self.assertEqual(wi["implementation_revision"], 1)
+
+    def test_post_fix_call_for_2_2_reaches_local_review(self):
+        state = _base_state(wi=_base_work_item(
+            governing_workflow_version="2.2", phase="APPLYING_REVIEW_FEEDBACK",
+            reviewed_implementation_head="abc123", implementation_revision=1,
+        ))
+        new_state = ws.record_bundle_generation(state, "wi", stage="post-fix", head="def456", now="t2")
+        self.assertEqual(new_state["work_items"]["wi"]["phase"], "AWAITING_LOCAL_IMPLEMENTATION_REVIEW")
+
+    def test_post_fix_from_functional_review_bounded_fix_for_2_2_reaches_local_review(self):
+        """A "2.2" item's functional-review bounded fix re-enters both
+        implementation-review stages -- the resolver's target for
+        stage="post-fix" from AWAITING_FUNCTIONAL_REVIEW is identical to
+        every other post-fix source, never a special case."""
+        state = _base_state(wi=_base_work_item(
+            governing_workflow_version="2.2", phase="AWAITING_FUNCTIONAL_REVIEW",
+            reviewed_implementation_head="abc123", implementation_revision=1,
+            technical_approval={"status": "STALE"},
+        ))
+        new_state = ws.record_bundle_generation(state, "wi", stage="post-fix", head="def456", now="t2")
+        self.assertEqual(new_state["work_items"]["wi"]["phase"], "AWAITING_LOCAL_IMPLEMENTATION_REVIEW")
+
+    def test_1_and_2_1_are_unaffected(self):
+        for version in ("1", "2.1"):
+            with self.subTest(version=version):
+                state = _base_state(wi=_base_work_item(
+                    governing_workflow_version=version, phase="SELF_REVIEWING_IMPLEMENTATION",
+                ))
+                new_state = ws.record_bundle_generation(state, "wi", stage="implementation", head="abc123", now="t1")
+                self.assertEqual(
+                    new_state["work_items"]["wi"]["phase"], "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+                )
+
+
+class TestValidateBundleGenerationRecordCommitVersionDependence(unittest.TestCase):
+    """`validate_bundle_generation_record_commit`'s own version-dependent
+    target-phase check and recovered-role membership test, exercised
+    end-to-end against a real Git history -- mirroring
+    `TestRecordBundleGeneration.test_end_to_end_implementation_round_
+    reaches_external_review_durably`, substituted per version."""
+
+    def test_ordinary_role_2_2_end_to_end(self):
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, "wi")
+            _commit_state_only(repo, "wi", {
+                "work_item_id": "wi", "governing_workflow_version": "2.2",
+                "reviewed_implementation_head": None, "implementation_revision": 0,
+                "phase": "IMPLEMENTING", "state_revision": 0, "last_transition": "t0",
+            }, "seed base state")
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            pre_state = _base_state(wi={
+                "work_item_id": "wi", "governing_workflow_version": "2.2",
+                "reviewed_implementation_head": None, "implementation_revision": None,
+                "phase": "SELF_REVIEWING_IMPLEMENTATION", "state_revision": 0, "last_transition": "t0",
+            })
+            post_state = ws.record_bundle_generation(
+                pre_state, "wi", stage="implementation", head=p, now="t1",
+            )
+            wi_after = post_state["work_items"]["wi"]
+            self.assertEqual(wi_after["phase"], "AWAITING_LOCAL_IMPLEMENTATION_REVIEW")
+            s = _commit_state_only(
+                repo, "wi", wi_after, "record gen",
+                trailers=_record_trailers("wi", wi_after["implementation_revision"]),
+            )
+            ws.validate_bundle_generation_record_commit(repo.root, s, "wi")  # must not raise
+
+    def test_ordinary_role_2_2_wrong_target_phase_rejected(self):
+        """A commit that hand-writes AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW
+        (the "1"/"2.1" target) for a "2.2" item is malformed -- the ordinary
+        role's required target is version-dependent, not a bare literal."""
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, "wi")
+            _commit_state_only(repo, "wi", {
+                "work_item_id": "wi", "governing_workflow_version": "2.2",
+                "reviewed_implementation_head": None, "implementation_revision": 0,
+                "phase": "IMPLEMENTING", "state_revision": 0, "last_transition": "t0",
+            }, "seed base state")
+            wi_after = {
+                "work_item_id": "wi", "governing_workflow_version": "2.2",
+                "reviewed_implementation_head": "p" * 40, "implementation_revision": 1,
+                "phase": "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW", "state_revision": 1, "last_transition": "t1",
+            }
+            s = _commit_state_only(
+                repo, "wi", wi_after, "record gen", trailers=_record_trailers("wi", 1),
+            )
+            with self.assertRaises(ws.MalformedBundleGenerationRecordCommitError):
+                ws.validate_bundle_generation_record_commit(repo.root, s, "wi")
+
+    def test_recovered_role_2_2_accepted_from_each_of_the_three_legal_committed_phases(self):
+        """B1(b)/B2/round-4 finding B1: a recovered-role commit landing at
+        any of the three phases a "2.2" item can occupy between T and
+        approval passes -- the membership test, not a single-valued
+        equality."""
+        for target_phase in (
+            "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+            "AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW",
+            "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+        ):
+            with self.subTest(target_phase=target_phase):
+                with ScratchRepo() as repo:
+                    _write_test_artifacts_declaration(repo, "wi")
+                    base_wi = {
+                        "work_item_id": "wi", "governing_workflow_version": "2.2",
+                        "reviewed_implementation_head": "p" * 40, "implementation_revision": 1,
+                        "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+                        "state_revision": 1, "last_transition": "t1",
+                    }
+                    ordinary = _commit_state_only(
+                        repo, "wi", base_wi, "record gen", trailers=_record_trailers("wi", 1),
+                    )
+                    recovered_wi = dict(base_wi, phase=target_phase, state_revision=2, last_transition="t2")
+                    recovered = _commit_state_only(
+                        repo, "wi", recovered_wi, "recover gen",
+                        trailers=_record_trailers("wi", 1) | {"Workflow-Supersedes": ordinary},
+                    )
+                    ws.validate_bundle_generation_record_commit(repo.root, recovered, "wi")  # must not raise
+
+    def test_recovered_role_2_2_rejects_a_phase_outside_the_three_legal_ones(self):
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, "wi")
+            base_wi = {
+                "work_item_id": "wi", "governing_workflow_version": "2.2",
+                "reviewed_implementation_head": "p" * 40, "implementation_revision": 1,
+                "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+                "state_revision": 1, "last_transition": "t1",
+            }
+            ordinary = _commit_state_only(
+                repo, "wi", base_wi, "record gen", trailers=_record_trailers("wi", 1),
+            )
+            recovered_wi = dict(base_wi, phase="APPLYING_REVIEW_FEEDBACK", state_revision=2, last_transition="t2")
+            recovered = _commit_state_only(
+                repo, "wi", recovered_wi, "recover gen",
+                trailers=_record_trailers("wi", 1) | {"Workflow-Supersedes": ordinary},
+            )
+            with self.assertRaises(ws.MalformedBundleGenerationRecordCommitError):
+                ws.validate_bundle_generation_record_commit(repo.root, recovered, "wi")
+
+    def test_1_and_2_1_negative_case_unaffected_by_the_widened_sets(self):
+        """The widened "2.2" sets change no "1"/"2.1" recovery refusal:
+        a recovered-role commit at AWAITING_LOCAL_IMPLEMENTATION_REVIEW
+        (a "2.2"-only phase) is still rejected for a "1"/"2.1" item."""
+        for version in ("1", "2.1"):
+            with self.subTest(version=version):
+                with ScratchRepo() as repo:
+                    _write_test_artifacts_declaration(repo, "wi")
+                    base_wi = {
+                        "work_item_id": "wi", "governing_workflow_version": version,
+                        "reviewed_implementation_head": "p" * 40, "implementation_revision": 1,
+                        "phase": "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+                        "state_revision": 1, "last_transition": "t1",
+                    }
+                    ordinary = _commit_state_only(
+                        repo, "wi", base_wi, "record gen", trailers=_record_trailers("wi", 1),
+                    )
+                    recovered_wi = dict(
+                        base_wi, phase="AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+                        state_revision=2, last_transition="t2",
+                    )
+                    recovered = _commit_state_only(
+                        repo, "wi", recovered_wi, "recover gen",
+                        trailers=_record_trailers("wi", 1) | {"Workflow-Supersedes": ordinary},
+                    )
+                    with self.assertRaises(ws.MalformedBundleGenerationRecordCommitError):
+                        ws.validate_bundle_generation_record_commit(repo.root, recovered, "wi")
+
+
+class TestImplementationProvenanceRecoveryWidenedForV2_2(unittest.TestCase):
+    """`verify_implementation_provenance_recovery`/`apply_implementation_
+    provenance_recovery`'s own phase guard, widened to the three phases a
+    "2.2" item can occupy between T and approval."""
+
+    def test_apply_recovery_accepted_from_each_of_the_three_legal_phases(self):
+        for phase in (
+            "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+            "AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW",
+            "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+        ):
+            with self.subTest(phase=phase):
+                state = _base_state(wi={
+                    "work_item_id": "wi", "governing_workflow_version": "2.2", "phase": phase,
+                    "reviewed_implementation_head": "p" * 40, "implementation_revision": 1,
+                    "state_revision": 3, "last_transition": "t3",
+                })
+                new_state = ws.apply_implementation_provenance_recovery(state, "wi", now="t4")
+                work_item = new_state["work_items"]["wi"]
+                self.assertEqual(work_item["phase"], phase)
+                self.assertEqual(work_item["state_revision"], 4)
+
+    def test_apply_recovery_still_refuses_a_phase_outside_the_three(self):
+        state = _base_state(wi={
+            "work_item_id": "wi", "governing_workflow_version": "2.2",
+            "phase": "APPLYING_REVIEW_FEEDBACK",
+            "reviewed_implementation_head": "p" * 40, "implementation_revision": 1,
+            "state_revision": 3, "last_transition": "t3",
+        })
+        with self.assertRaises(ws.IllegalImplementationProvenanceRecoverySourcePhaseError):
+            ws.apply_implementation_provenance_recovery(state, "wi", now="t4")
+
+    def test_1_and_2_1_still_admit_only_the_single_terminal_phase(self):
+        for version in ("1", "2.1", None):
+            with self.subTest(version=version):
+                state = _base_state(wi={
+                    "work_item_id": "wi", "governing_workflow_version": version,
+                    "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+                    "reviewed_implementation_head": "p" * 40, "implementation_revision": 1,
+                    "state_revision": 3, "last_transition": "t3",
+                })
+                with self.assertRaises(ws.IllegalImplementationProvenanceRecoverySourcePhaseError):
+                    ws.apply_implementation_provenance_recovery(state, "wi", now="t4")
+
+
+class TestProvenanceIntervalUnaffectedByReviewStageLedgerWrites(unittest.TestCase):
+    """A unit-level pin of D-Implementation-Review-Stages' own "Provenance-
+    interval interaction" claim: `implementation_provenance_interval_
+    reachable`'s HEAD == T requirement is unaffected by a local-APPROVE +
+    manual-APPROVE `implementation_review_stages` ledger-write sequence for
+    a "2.2" item -- neither writer ever creates a commit, so live HEAD
+    never moves past T while the ledger fills in."""
+
+    def test_head_still_equals_t_after_both_ledger_writes(self):
+        with ScratchRepo() as repo:
+            _write_test_artifacts_declaration(repo, "wi")
+            _commit_state_only(repo, "wi", {
+                "work_item_id": "wi", "governing_workflow_version": "2.2",
+                "reviewed_implementation_head": None, "implementation_revision": 0,
+                "phase": "IMPLEMENTING", "state_revision": 0, "last_transition": "t0",
+            }, "seed base state")
+            p = repo.commit("protected fix", filename="src/Foo.kt")
+            pre_state = _base_state(wi={
+                "work_item_id": "wi", "governing_workflow_version": "2.2",
+                "reviewed_implementation_head": None, "implementation_revision": None,
+                "phase": "SELF_REVIEWING_IMPLEMENTATION", "state_revision": 0, "last_transition": "t0",
+            })
+            post_state = ws.record_bundle_generation(
+                pre_state, "wi", stage="implementation", head=p, now="t1",
+            )
+            wi_after_generation = post_state["work_items"]["wi"]
+            t = _commit_state_only(
+                repo, "wi", wi_after_generation, "record gen",
+                trailers=_record_trailers("wi", wi_after_generation["implementation_revision"]),
+            )
+            work_item = wi_after_generation | {"work_item_id": "wi"}
+            self.assertTrue(
+                ws.implementation_provenance_interval_reachable(repo.root, work_item, base_commit=repo.base),
+            )
+            self.assertEqual(ws._run(["git", "rev-parse", "HEAD"], cwd=repo.root).strip(), t)
+
+            local_approved = ws.record_local_implementation_review(
+                post_state, "wi", verdict="APPROVE", bundle_id="b1",
+                review_content_id="c1", round=1, now="t2",
+            )
+            # Uncommitted -- HEAD must still be exactly t.
+            self.assertEqual(ws._run(["git", "rev-parse", "HEAD"], cwd=repo.root).strip(), t)
+            manual_approved = ws.record_manual_implementation_review(
+                local_approved, "wi", verdict="APPROVE", bundle_id="b2", round=1, now="t3",
+                current_review_content_id="c1", feedback_role="MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW",
+                feedback_review_content_id="c1",
+            )
+            self.assertEqual(ws._run(["git", "rev-parse", "HEAD"], cwd=repo.root).strip(), t)
+            self.assertEqual(
+                manual_approved["work_items"]["wi"]["phase"], "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+            )
+            # implementation_provenance_interval_reachable still holds --
+            # it reads reviewed_implementation_head/implementation_revision
+            # (both untouched by either ledger writer) and live HEAD (also
+            # untouched), never the ledger itself.
+            self.assertTrue(
+                ws.implementation_provenance_interval_reachable(repo.root, work_item, base_commit=repo.base),
+            )
+
+
+class TestPromoteLegacyWorkItemDestinationLiteral(unittest.TestCase):
+    """workflow-2.5.0 (resolves `LOCAL_MODEL_PLAN_REVIEW` round 6, optional
+    finding 1; regression added at revision 16, round 15, missing test 2):
+    `promote_legacy_work_item` always promotes to the literal `"2.1"`,
+    never `config["default_workflow_version"]`, even once a repository has
+    separately activated `"2.2"` as its own current default -- the
+    adopted item is already past both implementation-review stages, so
+    there is no future round left for it to satisfy that obligation in."""
+
+    def test_promotes_to_2_1_literal_even_when_2_2_is_the_current_default(self):
+        with ScratchRepo() as repo:
+            _run(["git", "commit", "-q", "--allow-empty", "-m", "legacy work"], cwd=repo.root)
+            legacy_commit = repo.head()
+            _write_and_commit(repo, "docs/ACTIVE_MILESTONE.md", "integrated legacy work\n", "narrative")
+            technical_approval = ws.build_approval_record(
+                basis="LEGACY_V1", stage="implementation", user_confirmation="legacy import",
+                now="t0", reviewed_content_commit=legacy_commit,
+                legacy_evidence={"note": "pre-Workflow"}, waived_guarantees=["no_bundle_id", "no_telemetry"],
+            )
+            wi = _base_work_item(
+                work_item_id="legacy-wi", governing_workflow_version="1", phase="LEGACY_READY",
+                technical_approval=technical_approval,
+            )
+            state = _base_state(**{"legacy-wi": wi})
+            _write_test_artifacts_declaration(repo, "legacy-wi", protected_prefixes=["app/"], excluded_prefixes=["docs/"])
+            artifacts_path = fingerprint.artifacts_path_for_work_item("legacy-wi")
+            # This repository has separately activated "2.2" as its own
+            # current default -- irrelevant to promote_legacy_work_item,
+            # which never reads WORKFLOW_CONFIG.json at all.
+            new_state = ws.promote_legacy_work_item(
+                state, repo.root, work_item_id="legacy-wi",
+                required_active_milestone_substring="integrated legacy work",
+                artifacts_path=artifacts_path, now="t1",
+            )
+            promoted = new_state["work_items"]["legacy-wi"]
+            self.assertEqual(promoted["governing_workflow_version"], "2.1")
+            self.assertEqual(promoted["phase"], "AWAITING_FUNCTIONAL_REVIEW")
+
+
+# ---------------------------------------------------------------------------
+# workflow-2.5.0 CP6: D-Review-Material-Lifecycle -- unit classification,
+# the marker-presence obligation, the narrative-content guarantee, the
+# marking pass, and the governing-version enumeration sweep. Reuses CP1's
+# canonical render_marker/parse_marker throughout -- never a second,
+# independently-derived grammar.
+# ---------------------------------------------------------------------------
+
+
+class ReviewMaterialLifecycleClassificationTest(unittest.TestCase):
+    """Guarantees (i)-(vi): explicit marker precedence, fail-closed
+    default, non-cascading nesting, and the narrative-content guarantee's
+    own scope."""
+
+    def test_positive_explicit_current_stays_review_visible(self):
+        text = "# Doc\n\n" + ws.render_marker("CURRENT") + "\n\nBody text.\n"
+        unit = ws.document_level_unit(text)
+        self.assertEqual(ws.unit_state(unit), ("CURRENT", True))
+
+    def test_negative_explicit_historical_excluded(self):
+        text = "## Section\n\n" + ws.render_marker("HISTORICAL") + "\n\nOld stuff.\n"
+        unit = ws.parse_markdown_units(text)[0]
+        self.assertEqual(ws.unit_state(unit), ("HISTORICAL", True))
+
+    def test_ambiguous_unmarked_fails_closed_to_current(self):
+        text = "## Section\n\nNo marker here at all.\n"
+        unit = ws.parse_markdown_units(text)[0]
+        self.assertEqual(ws.unit_state(unit), ("CURRENT", False))
+
+    def test_ambiguous_malformed_marker_fails_closed_to_current(self):
+        text = "## Section\n\n<!-- review-material-lifecycle: WEIRD -->\n\nBody.\n"
+        unit = ws.parse_markdown_units(text)[0]
+        self.assertEqual(ws.unit_state(unit), ("CURRENT", False))
+
+    def test_two_version_transition_non_marker_edit_leaves_classification_unchanged(self):
+        v1 = "## Original Heading\n\nSome prose.\n"
+        v2 = "## Reworded Heading\n\nSome reworded prose, same material.\n"
+        self.assertEqual(
+            ws.unit_state(ws.parse_markdown_units(v1)[0])[0],
+            ws.unit_state(ws.parse_markdown_units(v2)[0])[0],
+        )
+
+    def test_two_version_transition_marker_only_edit_performs_transition(self):
+        v1 = "## Heading\n\nProse.\n"
+        v2 = "## Heading\n\n" + ws.render_marker("HISTORICAL") + "\n\nProse.\n"
+        self.assertEqual(ws.unit_state(ws.parse_markdown_units(v1)[0])[0], "CURRENT")
+        self.assertEqual(ws.unit_state(ws.parse_markdown_units(v2)[0])[0], "HISTORICAL")
+
+    def test_boundary_redrawing_merge_without_marker_edit_does_not_promote_to_historical(self):
+        # A CURRENT unit and an adjacent HISTORICAL-marked unit, merged by
+        # demoting/deleting the heading between them with no marker edit
+        # anywhere in the diff, must not report the merged material
+        # HISTORICAL.
+        before = (
+            "## Current section\n\nCurrent prose.\n\n"
+            "## Historical section\n\n" + ws.render_marker("HISTORICAL") + "\n\nOld prose.\n"
+        )
+        before_units = ws.parse_markdown_units(before)
+        self.assertEqual(ws.unit_state(before_units[0])[0], "CURRENT")
+        self.assertEqual(ws.unit_state(before_units[1])[0], "HISTORICAL")
+
+        # The merge: demote the boundary heading to plain prose, touching
+        # no marker anywhere in the diff.
+        after = (
+            "## Current section\n\nCurrent prose.\n\n"
+            "Historical section (no longer its own heading)\n\n"
+            + ws.render_marker("HISTORICAL") + "\n\nOld prose.\n"
+        )
+        after_units = ws.parse_markdown_units(after)
+        self.assertEqual(len(after_units), 1)
+        # The merged unit's own marker is no longer its own_text's first
+        # non-blank line (the former CURRENT prose and the demoted heading
+        # text now precede it) -- so the merge falls to the fail-closed
+        # CURRENT default rather than silently inheriting a marker deeper
+        # in its own text. This is the mechanical basis for the guarantee:
+        # a merge can never *promote* material to HISTORICAL without an
+        # explicit marker edit of its own.
+        self.assertEqual(ws.unit_state(after_units[0]), ("CURRENT", False))
+
+    def test_narrative_location_forbidden_inside_current_fails(self):
+        text = (
+            "### D-Something\n\n" + ws.render_marker("CURRENT") + "\n\n"
+            "Corrected at revision 5, finding B1: the design now does X.\n"
+        )
+        unit = ws.parse_markdown_units(text)[0]
+        self.assertTrue(ws.check_narrative_content(unit))
+
+    def test_narrative_location_identical_narrative_inside_historical_passes(self):
+        text = (
+            "### D-Something\n\n" + ws.render_marker("HISTORICAL") + "\n\n"
+            "Corrected at revision 5, finding B1: the design now does X.\n"
+        )
+        unit = ws.parse_markdown_units(text)[0]
+        self.assertEqual(ws.check_narrative_content(unit), [])
+
+    def test_scope_unmarked_pre_existing_section_with_forbidden_narrative_passes(self):
+        # CURRENT only by the fail-closed default (no marker at all) is
+        # outside guarantee (vi)'s reach.
+        text = "### D-PreExisting\n\nCorrected at revision 5, finding B1: the design now does X.\n"
+        unit = ws.parse_markdown_units(text)[0]
+        self.assertEqual(ws.check_narrative_content(unit), [])
+
+    def test_already_marked_nested_unit_survives_and_is_not_folded_into_parent(self):
+        text = (
+            "### D-Container\n\n" + ws.render_marker("CURRENT") + "\n\n"
+            "Current prose with no forbidden narrative.\n\n"
+            "#### Disposition record\n\n" + ws.render_marker("HISTORICAL") + "\n\n"
+            "Corrected at revision 5, finding B1: history here.\n"
+        )
+        units = ws.parse_markdown_units(text)
+        container, nested = units[0], units[1]
+        self.assertEqual(ws.unit_state(container), ("CURRENT", True))
+        self.assertEqual(ws.unit_state(nested), ("HISTORICAL", True))
+        # A separately, explicitly marked descendant is never folded into
+        # its container's own guarantee-(vi) walk.
+        self.assertEqual(ws.check_narrative_content(container), [])
+
+
+class ReviewMaterialLifecycleMarkerPresenceTest(unittest.TestCase):
+    def test_marker_presence_fixture_in_scope_unit_missing_fails(self):
+        text = "### D-InScope\n\nNo marker.\n"
+        self.assertEqual(
+            ws.check_marker_presence_plan_sections(text, ("### D-InScope",)), ["### D-InScope"],
+        )
+
+    def test_marker_presence_unit_elsewhere_in_same_document_unaffected(self):
+        text = (
+            "### D-InScope\n\n" + ws.render_marker("CURRENT") + "\n\nBody.\n\n"
+            "### D-OutOfScope\n\nNo marker here, not a named subject.\n"
+        )
+        self.assertEqual(ws.check_marker_presence_plan_sections(text, ("### D-InScope",)), [])
+
+    def test_whole_document_marker_presence_fails_when_absent(self):
+        text = "# Title\n\nNo marker anywhere in the intro.\n\n## Section\n\nBody.\n"
+        self.assertFalse(ws.check_marker_presence_whole_document(text))
+
+    def test_whole_document_marker_presence_passes_when_present(self):
+        text = "# Title\n\n" + ws.render_marker("CURRENT") + "\n\nIntro.\n\n## Section\n\nBody.\n"
+        self.assertTrue(ws.check_marker_presence_whole_document(text))
+
+    def test_already_marked_nested_unit_discharges_its_own_presence_obligation(self):
+        text = (
+            "### D-Container\n\n" + ws.render_marker("CURRENT") + "\n\nProse.\n\n"
+            "#### Disposition\n\n" + ws.render_marker("HISTORICAL") + "\n\nHistory.\n"
+        )
+        self.assertEqual(ws.check_marker_presence_plan_sections(text, ("### D-Container",)), [])
+
+
+class ReviewMaterialLifecycleMarkingPassTest(unittest.TestCase):
+    def test_marks_missing_units_current_and_never_touches_already_marked(self):
+        text = (
+            "### D-Unmarked\n\nProse one.\n\n"
+            "### D-AlreadyMarked\n\n" + ws.render_marker("HISTORICAL") + "\n\nProse two.\n"
+        )
+        names = ("### D-Unmarked", "### D-AlreadyMarked")
+        result = ws.mark_missing_units_current(text, names)
+        units = ws.parse_markdown_units(result)
+        self.assertEqual(ws.unit_state(units[0]), ("CURRENT", True))
+        self.assertEqual(ws.unit_state(units[1]), ("HISTORICAL", True))
+        # Idempotent: a second pass changes nothing further.
+        self.assertEqual(ws.mark_missing_units_current(result, names), result)
+
+
+class ReviewMaterialLifecyclePreMarkingPartitionFixtureTest(unittest.TestCase):
+    """A corpus-shaped fixture proving guarantee (v)'s classification
+    partition: only the deliberately, visibly marked unit is HISTORICAL;
+    every unmarked unit stays CURRENT. Fixture-based (not a one-shot
+    real-corpus read) so it keeps catching a future edit that re-widens
+    guarantee (v) even once this repository's own real corpus has moved
+    past its own pre-marking moment."""
+
+    FIXTURE = (
+        "# Fixture corpus\n\n"
+        "## Marked Historical Section\n\n" + ws.render_marker("HISTORICAL") + "\n\nOld.\n\n"
+        "## Unmarked Section One\n\nCurrent by default.\n\n"
+        "## Unmarked Section Two\n\nAlso current by default.\n"
+    )
+
+    def test_classification_partition_matches_expected(self):
+        units = ws.parse_markdown_units(self.FIXTURE)
+        states = {u.heading: ws.unit_state(u)[0] for u in units}
+        self.assertEqual(states["Marked Historical Section"], "HISTORICAL")
+        self.assertEqual(states["Unmarked Section One"], "CURRENT")
+        self.assertEqual(states["Unmarked Section Two"], "CURRENT")
+
+    def test_mutated_copy_claiming_every_unit_current_including_marked_fails(self):
+        units = ws.parse_markdown_units(self.FIXTURE)
+        states = {u.heading: ws.unit_state(u)[0] for u in units}
+        with self.assertRaises(AssertionError):
+            for state in states.values():
+                self.assertEqual(state, "CURRENT")
+
+
+class ReviewMaterialLifecycleRealCorpusTest(unittest.TestCase):
+    """Guarantee (vii)'s real-corpus run of the finished marker-presence
+    check over every one of that obligation's actual subjects, plus the
+    narrative-content guarantee over the same named sections."""
+
+    def _read(self, relative_path):
+        overlay_root = Path(__file__).resolve().parent
+        return (overlay_root.parent / "docs" / "ai-workflow" / relative_path).read_text()
+
+    PLAN_SECTION_NAMES = (
+        "### D-Implementation-Review-Stages",
+        "### D-Implementation-Review-Version-Activation",
+        "### D-Review-Material-Lifecycle",
+    )
+
+    def test_implementation_review_workflow_carries_its_own_marker(self):
+        text = self._read("IMPLEMENTATION_REVIEW_WORKFLOW.md")
+        self.assertTrue(ws.check_marker_presence_whole_document(text))
+
+    def test_workflow_v2_plan_named_sections_all_carry_markers(self):
+        text = self._read("WORKFLOW_V2_PLAN.md")
+        self.assertEqual(ws.check_marker_presence_plan_sections(text, self.PLAN_SECTION_NAMES), [])
+
+    def test_named_sections_carry_no_forbidden_narrative(self):
+        text = self._read("WORKFLOW_V2_PLAN.md")
+        units = ws.parse_markdown_units(text)
+        resolved = ws.find_named_top_level_units(units, self.PLAN_SECTION_NAMES)
+        for name, unit in resolved.items():
+            self.assertEqual(ws.check_narrative_content(unit), [], name)
+
+    def test_disposition_record_subsection_survived_untouched_as_historical(self):
+        text = self._read("WORKFLOW_V2_PLAN.md")
+        units = ws.parse_markdown_units(text)
+        disposition = [u for u in units if u.heading.startswith("2.5.0 disposition record")]
+        self.assertEqual(len(disposition), 1)
+        self.assertEqual(ws.unit_state(disposition[0]), ("HISTORICAL", True))
+
+
+class GoverningVersionEnumerationSweepTest(unittest.TestCase):
+    def test_exhaustive_enumeration_form_flagged(self):
+        text = (
+            'For plan review, only work items with governing_workflow_version '
+            '"1" or "2.1" use the single-stage flow.'
+        )
+        findings = ws.find_governing_version_occurrences("doc.md", text)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].form, "exhaustive_enumeration")
+
+    def test_bare_21_scoped_form_flagged(self):
+        text = 'The two-stage plan review protocol is scoped entirely to "2.1" work items.'
+        findings = ws.find_governing_version_occurrences("doc.md", text)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].form, "bare_21_scoped")
+
+    def test_negated_version_independence_assertion_not_flagged(self):
+        text = 'Plan review is not a "2.1"-only mechanism; "2.2" items use it identically.'
+        self.assertEqual(ws.find_governing_version_occurrences("doc.md", text), [])
+
+    def test_widened_form_mentioning_both_versions_not_flagged(self):
+        text = 'Plan review applies to work items whose governing version is "2.1"/"2.2" only.'
+        self.assertEqual(ws.find_governing_version_occurrences("doc.md", text), [])
+
+    def test_occurrence_inside_historical_unit_is_allowlisted(self):
+        text = (
+            "## Old plan review disposition\n\n" + ws.render_marker("HISTORICAL") + "\n\n"
+            'At the time, plan review was scoped entirely to "2.1" work items.\n'
+        )
+        self.assertEqual(ws.find_governing_version_occurrences("doc.md", text), [])
+
+    def test_allowlist_pin_negative_fixture_new_current_section_still_flagged(self):
+        # Even though the document's own historical sections stay exempt,
+        # a stale claim inside a *new*, non-HISTORICAL current design
+        # section must still fail -- proving the allowlist is
+        # occurrence-scoped, never a whole-document grant.
+        text = (
+            "## Old plan review disposition\n\n" + ws.render_marker("HISTORICAL") + "\n\n"
+            'At the time, plan review was scoped entirely to "2.1" work items.\n\n'
+            "## New plan review design\n\n" + ws.render_marker("CURRENT") + "\n\n"
+            'This plan review mechanism is scoped entirely to "2.1" work items.\n'
+        )
+        findings = ws.find_governing_version_occurrences("doc.md", text)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].form, "bare_21_scoped")
+        self.assertIn("New plan review design", text[:findings[0].offset].rsplit("##", 1)[-1] or "")
+
+    def test_whole_document_allowlist_for_named_history_documents(self):
+        text = 'Plan review is scoped entirely to "2.1" work items.'
+        findings = ws.find_governing_version_occurrences(
+            "docs/ai-workflow/WORKFLOW_V2_3_PLAN.md", text,
+        )
+        self.assertEqual(findings, [])
+
+    def test_positive_fixture_negated_assertion_only_occurrence_passes_clean(self):
+        text = 'For plan review, this is not a single-governing-version-only mechanism; "2.1" and "2.2" both use it.'
+        self.assertEqual(ws.sweep_governing_version_enumeration({"doc.md": text}), [])
+
+    def test_real_corpus_sweep_is_clean(self):
+        """Deliberately scoped (round 4's O2), not exhaustive: the command
+        files plus `docs/ai-workflow/`'s own top-level documents, both
+        non-recursive -- the corpus this milestone's own review-facing
+        prose lives in. `docs/ai-workflow/audit/`, `dry-run/`, and
+        `requirements/` are out of this sweep's scope (a wider,
+        `**/*.md`-recursive run does find one true positive there today --
+        a base-2.4.0-inherited row in `audit/WORKFLOW_DEFECT_LEDGER.md`
+        this milestone's own overlay does not own or replace -- which is a
+        real gap, not a false negative, and is left for whichever future
+        checkpoint widens this sweep's own corpus deliberately rather than
+        as an accidental side effect of an unrelated fix)."""
+        overlay_root = Path(__file__).resolve().parent
+        payload_root = overlay_root.parent
+        paths = list((payload_root / ".claude" / "commands").glob("*.md")) + \
+            list((payload_root / "docs" / "ai-workflow").glob("*.md"))
+        texts = {str(p): p.read_text() for p in paths}
+        findings = ws.sweep_governing_version_enumeration(texts)
+        self.assertEqual(findings, [], [repr(f) for f in findings])
+
+
+class ApplyingReviewFeedbackVersionClaimSweepTest(unittest.TestCase):
+    """workflow-2.5.0 REVISE round 7, Missing-tests item 1 / `B1`: a
+    standing negative-corpus sweep for the superseded "`enter_applying_
+    review_feedback` is skipped for `\"2.2\"` because of a version branch"
+    claim, which has now produced a Blocking finding in rounds 3, 5, 6, and
+    twice more in round 7 -- always as a fresh paraphrase or a
+    Markdown-mangled substring the previous round's own point-fix and grep
+    did not anticipate.
+
+    **Round 8's own `B1`, disposition (b): kept as a regression guard, not
+    widened.** This is a *closed* five-cue list against the five wordings
+    known as of round 7 (`_APPLYING_REVIEW_FEEDBACK_ABSOLUTE_CUES`); it is
+    not, and does not claim to be, a general detector for every future
+    paraphrase of the underlying claim. Round 8 found the sweep does not
+    in fact catch round 6's own three real instances --
+    `test_round_6_782_row_is_not_currently_flagged_by_neighbor_suppression`
+    and `test_round_6_no_separate_call_wording_is_not_currently_flagged`
+    below pin the real, in-situ text and document that gap directly,
+    rather than asserting coverage the mechanism does not have. Widening
+    the cue set and/or the suppression-qualifier matching to actually close
+    those two gaps is left to a future checkpoint that also resolves the
+    now-in-corpus disposition question strengthening would raise (see
+    `test_real_corpus_sweep_is_clean` below)."""
+
+    def test_round_7_b1_instance_1_is_flagged(self):
+        # WORKFLOW_V2_1_OPERATOR_REFERENCE.md:483-488 before this round's
+        # fix, verbatim.
+        text = (
+            "so this command makes **no** `enter_applying_review_feedback` "
+            "call for it at all; steps 1-8 below run identically "
+            "regardless."
+        )
+        findings = ws.find_applying_review_feedback_version_claims("doc.md", text)
+        # Two of the five absolute-cue patterns both match this single
+        # passage ("no ... call" and "for it at all") -- that is fine; the
+        # point is that at least one fires, not exactly which.
+        self.assertGreaterEqual(len(findings), 1, [repr(f) for f in findings])
+
+    def test_round_7_b1_instance_2_is_flagged(self):
+        # WORKFLOW_V2_1_OPERATOR_REFERENCE.md:830 before this round's fix,
+        # verbatim.
+        text = (
+            "`/apply-implementation-review` (`enter_applying_review_feedback`, "
+            "`\"1\"`/`\"2.1\"` only — a `\"2.2\"` item never needs this call, "
+            "per its own dual-mode note at the top of that file)"
+        )
+        findings = ws.find_applying_review_feedback_version_claims("doc.md", text)
+        self.assertEqual(len(findings), 2, [repr(f) for f in findings])
+
+    def test_round_6_b1_instance_is_flagged(self):
+        # WORKFLOW_V2_1_OPERATOR_REFERENCE.md:782 before round 6's fix
+        # (paraphrased as round 6's own disposition record describes it):
+        # a bare, unqualified "a '2.2' item never reaches APPLYING_REVIEW_
+        # FEEDBACK via enter_applying_review_feedback" claim, with no
+        # terminal-phase-escape qualifier anywhere nearby.
+        text = (
+            "a `\"2.2\"` item never reaches `APPLYING_REVIEW_FEEDBACK` via "
+            "`enter_applying_review_feedback`; that phase is entered "
+            "directly by the review-stage writer instead, and this call is "
+            "not called at all for that governing version."
+        )
+        findings = ws.find_applying_review_feedback_version_claims("doc.md", text)
+        self.assertGreaterEqual(len(findings), 1, [repr(f) for f in findings])
+
+    def test_the_fixed_round_7_passages_are_not_flagged(self):
+        # This round's own replacement text for both instances -- proves
+        # the sweep does not simply re-flag its own fix.
+        overlay_root = Path(__file__).resolve().parent
+        payload_root = overlay_root.parent
+        text = (payload_root / "docs" / "ai-workflow" / "WORKFLOW_V2_1_OPERATOR_REFERENCE.md").read_text()
+        findings = ws.find_applying_review_feedback_version_claims(
+            "WORKFLOW_V2_1_OPERATOR_REFERENCE.md", text,
+        )
+        self.assertEqual(findings, [], [repr(f) for f in findings])
+
+    def test_milestone_workflow_finds_phase_qualifier_is_not_flagged(self):
+        # MILESTONE_WORKFLOW.md:349's already-correct passage -- named in
+        # round 6's Missing-tests item as the reason a naive substring ban
+        # cannot work: it states the *fixed* rule using nearly the banned
+        # words ("no ... call ... for a '2.2' item"), distinguished only by
+        # "since it finds `phase` already there".
+        text = (
+            "transitions directly to `APPLYING_REVIEW_FEEDBACK` (the "
+            "command itself performs the phase write, exactly as "
+            "`/review-plan`'s `REVISE` branch does for `REVISING_PLAN` — "
+            "`/apply-implementation-review` makes no "
+            "`enter_applying_review_feedback` call for a `\"2.2\"` item, "
+            "since it finds `phase` already there)."
+        )
+        self.assertEqual(ws.find_applying_review_feedback_version_claims("doc.md", text), [])
+
+    def test_workflow_v2_plan_terminal_escape_qualifier_is_not_flagged(self):
+        # WORKFLOW_V2_PLAN.md's own correct, detailed passage: contains
+        # "never reaches this writer" (not one of the banned absolute-cue
+        # phrasings) and explicitly names the terminal-phase escape.
+        text = (
+            "for a `\"2.2\"` item, this phase-conditional rule is always "
+            "the skip case in the normal two-stage loop -- the command "
+            "finds `phase` already at `APPLYING_REVIEW_FEEDBACK` -- but a "
+            "`\"2.2\"` item that instead reaches the *terminal* "
+            "`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` phase ... sits at "
+            "exactly the phase `enter_applying_review_feedback`'s own "
+            "guard names as legal, so the call fires for that item too."
+        )
+        self.assertEqual(ws.find_applying_review_feedback_version_claims("doc.md", text), [])
+
+    def test_a_qualifier_stated_in_the_next_sentence_of_the_same_bullet_still_suppresses(self):
+        # WORKFLOW_V2_1_OPERATOR_REFERENCE.md:438-441's own already-correct
+        # shape: the absolute-sounding "no ... call" sentence ends before
+        # the qualifying "terminal" appears, in the very next sentence of
+        # the same bullet. A sentence-level (rather than window-level)
+        # check would miss this.
+        text = (
+            "REVISE (→ `APPLYING_REVIEW_FEEDBACK` directly, no "
+            "`enter_applying_review_feedback` call). A `\"2.2\"` item at "
+            "any *other* phase — most commonly its own terminal "
+            "`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` once both "
+            "implementation-review stages have already approved — still "
+            "takes the advisory branch described above, unchanged."
+        )
+        self.assertEqual(ws.find_applying_review_feedback_version_claims("doc.md", text), [])
+
+    def test_unrelated_reference_far_outside_the_window_does_not_suppress(self):
+        # A document that states the absolute-cue phrase near one mention
+        # of enter_applying_review_feedback, and a qualifier only far away
+        # near an unrelated second mention, must still be flagged: the
+        # qualifier has to be *near* the claim it qualifies, not merely
+        # present anywhere in the document.
+        far_qualifier = "terminal escape " * 5
+        padding = "x" * 400
+        text = (
+            f"`enter_applying_review_feedback` call for it at all.{padding}"
+            f"Elsewhere, the {far_qualifier} phase-conditional guard is "
+            f"unrelated context about `enter_applying_review_feedback`."
+        )
+        findings = ws.find_applying_review_feedback_version_claims("doc.md", text)
+        self.assertEqual(len(findings), 1, [repr(f) for f in findings])
+
+    def test_round_6_782_row_is_not_currently_flagged_by_neighbor_suppression(self):
+        # WORKFLOW_V2_1_OPERATOR_REFERENCE.md's real pre-round-7 `:782` table
+        # row (git show 17b8641b, verbatim) IS matched by the "no ... call"
+        # cue in isolation, but its real preceding table row in the same
+        # document ends in "...the terminal \"ready for approval\" phase
+        # (reused rather than a new name)" -- an unrelated use of the word
+        # "terminal" that still falls inside the ±300-character window and
+        # suppresses the finding. Round 8's `B1` (1): the bare-substring
+        # `terminal` qualifier is not scoped to the same list item/table row
+        # as the cue it is meant to qualify. Pinned here, in situ, rather
+        # than as a paraphrase, exactly because round 6's own fixture below
+        # (`test_round_6_b1_instance_is_flagged`) is a paraphrase that
+        # cannot catch this — the previous round's Missing-tests item this
+        # gap corresponds to.
+        preceding_row = (
+            '| `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` | `record_bundle_'
+            'generation` — every `"1"`/`"2.1"` stage/outcome; for `"2.2"`, '
+            '`record_manual_implementation_review` on `APPROVE` (the '
+            'terminal "ready for approval" phase, reused rather than a new '
+            'name) |'
+        )
+        real_row = (
+            '| `APPLYING_REVIEW_FEEDBACK` | `enter_applying_review_feedback` '
+            '(`"1"`/`"2.1"`); for `"2.2"` (`workflow-2.5.0`), '
+            '`record_local_implementation_review`/'
+            '`record_manual_implementation_review` on `REVISE` write it '
+            'directly instead, with no `enter_applying_review_feedback` '
+            'call |'
+        )
+        # In isolation the cue fires...
+        self.assertEqual(
+            len(ws.find_applying_review_feedback_version_claims("doc.md", real_row)), 1,
+        )
+        # ...but preceded by its real neighbouring row, it is suppressed.
+        # This is the documented gap, not the desired behavior: a future
+        # strengthening (round 8's `B1` fix (a), not taken this round)
+        # should turn this assertion into a non-zero one.
+        combined = preceding_row + "\n" + real_row
+        self.assertEqual(
+            ws.find_applying_review_feedback_version_claims("doc.md", combined), [],
+        )
+
+    def test_round_6_no_separate_call_wording_is_not_currently_flagged(self):
+        # Round 6's other two real instances both read "makes no
+        # **separate** `enter_applying_review_feedback` call" -- an
+        # adjective between "no" and the reference cue that the
+        # `no\s+enter_applying_review_feedback\s+call` pattern does not
+        # tolerate. Round 8's `B1` (2): pinned in situ (markup stripped,
+        # matching what the detector actually sees) rather than as a
+        # paraphrase.
+        text = "this command makes no separate `enter_applying_review_feedback` call for a \"2.2\" item"
+        self.assertEqual(
+            ws.find_applying_review_feedback_version_claims("doc.md", text), [],
+        )
+
+    def test_real_corpus_sweep_is_clean(self):
+        """Same deliberately-scoped corpus as
+        `GoverningVersionEnumerationSweepTest.test_real_corpus_sweep_is_clean`
+        (round 4's O2) -- non-recursive over `.claude/commands/` and
+        `docs/ai-workflow/`'s own top level, for consistency with that
+        sibling sweep's precedent. **Not**, as round 7's docstring wrongly
+        claimed and round 8's `B1` (3) corrects, because a wider recursive
+        run demonstrates a true positive outside this scope: run over the
+        entire `2.5.0` payload (all `.md`/`.json`/`.py`/`.sh`/`.yml`/`.svg`
+        files, recursively), this sweep's cue set returns exactly 6
+        findings, every one of them self-referential (this module's own
+        cue table and this file's own test fixtures above) --
+        `docs/ai-workflow/WORKFLOW_V2_3_FOLLOWUPS_PLAN.md:1685` and
+        `docs/ai-workflow/requirements/workflow-v2-3-followups-mapping.json:133`
+        (both inherited unmodified from the `2.4.0` base, round 7's `O2`)
+        are flagged by neither the narrow nor the wide run: their wording,
+        "`APPLYING_REVIEW_FEEDBACK` (entered only by ... `enter_applying_
+        review_feedback` ...)", matches none of the five closed absolute
+        cues. Whether that wording is itself a true instance of the
+        underlying claim is a separate question this sweep's cue set is not
+        equipped to answer either way; it is not evidence for or against
+        widening this test's own corpus, and is not relied on as such
+        (round 8's `B1`, correcting round 7's `O2`/this docstring)."""
+        overlay_root = Path(__file__).resolve().parent
+        payload_root = overlay_root.parent
+        paths = list((payload_root / ".claude" / "commands").glob("*.md")) + \
+            list((payload_root / "docs" / "ai-workflow").glob("*.md"))
+        texts = {str(p): p.read_text() for p in paths}
+        findings = ws.sweep_applying_review_feedback_version_claims(texts)
+        self.assertEqual(findings, [], [repr(f) for f in findings])
+
+
+# ---------------------------------------------------------------------------
+# workflow-2.5.0 CP7: D-Canonical-Review-Data's generic, parametric
+# declaration-coverage helper. This replaces the bespoke, hand-authored
+# per-work-item declaration-coverage pattern this item's own CP2
+# (`TestImplementationReviewTwoStageDeclarationCoverage`, above) and
+# `plan-amendment-mechanism` each separately hand-derived from their own
+# registry/declarations data -- the identical mechanical check
+# (checkpoint-declared deliverable paths classify `protected`, never
+# `UnclassifiedPathError`/`excluded`) re-authored twice by hand from data
+# that already exists. Both of those existing tests are left exactly as
+# they are (rewriting another, already-approved work item's own test file
+# is out of this milestone's scope, and CP2's own test predates CP7 in
+# the checkpoint order); every *future* work item's plan calls
+# `assert_declaration_coverage` below instead of re-authoring the check.
+#
+# Precedent, not a second defect (D-Canonical-Review-Data): this is the
+# same "mechanically discovered, never hand-maintained" model
+# `workflow_state_completion_obligations_test.py`'s own
+# `surface_census`/`verifier_census` mechanism already follows -- that
+# census is *computed* from the real module surface each run rather than
+# typed out by a plan author. This helper generalizes the identical idea
+# to per-work-item declaration coverage; it is not a rediscovery of a gap
+# that mechanism has, it is the same pattern applied one level up.
+# ---------------------------------------------------------------------------
+
+
+def _implementation_stage_declaration_pairs(implementation_stage: dict) -> list[tuple[str, bool]]:
+    """Every implementation-stage declaration as `(entry, is_prefix)`
+    pairs -- exact paths (`protected_paths`/`excluded_paths`) and
+    prefixes (`protected_prefixes`/`excluded_prefixes`) alike."""
+    pairs: list[tuple[str, bool]] = []
+    for entry in implementation_stage.get("protected_paths", {}):
+        pairs.append((entry, False))
+    for entry in implementation_stage.get("excluded_paths", {}):
+        pairs.append((entry, False))
+    for entry in implementation_stage.get("protected_prefixes", {}):
+        pairs.append((entry, True))
+    for entry in implementation_stage.get("excluded_prefixes", {}):
+        pairs.append((entry, True))
+    return pairs
+
+
+def _contained_by(excepted_entry: str, excepted_is_prefix: bool,
+                   candidate_entry: str, candidate_is_prefix: bool) -> bool:
+    """Whether `candidate_entry` (an implementation-stage declaration,
+    exact path or prefix alike) is contained by `excepted_entry` (a
+    `plan_stage.excluded_paths`/`excluded_prefixes` entry): equal to it,
+    and itself an exact path, when `excepted_entry` is an exact path --
+    nothing counts as contained under a plan-stage exact path beyond that
+    same exact path, since nothing can be nested beneath a file -- or
+    itself starting with `excepted_entry` when `excepted_entry` is a
+    prefix, exact paths and prefixes alike."""
+    if not excepted_is_prefix:
+        return (not candidate_is_prefix) and candidate_entry == excepted_entry
+    return candidate_entry.startswith(excepted_entry)
+
+
+def implementation_declarations_contained_by(
+    excepted_entry: str, excepted_is_prefix: bool, implementation_stage: dict,
+) -> list[str]:
+    """The complete set of implementation-stage declarations -- exact
+    paths and prefixes, `protected_*`/`excluded_*` alike -- contained by
+    `excepted_entry`, sorted. This is the set `narrowing_exceptions`'
+    exhaustiveness requirement measures a listed entry set against."""
+    return sorted(
+        entry for entry, is_prefix in _implementation_stage_declaration_pairs(implementation_stage)
+        if _contained_by(excepted_entry, excepted_is_prefix, entry, is_prefix)
+    )
+
+
+def find_declaration_symmetry_gaps(plan_stage: dict, implementation_stage: dict) -> tuple[list[str], list[str]]:
+    """`D-Canonical-Review-Data`'s plan-stage/implementation-stage
+    declaration-symmetry check, both directions -- never raises itself,
+    so a caller can assert on the complete failure set at once rather
+    than stopping at the first one found:
+
+    (a) every `implementation_stage.protected_paths`/`protected_prefixes`
+        entry's own literal key must classify under the plan-stage sets
+        (`fingerprint.classify_path`) without raising
+        `UnclassifiedPathError`.
+    (b) every `plan_stage.excluded_paths`/`excluded_prefixes` entry's own
+        literal key must be either (i) classifiable outright under the
+        implementation-stage sets (`fingerprint.classify_path_implementation_stage`),
+        or (ii) named as a key in `plan_stage.narrowing_exceptions`, whose
+        mapped list is non-empty, every listed entry declared at
+        implementation stage and contained by the entry it excepts, and
+        the list exhaustive -- equal to (not merely a subset of) the
+        complete set of implementation-stage declarations contained by
+        that entry (`implementation_declarations_contained_by`).
+        Partial overlap alone, with no `narrowing_exceptions` entry, is
+        never accepted as coverage. A `narrowing_exceptions` key that
+        does not itself equal a real `plan_stage.excluded_paths`/
+        `excluded_prefixes` entry is flagged too, closing the same
+        staleness from the declaration side.
+
+    Returns `(direction_a_gaps, direction_b_gaps)`, each a list of
+    human-readable failure descriptions (empty when that direction is
+    clean)."""
+    protected = frozenset(plan_stage.get("protected_paths", []))
+    excluded_paths = plan_stage.get("excluded_paths", {})
+    excluded_prefixes = plan_stage.get("excluded_prefixes", {})
+    narrowing_exceptions = plan_stage.get("narrowing_exceptions", {})
+
+    impl_protected_paths = implementation_stage.get("protected_paths", {})
+    impl_protected_prefixes = implementation_stage.get("protected_prefixes", {})
+    impl_excluded_paths = implementation_stage.get("excluded_paths", {})
+    impl_excluded_prefixes = implementation_stage.get("excluded_prefixes", {})
+
+    direction_a_gaps: list[str] = []
+    for entry in list(impl_protected_paths) + list(impl_protected_prefixes):
+        try:
+            fingerprint.classify_path(entry, protected, excluded_paths, excluded_prefixes)
+        except fingerprint.UnclassifiedPathError:
+            direction_a_gaps.append(
+                f"implementation_stage entry {entry!r} is not classifiable by any plan_stage set"
+            )
+
+    declared_implementation_entries = {
+        entry for entry, _is_prefix in _implementation_stage_declaration_pairs(implementation_stage)
+    }
+    implementation_prefix_entries = set(impl_protected_prefixes) | set(impl_excluded_prefixes)
+
+    direction_b_gaps: list[str] = []
+    excepted_entries = ([(p, False) for p in excluded_paths]
+                        + [(p, True) for p in excluded_prefixes])
+    for excepted_entry, is_prefix in excepted_entries:
+        try:
+            fingerprint.classify_path_implementation_stage(
+                excepted_entry, impl_protected_paths, impl_protected_prefixes,
+                impl_excluded_paths, impl_excluded_prefixes,
+            )
+            continue  # clause (i): classifiable outright
+        except fingerprint.UnclassifiedPathError:
+            pass
+        # clause (ii): must be named in narrowing_exceptions
+        if excepted_entry not in narrowing_exceptions:
+            direction_b_gaps.append(
+                f"plan_stage entry {excepted_entry!r} is not classifiable by any implementation_stage "
+                f"set and has no narrowing_exceptions entry"
+            )
+            continue
+        listed = narrowing_exceptions[excepted_entry]
+        if not listed:
+            direction_b_gaps.append(
+                f"narrowing_exceptions[{excepted_entry!r}] is empty -- no implementation_stage "
+                f"narrowing declared for it at all"
+            )
+            continue
+        complete = implementation_declarations_contained_by(excepted_entry, is_prefix, implementation_stage)
+        problems: list[str] = []
+        for listed_entry in listed:
+            if listed_entry not in declared_implementation_entries:
+                problems.append(f"{listed_entry!r} is not declared at implementation stage")
+                continue
+            listed_is_prefix = listed_entry in implementation_prefix_entries
+            if not _contained_by(excepted_entry, is_prefix, listed_entry, listed_is_prefix):
+                problems.append(f"{listed_entry!r} is not contained by {excepted_entry!r}")
+        if sorted(listed) != complete:
+            missing = sorted(set(complete) - set(listed))
+            if missing:
+                problems.append(
+                    f"omits {missing!r}, also contained by {excepted_entry!r} (not exhaustive)"
+                )
+        for problem in problems:
+            direction_b_gaps.append(f"narrowing_exceptions[{excepted_entry!r}]: {problem}")
+
+    # A narrowing_exceptions key that does not itself equal a real
+    # plan_stage.excluded_paths/excluded_prefixes entry must fail too.
+    for key in narrowing_exceptions:
+        if key not in excluded_paths and key not in excluded_prefixes:
+            direction_b_gaps.append(
+                f"narrowing_exceptions key {key!r} is not itself a plan_stage.excluded_paths/"
+                f"excluded_prefixes entry"
+            )
+
+    return direction_a_gaps, direction_b_gaps
+
+
+def assert_declaration_coverage(work_item_id: str, repo_root: Path) -> None:
+    """The generic, parametric declaration-coverage assertion
+    `D-Canonical-Review-Data` extracts from this item's own CP2
+    (`TestImplementationReviewTwoStageDeclarationCoverage`) and
+    `plan-amendment-mechanism`'s own separately hand-authored test: reads
+    `<work_item_id>-registry.json` and `<work_item_id>-artifacts.json`
+    straight off disk, then asserts (1) every
+    `implementation_stage.protected_paths`/`protected_prefixes` entry
+    classifies `protected` under the implementation-stage classifier, and
+    (2) both plan-stage/implementation-stage declaration-symmetry
+    directions (`find_declaration_symmetry_gaps`) are clean. A future
+    work item's plan calls this instead of re-authoring the check by
+    hand; CP12 (`workflow-2.5.0`'s own disposable-repository validation)
+    exercises this helper directly for its own synthetic work item rather
+    than hand-writing another copy."""
+    registry_path = repo_root / f"docs/ai-workflow/registry/{work_item_id}-registry.json"
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    if registry.get("work_item_id") != work_item_id:
+        raise AssertionError(
+            f"{registry_path}: registry work_item_id {registry.get('work_item_id')!r} != {work_item_id!r}"
+        )
+
+    artifacts_path = repo_root / fingerprint.artifacts_path_for_work_item(work_item_id)
+    declarations = json.loads(artifacts_path.read_text(encoding="utf-8"))
+    plan_stage = declarations["plan_stage"]
+    implementation_stage = declarations["implementation_stage"]
+
+    impl_protected_paths = implementation_stage.get("protected_paths", {})
+    impl_protected_prefixes = implementation_stage.get("protected_prefixes", {})
+    impl_excluded_paths = implementation_stage.get("excluded_paths", {})
+    impl_excluded_prefixes = implementation_stage.get("excluded_prefixes", {})
+
+    for path in impl_protected_paths:
+        classification = fingerprint.classify_path_implementation_stage(
+            path, impl_protected_paths, impl_protected_prefixes, impl_excluded_paths, impl_excluded_prefixes,
+        )
+        if classification != "protected":
+            raise AssertionError(f"{path}: classifies {classification!r}, expected 'protected'")
+    for prefix in impl_protected_prefixes:
+        sample = prefix + "some_deliverable_file.txt"
+        classification = fingerprint.classify_path_implementation_stage(
+            sample, impl_protected_paths, impl_protected_prefixes, impl_excluded_paths, impl_excluded_prefixes,
+        )
+        if classification != "protected":
+            raise AssertionError(f"{sample}: classifies {classification!r}, expected 'protected'")
+
+    direction_a_gaps, direction_b_gaps = find_declaration_symmetry_gaps(plan_stage, implementation_stage)
+    if direction_a_gaps:
+        raise AssertionError(f"declaration symmetry direction (a) failed: {direction_a_gaps}")
+    if direction_b_gaps:
+        raise AssertionError(f"declaration symmetry direction (b) failed: {direction_b_gaps}")
+
+
+class DeclarationSymmetryHelperTest(unittest.TestCase):
+    """The required synthetic fixtures (`IMPLEMENTATION_REVIEW_TWO_STAGE_PLAN.md`
+    §CP7, revision 41) pinning `find_declaration_symmetry_gaps`'s every
+    documented case. (workflow-2.5.0 CP11, release-authoring sweep: the
+    real-corpus before/after check this class used to also carry -- pinned
+    against this repository's own live `implementation-review-two-stage`
+    declarations file and a hardcoded CP7 commit SHA -- was removed here,
+    along with the sibling `TestImplementationReviewTwoStageDeclarationCoverage`
+    class: both were self-referential to this exact repository at this
+    exact commit and could never pass once installed into any other target
+    repository via the general release payload. CP12's own disposable-
+    repository functional validation exercises this same generic helper
+    against a synthetic work item instead, per its own registry entry.)"""
+
+    # -- direction (a) -----------------------------------------------------
+
+    def test_direction_a_fails_when_implementation_protected_path_unclaimed_by_plan_stage(self):
+        plan_stage = {"protected_paths": [], "excluded_paths": {}, "excluded_prefixes": {}}
+        implementation_stage = {"protected_paths": {"src/x.py": "j"}, "protected_prefixes": {},
+                                 "excluded_paths": {}, "excluded_prefixes": {}}
+        gaps_a, gaps_b = find_declaration_symmetry_gaps(plan_stage, implementation_stage)
+        self.assertEqual(gaps_b, [])
+        self.assertEqual(len(gaps_a), 1)
+        self.assertIn("src/x.py", gaps_a[0])
+
+    # -- direction (b): no coverage at all ----------------------------------
+
+    def test_direction_b_fails_when_plan_excluded_path_has_no_implementation_declaration_at_all(self):
+        plan_stage = {"protected_paths": [], "excluded_paths": {"foo.txt": "j"}, "excluded_prefixes": {}}
+        implementation_stage = {"protected_paths": {}, "protected_prefixes": {},
+                                 "excluded_paths": {}, "excluded_prefixes": {}}
+        gaps_a, gaps_b = find_declaration_symmetry_gaps(plan_stage, implementation_stage)
+        self.assertEqual(gaps_a, [])
+        self.assertEqual(len(gaps_b), 1)
+        self.assertIn("foo.txt", gaps_b[0])
+        self.assertIn("no narrowing_exceptions entry", gaps_b[0])
+
+    def test_direction_b_fails_when_plan_excluded_prefix_is_only_partially_covered_with_no_exception(self):
+        # foo/bar.txt is declared at implementation stage, but the
+        # excepted entry's own literal key ("foo/") still does not
+        # classify -- partial overlap alone is never accepted.
+        plan_stage = {"protected_paths": [], "excluded_paths": {}, "excluded_prefixes": {"foo/": "j"}}
+        implementation_stage = {"protected_paths": {}, "protected_prefixes": {},
+                                 "excluded_paths": {"foo/bar.txt": "j"}, "excluded_prefixes": {}}
+        gaps_a, gaps_b = find_declaration_symmetry_gaps(plan_stage, implementation_stage)
+        self.assertEqual(gaps_a, [])
+        self.assertEqual(len(gaps_b), 1)
+        self.assertIn("foo/", gaps_b[0])
+        self.assertIn("no narrowing_exceptions entry", gaps_b[0])
+
+    # -- direction (b): narrowing_exceptions present but malformed ----------
+
+    def test_direction_b_fails_when_narrowing_exceptions_value_is_empty(self):
+        plan_stage = {"protected_paths": [], "excluded_paths": {},
+                       "excluded_prefixes": {"foo/": "j"},
+                       "narrowing_exceptions": {"foo/": []}}
+        implementation_stage = {"protected_paths": {}, "protected_prefixes": {},
+                                 "excluded_paths": {}, "excluded_prefixes": {}}
+        gaps_a, gaps_b = find_declaration_symmetry_gaps(plan_stage, implementation_stage)
+        self.assertEqual(gaps_a, [])
+        self.assertEqual(len(gaps_b), 1)
+        self.assertIn("is empty", gaps_b[0])
+
+    def test_direction_b_fails_when_narrowing_exceptions_listed_path_is_undeclared(self):
+        plan_stage = {"protected_paths": [], "excluded_paths": {},
+                       "excluded_prefixes": {"foo/": "j"},
+                       "narrowing_exceptions": {"foo/": ["foo/bar.txt"]}}
+        implementation_stage = {"protected_paths": {}, "protected_prefixes": {},
+                                 "excluded_paths": {}, "excluded_prefixes": {}}
+        gaps_a, gaps_b = find_declaration_symmetry_gaps(plan_stage, implementation_stage)
+        self.assertEqual(gaps_a, [])
+        self.assertEqual(len(gaps_b), 1)
+        self.assertIn("not declared at implementation stage", gaps_b[0])
+
+    def test_direction_b_fails_when_narrowing_exceptions_listed_path_is_not_contained(self):
+        plan_stage = {"protected_paths": [], "excluded_paths": {},
+                       "excluded_prefixes": {"foo/": "j"},
+                       "narrowing_exceptions": {"foo/": ["bar/baz.txt"]}}
+        implementation_stage = {"protected_paths": {}, "protected_prefixes": {},
+                                 "excluded_paths": {"bar/baz.txt": "j"}, "excluded_prefixes": {}}
+        gaps_a, gaps_b = find_declaration_symmetry_gaps(plan_stage, implementation_stage)
+        self.assertEqual(gaps_a, [])
+        self.assertEqual(len(gaps_b), 1)
+        self.assertIn("not contained by", gaps_b[0])
+
+    def test_direction_b_fails_when_narrowing_exceptions_list_omits_a_contained_exact_child(self):
+        plan_stage = {"protected_paths": [], "excluded_paths": {},
+                       "excluded_prefixes": {"foo/": "j"},
+                       "narrowing_exceptions": {"foo/": ["foo/a.txt"]}}
+        implementation_stage = {"protected_paths": {}, "protected_prefixes": {},
+                                 "excluded_paths": {"foo/a.txt": "j", "foo/b.txt": "j"}, "excluded_prefixes": {}}
+        gaps_a, gaps_b = find_declaration_symmetry_gaps(plan_stage, implementation_stage)
+        self.assertEqual(gaps_a, [])
+        self.assertEqual(len(gaps_b), 1)
+        self.assertIn("not exhaustive", gaps_b[0])
+        self.assertIn("foo/b.txt", gaps_b[0])
+
+    def test_direction_b_fails_when_narrowing_exceptions_list_omits_a_contained_prefix_child(self):
+        # The prefix twin of the exact-child exhaustiveness fixture above:
+        # exhaustiveness is measured against the complete set (exact
+        # paths and prefixes alike), never the exact-only subset.
+        plan_stage = {"protected_paths": [], "excluded_paths": {},
+                       "excluded_prefixes": {"foo/": "j"},
+                       "narrowing_exceptions": {"foo/": ["foo/a.txt"]}}
+        implementation_stage = {"protected_paths": {}, "protected_prefixes": {},
+                                 "excluded_paths": {"foo/a.txt": "j"},
+                                 "excluded_prefixes": {"foo/sub/": "j"}}
+        gaps_a, gaps_b = find_declaration_symmetry_gaps(plan_stage, implementation_stage)
+        self.assertEqual(gaps_a, [])
+        self.assertEqual(len(gaps_b), 1)
+        self.assertIn("not exhaustive", gaps_b[0])
+        self.assertIn("foo/sub/", gaps_b[0])
+
+    def test_direction_b_live_regression_exact_path_addition_without_updating_the_exception(self):
+        # The exact-path live-regression fixture: a state that passes
+        # today must fail the moment a further implementation-stage exact
+        # path lands under an already-excepted entry without that
+        # entry's own narrowing_exceptions list being updated to match.
+        plan_stage = {"protected_paths": [], "excluded_paths": {},
+                       "excluded_prefixes": {"foo/": "j"},
+                       "narrowing_exceptions": {"foo/": ["foo/a.txt", "foo/b.txt"]}}
+        good_implementation_stage = {"protected_paths": {}, "protected_prefixes": {},
+                                      "excluded_paths": {"foo/a.txt": "j", "foo/b.txt": "j"},
+                                      "excluded_prefixes": {}}
+        gaps_a, gaps_b = find_declaration_symmetry_gaps(plan_stage, good_implementation_stage)
+        self.assertEqual((gaps_a, gaps_b), ([], []))
+
+        regressed_implementation_stage = copy.deepcopy(good_implementation_stage)
+        regressed_implementation_stage["excluded_paths"]["foo/c.txt"] = "j"
+        gaps_a, gaps_b = find_declaration_symmetry_gaps(plan_stage, regressed_implementation_stage)
+        self.assertEqual(gaps_a, [])
+        self.assertEqual(len(gaps_b), 1)
+        self.assertIn("foo/c.txt", gaps_b[0])
+
+    def test_direction_b_live_regression_prefix_addition_without_updating_the_exception(self):
+        # The prefix twin of the live-regression fixture above.
+        plan_stage = {"protected_paths": [], "excluded_paths": {},
+                       "excluded_prefixes": {"foo/": "j"},
+                       "narrowing_exceptions": {"foo/": ["foo/a.txt", "foo/sub/"]}}
+        good_implementation_stage = {"protected_paths": {}, "protected_prefixes": {},
+                                      "excluded_paths": {"foo/a.txt": "j"},
+                                      "excluded_prefixes": {"foo/sub/": "j"}}
+        gaps_a, gaps_b = find_declaration_symmetry_gaps(plan_stage, good_implementation_stage)
+        self.assertEqual((gaps_a, gaps_b), ([], []))
+
+        regressed_implementation_stage = copy.deepcopy(good_implementation_stage)
+        regressed_implementation_stage["excluded_prefixes"]["foo/sub2/"] = "j"
+        gaps_a, gaps_b = find_declaration_symmetry_gaps(plan_stage, regressed_implementation_stage)
+        self.assertEqual(gaps_a, [])
+        self.assertEqual(len(gaps_b), 1)
+        self.assertIn("foo/sub2/", gaps_b[0])
+
+    def test_direction_b_fails_when_narrowing_exceptions_key_is_not_a_real_plan_stage_entry(self):
+        plan_stage = {"protected_paths": [], "excluded_paths": {"real.txt": "j"}, "excluded_prefixes": {},
+                       "narrowing_exceptions": {"fake/": ["fake/child.txt"]}}
+        implementation_stage = {"protected_paths": {}, "protected_prefixes": {},
+                                 "excluded_paths": {"fake/child.txt": "j", "real.txt": "j"}, "excluded_prefixes": {}}
+        gaps_a, gaps_b = find_declaration_symmetry_gaps(plan_stage, implementation_stage)
+        self.assertEqual(gaps_a, [])
+        self.assertEqual(len(gaps_b), 1)
+        self.assertIn("not itself a plan_stage.excluded_paths/excluded_prefixes entry", gaps_b[0])
+
+    # -- direction (b): passing cases ---------------------------------------
+
+    def test_direction_b_passes_for_the_declared_workflow_manager_narrowing_exception(self):
+        plan_stage = {"protected_paths": [], "excluded_paths": {},
+                       "excluded_prefixes": {".workflow-manager/": "j"},
+                       "narrowing_exceptions": {".workflow-manager/": [".workflow-manager/installation.json"]}}
+        implementation_stage = {"protected_paths": {}, "protected_prefixes": {},
+                                 "excluded_paths": {".workflow-manager/installation.json": "j"},
+                                 "excluded_prefixes": {}}
+        self.assertEqual(find_declaration_symmetry_gaps(plan_stage, implementation_stage), ([], []))
+
+    def test_direction_b_passes_when_plan_entry_is_fully_covered_without_needing_an_exception(self):
+        plan_stage = {"protected_paths": [], "excluded_paths": {"tools/build_release.py": "j"},
+                       "excluded_prefixes": {}}
+        implementation_stage = {"protected_paths": {"tools/build_release.py": "j"}, "protected_prefixes": {},
+                                 "excluded_paths": {}, "excluded_prefixes": {}}
+        self.assertEqual(find_declaration_symmetry_gaps(plan_stage, implementation_stage), ([], []))
+
+    def test_direction_b_passes_when_narrowing_exception_names_a_contained_prefix_not_an_exact_path(self):
+        # A plan-stage entry whose only implementation-stage narrowing is
+        # itself a prefix -- contained by, not equal to, the excepted
+        # entry -- must be representable and pass.
+        plan_stage = {"protected_paths": [], "excluded_paths": {},
+                       "excluded_prefixes": {"foo/": "j"},
+                       "narrowing_exceptions": {"foo/": ["foo/sub/"]}}
+        implementation_stage = {"protected_paths": {}, "protected_prefixes": {},
+                                 "excluded_paths": {}, "excluded_prefixes": {"foo/sub/": "j"}}
+        self.assertEqual(find_declaration_symmetry_gaps(plan_stage, implementation_stage), ([], []))
+
+
+# ---------------------------------------------------------------------------
+# CP8 -- D-Review-Finding-Taxonomy-and-Circuit-Breaker. Purely advisory
+# prose (REVIEW_PROTOCOL.md's "Feedback protocol" section): no
+# WORKFLOW_STATE.json field, no phase gate, no governing-version bump, and
+# no runtime parser rejects a missing/malformed tag. The helpers below are
+# test-only reference logic modeling exactly the algorithm the prose
+# describes -- they are never imported by workflow_state.py or by any
+# review command, matching the "advisory, never machine-enforced" framing.
+# ---------------------------------------------------------------------------
+
+
+import re as _re
+
+_FINDING_TAG_RE = _re.compile(r"\[(substantive|apparatus)\]", _re.IGNORECASE)
+_REVIEWER_ROLE_RE = _re.compile(r"^Reviewer role:\s*(\S+)\s*$", _re.MULTILINE)
+_STATUS_RE = _re.compile(r"^Status:\s*(APPROVE|REVISE|BLOCK)\s*$", _re.MULTILINE)
+_LOCAL_MODEL_STAGES = {"LOCAL_MODEL_PLAN_REVIEW", "LOCAL_MODEL_IMPLEMENTATION_REVIEW"}
+
+
+def _finding_blocks(feedback_text):
+    """Every Blocking/Important finding entry, as the raw text following
+    each leading '- ' bullet under those two headings -- fixture-only
+    parsing, deliberately naive (no REVIEW_FEEDBACK.md structural
+    validation), since only the tag's own presence/value matters here."""
+    blocks = []
+    for heading in ("Blocking findings", "Important findings"):
+        match = _re.search(
+            rf"^## {heading}\n(.*?)(?=\n## |\Z)", feedback_text, _re.MULTILINE | _re.DOTALL,
+        )
+        if not match:
+            continue
+        body = match.group(1)
+        blocks.extend(line for line in body.splitlines() if line.strip().startswith("-"))
+    return blocks
+
+
+def _finding_tag(finding_line):
+    """The advisory tag for one finding line -- 'apparatus' only when
+    exactly and unambiguously tagged so; a missing, malformed, or (were one
+    ever present) multiply-tagged line defaults, conservatively, to
+    'substantive' (D-Review-Finding-Taxonomy-and-Circuit-Breaker point 1),
+    so a missing tag can never masquerade as an apparatus-only finding."""
+    tags = _FINDING_TAG_RE.findall(finding_line)
+    if len(tags) == 1 and tags[0].lower() == "apparatus":
+        return "apparatus"
+    return "substantive"
+
+
+def _reviewer_role(feedback_text):
+    match = _REVIEWER_ROLE_RE.search(feedback_text)
+    return match.group(1) if match else None
+
+
+def _status(feedback_text):
+    match = _STATUS_RE.search(feedback_text)
+    return match.group(1) if match else None
+
+
+def _is_apparatus_only_revise_round(feedback_text):
+    """A REVISE round is apparatus-only when at least one Blocking/
+    Important finding is present and every one of them tags 'apparatus'
+    (an untagged/malformed one, defaulting to 'substantive', breaks this).
+    A round with no Blocking/Important findings at all is not a REVISE
+    round to begin with under REVIEW_PROTOCOL.md's own rule, so it is
+    never treated as apparatus-only here."""
+    if _status(feedback_text) != "REVISE":
+        return False
+    findings = _finding_blocks(feedback_text)
+    if not findings:
+        return False
+    return all(_finding_tag(line) == "apparatus" for line in findings)
+
+
+def circuit_breaker_fires(previous_feedback_text, current_feedback_text):
+    """Reference model of the advisory signal: fires exactly when both
+    rounds declare the *same* local-model `Reviewer role:` stage, both are
+    REVISE, and both are apparatus-only -- the exact scope
+    D-Review-Finding-Taxonomy-and-Circuit-Breaker states, narrowed to the
+    two local-model stages only (never a manual-external one)."""
+    prev_role = _reviewer_role(previous_feedback_text)
+    curr_role = _reviewer_role(current_feedback_text)
+    if prev_role is None or prev_role != curr_role or prev_role not in _LOCAL_MODEL_STAGES:
+        return False
+    return (
+        _is_apparatus_only_revise_round(previous_feedback_text)
+        and _is_apparatus_only_revise_round(current_feedback_text)
+    )
+
+
+def _feedback(role, status, findings):
+    """Builds a minimal, schema-shaped REVIEW_FEEDBACK.md fixture: findings
+    is a list of (heading, tag_or_None) pairs, tag_or_None omitted meaning
+    'untagged'."""
+    lines = [
+        "# Review Decision", "", f"Status: {status}", "",
+        "Reviewed bundle ID: deadbeef", "Reviewed base commit: cafef00d",
+        "Work item: implementation-review-two-stage", "",
+        f"Reviewer role: {role}", "",
+        "## Blocking findings", "",
+    ]
+    for heading, tag in findings:
+        tagged = f"[{tag}] " if tag else ""
+        lines.append(f"- {tagged}{heading}")
+    lines += ["", "## Important findings", "", "## Optional findings", ""]
+    return "\n".join(lines)
+
+
+class FindingTaxonomyCircuitBreakerTest(unittest.TestCase):
+    """CP8's first required test: the signal fires after two consecutive
+    apparatus-only REVISE rounds for the same local-model stage -- for
+    each of the two local-model stages independently -- and never
+    otherwise, including the missing-tag-can't-masquerade case."""
+
+    def test_fires_after_two_consecutive_apparatus_only_rounds_for_each_local_model_stage(self):
+        for role in sorted(_LOCAL_MODEL_STAGES):
+            with self.subTest(role=role):
+                previous = _feedback(role, "REVISE", [("stale prose", "apparatus")])
+                current = _feedback(role, "REVISE", [("another stale reference", "apparatus")])
+                self.assertTrue(circuit_breaker_fires(previous, current))
+
+    def test_does_not_fire_across_different_stages(self):
+        previous = _feedback("LOCAL_MODEL_PLAN_REVIEW", "REVISE", [("x", "apparatus")])
+        current = _feedback("LOCAL_MODEL_IMPLEMENTATION_REVIEW", "REVISE", [("y", "apparatus")])
+        self.assertFalse(circuit_breaker_fires(previous, current))
+
+    def test_does_not_fire_for_manual_external_rounds(self):
+        previous = _feedback("MANUAL_EXTERNAL_PLAN_REVIEW", "REVISE", [("x", "apparatus")])
+        current = _feedback("MANUAL_EXTERNAL_PLAN_REVIEW", "REVISE", [("y", "apparatus")])
+        self.assertFalse(circuit_breaker_fires(previous, current))
+
+    def test_a_missing_tag_defaults_to_substantive_and_cannot_masquerade_as_apparatus(self):
+        # An untagged finding never manufactures an apparatus-only streak
+        # by silence (point 1 of the design decision).
+        previous = _feedback("LOCAL_MODEL_PLAN_REVIEW", "REVISE", [("untagged finding", None)])
+        current = _feedback("LOCAL_MODEL_PLAN_REVIEW", "REVISE", [("also apparatus", "apparatus")])
+        self.assertFalse(circuit_breaker_fires(previous, current))
+        self.assertEqual(_finding_tag("- untagged finding"), "substantive")
+
+    def test_a_single_substantive_round_never_fires_regardless_of_the_other_round(self):
+        previous = _feedback("LOCAL_MODEL_IMPLEMENTATION_REVIEW", "REVISE",
+                              [("a real defect", "substantive")])
+        current = _feedback("LOCAL_MODEL_IMPLEMENTATION_REVIEW", "REVISE",
+                             [("cleanup only", "apparatus")])
+        self.assertFalse(circuit_breaker_fires(previous, current))
+
+    def test_resolve_or_reject_rule_is_unaffected_by_tag_or_its_absence(self):
+        # D-Review-Finding-Taxonomy-and-Circuit-Breaker point 2: the tag
+        # (or its absence) changes nothing about which findings must be
+        # resolved or explicitly rejected -- REVIEW_PROTOCOL.md's own text
+        # states this for both tags and for an untagged finding alike.
+        protocol_path = Path(__file__).resolve().parent.parent / "docs/ai-workflow/REVIEW_PROTOCOL.md"
+        text = protocol_path.read_text(encoding="utf-8")
+        self.assertIn(
+            "Every blocking and\nimportant finding must end up either resolved, or explicitly rejected",
+            text,
+        )
+        self.assertIn('never means "may be\nignored"', text)
+
+
+class ReviewProtocolManualExternalCircuitBreakerScopeTest(unittest.TestCase):
+    """CP8's second required test: REVIEW_PROTOCOL.md's own added text
+    makes no manual-external recoverability claim a reader could act on
+    (revision 15, MANUAL_EXTERNAL_PLAN_REVIEW round 1, finding I3) --
+    proved against the prose itself, not assumed."""
+
+    def _circuit_breaker_section(self):
+        protocol_path = Path(__file__).resolve().parent.parent / "docs/ai-workflow/REVIEW_PROTOCOL.md"
+        text = protocol_path.read_text(encoding="utf-8")
+        match = _re.search(
+            r"### Finding taxonomy and circuit breaker.*?(?=\n## )", text, _re.DOTALL,
+        )
+        self.assertIsNotNone(match, "D-Review-Finding-Taxonomy-and-Circuit-Breaker section not found")
+        return match.group(0)
+
+    def test_section_states_no_manual_external_recoverability_claim(self):
+        section = self._circuit_breaker_section()
+        self.assertIn("no", section)
+        self.assertIn("recoverability claim", section)
+        self.assertIn("manual-external", section.lower())
+        self.assertIn("operator\njudgment", section)
+
+    def test_section_never_affirmatively_claims_the_bound_fires_for_manual_external_rounds(self):
+        section = self._circuit_breaker_section()
+        flat = _re.sub(r"\s+", " ", section)
+        sentences = _re.split(r"(?<=[.:])\s+", flat)
+        manual_external_sentences = [s for s in sentences if "manual-external" in s.lower()]
+        self.assertTrue(manual_external_sentences, "no sentence mentions manual-external at all")
+        affirmative_claim_markers = (
+            "fires", "applies to", "also applies", "the same bound", "recovers the signal",
+            "is available for", "holds across two consecutive manual",
+        )
+        for sentence in manual_external_sentences:
+            lowered = sentence.lower()
+            for marker in affirmative_claim_markers:
+                self.assertNotIn(
+                    marker, lowered,
+                    f"sentence {sentence!r} makes an affirmative manual-external "
+                    f"circuit-breaker claim via {marker!r}",
+                )
+
+
+# ---------------------------------------------------------------------------
+# CP9 -- post-v2.3.1 backlog, tractable fixes (`docs/ai-workflow/
+# IMPLEMENTATION_REVIEW_TWO_STAGE_PLAN.md` section 2.7). Forward-only:
+# `generate_artifacts_declarations`'s implementation-stage default template
+# gains the `.workflow-manager/` exclusion the plan-stage default already
+# carried (`v2.4.0-001`'s own plan-stage fix), so a freshly generated
+# declarations file is not exposed to the identical gap this item's own
+# CP2 (revision 2, finding B1) had to hand-fix for itself. No existing work
+# item's already-generated declarations file is edited by this change. The
+# other three backlog fixes (`v2.3.1-003`'s mode-`100644` fallback,
+# `v2.3.1-001`'s portable host-note skip, and `migration/
+# portability_exceptions.json`'s required empty `by_version["2.5.0"]`
+# entry) are regression-tested in this overlay's own
+# `workflow_integration_test.py` and this repository's own
+# `tests/test_conformance_suite.py`, respectively -- not here.
+# ---------------------------------------------------------------------------
+
+
+class GeneratedDeclarationsWorkflowManagerImplementationStageWideningTest(unittest.TestCase):
+    """CP9's own required regression test: `generate_artifacts_declarations`'s
+    implementation-stage default classifies
+    `.workflow-manager/installation.json` `excluded` for a freshly-generated
+    declarations file, for both work-item types -- the implementation-stage
+    twin of the plan-stage `.workflow-manager/` exclusion `v2.4.0-001`'s own
+    fix already added (`plan_stage_excluded_prefixes.setdefault('.workflow-
+    manager/', ...)`)."""
+
+    def _declarations(self, work_item_type: str) -> dict:
+        return ws.generate_artifacts_declarations(
+            "new-item", "docs/ai-workflow/new-item-plan.md",
+            "docs/ai-workflow/registry/new-item-registry.json",
+            "docs/ai-workflow/requirements/new-item-mapping.json",
+            work_item_type=work_item_type,
+        )
+
+    def _classify_impl(self, declarations: dict, path: str) -> str:
+        stage = declarations["implementation_stage"]
+        return fingerprint.classify_path_implementation_stage(
+            path, stage["protected_paths"], stage["protected_prefixes"],
+            stage["excluded_paths"], stage["excluded_prefixes"],
+        )
+
+    def test_process_item_implementation_stage_excludes_workflow_manager_installation_record(self):
+        declarations = self._declarations("process")
+        self.assertEqual(
+            self._classify_impl(declarations, ".workflow-manager/installation.json"),
+            "excluded",
+        )
+
+    def test_product_item_implementation_stage_excludes_workflow_manager_installation_record(self):
+        declarations = self._declarations("product")
+        self.assertEqual(
+            self._classify_impl(declarations, ".workflow-manager/installation.json"),
+            "excluded",
+        )
+
+    def test_the_widened_prefix_is_present_verbatim_symmetric_with_the_plan_stage_default(self):
+        declarations = self._declarations("process")
+        self.assertIn(
+            ".workflow-manager/", declarations["implementation_stage"]["excluded_prefixes"],
+        )
+        self.assertIn(
+            ".workflow-manager/", declarations["plan_stage"]["excluded_prefixes"],
+        )
+
+
+
+class TestFeedbackLayoutStamp(unittest.TestCase):
+    """`D-Feedback-Layout` (workflow-2.6.0, CP3; REQ-1): the durable
+    `feedback_layout: "scoped"` stamp is written only at creation --
+    `route_work_item`'s fresh-id branch and
+    `create_remediation_child_work_item` -- never on resume, never
+    back-filled; `validate_state` accepts the one known value and refuses
+    any other (INV-3). The resolver side is
+    `workflow_fingerprint_test.TestFeedbackLayout`."""
+
+    def _route(self, state, work_item_id, *, plan_revision=1, now="t1"):
+        return ws.route_work_item(
+            state, ws.default_config(), work_item_id=work_item_id, work_item_type="process",
+            work_item_kind="process", plan_path="p", registry_path="r",
+            plan_revision=plan_revision, now=now,
+        )
+
+    def test_fresh_item_is_stamped_scoped(self):
+        new_state = self._route(_base_state(), "milestone-9")
+        self.assertEqual(new_state["work_items"]["milestone-9"]["feedback_layout"], "scoped")
+        ws.validate_state(new_state)
+
+    def test_remediation_child_is_stamped_scoped(self):
+        state = _base_state(parent=_base_work_item(
+            work_item_id="parent", work_item_type="product", work_item_kind="product",
+        ))
+        new_state, child_id = ws.create_remediation_child_work_item(
+            state, ws.default_config(), parent_work_item_id="parent", plan_path="p",
+            registry_path="r", base_commit="feedcafe", now="t1",
+        )
+        self.assertEqual(new_state["work_items"][child_id]["feedback_layout"], "scoped")
+        self.assertNotIn("feedback_layout", new_state["work_items"]["parent"], "the parent is never back-filled")
+
+    def test_resume_never_stamps_a_legacy_item(self):
+        state = _base_state(wi=_base_work_item(governing_workflow_version="2.2", phase="REVISING_PLAN"))
+        self.assertNotIn("feedback_layout", state["work_items"]["wi"])
+        resumed = self._route(state, "wi", plan_revision=2, now="t2")
+        self.assertNotIn("feedback_layout", resumed["work_items"]["wi"])
+
+    def test_resume_leaves_a_scoped_stamp_unchanged(self):
+        created = self._route(_base_state(), "milestone-9")
+        resumed = self._route(created, "milestone-9", plan_revision=2, now="t2")
+        self.assertEqual(resumed["work_items"]["milestone-9"]["feedback_layout"], "scoped")
+
+    def test_validate_state_accepts_absent_and_scoped(self):
+        state = _base_state(wi=_base_work_item())
+        ws.validate_state(state)  # absent: legacy
+        state["work_items"]["wi"]["feedback_layout"] = "scoped"
+        ws.validate_state(state)
+
+    def test_validate_state_refuses_an_unknown_layout(self):
+        for value in ("flat", "legacy-flat", "", None, 1, ["scoped"]):
+            with self.subTest(value=value):
+                state = _base_state(wi=_base_work_item())
+                state["work_items"]["wi"]["feedback_layout"] = value
+                with self.assertRaises(fingerprint.UnknownFeedbackLayoutError):
+                    ws.validate_state(state)
+
+
+
+# ---------------------------------------------------------------------------
+# workflow-2.6.0 CP4: D-Plan-Review-Bundle-Binding -- dict-level coverage of
+# the publication split, the `plan_review_binding` record's writers and
+# validator, the bind, the withdrawal and step 1's feedback rule. The
+# real-repository scenarios (verifier, status table, generator staging,
+# command order) live in workflow_acceptance_matrix_test.py and
+# workflow_fingerprint_generalization_test.py.
+# ---------------------------------------------------------------------------
+
+_CP4_A, _CP4_B, _CP4_C, _CP4_D = "a" * 64, "b" * 64, "c" * 64, "d" * 64
+
+
+def _cp4_record(status, *, consumed=None, published=None, bound=None, at="t0"):
+    return {"status": status, "at": at, "consumed": consumed, "published": published, "bound": bound}
+
+
+def _cp4_consumed(review_content_id=_CP4_B, plan_revision=1):
+    return {"review_content_id": review_content_id, "plan_revision": plan_revision,
+            "legacy": review_content_id is None}
+
+
+def _cp4_item(version="2.2", phase="REVISING_PLAN", plan_revision=1, record="default", **overrides):
+    wi = _base_work_item(governing_workflow_version=version, phase=phase, plan_revision=plan_revision, **overrides)
+    if record == "default":
+        record = _cp4_record("CONSUMED", consumed=_cp4_consumed(plan_revision=plan_revision))
+    if record is not None:
+        wi["plan_review_binding"] = record
+    return wi
+
+
+def _cp4_binding(review_content_id=_CP4_A, bundle_id=_CP4_C, plan_revision=2):
+    return {"review_content_id": review_content_id, "bundle_id": bundle_id, "plan_revision": plan_revision}
+
+
+class TestPlanReviewBindingValidation(unittest.TestCase):
+    """`validate_state` accepts every well-formed record and refuses every
+    malformed one by name (INV-3)."""
+
+    def _validate(self, record):
+        wi = _cp4_item(record=None)
+        wi["plan_review_binding"] = record
+        ws.validate_state(_base_state(wi=wi))
+
+    def test_absent_record_is_valid(self):
+        ws.validate_state(_base_state(wi=_cp4_item(record=None)))
+
+    def test_each_well_formed_status_is_valid(self):
+        for record in (
+            _cp4_record("CONSUMED", consumed=_cp4_consumed()),
+            _cp4_record("CONSUMED", consumed=_cp4_consumed(None, 3)),
+            _cp4_record("PUBLISHED", published={"review_content_id": _CP4_A, "plan_revision": 2}),
+            _cp4_record("PUBLISHED", consumed=_cp4_consumed(),
+                        published={"review_content_id": _CP4_A, "plan_revision": 2}),
+            _cp4_record("BOUND", consumed=_cp4_consumed(),
+                        published={"review_content_id": _CP4_A, "plan_revision": 2},
+                        bound=_cp4_binding()),
+        ):
+            with self.subTest(status=record["status"], legacy=bool(record["consumed"] and record["consumed"]["legacy"])):
+                self._validate(record)
+
+    def test_malformed_records_refuse_by_name(self):
+        good_published = {"review_content_id": _CP4_A, "plan_revision": 2}
+        cases = {
+            "present null": None,
+            "not an object": ["CONSUMED"],
+            "unknown status": _cp4_record("REVIEWED", consumed=_cp4_consumed()),
+            "unhashable status": dict(_cp4_record("CONSUMED", consumed=_cp4_consumed()), status=["CONSUMED"]),
+            "missing key": {"status": "CONSUMED", "at": "t0", "consumed": _cp4_consumed(), "published": None},
+            "extra key": dict(_cp4_record("CONSUMED", consumed=_cp4_consumed()), extra=1),
+            "empty at": _cp4_record("CONSUMED", consumed=_cp4_consumed(), at=""),
+            "legacy flag disagrees": _cp4_record("CONSUMED", consumed={
+                "review_content_id": _CP4_B, "plan_revision": 1, "legacy": True}),
+            "non-hex consumed id": _cp4_record("CONSUMED", consumed={
+                "review_content_id": "stale", "plan_revision": 1, "legacy": False}),
+            "bool revision": _cp4_record("CONSUMED", consumed={
+                "review_content_id": _CP4_B, "plan_revision": True, "legacy": False}),
+            "zero revision": _cp4_record("PUBLISHED", published={"review_content_id": _CP4_A, "plan_revision": 0}),
+            "malformed bound": _cp4_record("BOUND", bound={"review_content_id": _CP4_A, "plan_revision": 2}),
+            "CONSUMED without consumed": _cp4_record("CONSUMED"),
+            "CONSUMED with published": _cp4_record("CONSUMED", consumed=_cp4_consumed(), published=good_published),
+            "PUBLISHED without published": _cp4_record("PUBLISHED", consumed=_cp4_consumed()),
+            "PUBLISHED with bound": _cp4_record("PUBLISHED", published=good_published, bound=_cp4_binding()),
+            "BOUND without bound": _cp4_record("BOUND", published=good_published),
+        }
+        for name, record in cases.items():
+            with self.subTest(case=name):
+                with self.assertRaises(ws.InvalidPlanReviewBindingError):
+                    self._validate(record)
+
+
+class TestPublishPlanRevisionTwoStage(unittest.TestCase):
+    """Section 5.3 item 1: mirror-only publication with the `PUBLISHED`
+    record, the plan-stage allow-list, and the early consumed refusal."""
+
+    def test_phase_unchanged_at_each_non_ready_phase(self):
+        for version in ("2.1", "2.2"):
+            for phase, record in (
+                ("PLANNING", None),
+                ("REVISING_PLAN", "default"),
+                ("AMENDING_PLAN", "default"),
+            ):
+                with self.subTest(version=version, phase=phase):
+                    wi = _cp4_item(version=version, phase=phase, record=record, state_revision=4)
+                    state = _base_state(wi=wi)
+                    new_state = ws.publish_plan_revision(state, "wi", 2, "t1", review_content_id=_CP4_A)
+                    item = new_state["work_items"]["wi"]
+                    self.assertEqual(item["phase"], phase)
+                    self.assertEqual(item["plan_revision"], 2)
+                    self.assertEqual(item["state_revision"], 5)
+                    self.assertEqual(item["plan_review_binding"], {
+                        "status": "PUBLISHED", "at": "t1",
+                        "consumed": None if record is None else _cp4_consumed(),
+                        "published": {"review_content_id": _CP4_A, "plan_revision": 2},
+                        "bound": None,
+                    })
+                    self.assertNotIn("plan_review_binding", state["work_items"]["wi"]) if record is None else None
+                    ws.validate_state(new_state)
+
+    def test_same_round_republish_after_further_edits_replaces_published(self):
+        state = _base_state(wi=_cp4_item())
+        first = ws.publish_plan_revision(state, "wi", 2, "t1", review_content_id=_CP4_A)
+        second = ws.publish_plan_revision(first, "wi", 2, "t2", review_content_id=_CP4_D)
+        record = second["work_items"]["wi"]["plan_review_binding"]
+        self.assertEqual(record["published"], {"review_content_id": _CP4_D, "plan_revision": 2})
+        self.assertEqual(record["consumed"], _cp4_consumed())
+
+    def test_republishing_the_same_content_is_a_true_no_op(self):
+        state = ws.publish_plan_revision(_base_state(wi=_cp4_item()), "wi", 2, "t1", review_content_id=_CP4_A)
+        again = ws.publish_plan_revision(state, "wi", 2, "t9", review_content_id=_CP4_A)
+        self.assertIs(again, state)
+
+    def test_review_content_id_is_required(self):
+        for bad in (None, "stale", _CP4_A.upper()):
+            with self.subTest(review_content_id=bad):
+                with self.assertRaises(TypeError):
+                    ws.publish_plan_revision(_base_state(wi=_cp4_item()), "wi", 2, "t1", review_content_id=bad)
+
+    def test_consumed_content_refused_early(self):
+        with self.assertRaises(ws.ConsumedPlanReviewContentError):
+            ws.publish_plan_revision(_base_state(wi=_cp4_item()), "wi", 1, "t1", review_content_id=_CP4_B)
+
+    def test_legacy_marker_needs_one_revision_advance(self):
+        wi = _cp4_item(plan_revision=3, record=_cp4_record("CONSUMED", consumed=_cp4_consumed(None, 3)))
+        with self.assertRaises(ws.ConsumedPlanReviewContentError):
+            ws.publish_plan_revision(_base_state(wi=wi), "wi", 3, "t1", review_content_id=_CP4_A)
+        published = ws.publish_plan_revision(_base_state(wi=wi), "wi", 4, "t1", review_content_id=_CP4_A)
+        self.assertEqual(published["work_items"]["wi"]["plan_review_binding"]["status"], "PUBLISHED")
+
+    def test_legacy_mid_round_item_without_record_refuses(self):
+        for phase in ("REVISING_PLAN", "AMENDING_PLAN"):
+            with self.subTest(phase=phase):
+                with self.assertRaises(ws.LegacyPlanReviewBindingUnknownError) as refused:
+                    ws.publish_plan_revision(
+                        _base_state(wi=_cp4_item(phase=phase, record=None)), "wi", 2, "t1",
+                        review_content_id=_CP4_A,
+                    )
+                self.assertIn("ensure_plan_review_binding_marker", str(refused.exception))
+
+    def test_bound_record_at_a_non_ready_phase_is_inconsistent(self):
+        wi = _cp4_item(record=_cp4_record("BOUND", bound=_cp4_binding(plan_revision=1)))
+        with self.assertRaises(ws.PlanReviewBindingInconsistentError):
+            ws.publish_plan_revision(_base_state(wi=wi), "wi", 2, "t1", review_content_id=_CP4_A)
+
+    def test_ready_phases_refuse_in_place_republication(self):
+        for phase in sorted(ws.PLAN_REVIEW_READY_PHASES):
+            with self.subTest(phase=phase):
+                state = _base_state(wi=_cp4_item(phase=phase, record=None))
+                with self.assertRaises(ws.PlanReviewInProgressError) as refused:
+                    ws.publish_plan_revision(state, "wi", 2, "t1", review_content_id=_CP4_A)
+                self.assertIn("/milestone-plan wi", str(refused.exception))
+
+    def test_phases_outside_the_plan_stage_refuse(self):
+        for phase, names_amendment in (
+            ("IMPLEMENTING", True), ("SELF_REVIEWING_IMPLEMENTATION", True),
+            ("AWAITING_FUNCTIONAL_REVIEW", False), ("APPLYING_REVIEW_FEEDBACK", False),
+            ("AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW", False),
+        ):
+            with self.subTest(phase=phase):
+                with self.assertRaises(ws.PlanReviewPhaseNotPlanStageError) as refused:
+                    ws.publish_plan_revision(
+                        _base_state(wi=_cp4_item(phase=phase, record=None)), "wi", 2, "t1",
+                        review_content_id=_CP4_A,
+                    )
+                self.assertEqual("/request-plan-amendment wi" in str(refused.exception), names_amendment)
+
+    def test_v1_behavior_is_unchanged(self):
+        """`"1"` stays byte-for-byte `2.5.1`'s: the target phase, no record,
+        `review_content_id` ignored, the same no-op rule."""
+        for phase in ("PLANNING", "IMPLEMENTING", "REVISING_PLAN"):
+            with self.subTest(phase=phase):
+                wi = _base_work_item(governing_workflow_version="1", phase=phase, plan_revision=1,
+                                     state_revision=2, last_transition="t0")
+                expected = dict(wi, plan_revision=2, phase="AWAITING_EXTERNAL_PLAN_REVIEW",
+                                state_revision=3, last_transition="t1")
+                for kwargs in ({}, {"review_content_id": _CP4_A}):
+                    new_state = ws.publish_plan_revision(_base_state(wi=wi), "wi", 2, "t1", **kwargs)
+                    self.assertEqual(new_state["work_items"]["wi"], expected)
+                done = _base_state(wi=expected)
+                self.assertIs(ws.publish_plan_revision(done, "wi", 2, "t2"), done)
+
+
+class TestRouteWorkItemPlanStageAllowList(unittest.TestCase):
+    """`LPR-R4-002`: the resume branch's revision advance runs only at a
+    non-ready plan-stage phase for a two-stage item."""
+
+    def _route(self, state):
+        return ws.route_work_item(
+            state, ws.default_config(), work_item_id="wi", work_item_type="process",
+            work_item_kind="process", plan_path="p", registry_path="r",
+            plan_revision=2, now="t1",
+        )
+
+    def test_refuses_at_ready_and_outside_phases_writing_nothing(self):
+        for phase, error in (
+            ("AWAITING_LOCAL_PLAN_REVIEW", ws.PlanReviewInProgressError),
+            ("AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW", ws.PlanReviewInProgressError),
+            ("AWAITING_PLAN_APPROVAL", ws.PlanReviewInProgressError),
+            ("IMPLEMENTING", ws.PlanReviewPhaseNotPlanStageError),
+            ("AWAITING_FUNCTIONAL_REVIEW", ws.PlanReviewPhaseNotPlanStageError),
+        ):
+            with self.subTest(phase=phase):
+                state = _base_state(wi=_cp4_item(phase=phase, record=None))
+                snapshot = json.dumps(state, sort_keys=True)
+                with self.assertRaises(error):
+                    self._route(state)
+                self.assertEqual(json.dumps(state, sort_keys=True), snapshot)
+
+    def test_advances_at_each_non_ready_phase(self):
+        for phase in sorted(ws.PLAN_REVIEW_NON_READY_PHASES):
+            with self.subTest(phase=phase):
+                routed = self._route(_base_state(wi=_cp4_item(phase=phase, record=None)))
+                self.assertEqual(routed["work_items"]["wi"]["plan_revision"], 2)
+                self.assertEqual(routed["work_items"]["wi"]["phase"], phase)
+
+    def test_v1_item_is_unchanged(self):
+        state = _base_state(wi=_base_work_item(governing_workflow_version="1", phase="IMPLEMENTING"))
+        self.assertEqual(self._route(state)["work_items"]["wi"]["plan_revision"], 2)
+
+
+class TestBindPlanReviewBundle(unittest.TestCase):
+    """Section 5.3 item 3: the sole writer of `AWAITING_LOCAL_PLAN_REVIEW`,
+    legitimate only against the freshly re-read record."""
+
+    def _published(self, phase="REVISING_PLAN", consumed="default", plan_revision=2):
+        consumed = _cp4_consumed() if consumed == "default" else consumed
+        return _cp4_item(phase=phase, plan_revision=plan_revision, record=_cp4_record(
+            "PUBLISHED", consumed=consumed,
+            published={"review_content_id": _CP4_A, "plan_revision": plan_revision},
+        ), state_revision=7)
+
+    def test_success_writes_the_ready_phase_pointer_and_bound_record(self):
+        for phase in sorted(ws.PLAN_REVIEW_NON_READY_PHASES):
+            with self.subTest(phase=phase):
+                new_state = ws.bind_plan_review_bundle(
+                    _base_state(wi=self._published(phase=phase)), "wi", binding=_cp4_binding(), now="t2",
+                )
+                item = new_state["work_items"]["wi"]
+                self.assertEqual(item["phase"], "AWAITING_LOCAL_PLAN_REVIEW")
+                self.assertEqual(item["current_bundle_id"], _CP4_C)
+                self.assertEqual(item["state_revision"], 8)
+                self.assertEqual(item["plan_review_binding"], {
+                    "status": "BOUND", "at": "t2", "consumed": _cp4_consumed(),
+                    "published": {"review_content_id": _CP4_A, "plan_revision": 2},
+                    "bound": _cp4_binding(),
+                })
+                ws.validate_state(new_state)
+
+    def test_idempotent_rebind_at_local_review_even_for_a_new_bundle_id(self):
+        bound = ws.bind_plan_review_bundle(_base_state(wi=self._published()), "wi", binding=_cp4_binding(), now="t2")
+        again = ws.bind_plan_review_bundle(bound, "wi", binding=_cp4_binding(bundle_id=_CP4_D), now="t3")
+        self.assertIs(again, bound)
+
+    def test_never_regresses_a_later_ready_phase(self):
+        bound = ws.bind_plan_review_bundle(_base_state(wi=self._published()), "wi", binding=_cp4_binding(), now="t2")
+        for phase in ("AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW", "AWAITING_PLAN_APPROVAL"):
+            with self.subTest(phase=phase):
+                state = copy.deepcopy(bound)
+                state["work_items"]["wi"]["phase"] = phase
+                with self.assertRaises(ws.PlanReviewAlreadyReadyError):
+                    ws.bind_plan_review_bundle(state, "wi", binding=_cp4_binding(), now="t3")
+        with self.assertRaises(ws.PlanReviewAlreadyReadyError):
+            ws.bind_plan_review_bundle(bound, "wi", binding=_cp4_binding(review_content_id=_CP4_D), now="t3")
+
+    def test_unpublished_content_never_binds(self):
+        cases = {
+            "consumed record": (_cp4_item(plan_revision=2), _cp4_binding()),
+            "planning, no record": (_cp4_item(phase="PLANNING", plan_revision=2, record=None), _cp4_binding()),
+            "different content": (self._published(), _cp4_binding(review_content_id=_CP4_D)),
+            "different revision": (self._published(), _cp4_binding(plan_revision=3)),
+            "mirror moved on": (dict(self._published(), plan_revision=3), _cp4_binding()),
+        }
+        for name, (wi, binding) in cases.items():
+            with self.subTest(case=name):
+                with self.assertRaises(ws.PlanReviewNotPublishedError):
+                    ws.bind_plan_review_bundle(_base_state(wi=wi), "wi", binding=binding, now="t2")
+
+    def test_consumed_content_never_binds(self):
+        wi = self._published(consumed=_cp4_consumed(_CP4_A, 1))
+        with self.assertRaises(ws.ConsumedPlanReviewContentError):
+            ws.bind_plan_review_bundle(_base_state(wi=wi), "wi", binding=_cp4_binding(), now="t2")
+        legacy = self._published(consumed=_cp4_consumed(None, 2))
+        with self.assertRaises(ws.ConsumedPlanReviewContentError):
+            ws.bind_plan_review_bundle(_base_state(wi=legacy), "wi", binding=_cp4_binding(), now="t2")
+
+    def test_legacy_inconsistent_and_out_of_stage_refusals(self):
+        with self.assertRaises(ws.LegacyPlanReviewBindingUnknownError):
+            ws.bind_plan_review_bundle(_base_state(wi=_cp4_item(record=None)), "wi", binding=_cp4_binding(), now="t")
+        with self.assertRaises(ws.PlanReviewBindingInconsistentError):
+            ws.bind_plan_review_bundle(_base_state(wi=_cp4_item(record=_cp4_record(
+                "BOUND", bound=_cp4_binding()))), "wi", binding=_cp4_binding(), now="t")
+        with self.assertRaises(ws.PlanReviewPhaseNotPlanStageError):
+            ws.bind_plan_review_bundle(_base_state(wi=self._published(phase="IMPLEMENTING")),
+                                       "wi", binding=_cp4_binding(), now="t")
+        with self.assertRaises(ws.WrongGoverningVersionForPlanReviewStageError):
+            ws.bind_plan_review_bundle(_base_state(wi=_base_work_item(phase="REVISING_PLAN")),
+                                       "wi", binding=_cp4_binding(), now="t")
+        with self.assertRaises(TypeError):
+            ws.bind_plan_review_bundle(_base_state(wi=self._published()), "wi",
+                                       binding=dict(_cp4_binding(), extra=1), now="t")
+
+
+class TestWithdrawPlanReview(unittest.TestCase):
+    """Section 5.3 item 7: the verdict-free exit from a ready phase."""
+
+    def _bound(self, phase, **overrides):
+        return _cp4_item(phase=phase, plan_revision=2, record=_cp4_record(
+            "BOUND", consumed=_cp4_consumed(),
+            published={"review_content_id": _CP4_A, "plan_revision": 2}, bound=_cp4_binding(),
+        ), current_bundle_id=_CP4_C, plan_review_stages={"review_content_id": _CP4_A}, **overrides)
+
+    def test_each_ready_phase_withdraws_to_revising_plan_consuming_the_bound_content(self):
+        for phase in sorted(ws.PLAN_REVIEW_READY_PHASES):
+            with self.subTest(phase=phase):
+                state = _base_state(wi=self._bound(phase))
+                new_state = ws.withdraw_plan_review(state, "wi", "t5")
+                item = new_state["work_items"]["wi"]
+                self.assertEqual(item["phase"], "REVISING_PLAN")
+                self.assertEqual(item["plan_review_binding"], _cp4_record(
+                    "CONSUMED", consumed=_cp4_consumed(_CP4_A, 2), at="t5"))
+                # Untouched: the stages ledger and the bundle pointer.
+                self.assertEqual(item["plan_review_stages"], {"review_content_id": _CP4_A})
+                self.assertEqual(item["current_bundle_id"], _CP4_C)
+                # And the withdrawn content can never re-publish.
+                with self.assertRaises(ws.ConsumedPlanReviewContentError):
+                    ws.publish_plan_revision(new_state, "wi", 2, "t6", review_content_id=_CP4_A)
+
+    def test_an_open_amendment_withdraws_to_amending_plan(self):
+        wi = self._bound("AWAITING_LOCAL_PLAN_REVIEW", amendment_history=[
+            {"amendment_id": "0", "resolved_at_plan_revision": None},
+        ])
+        new_state = ws.withdraw_plan_review(_base_state(wi=wi), "wi", "t5")
+        self.assertEqual(new_state["work_items"]["wi"]["phase"], "AMENDING_PLAN")
+
+    def test_no_record_or_an_inconsistent_one_gets_the_legacy_marker(self):
+        for record in (None, _cp4_record("PUBLISHED", published={"review_content_id": _CP4_A, "plan_revision": 2})):
+            with self.subTest(record=None if record is None else record["status"]):
+                wi = _cp4_item(phase="AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW", plan_revision=4, record=record)
+                item = ws.withdraw_plan_review(_base_state(wi=wi), "wi", "t5")["work_items"]["wi"]
+                self.assertEqual(item["plan_review_binding"]["consumed"], _cp4_consumed(None, 4))
+
+    def test_a_non_ready_phase_refuses_writing_nothing(self):
+        for phase in ("REVISING_PLAN", "PLANNING", "IMPLEMENTING"):
+            with self.subTest(phase=phase):
+                state = _base_state(wi=_cp4_item(phase=phase))
+                with self.assertRaises(ws.PlanReviewNotReadyError):
+                    ws.withdraw_plan_review(state, "wi", "t5")
+
+
+class TestPlanApprovalStagedDiffIgnoresRenames(unittest.TestCase):
+    """Implementation review round 1, Optional 5: the empty-index
+    precondition and the post-staging member-set check read the staged
+    diff with `--no-renames`, so a staged non-member deletion that Git
+    would pair with a similar member addition as a rename is still named."""
+
+    _CONTENT = "".join(f"design line {i}\n" for i in range(40))
+
+    def _seed(self, repo):
+        (repo.root / "old.md").write_text(self._CONTENT)
+        _git_in(repo.root, "add", "old.md")
+        _git_in(repo.root, "commit", "-q", "-m", "seed old.md")
+        _git_in(repo.root, "rm", "--cached", "-q", "old.md")
+        (repo.root / "new.md").write_text(self._CONTENT)
+
+    def test_the_index_clean_check_names_the_deleted_side(self):
+        with ScratchRepo() as repo:
+            self._seed(repo)
+            _git_in(repo.root, "add", "new.md")
+            with self.assertRaises(ws.DirtyIndexBeforeStagingError) as refused:
+                ws.assert_plan_approval_index_clean(repo.root)
+            self.assertIn("old.md", str(refused.exception))
+
+    def test_the_post_staging_check_names_a_non_member_deletion(self):
+        with ScratchRepo() as repo:
+            self._seed(repo)
+            original = ws.assert_plan_approval_index_clean
+            ws.assert_plan_approval_index_clean = lambda _root: None  # the deletion got past it
+            try:
+                with self.assertRaises(ws.UnexpectedStagedPathSetError) as refused:
+                    ws.stage_plan_approval_commit_paths(repo.root, ("new.md",))
+            finally:
+                ws.assert_plan_approval_index_clean = original
+            self.assertIn("old.md", str(refused.exception))
+
+
+class TestPlanApprovalPhaseGate(unittest.TestCase):
+    """Implementation review round 1, Important 1: neither the withdrawal
+    nor a `REVISE` discards `plan_review_stages` (section 5.3 item 7), so
+    the content-keyed ledger can read A's two `APPROVE`s as live outside
+    `AWAITING_PLAN_APPROVAL`. `apply_plan_approval` refuses a two-stage item
+    anywhere but `AWAITING_PLAN_APPROVAL`, so that ledger read never reaches
+    approval. workflow-2.7.0 (`v2.6.0-001`): the detour that used to reach
+    it -- dual-approved A withdrawn, displaced from the single `consumed`
+    slot by B, and restored byte for byte -- is now refused at publish, and
+    at bind if a published record is forged."""
+
+    @staticmethod
+    def _record(review_content_id=_CP4_A):
+        return ws.build_approval_record(
+            basis="EXTERNAL_APPROVE", stage="plan", user_confirmation="approve wi plan",
+            now="t9", reviewed_bundle_id=_CP4_C, approved_review_content_id=review_content_id,
+            review_content_manifest=[],
+        )
+
+    def _dual_approved(self, version):
+        stages = {
+            "review_content_id": _CP4_A,
+            ws.LOCAL_MODEL_PLAN_REVIEW: {"bundle_id": _CP4_C, "verdict": "APPROVE",
+                                         "round": 1, "completed_at": "t1"},
+            ws.MANUAL_EXTERNAL_PLAN_REVIEW: {"bundle_id": _CP4_C, "verdict": "APPROVE",
+                                             "round": 1, "completed_at": "t2"},
+        }
+        return _base_state(wi=_cp4_item(
+            version=version, phase="AWAITING_PLAN_APPROVAL", plan_revision=2,
+            record=_cp4_record("BOUND", consumed=None,
+                               published={"review_content_id": _CP4_A, "plan_revision": 2},
+                               bound=_cp4_binding(_CP4_A, _CP4_C, 2)),
+            current_bundle_id=_CP4_C, plan_review_stages=stages,
+        ))
+
+    def test_withdraw_detour_restore_is_refused_at_publish_and_at_bind(self):
+        for version in sorted(ws.TWO_STAGE_PLAN_REVIEW_VERSIONS):
+            with self.subTest(version=version):
+                state = ws.withdraw_plan_review(self._dual_approved(version), "wi", "t3")
+                state = ws.publish_plan_revision(state, "wi", 3, "t4", review_content_id=_CP4_B)
+                state = ws.bind_plan_review_bundle(
+                    state, "wi", binding=_cp4_binding(_CP4_B, _CP4_D, 3), now="t5")
+                state = ws.withdraw_plan_review(state, "wi", "t6")
+                item = state["work_items"]["wi"]
+                self.assertEqual(item["plan_review_binding"]["consumed"]["review_content_id"], _CP4_B)
+                self.assertEqual(item[ws.CONSUMED_PLAN_REVIEW_CONTENT_IDS_KEY], [_CP4_A, _CP4_B])
+                # A is no longer the consumed slot, but the history still holds it.
+                with self.assertRaises(ws.ConsumedPlanReviewContentError):
+                    ws.publish_plan_revision(state, "wi", 4, "t7", review_content_id=_CP4_A)
+                forged = copy.deepcopy(state)
+                forged_item = forged["work_items"]["wi"]
+                forged_item["plan_revision"] = 4
+                forged_item["plan_review_binding"] = _cp4_record(
+                    "PUBLISHED", consumed=_cp4_consumed(_CP4_B, 3),
+                    published={"review_content_id": _CP4_A, "plan_revision": 4})
+                ws.validate_state(forged)
+                with self.assertRaises(ws.ConsumedPlanReviewContentError):
+                    ws.bind_plan_review_bundle(
+                        forged, "wi", binding=_cp4_binding(_CP4_A, _CP4_C, 4), now="t8")
+                # The ledger alone would still read as dual-approved for A, and the
+                # approval refuses at any phase but AWAITING_PLAN_APPROVAL regardless.
+                self.assertTrue(ws.plan_approval_gate_reachable(
+                    latest_round_status="APPROVE", governing_workflow_version=version,
+                    plan_review_stages=item["plan_review_stages"],
+                    current_review_content_id=_CP4_A,
+                ))
+                with self.assertRaises(ws.PlanApprovalPhaseError):
+                    ws.apply_plan_approval(state, "wi", self._record(), "t9")
+
+    def test_every_other_phase_refuses_and_awaiting_plan_approval_applies(self):
+        for version in sorted(ws.TWO_STAGE_PLAN_REVIEW_VERSIONS):
+            for phase in sorted(ws.KNOWN_PHASES - {"AWAITING_PLAN_APPROVAL"}):
+                with self.subTest(version=version, phase=phase):
+                    state = self._dual_approved(version)
+                    state["work_items"]["wi"]["phase"] = phase
+                    with self.assertRaises(ws.PlanApprovalPhaseError):
+                        ws.apply_plan_approval(state, "wi", self._record(), "t9")
+            with self.subTest(version=version, phase="AWAITING_PLAN_APPROVAL"):
+                new_state = ws.apply_plan_approval(self._dual_approved(version), "wi", self._record(), "t9")
+                self.assertEqual(new_state["work_items"]["wi"]["phase"], "IMPLEMENTING")
+
+    def test_a_version_1_item_is_unchanged(self):
+        state = self._dual_approved("1")
+        state["work_items"]["wi"]["phase"] = "AWAITING_EXTERNAL_PLAN_REVIEW"
+        new_state = ws.apply_plan_approval(state, "wi", self._record(), "t9")
+        self.assertEqual(new_state["work_items"]["wi"]["phase"], "IMPLEMENTING")
+
+
+class TestConsumedPlanReviewHistory(unittest.TestCase):
+    """workflow-2.7.0 (`v2.6.0-001`, `D-Consumed-History`): every
+    `review_content_id` ever written as `consumed` is kept in the work-item
+    key `consumed_plan_review_content_ids`, so content withdrawn, revised or
+    amended away re-enters review only after an edit."""
+
+    _E = "e" * 64
+
+    def _bound(self, review_content_id=_CP4_A, plan_revision=2, consumed=None, version="2.2"):
+        return _base_state(wi=_cp4_item(
+            version=version, phase="AWAITING_LOCAL_PLAN_REVIEW", plan_revision=plan_revision,
+            record=_cp4_record("BOUND", consumed=consumed,
+                               published={"review_content_id": review_content_id, "plan_revision": plan_revision},
+                               bound=_cp4_binding(review_content_id, _CP4_C, plan_revision)),
+        ))
+
+    def _publish_and_bind(self, state, review_content_id, plan_revision, now="t"):
+        state = ws.publish_plan_revision(state, "wi", plan_revision, now, review_content_id=review_content_id)
+        return ws.bind_plan_review_bundle(
+            state, "wi", binding=_cp4_binding(review_content_id, _CP4_D, plan_revision), now=now)
+
+    def _local_revise(self, state, review_content_id):
+        return ws.record_local_plan_review(
+            state, "wi", verdict="REVISE", bundle_id=_CP4_D, review_content_id=review_content_id,
+            round=1, now="t")
+
+    def test_the_defect_sequence_through_a_revise_consumption(self):
+        state = self._local_revise(self._bound(), _CP4_A)
+        state = self._publish_and_bind(state, _CP4_B, 3)
+        state = self._local_revise(state, _CP4_B)
+        self.assertEqual(state["work_items"]["wi"][ws.CONSUMED_PLAN_REVIEW_CONTENT_IDS_KEY], [_CP4_A, _CP4_B])
+        with self.assertRaises(ws.ConsumedPlanReviewContentError):
+            ws.publish_plan_revision(state, "wi", 4, "t", review_content_id=_CP4_A)
+
+    def test_the_defect_sequence_through_an_amendment_consumption(self):
+        with ScratchRepo() as repo:
+            approval_commit = repo.commit(
+                "approve plan", trailers={"Workflow-Plan-Approval": _CP4_A, "Workflow-Work-Item": "wi"})
+            item = _cp4_item(
+                phase="IMPLEMENTING", plan_revision=2, base_commit=repo.base,
+                record=_cp4_record("BOUND", consumed=None,
+                                   published={"review_content_id": _CP4_A, "plan_revision": 2},
+                                   bound=_cp4_binding(_CP4_A, _CP4_C, 2)),
+                plan_approval={"status": "CURRENT", "approved_review_content_id": _CP4_A},
+                checkpoints={"CP1": {"status": "COMPLETE", "start_commit": approval_commit}},
+                current_checkpoint_id=None, last_completed_checkpoint_id="CP1",
+            )
+            state = _request_plan_amendment_holding_lifecycle_lock(
+                _base_state(wi=item), "wi", "amend", repo_root=repo.root, now="t1")
+        self.assertEqual(state["work_items"]["wi"]["phase"], "AMENDING_PLAN")
+        self.assertEqual(state["work_items"]["wi"][ws.CONSUMED_PLAN_REVIEW_CONTENT_IDS_KEY], [_CP4_A])
+        state = self._publish_and_bind(state, _CP4_B, 3)
+        state = ws.withdraw_plan_review(state, "wi", "t2")
+        self.assertEqual(state["work_items"]["wi"]["phase"], "AMENDING_PLAN")
+        self.assertEqual(state["work_items"]["wi"][ws.CONSUMED_PLAN_REVIEW_CONTENT_IDS_KEY], [_CP4_A, _CP4_B])
+        with self.assertRaises(ws.ConsumedPlanReviewContentError):
+            ws.publish_plan_revision(state, "wi", 4, "t3", review_content_id=_CP4_A)
+
+    def test_restored_content_publishes_after_any_edit(self):
+        state = ws.withdraw_plan_review(self._bound(), "wi", "t1")
+        state = self._publish_and_bind(state, _CP4_B, 3)
+        state = ws.withdraw_plan_review(state, "wi", "t2")
+        with self.assertRaises(ws.ConsumedPlanReviewContentError):
+            ws.publish_plan_revision(state, "wi", 4, "t3", review_content_id=_CP4_A)
+        # A one-byte edit of A's bytes yields a new review_content_id.
+        state = self._publish_and_bind(state, self._E, 4)
+        item = state["work_items"]["wi"]
+        self.assertEqual(item["phase"], "AWAITING_LOCAL_PLAN_REVIEW")
+        self.assertEqual(item["plan_review_binding"]["bound"]["review_content_id"], self._E)
+
+    def test_a_2_6_0_item_migrates_at_read_time_and_on_its_first_consumption(self):
+        # A 2.6.0-shaped item: the slot only, no history key.
+        state = _base_state(wi=_cp4_item(plan_revision=3, record=_cp4_record(
+            "CONSUMED", consumed=_cp4_consumed(_CP4_B, 2))))
+        self.assertNotIn(ws.CONSUMED_PLAN_REVIEW_CONTENT_IDS_KEY, state["work_items"]["wi"])
+        ws.validate_state(state)
+        with self.assertRaises(ws.ConsumedPlanReviewContentError):
+            ws.publish_plan_revision(state, "wi", 3, "t1", review_content_id=_CP4_B)
+        state = self._publish_and_bind(state, _CP4_A, 3)
+        self.assertNotIn(ws.CONSUMED_PLAN_REVIEW_CONTENT_IDS_KEY, state["work_items"]["wi"],
+                         "publish and bind never write the history")
+        state = self._local_revise(state, _CP4_A)
+        self.assertEqual(state["work_items"]["wi"][ws.CONSUMED_PLAN_REVIEW_CONTENT_IDS_KEY], [_CP4_A, _CP4_B])
+        ws.validate_state(state)
+
+    def test_a_legacy_marker_adds_nothing(self):
+        state = _base_state(wi=_cp4_item(phase="AWAITING_LOCAL_PLAN_REVIEW", plan_revision=2, record=None))
+        state = ws.withdraw_plan_review(state, "wi", "t1")
+        item = state["work_items"]["wi"]
+        self.assertTrue(item["plan_review_binding"]["consumed"]["legacy"])
+        self.assertNotIn(ws.CONSUMED_PLAN_REVIEW_CONTENT_IDS_KEY, item)
+        # Over a non-legacy slot, the marker keeps the slot's id and adds none.
+        state = _base_state(wi=_cp4_item(
+            phase="AWAITING_LOCAL_PLAN_REVIEW", plan_revision=2,
+            record=_cp4_record("PUBLISHED", consumed=_cp4_consumed(_CP4_B, 1),
+                               published={"review_content_id": _CP4_A, "plan_revision": 2})))
+        item = ws.withdraw_plan_review(state, "wi", "t1")["work_items"]["wi"]
+        self.assertTrue(item["plan_review_binding"]["consumed"]["legacy"])
+        self.assertEqual(item[ws.CONSUMED_PLAN_REVIEW_CONTENT_IDS_KEY], [_CP4_B])
+
+    def _status(self, item, fresh, registry_revision):
+        original_registry = ws._registry_plan_revision_or_none
+        original_fresh = ws.compute_fresh_plan_review_content_id
+        ws._registry_plan_revision_or_none = lambda repo_root, work_item, work_item_id: registry_revision
+        ws.compute_fresh_plan_review_content_id = lambda repo_root, work_item_id: fresh
+        try:
+            return ws.plan_review_publication_status(Path("/nonexistent"), _base_state(wi=item), "wi")
+        finally:
+            ws._registry_plan_revision_or_none = original_registry
+            ws.compute_fresh_plan_review_content_id = original_fresh
+
+    def test_publication_status_row_10_reads_the_history_id_only(self):
+        item = _cp4_item(plan_revision=5, record=_cp4_record("CONSUMED", consumed=_cp4_consumed(_CP4_B, 4)))
+        item[ws.CONSUMED_PLAN_REVIEW_CONTENT_IDS_KEY] = [_CP4_A, _CP4_B]
+        # In the history, not in the slot, at a revision other than the one it was consumed at.
+        status = self._status(item, _CP4_A, 5)
+        self.assertEqual((status["row"], status["status"]), ("10", ws.PLAN_REVIEW_STATUS_NEEDS_EDIT))
+        # The slot keeps its full predicate: a hit at its own revisions, and
+        # (with no list) row 11 at another, as in 2.6.0.
+        slot_only = _cp4_item(plan_revision=4, record=_cp4_record("CONSUMED", consumed=_cp4_consumed(_CP4_B, 4)))
+        status = self._status(slot_only, _CP4_B, 4)
+        self.assertEqual((status["row"], status["status"]), ("10", ws.PLAN_REVIEW_STATUS_NEEDS_EDIT))
+        slot_only["plan_revision"] = 5
+        status = self._status(slot_only, _CP4_B, 5)
+        self.assertEqual((status["row"], status["status"]), ("11", ws.PLAN_REVIEW_STATUS_EDIT_IN_PROGRESS))
+        # In neither.
+        status = self._status(item, _CP4_D, 5)
+        self.assertEqual((status["row"], status["status"]), ("11", ws.PLAN_REVIEW_STATUS_EDIT_IN_PROGRESS))
+        # Unreadable content is never a history hit.
+        status = self._status(item, None, 5)
+        self.assertEqual(status["row"], "11")
+
+    def test_the_validator_refuses_a_malformed_history_and_accepts_one_without_the_slot_id(self):
+        for bad in ([_CP4_B, _CP4_A], [_CP4_A, _CP4_A], ["A" * 64], ["a" * 63], [_CP4_A + "\n"], [None],
+                    _CP4_A, None, {}):
+            with self.subTest(bad=bad):
+                item = _cp4_item()
+                item[ws.CONSUMED_PLAN_REVIEW_CONTENT_IDS_KEY] = bad
+                with self.assertRaises(ws.InvalidPlanReviewBindingError):
+                    ws.validate_state(_base_state(wi=item))
+                with self.assertRaises(ws.InvalidPlanReviewBindingError):
+                    ws.publish_plan_revision(_base_state(wi=item), "wi", 2, "t", review_content_id=_CP4_D)
+        item = _cp4_item()  # slot id is _CP4_B
+        item[ws.CONSUMED_PLAN_REVIEW_CONTENT_IDS_KEY] = [_CP4_A]
+        ws.validate_state(_base_state(wi=item))
+        item[ws.CONSUMED_PLAN_REVIEW_CONTENT_IDS_KEY] = []
+        ws.validate_state(_base_state(wi=item))
+        with self.assertRaises(ws.ConsumedPlanReviewContentError):
+            ws.publish_plan_revision(_base_state(wi=item), "wi", 2, "t", review_content_id=_CP4_B)
+
+    def test_downgrade_the_key_lives_outside_the_binding_record(self):
+        state = self._local_revise(self._bound(consumed=_cp4_consumed(_CP4_B, 1)), _CP4_A)
+        item = state["work_items"]["wi"]
+        self.assertEqual(item[ws.CONSUMED_PLAN_REVIEW_CONTENT_IDS_KEY], [_CP4_A, _CP4_B])
+        self.assertEqual(set(item["plan_review_binding"]), ws.PLAN_REVIEW_BINDING_KEYS)
+        self.assertNotIn(ws.CONSUMED_PLAN_REVIEW_CONTENT_IDS_KEY, json.dumps(item["plan_review_binding"]))
+        stripped = copy.deepcopy(state)
+        del stripped["work_items"]["wi"][ws.CONSUMED_PLAN_REVIEW_CONTENT_IDS_KEY]
+        ws.validate_state(stripped)
+        diff = {key for key in set(item) | set(stripped["work_items"]["wi"])
+                if item.get(key) != stripped["work_items"]["wi"].get(key)}
+        self.assertEqual(diff, {ws.CONSUMED_PLAN_REVIEW_CONTENT_IDS_KEY})
+
+
+class TestConsumedPlanReviewBindingWriters(unittest.TestCase):
+    """Section 5.3 item 2: every transition that takes reviewed content out
+    of review writes `CONSUMED` from its own inputs."""
+
+    def test_local_revise_consumes_its_own_review_content_id(self):
+        wi = _cp4_item(phase="AWAITING_LOCAL_PLAN_REVIEW", plan_revision=3, record=None)
+        item = ws.record_local_plan_review(
+            _base_state(wi=wi), "wi", verdict="REVISE", bundle_id="b1",
+            review_content_id=_CP4_A, round=1, now="t1",
+        )["work_items"]["wi"]
+        self.assertEqual(item["plan_review_binding"], _cp4_record("CONSUMED", consumed=_cp4_consumed(_CP4_A, 3), at="t1"))
+
+    def test_manual_revise_consumes_the_current_review_content_id(self):
+        wi = _cp4_item(phase="AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW", plan_revision=3, record=None,
+                       plan_review_stages={
+                           "review_content_id": _CP4_A,
+                           "LOCAL_MODEL_PLAN_REVIEW": {"bundle_id": "b1", "verdict": "APPROVE",
+                                                       "round": 1, "completed_at": "t0"},
+                           "MANUAL_EXTERNAL_PLAN_REVIEW": None,
+                       })
+        item = ws.record_manual_plan_review(
+            _base_state(wi=wi), "wi", verdict="REVISE", bundle_id="b1", round=1, now="t1",
+            current_review_content_id=_CP4_A, feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
+            feedback_review_content_id=_CP4_A,
+        )["work_items"]["wi"]
+        self.assertEqual(item["plan_review_binding"]["consumed"], _cp4_consumed(_CP4_A, 3))
+
+    def test_approve_and_block_leave_the_record_alone(self):
+        record = _cp4_record("BOUND", consumed=_cp4_consumed(), bound=_cp4_binding(plan_revision=1),
+                             published={"review_content_id": _CP4_A, "plan_revision": 1})
+        wi = _cp4_item(phase="AWAITING_LOCAL_PLAN_REVIEW", record=record)
+        for verdict in ("APPROVE", "BLOCK"):
+            with self.subTest(verdict=verdict):
+                item = ws.record_local_plan_review(
+                    _base_state(wi=copy.deepcopy(wi)), "wi", verdict=verdict, bundle_id="b1",
+                    review_content_id=_CP4_A, round=1, now="t1",
+                )["work_items"]["wi"]
+                self.assertEqual(item["plan_review_binding"], record)
+
+
+class TestEnsurePlanReviewBindingMarker(unittest.TestCase):
+    """Row 5's entry write (INV-7, `LPR-R3-006`)."""
+
+    def test_legacy_revising_plan_item_gets_the_null_id_marker(self):
+        wi = _cp4_item(phase="REVISING_PLAN", plan_revision=4, record=None, state_revision=2)
+        item = ws.ensure_plan_review_binding_marker(_base_state(wi=wi), "wi", "t1")["work_items"]["wi"]
+        self.assertEqual(item["plan_review_binding"], _cp4_record("CONSUMED", consumed=_cp4_consumed(None, 4), at="t1"))
+        self.assertEqual(item["state_revision"], 3)
+
+    def test_legacy_amending_plan_item_uses_its_open_amendment_record(self):
+        entry = {"amendment_id": "0", "resolved_at_plan_revision": None, "superseded_plan_revision": 2,
+                 "superseded_plan_approval": {"approved_review_content_id": _CP4_D}}
+        wi = _cp4_item(phase="AMENDING_PLAN", plan_revision=3, record=None, amendment_history=[entry])
+        item = ws.ensure_plan_review_binding_marker(_base_state(wi=wi), "wi", "t1")["work_items"]["wi"]
+        self.assertEqual(item["plan_review_binding"]["consumed"], _cp4_consumed(_CP4_D, 2))
+        without_id = copy.deepcopy(wi)
+        without_id["amendment_history"][0]["superseded_plan_approval"]["approved_review_content_id"] = None
+        item = ws.ensure_plan_review_binding_marker(_base_state(wi=without_id), "wi", "t1")["work_items"]["wi"]
+        self.assertEqual(item["plan_review_binding"]["consumed"], _cp4_consumed(None, 3))
+
+    def test_no_op_everywhere_else(self):
+        for wi in (
+            _cp4_item(),                                         # record already exists
+            _cp4_item(phase="PLANNING", record=None),            # first round
+            _cp4_item(phase="AWAITING_LOCAL_PLAN_REVIEW", record=None),
+            _base_work_item(governing_workflow_version="1", phase="REVISING_PLAN"),
+        ):
+            with self.subTest(phase=wi["phase"], version=wi["governing_workflow_version"]):
+                state = _base_state(wi=wi)
+                self.assertIs(ws.ensure_plan_review_binding_marker(state, "wi", "t1"), state)
+
+
+class TestAssertApplyPlanReviewFeedback(unittest.TestCase):
+    """`/apply-plan-review` step 1 for a two-stage item: `REVISE` only, and
+    the durable feedback check under rows 9 and 11."""
+
+    @staticmethod
+    def _feedback(status="REVISE", work_item="wi", review_content_id=_CP4_B):
+        lines = [f"Status: {status}", f"Work item: {work_item}"]
+        if review_content_id is not None:
+            lines.append(f"review_content_id: {review_content_id}")
+        return "\n".join(lines) + "\n"
+
+    def test_block_and_approve_are_never_applied(self):
+        for status in ("BLOCK", "APPROVE", None):
+            with self.subTest(status=status):
+                content = self._feedback(status=status) if status else "Work item: wi\n"
+                with self.assertRaises(ws.FeedbackStatusNotApplicableError) as refused:
+                    ws.assert_apply_plan_review_feedback(
+                        _cp4_item(), "wi", feedback_content=content, publication_status="NEEDS_EDIT",
+                    )
+                if status == "BLOCK":
+                    self.assertIn("/milestone-plan wi", str(refused.exception))
+                    self.assertIn("/review-plan wi", str(refused.exception))
+
+    def test_durable_check_binds_to_the_consumed_content(self):
+        for status in sorted(ws.PLAN_REVIEW_DURABLE_FEEDBACK_CHECK_STATUSES):
+            with self.subTest(status=status):
+                self.assertEqual(ws.assert_apply_plan_review_feedback(
+                    _cp4_item(), "wi", feedback_content=self._feedback(), publication_status=status,
+                ), "durable")
+                for bad in (_CP4_A, None):
+                    with self.assertRaises(ws.FeedbackNotForConsumedContentError):
+                        ws.assert_apply_plan_review_feedback(
+                            _cp4_item(), "wi", feedback_content=self._feedback(review_content_id=bad),
+                            publication_status=status,
+                        )
+
+    def test_legacy_marker_checks_work_item_and_status_only(self):
+        legacy = _cp4_item(record=_cp4_record("CONSUMED", consumed=_cp4_consumed(None, 1)))
+        self.assertEqual(ws.assert_apply_plan_review_feedback(
+            legacy, "wi", feedback_content=self._feedback(review_content_id=None),
+            publication_status="EDIT_IN_PROGRESS",
+        ), "durable")
+        with self.assertRaises(ws.FeedbackNotForConsumedContentError):
+            ws.assert_apply_plan_review_feedback(
+                legacy, "wi", feedback_content=self._feedback(work_item="other"),
+                publication_status="EDIT_IN_PROGRESS",
+            )
+
+    def test_other_statuses_defer_to_the_on_disk_bundle_binding(self):
+        self.assertEqual(ws.assert_apply_plan_review_feedback(
+            _cp4_item(), "wi", feedback_content=self._feedback(review_content_id=_CP4_A),
+            publication_status="NEEDS_EDIT",
+        ), "bundle")
+        v1 = _base_work_item(governing_workflow_version="1", phase="REVISING_PLAN")
+        self.assertEqual(ws.assert_apply_plan_review_feedback(
+            v1, "wi", feedback_content=self._feedback(status="BLOCK"), publication_status="NEEDS_EDIT",
+        ), "bundle")
+
+
+
+class TestPlanApprovalClosureUnits(unittest.TestCase):
+    """workflow-2.6.0 CP5, `D-Plan-Approval-Closure`: the pure pieces. The
+    command-shaped scenarios live in `workflow_acceptance_matrix_test.py`
+    (`PlanApprovalClosure*`, `PlanApprovalCommittedTruth`)."""
+
+    def _journal_dict(self, **overrides):
+        journal = {field: "x" for field in ws._PLAN_APPROVAL_JOURNAL_REQUIRED_STR_FIELDS}
+        journal.update({
+            "schema_version": ws.PLAN_APPROVAL_JOURNAL_SCHEMA_VERSION,
+            "applicable_paths": ["a.md"], "fifth_member_applies": False,
+            "takeover_count": 0, "previous_owner_tokens": [],
+        })
+        journal.update(overrides)
+        return journal
+
+    def _write_journal(self, root, journal):
+        path = ws.plan_approval_journal_path(root)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(journal))
+
+    def test_amend_gate_admits_only_tree_content_defects(self):
+        tree_content = (
+            ws.CommittedStateBlobMismatchError("x"), ws.CommittedBlobMismatchError("x"),
+            ws.CommittedProtectedContentMismatchError("x"), ws.PostApprovalManifestMismatchError("x"),
+            fingerprint.AbsentProtectedPathError("x"),
+        )
+        for exc in tree_content:
+            self.assertEqual(ws.classify_post_commit_verification_failure(exc),
+                             ws.POST_COMMIT_FAILURE_TREE_CONTENT, type(exc).__name__)
+        record_or_input = (
+            ws.MissingApprovalRecordError("x"), ws.CommittedApprovalRecordMismatchError("x"),
+            ws.CommittedPathSetMismatchError("x"), fingerprint.UnclassifiedPathError("x"),
+            TypeError("'NoneType' object is not subscriptable"), KeyError("x"), ValueError("x"),
+            subprocess.CalledProcessError(1, ["git"]),
+        )
+        for exc in record_or_input:
+            self.assertEqual(ws.classify_post_commit_verification_failure(exc),
+                             ws.POST_COMMIT_FAILURE_RECORD_OR_INPUT, type(exc).__name__)
+
+    def test_protected_content_mismatch_is_not_a_path_set_mismatch(self):
+        """The amend corrects content, never membership: the two must stay
+        distinguishable by type."""
+        self.assertFalse(issubclass(ws.CommittedProtectedContentMismatchError,
+                                    ws.CommittedPathSetMismatchError))
+
+    def test_missing_record_is_a_named_error_at_both_stages(self):
+        cases = (None, {}, {"plan_approval": None}, {"plan_approval": {}},
+                 {"plan_approval": {"approved_review_content_id": None}},
+                 {"technical_approval": None}, {"technical_approval": "not a dict"})
+        for stage in ("plan", "implementation"):
+            for work_item in cases:
+                with self.subTest(stage=stage, work_item=work_item):
+                    with self.assertRaises(ws.MissingApprovalRecordError):
+                        ws.verify_post_approval_manifest_match(
+                            Path("/nonexistent"), work_item, stage=stage,
+                            base_commit="HEAD", commit="HEAD",
+                        )
+
+    def test_explicit_expected_id_refuses_a_different_record_before_recomputing(self):
+        work_item = {"work_item_id": "x", "work_item_type": "process",
+                     "plan_approval": {"approved_review_content_id": "a" * 64}}
+        with self.assertRaises(ws.CommittedApprovalRecordMismatchError) as ctx:
+            ws.verify_post_approval_manifest_match(
+                Path("/nonexistent"), work_item, stage="plan", base_commit="HEAD",
+                commit="HEAD", expected_review_content_id="b" * 64,
+            )
+        self.assertIn("a" * 64, str(ctx.exception))
+        self.assertIn("b" * 64, str(ctx.exception))
+
+    def test_journal_removal_paths_must_be_a_subset_of_the_members(self):
+        with ScratchRepo() as repo:
+            with self.assertRaises(ValueError):
+                ws.open_plan_approval_journal(
+                    repo.root, work_item_id="x", base_commit=repo.base, pre_state={},
+                    record={}, approval_now="2026-01-01T00:00:00Z", expected_bundle_id="b",
+                    expected_review_content_id="r", applicable_paths=("a.md",),
+                    removal_paths=("gone.md",), fifth_member_applies=False,
+                    fifth_member_sha256=None, user_confirmation="u", quiescence_authorization="q",
+                )
+            self.assertIsNone(ws.read_plan_approval_journal(repo.root))
+
+    def test_a_2_5_1_journal_without_removal_paths_still_reads(self):
+        with ScratchRepo() as repo:
+            self._write_journal(repo.root, self._journal_dict())
+            journal = ws.read_plan_approval_journal(repo.root)
+            self.assertNotIn("removal_paths", journal)
+            self.assertEqual(journal.get("removal_paths", []), [])
+
+    def test_a_malformed_removal_paths_field_fails_closed(self):
+        for bad in ("a.md", [1], None, {"a.md": 1}):
+            with self.subTest(bad=bad), ScratchRepo() as repo:
+                self._write_journal(repo.root, self._journal_dict(removal_paths=bad))
+                with self.assertRaises(ws.PlanApprovalJournalUnavailableError) as ctx:
+                    ws.read_plan_approval_journal(repo.root)
+                self.assertIn("removal_paths", str(ctx.exception))
+
+    def test_manifest_protected_path_reader(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = Path(tmp) / "MANIFEST.md"
+            self.assertIsNone(fingerprint.read_plan_stage_manifest_protected_paths(manifest))
+            self.assertIsNone(fingerprint.read_plan_stage_manifest_base_commit(manifest))
+            manifest.write_text(
+                "# Bundle Manifest\n\nstage: plan\nbase_commit: " + "c" * 40 + "\n\n"
+                "## Protected paths\n- docs/a.md\n- docs/b.md\n\n"
+                "## Excluded paths (exact match)\n- `x` — y\n"
+            )
+            self.assertEqual(fingerprint.read_plan_stage_manifest_protected_paths(manifest),
+                             frozenset({"docs/a.md", "docs/b.md"}))
+            self.assertEqual(fingerprint.read_plan_stage_manifest_base_commit(manifest), "c" * 40)
+            manifest.write_text("# Bundle Manifest\n\nstage: plan\n")
+            self.assertIsNone(fingerprint.read_plan_stage_manifest_protected_paths(manifest))
+
+    def test_commit_plan_defaults_keep_hand_built_plans_working(self):
+        plan = fingerprint.PlanApprovalCommitPlan(("a",), None, None)
+        self.assertEqual(plan.protected_paths, ())
+        self.assertEqual(plan.removal_paths, ())
+
+    def test_staging_stages_an_absent_member_as_a_deletion(self):
+        with ScratchRepo() as repo:
+            (repo.root / "keep.md").write_text("keep\n")
+            (repo.root / "gone.md").write_text("gone\n")
+            _run(["git", "add", "keep.md", "gone.md"], cwd=repo.root)
+            _run(["git", "commit", "-q", "-m", "two files"], cwd=repo.root)
+            (repo.root / "gone.md").unlink()
+            (repo.root / "keep.md").write_text("keep, edited\n")
+            ws.stage_plan_approval_commit_paths(repo.root, ("keep.md", "gone.md", "never-existed.md"))
+            staged = subprocess.run(
+                ["git", "diff", "--cached", "--name-status", "HEAD"], cwd=repo.root,
+                capture_output=True, text=True, check=True,
+            ).stdout.split("\n")
+            self.assertIn("D\tgone.md", staged)
+            self.assertIn("M\tkeep.md", staged)
+
+    def test_dirty_index_refusal_names_the_git_mv_remedy(self):
+        with ScratchRepo() as repo:
+            _run(["git", "mv", "README.md", "RENAMED.md"], cwd=repo.root)
+            with self.assertRaises(ws.DirtyIndexBeforeStagingError) as ctx:
+                ws.assert_plan_approval_index_clean(repo.root)
+            self.assertIn("git mv", str(ctx.exception))
+            self.assertIn("git --literal-pathspecs restore --staged", str(ctx.exception))
+
+
+# ---------------------------------------------------------------------------
+# workflow-2.7.0 (ORCHESTRATION_PROTOCOL_V1_PLAN.md, CP4): the repository-aware
+# gate wrappers, `verify_implementation_review_bundle`, and
+# `implementing_entry_status`. The scratch repositories generate their bundles
+# with the real `prepare-ai-review.sh` (`workflow_test_harness`).
+# ---------------------------------------------------------------------------
+
+import workflow_test_harness as _harness  # noqa: E402
+
+_CP4_WI = "wi"
+
+
+def _cp4_verdict(status, *, rcid=None, bundle=None, base=None, work_item=_CP4_WI, role=None):
+    lines = ["# Review Decision", "", f"Status: {status}", ""]
+    if role:
+        lines.append(f"Reviewer role: {role}")
+    if bundle:
+        lines.append(f"Reviewed bundle ID: {bundle}")
+    if base:
+        lines.append(f"Reviewed base commit: {base}")
+    if work_item:
+        lines.append(f"Work item: {work_item}")
+    if rcid:
+        lines.append(f"Reviewed review_content_id: {rcid}")
+    return "\n".join(lines + ["", "## Blocking findings", "", "None.", ""])
+
+
+def _cp4_feedback(repo, text):
+    path = repo.root / ".ai-review" / _CP4_WI / "feedback" / "REVIEW_FEEDBACK.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if text is None:
+        path.unlink(missing_ok=True)
+    else:
+        path.write_text(text)
+
+
+def _cp4_bundle_dir(repo):
+    return repo.root / ".ai-review" / _CP4_WI / "current"
+
+
+def _cp4_mutate(repo, fn, *args, **kwargs):
+    state = fn(_harness.read_state(repo), _CP4_WI, *args, **kwargs)
+    _harness.write_state(repo, state)
+    return state
+
+
+def _cp4_edit(repo, **fields):
+    state = _harness.read_state(repo)
+    state["work_items"][_CP4_WI].update(fields)
+    _harness.write_state(repo, state)
+    return state
+
+
+def _cp4_move_head(repo):
+    state = _cp4_edit(repo, last_transition="an excluded-only commit")
+    del state
+    return _harness.commit_state(repo, "excluded-only commit")
+
+
+def _cp4_plan_approval_item(repo, version="2.2"):
+    _harness.seed_bundle_item(repo, governing_workflow_version=version, phase="PLANNING")
+    P, B = _harness.publish_and_bind_plan_bundle(repo)
+    _cp4_mutate(repo, ws.record_local_plan_review, verdict="APPROVE", bundle_id=B, review_content_id=P,
+                round=1, now="t")
+    _cp4_mutate(repo, ws.record_manual_plan_review, verdict="APPROVE", bundle_id=B, round=1, now="t",
+                current_review_content_id=P, feedback_role="MANUAL_EXTERNAL_PLAN_REVIEW",
+                feedback_review_content_id=P)
+    _cp4_feedback(repo, _cp4_verdict("APPROVE", rcid=P, bundle=B, base=repo.base, role="MANUAL_EXTERNAL_PLAN_REVIEW"))
+    return P, B
+
+
+def _cp4_external_item(repo, version):
+    """An item at `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`: `"1"`/`"2.1"`
+    straight from generation, `"2.2"` through both recorded stages. The
+    current fb is an `APPROVE` for the bundle."""
+    _harness.seed_bundle_item(repo, governing_workflow_version=version, phase="SELF_REVIEWING_IMPLEMENTATION")
+    repo.commit("implement", filename=_harness.BUNDLE_ITEM_IMPLEMENTATION_PATH)
+    I = _harness.generate_implementation_bundle(repo)
+    B = fingerprint.compute_bundle_id(_cp4_bundle_dir(repo))[0]
+    if version == "2.2":
+        _cp4_mutate(repo, ws.record_local_implementation_review, verdict="APPROVE", bundle_id=B,
+                    review_content_id=I, round=1, now="t")
+        _cp4_mutate(repo, ws.record_manual_implementation_review, verdict="APPROVE", bundle_id=B, round=1, now="t",
+                    current_review_content_id=I, feedback_role="MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW",
+                    feedback_review_content_id=I)
+    _cp4_feedback(repo, _cp4_verdict("APPROVE", rcid=I, bundle=B, base=repo.base))
+    return I, B
+
+
+class TestPlanApprovalGateStatus(unittest.TestCase):
+    def status(self, repo):
+        return ws.plan_approval_gate_status(repo.root, _harness.read_state(repo), _CP4_WI)
+
+    def assert_matches_the_predicate(self, status):
+        inputs = status["inputs"]
+        self.assertEqual(status["reachable"], ws.plan_approval_gate_reachable(
+            latest_round_status=inputs["latest_round_status"],
+            governing_workflow_version=inputs["governing_workflow_version"],
+            plan_review_stages=inputs["plan_review_stages"],
+            current_review_content_id=inputs["current_review_content_id"]))
+
+    def test_reachable(self):
+        with _harness.ScratchRepo() as repo:
+            _cp4_plan_approval_item(repo)
+            status = self.status(repo)
+            self.assertEqual((status["reachable"], status["cause"]), (True, None))
+            self.assert_matches_the_predicate(status)
+
+    def test_each_cause(self):
+        def check(mutate, cause, *, predicate=True):
+            with self.subTest(cause=cause), _harness.ScratchRepo() as repo:
+                P, B = _cp4_plan_approval_item(repo)
+                mutate(repo, P, B)
+                status = self.status(repo)
+                self.assertEqual((status["reachable"], status["cause"]), (False, cause))
+                if predicate:
+                    self.assert_matches_the_predicate(status)
+
+        check(lambda repo, P, B: _cp4_feedback(repo, None), "no_review_round")
+        check(lambda repo, P, B: _cp4_feedback(repo, _cp4_verdict("BLOCK", rcid=P)), "review_blocked")
+        check(lambda repo, P, B: _cp4_edit(repo, plan_review_stages=dict(
+            _harness.read_state(repo)["work_items"][_CP4_WI]["plan_review_stages"], review_content_id="d" * 64)),
+            "review_ledger_stale")
+        check(lambda repo, P, B: _cp4_move_head(repo), "bundle_generation_mismatch", predicate=False)
+        check(lambda repo, P, B: (repo.root / "docs/ai-workflow/WORKFLOW_V2_PLAN.md").write_text("drifted\n"),
+              "plan_review_bundle_unbound", predicate=False)
+
+    def test_a_v1_plan_gate_computes_the_bundle(self):
+        with _harness.ScratchRepo() as repo:
+            _harness.seed_bundle_item(repo, governing_workflow_version="1", phase="AWAITING_EXTERNAL_PLAN_REVIEW")
+            _harness.generate_plan_bundle(repo)
+            B = fingerprint.compute_bundle_id(_cp4_bundle_dir(repo))[0]
+            _cp4_feedback(repo, _cp4_verdict("APPROVE", bundle=B, base=repo.base))
+            status = self.status(repo)
+            self.assertEqual((status["reachable"], status["inputs"]["bundle_id"]), (True, B))
+            self.assert_matches_the_predicate(status)
+            import shutil
+            shutil.rmtree(_cp4_bundle_dir(repo))
+            status = self.status(repo)
+            self.assertEqual((status["reachable"], status["cause"]), (False, "bundle_unverified"))
+
+
+class TestTechnicalApprovalGateStatus(unittest.TestCase):
+    def status(self, repo):
+        return ws.technical_approval_gate_status(repo.root, _harness.read_state(repo), _CP4_WI)
+
+    def assert_matches_the_predicate(self, status):
+        inputs = status["inputs"]
+        self.assertEqual(status["reachable"], ws.technical_approval_gate_reachable(
+            latest_round_status=inputs["latest_round_status"], protected_path_dirty=inputs["protected_path_dirty"],
+            head_matches_reviewed_implementation_head=inputs["head_matches_reviewed_implementation_head"],
+            pinned_block=inputs["pinned_block"], governing_workflow_version=inputs["governing_workflow_version"],
+            implementation_review_stages=inputs["implementation_review_stages"],
+            current_review_content_id=inputs["current_review_content_id"]))
+
+    def test_reachable_at_every_version(self):
+        for version in ("1", "2.1", "2.2"):
+            with self.subTest(version=version), _harness.ScratchRepo() as repo:
+                _cp4_external_item(repo, version)
+                status = self.status(repo)
+                self.assertEqual((status["reachable"], status["cause"]), (True, None))
+                self.assert_matches_the_predicate(status)
+
+    def test_each_cause(self):
+        def check(mutate, cause, *, version="2.2", predicate=True):
+            with self.subTest(cause=cause, version=version), _harness.ScratchRepo() as repo:
+                I, B = _cp4_external_item(repo, version)
+                mutate(repo, I, B)
+                status = self.status(repo)
+                self.assertEqual((status["reachable"], status["cause"]), (False, cause))
+                if predicate:
+                    self.assert_matches_the_predicate(status)
+
+        pin = lambda repo, I, B: _cp4_mutate(  # noqa: E731
+            repo, ws.record_technical_review_block_pin, bundle_id=B, review_content_id=I, now="t")
+        check(pin, "review_block_pinned")
+        check(lambda repo, I, B: _cp4_feedback(repo, None), "no_review_round")
+        check(lambda repo, I, B: _cp4_feedback(repo, _cp4_verdict("BLOCK", rcid=I, bundle=B, base=repo.base)),
+              "review_blocked")
+        check(lambda repo, I, B: (repo.root / _harness.BUNDLE_ITEM_IMPLEMENTATION_PATH).write_text("dirty\n"),
+              "protected_path_dirty")
+        check(lambda repo, I, B: _cp4_edit(repo, reviewed_implementation_head=repo.base),
+              "implementation_provenance_stale")
+        check(lambda repo, I, B: _cp4_edit(repo, implementation_review_stages=dict(
+            _harness.read_state(repo)["work_items"][_CP4_WI]["implementation_review_stages"],
+            review_content_id="d" * 64)), "review_ledger_stale")
+        check(lambda repo, I, B: _cp4_move_head(repo), "bundle_generation_mismatch", predicate=False)
+        import shutil
+        check(lambda repo, I, B: shutil.rmtree(_cp4_bundle_dir(repo)), "bundle_unverified", predicate=False)
+        check(pin, "review_block_pinned", version="2.1")
+
+    def test_approve_reviews_block_pin_precedes_the_wrapper(self):
+        """`LPR-R2-008`: `/approve-review implementation` step 1 records a
+        `BLOCK` pin, then calls the wrapper on the re-read state."""
+        with _harness.ScratchRepo() as repo:
+            I, B = _cp4_external_item(repo, "2.1")
+            _cp4_feedback(repo, _cp4_verdict("BLOCK", bundle=B, base=repo.base))
+            ws.state_transaction(repo.root, lambda state: ws.record_technical_review_block_pin(
+                state, _CP4_WI, bundle_id=B, review_content_id=I, now="t"))
+            state = _harness.read_state(repo)
+            self.assertTrue(ws.is_technical_review_block_pinned(state["work_items"][_CP4_WI], B))
+            status = ws.technical_approval_gate_status(repo.root, state, _CP4_WI)
+            self.assertEqual((status["cause"], status["inputs"]["pinned_block"]), ("review_block_pinned", True))
+        text = (Path(__file__).resolve().parent.parent / ".claude" / "commands" / "approve-review.md").read_text()
+        self.assertIn("workflow_state.plan_approval_gate_status(repo_root, state,", text)
+        self.assertIn("workflow_state.technical_approval_gate_status(repo_root, state,", text)
+        self.assertLess(text.index("record_technical_review_block_pin(state"),
+                        text.index("workflow_state.technical_approval_gate_status(repo_root, state,"))
+
+    def test_the_generation_mismatch_is_named_before_the_pin(self):
+        """`LPR-R3-004`: a pinned `BLOCK` whose pin commit moved HEAD past
+        `generation_head` reports `bundle_generation_mismatch`; after the
+        provenance recovery and the command's re-pin, `review_block_pinned`."""
+        with _harness.ScratchRepo() as repo:
+            I, B = _cp4_external_item(repo, "2.1")
+            _cp4_feedback(repo, _cp4_verdict("BLOCK", bundle=B, base=repo.base))
+            _cp4_mutate(repo, ws.record_technical_review_block_pin, bundle_id=B, review_content_id=I, now="t")
+            _harness.commit_state(repo, "pin the BLOCK")
+            self.assertEqual(self.status(repo)["cause"], "bundle_generation_mismatch")
+            work_item = _harness.read_state(repo)["work_items"][_CP4_WI]
+            superseded = ws.verify_implementation_provenance_recovery(repo.root, work_item, base_commit=repo.base)
+            _cp4_mutate(repo, ws.apply_implementation_provenance_recovery, "t-recover")
+            _harness.commit_state(repo, "recover provenance", {
+                "Workflow-Bundle-Generation-Record": f"{_CP4_WI}/{work_item['implementation_revision']}",
+                "Workflow-Work-Item": _CP4_WI, "Workflow-Supersedes": superseded,
+            })
+            (_cp4_bundle_dir(repo) / "IMPLEMENTATION_SUMMARY.md").write_text(
+                f"implementation_revision: {work_item['implementation_revision']}\n\nrecovered\n")
+            _harness._run_generator(repo, "implementation", _CP4_WI)
+            new_bundle = fingerprint.compute_bundle_id(_cp4_bundle_dir(repo))[0]
+            self.assertEqual(self.status(repo)["cause"], "review_blocked")
+            _cp4_mutate(repo, ws.record_technical_review_block_pin, bundle_id=new_bundle, review_content_id=I, now="t")
+            self.assertEqual(self.status(repo)["cause"], "review_block_pinned")
+
+
+class TestVerifyImplementationReviewBundle(unittest.TestCase):
+    def test_a_fresh_bundle_verifies(self):
+        with _harness.ScratchRepo() as repo:
+            _harness.seed_bundle_item(repo, phase="SELF_REVIEWING_IMPLEMENTATION")
+            repo.commit("implement", filename=_harness.BUNDLE_ITEM_IMPLEMENTATION_PATH)
+            I = _harness.generate_implementation_bundle(repo)
+            self.assertEqual(ws.verify_implementation_review_bundle(repo.root, _CP4_WI), {
+                "bundle_id": fingerprint.compute_bundle_id(_cp4_bundle_dir(repo))[0], "review_content_id": I})
+
+    def test_each_fault_refuses(self):
+        import shutil
+
+        def reclassify(repo):
+            path = repo.root / "docs/ai-workflow/registry/wi-artifacts.json"
+            declarations = json.loads(path.read_text())
+            stage = declarations["implementation_stage"]
+            del stage["protected_paths"][_harness.BUNDLE_ITEM_IMPLEMENTATION_PATH]
+            stage["excluded_paths"][_harness.BUNDLE_ITEM_IMPLEMENTATION_PATH] = "reclassified"
+            path.write_text(json.dumps(declarations) + "\n")
+
+        faults = {
+            "missing directory": (lambda repo: shutil.rmtree(_cp4_bundle_dir(repo)), "no MANIFEST.md"),
+            "required file removed": (lambda repo: (_cp4_bundle_dir(repo) / "MANIFEST.md").unlink(), "no MANIFEST.md"),
+            "files differ": (lambda repo: (_cp4_bundle_dir(repo) / "DIFF.patch").write_text("x\n"), "bundle_id:"),
+            "content is not I": (reclassify, "review_content_id:"),
+        }
+        for name, (fault, detail) in faults.items():
+            with self.subTest(fault=name), _harness.ScratchRepo() as repo:
+                _harness.seed_bundle_item(repo, phase="SELF_REVIEWING_IMPLEMENTATION")
+                repo.commit("implement", filename=_harness.BUNDLE_ITEM_IMPLEMENTATION_PATH)
+                _harness.generate_implementation_bundle(repo)
+                fault(repo)
+                with self.assertRaisesRegex(ws.ImplementationReviewBundleUnverifiedError, detail):
+                    ws.verify_implementation_review_bundle(repo.root, _CP4_WI)
+
+    def test_a_plan_stage_manifest_names_the_stale_variant(self):
+        with _harness.ScratchRepo() as repo:
+            _harness.seed_bundle_item(repo, phase="PLANNING")
+            _harness.publish_and_bind_plan_bundle(repo)
+            with self.assertRaisesRegex(ws.ImplementationReviewBundleUnverifiedError, "stale-plan-stage-manifest"):
+                ws.verify_implementation_review_bundle(repo.root, _CP4_WI)
+
+
+# ---------------------------------------------------------------------------
+# workflow-2.7.0 (ORCHESTRATION_PROTOCOL_V1_PLAN.md, CP5): the shared manual
+# verdict ingest, `ingest_manual_review_verdict`, and `state_transaction`'s
+# `before_publish` hook. `two_stage_only=True` is the record-manual command
+# path; the protocol path is covered in `workflow_protocol_test.py`.
+# ---------------------------------------------------------------------------
+
+import shutil  # noqa: E402
+from unittest import mock  # noqa: E402
+
+_CP5_NOW = "t-ingest"
+_CP5_PLAN_ROLE = "MANUAL_EXTERNAL_PLAN_REVIEW"
+_CP5_IMPL_ROLE = "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW"
+
+
+def _cp5_plan_at_manual(repo, version="2.2", *, local_round=1):
+    """A two-stage item at `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW`: bound
+    plan bundle, local `APPROVE` at `local_round`. Returns `(content id,
+    bundle id)`."""
+    _harness.seed_bundle_item(repo, governing_workflow_version=version, phase="PLANNING")
+    P, B = _harness.publish_and_bind_plan_bundle(repo)
+    _cp4_mutate(repo, ws.record_local_plan_review, verdict="APPROVE", bundle_id=B, review_content_id=P,
+                round=local_round, now="t-local")
+    return P, B
+
+
+def _cp5_impl_at_manual(repo, *, local_round=1):
+    """A `"2.2"` item at `AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW`."""
+    _harness.seed_bundle_item(repo, governing_workflow_version="2.2", phase="SELF_REVIEWING_IMPLEMENTATION")
+    repo.commit("implement", filename=_harness.BUNDLE_ITEM_IMPLEMENTATION_PATH)
+    I = _harness.generate_implementation_bundle(repo)
+    B = fingerprint.compute_bundle_id(_cp4_bundle_dir(repo))[0]
+    _cp4_mutate(repo, ws.record_local_implementation_review, verdict="APPROVE", bundle_id=B,
+                review_content_id=I, round=local_round, now="t-local")
+    return I, B
+
+
+_CP5_STAGES = {
+    "plan": (_cp5_plan_at_manual, _CP5_PLAN_ROLE, ws.record_manual_plan_review),
+    "implementation": (_cp5_impl_at_manual, _CP5_IMPL_ROLE, ws.record_manual_implementation_review),
+}
+
+
+def _cp5_reject(repo):
+    marker = repo.root / fingerprint.resolve_rejected_marker_path(repo.root, _CP4_WI)
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text("rejected by the test\n")
+
+
+def _cp5_files(repo):
+    """The bytes of the state file and of the feedback file (`None` when
+    absent): what "nothing written" compares."""
+    feedback = repo.root / ".ai-review" / _CP4_WI / "feedback" / "REVIEW_FEEDBACK.md"
+    return (
+        (repo.root / ws.DEFAULT_STATE_PATH).read_bytes(),
+        feedback.read_bytes() if feedback.exists() else None,
+    )
+
+
+def _cp5_ingest(repo, stage, text, **kwargs):
+    kwargs.setdefault("two_stage_only", True)
+    return ws.ingest_manual_review_verdict(repo.root, _CP4_WI, stage=stage, verdict_text=text, now=_CP5_NOW,
+                                           **kwargs)
+
+
+class TestManualVerdictIngestRecordsAs260(unittest.TestCase):
+    """`APPROVE`, `REVISE` and `BLOCK` at both two-stage stages give the
+    state the 2.6.0 command's `record_manual_*_review` call gives, and the
+    feedback file holds the verdict."""
+
+    def test_each_verdict_at_each_stage(self):
+        for stage, (build, role, writer) in _CP5_STAGES.items():
+            for status in ("APPROVE", "REVISE", "BLOCK"):
+                with self.subTest(stage=stage, status=status), _harness.ScratchRepo() as repo:
+                    content_id, bundle_id = build(repo)
+                    text = _cp4_verdict(status, rcid=content_id, bundle=bundle_id, base=repo.base, role=role)
+                    expected = writer(
+                        _harness.read_state(repo), _CP4_WI, verdict=status, bundle_id=bundle_id, round=1,
+                        now=_CP5_NOW, current_review_content_id=content_id, feedback_role=role,
+                        feedback_review_content_id=content_id)
+                    result = _cp5_ingest(repo, stage, text)
+                    self.assertEqual(_harness.read_state(repo), expected)
+                    self.assertEqual(ws.read_review_feedback(repo.root, _CP4_WI), text)
+                    self.assertEqual(
+                        {k: result[k] for k in ("stage", "verdict", "review_content_id", "round", "bundle_id",
+                                                "advisory", "feedback_written")},
+                        {"stage": stage, "verdict": status, "review_content_id": content_id, "round": 1,
+                         "bundle_id": bundle_id, "advisory": None, "feedback_written": True})
+
+    def test_the_two_260_header_shapes_are_accepted(self):
+        """`LPR-R2-003`: a verdict that opens with `## Review Decision` and
+        states its fields under it, and a verdict with no `Work item:`."""
+        for stage, (build, role, _writer) in _CP5_STAGES.items():
+            with self.subTest(stage=stage, shape="review decision heading"), _harness.ScratchRepo() as repo:
+                content_id, bundle_id = build(repo)
+                text = (f"## Review Decision\n\nStatus: APPROVE\nReviewer role: {role}\n"
+                        f"Reviewed bundle ID: {bundle_id}\nWork item: {_CP4_WI}\n"
+                        f"Reviewed review_content_id: {content_id}\n\n## Blocking findings\n\nNone.\n")
+                self.assertEqual(_cp5_ingest(repo, stage, text)["verdict"], "APPROVE")
+            with self.subTest(stage=stage, shape="no work item"), _harness.ScratchRepo() as repo:
+                content_id, bundle_id = build(repo)
+                _cp5_ingest(repo, stage, _cp4_verdict("REVISE", rcid=content_id, bundle=bundle_id, work_item=None,
+                                                      role=role))
+                self.assertNotIn(_harness.read_state(repo)["work_items"][_CP4_WI]["phase"],
+                                 ("AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW",
+                                  "AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW"))
+
+    def test_both_review_content_id_labels_are_accepted(self):
+        for stage, (build, role, _writer) in _CP5_STAGES.items():
+            for label in ("Reviewed review_content_id:", "Reviewed review content ID:"):
+                with self.subTest(stage=stage, label=label), _harness.ScratchRepo() as repo:
+                    content_id, bundle_id = build(repo)
+                    text = (f"# Review Decision\n\nStatus: APPROVE\n\nReviewer role: {role}\n"
+                            f"Reviewed bundle ID: {bundle_id}\n{label} {content_id}\n\n## Findings\n\nNone.\n")
+                    self.assertEqual(_cp5_ingest(repo, stage, text)["review_content_id"], content_id)
+
+    def test_identical_bytes_are_the_no_op(self):
+        for stage, (build, role, _writer) in _CP5_STAGES.items():
+            with self.subTest(stage=stage), _harness.ScratchRepo() as repo:
+                content_id, bundle_id = build(repo)
+                text = _cp4_verdict("APPROVE", rcid=content_id, bundle=bundle_id, role=role)
+                _cp4_feedback(repo, text)
+                path = repo.root / ".ai-review" / _CP4_WI / "feedback" / "REVIEW_FEEDBACK.md"
+                before = path.stat().st_mtime_ns
+                self.assertFalse(_cp5_ingest(repo, stage, text)["feedback_written"])
+                self.assertEqual(path.stat().st_mtime_ns, before)
+
+
+class TestManualVerdictIngestRefusals(unittest.TestCase):
+    """Every refusal writes nothing: neither the feedback file nor the
+    state."""
+
+    def _refuses(self, stage, exc, text_for, *, fault=None, regex=""):
+        build, role, _writer = _CP5_STAGES[stage]
+        with self.subTest(stage=stage, exc=exc.__name__), _harness.ScratchRepo() as repo:
+            content_id, bundle_id = build(repo)
+            if fault is not None:
+                fault(repo, content_id)
+            before = _cp5_files(repo)
+            with self.assertRaisesRegex(exc, regex):
+                _cp5_ingest(repo, stage, text_for(content_id, bundle_id, role))
+            self.assertEqual(_cp5_files(repo), before)
+
+    def test_the_shared_refusals(self):
+        def ok(status="APPROVE", **kw):
+            return lambda c, b, r: _cp4_verdict(status, **{"rcid": c, "bundle": b, "role": r, **kw})
+
+        def hand_edit_ledger(manual):
+            def fault(repo, content_id):
+                state = _harness.read_state(repo)
+                item = state["work_items"][_CP4_WI]
+                key = "plan_review_stages" if "PLAN" in item["phase"] else "implementation_review_stages"
+                local, manual_key = [k for k in item[key] if k != "review_content_id"]
+                if manual:
+                    item[key][manual_key] = dict(item[key][local])
+                else:
+                    item[key][local] = None
+                _harness.write_state(repo, state)
+            return fault
+
+        for stage in _CP5_STAGES:
+            self._refuses(stage, fingerprint.ManualFeedbackForeignWorkItemError, ok(work_item="other-item"))
+            self._refuses(stage, fingerprint.BundleRejectedError, ok(),
+                          fault=lambda repo, _c: _cp5_reject(repo))
+            self._refuses(stage, ws.WrongReviewerRoleError,
+                          lambda c, b, r: _cp4_verdict("APPROVE", rcid=c, bundle=b, role=r.replace("MANUAL_EXTERNAL",
+                                                                                                   "LOCAL_MODEL")))
+            self._refuses(stage, ws.StaleReviewContentIdError, lambda c, b, r: _cp4_verdict(
+                "APPROVE", rcid="e" * 64, bundle=b, role=r))
+            self._refuses(stage, (ws.MissingLocalApprovalForManualStageError if stage == "plan"
+                                  else ws.MissingLocalApprovalForManualImplementationStageError),
+                          ok(), fault=hand_edit_ledger(manual=False))
+            self._refuses(stage, (ws.DuplicateManualStageIngestionError if stage == "plan"
+                                  else ws.DuplicateManualImplementationStageIngestionError),
+                          ok(), fault=hand_edit_ledger(manual=True))
+            self._refuses(stage, ws.ManualVerdictHeaderError, lambda c, b, r: _cp4_verdict(
+                "APPROVE", rcid=c, bundle=b, role=r).replace("Status: APPROVE\n", ""), regex="Status")
+            self._refuses(stage, ws.ManualVerdictHeaderError, ok(role=None), regex="Reviewer role")
+            self._refuses(stage, ws.ManualVerdictHeaderError, ok(rcid=None), regex="review_content_id")
+            self._refuses(stage, fingerprint.WorktreeOrHeadMismatchError, ok(),
+                          fault=lambda repo, _c: _cp4_move_head(repo))
+
+    def test_an_unbound_plan_bundle(self):
+        def drift(repo, _content_id):
+            plan = repo.root / "docs" / "ai-workflow" / "WORKFLOW_V2_PLAN.md"
+            plan.write_text(plan.read_text() + "edited after the bind\n")
+        self._refuses("plan", ws.ReviewedContentDriftError,
+                      lambda c, b, r: _cp4_verdict("APPROVE", rcid=c, bundle=b, role=r), fault=drift)
+
+    def test_a_review_content_id_only_after_a_section_is_a_header_error(self):
+        """The one documented tightening (`LPR-R2-003`)."""
+        for stage in _CP5_STAGES:
+            self._refuses(stage, ws.ManualVerdictHeaderError, lambda c, b, r: (
+                f"# Review Decision\n\nStatus: APPROVE\nReviewer role: {r}\n\n## Notes\n\n"
+                f"Reviewed review_content_id: {c}\n"), regex="review_content_id")
+
+    def test_a_round_that_is_not_a_positive_integer(self):
+        for stage in _CP5_STAGES:
+            for value in ("0", "four", "-1", "2.5"):
+                self._refuses(stage, ws.ManualVerdictHeaderError, lambda c, b, r, value=value: _cp4_verdict(
+                    "APPROVE", rcid=c, bundle=b, role=r).replace("Status: APPROVE\n", f"Status: APPROVE\nRound: {value}\n"),
+                    regex="Round")
+
+    def test_the_implementation_bundle_verifier(self):
+        """`LPR-R5-002`: a missing bundle directory and a bundle whose files
+        differ from `MANIFEST.md`'s `bundle_id` refuse with
+        `ImplementationReviewBundleUnverifiedError`; with HEAD also moved,
+        the verifier's refusal is the one reported."""
+        def remove(repo, _c):
+            shutil.rmtree(_cp4_bundle_dir(repo))
+
+        def tamper(repo, _c):
+            path = _cp4_bundle_dir(repo) / "IMPLEMENTATION_SUMMARY.md"
+            path.write_text(path.read_text() + "tampered\n")
+
+        def tamper_and_move(repo, c):
+            tamper(repo, c)
+            _cp4_move_head(repo)
+
+        text = lambda c, b, r: _cp4_verdict("APPROVE", rcid=c, bundle=b, role=r)
+        for fault in (remove, tamper, tamper_and_move):
+            self._refuses("implementation", ws.ImplementationReviewBundleUnverifiedError, text, fault=fault)
+
+    def test_a_rejected_marker_placed_after_the_guards(self):
+        real = ws._two_stage_manual_verdict_guards
+        for stage, (build, role, _writer) in _CP5_STAGES.items():
+            with self.subTest(stage=stage), _harness.ScratchRepo() as repo:
+                content_id, bundle_id = build(repo)
+
+                def guards_then_reject(*args, **kwargs):
+                    outcome = real(*args, **kwargs)
+                    _cp5_reject(repo)
+                    return outcome
+
+                before = _cp5_files(repo)
+                with mock.patch.object(ws, "_two_stage_manual_verdict_guards", side_effect=guards_then_reject), \
+                        self.assertRaises(fingerprint.BundleRejectedError):
+                    _cp5_ingest(repo, stage, _cp4_verdict("APPROVE", rcid=content_id, bundle=bundle_id, role=role))
+                self.assertEqual(_cp5_files(repo), before)
+
+    def test_the_command_path_refuses_a_feedback_only_item(self):
+        """`two_stage_only=True` keeps the record-manual commands' 2.6.0
+        governing-version guard."""
+        cases = {
+            "plan": ("1", "AWAITING_EXTERNAL_PLAN_REVIEW", ws.WrongGoverningVersionForPlanReviewStageError),
+            "implementation": ("2.1", "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+                               ws.WrongGoverningVersionForImplementationReviewStageError),
+        }
+        for stage, (version, phase, exc) in cases.items():
+            with self.subTest(stage=stage), _harness.ScratchRepo() as repo:
+                _harness.seed_bundle_item(repo, governing_workflow_version=version, phase=phase)
+                with self.assertRaises(exc):
+                    _cp5_ingest(repo, stage, _cp4_verdict("APPROVE", rcid="a" * 64, role="x"))
+
+
+class TestManualVerdictRoundAndBundleId(unittest.TestCase):
+    """`LPR-R3-005`."""
+
+    def test_a_stated_round_is_recorded(self):
+        for stage, (build, role, _writer) in _CP5_STAGES.items():
+            with self.subTest(stage=stage), _harness.ScratchRepo() as repo:
+                content_id, bundle_id = build(repo, local_round=2)
+                text = _cp4_verdict("APPROVE", rcid=content_id, bundle=bundle_id, role=role).replace(
+                    "Status: APPROVE\n", "Status: APPROVE\nRound: 4\n")
+                self.assertEqual(_cp5_ingest(repo, stage, text)["round"], 4)
+                self.assertEqual(self._manual_entry(repo, stage)["round"], 4)
+
+    def test_no_round_records_the_local_approvals_round(self):
+        for stage, (build, role, _writer) in _CP5_STAGES.items():
+            with self.subTest(stage=stage), _harness.ScratchRepo() as repo:
+                content_id, bundle_id = build(repo, local_round=3)
+                self.assertEqual(_cp5_ingest(repo, stage, _cp4_verdict(
+                    "APPROVE", rcid=content_id, bundle=bundle_id, role=role))["round"], 3)
+                self.assertEqual(self._manual_entry(repo, stage)["round"], 3)
+
+    def test_an_absent_bundle_id_records_null_with_the_advisory(self):
+        for stage, (build, role, _writer) in _CP5_STAGES.items():
+            with self.subTest(stage=stage), _harness.ScratchRepo() as repo:
+                content_id, _bundle_id = build(repo)
+                # The plan-stage bound check compares its own recorded ids
+                # through the same helper; the ingest never calls it for
+                # the verdict's absent id.
+                with mock.patch.object(ws, "check_manual_stage_bundle_id_advisory",
+                                       wraps=ws.check_manual_stage_bundle_id_advisory) as advisory_check:
+                    result = _cp5_ingest(repo, stage, _cp4_verdict("APPROVE", rcid=content_id, role=role))
+                self.assertNotIn(None, [call.args[0] for call in advisory_check.call_args_list])
+                self.assertIsNone(result["bundle_id"])
+                self.assertEqual(result["advisory"], ws.ABSENT_REVIEWED_BUNDLE_ID_ADVISORY)
+                self.assertIsNone(self._manual_entry(repo, stage)["bundle_id"])
+                ws.validate_state(_harness.read_state(repo))
+
+    def test_a_differing_bundle_id_is_recorded_verbatim_with_the_advisory(self):
+        for stage, (build, role, _writer) in _CP5_STAGES.items():
+            with self.subTest(stage=stage), _harness.ScratchRepo() as repo:
+                content_id, _bundle_id = build(repo)
+                result = _cp5_ingest(repo, stage, _cp4_verdict("APPROVE", rcid=content_id, bundle="f" * 64, role=role))
+                self.assertEqual(result["bundle_id"], "f" * 64)
+                self.assertIn("advisory only", result["advisory"])
+                self.assertEqual(self._manual_entry(repo, stage)["bundle_id"], "f" * 64)
+
+    @staticmethod
+    def _manual_entry(repo, stage):
+        item = _harness.read_state(repo)["work_items"][_CP4_WI]
+        if stage == "plan":
+            return item["plan_review_stages"][_CP5_PLAN_ROLE]
+        return item["implementation_review_stages"][_CP5_IMPL_ROLE]
+
+
+class TestManualVerdictIngestCrashWindow(unittest.TestCase):
+    def test_a_failed_state_write_leaves_the_file_and_a_retry_records_once(self):
+        for stage, (build, role, _writer) in _CP5_STAGES.items():
+            with self.subTest(stage=stage), _harness.ScratchRepo() as repo:
+                content_id, bundle_id = build(repo)
+                text = _cp4_verdict("APPROVE", rcid=content_id, bundle=bundle_id, role=role)
+                state_before = (repo.root / ws.DEFAULT_STATE_PATH).read_bytes()
+                with mock.patch.object(ws, "_publish_state_file", side_effect=OSError("disk full")), \
+                        self.assertRaises(OSError):
+                    _cp5_ingest(repo, stage, text)
+                self.assertEqual((repo.root / ws.DEFAULT_STATE_PATH).read_bytes(), state_before)
+                self.assertEqual(ws.read_review_feedback(repo.root, _CP4_WI), text)
+                result = _cp5_ingest(repo, stage, text)
+                self.assertFalse(result["feedback_written"])
+                revision = _harness.read_state(repo)["work_items"][_CP4_WI]["state_revision"]
+                with self.assertRaises((ws.WrongPhaseForPlanReviewStageError,
+                                        ws.WrongPhaseForImplementationReviewStageError)):
+                    _cp5_ingest(repo, stage, text)
+                self.assertEqual(_harness.read_state(repo)["work_items"][_CP4_WI]["state_revision"], revision)
+
+
+class TestStateTransactionBeforePublish(unittest.TestCase):
+    def _seed(self, repo, **item):
+        path = repo.root / ws.DEFAULT_STATE_PATH
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(_base_state(wi=_base_work_item(**item))))
+        return path
+
+    def test_an_exception_from_the_hook_publishes_nothing(self):
+        with ScratchRepo() as repo:
+            path = self._seed(repo)
+            before = path.read_bytes()
+            mutator = lambda state: ws.record_technical_review_block_pin(
+                state, "wi", bundle_id="b1", review_content_id="c1", now="t1")
+            with self.assertRaisesRegex(RuntimeError, "hook"):
+                ws.state_transaction(repo.root, mutator, before_publish=lambda new: (_ for _ in ()).throw(
+                    RuntimeError("hook")))
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_the_hook_runs_after_every_check_and_before_publication(self):
+        with ScratchRepo() as repo:
+            self._seed(repo)
+            order = []
+            real_check, real_publish = ws._assert_technical_review_block_pins_monotonic, ws._publish_state_file
+            with mock.patch.object(ws, "_assert_technical_review_block_pins_monotonic",
+                                   side_effect=lambda *a: (order.append("checks"), real_check(*a))[1]), \
+                    mock.patch.object(ws, "_publish_state_file",
+                                      side_effect=lambda *a: (order.append("publish"), real_publish(*a))[1]):
+                received = []
+                result = ws.state_transaction(
+                    repo.root, lambda state: ws.record_technical_review_block_pin(
+                        state, "wi", bundle_id="b1", review_content_id="c1", now="t1"),
+                    before_publish=lambda new: (order.append("hook"), received.append(new)))
+            self.assertEqual(order, ["checks", "hook", "publish"])
+            self.assertIs(received[0], result)
+
+    def test_a_failed_check_never_calls_the_hook(self):
+        """`MPR-R8-003`: a mutator whose result fails the pin check leaves
+        the state and the hook's file untouched."""
+        with ScratchRepo() as repo:
+            path = self._seed(repo, technical_review_block_pins=[
+                {"bundle_id": "b1", "review_content_id": "c1", "recorded_at": "t1"}])
+            before = path.read_bytes()
+            side_file = repo.root / "side.txt"
+            side_file.write_text("before\n")
+
+            def drop_pin(state):
+                new_state = copy.deepcopy(state)
+                new_state["work_items"]["wi"]["technical_review_block_pins"] = []
+                return new_state
+
+            with self.assertRaises(ws.PinLedgerMonotonicityError):
+                ws.state_transaction(repo.root, drop_pin, before_publish=lambda new: side_file.write_text("hook\n"))
+            self.assertEqual((path.read_bytes(), side_file.read_text()), (before, "before\n"))
+
+
+_CP5_INGEST_WORKER_SOURCE = """
+import json
+import sys
+import time
+import traceback
+from pathlib import Path
+
+import workflow_state as ws
+
+repo_root, stage, verdict_path, out_path, start_path, pause_dir = sys.argv[1:7]
+if pause_dir != "-":
+    real_store = ws._store_manual_verdict
+
+    def paused_store(*args, **kwargs):
+        Path(pause_dir, "paused").write_text("1")
+        while not Path(pause_dir, "go").exists():
+            time.sleep(0.005)
+        return real_store(*args, **kwargs)
+
+    ws._store_manual_verdict = paused_store
+while not Path(start_path).exists():
+    time.sleep(0.001)
+try:
+    result = ws.ingest_manual_review_verdict(
+        Path(repo_root), "wi", stage=stage, verdict_text=Path(verdict_path).read_text(), now="t-worker")
+    outcome = {"ok": True, "verdict": result["verdict"]}
+except Exception as exc:
+    outcome = {"ok": False, "exception": type(exc).__name__, "message": str(exc)}
+Path(out_path).write_text(json.dumps(outcome))
+"""
+
+
+class TestConcurrentManualVerdictIngests(unittest.TestCase):
+    """`MPR-R7-002`, with real, separate processes: two ingests of
+    different verdicts for the same content are serialized; exactly one
+    records and the file holds what the ledger recorded."""
+
+    def _run(self, repo, stage, texts, *, pause_first=False):
+        tmp = Path(tempfile.mkdtemp(prefix="wf-cp5-ingest-"))
+        start = tmp / "start"
+        procs, outs = [], []
+        try:
+            for index, text in enumerate(texts):
+                verdict_path = tmp / f"verdict-{index}.md"
+                verdict_path.write_text(text)
+                out = tmp / f"out-{index}.json"
+                pause = tmp / "pause"
+                if pause_first and index == 0:
+                    pause.mkdir()
+                worker_start = start if not pause_first else tmp / f"start-{index}"
+                procs.append(_spawn_worker(
+                    _CP5_INGEST_WORKER_SOURCE, repo.root, stage, verdict_path, out, worker_start,
+                    pause if pause_first and index == 0 else "-"))
+                outs.append(out)
+                if pause_first and index == 0:
+                    worker_start.write_text("go")
+                    _wait_for_path(pause / "paused", "the first ingest's pause")
+                elif pause_first:
+                    worker_start.write_text("go")
+                    time.sleep(0.5)
+                    self.assertIsNone(procs[1].poll(), "the second ingest did not block on the state lock")
+                    self.assertFalse(out.exists())
+                    (pause / "go").write_text("go")
+            if not pause_first:
+                start.write_text("go")
+            for proc in procs:
+                proc.wait(timeout=60)
+            return [json.loads(out.read_text()) for out in outs]
+        finally:
+            _reap(*procs)
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def _assert_one_recorded(self, repo, stage, outcomes):
+        winners = [o for o in outcomes if o["ok"]]
+        self.assertEqual(len(winners), 1, outcomes)
+        loser = next(o for o in outcomes if not o["ok"])
+        self.assertIn(loser["exception"], ("WrongPhaseForPlanReviewStageError",
+                                           "WrongPhaseForImplementationReviewStageError"), loser)
+        fields = fingerprint.parse_review_feedback_header(ws.read_review_feedback(repo.root, _CP4_WI))
+        self.assertEqual(fields["status"], winners[0]["verdict"])
+        phase = _harness.read_state(repo)["work_items"][_CP4_WI]["phase"]
+        expected_phase = {
+            ("plan", "APPROVE"): "AWAITING_PLAN_APPROVAL", ("plan", "REVISE"): "REVISING_PLAN",
+            ("implementation", "APPROVE"): "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
+            ("implementation", "REVISE"): "APPLYING_REVIEW_FEEDBACK",
+        }[(stage, winners[0]["verdict"])]
+        self.assertEqual(phase, expected_phase)
+
+    def test_two_stage_rows(self):
+        for stage, (build, role, _writer) in _CP5_STAGES.items():
+            for pause_first in (False, True):
+                with self.subTest(stage=stage, paused=pause_first), _harness.ScratchRepo() as repo:
+                    content_id, bundle_id = build(repo)
+                    texts = [_cp4_verdict(status, rcid=content_id, bundle=bundle_id, role=role)
+                             for status in ("APPROVE", "REVISE")]
+                    outcomes = self._run(repo, stage, texts, pause_first=pause_first)
+                    self._assert_one_recorded(repo, stage, outcomes)
+                    if pause_first:
+                        self.assertTrue(outcomes[0]["ok"], outcomes)
+
+    def test_feedback_only_rows(self):
+        for stage, (version, phase) in {"plan": ("1", "AWAITING_EXTERNAL_PLAN_REVIEW"),
+                                        "implementation": ("2.1", "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW")}.items():
+            with self.subTest(stage=stage), _harness.ScratchRepo() as repo:
+                bundle_id = _cp5_feedback_only_item(repo, stage, version)
+                texts = [_cp4_verdict(status, bundle=bundle_id, base=repo.base) for status in ("APPROVE", "REVISE")]
+                state_before = (repo.root / ws.DEFAULT_STATE_PATH).read_bytes()
+                outcomes = self._run(repo, stage, texts)
+                winners = [o for o in outcomes if o["ok"]]
+                self.assertEqual(len(winners), 1, outcomes)
+                self.assertEqual(next(o for o in outcomes if not o["ok"])["exception"],
+                                 "ConflictingReviewFeedbackError")
+                stored = ws.read_review_feedback(repo.root, _CP4_WI)
+                self.assertEqual(fingerprint.parse_review_feedback_header(stored)["status"], winners[0]["verdict"])
+                self.assertEqual((repo.root / ws.DEFAULT_STATE_PATH).read_bytes(), state_before)
+                self.assertFalse(ws.ingest_manual_review_verdict(
+                    repo.root, _CP4_WI, stage=stage, verdict_text=stored, now=_CP5_NOW)["feedback_written"])
+
+
+def _cp5_feedback_only_item(repo, stage, version):
+    """An item at a feedback-only row's phase with its current bundle
+    generated. Returns the bundle id."""
+    if stage == "plan":
+        _harness.seed_bundle_item(repo, governing_workflow_version=version, phase="AWAITING_EXTERNAL_PLAN_REVIEW")
+        _harness.generate_plan_bundle(repo)
+    else:
+        _harness.seed_bundle_item(repo, governing_workflow_version=version, phase="SELF_REVIEWING_IMPLEMENTATION")
+        repo.commit("implement", filename=_harness.BUNDLE_ITEM_IMPLEMENTATION_PATH)
+        _harness.generate_implementation_bundle(repo)
+    return fingerprint.compute_bundle_id(_cp4_bundle_dir(repo))[0]
 
 
 if __name__ == "__main__":

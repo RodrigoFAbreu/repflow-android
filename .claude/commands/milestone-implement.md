@@ -36,6 +36,20 @@ Requires an approved plan (from `/milestone-plan` + `/apply-plan-review`).
      inline exactly as step 1's own replacement is. The `"1"` branch stays
      v1-inert: it performs no `WORKFLOW_STATE.json` read or write beyond
      step 0's own.
+   - **`governing_workflow_version: "2.2"`** (workflow-2.5.0,
+     round-6 plan-review-inheritance widening, `LOCAL_MODEL_PLAN_REVIEW`
+     round 6, finding B1(a)/(c)): takes the identical `"2.1"` branch
+     immediately above -- the resumable, one-checkpoint-per-invocation
+     session model and the checkpoint-vs-wrap-up boundary discipline are
+     entirely independent of which review protocol (single-stage,
+     two-stage plan-only, or two-stage plan-and-implementation) governs
+     this work item's own review stages. This is a distinct item from step
+     4 below's own version-dependent `record_bundle_generation(stage=
+     "implementation")` documentation -- that is about which phase step 4
+     writes; this is about which branch of *this* step selects.
+   - **Any other `governing_workflow_version`** (round-7 optional
+     finding 2): refuse cleanly, naming the actual value -- never guess
+     which branch above applies.
 
 1. For each checkpoint in the approved plan, in order:
    - implement it, following `CLAUDE.md`/`AGENTS.md`/`.github/copilot-instructions.md`/
@@ -57,12 +71,21 @@ D3's `IN_PROGRESS`/`COMPLETE` state writers, D3's worktree-scoped
 dirty-resume rule, `WF2`):
 
 1a. **Entry validation**: call
-    `workflow_state.implementing_entry_reachable(repo_root, work_item,
-    base_commit)`. `False` stops here -- report whether `plan_approval` is
-    missing/`STALE`, or the approval commit is not an ancestor of HEAD;
-    never proceed on a stale or unreachable plan approval. Runs on every
-    invocation, not only the first (missing-test item 9: reachability
-    must hold identically at checkpoints 1, 2, and N).
+    `workflow_state.implementing_entry_status(repo_root, work_item,
+    base_commit)` (workflow-2.7.0, `LPR-R3-002`; the same function the
+    orchestration protocol's `next-action` calls, row 22;
+    `workflow_state.implementing_entry_reachable` is its `reachable` field).
+    `reachable: false` stops here -- report its `cause` and that cause's
+    remedy: `plan_approval_not_current` (no `plan_approval`, or it is
+    `STALE`: obtain a current plan approval),
+    `plan_approval_commit_unreachable` (the approval commit is not
+    HEAD or an ancestor of it: restore the history that contains it), or
+    `plan_content_drifted` (the plan-stage content no longer matches the
+    approved content: restore the approved plan-stage bytes, or
+    `/request-plan-amendment <id>`); never proceed on a stale or
+    unreachable plan approval. Runs on every invocation, not only the
+    first (missing-test item 9: reachability must hold identically at
+    checkpoints 1, 2, and N).
 1b. **Select the checkpoint**: load
     `docs/ai-workflow/registry/<work_item_id>-registry.json` and call
     `workflow_state.select_next_checkpoint(work_item, registry)`
@@ -122,6 +145,11 @@ dirty-resume rule, `WF2`):
       claim, explicitly take the claim over
       (`workflow_state.take_over_claim`), or reconcile manually. Never
       guessed (D3, missing-test items 31, 43, 71).
+    - A `workflow_state.LifecycleRefusalError` subclass (workflow-2.6.0):
+      the `adopt_claim` this step may run, and a `take_over_claim` of an
+      absent claim, run the same amendment-witness check `claim_checkpoint`
+      does. Stop and report exactly as step 1d's "Lifecycle refusals"
+      paragraph says, with `exc.evidence`.
 1d. **Establish identity, acquire, then write state under the guard**
     (`FRESH`/`CONTINUE_CLAIM` only -- skipped entirely for `RESUME`).
     Both mutations below are covered by the fenced compare-and-delete
@@ -135,7 +163,9 @@ dirty-resume rule, `WF2`):
          work_item_id, now=<now>)` -- the establishing write, outside any
          guard, since no claim/token exists yet;
       2. call `workflow_state.claim_checkpoint(repo_root, work_item_id,
-         checkpoint_id, now=<now>)`, which mints `owner_token`;
+         checkpoint_id, now=<now>)`, which mints `owner_token` and returns
+         the published claim record -- `owner_token` is that record's
+         `owner_token` field, never the record itself;
       3. inside `workflow_state.owner_mutation(repo_root, work_item_id,
          owner_token, checkpoint_id=checkpoint_id, step="1d",
          step_class=workflow_state.DESTRUCTIVE, now=<now>)`: refresh
@@ -149,6 +179,54 @@ dirty-resume rule, `WF2`):
       (the guarded state write: refresh `write_worktree_identity` +
       `transition_checkpoint_in_progress` + persist). Never re-acquire
       the claim.
+
+    **Lifecycle refusals at `claim_checkpoint`** (workflow-2.6.0,
+    `D-Repo-Global-Lifecycle`, closing `v2.4.0-002`): the claim is published
+    under the repository-global lifecycle lock (primitive 9), after the
+    mixed-release lag probe and the amendment witness's predicate list and
+    before the local phase check. So this step refuses an amendment in
+    flight in *any* linked worktree, even while this worktree's own state
+    still says `IMPLEMENTING`. `adopt_claim` (reached from 1c) and an
+    absent-claim `take_over_claim` run the same check. Any of these
+    refusals publishes nothing: stop immediately, before step 3, and report
+    the exception's message and `exc.evidence` in full:
+    - `AmendmentInFlightError`: an amendment of this work item is open, or
+      its resolution reserved, somewhere in the repository. Evidence names
+      the requesting (or resolving) worktree, its branch and the sequence.
+      Remedy: let that amendment finish (`/milestone-plan`, review,
+      `/approve-review plan`), then merge its approval into this branch.
+      Only when the evidence carries a `literal` (the requester or
+      resolver worktree is gone, unreadable, detached, or switched branch,
+      so the orphan test cannot decide) may the user clear an abandoned
+      witness with that exact literal, through
+      `workflow_state.clear_amendment_witness` /
+      `workflow_state.clear_amendment_resolution`, which re-check under the
+      lock that nothing still holds it;
+    - `StaleLifecycleStateError`: an amendment was resolved elsewhere and
+      this worktree's `HEAD` does not show it. Remedy: merge the resolved
+      amendment first, then re-run;
+    - `AmendmentResolutionConflictError`: this branch carries a different
+      resolution of an amendment than the one recorded repository-wide.
+      Remedy: discard the divergent approval and merge the recorded one --
+      never collapsed, and no literal;
+    - `AmendmentResolutionReservedError`: the only visible resolution is
+      another worktree's own approval commit awaiting amend recovery.
+      Remedy: wait for that `/approve-review plan` transaction to finish;
+    - `LaggingWorktreeAmendmentError`: a worktree still on a pre-`2.6.0`
+      release holds an unresolved amendment the witness does not record.
+      Remedy: finish or discard it there, or merge the `2.6.0` update into
+      that worktree's branch;
+    - `AmendmentBootstrapConflictError`: the first lifecycle check after
+      updating from `2.5.1` found worktrees whose `amendment_history`
+      disagree. Remedy: finish or discard the divergent amendment or
+      approval on all but one branch;
+    - `AmendmentWitnessUnavailableError`/`LifecycleStateUnreadableError`: a
+      torn, symlinked or unknown-shaped witness, or an unreadable state
+      file -- refused, never guessed (INV-3). Remedy: inspect and repair it
+      by hand;
+    - `LifecycleLockOrderError`: this session already holds another
+      lock-order primitive -- a caller bug; the claim is never published
+      from inside another primitive's window.
 1e. **Implement exactly that one checkpoint**: follow
     `CLAUDE.md`/`AGENTS.md`/`.github/copilot-instructions.md`/
     `.github/instructions/*` for layer boundaries, migrations, and enum
@@ -271,7 +349,18 @@ dirty-resume rule, `WF2`):
    is available and the plan touches persistence/migrations. Report exactly
    what ran and its real result — never claim a check passed that did not
    run.
-4. Enter `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`:
+4. Enter `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` **for a `"1"`/`"2.1"`
+   item, or `AWAITING_LOCAL_IMPLEMENTATION_REVIEW` for a `"2.2"` item**
+   (workflow-2.5.0, `D-Implementation-Review-Stages`; documented here, not a
+   separate writer): the phase this step's own `record_bundle_generation`
+   call below actually writes is
+   `workflow_state.bundle_generation_target_phase("implementation",
+   governing_workflow_version)`'s resolved value -- `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`
+   for `"1"`/`"2.1"` (byte-identical to before this checkpoint) and
+   `AWAITING_LOCAL_IMPLEMENTATION_REVIEW` for `"2.2"` -- never a bare
+   hard-coded literal. This section's own heading names the `"1"`/`"2.1"`
+   case for continuity with the rest of this file; the `"2.2"` case is the
+   identical call, resolving differently, not a second code path:
    - if this work item has a `docs/ai-workflow/WORKFLOW_STATE.json` entry:
      **`REJECTED`-bundle refusal, this command's sole assertion, immediately
      preceding `record_bundle_generation`** (`WFR-67`, one of the three
