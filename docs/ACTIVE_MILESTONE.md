@@ -40,6 +40,18 @@ regression; the rest were weak regression tests.
 | PX-I2 Home test gave the card 384dp | Fixed: renders `HomeScreen` at 384dp (352dp card), one test per scale; with the threshold raised to 1.5 both fail | `4c4cd85` |
 | Local O1-O4 | Postponed to a later milestone (user rule) | n/a |
 
+### Implementation review of revision 8 — applied (implementation revision 9 pending review)
+
+The external review (REVISE: 0 Blocking, 1 Important, 0 new Optional) found no
+production defect; the local review approved the same bundle with one Optional
+about the same helper. Test-only fix.
+
+| Finding | Disposition | Commit |
+|---|---|---|
+| PX2-I1 `assertButtonLabelWhole` accepted a vertically clipped label and compared already-clipped `boundsInRoot` | Fixed: the line bottom must fit the text node's height, and containment uses unclipped bounds (`positionInRoot` + `size`). With the three rest strip buttons temporarily forced to a fixed 44dp height the label tests failed at 1.3 and 2.0 (`-15s` line bottom 84px and 115px against a 78px text box); the real layout passes (ActiveWorkoutScreenTest + HomeScreenTest, 46 tests, 0 failed). Mutation reverted | `e2c37b5` |
+| O-r8-1 helper comment inexact | Folded in: the comment now states what each check catches | `e2c37b5` |
+| Local O1-O4 | Still postponed (user rule) | n/a |
+
 ## `repflow-redesign-visual-foundation` — Functional review checklist, ROUND 2 (parent, final end-to-end acceptance; implementation revision 6)
 
 The parent's new functional review. Round 1 (finding F1, "screens were
