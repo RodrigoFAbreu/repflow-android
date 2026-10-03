@@ -134,7 +134,8 @@ class MainActivityNavHostSmokeTest {
     @Test
     fun exerciseLibraryIsReachableFromSettings() {
         clickByDescription(R.string.home_settings_content_description)
-        clickByText(R.string.settings_library_row)
+        // Library sits under "Your data" now (GF-4), below the first screenful.
+        composeRule.onNodeWithText(string(R.string.settings_library_row)).performScrollTo().performClick()
         // The search field only exists on the exercise list screen.
         composeRule.onNodeWithText(string(R.string.exercise_list_search_hint)).assertIsDisplayed()
     }
