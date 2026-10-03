@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "work_item_id": "repflow-redesign-visual-foundation-remediation-1-remediation-1",
+  "plan_revision": 4,
+  "checkpoints": [
+    {
+      "id": "CP1",
+      "name": "B7: clear the rest-done notification when a workout is finished or abandoned",
+      "depends_on": [],
+      "complexity": 2,
+      "session_target": "1"
+    },
+    {
+      "id": "CP2",
+      "name": "B6 and B2 read model: trained-only ordering, date ranges, tiles, frequency, records",
+      "depends_on": [],
+      "complexity": 3,
+      "session_target": "2"
+    },
+    {
+      "id": "CP3",
+      "name": "B2 Progress screen conversion to 5b",
+      "depends_on": [
+        "CP2"
+      ],
+      "complexity": 3,
+      "session_target": "2"
+    },
+    {
+      "id": "CP4",
+      "name": "B5 and B4: shared 48dp search field and empty-state glyphs",
+      "depends_on": [],
+      "complexity": 2,
+      "session_target": "1"
+    },
+    {
+      "id": "CP5",
+      "name": "Settings schema 8 to 9: theme, default rest, extra set fields",
+      "depends_on": [],
+      "complexity": 3,
+      "session_target": "2"
+    },
+    {
+      "id": "CP6",
+      "name": "Apply the new preferences: theme, default rest, extra set fields",
+      "depends_on": [
+        "CP5"
+      ],
+      "complexity": 3,
+      "session_target": "2"
+    },
+    {
+      "id": "CP7",
+      "name": "B1 Settings screen to 5c and the Archived screen",
+      "depends_on": [
+        "CP5",
+        "CP6"
+      ],
+      "complexity": 3,
+      "session_target": "2"
+    },
+    {
+      "id": "CP8",
+      "name": "B1 dedicated Backup screen (5d)",
+      "depends_on": [
+        "CP7"
+      ],
+      "complexity": 3,
+      "session_target": "2"
+    },
+    {
+      "id": "CP9",
+      "name": "B3 set entry keeps its numbers and seeds from last session",
+      "depends_on": [
+        "CP6"
+      ],
+      "complexity": 3,
+      "session_target": "2"
+    },
+    {
+      "id": "CP10",
+      "name": "Verification, deviation register and decision records",
+      "depends_on": [
+        "CP1",
+        "CP2",
+        "CP3",
+        "CP4",
+        "CP5",
+        "CP6",
+        "CP7",
+        "CP8",
+        "CP9"
+      ],
+      "complexity": 2,
+      "session_target": "1"
+    }
+  ]
+}
