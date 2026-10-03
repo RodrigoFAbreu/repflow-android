@@ -1,5 +1,26 @@
 # Active Milestone
 
+## `repflow-redesign-visual-foundation` — complete (accepted 2026-10-03)
+
+The user accepted the milestone after functional-review round 3 (PASS: C2, B7,
+A1, G2, G3; no Blocking or Important findings). `/accept-milestone` moved the
+work item to `MILESTONE_COMPLETE` (`active_work_item_id` is now `null`) and
+archived its execution and reference plans to `docs/milestones/completed/`.
+The remediation children stay `MILESTONE_COMPLETE`. The state entry's
+`plan_path` still names the pre-archive location: it is bound to the approved
+plan manifest and was left untouched.
+
+**Open follow-ups (not built, for a later item):** `D149`-`D162` (P2-F-7,
+newer-design differences), `P3-F-1` (History detail stat-tile values truncated
+at font scale 2.0, `RepFlowStatTile.kt` value `maxLines = 1`), and the Optional
+findings O1-O4 postponed under the user's rule.
+
+**Next action:** no incomplete milestone remains in `docs/ROADMAP.md`. The
+next step is the user's choice of follow-up item; start it with
+`/milestone-plan`.
+
+The sections below are the historical record of this milestone's final rounds.
+
 ## `repflow-redesign-visual-foundation` — Functional review round 2: findings applied (2026-10-03, implementation revision 7 pending review)
 
 Round 2 of the parent's functional review (32 PASS, 5 FAIL, 7 findings) was
