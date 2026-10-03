@@ -27,6 +27,19 @@ Also: `5af2c90` moves the done strip into `RestDoneStrip.kt` (detekt
 strip running and the done strip), A1 (resume card, empty Recovery card), G2
 and G3 (font 1.3 and 2.0: rest strip, resume card, History detail tiles).
 
+### Implementation review of revision 7 — applied (implementation revision 8 pending review)
+
+The external review (REVISE: 0 Blocking, 2 Important, 0 Optional) and the local
+review (1 Important, 4 Optional) found no production defect beyond one height
+regression; the rest were weak regression tests.
+
+| Finding | Disposition | Commit |
+|---|---|---|
+| Local I1 `Skip rest` 56dp vs 44dp nudges at font 1.0 | Fixed: `RepFlowPrimaryButton(minHeight = ...)`, the strip passes its 44dp floor; test at 384dp / font 1.0 asserts same top and equal heights (failed before) | `0db4043` |
+| PX-I1 label test could pass while clipped | Fixed: shared `assertButtonLabelWhole` (one line, no ellipsis, every character, inside text box and button), one test per scale; a temporary one-line clipped label failed it at 1.3 and 2.0 | `0db4043` |
+| PX-I2 Home test gave the card 384dp | Fixed: renders `HomeScreen` at 384dp (352dp card), one test per scale; with the threshold raised to 1.5 both fail | `4c4cd85` |
+| Local O1-O4 | Postponed to a later milestone (user rule) | n/a |
+
 ## `repflow-redesign-visual-foundation` — Functional review checklist, ROUND 2 (parent, final end-to-end acceptance; implementation revision 6)
 
 The parent's new functional review. Round 1 (finding F1, "screens were
