@@ -26,7 +26,32 @@ registry `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediati
   all green; AVD run of `RestTimerExpiryHandlerTest`, `HomeRouteLifecycleTest`,
   `ActiveWorkoutLeaveRouteTest`, `ProgressionRecommendationRouteTest`:
   26 tests, 0 failures. CP1 builds no screen, so no design artboard was read.
-- **Next: CP2** (B6 and B2 read model).
+- **CP2 (B6 and the B2 read model) complete, 2026-10-03.** Application layer
+  only; no schema, no screen. `exerciseProgressOf` now counts an occurrence
+  only when it has a set (B6): an exercise with 0 sets in a session is not
+  "most recent" there, contributes no point or session, and one never counted
+  is not listed; `name`, `trackingType` and `lastTrainedAt` come from the last
+  counted occurrence. New `ProgressRange` (`THREE_MONTHS`/`SIX_MONTHS`/`ALL`,
+  calendar months back with a month-end clamp, exclusive bound) replaces the
+  12-session window (`D110` superseded): `ProgressSeries` is uncapped and
+  `within(range, now, zone)` narrows it; `delta`, `deltaPercent` (whole
+  percent, none from a 0 start), `best`, `first`, `latest` read the points it
+  holds. `ExerciseProgress` carries `performances` (working sets per session);
+  `ExerciseProgressDetail.kt` derives `sessionCount`, `averageRpe` (one
+  decimal, null when none recorded), `weeklyFrequency` (8 Monday-start local
+  weeks, average over all 8) and `records()` (`Loaded(heaviestSet, bestEstimatedOneRepMax?)`,
+  `MostReps`, `LongestHold`; ties per Q6; Best est. 1RM is the chart's whole-kg
+  Brzycki value and absent with no set of 12 reps or fewer). `xLabelIndices`
+  is CP3's (it needs the chart). Bridge until CP3 replaces the card:
+  `ProgressUiState.series` still hands the old bar card its last 12 points,
+  so the screen is unchanged. Tests: new JVM `ProgressRangeTest`,
+  `ExerciseProgressDetailTest`, `ExerciseProgressTrainedTest` (shared
+  `ProgressFixtures`), and `ExerciseProgressTest` updated (the window test
+  became an uncapped-series test). Gate: spotlessCheck, detekt, lintDebug
+  (0 errors, 21 warnings, 1 hint), testDebugUnitTest (670 tests, 107 classes,
+  0 failures), assembleDebugAndroidTest all green. CP2 builds no screen, so no
+  device run; the `5b` artboard was re-read (matches the plan's summary).
+- **Next: CP3** (B2 Progress screen conversion to 5b; also owns `xLabelIndices`).
 
 ---
 

@@ -10,6 +10,7 @@ import com.repflow.app.domain.workout.WorkoutSet
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.Instant
+import java.time.ZoneId
 
 /*
  * The Progress tab's read model (remediation-1 CP15, plan items 3, 4 and 6):
@@ -51,46 +52,82 @@ data class ProgressPoint(
 )
 
 /**
- * One metric's points, oldest first, and the window the chart draws.
+ * One metric's points, oldest first. The range pills narrow it with [within];
+ * everything else (a trend, the delta, the best) reads the points it holds, so
+ * the same functions serve the whole history and a `3m` or `6m` slice of it.
  *
  * @property points every valid session that produced a value, oldest first.
  */
 data class ProgressSeries(
     val points: List<ProgressPoint>,
 ) {
-    /** The last [WINDOW_SIZE] points - `4a`'s "12-session window". */
-    val window: List<ProgressPoint> = points.takeLast(WINDOW_SIZE)
-
     /** A trend needs two points; fewer is the offered metric's empty state (plan item 7). */
-    val hasTrend: Boolean = window.size >= MIN_TREND_POINTS
+    val hasTrend: Boolean get() = points.size >= MIN_TREND_POINTS
 
-    val latest: ProgressPoint? = window.lastOrNull()
+    val latest: ProgressPoint? get() = points.lastOrNull()
 
-    /** The window's first point, which the delta is measured from (`since 5 May`). */
-    val windowStart: ProgressPoint? = window.firstOrNull()
+    /** The first point, which the delta is measured from. */
+    val first: ProgressPoint? get() = points.firstOrNull()
 
-    /** Latest minus the window's first value; `null` without a trend. */
-    val delta: BigDecimal? = if (hasTrend) window.last().value.subtract(window.first().value) else null
+    /** Latest minus the first value; `null` without a trend. */
+    val delta: BigDecimal? get() = if (hasTrend) points.last().value.subtract(points.first().value) else null
 
-    /** The window's highest value (`Best: 82.5 kg`). */
-    val best: BigDecimal? = window.maxOfOrNull { it.value }
+    /**
+     * [delta] as a whole percent of the first value, half-up; `null` without a
+     * trend and when the first value is 0 (a percent of nothing).
+     */
+    val deltaPercent: BigDecimal?
+        get() {
+            val change = delta ?: return null
+            val start = points.first().value
+            if (start.signum() == 0) return null
+            return change.multiply(PERCENT).divide(start, 0, RoundingMode.HALF_UP)
+        }
+
+    /** The highest value (`Best: 82.5 kg`). */
+    val best: BigDecimal? get() = points.maxOfOrNull { it.value }
+
+    /** The points inside [range] as of [now]: later than its exclusive bound, or all of them for `All`. */
+    fun within(
+        range: ProgressRange,
+        now: Instant,
+        zone: ZoneId,
+    ): ProgressSeries {
+        val bound = range.startsAfter(now, zone) ?: return this
+        return ProgressSeries(points.filter { it.startedAt > bound })
+    }
 
     companion object {
-        const val WINDOW_SIZE = 12
         const val MIN_TREND_POINTS = 2
+        private val PERCENT = BigDecimal(100)
     }
 }
 
 /**
- * One exercise's progress, as the Progress tab's chip and card read it.
+ * One valid session's working sets of one exercise (every occurrence of it in
+ * that session together); the raw material of the
+ * Q6 derivations in `ExerciseProgressDetail.kt`. Sessions with no working set
+ * of the exercise are not listed.
+ */
+data class SessionPerformance(
+    val sessionId: WorkoutSessionId,
+    val startedAt: Instant,
+    val workingSets: List<WorkoutSet>,
+)
+
+/**
+ * One exercise's progress, as the Progress tab's picker and card read it.
  *
- * @property name the name recorded with the most recent session that included
+ * @property name the name recorded with the most recent session that trained
  *   it - the snapshot keeps a renamed or archived exercise's history readable.
- * @property trackingType the most recent session's tracking type; an earlier
- *   session recorded under another type contributes no point.
- * @property lastTrainedAt when the most recent valid session that included it
- *   started - the chips are ordered by it, newest first.
+ * @property trackingType that session's tracking type; an earlier session
+ *   recorded under another type contributes no point.
+ * @property lastTrainedAt when the most recent valid session that trained it
+ *   started - the picker is ordered by it, newest first. An occurrence with no
+ *   set at all is not training (B6).
  * @property series one entry per [offeredMetrics], possibly with no points.
+ * @property performances the working sets behind [series], one entry per
+ *   session, oldest first; the tiles, frequency and records derive from them.
  */
 data class ExerciseProgress(
     val exerciseId: ExerciseId,
@@ -98,6 +135,7 @@ data class ExerciseProgress(
     val trackingType: ExerciseTrackingType,
     val lastTrainedAt: Instant,
     val series: Map<ProgressMetric, ProgressSeries>,
+    val performances: List<SessionPerformance> = emptyList(),
 ) {
     val offeredMetrics: List<ProgressMetric> get() = ProgressMetric.offeredFor(trackingType)
 
@@ -119,31 +157,39 @@ data class ExerciseProgress(
  *
  * **Only valid sessions count** (plan item 4): anything not completed, and any
  * invalidated session, is dropped here as well as by the query that feeds it,
- * so invalidating a workout removes its points. **Only working sets count**:
- * warm-ups never contribute. A session contributes a point to a metric only
- * when it has a value for it - a weight-and-reps session whose working sets
- * carry no load gives no point to any of the three. An exercise added twice to
- * one session is one point, over all its sets.
+ * so invalidating a workout removes its points. **One "trained" rule (B6):**
+ * for listing, ordering, [ExerciseProgress.lastTrainedAt], `name` and
+ * `trackingType` an occurrence counts when it has any set, so an exercise that
+ * was added to a workout but never logged is not "most recent" and, never
+ * having been trained, is not listed. For the series, tiles and records only
+ * **working** sets count: warm-ups never contribute. A session contributes a
+ * point to a metric only when it has a value for it - a weight-and-reps
+ * session whose working sets carry no load gives no point to any of the three.
+ * An exercise added twice to one session is one point, over all its sets.
  */
 fun exerciseProgressOf(sessions: List<WorkoutSession>): List<ExerciseProgress> {
     val valid =
         sessions
             .filter { it.status == WorkoutSessionStatus.COMPLETED && !it.isInvalidated }
             .sortedBy { it.startedAt }
-    val occurrences = valid.flatMap { session -> session.exercises.map { session to it } }
+    val occurrences =
+        valid.flatMap { session -> session.exercises.filter { it.sets.isNotEmpty() }.map { session to it } }
     return occurrences
         .groupBy { (_, exercise) -> exercise.exerciseId }
         .map { (exerciseId, chronological) ->
             val (lastSession, lastExercise) = chronological.last()
             val trackingType = lastExercise.trackingType
-            val workingSetsBySession =
+            val performances =
                 chronological
                     .filter { (_, exercise) -> exercise.trackingType == trackingType }
                     .groupBy { (session, _) -> session.id }
                     .values
                     .map { inSession ->
-                        inSession.first().first to
-                            inSession.flatMap { (_, exercise) -> exercise.sets.filterNot { it.isWarmup } }
+                        SessionPerformance(
+                            sessionId = inSession.first().first.id,
+                            startedAt = inSession.first().first.startedAt,
+                            workingSets = inSession.flatMap { (_, exercise) -> exercise.sets.filterNot { it.isWarmup } },
+                        )
                     }
             ExerciseProgress(
                 exerciseId = exerciseId,
@@ -153,11 +199,13 @@ fun exerciseProgressOf(sessions: List<WorkoutSession>): List<ExerciseProgress> {
                 series =
                     ProgressMetric.offeredFor(trackingType).associateWith { metric ->
                         ProgressSeries(
-                            workingSetsBySession.mapNotNull { (session, sets) ->
-                                metricValue(metric, trackingType, sets)?.let { ProgressPoint(session.id, session.startedAt, it) }
+                            performances.mapNotNull { performance ->
+                                metricValue(metric, trackingType, performance.workingSets)
+                                    ?.let { ProgressPoint(performance.sessionId, performance.startedAt, it) }
                             },
                         )
                     },
+                performances = performances.filter { it.workingSets.isNotEmpty() },
             )
         }.sortedByDescending { it.lastTrainedAt }
 }

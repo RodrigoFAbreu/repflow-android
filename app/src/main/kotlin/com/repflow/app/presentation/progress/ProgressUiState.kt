@@ -29,8 +29,14 @@ data class ProgressUiState(
         exercise?.offeredMetrics?.let { offered -> if (selectedMetric in offered) selectedMetric else offered.first() }
             ?: selectedMetric
 
-    val series: ProgressSeries? = exercise?.series?.get(metric)
+    /**
+     * The card still draws the parent's last-12-sessions bars until CP3 replaces
+     * it with the date-ranged line chart (Q7); the read model itself no longer caps.
+     */
+    val series: ProgressSeries? = exercise?.series?.get(metric)?.let { ProgressSeries(it.points.takeLast(CARD_WINDOW_SIZE)) }
 
     /** `D22`: a reps-only or timed exercise offers `Top set` alone and says why. */
     val showsLoadMetricsUnavailable: Boolean = exercise?.trackingType?.supportsLoad == false
 }
+
+private const val CARD_WINDOW_SIZE = 12

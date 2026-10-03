@@ -146,7 +146,7 @@ class ExerciseProgressTest {
         assertTrue(topSet.hasTrend)
         assertEquals(0, BigDecimal("5").compareTo(topSet.delta))
         assertEquals(0, BigDecimal("90").compareTo(topSet.best))
-        assertEquals(day0, topSet.windowStart?.startedAt)
+        assertEquals(day0, topSet.first?.startedAt)
         assertEquals(0, BigDecimal("-445").compareTo(progress.series.getValue(ProgressMetric.VOLUME).delta))
     }
 
@@ -328,15 +328,14 @@ class ExerciseProgressTest {
         }
 
     @Test
-    fun `the window is the last twelve sessions, and the delta and best are measured within it`() {
+    fun `the series is not capped - every session is a point, and the delta and best span them all`() {
         val sessions = (0L until 14L).map { day -> session(day, benchEntry(loaded(60.0 + day * 2.5, 5))) }
 
         val topSet = exerciseProgressOf(sessions).of(bench).series.getValue(ProgressMetric.TOP_SET)
 
         assertEquals(14, topSet.points.size)
-        assertEquals(ProgressSeries.WINDOW_SIZE, topSet.window.size)
-        assertEquals(day0.plus(Duration.ofDays(2)), topSet.windowStart?.startedAt)
-        assertEquals(0, BigDecimal("27.5").compareTo(topSet.delta))
+        assertEquals(day0, topSet.first?.startedAt)
+        assertEquals(0, BigDecimal("32.5").compareTo(topSet.delta))
         assertEquals(0, BigDecimal("92.5").compareTo(topSet.best))
     }
 

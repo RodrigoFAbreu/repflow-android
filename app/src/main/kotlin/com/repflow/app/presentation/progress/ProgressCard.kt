@@ -110,7 +110,7 @@ internal fun ProgressCard(
                         R.string.progress_best,
                         plainNumber(requireNotNull(series.best), currentLocale()),
                         units.short,
-                        series.window.size,
+                        series.points.size,
                     ),
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, fontFeatureSettings = "tnum"),
                 color = secondary,
@@ -146,7 +146,7 @@ private fun CardHeader(
     deltaUnit: String,
 ) {
     val delta = series?.delta
-    val since = series?.windowStart
+    val since = series?.first
     Row(horizontalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapSm)) {
         Text(
             text = name,
@@ -209,7 +209,7 @@ private fun BarChart(
     unit: String,
     modifier: Modifier = Modifier,
 ) {
-    val window = series.window
+    val window = series.points
     val heights = barHeightFractions(window.map { it.value })
     val months = barMonthLabels(window, ZoneId.systemDefault())
     val locale = currentLocale()
