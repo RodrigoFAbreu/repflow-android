@@ -12,11 +12,13 @@ import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.presentation.workout.RestNotificationCanceller
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
@@ -100,7 +102,12 @@ class BackupViewModel
                 // A failed write is dropped on purpose: the file is already saved, so the
                 // export does not fail - the hero keeps showing the previous time (or
                 // `No backup yet`).
-                viewModelScope.launch { settingsRepository.update { it.copy(lastBackupAt = clock.now()) } }
+                // NonCancellable: leaving the Backup route clears this ViewModel and cancels
+                // viewModelScope, which must not drop a stamp for a file that is already saved.
+                // The write is one short Room update, so it is not a leak.
+                viewModelScope.launch {
+                    withContext(NonCancellable) { settingsRepository.update { it.copy(lastBackupAt = clock.now()) } }
+                }
             }
         }
 

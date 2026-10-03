@@ -1,5 +1,6 @@
 package com.repflow.app.presentation.backup
 
+import androidx.lifecycle.viewModelScope
 import com.repflow.app.application.backup.BackupRestoreError
 import com.repflow.app.application.backup.ExportBackup
 import com.repflow.app.application.backup.ExportWorkoutHistoryCsv
@@ -19,8 +20,10 @@ import com.repflow.app.application.trainingplan.ObserveTrainingPlanVersionLabels
 import com.repflow.app.application.workout.InMemoryWorkoutRepository
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.presentation.workout.RecordingRestNotificationCanceller
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -254,6 +257,29 @@ class BackupViewModelTest {
             viewModel.onExportWriteFailed()
 
             assertNull(settingsRepository.get().lastBackupAt)
+        }
+
+    @Test
+    fun `a suspended last_backup_at write still lands after the ViewModel is cleared`() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            val suspending =
+                object : SettingsRepository by settingsRepository {
+                    override suspend fun update(transform: (AppSettings) -> AppSettings): DomainResult<Unit, SettingsPersistenceError> {
+                        gate.await()
+                        return settingsRepository.update(transform)
+                    }
+                }
+            val model =
+                BackupViewModel(exportBackup, restoreBackup, exportWorkoutHistoryCsv, restNotificationCanceller, suspending, clock)
+            model.onExportBackupRequested { }
+
+            model.onExportWriteSucceeded(BackupExportKind.BACKUP)
+            // Leaving the Backup route clears the ViewModel, which cancels viewModelScope, mid-write.
+            model.viewModelScope.cancel()
+            gate.complete(Unit)
+
+            assertEquals(Instant.parse("2026-10-03T12:00:00Z"), settingsRepository.get().lastBackupAt)
         }
 
     @Test
