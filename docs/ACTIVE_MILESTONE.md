@@ -1,5 +1,211 @@
 # Active Milestone
 
+## `repflow-redesign-visual-foundation` — Functional review checklist, ROUND 2 (parent, final end-to-end acceptance; implementation revision 6)
+
+The parent's new functional review. Round 1 (finding F1, "screens were
+reskinned, not converted to the Claude Design layouts") was routed to
+`repflow-redesign-visual-foundation-remediation-1` (functional round 4 clean,
+awaiting acceptance) and its child
+`repflow-redesign-visual-foundation-remediation-1-remediation-1` (Settings
+`5c`, Archived, Backup `5d`, Progress `5b`, set carry-over, glyphs, 48dp
+search; MILESTONE_COMPLETE, commit `31a4b11`). This round is **one coherent
+walk through the whole redesign as it stands now**, against the live Claude
+Design project `Repflow mobile app design` (file `RepFlow.dc.html`). Newest
+turn wins: turn 9 redraws the older artboards to the built decisions. Detail
+per area is in the children's checklists above (R4 of
+`...-remediation-1`, R2 of `...-remediation-1-remediation-1`); this round does
+not repeat every step.
+
+Findings go to `.ai-review/feedback/FUNCTIONAL_REVIEW.md` headed "round 2,
+repflow-redesign-visual-foundation". An older file of that name there belongs
+to the grandchild's consumed round 1: overwrite it. Every command names the id
+explicitly.
+
+**Tags.** Every step is **[AVD]**: the AVD `RepFlow_S24Ultra_384dp_API36`
+(`emulator-5554`). **EMULATOR ONLY this round**: the user cannot connect the
+phone, so phone-only feel checks (real vibration, sound, haptics, real
+notification shade feel) are skipped and are not findings. WRITES marks steps
+that write data.
+
+### What does not count as a finding (already decided)
+
+- The registered deviations (inventory D1-D148):
+  `docs/milestones/repflow-redesign-visual-foundation-remediation-1-inventory.md`.
+- The follow-up list: number pad m:ss, permission-state Settings rows, loading
+  placeholders, resume card in light theme, text contrast tiers (55%/70%),
+  set-row index/warm-up layout, tinted "Just logged" bar, dimmed pending
+  targets, stacked dialog order, Undo-archive date, an old "Rest done" staying
+  during the next rest, chip checks in the exercise editor.
+- User decisions:
+  `/home/rodrigo/.local/share/claude-lanes/repflow-lane/design-turn7-guidance.md`.
+- Weight unit not built (D5). Phone-only checks (vibration, sound).
+
+A real finding is: a crash, wrong data, a flow that does not work, a screen
+that visibly differs from the turn-9/newest artboard in a way not in the lists
+above, clipped or unreachable content, or a regression.
+
+### Setup and automated state
+
+- `ANDROID_SERIAL=emulator-5554 ./gradlew installDebug` (Room 9). Restore the
+  sample backup first, or seed: Bench Press (weight and reps) with at least
+  eight sessions over four months, Pull Up (reps), Plank (timed), one archived
+  exercise and one archived plan, two or more plans (one with enough rows to
+  scroll), one exercise never done, one Recovery entry, one history workout with
+  a recommendation. Also test one fresh install for empty states. Notifications
+  and `Alarms & reminders` allowed.
+- Automated state is current and not re-run: the working tree is clean and
+  `git diff 91a6475 HEAD -- app` is empty (91a6475 is the last app change;
+  everything since is docs and `WORKFLOW_STATE.json`). Last full gates are those
+  recorded by the two children (grandchild: spotlessCheck, detekt, lintDebug 0
+  errors, JVM tests and AVD instrumented 0 failures).
+
+### A. Home and Plans
+
+1. **[AVD] A1. Home.** Open Home (dark): layout against the Home artboard
+   (greeting/header, resume card when a workout is active, start actions,
+   recent activity). Nothing clipped; tap each entry and Back.
+2. **[AVD] A2. Plans list.** Plans tab: list, archive action, empty state on a
+   fresh install (glyph and copy).
+3. **[AVD] A3. Plan editor (WRITES).** `New plan`: name, add exercises (picker),
+   sets/reps steppers, reorder/remove a row, Save. Empty name shows `required`;
+   a duplicate name is refused with the error; leaving with edits asks to
+   discard. Reopen the saved plan: values persisted.
+
+### B. Workout
+
+4. **[AVD] B1. Start (WRITES).** Start a workout from the plan: the Board lists
+   its exercises with targets.
+5. **[AVD] B2. Board.** Rows show state (pending/done), set counts; add an
+   exercise from the picker; a row opens focus mode.
+6. **[AVD] B3. Focus mode, set entry.** Bench Press (history): weight and reps
+   seeded from the last working set, `Last time: ...` line shown. Step weight and
+   reps; `Log set` logs it; weight and reps stay for the next set while RPE,
+   pain, technique and warm-up clear.
+7. **[AVD] B4. Unlogged values survive.** Type values without logging, go to
+   the Board and back (and rotate): values kept.
+8. **[AVD] B5. Log set rules.** Never-done weight-and-reps exercise: `Log set`
+   disabled until both have a value (0 kg counts); Pull Up needs only reps; Plank
+   only the duration.
+9. **[AVD] B6. Edit and undo a set.** Edit a logged set and delete/undo one;
+   totals update.
+10. **[AVD] B7. Rest strip.** After a logged set the rest strip runs; `-15s`,
+    `+15s` and `Skip` work; a rest that ends shows `Rest done` once.
+11. **[AVD] B8. Rest notification.** With the app in the background the rest
+    notification posts and the ending alert arrives (no sound/vibration
+    judgement).
+12. **[AVD] B9. Previous/Next.** Move between exercises with Previous/Next:
+    each keeps its own values.
+13. **[AVD] B10. Leave.** Back or the leave action offers leave versus stay;
+    leaving keeps the workout running (Home resume card).
+14. **[AVD] B11. Abandon (WRITES).** Abandon a second test workout: confirm
+    dialog, the workout is gone, the rest notification is cleared.
+15. **[AVD] B12. Finish (WRITES).** Finish the first workout: confirm (unlogged
+    exercises handled), rest notification cleared, the done screen shows
+    totals and exercises; with enough history the recommendation appears and
+    its accept/dismiss work.
+
+### C. History and Recovery
+
+16. **[AVD] C1. History list.** The finished workout is at the top; filters and
+    empty state (fresh install) correct.
+17. **[AVD] C2. History detail.** Opens with exercises and sets as logged,
+    matching what was entered; Back returns to the list position.
+18. **[AVD] C3. Recovery entry (WRITES).** Add a Recovery entry: required
+    fields, Save; it appears in Recovery history.
+19. **[AVD] C4. Recovery history.** Open an entry; edit it and delete (or undo)
+    one; the list updates.
+
+### D. Library and Progress
+
+20. **[AVD] D1. Library.** Active/Archived filters, search (48dp field); a
+    search with no match shows the magnifier copy and the `Create "..."` row
+    (Active) or `No archived exercises match "..."` (Archived).
+21. **[AVD] D2. Exercise editor (WRITES).** Create an exercise (type, muscle
+    group, equipment); empty/duplicate name errors and focus behaviour as in the
+    child's R4 (keyboard stays, no keystroke lost); Save persists; archive it,
+    then restore it from Archived.
+22. **[AVD] D3. Progress.** Progress for Bench Press: chart, `3m` `6m` `All`
+    range pills, metric captions, span line, `Records · all time`, per-session
+    list; a range or metric with no data shows the unavailable copy. An exercise
+    with zero sets in a session is not counted.
+23. **[AVD] D4. Progress empty.** Fresh install: Progress empty state.
+
+### E. Settings, Archived and Backup
+
+24. **[AVD] E1. Settings.** Groups in order `Appearance`, `Rest timer`,
+    `During a workout`, `Your data`, then the Erase card and footer; nothing
+    clipped; compare with the Settings artboard (`5c`/`8c`).
+25. **[AVD] E2. Default rest (WRITES a setting).** Sheet: a preset saves and
+    closes, `Other` opens the pad, a custom value shows as a selected chip.
+    Restore `1:30`.
+26. **[AVD] E3. Archived.** `Archived` row opens the screen: sections for
+    exercises and plans, rows with `Archived <date>` and a 44dp Restore;
+    restoring removes the row and shows `<name> restored · Undo`; both
+    sections empty shows `Nothing archived...`.
+27. **[AVD] E4. Backup (WRITES).** Backup screen: Export JSON stamps `Last
+    backup today` (also on the Settings row subtitle); CSV export does not
+    stamp. Restore from the exported file shows the confirm dialog and the data
+    is intact afterwards.
+28. **[AVD] E5. Erase (WRITES, last, or on a throwaway install).** The Erase
+    card confirms in a dialog; cancelling changes nothing.
+
+### F. Light and dark
+
+29. **[AVD] F1. Dark pass.** Steps A1, B3, C2, D3, E1 already done in dark are
+    on-spec: colours from the tokens, readable text, no stray light surfaces.
+30. **[AVD] F2. Light pass.** Set the theme to Light (Settings > Appearance) and
+    revisit Home, Plans, the Board, focus mode, rest strip, the done screen,
+    History detail, Library, Progress, Settings, Archived and Backup. No
+    unreadable text, invisible borders or dark leftovers (the resume card
+    staying dark is a decided follow-up). Restore `System`.
+31. **[AVD] F3. Dialogs and sheets in light and dark.** One dialog (Abandon) and
+    one sheet (Default rest) in each theme: scrim, surfaces, buttons readable.
+
+### G. 384dp and font scale
+
+32. **[AVD] G1. 384dp width.** The AVD is 384dp: Home, Board, focus mode, Progress
+    and Settings have no clipped or overlapping content and every action is
+    reachable.
+33. **[AVD] G2. Font scale 1.3.** Settings > Display > Font size set to
+    1.3 (`adb shell settings put system font_scale 1.3`): repeat the Board,
+    focus mode (set entry, `Log set`), the rest strip, History detail and
+    Settings. Text is scaled, nothing is cut off, buttons keep their 44-56dp
+    targets.
+34. **[AVD] G3. Font scale 2.0.** `font_scale 2.0`: the same screens plus
+    Progress and Backup. Content may scroll but `Log set`, Finish, Save and
+    dialog buttons stay reachable; no text clipped to illegibility. Reset with
+    `adb shell settings put system font_scale 1.0`.
+35. **[AVD] G4. Landscape spot check.** Rotate on the focus screen and the
+    Board: no crash, values kept, actions reachable.
+
+### H. Regression and cleanup
+
+36. **[AVD] H1. Process death.** With a workout running, force-stop the app
+    (`adb shell am force-stop` with the app's package id, or App info); reopen: the active
+    workout resumes with its logged sets.
+37. **[AVD] H2. Cleanup.** Abandon leftover test workouts; restore Settings
+    (theme `System`, rest `1:30`, font scale 1.0).
+
+### Known limitations and out of scope
+
+- Everything under "What does not count as a finding".
+- No phone this round: real vibration, sound and haptic feel are not tested.
+- Weight unit not built (D5).
+
+### Expected result and what happens next
+
+Every step behaves as stated, nothing crashes, no area regressed. If clean:
+`/accept-milestone repflow-redesign-visual-foundation` is the only acceptance
+command and needs every checkpoint in this item's own registry `COMPLETE`; an
+outstanding checkpoint goes to `/milestone-implement`. The child
+`repflow-redesign-visual-foundation-remediation-1` still awaits its own
+acceptance. No command records acceptance of a partial round. Findings go to
+`.ai-review/feedback/FUNCTIONAL_REVIEW.md`, then
+`/apply-functional-review repflow-redesign-visual-foundation` (bounded branch
+for a same-scope fix, broad branch for a `<parent-id>-remediation-<n>` child).
+
+---
+
 ## In implementation: `repflow-redesign-visual-foundation-remediation-1-remediation-1`
 
 Second remediation child (group B of the parent's functional review round 1).
