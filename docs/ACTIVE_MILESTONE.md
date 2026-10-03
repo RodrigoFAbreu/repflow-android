@@ -370,7 +370,67 @@ registry `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediati
   plan range" (the stepper's first + still gives 1) and its weight-required
   `Log set`. Open question for CP10's register: whether a weight-and-reps set
   may be logged without a weight.
-- **Next: CP10** (verification, deviation register and decision records).
+- **CP10 (verification, register and decision records) complete, 2026-10-03.**
+  No product code changed. **Gate:** `spotlessCheck detekt lintDebug
+  testDebugUnitTest assembleDebugAndroidTest` green (lint 0 errors, 22 warnings,
+  1 hint, the baseline; 727 unit tests in 114 classes, 0 failures); the whole
+  instrumented suite on the AVD `RepFlow_S24Ultra_384dp_API36` (`emulator-5554`,
+  killed afterwards, never the phone): `connectedDebugAndroidTest` 377 tests, 0
+  failed. **Fail-on-old-behaviour re-runs** (the rewritten and new tests were run
+  against deliberately reverted behaviour, then the source was restored with
+  `git checkout`): JVM, one run, 18 failures across `ProgressRangeTest` (5),
+  `BackupViewModelTest` (2), `HomeViewModelTest`, `SettingsViewModelTest`,
+  `ActiveWorkoutRestNotificationTest` (2), `ActiveWorkoutRestPrecedenceTest`,
+  `ActiveWorkoutSeedTest` (3), `SetEntryStateTest`, `WorkoutFocusModelTest` (2)
+  for: the clear-everything `clearAfterSet`, the exercise default dropped from
+  the rest precedence, the four cancel calls removed, date ranges off by a month,
+  the `last_backup_at` stamp removed, history seed removed. Instrumented, on the
+  AVD: `ActiveWorkoutScreenTest.tappingLogSetKeepsWeightAndRepsAndClearsTheRest`,
+  `theWorkoutPickersSearchFieldIsExactly48dpTall` and
+  `RestTimerExpiryHandlerTest.theRealCancellerClearsAPostedRestDoneNotification`
+  failed with the old clear-all entry, a 56dp search field and a no-op canceller.
+  Not mutation-checked (named, not claimed): the `ProgressScreenTest` rewrites,
+  the `SettingsScreenTest` rewrite, the migration tests (a missing `MIGRATION_8_9`
+  is what `RepFlowDatabaseMigrationTest`'s registration test targets).
+  **Side-by-side pass:** only partly done. On the AVD (empty database, 384dp,
+  system theme, and Backup also at font scale 1.3) Settings and Backup were
+  compared with `5c`/`8c`: layout, copy and wrapping match the register; nothing
+  clipped at 1.3. Progress, the Library search and `2c` could not be seen with
+  real data there (empty database, no data seeding in this checkpoint); they
+  rest on `ProgressScreenTest` (including the 360/384dp dense-label case) and
+  `RepFlowSearchFieldTest` (exact 48dp, 200% scale). `5d`'s hero with a backup
+  was not photographed. The functional review should do these by eye.
+  **Register:** `D115`-`D142` appended to the inventory (never renumbered);
+  `D60` superseded, `D110` superseded, `D63`, `D103`, `D104`, `D108`, `D111`
+  marked amended or superseded; `O11` and `O12` closed with their built rows;
+  every worker-made decision from CP3, CP4, CP6, CP7, CP8 and CP9 has a row
+  (empty and one-point chart states, Best est. 1RM row and its `—`, pill states,
+  the kept note, width-aware labels, search-field colour and clear button, the
+  theme first-frame flash, the keypad clamp, the Archived date format, the
+  colon in `Last time:`, the first `+`, the double-`Log set` trade-off).
+  `docs/UX_FLOWS.md` updated (Settings groups, Archived, Backup, Progress,
+  set entry, rest precedence); `DOMAIN_GLOSSARY.md` unchanged (no new term).
+  **Out of scope, recorded:** the `Last backup` setting is not in the backup
+  file (`D117`); the declined "Save bar above the keyboard" change stays out.
+  **Listed for the functional review (not changed in CP10):**
+  1. **User decision after CP9:** for a weight-and-reps exercise `Log set` must
+     require weight **and** reps (`8d`). Today weight is optional. To be raised
+     as a fix there; it is not registered as an accepted deviation.
+  2. Progress copy against turns 8/9 (`5b`): metric captions, the span line,
+     the unavailable-metric copy, the `Only valid sessions count` note (`D125`),
+     and the range-pill/chip check marks (`D124`).
+  3. Settings against `8c`: regroup `Appearance` / `Rest timer` / `During a
+     workout` / `Your data`, the Archived row label, the `Last backup <when>`
+     subtitle on `Backup and restore`, permission slot rows, `Default rest`
+     as m:ss, `Always shown` wording (`D138`).
+  4. Set entry (`8d`, turn 9): dimmed pending targets, the `Just logged` bar,
+     index/warm-up row layout, first `+` at the plan range's bottom (`D128`,
+     `D141`).
+  5. Number pad (`D136`), permission rows (`D137`), loading placeholders, Resume
+     card in light theme, text contrast tiers (`D140`), exact-match search,
+     notification icon and tap action, funnel-x and chart-line glyphs (`D142`):
+     follow-ups once the designer answers `DESIGN_FOLLOWUP.md` section C.
+  **Instrumented tests still needing a device:** none; all ran on the AVD.
 
 ---
 

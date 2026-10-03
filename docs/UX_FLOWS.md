@@ -33,8 +33,15 @@ The bottom navigation carries four top-level destinations, in this order:
 (`docs/TECHNICAL_DECISIONS.md`, "Navigation structure").
 
 - **Settings** opens from Home's gear. It is not a tab and shows no bottom
-  navigation. The **exercise library** opens from Settings, and backup
-  export, restore and CSV export are rows in its `Data` group.
+  navigation. The **exercise library** opens from Settings. Settings is
+  grouped `Library`, `Units and appearance` (`Theme`: System, Light, Dark),
+  `Rest timer` (including the app-wide `Default rest`), `During a workout`
+  (including `Extra set fields`: Always shown, Collapsed, Off) and `Data`.
+  `Data` holds `Archived exercises and plans`, a screen listing archived
+  exercises and plans with `Restore`, and `Backup and restore`, a dedicated
+  screen with `Export backup now` (the hero shows `Last backup <when>`),
+  `Workout history as CSV` and `Restore from a backup`; both open from
+  Settings only and show no bottom navigation.
 - **Recovery entry** opens from Home's recovery card (`Log`); recovery and
   futsal history open from the entry screen.
 - **Workout mode replaces the navigation.** The workout board, focus mode
@@ -95,8 +102,9 @@ Focus mode shows:
   and `Why ›` to the full recommendation
 - Current rest status
 - Completed sets, and the set just logged
-- Previous performance *(declared intent — focus mode shows nothing from an
-  earlier session before the first set; `IMPROVEMENT_ROADMAP.md` §9.8)*
+- Previous performance: `Last time: 80 kg × 8`, from the last working set of
+  the most recent valid session that logged the exercise, shown until the
+  first set of this session is logged
 - Suggested load as a figure *(declared intent — the suggestion names an
   outcome, not a load; `IMPROVEMENT_ROADMAP.md` §9.7)*
 
@@ -105,8 +113,11 @@ The user can:
 - Increase or decrease load (a stepper by the exercise's load step, or the
   keypad)
 - Increase or decrease repetitions (or seconds, for a timed exercise)
-- Reuse the previous set *(declared intent — every logged set clears the
-  entry; `IMPROVEMENT_ROADMAP.md` §9.8)*
+- Log the next set from the numbers already shown: after `Log set` the
+  weight and reps (or seconds) stay and only RPE, pain, technique and the
+  warm-up mark clear. A new exercise starts from last session's last working
+  set (empty for one never done). `Log set` stays disabled until reps (or
+  seconds) are present. `Undo last` corrects a mistaken set
 - Record RPE
 - Record optional technique quality
 - Record optional pain
@@ -123,7 +134,8 @@ Saving a set immediately persists the result.
 
 After saving a set, while Settings' `Start rest timer automatically` is on:
 
-1. Start the rest timer for the exercise's planned rest (or the app default).
+1. Start the rest timer for the plan row's rest, else the exercise's own
+   `Default rest`, else Settings' `Default rest` (initially 1:30).
 2. Store the absolute timer end timestamp.
 3. Display the remaining duration, on the board and in focus mode.
 4. Allow adding or removing time (`+15s` / `−15s`).
@@ -166,6 +178,17 @@ screen shows:
 
 The completed workout becomes historical data and must not be changed by later
 training-plan edits.
+
+## Progress
+
+The Progress tab shows one exercise at a time, most recently trained first.
+A full-width exercise picker opens the `Track an exercise` sheet; three
+metric buttons (`Top set`, `Est. 1RM`, `Volume`) and the range pills `3m`,
+`6m`, `All` (by date, default `All`) drive a line chart whose readout follows
+a tap or drag. Below it are `Sessions` and `Avg RPE` tiles for the range,
+`Training frequency` (sessions per week over the last 8 weeks) and `Records`
+(`Heaviest set`, `Best est. 1RM`; all-time, each dated). An exercise counts
+as trained in a session only if it has at least one set there.
 
 ## Recovery entry
 
