@@ -113,6 +113,97 @@ wiring it into generic CI would fail on any later, unrelated product PR
 once this milestone's own diff is no longer current (`GPT-R9-002`); it is
 a local/explicit real-repository demonstration, run on demand.
 
+## UI design system and visual identity
+
+Resolved by milestone `repflow-redesign-visual-foundation` (plan revision 19,
+`docs/milestones/repflow-redesign-visual-foundation-execution.md`). The
+concrete system lives in
+`app/src/main/kotlin/com/repflow/app/presentation/designsystem/`:
+
+- `RepFlowColor.kt` — the dark/light `ColorScheme` pair plus the extra
+  per-theme tokens Material 3 has no slot for (`control`, `hairline`) and the
+  named accent steps. Which `ColorScheme` roles this milestone assigns, and
+  which are deliberately left at the Material 3 baseline because a stock
+  component elsewhere in the app reads the same role, is recorded in
+  `presentation/designsystem/ROLE_AUDIT.md` — read it before adding or
+  changing a role.
+- `RepFlowTypography.kt`, `RepFlowShapes.kt`, `RepFlowSpacing.kt` — the type
+  scale, the radius scale (8 for controls, 12 for cards/buttons, 16 for
+  sheets, plus the three sanctioned one-offs `stepper`/`fab`/`pill`), and the
+  spacing scale (6/8/10/12 gaps, 14-18 card padding, 16 screen padding).
+- `designsystem/icons/RepFlowIcons.kt` — the bounded local Phosphor vector
+  set (no icon-library dependency added).
+- `designsystem/components/` — the reusable primitives (card, buttons, tag,
+  stepper, state composables).
+
+Values are transcribed from the live Claude Design RepFlow spec, recorded in
+`docs/milestones/repflow-redesign-visual-foundation-reference.md`. Tokens are
+reached through `MaterialTheme.colorScheme`/`.typography`/`.shapes` wherever
+Material 3 has a slot; `RepFlowColor`/`RepFlowShapes`/`RepFlowSpacing` are for
+the named tokens that have none. No screen hardcodes a colour literal.
+
+This resolves *what the design system is*, not *how far it has been applied*:
+only the bottom nav, the Exercise list, and the Active Workout set-entry +
+rest timer were reskinned in this milestone. Every other screen still renders
+through the same cascading theme but keeps its bespoke per-screen loading /
+empty / error composables until a later milestone applies the primitives
+there — see that milestone's "Known limitations".
+
+*Superseded in scope by `repflow-redesign-visual-foundation-remediation-1`*:
+that milestone converted every screen in the four-destination navigation
+(see "Navigation structure" below) to the Claude Design compositions on this
+same system, added the structural primitives the design needs
+(`designsystem/components/`), and recorded every remaining difference from
+the design, with its reason, in
+`docs/milestones/repflow-redesign-visual-foundation-remediation-1-inventory.md`'s
+deviation register.
+
+## Navigation structure
+
+Resolved by milestone `repflow-redesign-visual-foundation-remediation-1`
+(plan revision 20, CP2 and CP16), on the user's explicit written
+authorization at that milestone's planning gate, in favour of the Claude
+Design project's information architecture. It replaces the six-tab bottom
+navigation Milestone 8 shipped under the earlier "D-1 approved for M1 only"
+stance.
+
+- **Four top-level destinations**, in this order, in the bottom navigation:
+  **Home** (the start destination), **Plans**, **History**, **Progress**.
+- **Settings** is not a tab: it opens from Home's gear and shows no bottom
+  navigation.
+- **Moved inward**, each reachable from the start destination: the exercise
+  library from Settings (`Exercise library`); recovery entry from Home's
+  recovery card (`Log`), and recovery history from the entry screen; backup
+  export, restore and CSV export as rows in Settings' `Data` group (the
+  dedicated Backup screen is retired).
+- **Workout mode replaces the navigation**: the workout board, focus mode
+  and the done screen draw no bottom navigation; the board's `X` (leave) and
+  `Finish` are the only ways out.
+
+`docs/UX_FLOWS.md` describes the delivered flows on this structure.
+
+## Readiness score
+
+Resolved by the user on 2026-09-30, by adopting the Claude Design
+prototype's own engine (`RepFlow.dc.html:3142–3166`), and implemented by
+milestone `repflow-redesign-visual-foundation-remediation-1` (CP4) in the
+pure-Kotlin `domain/recovery/ReadinessScore.kt`. Recorded here so it is a
+decision rather than folklore in a Kotlin file:
+
+- **Inputs and weights:** the six recovery-entry scales (each `0–5`) —
+  sleep quality ×1.0, energy ×1.2, leg DOMS ×1.0, heavy legs ×0.8, heel
+  stiffness ×0.7, pain while walking ×1.5; the last four are inverted (a
+  higher value is worse). The futsal flags are not read.
+- **Score:** the weighted, normalized sum scaled to `0–100` and rounded.
+- **Bands:** Ready ≥ 75, Hold ≥ 58, Back off ≥ 42, otherwise Protect.
+- **Pain gate:** pain while walking ≥ 3, or heel stiffness ≥ 4, is Protect
+  whatever the score.
+- **Date rule:** a score exists only for a day with a recovery entry for
+  that calendar date; there is no carry-over from an earlier day.
+- **Effect:** none on any other computation. The score is shown (Home's
+  recovery card and the readiness sheet); `ProgressionPolicyV1` does not
+  read it, and its own formulas and thresholds stay an open decision.
+
 ## Dependency policy
 
 Add libraries only when they solve a concrete requirement. Avoid Firebase,
@@ -126,12 +217,13 @@ until explicitly prioritized.
 | Exact initial Gradle module split | Open |
 | Final Room entity schema | Open |
 | Exact progression formulas and thresholds | Open |
-| Navigation structure | Open (D-1 approved for M1 only) |
+| Navigation structure | Resolved by milestone `repflow-redesign-visual-foundation-remediation-1` — see "Navigation structure" above |
 | Backup file location and retention count | Open |
 | Notification behavior when permission is denied | Open |
 | Whether active workouts may span calendar days | Open |
 | How substitutions affect progression history | Open |
 | Whether completed workouts may be manually corrected | Open |
-| Exact UI design system and visual identity | Open |
+| Exact UI design system and visual identity | Resolved by milestone `repflow-redesign-visual-foundation` — see "UI design system and visual identity" above |
+| Readiness score weights, bands, pain gate and date rule | Resolved by milestone `repflow-redesign-visual-foundation-remediation-1` (user decision, 2026-09-30) — see "Readiness score" above |
 
 Agents must not silently finalize these decisions during unrelated tasks.

@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "work_item_id": "repflow-redesign-visual-foundation-remediation-1",
+  "requirements": {
+    "REQ-1": {
+      "description": "Adopt the Claude Design information architecture: a four-destination bottom nav (Home / Plans / History / Progress), Settings reached from Home, and Exercises / Recovery / Backup relocated inward as the design shows - Exercises reached from the workout board's exercise picker and from a Library row in Settings, Recovery from Home's recovery card, Backup from Settings' Data group - with the nav suppressed in workout mode. Every relocated destination is reachable by its new inward path from the checkpoint that changes the destination set. Finalize the 'Navigation structure' open decision.",
+      "checkpoint_ids": [
+        "CP2",
+        "CP5",
+        "CP10",
+        "CP13",
+        "CP14",
+        "CP16"
+      ]
+    },
+    "REQ-2": {
+      "description": "Build the Home screen the design and docs/UX_FLOWS.md both specify: resume-active-workout, start today's workout, recovery/readiness context, and a recent-workout summary, with the workout action carrying the strongest visual priority.",
+      "checkpoint_ids": [
+        "CP5"
+      ]
+    },
+    "REQ-3": {
+      "description": "Convert the active workout from a single flat list into the design's board plus focus mode, with the focus screen driving one exercise at a time through steppers, a keypad, 0-5 scale rows and a pinned bottom action bar.",
+      "checkpoint_ids": [
+        "CP7",
+        "CP8",
+        "CP9"
+      ]
+    },
+    "REQ-4": {
+      "description": "Surface the readiness score and the progression recommendation on top of the domain and application logic that already exists (RecoveryEntry's six scales; ComputeProgressionRecommendation / RecordManualOverride), adding no new progression or recovery domain concepts.",
+      "checkpoint_ids": [
+        "CP4",
+        "CP6",
+        "CP9"
+      ]
+    },
+    "REQ-5": {
+      "description": "Build the Progress tab: per-exercise top set, estimated 1RM and volume over a session window, derived from existing valid workout history only.",
+      "checkpoint_ids": [
+        "CP15"
+      ]
+    },
+    "REQ-6": {
+      "description": "Build the Settings screen with persisted preferences and make the behaviours it gates real (rest-timer auto-start, vibrate, notification; keep-screen-awake; confirm-before-finishing), with the exercise library reachable from it and backup, restore and erase-all-data under its Data section, erase scoped to training data through its own application-layer use case.",
+      "checkpoint_ids": [
+        "CP14"
+      ]
+    },
+    "REQ-7": {
+      "description": "Convert the remaining existing screens to the design's compositions rather than restyling them: exercise library, plans list, plan editor, history, workout detail, recovery entry and recovery history.",
+      "checkpoint_ids": [
+        "CP10",
+        "CP11",
+        "CP12",
+        "CP13"
+      ]
+    },
+    "REQ-8": {
+      "description": "Hold the conversion to the design as the product source of truth: a per-screen inventory and deviation register, shared structural primitives instead of per-screen bespoke layout, and a final side-by-side validation of design against the running app on the physical Samsung SM-S928B.",
+      "checkpoint_ids": [
+        "CP1",
+        "CP3",
+        "CP16"
+      ]
+    }
+  }
+}

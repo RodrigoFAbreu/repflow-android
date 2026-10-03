@@ -1,18 +1,36 @@
 package com.repflow.app.presentation.trainingplan.editor
 
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotFocused
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.unit.dp
+import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
+import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.trainingplan.TrainingPlanId
 import com.repflow.app.domain.trainingplan.TrainingPlanValidationError
+import com.repflow.app.presentation.RepFlowTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -21,7 +39,9 @@ import org.junit.runner.RunWith
 /**
  * Stateless Compose coverage for [TrainingPlanEditorScreen], mirroring
  * [com.repflow.app.presentation.exercise.editor.ExerciseEditorScreenTest]'s
- * shape.
+ * shape. Remediation-1 CP11 replaced the row's exercise dropdown with the
+ * picker sheet (the last two tests); the row actions stay on the collapsed
+ * row, so the move/remove tests reach them without expanding anything.
  */
 @RunWith(AndroidJUnit4::class)
 class TrainingPlanEditorScreenTest {
@@ -31,24 +51,30 @@ class TrainingPlanEditorScreenTest {
     private fun setContent(
         uiState: TrainingPlanEditorUiState,
         onNameChanged: (String) -> Unit = {},
+        onNameFocusLost: () -> Unit = {},
         rowActions: TrainingPlanEditorRowActions = noOpRowActions(),
         onAddRowClicked: () -> Unit = {},
         onSaveClicked: () -> Unit = {},
         onBackRequested: () -> Unit = {},
         onDiscardConfirmed: () -> Unit = {},
         onDiscardCancelled: () -> Unit = {},
+        onCreateExerciseClick: () -> Unit = {},
     ) {
         composeRule.setContent {
-            TrainingPlanEditorScreen(
-                uiState = uiState,
-                onNameChanged = onNameChanged,
-                rowActions = rowActions,
-                onAddRowClicked = onAddRowClicked,
-                onSaveClicked = onSaveClicked,
-                onBackRequested = onBackRequested,
-                onDiscardConfirmed = onDiscardConfirmed,
-                onDiscardCancelled = onDiscardCancelled,
-            )
+            RepFlowTheme {
+                TrainingPlanEditorScreen(
+                    uiState = uiState,
+                    onNameChanged = onNameChanged,
+                    onNameFocusLost = onNameFocusLost,
+                    rowActions = rowActions,
+                    onAddRowClicked = onAddRowClicked,
+                    onSaveClicked = onSaveClicked,
+                    onBackRequested = onBackRequested,
+                    onDiscardConfirmed = onDiscardConfirmed,
+                    onDiscardCancelled = onDiscardCancelled,
+                    onCreateExerciseClick = onCreateExerciseClick,
+                )
+            }
         }
     }
 
@@ -125,11 +151,46 @@ class TrainingPlanEditorScreenTest {
         assertEquals("Push Pull Legs", name)
     }
 
+    /** Functional review R2-F-1: tapping the name field and leaving it counts as touching it. */
+    @Test
+    fun leavingTheFocusedNameFieldReportsFocusLost() {
+        var focusLost = 0
+        lateinit var focusManager: FocusManager
+        composeRule.setContent {
+            RepFlowTheme {
+                focusManager = LocalFocusManager.current
+                TrainingPlanEditorScreen(
+                    uiState = TrainingPlanEditorUiState(),
+                    onNameChanged = {},
+                    onNameFocusLost = { focusLost++ },
+                    rowActions = noOpRowActions(),
+                    onAddRowClicked = {},
+                    onSaveClicked = {},
+                    onBackRequested = {},
+                    onDiscardConfirmed = {},
+                    onDiscardCancelled = {},
+                    onCreateExerciseClick = {},
+                )
+            }
+        }
+        composeRule.waitForIdle()
+        assertEquals(0, focusLost)
+
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_name_label)).performClick()
+        composeRule.waitForIdle()
+        assertEquals(0, focusLost)
+
+        composeRule.runOnIdle { focusManager.clearFocus() }
+        composeRule.waitForIdle()
+        assertEquals(1, focusLost)
+    }
+
     @Test
     fun nameFieldShowsTheBlankNameError() {
         setContent(
             TrainingPlanEditorUiState(
                 name = "   ",
+                nameTouched = true,
                 nameError = TrainingPlanEditorFieldError.Domain(TrainingPlanValidationError.NameBlank),
             ),
         )
@@ -137,6 +198,60 @@ class TrainingPlanEditorScreenTest {
         composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_error_name_blank))
             .assertIsDisplayed()
+    }
+
+    /**
+     * Functional review R3-F-4: the name field keeps focus (and so the keyboard)
+     * while its error appears and disappears; no keystroke is lost.
+     */
+    @Test
+    fun theNameFieldKeepsFocusWhileItsErrorAppearsAndDisappears() {
+        var uiState by mutableStateOf(TrainingPlanEditorUiState(name = "Legs A", nameTouched = true))
+        composeRule.setContent {
+            RepFlowTheme {
+                TrainingPlanEditorScreen(
+                    uiState = uiState,
+                    onNameChanged = { value ->
+                        uiState =
+                            uiState.copy(
+                                name = value,
+                                nameTouched = true,
+                                nameError =
+                                    if (value.isBlank()) {
+                                        TrainingPlanEditorFieldError.Domain(TrainingPlanValidationError.NameBlank)
+                                    } else {
+                                        null
+                                    },
+                            )
+                    },
+                    onNameFocusLost = {},
+                    rowActions = noOpRowActions(),
+                    onAddRowClicked = {},
+                    onSaveClicked = {},
+                    onBackRequested = {},
+                    onDiscardConfirmed = {},
+                    onDiscardCancelled = {},
+                    onCreateExerciseClick = {},
+                )
+            }
+        }
+        val name = composeRule.onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_name_label))
+        val blankError = composeRule.activity.getString(R.string.training_plan_editor_error_name_blank)
+
+        name.performClick()
+        name.assertIsFocused()
+        name.performTextReplacement("")
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(blankError).assertIsDisplayed()
+        name.assertIsFocused()
+
+        name.performTextInput("L")
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(blankError).assertDoesNotExist()
+        name.assertIsFocused()
+        name.performTextInput("e")
+        assertEquals("Le", uiState.name)
+        name.assertIsFocused()
     }
 
     @Test
@@ -280,4 +395,268 @@ class TrainingPlanEditorScreenTest {
             .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_submit_error_duplicate_name))
             .assertIsDisplayed()
     }
+
+    private fun longPlan(submitError: TrainingPlanEditorSubmitError? = null) =
+        TrainingPlanEditorUiState(
+            name = "Push",
+            rows =
+                (1L..12L).map {
+                    PlannedExerciseRowUiState(
+                        rowId = it,
+                        exerciseId = "exercise-$it",
+                        exerciseName = "Exercise $it",
+                        trackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
+                        targetSetsText = "3",
+                        repMinText = "8",
+                        repMaxText = "12",
+                    )
+                },
+            submitError = submitError,
+        )
+
+    /** Functional review R2-F-2: the reason is beside the name, not at the foot of a long list. */
+    @Test
+    fun aDuplicateNameErrorShowsNextToTheNameEvenWithALongList() {
+        setContent(longPlan(TrainingPlanEditorSubmitError(TrainingPlanEditorSubmitErrorKind.DUPLICATE_NAME)))
+
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_submit_error_duplicate_name))
+            .assertIsDisplayed()
+    }
+
+    /** Functional review R2-F-2: a refused save while scrolled down scrolls the name back into view. */
+    @Test
+    fun aDuplicateNameErrorScrollsTheNameIntoView() {
+        var uiState by mutableStateOf(longPlan())
+        composeRule.setContent {
+            RepFlowTheme {
+                TrainingPlanEditorScreen(
+                    uiState = uiState,
+                    onNameChanged = {},
+                    onNameFocusLost = {},
+                    rowActions = noOpRowActions(),
+                    onAddRowClicked = {},
+                    onSaveClicked = {},
+                    onBackRequested = {},
+                    onDiscardConfirmed = {},
+                    onDiscardCancelled = {},
+                    onCreateExerciseClick = {},
+                )
+            }
+        }
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_add_exercise)).performScrollTo()
+
+        uiState = longPlan(TrainingPlanEditorSubmitError(TrainingPlanEditorSubmitErrorKind.DUPLICATE_NAME))
+        composeRule.waitForIdle()
+
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_submit_error_duplicate_name))
+            .assertIsDisplayed()
+    }
+
+    /** Functional review R3-F-2: a tap outside the name field and the keyboard's Done take focus off it. */
+    @Test
+    fun tappingOutsideTheNameFieldAndDoneClearFocusButTappingTheFieldDoesNot() {
+        setContent(TrainingPlanEditorUiState(name = "Legs A"))
+        val name = composeRule.onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_name_label))
+
+        name.performClick()
+        name.assertIsFocused()
+        name.performClick()
+        name.assertIsFocused()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_no_exercises)).performClick()
+        name.assertIsNotFocused()
+
+        name.performClick()
+        name.assertIsFocused()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_add_exercise)).performClick()
+        name.assertIsNotFocused()
+
+        name.performClick()
+        name.performImeAction()
+        name.assertIsNotFocused()
+    }
+
+    /** Functional review R3-F-3: a second refused save for the same reason brings the name into view again. */
+    @Test
+    fun aRepeatedDuplicateNameRefusalScrollsTheNameIntoViewAgain() {
+        var uiState by mutableStateOf(longPlan())
+        composeRule.setContent {
+            RepFlowTheme {
+                TrainingPlanEditorScreen(
+                    uiState = uiState,
+                    onNameChanged = {},
+                    onNameFocusLost = {},
+                    rowActions = noOpRowActions(),
+                    onAddRowClicked = {},
+                    onSaveClicked = {},
+                    onBackRequested = {},
+                    onDiscardConfirmed = {},
+                    onDiscardCancelled = {},
+                    onCreateExerciseClick = {},
+                )
+            }
+        }
+        val duplicate = composeRule.activity.getString(R.string.training_plan_editor_submit_error_duplicate_name)
+
+        repeat(3) { attempt ->
+            composeRule.onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_add_exercise)).performScrollTo()
+            uiState =
+                longPlan(TrainingPlanEditorSubmitError(TrainingPlanEditorSubmitErrorKind.DUPLICATE_NAME, attempt + 1))
+            composeRule.waitForIdle()
+            composeRule.onNodeWithText(duplicate).assertIsDisplayed()
+        }
+    }
+
+    /** Functional review R2-F-4: a blank field on a new row asks for a value; it never says to add an exercise. */
+    @Test
+    fun aBlankRowFieldAsksForAValueNotForAnExercise() {
+        val blank = TrainingPlanEditorFieldError.Required
+        setContent(
+            TrainingPlanEditorUiState(
+                rows =
+                    listOf(
+                        PlannedExerciseRowUiState(
+                            rowId = 1L,
+                            exerciseId = "exercise-1",
+                            exerciseName = "Bench Press",
+                            trackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
+                            targetSetsError = blank,
+                            targetRangeError = blank,
+                        ),
+                    ),
+            ),
+        )
+
+        composeRule.onNodeWithText("Bench Press").performClick()
+
+        composeRule.onAllNodesWithText(composeRule.activity.getString(R.string.training_plan_editor_error_required)).assertCountEquals(2)
+        composeRule.onNodeWithText("Add at least one exercise.").assertDoesNotExist()
+    }
+
+    @Test
+    fun aRowWithNoExerciseOpensThePickerSheetAndTheChoiceFillsThatRow() {
+        var selected: Pair<Long, String>? = null
+        val row = PlannedExerciseRowUiState(rowId = 7L)
+        setContent(
+            TrainingPlanEditorUiState(rows = listOf(row), availableExercises = pickerOptions()),
+            rowActions = noOpRowActions().copy(onExerciseSelected = { rowId, exerciseId -> selected = rowId to exerciseId }),
+        )
+
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_select_exercise_placeholder))
+            .performClick()
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_picker_title))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_picker_search_hint))
+            .assertHeightIsEqualTo(48.dp)
+        composeRule.onNodeWithText("Romanian Deadlift").performClick()
+
+        assertEquals(7L to "ex-rdl", selected)
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_picker_title))
+            .assertDoesNotExist()
+    }
+
+    @Test
+    fun aRowsWarmupCountAgreesInNumber() {
+        fun row(
+            id: Long,
+            warmups: String,
+        ) = PlannedExerciseRowUiState(
+            rowId = id,
+            exerciseId = "ex-$id",
+            exerciseName = "Exercise $id",
+            trackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
+            targetSetsText = "3",
+            repMinText = "8",
+            repMaxText = "12",
+            targetWarmupSetsText = warmups,
+        )
+        setContent(TrainingPlanEditorUiState(rows = listOf(row(1L, "1"), row(2L, "2"))))
+
+        composeRule.onNode(hasText("1 warm-up", substring = true) and !hasText("warm-ups", substring = true)).assertIsDisplayed()
+        composeRule.onNode(hasText("2 warm-ups", substring = true)).assertIsDisplayed()
+    }
+
+    @Test
+    fun dismissingThePickerWithoutAChoiceRemovesTheBlankRow() {
+        var removed: Long? = null
+        val row = PlannedExerciseRowUiState(rowId = 7L)
+        setContent(
+            TrainingPlanEditorUiState(rows = listOf(row), availableExercises = pickerOptions()),
+            rowActions = noOpRowActions().copy(onRemove = { removed = it }),
+        )
+
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_select_exercise_placeholder))
+            .performClick()
+        // The sheet is its own window, so the key event goes through Espresso rather than the activity's dispatcher.
+        Espresso.pressBack()
+        composeRule.waitForIdle()
+
+        assertEquals(7L, removed)
+    }
+
+    @Test
+    fun creatingANewExerciseFromThePickerRemovesTheBlankRow() {
+        var removed: Long? = null
+        var created = false
+        val row = PlannedExerciseRowUiState(rowId = 7L)
+        setContent(
+            TrainingPlanEditorUiState(rows = listOf(row), availableExercises = pickerOptions()),
+            rowActions = noOpRowActions().copy(onRemove = { removed = it }),
+            onCreateExerciseClick = { created = true },
+        )
+
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_select_exercise_placeholder))
+            .performClick()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_picker_create)).performClick()
+
+        assertEquals(7L, removed)
+        assertEquals(true, created)
+    }
+
+    @Test
+    fun addExerciseOpensThePickerSheetForTheNewRowOnceItAppears() {
+        var state by mutableStateOf(TrainingPlanEditorUiState(availableExercises = pickerOptions()))
+        var selected: Pair<Long, String>? = null
+        // A stateful host: the ViewModel's new empty row has to actually appear for the sheet to open for it.
+        composeRule.setContent {
+            RepFlowTheme {
+                TrainingPlanEditorScreen(
+                    uiState = state,
+                    onNameChanged = {},
+                    onNameFocusLost = {},
+                    rowActions = noOpRowActions().copy(onExerciseSelected = { rowId, exerciseId -> selected = rowId to exerciseId }),
+                    onAddRowClicked = { state = state.copy(rows = state.rows + PlannedExerciseRowUiState(rowId = 3L)) },
+                    onSaveClicked = {},
+                    onBackRequested = {},
+                    onDiscardConfirmed = {},
+                    onDiscardCancelled = {},
+                    onCreateExerciseClick = {},
+                )
+            }
+        }
+
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_add_exercise))
+            .performClick()
+        composeRule.onNodeWithText("Plank").performClick()
+
+        assertEquals(3L to "ex-plank", selected)
+    }
+
+    private fun pickerOptions() =
+        listOf(
+            TrainingPlanEditorExerciseOption(
+                id = "ex-rdl",
+                name = "Romanian Deadlift",
+                trackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
+            ),
+            TrainingPlanEditorExerciseOption(id = "ex-plank", name = "Plank", trackingType = ExerciseTrackingType.DURATION),
+        )
 }

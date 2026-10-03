@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "work_item_id": "repflow-redesign-visual-foundation-remediation-1-remediation-1",
+  "requirements": {
+    "B1": {
+      "description": "Settings follow 5c/5d: Theme, Default rest, Extra set fields, an Archived exercises and plans row, and a dedicated Backup screen",
+      "checkpoint_ids": [
+        "CP5",
+        "CP6",
+        "CP7",
+        "CP8"
+      ]
+    },
+    "B2": {
+      "description": "Progress follows 5b: exercise picker sheet, line chart, 3m/6m/All ranges, Sessions/Avg RPE tiles, Training frequency, Records",
+      "checkpoint_ids": [
+        "CP2",
+        "CP3"
+      ]
+    },
+    "B3": {
+      "description": "Set entry keeps weight and reps after each logged set and starts each exercise from last session's numbers (replaces D60)",
+      "checkpoint_ids": [
+        "CP9"
+      ]
+    },
+    "B4": {
+      "description": "Empty-state glyphs for the Library (both filters) and Recovery history",
+      "checkpoint_ids": [
+        "CP4"
+      ]
+    },
+    "B5": {
+      "description": "Search fields are 48dp in the Library and both pickers",
+      "checkpoint_ids": [
+        "CP4"
+      ]
+    },
+    "B6": {
+      "description": "Progress orders exercises by most recently trained and does not count an exercise with 0 sets as trained",
+      "checkpoint_ids": [
+        "CP2"
+      ]
+    },
+    "B7": {
+      "description": "Finishing or abandoning a workout, a successful Erase all data and a successful Restore also cancel the Rest done notification (id 1001)",
+      "checkpoint_ids": [
+        "CP1"
+      ]
+    },
+    "REG": {
+      "description": "Register, inventory and decision records updated; full verification gate green",
+      "checkpoint_ids": [
+        "CP10"
+      ]
+    }
+  }
+}

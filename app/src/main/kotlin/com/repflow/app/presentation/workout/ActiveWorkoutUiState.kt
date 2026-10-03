@@ -1,11 +1,16 @@
 package com.repflow.app.presentation.workout
 
+import com.repflow.app.application.settings.AppSettings
+import com.repflow.app.application.settings.ExtraSetFields
+import com.repflow.app.application.workout.LastPerformance
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.domain.workout.WorkoutSetId
+import com.repflow.app.presentation.progression.ProgressionRecommendationUi
+import java.math.BigDecimal
 import java.time.Instant
 
 /**
@@ -42,21 +47,6 @@ data class ExercisePickerItem(
     val recommendation: ProgressionRecommendationUi? = null,
 )
 
-/** A read-only, presentation-layer view of the latest [com.repflow.app.domain.progression.ProgressionRecommendation] for an exercise. */
-data class ProgressionRecommendationUi(
-    val result: ProgressionResultUi,
-    val topReason: String?,
-    val isOverridden: Boolean,
-)
-
-enum class ProgressionResultUi {
-    INCREASE_LOAD,
-    MAINTAIN_LOAD,
-    REDUCE_LOAD,
-    RECOVERY_ADJUSTMENT,
-    WAIT_FOR_MORE_DATA,
-}
-
 sealed interface ActiveWorkoutContent {
     data object Loading : ActiveWorkoutContent
 
@@ -67,6 +57,17 @@ sealed interface ActiveWorkoutContent {
         val startedAt: Instant,
         val exercises: List<ActiveExerciseUi>,
         val restTimer: RestTimerUi? = null,
+        /** The plan the session was started from, for the board's title; `null` for an ad-hoc session (`Untitled workout`) or a label that no longer resolves. Remediation-1 CP7. */
+        val planName: String? = null,
+        /**
+         * The app-wide `Default rest` in seconds (remediation-1-remediation-1 CP6,
+         * Q9): the last link of the rest precedence, put here by the ViewModel
+         * from the settings it observes so the displayed and the started rest
+         * resolve from one value.
+         */
+        val appDefaultRestSeconds: Int = AppSettings.DEFAULT_REST_SECONDS,
+        /** How focus mode shows RPE, pain and technique (`Extra set fields`, Q2). */
+        val extraSetFields: ExtraSetFields = ExtraSetFields.DEFAULT,
     ) : ActiveWorkoutContent
 
     data class ObservationFailed(
@@ -81,6 +82,40 @@ data class ActiveExerciseUi(
     val sets: List<ActiveSetUi>,
     /** The resolved plan target this exercise was seeded from, `null` for an ad-hoc exercise (Milestone 8, implementation-review finding #2). */
     val plannedTarget: PlannedTargetUi? = null,
+    /**
+     * The library exercise this workout exercise records, so focus mode can show
+     * its progression suggestion and route `Why ›` to it (remediation-1 CP8).
+     */
+    val exerciseId: ExerciseId? = null,
+    /**
+     * [com.repflow.app.domain.exercise.Exercise.defaultLoadIncrement] in kg - the
+     * weight stepper's step (`6b`: "Step size comes from the exercise's load
+     * increment"); `null` when the exercise has none (remediation-1 CP8).
+     */
+    val defaultLoadIncrement: BigDecimal? = null,
+    /** [com.repflow.app.domain.exercise.Exercise.instructions], shown as focus mode's technique notes; `null` when there are none (remediation-1 CP8). */
+    val instructions: String? = null,
+    /** [com.repflow.app.domain.exercise.Exercise.defaultRestDuration] in seconds: the rest precedence's middle link (Q9); `null` when the exercise sets none. */
+    val defaultRestSeconds: Int? = null,
+    /**
+     * What the user did on this exercise last time (Q8: the last working set of
+     * the most recent valid session), for focus mode's `Last time:` line;
+     * `null` for a never-done exercise (remediation-1-remediation-1 CP9).
+     */
+    val lastPerformance: LastPerformance? = null,
+    /** What an untouched set entry starts from, computed by the ViewModel ([entrySeedOf]); `null` when there is nothing to seed. */
+    val seed: SetEntrySeed? = null,
+)
+
+/**
+ * The numbers an untouched set entry takes: this session's last logged set of
+ * the exercise, else its [LastPerformance]. Only the fields the exercise's
+ * tracking type records are set.
+ */
+data class SetEntrySeed(
+    val load: BigDecimal? = null,
+    val reps: BigDecimal? = null,
+    val seconds: BigDecimal? = null,
 )
 
 /**
@@ -124,4 +159,24 @@ enum class ActiveWorkoutErrorReason {
     VALIDATION_FAILED,
     PERSISTENCE_UNAVAILABLE,
     UNKNOWN,
+}
+
+/**
+ * Where the finish sheet's confirm is (remediation-1 CP9). Kept apart from
+ * [ActiveWorkoutUiState] so the observed-session stream is unchanged: the
+ * session still goes `Active` → `NoActiveSession` on completion.
+ *
+ * Completing ends the active session, and the workout surface reads an ended
+ * session as "nothing left to show here, go Home". [InFlight] is what tells it
+ * this end is a finish, so it waits for [Finished] - which carries the id the
+ * done screen opens with - instead.
+ */
+sealed interface WorkoutFinishState {
+    data object Idle : WorkoutFinishState
+
+    data object InFlight : WorkoutFinishState
+
+    data class Finished(
+        val sessionId: WorkoutSessionId,
+    ) : WorkoutFinishState
 }

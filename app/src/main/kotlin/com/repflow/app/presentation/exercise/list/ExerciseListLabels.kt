@@ -1,0 +1,61 @@
+package com.repflow.app.presentation.exercise.list
+
+import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
+import com.repflow.app.R
+import com.repflow.app.application.exercise.ExerciseStatusFilter
+import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
+
+/*
+ * The exercise list's plain-data mapping: which words the screen puts on a
+ * filter pill and on an empty list. Separate from `ExerciseListScreen.kt`
+ * because none of it is composable - which is also what lets a plain-JVM
+ * test reach it (`ExerciseListScreenWiringTest`), where the index-based
+ * filter row would otherwise only be checkable on a device.
+ */
+
+/**
+ * The filter row's order, left to right. `RepFlowPillPicker` is index-based,
+ * so this list is what keeps the labels, the selected index and the emitted
+ * filter in step with one another.
+ */
+internal val ExerciseListFilterOrder =
+    listOf(ExerciseStatusFilter.ACTIVE, ExerciseStatusFilter.ARCHIVED)
+
+/** The label each filter carries in the row above the list. */
+@StringRes
+internal fun exerciseListFilterLabelRes(filter: ExerciseStatusFilter): Int =
+    when (filter) {
+        ExerciseStatusFilter.ACTIVE -> R.string.exercise_list_filter_active
+        ExerciseStatusFilter.ARCHIVED -> R.string.exercise_list_filter_archived
+    }
+
+/**
+ * Why the list is empty, in the user's words. [ExerciseListEmptyReason.NO_SEARCH_RESULTS]
+ * takes the query as its argument, and says "Nothing called ..." on the Active filter and
+ * "No archived exercises match ..." on the Archived one ([exerciseListNoMatchMessageRes]).
+ */
+@StringRes
+internal fun exerciseListEmptyMessageRes(reason: ExerciseListEmptyReason): Int =
+    when (reason) {
+        ExerciseListEmptyReason.NO_EXERCISES -> R.string.exercise_list_empty_no_exercises
+        ExerciseListEmptyReason.NO_SEARCH_RESULTS -> exerciseListNoMatchMessageRes(ExerciseStatusFilter.ACTIVE)
+        ExerciseListEmptyReason.NO_ARCHIVED -> R.string.exercise_list_empty_no_archived
+    }
+
+/** The no-results line for [filter] (design turn 7, `7c` N13); it takes the query as `%1$s`. */
+@StringRes
+internal fun exerciseListNoMatchMessageRes(filter: ExerciseStatusFilter): Int =
+    when (filter) {
+        ExerciseStatusFilter.ACTIVE -> R.string.exercise_list_empty_no_match_active
+        ExerciseStatusFilter.ARCHIVED -> R.string.exercise_list_empty_no_match_archived
+    }
+
+/** The glyph over each empty reason: the library, the archive, the search. */
+@DrawableRes
+internal fun exerciseListEmptyIconRes(reason: ExerciseListEmptyReason): Int =
+    when (reason) {
+        ExerciseListEmptyReason.NO_EXERCISES -> RepFlowIcons.barbell
+        ExerciseListEmptyReason.NO_SEARCH_RESULTS -> RepFlowIcons.magnifyingGlass
+        ExerciseListEmptyReason.NO_ARCHIVED -> RepFlowIcons.archive
+    }

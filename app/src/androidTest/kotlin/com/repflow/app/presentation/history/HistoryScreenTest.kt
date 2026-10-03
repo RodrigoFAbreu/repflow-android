@@ -1,10 +1,15 @@
 package com.repflow.app.presentation.history
 
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
 import com.repflow.app.domain.common.DomainResult
@@ -14,6 +19,7 @@ import com.repflow.app.domain.workout.WorkoutExercise
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSession
 import com.repflow.app.domain.workout.WorkoutSessionId
+import com.repflow.app.presentation.RepFlowTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Rule
@@ -21,13 +27,15 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 /**
  * Stateless Compose coverage for [HistoryScreen] - state in, events out, no
  * Hilt, mirroring
  * [com.repflow.app.presentation.exercise.list.ExerciseListScreenTest].
+ *
+ * Remediation-1 CP12 moved invalidating a workout off the list row to the
+ * detail's `⋮` (`3a`, `askInvalidate`), so the three invalidate tests open the
+ * detail first (a selected session) and reach the same dialog from there.
  */
 @RunWith(AndroidJUnit4::class)
 class HistoryScreenTest {
@@ -56,19 +64,21 @@ class HistoryScreenTest {
         onMessageShown: (Long) -> Unit = {},
     ) {
         composeRule.setContent {
-            HistoryScreen(
-                uiState = uiState,
-                onSessionClick = onSessionClick,
-                onDetailDismissed = onDetailDismissed,
-                onInvalidateClicked = onInvalidateClicked,
-                onExerciseFilterChanged = onExerciseFilterChanged,
-                onPlanFilterChanged = onPlanFilterChanged,
-                onStartDateChanged = onStartDateChanged,
-                onEndDateChanged = onEndDateChanged,
-                onShowInvalidatedChanged = onShowInvalidatedChanged,
-                onSortOrderChanged = onSortOrderChanged,
-                onMessageShown = onMessageShown,
-            )
+            RepFlowTheme {
+                HistoryScreen(
+                    uiState = uiState,
+                    onSessionClick = onSessionClick,
+                    onDetailDismissed = onDetailDismissed,
+                    onInvalidateClicked = onInvalidateClicked,
+                    onExerciseFilterChanged = onExerciseFilterChanged,
+                    onPlanFilterChanged = onPlanFilterChanged,
+                    onStartDateChanged = onStartDateChanged,
+                    onEndDateChanged = onEndDateChanged,
+                    onShowInvalidatedChanged = onShowInvalidatedChanged,
+                    onSortOrderChanged = onSortOrderChanged,
+                    onMessageShown = onMessageShown,
+                )
+            }
         }
     }
 
@@ -77,7 +87,42 @@ class HistoryScreenTest {
         setContent(HistoryUiState(isLoading = false, sessions = listOf(completedSession())))
 
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.history_session_invalidate_action))
+            .onNodeWithText(composeRule.activity.getString(R.string.home_untitled_workout))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.history_duration_minutes, 60), substring = true)
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(composeRule.activity.resources.getQuantityString(R.plurals.history_count, 1, 1))
+            .assertIsDisplayed()
+        // The row face carries no destructive action any more: it lives on the detail.
+        composeRule
+            .onNodeWithContentDescription(composeRule.activity.getString(R.string.history_session_invalidate_action))
+            .assertDoesNotExist()
+    }
+
+    @Test
+    fun rowsCarryThePrAndInvalidatedBadges() {
+        val personalBest = completedSession("session-1")
+        val invalidated =
+            when (val result = completedSession("session-2").invalidate(Instant.parse("2026-01-02T00:00:00Z"))) {
+                is DomainResult.Success -> result.value
+                is DomainResult.Failure -> throw AssertionError("Expected success but was failure: ${result.error}")
+            }
+        setContent(
+            HistoryUiState(
+                isLoading = false,
+                sessions = listOf(personalBest, invalidated),
+                personalBestSessionIds = setOf(personalBest.id),
+                filters = HistoryFilters(showInvalidated = true),
+            ),
+        )
+
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.history_row_badge_pr))
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.history_row_badge_invalidated))
             .assertIsDisplayed()
     }
 
@@ -90,8 +135,7 @@ class HistoryScreenTest {
             onSessionClick = { clickedId = it },
         )
 
-        val dateText = session.startedAt.atZone(ZoneId.systemDefault()).format(rowDateFormatter)
-        composeRule.onNodeWithText(dateText).performClick()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.home_untitled_workout)).performClick()
 
         assertEquals(session.id, clickedId)
     }
@@ -101,12 +145,12 @@ class HistoryScreenTest {
         var invalidatedId: WorkoutSessionId? = null
         val session = completedSession()
         setContent(
-            HistoryUiState(isLoading = false, sessions = listOf(session)),
+            HistoryUiState(isLoading = false, sessions = listOf(session), selectedSessionId = session.id),
             onInvalidateClicked = { invalidatedId = it },
         )
 
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.history_session_invalidate_action))
+            .onNodeWithContentDescription(composeRule.activity.getString(R.string.history_session_invalidate_action))
             .performClick()
 
         composeRule
@@ -120,12 +164,12 @@ class HistoryScreenTest {
         var invalidatedId: WorkoutSessionId? = null
         val session = completedSession()
         setContent(
-            HistoryUiState(isLoading = false, sessions = listOf(session)),
+            HistoryUiState(isLoading = false, sessions = listOf(session), selectedSessionId = session.id),
             onInvalidateClicked = { invalidatedId = it },
         )
 
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.history_session_invalidate_action))
+            .onNodeWithContentDescription(composeRule.activity.getString(R.string.history_session_invalidate_action))
             .performClick()
         composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.history_invalidate_dialog_confirm))
@@ -139,12 +183,12 @@ class HistoryScreenTest {
         var invalidatedId: WorkoutSessionId? = null
         val session = completedSession()
         setContent(
-            HistoryUiState(isLoading = false, sessions = listOf(session)),
+            HistoryUiState(isLoading = false, sessions = listOf(session), selectedSessionId = session.id),
             onInvalidateClicked = { invalidatedId = it },
         )
 
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.history_session_invalidate_action))
+            .onNodeWithContentDescription(composeRule.activity.getString(R.string.history_session_invalidate_action))
             .performClick()
         composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.history_invalidate_dialog_cancel))
@@ -224,7 +268,7 @@ class HistoryScreenTest {
     }
 
     @Test
-    fun exerciseFilterMenuInvokesOnExerciseFilterChanged() {
+    fun exerciseFilterSheetInvokesOnExerciseFilterChanged() {
         var selectedExerciseId: ExerciseId? = null
         setContent(
             HistoryUiState(isLoading = false, sessions = listOf(completedSessionWithExercise())),
@@ -234,13 +278,66 @@ class HistoryScreenTest {
         composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.history_filter_exercise_all))
             .performClick()
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.history_filter_exercise_sheet_title).uppercase())
+            .assertIsDisplayed()
         composeRule.onNodeWithText("Bench Press").performClick()
 
         assertEquals(ExerciseId("bench-press"), selectedExerciseId)
     }
 
+    @Test
+    fun backFromDetailKeepsTheListScrollPosition() {
+        val sessions =
+            (1..SCROLL_SESSION_COUNT).map { day ->
+                val started = Instant.parse("2026-01-01T10:00:00Z").plusSeconds(day * SECONDS_PER_DAY)
+                val session = WorkoutSession.start(WorkoutSessionId("session-$day"), null, started)
+                (session.complete(started.plusSeconds(SECONDS_PER_HOUR)) as DomainResult.Success).value
+            }
+        val whenOf = { index: Int ->
+            java.time.format.DateTimeFormatter
+                .ofPattern("EEE d MMM", java.util.Locale.getDefault())
+                .format(sessions[index].startedAt.atZone(java.time.ZoneId.systemDefault()))
+        }
+        val state = mutableStateOf(HistoryUiState(isLoading = false, sessions = sessions))
+        composeRule.setContent {
+            RepFlowTheme {
+                HistoryScreen(
+                    uiState = state.value,
+                    onSessionClick = { state.value = state.value.copy(selectedSessionId = it) },
+                    onDetailDismissed = { state.value = state.value.copy(selectedSessionId = null) },
+                    onInvalidateClicked = {},
+                    onExerciseFilterChanged = {},
+                    onPlanFilterChanged = {},
+                    onStartDateChanged = {},
+                    onEndDateChanged = {},
+                    onShowInvalidatedChanged = {},
+                    onSortOrderChanged = {},
+                    onMessageShown = {},
+                )
+            }
+        }
+        // Newest first: the list's top is the last session; scroll well past it.
+        val newestWhen = whenOf(SCROLL_SESSION_COUNT - 1)
+        val deepWhen = whenOf(SCROLL_TARGET_INDEX)
+        composeRule.onNodeWithText(newestWhen, substring = true).assertIsDisplayed()
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasText(deepWhen, substring = true))
+        composeRule.onNodeWithText(deepWhen, substring = true).assertIsDisplayed()
+
+        composeRule.onNodeWithText(deepWhen, substring = true).performClick()
+        composeRule
+            .onNodeWithContentDescription(composeRule.activity.getString(R.string.history_detail_back))
+            .performClick()
+
+        composeRule.onNodeWithText(deepWhen, substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText(newestWhen, substring = true).assertDoesNotExist()
+    }
+
     private companion object {
+        const val SCROLL_SESSION_COUNT = 21
+        const val SCROLL_TARGET_INDEX = 4
+        const val SECONDS_PER_DAY = 86_400L
+        const val SECONDS_PER_HOUR = 3_600L
         const val SNACKBAR_AUTO_DISMISS_TIMEOUT_MILLIS = 8_000L
-        val rowDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm")
     }
 }

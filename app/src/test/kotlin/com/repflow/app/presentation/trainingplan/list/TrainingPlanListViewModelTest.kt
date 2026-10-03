@@ -3,6 +3,7 @@ package com.repflow.app.presentation.trainingplan.list
 import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.test
 import com.repflow.app.application.exercise.FixedClock
+import com.repflow.app.application.exercise.GetExercise
 import com.repflow.app.application.exercise.InMemoryExerciseRepository
 import com.repflow.app.application.exercise.SequentialIdentifierGenerator
 import com.repflow.app.application.trainingplan.ArchiveTrainingPlan
@@ -15,6 +16,8 @@ import com.repflow.app.application.trainingplan.PlannedExerciseTargetKind
 import com.repflow.app.application.trainingplan.RestoreTrainingPlan
 import com.repflow.app.application.trainingplan.TrainingPlanPersistenceError
 import com.repflow.app.application.trainingplan.TrainingPlanStatusFilter
+import com.repflow.app.application.workout.InMemoryWorkoutRepository
+import com.repflow.app.application.workout.StartWorkoutSessionFromPlan
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.exercise.Exercise
 import com.repflow.app.domain.exercise.ExerciseId
@@ -30,6 +33,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
@@ -42,11 +47,18 @@ class TrainingPlanListViewModelTest {
     private val planRepository = InMemoryTrainingPlanRepository()
     private val exerciseRepository = InMemoryExerciseRepository()
     private val createTrainingPlan = CreateTrainingPlan(planRepository, exerciseRepository, clock, ids)
+    private val workoutRepository = InMemoryWorkoutRepository()
     private val viewModel =
         TrainingPlanListViewModel(
             ObserveTrainingPlans(planRepository),
             ArchiveTrainingPlan(planRepository, clock),
             RestoreTrainingPlan(planRepository, clock),
+            StartWorkoutSessionFromPlan(
+                workoutRepository,
+                GetExercise(exerciseRepository),
+                clock,
+                SequentialIdentifierGenerator(prefix = "session"),
+            ),
         )
 
     @After
@@ -130,6 +142,74 @@ class TrainingPlanListViewModelTest {
                 val content = loaded.content as TrainingPlanListContent.Content
                 assertEquals(listOf("Push Pull Legs"), content.items.map { it.name })
                 assertEquals(1, content.items.single().plannedExerciseCount)
+            }
+        }
+
+    @Test
+    fun `a card carries the latest version number and an archived plan its archive instant`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            val exerciseId = seedExercise()
+            seedPlan("Active Plan", exerciseId)
+            val archivedPlanId = seedPlan("Retired Plan", exerciseId)
+            archivePlan(archivedPlanId)
+
+            viewModel.uiState.test {
+                val active = awaitUntilFilterMatches(TrainingPlanStatusFilter.ACTIVE).content as TrainingPlanListContent.Content
+                assertEquals(1, active.items.single().versionNumber)
+                assertNull(active.items.single().archivedAt)
+
+                viewModel.onFilterChanged(TrainingPlanStatusFilter.ARCHIVED)
+                val archived = awaitUntilFilterMatches(TrainingPlanStatusFilter.ARCHIVED).content as TrainingPlanListContent.Content
+                assertEquals(now, archived.items.single().archivedAt)
+            }
+        }
+
+    @Test
+    fun `starting a plan starts a session from its latest version and asks to open the workout`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            val exerciseId = seedExercise()
+            val planId = seedPlan("Push Pull Legs", exerciseId)
+            val versionId = requireNotNull(planRepository.findOverviewByPlanId(planId)).latestVersion.id
+
+            viewModel.uiState.test {
+                awaitUntilContent()
+
+                viewModel.onStartClicked(planId)
+                awaitUntil { it.openWorkout }
+
+                val session = requireNotNull(workoutRepository.findActiveSession())
+                assertEquals(versionId, session.trainingPlanVersionId)
+                assertEquals(listOf(exerciseId), session.exercises.map { it.exerciseId })
+
+                viewModel.onWorkoutOpened()
+                assertFalse(awaitItem().openWorkout)
+            }
+        }
+
+    @Test
+    fun `starting a plan while a workout is running reports it and opens nothing`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            val exerciseId = seedExercise()
+            val firstPlan = seedPlan("Push Pull Legs", exerciseId)
+            val secondPlan = seedPlan("Upper Lower", exerciseId)
+
+            viewModel.uiState.test {
+                awaitUntilContent()
+                viewModel.onStartClicked(firstPlan)
+                awaitUntil { it.openWorkout }
+                viewModel.onWorkoutOpened()
+                awaitUntil { !it.openWorkout }
+                val runningSession = requireNotNull(workoutRepository.findActiveSession()).id
+
+                viewModel.onStartClicked(secondPlan)
+                val state = awaitUntilMessagesNotEmpty()
+
+                assertTrue(state.messages.single() is TrainingPlanListMessage.WorkoutAlreadyActive)
+                assertFalse(state.openWorkout)
+                assertEquals(runningSession, workoutRepository.findActiveSession()?.id)
             }
         }
 

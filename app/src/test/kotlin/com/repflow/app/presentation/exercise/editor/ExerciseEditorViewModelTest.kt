@@ -30,6 +30,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -98,6 +99,35 @@ class ExerciseEditorViewModelTest {
         viewModel.onNameChanged("Squat")
 
         assertTrue(viewModel.uiState.value.isSaveEnabled)
+    }
+
+    @Test
+    fun `a pristine create form shows no name error until the name is touched`() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        val viewModel = viewModel()
+
+        assertNull(viewModel.uiState.value.visibleNameError)
+
+        viewModel.onNameChanged("   ")
+
+        assertEquals(
+            ExerciseEditorFieldError.Domain(ExerciseValidationError.NameBlank),
+            viewModel.uiState.value.visibleNameError,
+        )
+    }
+
+    /** Functional review R2-F-1: focusing the name field and leaving it empty must show the required error. */
+    @Test
+    fun `leaving the name field empty counts as touching it`() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        val viewModel = viewModel()
+
+        viewModel.onNameFocusLost()
+
+        assertEquals(
+            ExerciseEditorFieldError.Domain(ExerciseValidationError.NameBlank),
+            viewModel.uiState.value.visibleNameError,
+        )
     }
 
     @Test
@@ -213,6 +243,31 @@ class ExerciseEditorViewModelTest {
                     ?.kind,
             )
             assertNull(viewModel.uiState.value.savedExerciseId)
+        }
+
+    /** Functional review R3-F-5 and R3-F-3. */
+    @Test
+    fun `editing the name clears a duplicate-name refusal and each refusal is a new value`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            seedExercise(name = "Deadlift")
+            val viewModel = viewModel()
+            viewModel.onNameChanged("Deadlift")
+            viewModel.onSaveClicked()
+            advanceUntilIdle()
+            val first = viewModel.uiState.value.submitError
+            requireNotNull(first)
+
+            viewModel.onNameChanged("Deadlifts")
+            assertNull(viewModel.uiState.value.submitError)
+
+            viewModel.onNameChanged("Deadlift")
+            viewModel.onSaveClicked()
+            advanceUntilIdle()
+            val second = viewModel.uiState.value.submitError
+            requireNotNull(second)
+            assertEquals(ExerciseEditorSubmitErrorKind.DUPLICATE_NAME, second.kind)
+            assertNotEquals(first, second)
         }
 
     @Test
@@ -333,5 +388,43 @@ class ExerciseEditorViewModelTest {
 
         assertEquals("Romanian Deadlift", recreated.uiState.value.name)
         assertEquals("120", recreated.uiState.value.restSecondsText)
+    }
+
+    // Remediation-1 CP10: the create route's optional name prefill (the
+    // library's `Create "<query>"`).
+
+    private fun prefilledHandle(name: String) = SavedStateHandle().apply { set(RepFlowDestinations.EXERCISE_NEW_NAME_ARG, name) }
+
+    @Test
+    fun `a prefilled create route starts with that name and save enabled`() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        val viewModel = viewModel(savedStateHandle = prefilledHandle("Landmine Press"))
+
+        assertEquals(ExerciseEditorMode.Create, viewModel.uiState.value.mode)
+        assertEquals("Landmine Press", viewModel.uiState.value.name)
+        assertTrue(viewModel.uiState.value.isSaveEnabled)
+    }
+
+    @Test
+    fun `a prefilled name the user then edits survives recreation as the edit`() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        val savedStateHandle = prefilledHandle("Landmine Press")
+        val first = viewModel(savedStateHandle = savedStateHandle)
+        first.onNameChanged("Landmine Press (half kneeling)")
+
+        val recreated = viewModel(savedStateHandle = savedStateHandle)
+
+        assertEquals("Landmine Press (half kneeling)", recreated.uiState.value.name)
+    }
+
+    @Test
+    fun `backing out of an untouched prefilled editor dismisses without the discard dialog`() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        val viewModel = viewModel(savedStateHandle = prefilledHandle("Landmine Press"))
+
+        viewModel.onBackRequested()
+
+        assertTrue(viewModel.uiState.value.dismissed)
+        assertFalse(viewModel.uiState.value.isDiscardDialogVisible)
     }
 }

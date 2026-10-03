@@ -3,6 +3,7 @@ package com.repflow.app.infrastructure.database.recovery
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.cash.turbine.test
 import com.repflow.app.infrastructure.database.RepFlowDatabase
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -62,6 +63,22 @@ class RecoveryDaoTest {
     fun findLatestReturnsNullWhenNoRowsExist() =
         runBlocking {
             assertNull(recoveryDao.findLatest())
+        }
+
+    @Test
+    fun observeForDateReEmitsAfterAnUpsertForThatDate() =
+        runBlocking {
+            recoveryDao.observeForDate("2026-01-01").test {
+                assertNull(awaitItem())
+
+                recoveryDao.upsert(recoveryEntity(id = "recovery-1", sleepQuality = 2))
+                assertEquals(2, awaitItem()?.sleepQuality)
+
+                recoveryDao.upsert(recoveryEntity(id = "recovery-2", sleepQuality = 4))
+                assertEquals(4, awaitItem()?.sleepQuality)
+
+                cancelAndIgnoreRemainingEvents()
+            }
         }
 
     @Test

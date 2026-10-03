@@ -7,6 +7,9 @@ import com.repflow.app.application.trainingplan.ObserveTrainingPlans
 import com.repflow.app.application.trainingplan.RestoreTrainingPlan
 import com.repflow.app.application.trainingplan.TrainingPlanOverview
 import com.repflow.app.application.trainingplan.TrainingPlanStatusFilter
+import com.repflow.app.application.workout.StartWorkoutSessionFromPlan
+import com.repflow.app.application.workout.StartWorkoutSessionFromPlanCommand
+import com.repflow.app.application.workout.WorkoutOperationError
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.trainingplan.TrainingPlanId
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
@@ -30,6 +34,11 @@ import javax.inject.Inject
  * [com.repflow.app.presentation.exercise.list.ExerciseListViewModel]'s
  * active/archived filter and archive/restore/Undo shape (Milestone 8, CP12) -
  * minus the search query, which plans still don't have.
+ *
+ * Remediation-1 CP11 adds the card's `Start workout` ([onStartClicked]): a
+ * session started from the plan's latest version through the same use case
+ * Home's start card calls, after which [TrainingPlanListUiState.openWorkout]
+ * asks the route to open the workout.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -39,8 +48,11 @@ class TrainingPlanListViewModel
         private val observeTrainingPlans: ObserveTrainingPlans,
         private val archiveTrainingPlan: ArchiveTrainingPlan,
         private val restoreTrainingPlan: RestoreTrainingPlan,
+        private val startWorkoutSessionFromPlan: StartWorkoutSessionFromPlan,
     ) : ViewModel() {
         private val filter = MutableStateFlow(TrainingPlanStatusFilter.ACTIVE)
+        private val openWorkout = MutableStateFlow(false)
+        private var startInFlight = false
         private val retryTrigger = MutableStateFlow(0)
         private val messages = MutableStateFlow<List<TrainingPlanListMessage>>(emptyList())
         private val nextMessageId = AtomicLong(0)
@@ -64,8 +76,8 @@ class TrainingPlanListViewModel
                 }
 
         val uiState =
-            combine(contentState, messages) { cs, msgs ->
-                TrainingPlanListUiState(cs.filter, cs.content, msgs)
+            combine(contentState, messages, openWorkout) { cs, msgs, open ->
+                TrainingPlanListUiState(cs.filter, cs.content, msgs, open)
             }.stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
@@ -106,6 +118,54 @@ class TrainingPlanListViewModel
             }
         }
 
+        /**
+         * Starts a workout from [id]'s latest version - the plan as it stands,
+         * exactly what Home's start card would seed - and raises
+         * [TrainingPlanListUiState.openWorkout] once the session exists. A
+         * workout already running is reported rather than replaced; any other
+         * refusal (the plan gone or unreadable, an exercise no longer
+         * resolvable, storage unavailable) is the generic failure message. A second tap while one
+         * start is in flight is ignored, so it can never report the first
+         * start's own session as "already running".
+         */
+        fun onStartClicked(id: TrainingPlanId) {
+            if (startInFlight) return
+            startInFlight = true
+            viewModelScope.launch {
+                try {
+                    val overview =
+                        observeTrainingPlans(TrainingPlanStatusFilter.ACTIVE)
+                            .catch { failure ->
+                                if (failure is CancellationException) throw failure
+                                emit(emptyList())
+                            }.first()
+                            .find { it.plan.id == id }
+                    val result =
+                        if (overview == null) {
+                            DomainResult.Failure(WorkoutOperationError.NotFound)
+                        } else {
+                            startWorkoutSessionFromPlan(
+                                StartWorkoutSessionFromPlanCommand(
+                                    trainingPlanVersionId = overview.latestVersion.id,
+                                    plannedExercises = overview.latestVersion.plannedExercises,
+                                ),
+                            )
+                        }
+                    when (result) {
+                        is DomainResult.Success -> openWorkout.value = true
+                        is DomainResult.Failure -> enqueue(result.error.toStartMessage(nextId()))
+                    }
+                } finally {
+                    startInFlight = false
+                }
+            }
+        }
+
+        /** The route has shown the workout surface. */
+        fun onWorkoutOpened() {
+            openWorkout.value = false
+        }
+
         fun onMessageShown(messageId: Long) {
             messages.update { current -> current.filterNot { it.id == messageId } }
         }
@@ -126,13 +186,6 @@ class TrainingPlanListViewModel
             return TrainingPlanListContent.Empty(reason)
         }
 
-        private fun toListItem(overview: TrainingPlanOverview) =
-            TrainingPlanListItem(
-                id = overview.plan.id,
-                name = overview.plan.name.value,
-                plannedExerciseCount = overview.latestVersion.plannedExercises.size,
-            )
-
         private fun enqueue(message: TrainingPlanListMessage) {
             messages.update { it + message }
         }
@@ -142,4 +195,20 @@ class TrainingPlanListViewModel
         private companion object {
             const val STOP_TIMEOUT_MILLIS = 5_000L
         }
+    }
+
+private fun toListItem(overview: TrainingPlanOverview) =
+    TrainingPlanListItem(
+        id = overview.plan.id,
+        name = overview.plan.name.value,
+        plannedExerciseCount = overview.latestVersion.plannedExercises.size,
+        versionNumber = overview.latestVersion.versionNumber,
+        archivedAt = overview.plan.archivedAt,
+    )
+
+private fun WorkoutOperationError.toStartMessage(id: Long): TrainingPlanListMessage =
+    if (this == WorkoutOperationError.ActiveSessionAlreadyExists) {
+        TrainingPlanListMessage.WorkoutAlreadyActive(id)
+    } else {
+        TrainingPlanListMessage.OperationFailed(id)
     }

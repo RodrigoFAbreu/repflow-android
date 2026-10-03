@@ -22,6 +22,7 @@ import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.presentation.navigation.RepFlowDestinations
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -29,6 +30,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -102,6 +105,31 @@ class TrainingPlanEditorViewModelTest {
                 assertTrue(state.rows.isEmpty())
                 assertTrue(!state.isSaveEnabled)
             }
+        }
+
+    @Test
+    fun `a pristine create form shows no name error until the name is touched`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            val vm = viewModel()
+
+            assertNull(vm.uiState.value.visibleNameError)
+
+            vm.onNameChanged("  ")
+
+            assertNotNull(vm.uiState.value.visibleNameError)
+        }
+
+    /** Functional review R2-F-1: focusing the name field and leaving it empty must show the required error. */
+    @Test
+    fun `leaving the name field empty counts as touching it`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            val vm = viewModel()
+
+            vm.onNameFocusLost()
+
+            assertNotNull(vm.uiState.value.visibleNameError)
         }
 
     @Test
@@ -261,6 +289,18 @@ class TrainingPlanEditorViewModelTest {
                 vm.uiState.value.submitError
                     ?.kind,
             )
+
+            // Functional review R3-F-5: editing the name answers the refusal; Save checks it again (R3-F-3: a new value).
+            val first = vm.uiState.value.submitError
+            vm.onNameChanged("Push Pull Legs 2")
+            assertNull(vm.uiState.value.submitError)
+            vm.onNameChanged("Push Pull Legs")
+            vm.onSaveClicked()
+            advanceUntilIdle()
+            val second = vm.uiState.value.submitError
+            requireNotNull(second)
+            assertEquals(TrainingPlanEditorSubmitErrorKind.DUPLICATE_NAME, second.kind)
+            assertNotEquals(first, second)
         }
 
     @Test
@@ -305,6 +345,80 @@ class TrainingPlanEditorViewModelTest {
                     .single()
                     .exerciseId,
             )
+        }
+
+    private fun seedPlanAndOpenEditor(): TrainingPlanEditorViewModel {
+        val exerciseId = seedExercise()
+        val created =
+            runBlocking {
+                CreateTrainingPlan(planRepository, exerciseRepository, clock, ids)(
+                    CreateTrainingPlanCommand(
+                        name = "Push Pull Legs",
+                        plannedExercises =
+                            listOf(
+                                PlannedExerciseInput(
+                                    exerciseId = exerciseId.value,
+                                    order = 0,
+                                    targetSets = 3,
+                                    targetKind = PlannedExerciseTargetKind.REPS,
+                                    repMin = 8,
+                                    repMax = 12,
+                                    durationMinSeconds = null,
+                                    durationMaxSeconds = null,
+                                    restSeconds = 90,
+                                    isOptional = false,
+                                ),
+                            ),
+                    ),
+                )
+            }
+        check(created is DomainResult.Success)
+        return viewModel(planId = created.value.value)
+    }
+
+    @Test
+    fun `backing out of an unchanged existing plan does not ask to discard`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            val vm = seedPlanAndOpenEditor()
+            advanceUntilIdle()
+
+            vm.onBackRequested()
+
+            assertTrue(vm.uiState.value.dismissed)
+            assertFalse(vm.uiState.value.isDiscardDialogVisible)
+        }
+
+    @Test
+    fun `backing out of an edited existing plan asks to discard`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            val vm = seedPlanAndOpenEditor()
+            advanceUntilIdle()
+
+            vm.onNameChanged("Push Pull Legs 2")
+            vm.onBackRequested()
+
+            assertTrue(vm.uiState.value.isDiscardDialogVisible)
+            assertFalse(vm.uiState.value.dismissed)
+        }
+
+    @Test
+    fun `editing a row and then reverting it is not a change`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            val vm = seedPlanAndOpenEditor()
+            advanceUntilIdle()
+            val rowId =
+                vm.uiState.value.rows
+                    .single()
+                    .rowId
+
+            vm.onRowTargetSetsChanged(rowId, "4")
+            vm.onRowTargetSetsChanged(rowId, "3")
+            vm.onBackRequested()
+
+            assertTrue(vm.uiState.value.dismissed)
         }
 
     @Test

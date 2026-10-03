@@ -109,9 +109,9 @@ class HistoryUiStateTest {
             session("3", Instant.parse("2026-01-03T00:00:00Z"), trainingPlanVersionId = TrainingPlanVersionId("other-v1"))
         val versionLabels =
             mapOf(
-                TrainingPlanVersionId("v1") to TrainingPlanVersionLabel(planId, "Push Day"),
-                TrainingPlanVersionId("v2") to TrainingPlanVersionLabel(planId, "Push Day"),
-                TrainingPlanVersionId("other-v1") to TrainingPlanVersionLabel(TrainingPlanId("plan-2"), "Leg Day"),
+                TrainingPlanVersionId("v1") to TrainingPlanVersionLabel(planId, "Push Day", 1),
+                TrainingPlanVersionId("v2") to TrainingPlanVersionLabel(planId, "Push Day", 2),
+                TrainingPlanVersionId("other-v1") to TrainingPlanVersionLabel(TrainingPlanId("plan-2"), "Leg Day", 1),
             )
         val state =
             HistoryUiState(
@@ -177,8 +177,8 @@ class HistoryUiStateTest {
         val adHoc = session("3", Instant.parse("2026-01-03T00:00:00Z"))
         val versionLabels =
             mapOf(
-                TrainingPlanVersionId("v1") to TrainingPlanVersionLabel(planId, "Push Day"),
-                TrainingPlanVersionId("v2") to TrainingPlanVersionLabel(planId, "Push Day"),
+                TrainingPlanVersionId("v1") to TrainingPlanVersionLabel(planId, "Push Day", 1),
+                TrainingPlanVersionId("v2") to TrainingPlanVersionLabel(planId, "Push Day", 2),
             )
         val state =
             HistoryUiState(

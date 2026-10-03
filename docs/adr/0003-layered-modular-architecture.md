@@ -610,18 +610,26 @@ unlike the rest of this ADR it is current state, not rationale, and may drift
 ```text
 app/src/main/kotlin/com/repflow/app/
   domain/{exercise,trainingplan,workout,recovery,progression,backup,common}
-  application/{...same feature packages...}
-  data/{...same feature packages...}
+  application/{...same feature packages..., history, progress, settings}
+  data/{...same feature packages..., settings}
   infrastructure/{database/, di/, id/, time/}
-  presentation/{...same feature packages.../navigation}
+  presentation/{...feature packages..., home, history, progress, settings,
+                designsystem/, navigation/}
 ```
 
 Test trees (`app/src/test`, `app/src/androidTest`) mirror this 1:1.
 
-Hilt (`infrastructure/di`) provides three `SingletonComponent` modules:
-`DatabaseModule` (Room database + DAOs), `RepositoryModule` (`@Binds` each
-application repository interface to its `data`-layer `Local*` implementation),
-`SystemModule` (clock, ID generation, IO dispatcher).
+Hilt provides four `SingletonComponent` modules. Three live in
+`infrastructure/di`: `DatabaseModule` (Room database + DAOs),
+`RepositoryModule` (`@Binds` each application repository interface to its
+`data`-layer `Local*` implementation), `SystemModule` (clock, ID generation,
+IO dispatcher). The fourth, `RestAlertModule`
+(`presentation/workout/SystemRestAlertVibrator.kt`, added by
+`repflow-redesign-visual-foundation-remediation-1` CP14), binds the
+presentation-layer `RestAlertVibrator` to `SystemRestAlertVibrator`, the
+platform vibrator the rest-timer alert uses; it stays in `presentation`
+because both the interface and its only implementation are Android
+presentation concerns.
 
 Navigation is a single `NavHost`
 (`presentation/navigation/RepFlowNavHost.kt`) using plain string route

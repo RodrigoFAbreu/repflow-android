@@ -1,5 +1,6 @@
 package com.repflow.app.presentation.recovery
 
+import com.repflow.app.application.recovery.FixedClock
 import com.repflow.app.application.recovery.InMemoryFutsalRepository
 import com.repflow.app.application.recovery.InMemoryRecoveryRepository
 import com.repflow.app.domain.common.DomainResult
@@ -25,6 +26,7 @@ class RecoveryHistoryViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val recoveryRepository = InMemoryRecoveryRepository()
     private val futsalRepository = InMemoryFutsalRepository()
+    private val clock = FixedClock(Instant.parse("2026-01-02T12:00:00Z"))
 
     @Before
     fun setUp() {
@@ -72,7 +74,7 @@ class RecoveryHistoryViewModelTest {
                 ),
             )
 
-            val viewModel = RecoveryHistoryViewModel(recoveryRepository, futsalRepository)
+            val viewModel = RecoveryHistoryViewModel(recoveryRepository, futsalRepository, clock)
             dispatcher.scheduler.advanceUntilIdle()
 
             assertEquals(false, viewModel.uiState.value.isLoading)
@@ -83,7 +85,7 @@ class RecoveryHistoryViewModelTest {
     @Test
     fun `starts loading and shows empty lists when nothing is recorded`() =
         runTest {
-            val viewModel = RecoveryHistoryViewModel(recoveryRepository, futsalRepository)
+            val viewModel = RecoveryHistoryViewModel(recoveryRepository, futsalRepository, clock)
 
             assertEquals(true, viewModel.uiState.value.isLoading)
 

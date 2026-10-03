@@ -40,6 +40,7 @@ fun ExerciseEditorRoute(
     ExerciseEditorScreen(
         uiState = uiState,
         onNameChanged = viewModel::onNameChanged,
+        onNameFocusLost = viewModel::onNameFocusLost,
         onTrackingTypeChanged = viewModel::onTrackingTypeChanged,
         onInstructionsChanged = viewModel::onInstructionsChanged,
         onRestSecondsChanged = viewModel::onRestSecondsChanged,

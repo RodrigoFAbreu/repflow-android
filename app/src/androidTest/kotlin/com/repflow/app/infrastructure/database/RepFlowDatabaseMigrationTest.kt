@@ -3,12 +3,17 @@ package com.repflow.app.infrastructure.database
 import androidx.room.testing.MigrationTestHelper
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.test.platform.app.InstrumentationRegistry
+import com.repflow.app.application.settings.ExtraSetFields
+import com.repflow.app.application.settings.ThemeMode
+import com.repflow.app.infrastructure.di.DatabaseModule
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 
 /**
- * Validates [MIGRATION_1_2] against a real v1-schema database, using the
+ * Validates every migration ([MIGRATION_1_2] through [MIGRATION_8_9]) against a real older-schema database, using the
  * exported schema JSON files under `app/schemas` (see the `androidTest`
  * `assets.directories` entry in `app/build.gradle.kts`). This is the first
  * real migration test in the project - version 1 never had one, and there
@@ -25,6 +30,12 @@ class RepFlowDatabaseMigrationTest {
 
     private companion object {
         const val TEST_DB = "migration-test"
+        const val REGISTRATION_DB = "migration-8-9-registration-test"
+
+        /** The pinned v8 row with `keep_screen_awake = 1` (its default is 0), so a bypassed migration is visible. */
+        const val SEED_V8_ROW =
+            "INSERT INTO settings (id, rest_timer_auto_start, rest_timer_vibrate, rest_timer_notification, " +
+                "keep_screen_awake, confirm_before_finishing) VALUES (1, 1, 1, 1, 1, 1)"
     }
 
     @Test
@@ -308,6 +319,153 @@ class RepFlowDatabaseMigrationTest {
         assertEquals(3, setCursor.getInt(0))
         assertEquals(4, setCursor.getInt(1))
         setCursor.close()
+    }
+
+    /**
+     * Remediation-1 CP14: the single-row `settings` table arrives with today's
+     * defaults - auto-start, vibrate and notification on, keep screen awake off,
+     * confirm before finishing on - and every existing row survives.
+     */
+    @Test
+    fun migrate7To8_addsTheSettingsTableWithTheDefaultRowAndKeepsExistingRows() {
+        seedDatabaseThroughVersion6()
+        helper.runMigrationsAndValidate(TEST_DB, 7, true, MIGRATION_6_7).close()
+
+        val migratedDb = helper.runMigrationsAndValidate(TEST_DB, 8, true, MIGRATION_7_8)
+
+        val settingsCursor =
+            migratedDb.query(
+                "SELECT id, rest_timer_auto_start, rest_timer_vibrate, rest_timer_notification, " +
+                    "keep_screen_awake, confirm_before_finishing FROM settings",
+            )
+        assertEquals(1, settingsCursor.count)
+        settingsCursor.moveToFirst()
+        assertEquals(1, settingsCursor.getInt(0))
+        assertEquals(listOf(1, 1, 1, 0, 1), (1..5).map { settingsCursor.getInt(it) })
+        settingsCursor.close()
+
+        val exerciseCursor = migratedDb.query("SELECT name FROM exercises WHERE id = 'exercise-1'")
+        exerciseCursor.moveToFirst()
+        assertEquals("Bench Press", exerciseCursor.getString(0))
+        exerciseCursor.close()
+
+        val setCursor = migratedDb.query("SELECT load, reps FROM workout_sets WHERE id = 'set-1'")
+        setCursor.moveToFirst()
+        assertEquals(60.0, setCursor.getDouble(0), 0.0)
+        assertEquals(8, setCursor.getInt(1))
+        setCursor.close()
+    }
+
+    @Test
+    fun migrate7To8_allowsUpdatingTheSettingsRow() {
+        seedDatabaseThroughVersion6()
+        helper.runMigrationsAndValidate(TEST_DB, 7, true, MIGRATION_6_7).close()
+
+        val migratedDb = helper.runMigrationsAndValidate(TEST_DB, 8, true, MIGRATION_7_8)
+        migratedDb.execSQL("UPDATE settings SET keep_screen_awake = 1, rest_timer_vibrate = 0 WHERE id = 1")
+
+        val cursor = migratedDb.query("SELECT keep_screen_awake, rest_timer_vibrate FROM settings WHERE id = 1")
+        cursor.moveToFirst()
+        assertEquals(1, cursor.getInt(0))
+        assertEquals(0, cursor.getInt(1))
+        cursor.close()
+    }
+
+    @Test
+    fun migrate8To9_keepsTheFiveSwitchesAndGivesTheNewColumnsTheirDefaults() {
+        helper.createDatabase(TEST_DB, 8).apply {
+            execSQL(SEED_V8_ROW)
+            close()
+        }
+
+        val migratedDb = helper.runMigrationsAndValidate(TEST_DB, 9, true, MIGRATION_8_9)
+
+        migratedDb
+            .query(
+                "SELECT rest_timer_auto_start, rest_timer_vibrate, rest_timer_notification, keep_screen_awake, " +
+                    "confirm_before_finishing, theme, default_rest_seconds, extra_set_fields, last_backup_at FROM settings",
+            ).use { cursor ->
+                assertEquals(1, cursor.count)
+                cursor.moveToFirst()
+                assertEquals(listOf(1, 1, 1, 1, 1), (0..4).map { cursor.getInt(it) })
+                assertEquals("SYSTEM", cursor.getString(5))
+                assertEquals(90, cursor.getInt(6))
+                assertEquals("COLLAPSED", cursor.getString(7))
+                assertEquals(true, cursor.isNull(8))
+            }
+    }
+
+    @Test
+    fun migrate7To9_givesTheSeededRowTheNewDefaults() {
+        seedDatabaseThroughVersion6()
+        helper.runMigrationsAndValidate(TEST_DB, 7, true, MIGRATION_6_7).close()
+        helper.runMigrationsAndValidate(TEST_DB, 8, true, MIGRATION_7_8).close()
+
+        val migratedDb = helper.runMigrationsAndValidate(TEST_DB, 9, true, MIGRATION_8_9)
+
+        migratedDb.query("SELECT theme, default_rest_seconds, extra_set_fields, last_backup_at FROM settings").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals("SYSTEM", cursor.getString(0))
+            assertEquals(90, cursor.getInt(1))
+            assertEquals("COLLAPSED", cursor.getString(2))
+            assertEquals(true, cursor.isNull(3))
+        }
+    }
+
+    @Test
+    fun fullChainFrom1To9OpensThroughAllMigrations() {
+        helper.createDatabase(TEST_DB, 1).apply {
+            insertV1Exercise(this)
+            close()
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, RepFlowDatabase.VERSION, true, *ALL_MIGRATIONS).use { db ->
+            db.query("SELECT COUNT(*) FROM settings").use { cursor ->
+                cursor.moveToFirst()
+                assertEquals(1, cursor.getInt(0))
+            }
+        }
+    }
+
+    @Test
+    fun allMigrationsContainsEveryStepUpToTheDatabaseVersion() {
+        val steps = ALL_MIGRATIONS.map { it.startVersion to it.endVersion }
+
+        assertEquals((1 until RepFlowDatabase.VERSION).map { it to it + 1 }, steps)
+        assertEquals(ALL_MIGRATIONS.size, ALL_MIGRATIONS.toSet().size)
+    }
+
+    /**
+     * The production-registration test: a real version-8 file (with one
+     * non-default value) opened through [DatabaseModule.buildRepFlowDatabase]
+     * only opens, and reads the new defaults, if the production builder
+     * registers MIGRATION_8_9.
+     */
+    @Test
+    fun theProductionBuilderUpgradesARealVersion8DatabaseToTheNewDefaults() {
+        val targetContext = InstrumentationRegistry.getInstrumentation().targetContext
+        helper.createDatabase(REGISTRATION_DB, 8).apply {
+            execSQL(SEED_V8_ROW)
+            close()
+        }
+
+        val database = DatabaseModule.buildRepFlowDatabase(targetContext, REGISTRATION_DB)
+        try {
+            val settings = checkNotNull(runBlocking { database.settingsDao().find() })
+
+            assertEquals(ThemeMode.SYSTEM.name, settings.theme)
+            assertEquals(90, settings.defaultRestSeconds)
+            assertEquals(ExtraSetFields.COLLAPSED.name, settings.extraSetFields)
+            assertNull(settings.lastBackupAt)
+            assertEquals(true, settings.keepScreenAwake)
+            assertEquals(true, settings.restTimerAutoStart)
+            assertEquals(true, settings.restTimerVibrate)
+            assertEquals(true, settings.restTimerNotification)
+            assertEquals(true, settings.confirmBeforeFinishing)
+        } finally {
+            database.close()
+            targetContext.deleteDatabase(REGISTRATION_DB)
+        }
     }
 
     private fun seedDatabaseThroughVersion6() {

@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "work_item_id": "repflow-redesign-visual-foundation",
+  "plan_revision": 19,
+  "checkpoints": [
+    {
+      "id": "CP1",
+      "name": "Design tokens & Compose theme foundation",
+      "depends_on": [],
+      "complexity": 3,
+      "session_target": "2"
+    },
+    {
+      "id": "CP2",
+      "name": "Bounded icon approach (local vector assets)",
+      "depends_on": [],
+      "complexity": 2,
+      "session_target": "1"
+    },
+    {
+      "id": "CP3",
+      "name": "Core reusable primitive components",
+      "depends_on": [
+        "CP1",
+        "CP2"
+      ],
+      "complexity": 2,
+      "session_target": "1"
+    },
+    {
+      "id": "CP4",
+      "name": "Apply foundation to app shell (bottom nav)",
+      "depends_on": [
+        "CP3"
+      ],
+      "complexity": 1,
+      "session_target": "1"
+    },
+    {
+      "id": "CP5",
+      "name": "Apply foundation to Exercise list (representative list/CRUD surface)",
+      "depends_on": [
+        "CP3"
+      ],
+      "complexity": 2,
+      "session_target": "1"
+    },
+    {
+      "id": "CP6",
+      "name": "Apply foundation to Active Workout set-entry + rest timer (representative core-interaction surface)",
+      "depends_on": [
+        "CP3"
+      ],
+      "complexity": 3,
+      "session_target": "3"
+    },
+    {
+      "id": "CP7",
+      "name": "Verification, dark/light check, Open-decision + status doc updates",
+      "depends_on": [
+        "CP4",
+        "CP5",
+        "CP6"
+      ],
+      "complexity": 1,
+      "session_target": "1"
+    }
+  ]
+}

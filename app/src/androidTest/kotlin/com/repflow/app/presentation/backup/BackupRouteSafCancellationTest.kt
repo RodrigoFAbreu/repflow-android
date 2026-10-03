@@ -4,10 +4,12 @@ import android.app.Activity
 import android.app.Instrumentation
 import android.content.Intent
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.espresso.intent.Intents
 import androidx.test.espresso.intent.matcher.IntentMatchers.hasAction
 import com.repflow.app.R
@@ -20,7 +22,7 @@ import org.junit.Test
 /**
  * Real end-to-end coverage (Milestone 8, CP14) for the "user cancels the SAF
  * export picker" path: [Intents.intending] stubs the `CreateDocument` intent
- * [BackupRoute] launches to return [Activity.RESULT_CANCELED], exactly what
+ * the Backup screen ([rememberBackupFileActions]) launches to return [Activity.RESULT_CANCELED], exactly what
  * Android delivers when a real user backs out of the system file picker
  * without choosing a destination. Confirms this reaches
  * [BackupViewModel.onExportWriteCancelled] - busy state cleared, no failure
@@ -48,20 +50,30 @@ class BackupRouteSafCancellationTest {
             .intending(hasAction(Intent.ACTION_CREATE_DOCUMENT))
             .respondWith(Instrumentation.ActivityResult(Activity.RESULT_CANCELED, null))
 
+        // Backup is not a tab: Home's Settings affordance, Settings' `Backup and
+        // restore` row (remediation-1-remediation-1 CP8), then the screen's own
+        // button.
         composeRule
             .onNodeWithContentDescription(
-                composeRule.activity.getString(R.string.exercise_list_backup_content_description),
+                composeRule.activity.getString(R.string.home_settings_content_description),
             ).performClick()
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.backup_export_action))
+            .onNodeWithText(composeRule.activity.getString(R.string.settings_backup_row))
+            .performScrollTo()
             .performClick()
+        exportButton().performScrollTo().performClick()
         composeRule.waitForIdle()
 
         composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.backup_message_operation_failed))
             .assertDoesNotExist()
-        composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.backup_export_action))
-            .assertIsEnabled()
+        exportButton().assertIsEnabled()
     }
+
+    /** The hero's export button: `Export your first backup` on a fresh install, `Export backup now` once one exists. */
+    private fun exportButton() =
+        composeRule.onNode(
+            hasText(composeRule.activity.getString(R.string.backup_export_first_action))
+                .or(hasText(composeRule.activity.getString(R.string.backup_export_action))),
+        )
 }

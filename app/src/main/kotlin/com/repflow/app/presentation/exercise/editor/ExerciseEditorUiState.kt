@@ -23,6 +23,8 @@ data class ExerciseEditorUiState(
     val restSecondsText: String = "",
     val loadIncrementKgText: String = "",
     val nameError: ExerciseEditorFieldError? = null,
+    /** Set once the user has typed in the name field (or it arrived non-empty); a pristine form shows no error. */
+    val nameTouched: Boolean = false,
     val instructionsError: ExerciseEditorFieldError? = null,
     val restDurationError: ExerciseEditorFieldError? = null,
     val loadIncrementError: ExerciseEditorFieldError? = null,
@@ -33,6 +35,10 @@ data class ExerciseEditorUiState(
     val submitError: ExerciseEditorSubmitError? = null,
     val messages: List<ExerciseEditorMessage> = emptyList(),
 ) {
+    /** The name's validation error, shown only once the field has been touched. */
+    val visibleNameError: ExerciseEditorFieldError?
+        get() = nameError.takeIf { nameTouched }
+
     /**
      * `false` while loading (edit mode), while a required field is invalid,
      * while [name] is blank, or while a save is already in flight - the last
@@ -75,8 +81,14 @@ enum class ExerciseEditorSubmitErrorKind {
     UNAVAILABLE,
 }
 
+/**
+ * A refused save's reason. [attempt] counts the refused saves in this editor, so two
+ * refusals for the same reason are two different values: the screen reacts to each
+ * (functional review R3-F-3), not only the first.
+ */
 data class ExerciseEditorSubmitError(
     val kind: ExerciseEditorSubmitErrorKind,
+    val attempt: Int = 0,
 )
 
 /**

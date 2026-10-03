@@ -1,6 +1,7 @@
 # RepFlow Roadmap
 
-Every roadmap milestone (0-8) is complete. Milestone 8 (post-MVP functional
+Every roadmap milestone (0-8) is complete, and the Figma-led redesign
+(`repflow-redesign-visual-foundation`, below) is accepted and closed. Milestone 8 (post-MVP functional
 usability stabilization, created from the user's own hands-on findings) is
 accepted and closed under an explicit user waiver of its planned
 functional-review gate. See [status](ACTIVE_MILESTONE.md) for the full
@@ -88,3 +89,19 @@ separate Figma-led redesign milestone (not yet planned). See
 - [x] Plans/exercises: training-plan archive/restore, exercise archive-snackbar fix
 - [x] Backup: edge-case hardening + new-field schema coverage + v1-backward-compatibility
 - [x] Full verification + external implementation review; user functional review waived (see ACTIVE_MILESTONE.md)
+
+## Redesign — Visual foundation ✓ complete
+
+The Figma-led redesign deferred from Milestone 8
+(`repflow-redesign-visual-foundation`), with its two remediation children
+(`-remediation-1`, `-remediation-1-remediation-1`), is complete. The user
+accepted it after functional-review round 3 (re-test of the five round-2
+failures: PASS, no Blocking or Important findings). Plans:
+`docs/milestones/completed/repflow-redesign-visual-foundation-execution.md` and
+`-reference.md`. Open follow-ups, deliberately not built here: `D149`-`D162`
+(newer-design differences) and `P3-F-1` (History detail stat-tile values
+truncated at font scale 2.0). See [status](ACTIVE_MILESTONE.md).
+
+- [x] Visual foundation, theme, components and screen redesign
+- [x] Technical approval (implementation revision 9, `EXTERNAL_APPROVE`)
+- [x] Functional review accepted by the user (round 3)

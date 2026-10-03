@@ -59,7 +59,9 @@ class TrainingPlanEditorViewModel
             savedStateHandle.get<String>(RepFlowDestinations.PLAN_EDIT_ARG)?.let(::TrainingPlanId)
 
         private var loadedOverview: TrainingPlanOverview? = null
+        private var loadedSignature: DraftSignature? = null
         private var nextRowId = 0L
+        private var refusedSaves = 0
 
         private val _uiState =
             MutableStateFlow(
@@ -68,6 +70,7 @@ class TrainingPlanEditorViewModel
                         mode = editingId?.let(TrainingPlanEditorMode::Edit) ?: TrainingPlanEditorMode.Create,
                         loadStatus = if (editingId != null) TrainingPlanEditorLoadStatus.LOADING else TrainingPlanEditorLoadStatus.READY,
                         name = savedStateHandle[KEY_NAME] ?: "",
+                        nameTouched = !savedStateHandle.get<String>(KEY_NAME).isNullOrEmpty(),
                     ),
                 ),
             )
@@ -93,6 +96,11 @@ class TrainingPlanEditorViewModel
 
         private fun onExistingLoaded(overview: TrainingPlanOverview) {
             loadedOverview = overview
+            loadedSignature =
+                DraftSignature(
+                    name = overview.plan.name.value,
+                    rows = overview.latestVersion.plannedExercises.map { rowSignature(toRow(it)) },
+                )
             if (savedStateHandle.get<Boolean>(KEY_DRAFT_INITIALIZED) != true) {
                 savedStateHandle[KEY_NAME] = overview.plan.name.value
                 savedStateHandle[KEY_DRAFT_INITIALIZED] = true
@@ -122,9 +130,18 @@ class TrainingPlanEditorViewModel
                 targetWarmupSetsText = exercise.targetWarmupSets?.toString() ?: "",
             )
 
+        /** The name field lost focus: it now counts as touched, so an empty name shows its error (functional review R2-F-1). */
+        fun onNameFocusLost() {
+            _uiState.update { it.copy(nameTouched = true) }
+        }
+
         fun onNameChanged(value: String) {
             savedStateHandle[KEY_NAME] = value
-            _uiState.update { revalidate(it.copy(name = value)) }
+            _uiState.update { state ->
+                // Editing the name answers a duplicate-name refusal; `Save` checks it again (functional review R3-F-5).
+                val submitError = state.submitError?.takeUnless { it.kind == TrainingPlanEditorSubmitErrorKind.DUPLICATE_NAME }
+                revalidate(state.copy(name = value, nameTouched = true, submitError = submitError))
+            }
         }
 
         fun onAddRowClicked() {
@@ -312,21 +329,42 @@ class TrainingPlanEditorViewModel
         private fun isDirty(state: TrainingPlanEditorUiState): Boolean =
             when (state.mode) {
                 is TrainingPlanEditorMode.Create -> state.name.isNotBlank() || state.rows.isNotEmpty()
-                is TrainingPlanEditorMode.Edit -> loadedOverview != null
+                is TrainingPlanEditorMode.Edit -> loadedSignature?.let { it != signatureOf(state) } ?: false
             }
+
+        private fun signatureOf(state: TrainingPlanEditorUiState) = DraftSignature(name = state.name, rows = state.rows.map(::rowSignature))
+
+        /** The user-editable content of a row, without its presentation-only id or derived display fields. */
+        private fun rowSignature(row: PlannedExerciseRowUiState): List<Any?> =
+            listOf(
+                row.exerciseId,
+                row.targetSetsText,
+                row.repMinText,
+                row.repMaxText,
+                row.durationMinText,
+                row.durationMaxText,
+                row.restSecondsText,
+                row.isOptional,
+                row.targetWarmupSetsText,
+            )
+
+        private data class DraftSignature(
+            val name: String,
+            val rows: List<List<Any?>>,
+        )
 
         private fun toSubmitError(error: TrainingPlanOperationError): TrainingPlanEditorSubmitError =
             when (error) {
                 TrainingPlanOperationError.DuplicateName -> {
-                    TrainingPlanEditorSubmitError(TrainingPlanEditorSubmitErrorKind.DUPLICATE_NAME)
+                    TrainingPlanEditorSubmitError(TrainingPlanEditorSubmitErrorKind.DUPLICATE_NAME, ++refusedSaves)
                 }
 
                 is TrainingPlanOperationError.ValidationFailed, is TrainingPlanOperationError.PlannedExerciseInvalid -> {
-                    TrainingPlanEditorSubmitError(TrainingPlanEditorSubmitErrorKind.INVALID)
+                    TrainingPlanEditorSubmitError(TrainingPlanEditorSubmitErrorKind.INVALID, ++refusedSaves)
                 }
 
                 else -> {
-                    TrainingPlanEditorSubmitError(TrainingPlanEditorSubmitErrorKind.UNAVAILABLE)
+                    TrainingPlanEditorSubmitError(TrainingPlanEditorSubmitErrorKind.UNAVAILABLE, ++refusedSaves)
                 }
             }
 

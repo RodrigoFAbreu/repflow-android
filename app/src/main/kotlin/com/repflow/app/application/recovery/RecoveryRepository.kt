@@ -2,6 +2,7 @@ package com.repflow.app.application.recovery
 
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.recovery.RecoveryEntry
+import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
 
 /**
@@ -16,6 +17,13 @@ import java.time.LocalDate
  */
 interface RecoveryRepository {
     suspend fun findForDate(date: LocalDate): RecoveryEntry?
+
+    /**
+     * The entry for [date], or `null`, re-emitted whenever it is written -
+     * the observable twin of [findForDate], for the readiness score
+     * (remediation-1 CP4).
+     */
+    fun observeForDate(date: LocalDate): Flow<RecoveryEntry?>
 
     suspend fun findLatest(): RecoveryEntry?
 

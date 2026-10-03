@@ -9,6 +9,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.espresso.intent.Intents
 import androidx.test.espresso.intent.matcher.IntentMatchers.hasAction
 import com.repflow.app.R
@@ -50,12 +51,20 @@ class BackupRouteUnreadableRestoreFileTest {
             .intending(hasAction(Intent.ACTION_OPEN_DOCUMENT))
             .respondWith(Instrumentation.ActivityResult(Activity.RESULT_OK, Intent().setData(unreadableUri)))
 
+        // Backup is not a tab: Home's Settings affordance, Settings' `Backup and
+        // restore` row (remediation-1-remediation-1 CP8), then the screen's own
+        // button.
         composeRule
             .onNodeWithContentDescription(
-                composeRule.activity.getString(R.string.exercise_list_backup_content_description),
+                composeRule.activity.getString(R.string.home_settings_content_description),
             ).performClick()
         composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.settings_backup_row))
+            .performScrollTo()
+            .performClick()
+        composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.backup_restore_action))
+            .performScrollTo()
             .performClick()
         composeRule.waitForIdle()
 

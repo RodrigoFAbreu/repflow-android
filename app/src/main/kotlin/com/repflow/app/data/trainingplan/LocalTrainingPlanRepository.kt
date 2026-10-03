@@ -13,6 +13,7 @@ import com.repflow.app.application.trainingplan.TrainingPlanStatusFilter
 import com.repflow.app.application.trainingplan.TrainingPlanVersionLabel
 import com.repflow.app.domain.backup.TrainingPlanSnapshot
 import com.repflow.app.domain.common.DomainResult
+import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.trainingplan.PlannedExercise
 import com.repflow.app.domain.trainingplan.PlannedExerciseId
 import com.repflow.app.domain.trainingplan.TrainingPlan
@@ -72,8 +73,13 @@ class LocalTrainingPlanRepository
                     .mapNotNull { versionEntity ->
                         val planName = nameByPlanId[versionEntity.planId] ?: return@mapNotNull null
                         TrainingPlanVersionId(versionEntity.id) to
-                            TrainingPlanVersionLabel(TrainingPlanId(versionEntity.planId), planName)
+                            TrainingPlanVersionLabel(TrainingPlanId(versionEntity.planId), planName, versionEntity.versionNumber)
                     }.toMap()
+            }
+
+        override fun observeExercisePlanUsage(): Flow<Map<ExerciseId, Int>> =
+            plannedExerciseDao.observeExercisePlanUsage().map { rows ->
+                rows.associate { row -> ExerciseId(row.exerciseId) to row.planCount }
             }
 
         override suspend fun findAllForBackup(): List<TrainingPlanSnapshot> =

@@ -44,8 +44,7 @@ class RecoveryFutsalViewModel
         val uiState = _uiState.asStateFlow()
 
         init {
-            val today = clock.now().atZone(ZoneId.systemDefault()).toLocalDate()
-            viewModelScope.launch { loadForDate(today) }
+            viewModelScope.launch { loadForDate(today()) }
         }
 
         /** Loads (or resets to blank) the recovery/futsal fields for [date] (Milestone 8, CP3). */
@@ -56,12 +55,13 @@ class RecoveryFutsalViewModel
                 RecoveryFutsalUiState(
                     isLoading = false,
                     date = date,
-                    sleepQuality = recovery?.sleepQuality ?: RecoveryFutsalUiState.DEFAULT_SCALE_VALUE,
-                    energy = recovery?.energy ?: RecoveryFutsalUiState.DEFAULT_SCALE_VALUE,
-                    legDoms = recovery?.legDoms ?: RecoveryFutsalUiState.DEFAULT_SCALE_VALUE,
-                    heelStiffness = recovery?.heelStiffness ?: RecoveryFutsalUiState.DEFAULT_SCALE_VALUE,
-                    painWhileWalking = recovery?.painWhileWalking ?: RecoveryFutsalUiState.DEFAULT_SCALE_VALUE,
-                    heavyLegs = recovery?.heavyLegs ?: RecoveryFutsalUiState.DEFAULT_SCALE_VALUE,
+                    today = today(),
+                    sleepQuality = recovery?.sleepQuality,
+                    energy = recovery?.energy,
+                    legDoms = recovery?.legDoms,
+                    heelStiffness = recovery?.heelStiffness,
+                    painWhileWalking = recovery?.painWhileWalking,
+                    heavyLegs = recovery?.heavyLegs,
                     futsalInPrevious24h = recovery?.futsalInPrevious24h ?: false,
                     futsalExpectedNext24h = recovery?.futsalExpectedNext24h ?: false,
                     notes = recovery?.notes.orEmpty(),
@@ -71,9 +71,11 @@ class RecoveryFutsalViewModel
             }
         }
 
+        private fun today(): LocalDate = clock.now().atZone(ZoneId.systemDefault()).toLocalDate()
+
         /** Switches the screen to a different date (Milestone 8, CP3), reloading any entry already saved for it. */
         fun onDateChanged(date: LocalDate) {
-            _uiState.update { it.copy(isLoading = true, date = date) }
+            _uiState.update { it.copy(isLoading = true, date = date, isEntrySaved = false) }
             viewModelScope.launch { loadForDate(date) }
         }
 
@@ -82,7 +84,7 @@ class RecoveryFutsalViewModel
             value: Int,
         ) {
             val clamped = value.coerceIn(RecoveryFutsalUiState.SCALE_MIN, RecoveryFutsalUiState.SCALE_MAX)
-            _uiState.update { state ->
+            edit { state ->
                 when (field) {
                     RecoveryScaleField.SLEEP_QUALITY -> state.copy(sleepQuality = clamped)
                     RecoveryScaleField.ENERGY -> state.copy(energy = clamped)
@@ -94,98 +96,130 @@ class RecoveryFutsalViewModel
             }
         }
 
-        fun onFutsalPreviousToggled(value: Boolean) {
-            _uiState.update { it.copy(futsalInPrevious24h = value) }
+        fun onFutsalPreviousToggled(value: Boolean) = edit { it.copy(futsalInPrevious24h = value) }
+
+        fun onFutsalNextToggled(value: Boolean) = edit { it.copy(futsalExpectedNext24h = value) }
+
+        fun onNotesChanged(value: String) = edit { it.copy(notes = value) }
+
+        fun onDurationChanged(value: String) = edit { it.copy(durationMinutesInput = value) }
+
+        fun onSessionRpeChanged(value: String) = edit { it.copy(sessionRpeInput = value) }
+
+        /** Any edit makes the entry unsaved again, so the bar reads `Save entry` (`3c`). */
+        private fun edit(change: (RecoveryFutsalUiState) -> RecoveryFutsalUiState) {
+            _uiState.update { change(it).copy(isEntrySaved = false) }
         }
 
-        fun onFutsalNextToggled(value: Boolean) {
-            _uiState.update { it.copy(futsalExpectedNext24h = value) }
-        }
-
-        fun onNotesChanged(value: String) {
-            _uiState.update { it.copy(notes = value) }
-        }
-
-        fun onDurationChanged(value: String) {
-            _uiState.update { it.copy(durationMinutesInput = value) }
-        }
-
-        fun onSessionRpeChanged(value: String) {
-            _uiState.update { it.copy(sessionRpeInput = value) }
-        }
-
-        fun onSaveRecovery() {
-            if (_uiState.value.isSavingRecovery) return
+        /**
+         * `3c`'s one `Save entry` (remediation-1 CP13): saves the check-in and,
+         * while "Played in last 24h" is on, the futsal session for the same date.
+         *
+         * The futsal fields are optional: with both empty only the check-in is
+         * saved, as the old screen's separate futsal save allowed. One filled
+         * without the other, or a non-number, is rejected before anything is
+         * written. A check-in saved before a futsal failure stays saved, and
+         * saving again rewrites both (each repository upserts by date).
+         */
+        fun onSaveEntry() {
             val state = _uiState.value
-            _uiState.update { it.copy(isSavingRecovery = true) }
-            viewModelScope.launch {
-                val result =
-                    recordRecoveryEntry(
-                        RecordRecoveryEntryCommand(
-                            date = state.date,
-                            sleepQuality = state.sleepQuality,
-                            energy = state.energy,
-                            legDoms = state.legDoms,
-                            heelStiffness = state.heelStiffness,
-                            painWhileWalking = state.painWhileWalking,
-                            heavyLegs = state.heavyLegs,
-                            futsalInPrevious24h = state.futsalInPrevious24h,
-                            futsalExpectedNext24h = state.futsalExpectedNext24h,
-                            notes = state.notes.ifBlank { null },
-                        ),
-                    )
-                when (result) {
-                    is DomainResult.Success -> {
-                        _uiState.update { it.copy(isSavingRecovery = false, recoverySavedMessage = "saved") }
-                    }
-
-                    is DomainResult.Failure -> {
-                        _uiState.update { it.copy(isSavingRecovery = false, errorMessage = result.error.toMessageKey()) }
-                    }
-                }
-            }
-        }
-
-        fun onSaveFutsal() {
-            if (_uiState.value.isSavingFutsal) return
-            val state = _uiState.value
-            val durationMinutes = state.durationMinutesInput.toIntOrNull()
-            val sessionRpe = state.sessionRpeInput.toDoubleOrNull()
-            if (durationMinutes == null || sessionRpe == null) {
-                _uiState.update { it.copy(errorMessage = "invalid") }
+            if (state.isSaving || state.isLoading || !state.hasAllScaleValues) return
+            val futsal = if (state.futsalInPrevious24h) state.futsalInput() else FutsalInput.None
+            if (futsal is FutsalInput.Invalid) {
+                _uiState.update { it.copy(errorMessage = MESSAGE_INVALID) }
                 return
             }
-            _uiState.update { it.copy(isSavingFutsal = true) }
+            _uiState.update { it.copy(isSaving = true) }
             viewModelScope.launch {
-                val result =
-                    recordFutsalSession(
-                        RecordFutsalSessionCommand(date = state.date, durationMinutes = durationMinutes, sessionRpe = sessionRpe),
-                    )
-                when (result) {
-                    is DomainResult.Success -> {
-                        _uiState.update { it.copy(isSavingFutsal = false, futsalSavedMessage = "saved") }
-                    }
-
-                    is DomainResult.Failure -> {
-                        _uiState.update { it.copy(isSavingFutsal = false, errorMessage = result.error.toMessageKey()) }
+                val errorKey = saveRecovery(state) ?: (futsal as? FutsalInput.Session)?.let { saveFutsal(state.date, it) }
+                _uiState.update {
+                    if (errorKey == null) {
+                        it.copy(isSaving = false, isEntrySaved = true)
+                    } else {
+                        it.copy(isSaving = false, errorMessage = errorKey)
                     }
                 }
+            }
+        }
+
+        /** Returns the error message key, or null on success. */
+        private suspend fun saveRecovery(state: RecoveryFutsalUiState): String? {
+            val result =
+                recordRecoveryEntry(
+                    RecordRecoveryEntryCommand(
+                        date = state.date,
+                        sleepQuality = requireNotNull(state.sleepQuality),
+                        energy = requireNotNull(state.energy),
+                        legDoms = requireNotNull(state.legDoms),
+                        heelStiffness = requireNotNull(state.heelStiffness),
+                        painWhileWalking = requireNotNull(state.painWhileWalking),
+                        heavyLegs = requireNotNull(state.heavyLegs),
+                        futsalInPrevious24h = state.futsalInPrevious24h,
+                        futsalExpectedNext24h = state.futsalExpectedNext24h,
+                        notes = state.notes.ifBlank { null },
+                    ),
+                )
+            return when (result) {
+                is DomainResult.Success -> null
+                is DomainResult.Failure -> result.error.toMessageKey()
+            }
+        }
+
+        /** Returns the error message key, or null on success. */
+        private suspend fun saveFutsal(
+            date: LocalDate,
+            session: FutsalInput.Session,
+        ): String? {
+            val result =
+                recordFutsalSession(
+                    RecordFutsalSessionCommand(date = date, durationMinutes = session.durationMinutes, sessionRpe = session.sessionRpe),
+                )
+            return when (result) {
+                is DomainResult.Success -> null
+                is DomainResult.Failure -> result.error.toMessageKey()
             }
         }
 
         fun onMessageShown() {
-            _uiState.update { it.copy(recoverySavedMessage = null, futsalSavedMessage = null, errorMessage = null) }
+            _uiState.update { it.copy(errorMessage = null) }
         }
 
         private fun RecoveryOperationError.toMessageKey(): String =
             when (this) {
-                is RecoveryOperationError.ValidationFailed -> "invalid"
-                RecoveryOperationError.PersistenceUnavailable -> "unavailable"
+                is RecoveryOperationError.ValidationFailed -> MESSAGE_INVALID
+                RecoveryOperationError.PersistenceUnavailable -> MESSAGE_UNAVAILABLE
             }
 
         private fun FutsalOperationError.toMessageKey(): String =
             when (this) {
-                is FutsalOperationError.ValidationFailed -> "invalid"
-                FutsalOperationError.PersistenceUnavailable -> "unavailable"
+                is FutsalOperationError.ValidationFailed -> MESSAGE_INVALID
+                FutsalOperationError.PersistenceUnavailable -> MESSAGE_UNAVAILABLE
             }
+
+        companion object {
+            /** The error keys [RecoveryFutsalScreen] maps to copy. */
+            const val MESSAGE_INVALID = "invalid"
+            const val MESSAGE_UNAVAILABLE = "unavailable"
+        }
     }
+
+/** What the futsal block holds when the entry is saved. */
+private sealed interface FutsalInput {
+    /** Both fields empty: no session to save. */
+    data object None : FutsalInput
+
+    /** One field empty, or not a number. */
+    data object Invalid : FutsalInput
+
+    data class Session(
+        val durationMinutes: Int,
+        val sessionRpe: Double,
+    ) : FutsalInput
+}
+
+private fun RecoveryFutsalUiState.futsalInput(): FutsalInput {
+    if (durationMinutesInput.isBlank() && sessionRpeInput.isBlank()) return FutsalInput.None
+    val duration = durationMinutesInput.trim().toIntOrNull()
+    val rpe = sessionRpeInput.trim().toDoubleOrNull()
+    return if (duration == null || rpe == null) FutsalInput.Invalid else FutsalInput.Session(duration, rpe)
+}

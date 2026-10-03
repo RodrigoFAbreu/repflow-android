@@ -52,3 +52,36 @@ style:
   # limit for genuinely branchy, non-guard-clause functions elsewhere.
   ReturnCount:
     excludeGuardClauses: true
+  # A design-token file is definitionally a list of literal values transcribed
+  # from a design source (colour hexes, opacity multipliers). Introducing a
+  # named constant per literal only to feed it straight into the token it
+  # already names adds a second name for the same thing and one more place a
+  # transcription error can hide; the values are pinned by RepFlowThemeTest
+  # instead. Setting this key replaces the rule's default list rather than
+  # adding to it, so 1.23.8's own default excludes are restated verbatim below
+  # (read from default-detekt-config.yml inside detekt-core-1.23.8.jar, the
+  # version this project resolves) with the token path appended. Re-check the
+  # list against that file on a detekt upgrade.
+  MagicNumber:
+    excludes:
+      - '**/test/**'
+      - '**/androidTest/**'
+      - '**/commonTest/**'
+      - '**/jvmTest/**'
+      - '**/androidUnitTest/**'
+      - '**/androidInstrumentedTest/**'
+      - '**/jsTest/**'
+      - '**/iosTest/**'
+      - '**/*.kts'
+      - '**/presentation/designsystem/**'
+  # The same token object deliberately keeps every member a plain `val`: some
+  # of its tokens are @Composable getters that can never be `const`, and the
+  # rest are named exactly as the plan and their call sites name them, which
+  # ktlint's property-naming rule would force into screaming snake case the
+  # moment they became `const`. Unlike MagicNumber this rule ships no default
+  # excludes at all in 1.23.8 (`active: true` and nothing else), so there is
+  # no default list to restate here - the one entry below is deliberately
+  # curated, not a default plus an addition.
+  MayBeConst:
+    excludes:
+      - '**/presentation/designsystem/**'

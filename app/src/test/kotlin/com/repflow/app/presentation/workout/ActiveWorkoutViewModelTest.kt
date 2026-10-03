@@ -9,10 +9,10 @@ import com.repflow.app.application.exercise.ObserveExercises
 import com.repflow.app.application.exercise.SequentialIdentifierGenerator
 import com.repflow.app.application.progression.ComputeProgressionRecommendation
 import com.repflow.app.application.progression.InMemoryProgressionRecommendationRepository
-import com.repflow.app.application.progression.RecordManualOverride
 import com.repflow.app.application.recovery.GetWorkoutDayContext
 import com.repflow.app.application.recovery.InMemoryFutsalRepository
 import com.repflow.app.application.recovery.InMemoryRecoveryRepository
+import com.repflow.app.application.settings.InMemorySettingsRepository
 import com.repflow.app.application.trainingplan.InMemoryTrainingPlanRepository
 import com.repflow.app.application.trainingplan.ObserveTrainingPlans
 import com.repflow.app.application.workout.AbandonWorkoutSession
@@ -46,14 +46,18 @@ import com.repflow.app.domain.trainingplan.TrainingPlanId
 import com.repflow.app.domain.trainingplan.TrainingPlanName
 import com.repflow.app.domain.trainingplan.TrainingPlanVersion
 import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
+import com.repflow.app.domain.workout.WorkoutSessionId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.Instant
 
@@ -66,7 +70,10 @@ class ActiveWorkoutViewModelTest {
     private val exerciseRepository = InMemoryExerciseRepository()
     private val trainingPlanRepository = InMemoryTrainingPlanRepository()
     private val progressionRecommendationRepository = InMemoryProgressionRecommendationRepository()
-    private val viewModel =
+    private val settingsRepository = InMemorySettingsRepository()
+    private val viewModel by lazy { newViewModel() }
+
+    private fun newViewModel() =
         ActiveWorkoutViewModel(
             observeActiveWorkoutSession = ObserveActiveWorkoutSession(workoutRepository),
             observeExercises = ObserveExercises(exerciseRepository),
@@ -74,7 +81,6 @@ class ActiveWorkoutViewModelTest {
             trainingPlanRepository = trainingPlanRepository,
             getWorkoutDayContext = GetWorkoutDayContext(InMemoryRecoveryRepository(), InMemoryFutsalRepository(), clock),
             progressionRecommendationRepository = progressionRecommendationRepository,
-            recordManualOverride = RecordManualOverride(progressionRecommendationRepository, clock),
             startWorkoutSession = StartWorkoutSession(workoutRepository, clock, ids),
             startWorkoutSessionFromPlan = StartWorkoutSessionFromPlan(workoutRepository, GetExercise(exerciseRepository), clock, ids),
             addWorkoutExercise = AddWorkoutExercise(workoutRepository, ids),
@@ -97,6 +103,9 @@ class ActiveWorkoutViewModelTest {
                     clock,
                 ),
             abandonWorkoutSession = AbandonWorkoutSession(workoutRepository, clock),
+            settingsRepository = settingsRepository,
+            restNotificationCanceller = RecordingRestNotificationCanceller(),
+            workoutRepository = workoutRepository,
         )
 
     private fun <T> requireSuccess(result: DomainResult<T, *>): T =
@@ -149,7 +158,7 @@ class ActiveWorkoutViewModelTest {
     @Test
     fun `starts loading then shows no active session when none exists`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             viewModel.uiState.test {
                 assertEquals(ActiveWorkoutContent.Loading, awaitItem().content)
                 assertEquals(ActiveWorkoutContent.NoActiveSession, awaitItem().content)
@@ -159,7 +168,7 @@ class ActiveWorkoutViewModelTest {
     @Test
     fun `onStartWorkout transitions to an active session with zero exercises`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             viewModel.uiState.test {
                 awaitItem() // Loading
                 awaitItem() // NoActiveSession
@@ -206,11 +215,11 @@ class ActiveWorkoutViewModelTest {
                 )
             requireSuccess(trainingPlanRepository.createPlanWithFirstVersion(plan, version))
 
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             viewModel.uiState.test {
                 // The training-plan overview list is populated by its own `init`-launched
                 // collector (mirrors dayContext's one-shot fetch), a separate coroutine from
-                // uiState's own combine - under UnconfinedTestDispatcher the two can settle
+                // uiState's own combine - the two can settle
                 // in a different number of intermediate emissions than a naive "Loading, then
                 // NoActiveSession" count would assume, so scan forward to the first state that
                 // actually has both instead of asserting on a fixed awaitItem() count.
@@ -269,7 +278,7 @@ class ActiveWorkoutViewModelTest {
                 )
             requireSuccess(trainingPlanRepository.createPlanWithFirstVersion(plan, version))
 
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             viewModel.uiState.test {
                 var state = awaitItem()
                 while (state.content !is ActiveWorkoutContent.NoActiveSession || state.availablePlans.isEmpty()) {
@@ -296,7 +305,7 @@ class ActiveWorkoutViewModelTest {
             // simulates a selection that went stale because the plan list changed between
             // rendering and the click, distinct from `...missing exercise...` above where the
             // overview resolves fine but one of its planned exercises doesn't.
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             viewModel.uiState.test {
                 var state = awaitItem()
                 while (state.content !is ActiveWorkoutContent.NoActiveSession) {
@@ -351,7 +360,7 @@ class ActiveWorkoutViewModelTest {
                 )
             requireSuccess(trainingPlanRepository.createPlanWithFirstVersion(plan, version))
 
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             viewModel.uiState.test {
                 var state = awaitItem()
                 while (state.content !is ActiveWorkoutContent.NoActiveSession || state.availablePlans.isEmpty()) {
@@ -410,7 +419,7 @@ class ActiveWorkoutViewModelTest {
                 )
             requireSuccess(trainingPlanRepository.createPlanWithFirstVersion(plan, version))
 
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             viewModel.uiState.test {
                 var state = awaitItem()
                 while (state.content !is ActiveWorkoutContent.NoActiveSession || state.availablePlans.isEmpty()) {
@@ -472,7 +481,7 @@ class ActiveWorkoutViewModelTest {
             val archived = plan.archive(now)
             requireSuccess(trainingPlanRepository.updatePlan(archived))
 
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             viewModel.uiState.test {
                 var state = awaitItem()
                 while (state.content !is ActiveWorkoutContent.NoActiveSession) {
@@ -487,7 +496,7 @@ class ActiveWorkoutViewModelTest {
     fun `recording a set updates the active session`() =
         runTest {
             seedExercise()
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             viewModel.uiState.test {
                 val withExercise = startWorkoutWithFirstAvailableExercise()
 
@@ -510,7 +519,7 @@ class ActiveWorkoutViewModelTest {
     fun `editing the last set updates load, reps, rpe and warm-up status`() =
         runTest {
             seedExercise()
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             viewModel.uiState.test {
                 val withExercise = startWorkoutWithFirstAvailableExercise()
                 viewModel.onRecordSet(withExercise.id, 60.0, 8, null, 7.5, true)
@@ -545,7 +554,7 @@ class ActiveWorkoutViewModelTest {
     fun `recording a set with pain and technique quality persists both fields`() =
         runTest {
             seedExercise()
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             viewModel.uiState.test {
                 val withExercise = startWorkoutWithFirstAvailableExercise()
 
@@ -561,7 +570,7 @@ class ActiveWorkoutViewModelTest {
     fun `undoing the last set removes it`() =
         runTest {
             seedExercise()
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             viewModel.uiState.test {
                 val withExercise = startWorkoutWithFirstAvailableExercise()
                 viewModel.onRecordSet(withExercise.id, 60.0, 8, null, 7.5, true)
@@ -586,7 +595,7 @@ class ActiveWorkoutViewModelTest {
     fun `recording a set for a duration-tracked exercise persists durationSeconds`() =
         runTest {
             seedDurationExercise()
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             viewModel.uiState.test {
                 val withExercise = startWorkoutWithFirstAvailableExercise()
 
@@ -608,8 +617,8 @@ class ActiveWorkoutViewModelTest {
      * Starts an ad-hoc workout and adds the (single) exercise the test seeded, returning it.
      * Scans forward with `awaitItem()` rather than assuming a fixed emission count per step
      * (Milestone 8, CP7 root-caused the pre-existing flakiness here: under
-     * UnconfinedTestDispatcher, the number of intermediate `uiState` combine emissions per
-     * state change isn't guaranteed).
+     * UnconfinedTestDispatcher, which these tests used then, the number of intermediate
+     * `uiState` combine emissions per state change isn't guaranteed).
      */
     private suspend fun ReceiveTurbine<ActiveWorkoutUiState>.startWorkoutWithFirstAvailableExercise(): ActiveExerciseUi {
         var state = awaitItem()
@@ -647,9 +656,49 @@ class ActiveWorkoutViewModelTest {
     }
 
     @Test
+    fun `with rest auto-start on, a logged set starts the rest timer`() =
+        runTest {
+            seedExercise()
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                val withExercise = startWorkoutWithFirstAvailableExercise()
+
+                viewModel.onRecordSet(withExercise.id, 60.0, 8)
+                awaitSingleSet()
+
+                assertNotNull(workoutRepository.findActiveSession()?.restTimer)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `with rest auto-start off, a logged set is recorded but starts no rest timer`() =
+        runTest {
+            seedExercise()
+            settingsRepository.update { it.copy(restTimerAutoStart = false) }
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                val withExercise = startWorkoutWithFirstAvailableExercise()
+
+                viewModel.onRecordSet(withExercise.id, 60.0, 8)
+                assertEquals(60.0, awaitSingleSet().load)
+
+                val session = requireNotNull(workoutRepository.findActiveSession())
+                assertEquals(
+                    1,
+                    session.exercises
+                        .single()
+                        .sets.size,
+                )
+                assertNull(session.restTimer)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
     fun `onCompleteWorkout returns to no active session`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             viewModel.uiState.test {
                 awaitItem() // Loading
                 awaitItem() // NoActiveSession
@@ -660,6 +709,47 @@ class ActiveWorkoutViewModelTest {
                 viewModel.onCompleteWorkout(active.sessionId)
 
                 assertEquals(ActiveWorkoutContent.NoActiveSession, awaitItem().content)
+            }
+        }
+
+    /**
+     * The finish sheet's confirm (remediation-1 CP9), implementation-review
+     * revision 1's missing test: success ends in `Finished` with the session's
+     * id, and a second confirm while the first is in flight is ignored - were
+     * it not, its certain failure would reset the first one's `Finished`.
+     */
+    @Test
+    fun `the finish confirm ends Finished with the session id and a second confirm in flight is ignored`() =
+        runTest {
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            // Built after Main is installed, so its own launches run on it.
+            val viewModel = newViewModel()
+            viewModel.onStartWorkout()
+            advanceUntilIdle()
+            val sessionId = requireNotNull(workoutRepository.findActiveSession()).id
+
+            viewModel.onCompleteWorkout(sessionId)
+            assertEquals(WorkoutFinishState.InFlight, viewModel.finish.value)
+            viewModel.onCompleteWorkout(sessionId)
+            advanceUntilIdle()
+
+            assertEquals(WorkoutFinishState.Finished(sessionId), viewModel.finish.value)
+        }
+
+    /** A failed finish returns the confirm to idle and reports the error as any other action does. */
+    @Test
+    fun `a failed finish returns to idle and reports the error`() =
+        runTest {
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                awaitItem() // Loading
+                awaitItem() // NoActiveSession
+
+                viewModel.onCompleteWorkout(WorkoutSessionId("missing"))
+
+                assertEquals(ActiveWorkoutErrorReason.NOT_FOUND, awaitItem().errorMessage)
+                assertEquals(WorkoutFinishState.Idle, viewModel.finish.value)
+                cancelAndIgnoreRemainingEvents()
             }
         }
 }

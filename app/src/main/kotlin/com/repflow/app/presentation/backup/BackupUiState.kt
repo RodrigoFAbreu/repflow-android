@@ -1,10 +1,20 @@
 package com.repflow.app.presentation.backup
 
-/** Backup screen state: transient status messages for each of the three actions. */
+import java.time.Instant
+
+/**
+ * The Backup screen's state: busy, a transient status message, a restore
+ * awaiting confirmation, and the hero's `Last backup` - [lastBackupAt] is when
+ * a backup export last succeeded on this device (`null`: none yet, once
+ * [isLastBackupLoaded]), read against [now].
+ */
 data class BackupUiState(
     val isBusy: Boolean = false,
     val statusMessage: BackupStatusMessage? = null,
     val pendingRestoreJson: String? = null,
+    val lastBackupAt: Instant? = null,
+    val isLastBackupLoaded: Boolean = false,
+    val now: Instant = Instant.EPOCH,
 )
 
 sealed interface BackupStatusMessage {

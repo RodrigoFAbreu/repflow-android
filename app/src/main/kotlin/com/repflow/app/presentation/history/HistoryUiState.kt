@@ -10,6 +10,10 @@ import java.time.ZoneId
  * History screen state: every loaded completed session, the user's current
  * filter/sort selection, and an optional read-only detail selection.
  *
+ * `personalBestSessionIds` are the sessions that carry `3a`'s `PR` badge,
+ * derived from [sessions] by `sessionsWithPersonalBests` whenever they change
+ * (remediation-1 CP12).
+ *
  * `messages` is a FIFO queue of [HistoryMessage]; each has a stable, unique,
  * monotonic id and is consumed via `onMessageShown(id)`, mirroring
  * [com.repflow.app.presentation.exercise.list.ExerciseListUiState]'s
@@ -19,6 +23,7 @@ data class HistoryUiState(
     val isLoading: Boolean = true,
     val sessions: List<WorkoutSession> = emptyList(),
     val versionLabels: Map<TrainingPlanVersionId, TrainingPlanVersionLabel> = emptyMap(),
+    val personalBestSessionIds: Set<WorkoutSessionId> = emptySet(),
     val filters: HistoryFilters = HistoryFilters(),
     val selectedSessionId: WorkoutSessionId? = null,
     val messages: List<HistoryMessage> = emptyList(),

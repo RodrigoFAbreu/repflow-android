@@ -2,6 +2,7 @@ package com.repflow.app.presentation.recovery
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.repflow.app.application.common.Clock
 import com.repflow.app.application.recovery.FutsalRepository
 import com.repflow.app.application.recovery.RecoveryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -9,12 +10,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.ZoneId
 import javax.inject.Inject
 
 /**
  * Owns the read-only recovery/futsal history list state (Milestone 8, CP4).
  * Both repositories already expose `findAll()` (used previously only by
- * backup export); this is the first UI consumer.
+ * backup export); this is the first UI consumer. The [Clock] dates the
+ * fourteen-day chart (remediation-1 CP13).
  */
 @HiltViewModel
 class RecoveryHistoryViewModel
@@ -22,6 +25,7 @@ class RecoveryHistoryViewModel
     constructor(
         private val recoveryRepository: RecoveryRepository,
         private val futsalRepository: FutsalRepository,
+        private val clock: Clock,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(RecoveryHistoryUiState())
         val uiState = _uiState.asStateFlow()
@@ -33,6 +37,7 @@ class RecoveryHistoryViewModel
                 _uiState.update {
                     it.copy(
                         isLoading = false,
+                        today = clock.now().atZone(ZoneId.systemDefault()).toLocalDate(),
                         recoveryEntries = recoveryEntries,
                         futsalSessions = futsalSessions,
                     )

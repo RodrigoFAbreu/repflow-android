@@ -6,19 +6,33 @@ import com.repflow.app.application.backup.BackupRestoreError
 import com.repflow.app.application.backup.ExportBackup
 import com.repflow.app.application.backup.ExportWorkoutHistoryCsv
 import com.repflow.app.application.backup.RestoreBackup
+import com.repflow.app.application.common.Clock
+import com.repflow.app.application.settings.SettingsRepository
 import com.repflow.app.domain.common.DomainResult
+import com.repflow.app.presentation.workout.RestNotificationCanceller
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
- * Owns the backup/restore/CSV-export screen state. The Route composable
- * hosts the SAF ([androidx.activity.result.contract.ActivityResultContracts])
- * launchers and passes already-opened text content in/out - this ViewModel
- * never touches `Uri`, `ContentResolver` or any Android I/O type directly.
+ * Owns the backup/restore/CSV-export state, for the dedicated Backup screen
+ * (`5d`, remediation-1-remediation-1 CP8; it was Settings' Data group from
+ * remediation-1 CP14). It also tracks when the last **backup** export
+ * succeeded - `last_backup_at`, a device setting kept out of the backup file -
+ * and writes it after a successful backup export, never a CSV one (a "Last
+ * backup" after a CSV export would mislead the user about data safety).
+ * [rememberBackupFileActions] hosts the SAF
+ * ([androidx.activity.result.contract.ActivityResultContracts]) launchers and
+ * passes already-opened text content in/out - this ViewModel never touches
+ * `Uri`, `ContentResolver` or any Android I/O type directly.
  */
 @HiltViewModel
 class BackupViewModel
@@ -27,9 +41,29 @@ class BackupViewModel
         private val exportBackup: ExportBackup,
         private val restoreBackup: RestoreBackup,
         private val exportWorkoutHistoryCsv: ExportWorkoutHistoryCsv,
+        private val restNotificationCanceller: RestNotificationCanceller,
+        private val settingsRepository: SettingsRepository,
+        private val clock: Clock,
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow(BackupUiState())
+        private val _uiState = MutableStateFlow(BackupUiState(now = clock.now()))
         val uiState = _uiState.asStateFlow()
+
+        init {
+            viewModelScope.launch {
+                settingsRepository
+                    .observe()
+                    .catch { failure ->
+                        // A settings read failure must not crash the screen: the hero falls back to
+                        // `No backup yet`, and export and restore still work.
+                        if (failure is CancellationException) throw failure
+                        _uiState.update { it.copy(isLastBackupLoaded = true) }
+                    }.collect { settings ->
+                        _uiState.update {
+                            it.copy(lastBackupAt = settings.lastBackupAt, isLastBackupLoaded = true, now = clock.now())
+                        }
+                    }
+            }
+        }
 
         /**
          * Builds the backup JSON text; [onReady] is called with it so the
@@ -65,6 +99,19 @@ class BackupViewModel
                     BackupExportKind.CSV -> BackupStatusMessage.CsvExportSucceeded
                 }
             _uiState.update { it.copy(isBusy = false, statusMessage = message) }
+            if (kind == BackupExportKind.BACKUP) {
+                // A failed write is dropped on purpose: the file is already saved, so the
+                // export does not fail - the hero keeps showing the previous time (or
+                // `No backup yet`).
+                // NonCancellable: leaving the Backup route clears this ViewModel and cancels
+                // viewModelScope, which must not drop a stamp for a file that is already saved.
+                // The write is one short Room update, so it is not a leak.
+                // UNDISPATCHED: the body must start before any cancellation can be observed, so a
+                // scope cancelled before a queued dispatch still enters the NonCancellable block.
+                viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                    withContext(NonCancellable) { settingsRepository.update { it.copy(lastBackupAt = clock.now()) } }
+                }
+            }
         }
 
         /** The user dismissed the SAF picker without choosing a destination - not an error, just clears busy silently. */
@@ -103,6 +150,7 @@ class BackupViewModel
             viewModelScope.launch {
                 when (val result = restoreBackup(json)) {
                     is DomainResult.Success -> {
+                        restNotificationCanceller.cancel()
                         _uiState.update { it.copy(isBusy = false, statusMessage = BackupStatusMessage.RestoreSucceeded) }
                     }
 

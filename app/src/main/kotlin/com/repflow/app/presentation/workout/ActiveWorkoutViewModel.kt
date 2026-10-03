@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.repflow.app.application.exercise.ExerciseStatusFilter
 import com.repflow.app.application.exercise.ObserveExercises
 import com.repflow.app.application.progression.ProgressionRecommendationRepository
-import com.repflow.app.application.progression.RecordManualOverride
 import com.repflow.app.application.recovery.GetWorkoutDayContext
+import com.repflow.app.application.settings.AppSettings
+import com.repflow.app.application.settings.ExtraSetFields
+import com.repflow.app.application.settings.SettingsRepository
 import com.repflow.app.application.trainingplan.ObserveTrainingPlans
 import com.repflow.app.application.trainingplan.TrainingPlanOverview
 import com.repflow.app.application.trainingplan.TrainingPlanRepository
@@ -16,9 +18,9 @@ import com.repflow.app.application.workout.AddWorkoutExercise
 import com.repflow.app.application.workout.AddWorkoutExerciseCommand
 import com.repflow.app.application.workout.AdjustRestTimer
 import com.repflow.app.application.workout.CompleteWorkoutSession
-import com.repflow.app.application.workout.DEFAULT_REST_TIMER_SECONDS
 import com.repflow.app.application.workout.EditLastWorkoutSet
 import com.repflow.app.application.workout.EditLastWorkoutSetCommand
+import com.repflow.app.application.workout.LastPerformance
 import com.repflow.app.application.workout.ObserveActiveWorkoutSession
 import com.repflow.app.application.workout.RecordWorkoutSet
 import com.repflow.app.application.workout.RecordWorkoutSetCommand
@@ -31,10 +33,11 @@ import com.repflow.app.application.workout.StartWorkoutSessionFromPlan
 import com.repflow.app.application.workout.StartWorkoutSessionFromPlanCommand
 import com.repflow.app.application.workout.UndoLastWorkoutSet
 import com.repflow.app.application.workout.WorkoutOperationError
+import com.repflow.app.application.workout.WorkoutRepository
+import com.repflow.app.application.workout.lastPerformancesOf
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.exercise.Exercise
 import com.repflow.app.domain.exercise.ExerciseId
-import com.repflow.app.domain.progression.ProgressionResult
 import com.repflow.app.domain.trainingplan.PlannedExercise
 import com.repflow.app.domain.trainingplan.PlannedExerciseTarget
 import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
@@ -43,6 +46,8 @@ import com.repflow.app.domain.workout.WorkoutExercise
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSession
 import com.repflow.app.domain.workout.WorkoutSessionId
+import com.repflow.app.presentation.progression.ProgressionRecommendationUi
+import com.repflow.app.presentation.progression.toSummaryUi
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -50,11 +55,13 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.math.BigDecimal
 import javax.inject.Inject
 
 /**
@@ -62,6 +69,18 @@ import javax.inject.Inject
  * [ObserveExercises], and dispatches the active-workout use cases: starting,
  * adding an ad hoc exercise, recording/undoing/editing a set, and
  * completing/abandoning the session.
+ *
+ * Since remediation-1 CP7 the workout surface has no start menu - Home starts
+ * every workout (CP5) - so [onStartWorkout] and `availablePlans` have no
+ * screen consumer. They are kept, with their tests, as the plan's JVM pass
+ * over this package states; CP16's sweep decides whether they go.
+ *
+ * Remediation-1 CP14: Settings gates three of this surface's behaviours, read
+ * from [SettingsRepository]. [onRecordSet] starts the rest timer only while
+ * `Start rest timer automatically` is on, reading the switch when the set is
+ * logged; [settings] carries the rest to the screen (keep screen awake, confirm
+ * before finishing) and [notificationEnabled] to the route's permission prompt
+ * - both `null` until the repository first emits, never a stored default.
  */
 @Suppress("LongParameterList", "TooManyFunctions")
 @HiltViewModel
@@ -74,7 +93,6 @@ class ActiveWorkoutViewModel
         private val trainingPlanRepository: TrainingPlanRepository,
         private val getWorkoutDayContext: GetWorkoutDayContext,
         private val progressionRecommendationRepository: ProgressionRecommendationRepository,
-        private val recordManualOverride: RecordManualOverride,
         private val startWorkoutSession: StartWorkoutSession,
         private val startWorkoutSessionFromPlan: StartWorkoutSessionFromPlan,
         private val addWorkoutExercise: AddWorkoutExercise,
@@ -86,11 +104,42 @@ class ActiveWorkoutViewModel
         private val skipRestTimer: SkipRestTimer,
         private val completeWorkoutSession: CompleteWorkoutSession,
         private val abandonWorkoutSession: AbandonWorkoutSession,
+        private val settingsRepository: SettingsRepository,
+        private val restNotificationCanceller: RestNotificationCanceller,
+        private val workoutRepository: WorkoutRepository,
     ) : ViewModel() {
         private val error = MutableStateFlow<ActiveWorkoutErrorReason?>(null)
         private val _dayContext = MutableStateFlow<WorkoutDayContextUi?>(null)
         val dayContext: StateFlow<WorkoutDayContextUi?> = _dayContext
         private val recommendationRefreshTrigger = MutableStateFlow(0)
+        private val _finish = MutableStateFlow<WorkoutFinishState>(WorkoutFinishState.Idle)
+
+        /** The finish sheet's confirm, from request to the completed session's id (remediation-1 CP9). */
+        val finish: StateFlow<WorkoutFinishState> = _finish
+
+        /**
+         * Each exercise's last performance (CP9, Q8), read once when the ViewModel
+         * is created and again when a workout completes - the only moment history
+         * gains a session - and not subscribed to history, so logging a set never
+         * re-reads and re-maps it. Empty until the read lands (the seed is applied
+         * to an untouched entry whenever it arrives) and when it fails.
+         */
+        private val lastPerformances = MutableStateFlow<Map<ExerciseId, LastPerformance>>(emptyMap())
+
+        private val _settings = MutableStateFlow<AppSettings?>(null)
+
+        /** The device's settings, `null` until [SettingsRepository] first emits (remediation-1 CP14). */
+        val settings: StateFlow<AppSettings?> = _settings
+
+        /**
+         * The Notification switch for the route's permission prompt: `null` until
+         * it has loaded, so nothing is asked before the switch's real value is
+         * known (remediation-1 CP14).
+         */
+        val notificationEnabled: StateFlow<Boolean?> =
+            _settings
+                .map { it?.restTimerNotification }
+                .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
         /**
          * Milestone 8, CP6: a plain `MutableStateFlow` eagerly kept in sync from
@@ -105,6 +154,7 @@ class ActiveWorkoutViewModel
         private val trainingPlanOverviewsFlow = MutableStateFlow<List<TrainingPlanOverview>>(emptyList())
 
         init {
+            refreshLastPerformances()
             viewModelScope.launch {
                 val context = getWorkoutDayContext()
                 _dayContext.value =
@@ -115,16 +165,58 @@ class ActiveWorkoutViewModel
                     )
             }
             viewModelScope.launch {
+                settingsRepository
+                    .observe()
+                    .catch { failure -> if (failure is CancellationException) throw failure }
+                    .collect { value -> _settings.value = value }
+            }
+            viewModelScope.launch {
                 observeTrainingPlans(TrainingPlanStatusFilter.ACTIVE)
                     .catch { failure -> if (failure is CancellationException) throw failure }
                     .collect { overviews -> trainingPlanOverviewsFlow.value = overviews }
             }
         }
 
+        /**
+         * Plan names for the board's title (remediation-1 CP7). A failed read
+         * degrades to no names - the board then reads `Untitled workout` - rather
+         * than failing the whole workout surface.
+         */
+        private val planLabels =
+            trainingPlanRepository
+                .observeVersionLabels()
+                .catch { failure ->
+                    if (failure is CancellationException) throw failure
+                    emit(emptyMap())
+                }
+
+        /**
+         * Every library exercise, archived ones included, by id: focus mode's
+         * load step and technique notes (remediation-1 CP8) come from the
+         * exercise a workout exercise records, which may have been archived
+         * since it was added. A failed read degrades to the stepper's default
+         * step and no notes rather than failing the workout surface.
+         */
+        private val exerciseDetails =
+            combine(
+                observeExercises(ExerciseStatusFilter.ACTIVE, ""),
+                observeExercises(ExerciseStatusFilter.ARCHIVED, ""),
+            ) { active, archived -> (active + archived).associateBy { it.id } }
+                .catch { failure ->
+                    if (failure is CancellationException) throw failure
+                    emit(emptyMap())
+                }
+
         private val content =
-            observeActiveWorkoutSession()
-                .map { session -> toContent(session) }
-                .onStart { emit(ActiveWorkoutContent.Loading) }
+            combine(
+                observeActiveWorkoutSession(),
+                planLabels,
+                exerciseDetails,
+                _settings,
+                lastPerformances,
+            ) { session, labels, details, settings, lasts ->
+                toContent(session, session?.trainingPlanVersionId?.let { labels[it]?.planName }, details, settings, lasts)
+            }.onStart { emit(ActiveWorkoutContent.Loading) }
                 .catch { failure ->
                     if (failure is CancellationException) throw failure
                     emit(ActiveWorkoutContent.ObservationFailed(ActiveWorkoutErrorReason.UNKNOWN))
@@ -227,7 +319,7 @@ class ActiveWorkoutViewModel
             techniqueQuality: Int? = null,
         ) {
             val sessionId = activeSessionId() ?: return
-            val restSeconds = plannedRestSecondsFor(exerciseId) ?: DEFAULT_REST_TIMER_SECONDS
+            val exerciseUi = activeExercise(exerciseId)
             launchAction {
                 val result =
                     recordWorkoutSet(
@@ -243,7 +335,20 @@ class ActiveWorkoutViewModel
                             techniqueQuality = techniqueQuality,
                         ),
                     )
-                if (result is DomainResult.Success) startRestTimer(sessionId, restSeconds)
+                // Read when the set is logged, so a switch changed mid-workout applies to the next set.
+                if (result is DomainResult.Success) {
+                    val settings = settingsRepository.get()
+                    if (settings.restTimerAutoStart) {
+                        // Q9: the plan row's rest, else the exercise's own `Default rest`, else the app default.
+                        val restSeconds =
+                            resolveRestSeconds(
+                                exerciseUi?.plannedTarget?.restSeconds,
+                                exerciseUi?.defaultRestSeconds,
+                                settings.defaultRestSeconds,
+                            )
+                        startRestTimer(sessionId, restSeconds)
+                    }
+                }
                 result
             }
         }
@@ -297,36 +402,73 @@ class ActiveWorkoutViewModel
             }
         }
 
+        /**
+         * The finish sheet's confirm - the only caller of [CompleteWorkoutSession]
+         * (remediation-1 CP9). On success [finish] carries the session id to the
+         * done screen; on failure it returns to idle and the error is reported
+         * as any other action's is. A second confirm while one is in flight is
+         * ignored: its certain failure would otherwise turn the first one's
+         * finish into a plain "session ended, go Home".
+         */
         fun onCompleteWorkout(sessionId: WorkoutSessionId) {
-            launchAction { completeWorkoutSession(sessionId) }
+            if (_finish.value != WorkoutFinishState.Idle) return
+            _finish.value = WorkoutFinishState.InFlight
+            viewModelScope.launch {
+                when (val result = completeWorkoutSession(sessionId)) {
+                    is DomainResult.Success -> {
+                        restNotificationCanceller.cancel()
+                        refreshLastPerformances()
+                        _finish.value = WorkoutFinishState.Finished(sessionId)
+                    }
+
+                    is DomainResult.Failure -> {
+                        _finish.value = WorkoutFinishState.Idle
+                        error.update { result.error.toReason() }
+                    }
+                }
+            }
         }
 
         fun onAbandonWorkout(sessionId: WorkoutSessionId) {
-            launchAction { abandonWorkoutSession(sessionId) }
+            viewModelScope.launch {
+                when (val result = abandonWorkoutSession(sessionId)) {
+                    is DomainResult.Success -> restNotificationCanceller.cancel()
+                    is DomainResult.Failure -> error.update { result.error.toReason() }
+                }
+            }
         }
 
         fun onErrorShown() {
             error.update { null }
         }
 
-        fun onOverrideRecommendation(
-            exerciseId: ExerciseId,
-            override: ProgressionResultUi,
-        ) {
-            viewModelScope.launch {
-                recordManualOverride(exerciseId, override.toDomain())
-                recommendationRefreshTrigger.update { it + 1 }
-            }
+        /**
+         * Re-reads every picker row's recommendation. The override itself is
+         * recorded on the recommendation screen (remediation-1 CP6), which this
+         * ViewModel never sees, so the route calls this on every `ON_START` -
+         * a return from that screen inside the 5-second `WhileSubscribed`
+         * window would otherwise keep showing the choice from before it.
+         */
+        fun onRefreshRecommendations() {
+            recommendationRefreshTrigger.update { it + 1 }
         }
 
         private suspend fun latestRecommendationUi(exerciseId: ExerciseId): ProgressionRecommendationUi? =
-            progressionRecommendationRepository.findLatestForExercise(exerciseId)?.let { recommendation ->
-                ProgressionRecommendationUi(
-                    result = (recommendation.manualOverride?.result ?: recommendation.result).toUi(),
-                    topReason = recommendation.reasons.firstOrNull(),
-                    isOverridden = recommendation.manualOverride != null,
-                )
+            progressionRecommendationRepository.findLatestForExercise(exerciseId)?.toSummaryUi()
+
+        private fun refreshLastPerformances() {
+            viewModelScope.launch {
+                lastPerformances.value =
+                    workoutRepository
+                        .observeCompletedSessions(includeInvalidated = false)
+                        .map(::lastPerformancesOf)
+                        .catch { failure ->
+                            // History is only a seed: a failed read leaves the steppers empty rather than failing the workout.
+                            if (failure is CancellationException) throw failure
+                            emit(emptyMap())
+                        }.firstOrNull() ?: emptyMap()
             }
+        }
 
         private fun activeSessionId(): WorkoutSessionId? = (uiState.value.content as? ActiveWorkoutContent.Active)?.sessionId
 
@@ -350,7 +492,13 @@ class ActiveWorkoutViewModel
          * as a separate non-suspend closure (same pattern
          * [latestRecommendationUi] already relies on above).
          */
-        private suspend fun toContent(session: WorkoutSession?): ActiveWorkoutContent =
+        private suspend fun toContent(
+            session: WorkoutSession?,
+            planName: String?,
+            details: Map<ExerciseId, Exercise>,
+            settings: AppSettings?,
+            lasts: Map<ExerciseId, LastPerformance>,
+        ): ActiveWorkoutContent =
             if (session == null) {
                 ActiveWorkoutContent.NoActiveSession
             } else {
@@ -358,45 +506,64 @@ class ActiveWorkoutViewModel
                     sessionId = session.id,
                     startedAt = session.startedAt,
                     restTimer = session.restTimer?.toUi(),
-                    exercises = session.exercises.map { exercise -> toExerciseUi(exercise) },
+                    exercises =
+                        session.exercises.map { exercise ->
+                            toExerciseUi(exercise, details[exercise.exerciseId], lasts[exercise.exerciseId])
+                        },
+                    planName = planName,
+                    appDefaultRestSeconds = settings?.defaultRestSeconds ?: AppSettings.DEFAULT_REST_SECONDS,
+                    extraSetFields = settings?.extraSetFields ?: ExtraSetFields.DEFAULT,
                 )
             }
 
-        private suspend fun toExerciseUi(exercise: WorkoutExercise): ActiveExerciseUi =
-            ActiveExerciseUi(
+        private suspend fun toExerciseUi(
+            exercise: WorkoutExercise,
+            detail: Exercise?,
+            last: LastPerformance?,
+        ): ActiveExerciseUi {
+            val sets =
+                exercise.sets.map { set ->
+                    ActiveSetUi(
+                        id = set.id,
+                        setNumber = set.order + 1,
+                        load = set.load,
+                        reps = set.reps,
+                        durationSeconds = set.durationSeconds,
+                        rpe = set.rpe,
+                        isWarmup = set.isWarmup,
+                        pain = set.pain,
+                        techniqueQuality = set.techniqueQuality,
+                    )
+                }
+            return ActiveExerciseUi(
                 id = exercise.id,
                 name = exercise.exerciseNameSnapshot,
                 trackingType = exercise.trackingType,
-                sets =
-                    exercise.sets.map { set ->
-                        ActiveSetUi(
-                            id = set.id,
-                            setNumber = set.order + 1,
-                            load = set.load,
-                            reps = set.reps,
-                            durationSeconds = set.durationSeconds,
-                            rpe = set.rpe,
-                            isWarmup = set.isWarmup,
-                            pain = set.pain,
-                            techniqueQuality = set.techniqueQuality,
-                        )
-                    },
+                sets = sets,
                 plannedTarget =
                     exercise.plannedExerciseId
                         ?.let { trainingPlanRepository.findPlannedExercise(it) }
                         ?.toUi(),
+                exerciseId = exercise.exerciseId,
+                defaultLoadIncrement = detail?.defaultLoadIncrement?.let { BigDecimal.valueOf(it.grams, GRAMS_TO_KG_SCALE) },
+                instructions = detail?.instructions?.value,
+                defaultRestSeconds = detail?.defaultRestDuration?.seconds?.toInt(),
+                lastPerformance = last,
+                seed = entrySeedOf(exercise.trackingType, sets, last),
             )
+        }
 
-        /** The exercise's planned rest, if it was seeded from a plan target; `null` for an ad-hoc exercise (Milestone 8, implementation-review finding #2). */
-        private fun plannedRestSecondsFor(exerciseId: WorkoutExerciseId): Int? =
+        /** The workout exercise as the screen shows it: its plan row's rest (Milestone 8, implementation-review finding #2) and its own `Default rest` (Q9) come from it. */
+        private fun activeExercise(exerciseId: WorkoutExerciseId): ActiveExerciseUi? =
             (uiState.value.content as? ActiveWorkoutContent.Active)
                 ?.exercises
                 ?.find { it.id == exerciseId }
-                ?.plannedTarget
-                ?.restSeconds
 
         private companion object {
             const val STOP_TIMEOUT_MILLIS = 5_000L
+
+            /** `LoadIncrement` is stored in grams; the stepper steps in kg. */
+            const val GRAMS_TO_KG_SCALE = 3
         }
     }
 
@@ -422,24 +589,6 @@ private fun toPickerItem(
         trackingType = exercise.trackingType,
         recommendation = recommendation,
     )
-
-private fun ProgressionResult.toUi(): ProgressionResultUi =
-    when (this) {
-        ProgressionResult.IncreaseLoad -> ProgressionResultUi.INCREASE_LOAD
-        ProgressionResult.MaintainLoad -> ProgressionResultUi.MAINTAIN_LOAD
-        ProgressionResult.ReduceLoad -> ProgressionResultUi.REDUCE_LOAD
-        ProgressionResult.RecoveryAdjustment -> ProgressionResultUi.RECOVERY_ADJUSTMENT
-        ProgressionResult.WaitForMoreData -> ProgressionResultUi.WAIT_FOR_MORE_DATA
-    }
-
-private fun ProgressionResultUi.toDomain(): ProgressionResult =
-    when (this) {
-        ProgressionResultUi.INCREASE_LOAD -> ProgressionResult.IncreaseLoad
-        ProgressionResultUi.MAINTAIN_LOAD -> ProgressionResult.MaintainLoad
-        ProgressionResultUi.REDUCE_LOAD -> ProgressionResult.ReduceLoad
-        ProgressionResultUi.RECOVERY_ADJUSTMENT -> ProgressionResult.RecoveryAdjustment
-        ProgressionResultUi.WAIT_FOR_MORE_DATA -> ProgressionResult.WaitForMoreData
-    }
 
 private fun WorkoutOperationError.toReason(): ActiveWorkoutErrorReason =
     when (this) {

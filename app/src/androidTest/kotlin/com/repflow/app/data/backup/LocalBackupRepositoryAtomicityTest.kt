@@ -28,10 +28,17 @@ import java.time.Instant
  * the pattern in [com.repflow.app.infrastructure.database.exercise.ExerciseDaoTest]).
  *
  * The milestone 7 reference's "restore replaces all local data atomically"
- * invariant depends on [androidx.room.RoomDatabase.clearAllTables] behaving
- * correctly when called from *inside* an outer [androidx.room.withTransaction]
- * block rather than as its own transaction - this was flagged as unverified
- * after CP3 and is exactly what this test confirms.
+ * invariant - since remediation-1 CP14, all local **training** data - depends
+ * on the restore's clear rolling back with the rest of the transaction. The
+ * clear is no longer `clearAllTables()` (which would also have deleted the
+ * `settings` row, which no backup carries) but
+ * [LocalTrainingDataRepository.clearTrainingData], a repository method issuing
+ * its own deletes in its own [androidx.room.withTransaction] - called from
+ * *inside* [LocalBackupRepository.replaceAll]'s outer one. Whether that inner
+ * transaction joins the outer one, and rolls back with it when a later insert
+ * fails, is the same nested-transaction question this file was written to
+ * answer for `clearAllTables()`, asked of the new call; the third test answers
+ * it.
  */
 @RunWith(AndroidJUnit4::class)
 class LocalBackupRepositoryAtomicityTest {
@@ -44,7 +51,7 @@ class LocalBackupRepositoryAtomicityTest {
             Room
                 .inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), RepFlowDatabase::class.java)
                 .build()
-        repository = LocalBackupRepository(database)
+        repository = LocalBackupRepository(database, LocalTrainingDataRepository(database))
     }
 
     @After
@@ -146,7 +153,7 @@ class LocalBackupRepositoryAtomicityTest {
         }
 
     @Test
-    fun replaceAll_rollsBackClearAllTablesWhenAMidTransactionInsertFails() =
+    fun replaceAll_rollsBackTheScopedTrainingDataClearWhenAMidTransactionInsertFails() =
         runBlocking {
             database.exerciseDao().insert(
                 ExerciseEntity(
@@ -184,7 +191,7 @@ class LocalBackupRepositoryAtomicityTest {
 
             assertTrue(result is DomainResult.Failure)
             assertEquals(
-                "clearAllTables() must roll back with the rest of the transaction on failure",
+                "clearTrainingData() must roll back with the rest of the transaction on failure",
                 listOf("existing-1"),
                 database.exerciseDao().findAll().map { it.id },
             )
