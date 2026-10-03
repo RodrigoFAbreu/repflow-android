@@ -3173,12 +3173,12 @@
       "registry_path": "docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediation-1-remediation-1-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/repflow-redesign-visual-foundation-remediation-1-remediation-1-mapping.json",
       "governing_workflow_version": "2.1",
-      "phase": "APPLYING_REVIEW_FEEDBACK",
+      "phase": "AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW",
       "plan_revision": 4,
-      "implementation_revision": 3,
+      "implementation_revision": 4,
       "functional_review_round": null,
       "base_commit": "389608ee3a16e09565145673cd496953a9c3b091",
-      "reviewed_implementation_head": "6bbc58cdc48f75fad6604a069bf6c8c57bf8f119",
+      "reviewed_implementation_head": "b6f623d6958e6b07a56a8eae69c628796b412a37",
       "current_checkpoint_id": null,
       "last_completed_checkpoint_id": "CP10",
       "checkpoints": {
@@ -3274,8 +3274,8 @@
       },
       "functional_acceptance_status": null,
       "blocking_decisions": [],
-      "state_revision": 42,
-      "last_transition": "2026-10-03T15:15:55.209037+00:00"
+      "state_revision": 43,
+      "last_transition": "2026-10-03T15:17:33.856408+00:00"
     }
   }
 }
