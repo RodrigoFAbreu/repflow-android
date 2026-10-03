@@ -50,14 +50,14 @@ internal fun SectionLabel(
 }
 
 /**
- * `4a`'s switch row: label 14.5 over a 12.5 meta, the 44x26 track at the end,
+ * `4a`'s switch row: label 14.5 over a 12.5 meta (none when [meta] is `null`, as `8c` draws Vibrate and Keep the screen on), the 44x26 track at the end,
  * at least 60 tall over an 8% divider. The whole row toggles, and it is a
  * switch to accessibility; until [settings] has loaded it is disabled and off.
  */
 @Composable
 internal fun SettingsSwitchRow(
     @StringRes title: Int,
-    @StringRes meta: Int,
+    @StringRes meta: Int?,
     toggle: SettingToggle,
     settings: AppSettings?,
     onToggle: (SettingToggle, Boolean) -> Unit,
@@ -78,7 +78,7 @@ internal fun SettingsSwitchRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapLg),
         ) {
-            RowText(stringResource(title), stringResource(meta), modifier = Modifier.weight(1f))
+            RowText(stringResource(title), meta?.let { stringResource(it) }.orEmpty(), modifier = Modifier.weight(1f))
             SwitchTrack(checked)
         }
         RowDivider()

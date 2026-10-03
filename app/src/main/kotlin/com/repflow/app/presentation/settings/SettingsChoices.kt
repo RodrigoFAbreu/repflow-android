@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -54,7 +55,10 @@ import com.repflow.app.presentation.designsystem.repFlowSecondaryTextColor
  * the sheets follow `6b` ("sheets for choices") and design turn 7 `7c` N2/N3.
  */
 
-/** `5c`'s `Theme`: the label over three equal segments, each 44 tall at radius 8, the chosen one tinted. */
+/**
+ * `5c`'s `Theme`: the label over three equal segments, each 44 tall at radius 8, the chosen one tinted
+ * with its outline and **no check** - a segmented control's neighbours make the state obvious (`8a` answer 11).
+ */
 @Composable
 internal fun ThemeSegments(
     selected: ThemeMode?,
@@ -91,6 +95,7 @@ private fun Segment(
     enabled: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    checkWhenSelected: Boolean = false,
 ) {
     val colors = repFlowSelectedPillColors(MaterialTheme.colorScheme)
     val shape = MaterialTheme.shapes.small
@@ -104,11 +109,24 @@ private fun Segment(
                 .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium.copy(fontSize = SegmentFontSize),
-            color = if (selected) colors.label else MaterialTheme.colorScheme.onSurface,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(SegmentCheckGap),
+        ) {
+            if (selected && checkWhenSelected) {
+                Icon(
+                    painter = painterResource(RepFlowIcons.checkFat),
+                    contentDescription = null,
+                    tint = colors.label,
+                    modifier = Modifier.size(SegmentCheckSize).testTag(CHOICE_CHECK_TAG),
+                )
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = SegmentFontSize),
+                color = if (selected) colors.label else MaterialTheme.colorScheme.onSurface,
+            )
+        }
     }
 }
 
@@ -170,7 +188,7 @@ internal val DefaultRestPresets: List<Int> = listOf(ONE_MINUTE, ONE_AND_A_HALF_M
 
 /**
  * `Default rest`'s sheet (`7c` N2): a title and caption over the four presets
- * and `Other`. A preset saves and closes; `Other` opens the existing numeric
+ * and `Other`; the selected choice chip carries a check (`8a` answer 11). A preset saves and closes; `Other` opens the existing numeric
  * keypad (whole seconds; the keypad itself is unchanged), and a value that is
  * not a preset then stands in `Other`'s place as a selected chip - tapping it
  * reopens the keypad.
@@ -222,6 +240,7 @@ internal fun DefaultRestSheet(
                             onDismiss()
                         },
                         modifier = Modifier.weight(1f),
+                        checkWhenSelected = true,
                     )
                 }
             }
@@ -233,6 +252,7 @@ internal fun DefaultRestSheet(
                     enabled = true,
                     onClick = { keypadOpen = true },
                     modifier = Modifier.fillMaxWidth(),
+                    checkWhenSelected = true,
                 )
             }
         }
@@ -288,7 +308,7 @@ private fun ChoiceRow(
                 painter = painterResource(RepFlowIcons.checkFat),
                 contentDescription = null,
                 tint = colors.label,
-                modifier = Modifier.size(ValueCaretSize),
+                modifier = Modifier.size(ValueCaretSize).testTag(CHOICE_CHECK_TAG),
             )
         }
     }
@@ -310,6 +330,9 @@ private fun extraSetFieldsMetaRes(mode: ExtraSetFields): Int =
         ExtraSetFields.OFF -> R.string.settings_extra_set_fields_off_meta
     }
 
+/** Test tag on the check a selected choice chip or row carries (`8a` answer 11); segmented controls carry none. */
+internal const val CHOICE_CHECK_TAG = "settings_choice_check"
+
 private const val SECONDS_PER_MINUTE = 60
 private const val ONE_MINUTE = SECONDS_PER_MINUTE
 private const val ONE_AND_A_HALF_MINUTES = 90
@@ -319,6 +342,8 @@ private const val DISABLED_VALUE_ALPHA = 0.38f
 private const val SELECTED_ROW_ALPHA = 0.10f
 private val SegmentMinHeight = 44.dp
 private val SegmentFontSize = 13.5.sp
+private val SegmentCheckSize = 14.dp
+private val SegmentCheckGap = 6.dp
 private val ValueFontSize = 14.5.sp
 private val ValueCaretSize = 14.dp
 private val SheetTitleFontSize = 18.sp

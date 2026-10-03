@@ -14,6 +14,7 @@ import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -26,9 +27,12 @@ import com.repflow.app.application.settings.ExtraSetFields
 import com.repflow.app.application.settings.ThemeMode
 import com.repflow.app.presentation.RepFlowTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.time.Instant
+import java.time.ZoneOffset
 
 /**
  * Settings, converted to `5c` (remediation-1-remediation-1 CP7), grouped as the
@@ -68,13 +72,18 @@ class SettingsScreenTest {
             onSettingsMessageShown = onSettingsMessageShown,
         )
 
-    private fun render(settings: AppSettings?) {
+    private fun render(
+        settings: AppSettings?,
+        now: Instant = Instant.parse("2026-10-03T12:00:00Z"),
+    ) {
         composeRule.setContent {
             RepFlowTheme {
                 SettingsScreen(
                     uiState = SettingsUiState(settings = settings),
                     versionName = "0.1",
                     actions = actions(),
+                    now = now,
+                    zone = ZoneOffset.UTC,
                 )
             }
         }
@@ -117,7 +126,7 @@ class SettingsScreenTest {
     fun theLibraryRowOpensTheLibrary() {
         render(AppSettings.DEFAULT)
 
-        composeRule.onNodeWithText(string(R.string.settings_library_row)).performClick()
+        composeRule.onNodeWithText(string(R.string.settings_library_row)).performScrollTo().performClick()
 
         assertEquals(1, libraryClicks)
     }
@@ -144,7 +153,7 @@ class SettingsScreenTest {
         render(AppSettings.DEFAULT)
         val labels =
             listOf(
-                R.string.settings_section_units_appearance,
+                R.string.settings_section_appearance,
                 R.string.settings_section_rest_timer,
                 R.string.settings_section_workout,
                 R.string.settings_section_data,
@@ -158,6 +167,98 @@ class SettingsScreenTest {
 
         assertEquals(tops.sorted(), tops)
         assertEquals(tops.size, tops.toSet().size)
+    }
+
+    /** GF-4 (`8c`): Library, Archived and Backup and restore sit together under `Your data`, ahead of the Erase card. */
+    @Test
+    fun yourDataHoldsLibraryArchivedBackupAndThenTheEraseCard() {
+        render(AppSettings.DEFAULT)
+
+        val tops =
+            listOf(
+                string(R.string.settings_section_data).uppercase(),
+                string(R.string.settings_library_row),
+                string(R.string.settings_archived_row),
+                string(R.string.settings_backup_row),
+                string(R.string.settings_erase_action),
+            ).map { composeRule.onNodeWithText(it).getUnclippedBoundsInRoot().top }
+
+        assertEquals(tops.sorted(), tops)
+        assertEquals(tops.size, tops.toSet().size)
+        composeRule.onAllNodesWithText(string(R.string.settings_library_meta)).assertCountEquals(1)
+    }
+
+    @Test
+    fun theArchivedRowIsCalledArchivedWithItsSubtitle() {
+        render(AppSettings.DEFAULT)
+
+        assertEquals("Archived", string(R.string.settings_archived_row))
+        composeRule.onNodeWithText(string(R.string.settings_archived_row_meta)).performScrollTo().assertIsDisplayed()
+        assertEquals("Exercises and plans", string(R.string.settings_archived_row_meta))
+    }
+
+    @Test
+    fun theBackupRowSaysNoBackupYetBeforeTheFirstOne() {
+        render(AppSettings.DEFAULT.copy(lastBackupAt = null))
+
+        composeRule.onNodeWithText(string(R.string.backup_none_title)).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun theBackupRowDatesTheLastBackupByTheBackupScreensLabelLogic() {
+        val now = Instant.parse("2026-10-03T12:00:00Z")
+        render(AppSettings.DEFAULT.copy(lastBackupAt = Instant.parse("2026-10-01T21:04:00Z")), now = now)
+
+        composeRule.onNodeWithText(string(R.string.backup_last_days_ago, 2)).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun theBackupRowStaysBlankUntilTheSettingsHaveLoaded() {
+        render(settings = null)
+
+        composeRule.onAllNodesWithText(string(R.string.backup_none_title)).assertCountEquals(0)
+    }
+
+    @Test
+    fun theRowCopyFollows8c() {
+        render(AppSettings.DEFAULT)
+
+        assertEquals("Used when neither the plan nor the exercise sets one", string(R.string.settings_default_rest_row_meta))
+        composeRule.onNodeWithText(string(R.string.settings_default_rest_row_meta)).assertIsDisplayed()
+        // Vibrate and Keep the screen on carry no subtitle: their rows hold the title and the switch only.
+        composeRule.onNodeWithText(string(R.string.settings_rest_vibrate)).assertIsOn()
+        composeRule.onAllNodesWithText("Even with the screen off").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Ends when you finish").assertCountEquals(0)
+    }
+
+    @Test
+    fun theEraseCardNamesRecoveryEntriesAndSuggestions() {
+        val body = string(R.string.settings_erase_body)
+
+        assertTrue(body, body.contains("recovery entry"))
+        assertTrue(body, body.contains("suggestion"))
+        render(AppSettings.DEFAULT)
+        composeRule.onNodeWithText(body).performScrollTo().assertIsDisplayed()
+    }
+
+    /** `8a` answer 11: the selected chip in the Default rest sheet carries a check; the Theme control (a segmented control) never does. */
+    @Test
+    fun theDefaultRestSheetsSelectedChipCarriesACheckAndTheThemeControlCarriesNone() {
+        render(AppSettings.DEFAULT)
+        composeRule.onAllNodesWithTag(CHOICE_CHECK_TAG, useUnmergedTree = true).assertCountEquals(0)
+
+        composeRule.onNodeWithText(string(R.string.settings_default_rest_row)).performClick()
+
+        composeRule.onAllNodesWithTag(CHOICE_CHECK_TAG, useUnmergedTree = true).assertCountEquals(1)
+    }
+
+    @Test
+    fun theExtraSetFieldsSheetsSelectedChoiceCarriesACheck() {
+        render(AppSettings.DEFAULT)
+
+        composeRule.onNodeWithText(string(R.string.settings_extra_set_fields_row)).performClick()
+
+        composeRule.onAllNodesWithTag(CHOICE_CHECK_TAG, useUnmergedTree = true).assertCountEquals(1)
     }
 
     @Test

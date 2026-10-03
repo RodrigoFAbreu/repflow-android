@@ -210,12 +210,7 @@ private fun HeroText(
         )
         return
     }
-    val title =
-        when (val label = lastBackupLabel(lastBackupAt, now, zone)) {
-            LastBackupLabel.Today -> stringResource(R.string.backup_last_today)
-            LastBackupLabel.Yesterday -> stringResource(R.string.backup_last_yesterday)
-            is LastBackupLabel.DaysAgo -> stringResource(R.string.backup_last_days_ago, label.days)
-        }
+    val title = lastBackupTitle(lastBackupLabel(lastBackupAt, now, zone))
     val local = lastBackupAt.atZone(zone)
     Text(text = title, style = MaterialTheme.typography.titleMedium)
     Text(

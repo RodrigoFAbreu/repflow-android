@@ -28,33 +28,36 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.repflow.app.R
 import com.repflow.app.application.settings.AppSettings
+import com.repflow.app.presentation.backup.lastBackupLabel
+import com.repflow.app.presentation.backup.lastBackupTitle
 import com.repflow.app.presentation.designsystem.RepFlowColor
 import com.repflow.app.presentation.designsystem.RepFlowSpacing
 import com.repflow.app.presentation.designsystem.components.RepFlowScreenScaffold
 import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
 import com.repflow.app.presentation.designsystem.repFlowSecondaryTextColor
+import java.time.Instant
+import java.time.ZoneId
 
 /**
- * Settings, converted to the newer `5c` (remediation-1-remediation-1 CP7), in
- * CP3's sub-screen frame, grouped by when you would change something -
+ * Settings, as design turn 8's `8c` draws it (functional review GF-4), in CP3's
+ * sub-screen frame, grouped by when you would change something -
  *
- * - **Library** - `Exercise library`, the library's inward path outside a
- *   workout (register `D25`; `5c` has no such row);
- * - **Units and appearance** - `Theme` as three full-width segments
- *   (`Weight unit` is not built: `D5`, the domain stores kilograms only);
+ * - **Appearance** - `Theme` as three full-width segments (`Weight unit` is not
+ *   built: `D5`, the domain stores kilograms only);
  * - **Rest timer** - auto-start, the `Default rest` row (opens a sheet),
  *   vibrate and notification switches;
  * - **During a workout** - keep screen awake, confirm before finishing and the
  *   `Extra set fields` row (opens a sheet);
- * - **Data** - `Archived exercises and plans` (the Archived screen) and `Backup
- *   and restore` (the Backup screen, `5d`, CP8), then the `Irreversible` card
- *   over `Erase all data`, behind a typed confirmation;
+ * - **Your data** - `Exercise library` (register `D25`), `Archived` (the
+ *   Archived screen), `Backup and restore` (the Backup screen, `5d`, CP8) with
+ *   its `Last backup <when>` subtitle, then the `Irreversible` card over
+ *   `Erase all data`, behind a typed confirmation;
  * - the footer.
  *
  * Every switch, the theme and the two value rows render from
  * [SettingsUiState.settings] - what is stored - and wait, disabled, until it
  * has loaded. A switch's whole row is its tap target and it is announced as a
- * switch with its state.
+ * switch with its state. [now] and [zone] only date the Backup row's subtitle.
  */
 @Composable
 fun SettingsScreen(
@@ -62,6 +65,8 @@ fun SettingsScreen(
     versionName: String?,
     actions: SettingsActions,
     modifier: Modifier = Modifier,
+    now: Instant = Instant.now(),
+    zone: ZoneId = ZoneId.systemDefault(),
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     var showEraseConfirm by rememberSaveable { mutableStateOf(false) }
@@ -111,20 +116,13 @@ fun SettingsScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(top = 4.dp, bottom = 20.dp),
         ) {
-            SectionLabel(R.string.settings_section_library, first = true)
-            SettingsActionRow(
-                icon = RepFlowIcons.books,
-                title = stringResource(R.string.settings_library_row),
-                meta = stringResource(R.string.settings_library_meta),
-                onClick = actions.onLibraryClick,
-            )
             SettingsGroups(
                 settings = uiState.settings,
                 actions = actions,
                 onDefaultRestClick = { showRestSheet = true },
                 onExtraSetFieldsClick = { showExtraSheet = true },
             )
-            DataGroup(actions = actions)
+            DataGroup(actions = actions, settings = uiState.settings, now = now, zone = zone)
             EraseCard(enabled = !uiState.isErasing, onEraseClick = { showEraseConfirm = true })
             Text(
                 text =
@@ -171,7 +169,7 @@ private fun SettingsGroups(
     onExtraSetFieldsClick: () -> Unit,
 ) {
     val onToggle = actions.onToggle
-    SectionLabel(R.string.settings_section_units_appearance)
+    SectionLabel(R.string.settings_section_appearance, first = true)
     ThemeSegments(selected = settings?.theme, onSelect = actions.onThemeSelected)
     SectionLabel(R.string.settings_section_rest_timer)
     SettingsSwitchRow(
@@ -189,7 +187,7 @@ private fun SettingsGroups(
     )
     SettingsSwitchRow(
         R.string.settings_rest_vibrate,
-        R.string.settings_rest_vibrate_meta,
+        null,
         SettingToggle.REST_TIMER_VIBRATE,
         settings,
         onToggle,
@@ -204,7 +202,7 @@ private fun SettingsGroups(
     SectionLabel(R.string.settings_section_workout)
     SettingsSwitchRow(
         R.string.settings_keep_screen_awake,
-        R.string.settings_keep_screen_awake_meta,
+        null,
         SettingToggle.KEEP_SCREEN_AWAKE,
         settings,
         onToggle,
@@ -225,18 +223,35 @@ private fun SettingsGroups(
 }
 
 @Composable
-private fun DataGroup(actions: SettingsActions) {
+private fun DataGroup(
+    actions: SettingsActions,
+    settings: AppSettings?,
+    now: Instant,
+    zone: ZoneId,
+) {
     SectionLabel(R.string.settings_section_data)
+    SettingsActionRow(
+        icon = RepFlowIcons.books,
+        title = stringResource(R.string.settings_library_row),
+        meta = stringResource(R.string.settings_library_meta),
+        onClick = actions.onLibraryClick,
+    )
     SettingsActionRow(
         icon = RepFlowIcons.archive,
         title = stringResource(R.string.settings_archived_row),
-        meta = "",
+        meta = stringResource(R.string.settings_archived_row_meta),
         onClick = actions.onArchivedClick,
     )
     SettingsActionRow(
         icon = RepFlowIcons.database,
         title = stringResource(R.string.settings_backup_row),
-        meta = "",
+        // `Last backup <when>` or `No backup yet` (`8c`), by the Backup screen's own label logic; nothing until settings load.
+        meta =
+            when {
+                settings == null -> ""
+                settings.lastBackupAt == null -> stringResource(R.string.backup_none_title)
+                else -> lastBackupTitle(lastBackupLabel(settings.lastBackupAt, now, zone))
+            },
         onClick = actions.onBackupClick,
     )
 }

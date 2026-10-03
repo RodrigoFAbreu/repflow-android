@@ -1,5 +1,8 @@
 package com.repflow.app.presentation.backup
 
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import com.repflow.app.R
 import java.time.Instant
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
@@ -32,3 +35,12 @@ internal fun lastBackupLabel(
         else -> LastBackupLabel.DaysAgo(days.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
     }
 }
+
+/** The words for [label]: `Last backup today`, `yesterday` or `N days ago` - shared by Backup's hero and Settings' row. */
+@Composable
+internal fun lastBackupTitle(label: LastBackupLabel): String =
+    when (label) {
+        LastBackupLabel.Today -> stringResource(R.string.backup_last_today)
+        LastBackupLabel.Yesterday -> stringResource(R.string.backup_last_yesterday)
+        is LastBackupLabel.DaysAgo -> stringResource(R.string.backup_last_days_ago, label.days)
+    }
