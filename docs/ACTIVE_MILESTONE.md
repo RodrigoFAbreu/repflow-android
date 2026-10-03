@@ -478,6 +478,43 @@ registry `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediati
 
 ---
 
+## `repflow-redesign-visual-foundation-remediation-1-remediation-1` — Functional review round 1: findings applied (2026-10-03)
+
+`/apply-functional-review` took the **bounded branch** for all five findings
+(GF-1 to GF-5, the user's decision: fix all in this item). Technical approval
+of revision 4 was marked STALE first (`28b4dfc`), before any edit. No broad
+child was needed: each fix is one contained change, no schema change, no new
+module. The checklist below is **superseded for the changed areas** by the
+re-test list at the end of this section; `/prepare-functional-review` rebuilds
+it after a fresh implementation review and technical approval.
+
+| Finding | Class | Disposition | Commit |
+|---|---|---|---|
+| GF-5 | defect | The rest notification posts on `rest_timer_v2` (vibration disabled, same importance and sound); the old `rest_timer` channel is deleted when it is created. Notification id 1001 and cancellation unchanged. Any customisation of the old channel resets (accepted by the user). `RestTimerExpiryHandlerTest`: the legacy vibrating channel is replaced by a quiet v2 one | `99e03ff` |
+| GF-1 | defect | Per-exercise `SetEntryState` hoisted into a saveable `FocusEntries` map keyed by workout exercise id at `ActiveWorkoutScreen`, above focus mode. Seed and `touched` rules unchanged. 4 new `ActiveWorkoutSetEntryTest` tests, all failing before the fix (seeded and never-done exercise across the Board, focus moving away and back, recreation after a Board visit) | `b88446a` |
+| GF-3 | missing requirement | `canLog` needs weight and reps for weight and reps. **0 kg counts as a weight; an empty value does not.** Reps-only and timed unchanged; stored sets unaffected. Unit tests; seeds in three screen tests now carry a weight | `afd3f84` (+ `08b929a` formatting) |
+| GF-2 | defect | No-results state per `7c` N13 on both filters; `No archived exercises.` only for a truly empty archive with no query. VM test, screen tests, wiring test | `264a18a` |
+| GF-4 | missing requirement | Settings (`8c`) regrouped and re-worded, Backup row subtitle, check on Default rest chips (`6ad3ec8`); Progress (`8b`) note removed, span line, captions, unavailable copy (`1688b97`); smoke test scroll (`6362410`). Out of scope and left: m:ss pad, permission rows, stacked dialog order, empty-range and single-session extra lines | `6ad3ec8`, `1688b97`, `6362410` |
+
+Register: `D143`-`D148` appended to the inventory; `D125` superseded, `D138`
+amended. The three open follow-ups from this review's notes (Undo after Restore
+re-archives with today's date, an older `Rest done` stays in the shade, the
+landscape rest panel over the steppers) are not changed.
+
+**Gate:** `spotlessCheck detekt lintDebug testDebugUnitTest --rerun-tasks`:
+BUILD SUCCESSFUL, 114 classes, 737 unit tests, 0 failures, lint 0 errors and 22
+warnings (the baseline), detekt empty. Instrumented on the AVD
+(`emulator-5554`, killed afterwards, never the phone), in three package groups:
+data + infrastructure 94, presentation.workout 92, presentation excluding
+workout 206; total 392, 0 failures (377 before this round, plus 15 new).
+
+**Re-test (for the next functional review):** D3/D-set entry (type or step, go
+to the Board, return; Next and back; `Log set` disabled until weight and reps,
+0 kg accepted); E2 Library no-results on Active and Archived; A1-A7 Settings
+layout and copy, the Backup row subtitle, the check on the Default rest chips
+and none on Theme; C Progress (no note, span line, captions, unavailable
+copy); G2 on the phone: one buzz at rest end, with the notification's sound.
+
 ## `repflow-redesign-visual-foundation-remediation-1-remediation-1` — Functional review checklist, round 1 (implementation revision 4)
 
 Functional review ROUND 1 of group B. Technical approval of **revision 4** is
