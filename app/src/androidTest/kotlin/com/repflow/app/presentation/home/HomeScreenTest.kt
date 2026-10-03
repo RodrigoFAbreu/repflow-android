@@ -7,15 +7,13 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
@@ -26,8 +24,8 @@ import com.repflow.app.domain.recovery.RecoveryEntryId
 import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
 import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.presentation.RepFlowTheme
+import com.repflow.app.presentation.assertButtonLabelWhole
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -56,21 +54,31 @@ class HomeScreenTest {
 
     private fun string(id: Int): String = composeRule.activity.getString(id)
 
-    private fun show(state: HomeUiState) {
+    private fun show(
+        state: HomeUiState,
+        fontScale: Float? = null,
+        width: Dp? = null,
+    ) {
         composeRule.setContent {
-            RepFlowTheme {
-                HomeScreen(
-                    uiState = state,
-                    onSettingsClick = {},
-                    onResumeClick = { opened++ },
-                    onFinishClick = { opened++ },
-                    onAbandonConfirmed = { abandoned += it },
-                    onStartWorkout = { started += it },
-                    onCreatePlanClick = { createPlan++ },
-                    onLogRecoveryClick = { logRecovery++ },
-                    onRetryHistory = {},
-                    onErrorShown = {},
-                )
+            val base = LocalDensity.current
+            val density = if (fontScale == null) base else Density(base.density, fontScale)
+            CompositionLocalProvider(LocalDensity provides density) {
+                RepFlowTheme {
+                    Box(if (width == null) Modifier else Modifier.width(width)) {
+                        HomeScreen(
+                            uiState = state,
+                            onSettingsClick = {},
+                            onResumeClick = { opened++ },
+                            onFinishClick = { opened++ },
+                            onAbandonConfirmed = { abandoned += it },
+                            onStartWorkout = { started += it },
+                            onCreatePlanClick = { createPlan++ },
+                            onLogRecoveryClick = { logRecovery++ },
+                            onRetryHistory = {},
+                            onErrorShown = {},
+                        )
+                    }
+                }
             }
         }
     }
@@ -179,47 +187,27 @@ class HomeScreenTest {
         composeRule.onNodeWithContentDescription(string(R.string.home_recovery_log_content_description)).assertIsDisplayed()
     }
 
-    /** At 1.3x and 2.0x font the resume card's `Resume` and `Finish it` stay whole words on one line (design 9f, P2-F-3). */
+    /** At 1.3x font, on Home's real 352dp card width, `Resume` and `Finish it` stay whole (design 9f, P2-F-3). */
     @Test
-    fun theResumeCardsLabelsStayWholeAtLargeFontSizes() {
-        val scale = mutableStateOf(LARGE_FONT_SCALE_MEDIUM)
-        composeRule.setContent {
-            val base = LocalDensity.current
-            CompositionLocalProvider(LocalDensity provides Density(base.density, scale.value)) {
-                RepFlowTheme {
-                    Box(Modifier.width(384.dp)) {
-                        ResumeCard(
-                            workout =
-                                HomeActiveWorkout(
-                                    WorkoutSessionId("s"),
-                                    planName = "Push day",
-                                    startedAt = Instant.now(),
-                                    setsLogged = 3,
-                                ),
-                            onResumeClick = {},
-                            onFinishClick = {},
-                            onAbandonClick = {},
-                        )
-                    }
-                }
-            }
-        }
-        listOf(LARGE_FONT_SCALE_MEDIUM, LARGE_FONT_SCALE_MAX).forEach { fontScale ->
-            composeRule.runOnIdle { scale.value = fontScale }
-            composeRule.waitForIdle()
-            listOf(R.string.home_resume, R.string.home_finish_it).forEach { label ->
-                val results = mutableListOf<TextLayoutResult>()
-                val node = composeRule.onNodeWithText(string(label))
-                node.assertIsDisplayed()
-                node
-                    .fetchSemanticsNode()
-                    .config[SemanticsActions.GetTextLayoutResult]
-                    .action
-                    ?.invoke(results)
-                assertEquals("label $label wraps at font $fontScale", 1, results.single().lineCount)
-                val bounds = node.getUnclippedBoundsInRoot()
-                assertTrue("label $label is clipped at font $fontScale: $bounds", bounds.left >= 0.dp && bounds.right <= 384.dp)
-            }
+    fun theResumeCardsLabelsStayWholeAt1point3xFont() = assertResumeLabelsWhole(LARGE_FONT_SCALE_MEDIUM)
+
+    /** At 2.0x font, on Home's real 352dp card width, `Resume` and `Finish it` stay whole (design 9f, P2-F-3). */
+    @Test
+    fun theResumeCardsLabelsStayWholeAt2xFont() = assertResumeLabelsWhole(LARGE_FONT_SCALE_MAX)
+
+    private fun assertResumeLabelsWhole(fontScale: Float) {
+        // The whole HomeScreen at 384dp, so the card gets its real 352dp after the 16dp side padding.
+        show(
+            HomeUiState(
+                date = today,
+                activeWorkout = HomeActiveWorkout(WorkoutSessionId("s"), planName = "Push day", startedAt = Instant.now(), setsLogged = 3),
+            ),
+            fontScale = fontScale,
+            width = 384.dp,
+        )
+        composeRule.waitForIdle()
+        listOf(R.string.home_resume, R.string.home_finish_it).forEach { label ->
+            composeRule.assertButtonLabelWhole(string(label), "font $fontScale")
         }
     }
 
