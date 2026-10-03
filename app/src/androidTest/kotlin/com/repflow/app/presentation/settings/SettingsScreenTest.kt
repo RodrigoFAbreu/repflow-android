@@ -5,12 +5,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -18,6 +22,8 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
 import com.repflow.app.application.settings.AppSettings
+import com.repflow.app.application.settings.ExtraSetFields
+import com.repflow.app.application.settings.ThemeMode
 import com.repflow.app.presentation.RepFlowTheme
 import com.repflow.app.presentation.backup.BackupStatusMessage
 import com.repflow.app.presentation.backup.BackupUiState
@@ -27,10 +33,14 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Remediation-1 CP14's Settings screen (`4a`): each switch renders the stored
- * value and reports its own toggle, the switches wait disabled until the
- * settings have loaded, the Library row leads to the library, and `Erase all
- * data` sits behind a typed confirmation.
+ * Settings, converted to `5c` (remediation-1-remediation-1 CP7), grouped as the
+ * design groups it: each switch renders the stored value and reports its own
+ * toggle; `Theme`, `Default rest` and `Extra set fields` render the stored
+ * value and report their own choice (the two rows through their sheets); all
+ * of it waits disabled until the settings have loaded; the Library and
+ * Archived rows lead where they say; and `Erase all data` sits behind a typed
+ * confirmation. The Data group's three backup rows stay until CP8's Backup
+ * screen replaces them.
  */
 @RunWith(AndroidJUnit4::class)
 class SettingsScreenTest {
@@ -38,8 +48,33 @@ class SettingsScreenTest {
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     private val toggles = mutableListOf<Pair<SettingToggle, Boolean>>()
+    private val themes = mutableListOf<ThemeMode>()
+    private val rests = mutableListOf<Int>()
+    private val extraFields = mutableListOf<ExtraSetFields>()
     private var libraryClicks = 0
+    private var archivedClicks = 0
     private var eraseConfirms = 0
+
+    private fun actions(
+        onBackupStatusShown: () -> Unit = {},
+        onSettingsMessageShown: () -> Unit = {},
+    ) = SettingsActions(
+        onBack = {},
+        onLibraryClick = { libraryClicks++ },
+        onArchivedClick = { archivedClicks++ },
+        onToggle = { toggle, on -> toggles += toggle to on },
+        onThemeSelected = { themes += it },
+        onDefaultRestSelected = { rests += it },
+        onExtraSetFieldsSelected = { extraFields += it },
+        onExportBackup = {},
+        onRestoreBackup = {},
+        onExportCsv = {},
+        onRestoreConfirmed = {},
+        onRestoreCancelled = {},
+        onBackupStatusShown = onBackupStatusShown,
+        onEraseAllDataConfirmed = { eraseConfirms++ },
+        onSettingsMessageShown = onSettingsMessageShown,
+    )
 
     private fun render(settings: AppSettings?) {
         composeRule.setContent {
@@ -48,20 +83,7 @@ class SettingsScreenTest {
                     uiState = SettingsUiState(settings = settings),
                     backupState = BackupUiState(),
                     versionName = "0.1",
-                    actions =
-                        SettingsActions(
-                            onBack = {},
-                            onLibraryClick = { libraryClicks++ },
-                            onToggle = { toggle, on -> toggles += toggle to on },
-                            onExportBackup = {},
-                            onRestoreBackup = {},
-                            onExportCsv = {},
-                            onRestoreConfirmed = {},
-                            onRestoreCancelled = {},
-                            onBackupStatusShown = {},
-                            onEraseAllDataConfirmed = { eraseConfirms++ },
-                            onSettingsMessageShown = {},
-                        ),
+                    actions = actions(),
                 )
             }
         }
@@ -126,6 +148,120 @@ class SettingsScreenTest {
         composeRule.onNodeWithText(string(R.string.settings_erase_confirm_title)).assertDoesNotExist()
     }
 
+    @Test
+    fun theGroupsFollowTheDesignOrder() {
+        render(AppSettings.DEFAULT)
+        val labels =
+            listOf(
+                R.string.settings_section_units_appearance,
+                R.string.settings_section_rest_timer,
+                R.string.settings_section_workout,
+                R.string.settings_section_data,
+            )
+
+        // A scrolling column places every child, shown or not, so the order of their tops is the page order.
+        val tops =
+            labels.map { label ->
+                composeRule.onNodeWithText(string(label).uppercase()).getUnclippedBoundsInRoot().top
+            }
+
+        assertEquals(tops.sorted(), tops)
+        assertEquals(tops.size, tops.toSet().size)
+    }
+
+    @Test
+    fun theThemeShowsTheStoredChoiceAndReportsAnother() {
+        render(AppSettings.DEFAULT.copy(theme = ThemeMode.LIGHT))
+
+        composeRule.onNodeWithText(string(R.string.settings_theme_light)).assertIsSelected()
+        composeRule.onNodeWithText(string(R.string.settings_theme_dark)).performClick()
+
+        assertEquals(listOf(ThemeMode.DARK), themes)
+    }
+
+    @Test
+    fun theDefaultRestRowShowsItsValueAndAPresetSavesAndCloses() {
+        render(AppSettings.DEFAULT)
+
+        composeRule.onNodeWithText("1:30").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.settings_default_rest_row)).performClick()
+        composeRule.onNodeWithText(string(R.string.settings_default_rest_sheet_caption)).assertIsDisplayed()
+        composeRule.onNodeWithText("3:00").performClick()
+
+        assertEquals(listOf(180), rests)
+        composeRule.onNodeWithText(string(R.string.settings_default_rest_sheet_caption)).assertDoesNotExist()
+    }
+
+    @Test
+    fun otherOpensTheKeypadAndATypedRestIsSaved() {
+        render(AppSettings.DEFAULT)
+
+        composeRule.onNodeWithText(string(R.string.settings_default_rest_row)).performClick()
+        composeRule.onNodeWithText(string(R.string.settings_default_rest_other)).performClick()
+        composeRule.onNodeWithText(string(R.string.settings_default_rest_keypad_title)).assertIsDisplayed()
+        composeRule.onNodeWithText("1").performClick()
+        composeRule.onNodeWithText("3").performClick()
+        composeRule.onNodeWithText("5").performClick()
+        composeRule.onNodeWithText(string(R.string.repflow_keypad_confirm)).performClick()
+
+        assertEquals(listOf(135), rests)
+        composeRule.onNodeWithText(string(R.string.settings_default_rest_sheet_caption)).assertDoesNotExist()
+    }
+
+    @Test
+    fun aCustomRestStandsInOthersPlaceAsASelectedChip() {
+        render(AppSettings.DEFAULT.copy(defaultRestSeconds = 135))
+
+        composeRule.onNodeWithText("2:15").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.settings_default_rest_row)).performClick()
+
+        composeRule.onAllNodesWithText("2:15").assertCountEquals(2)
+        composeRule.onNodeWithText(string(R.string.settings_default_rest_other)).assertDoesNotExist()
+    }
+
+    @Test
+    fun theExtraSetFieldsRowShowsItsModeAndTheSheetExplainsAndSavesAChoice() {
+        render(AppSettings.DEFAULT)
+
+        composeRule.onNodeWithText(string(R.string.settings_extra_set_fields_collapsed)).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.settings_extra_set_fields_row)).performClick()
+        composeRule.onNodeWithText(string(R.string.settings_extra_set_fields_always_meta)).assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.settings_extra_set_fields_collapsed_meta)).assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.settings_extra_set_fields_off_meta)).assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.settings_extra_set_fields_off)).performClick()
+
+        assertEquals(listOf(ExtraSetFields.OFF), extraFields)
+        composeRule.onNodeWithText(string(R.string.settings_extra_set_fields_off_meta)).assertDoesNotExist()
+    }
+
+    @Test
+    fun theNewRowsWaitDisabledUntilTheSettingsHaveLoaded() {
+        render(settings = null)
+
+        composeRule.onNodeWithText(string(R.string.settings_theme_dark)).assertIsNotEnabled()
+        composeRule.onNodeWithText(string(R.string.settings_default_rest_row)).performScrollTo().assertIsNotEnabled()
+        composeRule.onNodeWithText(string(R.string.settings_extra_set_fields_row)).performScrollTo().assertIsNotEnabled()
+        assertEquals(emptyList<ThemeMode>(), themes)
+    }
+
+    @Test
+    fun theArchivedRowOpensTheArchivedScreen() {
+        render(AppSettings.DEFAULT)
+
+        composeRule.onNodeWithText(string(R.string.settings_archived_row)).performScrollTo().performClick()
+
+        assertEquals(1, archivedClicks)
+    }
+
+    @Test
+    fun theDataGroupKeepsTheThreeBackupRowsUntilTheBackupScreenReplacesThem() {
+        render(AppSettings.DEFAULT)
+
+        composeRule.onNodeWithText(string(R.string.backup_export_action)).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.backup_restore_action)).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.backup_csv_export_action)).performScrollTo().assertIsDisplayed()
+    }
+
     /**
      * Remediation-1 CP16: both messages are consumed only once their snackbar
      * has been shown. Consuming first cleared the key the showing effect is
@@ -145,21 +281,12 @@ class SettingsScreenTest {
                     backupState = backupState,
                     versionName = "0.1",
                     actions =
-                        SettingsActions(
-                            onBack = {},
-                            onLibraryClick = {},
-                            onToggle = { _, _ -> },
-                            onExportBackup = {},
-                            onRestoreBackup = {},
-                            onExportCsv = {},
-                            onRestoreConfirmed = {},
-                            onRestoreCancelled = {},
+                        actions(
                             onBackupStatusShown = {
                                 backupShown++
                                 backupState = backupState.copy(statusMessage = null)
                                 uiState = uiState.copy(message = SettingsMessage.ERASED)
                             },
-                            onEraseAllDataConfirmed = {},
                             onSettingsMessageShown = {
                                 settingsShown++
                                 uiState = uiState.copy(message = null)

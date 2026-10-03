@@ -156,7 +156,7 @@ internal fun SettingsActionRow(
 }
 
 @Composable
-private fun RowText(
+internal fun RowText(
     title: String,
     meta: String,
     modifier: Modifier = Modifier,
@@ -167,17 +167,19 @@ private fun RowText(
             style = MaterialTheme.typography.bodyMedium.copy(fontSize = RowTitleFontSize),
             color = MaterialTheme.colorScheme.onSurface,
         )
-        Text(
-            text = meta,
-            style = MaterialTheme.typography.bodySmall,
-            color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
-            modifier = Modifier.padding(top = 2.dp),
-        )
+        if (meta.isNotEmpty()) {
+            Text(
+                text = meta,
+                style = MaterialTheme.typography.bodySmall,
+                color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
     }
 }
 
 @Composable
-private fun RowDivider() {
+internal fun RowDivider() {
     HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = ROW_DIVIDER_ALPHA))
 }
 
@@ -203,8 +205,8 @@ internal fun SavedMark() {
     }
 }
 
-private val SettingsRowMinHeight = 60.dp
-private val RowTitleFontSize = 14.5.sp
+internal val SettingsRowMinHeight = 60.dp
+internal val RowTitleFontSize = 14.5.sp
 private const val ROW_DIVIDER_ALPHA = 0.08f
 private const val LEADING_ICON_ALPHA = 0.6f
 private const val DISABLED_ALPHA = 0.38f

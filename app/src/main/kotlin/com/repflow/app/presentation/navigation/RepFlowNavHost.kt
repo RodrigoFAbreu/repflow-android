@@ -14,6 +14,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.repflow.app.presentation.archived.ArchivedRoute
 import com.repflow.app.presentation.exercise.editor.ExerciseEditorRoute
 import com.repflow.app.presentation.exercise.list.ExerciseListRoute
 import com.repflow.app.presentation.history.HistoryRoute
@@ -96,7 +97,11 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
                 SettingsRoute(
                     onBack = { navController.popBackStack() },
                     onLibraryClick = { navController.navigate(RepFlowDestinations.EXERCISES) },
+                    onArchivedClick = { navController.navigate(RepFlowDestinations.ARCHIVED) },
                 )
+            }
+            composable(RepFlowDestinations.ARCHIVED) {
+                ArchivedRoute(onBack = { navController.popBackStack() })
             }
             composable(RepFlowDestinations.EXERCISES) {
                 ExerciseListRoute(

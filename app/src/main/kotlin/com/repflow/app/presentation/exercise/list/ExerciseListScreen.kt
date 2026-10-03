@@ -198,7 +198,7 @@ private fun ExerciseListMessages(
  * with the words alone.
  */
 @Composable
-private fun ExerciseListSnackbar(data: SnackbarData) {
+internal fun ExerciseListSnackbar(data: SnackbarData) {
     val scheme = MaterialTheme.colorScheme
     val accent = repFlowAccentOutlineColors(scheme).label
     val actionLabel = data.visuals.actionLabel

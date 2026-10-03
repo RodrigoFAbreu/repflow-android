@@ -147,6 +147,24 @@ class MainActivityNavHostSmokeTest {
         composeRule.onNodeWithText(string(R.string.backup_restore_action)).performScrollTo().assertIsDisplayed()
     }
 
+    /**
+     * Remediation-1-remediation-1 CP7: the Archived screen is reached only from
+     * Settings and returns there. Like the other walks this assumes a fresh
+     * install, where nothing is archived and one empty state shows.
+     */
+    @Test
+    fun archivedIsReachableFromSettingsAndBackReturnsThere() {
+        clickByDescription(R.string.home_settings_content_description)
+        composeRule.onNodeWithText(string(R.string.settings_archived_row)).performScrollTo().performClick()
+        waitForText(R.string.archived_empty_both)
+        composeRule.onNodeWithText(string(R.string.archived_title)).assertIsDisplayed()
+        assertBottomNavAbsent()
+
+        clickByDescription(R.string.archived_back_content_description)
+
+        composeRule.onNodeWithText(string(R.string.settings_title)).assertIsDisplayed()
+    }
+
     @Test
     fun historyTabOpensWithoutCrashing() {
         clickByDescription(R.string.exercise_list_history_content_description)

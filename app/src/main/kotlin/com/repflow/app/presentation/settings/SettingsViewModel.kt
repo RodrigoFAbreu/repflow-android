@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.repflow.app.application.backup.EraseAllData
 import com.repflow.app.application.settings.AppSettings
+import com.repflow.app.application.settings.ExtraSetFields
 import com.repflow.app.application.settings.SettingsRepository
+import com.repflow.app.application.settings.ThemeMode
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.presentation.workout.RestNotificationCanceller
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -93,9 +95,24 @@ class SettingsViewModel
         fun onToggle(
             toggle: SettingToggle,
             on: Boolean,
-        ) {
+        ) = write { it.withToggle(toggle, on) }
+
+        /** `Theme`'s segment: stores [mode] and nothing else. */
+        fun onThemeSelected(mode: ThemeMode) = write { it.copy(theme = mode) }
+
+        /**
+         * `Default rest`'s sheet: stores [seconds] clamped to the exercise rest's own 1-1800 range,
+         * so `Other` can never store a rest no exercise could have.
+         */
+        fun onDefaultRestSelected(seconds: Int) =
+            write { it.copy(defaultRestSeconds = seconds.coerceIn(MIN_DEFAULT_REST_SECONDS, MAX_DEFAULT_REST_SECONDS)) }
+
+        /** `Extra set fields`' sheet: stores [mode] and nothing else. */
+        fun onExtraSetFieldsSelected(mode: ExtraSetFields) = write { it.copy(extraSetFields = mode) }
+
+        private fun write(transform: (AppSettings) -> AppSettings) {
             viewModelScope.launch {
-                when (settingsRepository.update { it.withToggle(toggle, on) }) {
+                when (settingsRepository.update(transform)) {
                     is DomainResult.Success -> Unit
                     is DomainResult.Failure -> _uiState.update { it.copy(message = SettingsMessage.SAVE_FAILED) }
                 }
@@ -124,5 +141,10 @@ class SettingsViewModel
 
         fun onMessageShown() {
             _uiState.update { it.copy(message = null) }
+        }
+
+        private companion object {
+            const val MIN_DEFAULT_REST_SECONDS = 1
+            const val MAX_DEFAULT_REST_SECONDS = 1_800
         }
     }

@@ -4,8 +4,10 @@ import com.repflow.app.application.backup.EraseAllData
 import com.repflow.app.application.backup.InMemoryTrainingDataRepository
 import com.repflow.app.application.backup.TrainingDataError
 import com.repflow.app.application.settings.AppSettings
+import com.repflow.app.application.settings.ExtraSetFields
 import com.repflow.app.application.settings.InMemorySettingsRepository
 import com.repflow.app.application.settings.SettingsPersistenceError
+import com.repflow.app.application.settings.ThemeMode
 import com.repflow.app.presentation.workout.RecordingRestNotificationCanceller
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -73,6 +75,90 @@ class SettingsViewModelTest {
             viewModel.onMessageShown()
             assertEquals(null, viewModel.uiState.value.message)
         }
+
+    @Test
+    fun `the theme writes only itself`() =
+        runTest {
+            val before = settingsRepository.get()
+
+            viewModel.onThemeSelected(ThemeMode.DARK)
+
+            assertEquals(before.copy(theme = ThemeMode.DARK), settingsRepository.get())
+            assertEquals(
+                ThemeMode.DARK,
+                viewModel.uiState.value.settings
+                    ?.theme,
+            )
+        }
+
+    @Test
+    fun `the default rest writes only itself`() =
+        runTest {
+            val before = settingsRepository.get()
+
+            viewModel.onDefaultRestSelected(135)
+
+            assertEquals(before.copy(defaultRestSeconds = 135), settingsRepository.get())
+            assertEquals(
+                135,
+                viewModel.uiState.value.settings
+                    ?.defaultRestSeconds,
+            )
+        }
+
+    @Test
+    fun `a typed default rest outside 1 to 1800 seconds is clamped into range`() =
+        runTest {
+            viewModel.onDefaultRestSelected(0)
+            assertEquals(1, settingsRepository.get().defaultRestSeconds)
+
+            viewModel.onDefaultRestSelected(999_999)
+            assertEquals(1_800, settingsRepository.get().defaultRestSeconds)
+        }
+
+    @Test
+    fun `the extra set fields mode writes only itself`() =
+        runTest {
+            val before = settingsRepository.get()
+
+            viewModel.onExtraSetFieldsSelected(ExtraSetFields.OFF)
+
+            assertEquals(before.copy(extraSetFields = ExtraSetFields.OFF), settingsRepository.get())
+            assertEquals(
+                ExtraSetFields.OFF,
+                viewModel.uiState.value.settings
+                    ?.extraSetFields,
+            )
+        }
+
+    @Test
+    fun `each new setting reports a failed write and keeps the stored value`() =
+        runTest {
+            val writes =
+                listOf<() -> Unit>(
+                    { viewModel.onThemeSelected(ThemeMode.LIGHT) },
+                    { viewModel.onDefaultRestSelected(180) },
+                    { viewModel.onExtraSetFieldsSelected(ExtraSetFields.ALWAYS_SHOWN) },
+                )
+            for (write in writes) {
+                settingsRepository.nextUpdateFailure = SettingsPersistenceError.Unavailable
+
+                write()
+
+                assertEquals(SettingsMessage.SAVE_FAILED, viewModel.uiState.value.message)
+                assertEquals(AppSettings.DEFAULT, settingsRepository.get())
+                viewModel.onMessageShown()
+            }
+        }
+
+    @Test
+    fun `a rest shows as minutes and seconds`() {
+        assertEquals("1:00", formatRest(60))
+        assertEquals("1:30", formatRest(90))
+        assertEquals("2:15", formatRest(135))
+        assertEquals("0:05", formatRest(5))
+        assertEquals("30:00", formatRest(1_800))
+    }
 
     @Test
     fun `erasing all data clears the training data and keeps the settings`() =

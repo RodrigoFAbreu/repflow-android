@@ -200,7 +200,65 @@ registry `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediati
   `ActiveWorkoutScreenTest`, `MainActivityNavHostSmokeTest`: 50 tests, 0
   failures. Not built, by the plan: the Settings controls that change these
   values are CP7's.
-- **Next: CP7** (B1 Settings screen to `5c`, and the Archived screen).
+- **CP7 (B1 Settings screen to `5c`, and the Archived screen) complete,
+  2026-10-03.** Presentation only; no schema, no dependency. The live `5c`
+  artboard and design turn 7 (`7c` N1, N2, N3) were read first; the turn-7
+  guidance applied only inside this scope (B2 Default rest sheet, B5 Extra set
+  fields sheet, B8 Archived screen); B3, B6, B7 (row label stays `Archived
+  exercises and plans`), B22 (notification subtitle stays `Shows when rest
+  ends`) are kept ours, for CP10's deviation register. **Settings:** groups
+  `Library` (`Exercise library`, `D25`), `Units and appearance` (`Theme` as
+  three full-width 44dp segments, `System`/`Light`/`Dark`; `Weight unit` not
+  built, `D5`), `Rest timer` (`Start rest automatically`, the `Default rest`
+  value row `1:30 ›`, `Vibrate when rest ends`, `Notify when rest ends`),
+  `During a workout` (`Keep the screen on`, `Confirm before finishing`, the
+  `Extra set fields` value row `Collapsed ›`), `Data` (`Archived exercises and
+  plans ›` plus, **until CP8 replaces them with `Backup and restore ›`, the
+  three existing backup rows**: the Backup route is CP8's, so CP7 cannot link
+  to it and removing the rows would lose export/restore for a checkpoint), the
+  `Irreversible` card, the footer. Titles follow `5c`; the subtitles the design
+  does not draw are kept ours. `SettingsViewModel` gains `onThemeSelected`,
+  `onDefaultRestSelected` (clamped to the exercise rest's 1-1800 s) and
+  `onExtraSetFieldsSelected`, each a write-through with `SAVE_FAILED`. **Sheets**
+  (`RepFlowSheet`, new `SettingsChoices.kt`): `Default rest` has the caption
+  `Used when neither the plan nor the exercise sets a rest.`, chips `1:00 1:30
+  2:00 3:00`, a preset saves and closes, `Other` opens the existing numeric
+  keypad unchanged (whole seconds, titled `Rest in seconds`; B3 stays ours, so
+  not m:ss), and a non-preset value stands in `Other`'s place as a selected
+  chip that reopens the keypad; `Extra set fields` is a radio list with the
+  three explanation lines (a pick saves and closes). **Archived screen:** new
+  `presentation/archived/` (route `settings/archived`, reached only from
+  Settings): `ArchivedViewModel` over `ObserveExercises(ARCHIVED)` and
+  `ObserveTrainingPlans(ARCHIVED)`, `RestoreExercise`/`RestoreTrainingPlan` and
+  the archive use cases for `Undo`; sections `Exercises` and `Plans`, rows name
+  over `Archived d MMM yyyy` (the plan card's own date format; the design draws
+  `12 Sep`) with an outlined 44dp `Restore` (accessible name `Restore <name>`),
+  most recently archived first, the restored row leaves at once (the
+  observation re-emits), snackbar `<name> restored` with `Undo` (re-archives;
+  reuses the library's snackbar card), an inline empty row per section (`No
+  archived exercises.` / `No archived plans.`), both empty one `Nothing
+  archived. Archived exercises and plans show up here.` with the archive glyph,
+  a failure state with retry. `ExerciseListSnackbar` became `internal` to be
+  reused. Decided here, registered by CP10: the `Other` keypad clamps 0 or a
+  value over 1800 into 1-1800 rather than rejecting it; the Data group keeps the
+  three backup rows until CP8. Tests: JVM `SettingsViewModelTest` (+6: theme,
+  default rest, clamp, extra set fields, each failed write reports
+  `SAVE_FAILED`, `formatRest`), new `ArchivedViewModelTest` (7); instrumented
+  `SettingsScreenTest` rewritten for the grouped layout (14 tests: group order,
+  theme, default rest row and preset, `Other` keypad, custom chip, extra set
+  fields sheet, disabled until loaded, Archived row, the three backup rows kept,
+  plus the kept switch, library, erase and message tests), new
+  `ArchivedScreenTest` (6), `MainActivityNavHostSmokeTest` (+1: Settings,
+  Archived, back). Gate: spotlessCheck, detekt, lintDebug (0 errors, 21
+  warnings, 1 hint), testDebugUnitTest (697 tests, 110 classes, 0 failures),
+  assembleDebug, assembleDebugAndroidTest green. AVD (`emulator-5560`, stopped
+  afterwards): `SettingsScreenTest`, `ArchivedScreenTest`,
+  `MainActivityNavHostSmokeTest` 30/30 after the last change; earlier in the same
+  session (32 tests, 0 failures) those three plus `RestTimerReceiverDeliveryTest`,
+  and `BackupRouteUnreadableRestoreFileTest`, `BackupRouteSafCancellationTest` and
+  `MainActivityThemeSmokeTest` (5 tests, 0 failures), which also use the Settings
+  screen. The side-by-side visual pass against `5c` is CP10's.
+- **Next: CP8** (B1 dedicated Backup screen, `5d`).
 
 ---
 

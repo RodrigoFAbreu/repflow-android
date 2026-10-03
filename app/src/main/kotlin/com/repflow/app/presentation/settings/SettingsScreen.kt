@@ -38,24 +38,28 @@ import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
 import com.repflow.app.presentation.designsystem.repFlowSecondaryTextColor
 
 /**
- * Settings (remediation-1 CP14, artboard `4a`'s `nTabSettings`,
- * `RepFlow.dc.html:1052-1111`): CP3's sub-screen frame, then the groups as the
- * design groups them -
+ * Settings, converted to the newer `5c` (remediation-1-remediation-1 CP7), in
+ * CP3's sub-screen frame, grouped by when you would change something -
  *
  * - **Library** - `Exercise library`, the library's inward path outside a
- *   workout (register `D25`; `4a` has no such row);
- * - **Rest timer** - auto-start, vibrate and notification switches;
- * - **During a workout** - keep screen awake and confirm before finishing;
- * - **Data** - `Export a backup` (`Saved` once the file is written),
- *   `Restore from a file` (the system picker, then the existing destructive
- *   confirmation) and `Workout history as CSV`, then the `Irreversible` card
- *   over `Erase all data`, behind a typed confirmation;
+ *   workout (register `D25`; `5c` has no such row);
+ * - **Units and appearance** - `Theme` as three full-width segments
+ *   (`Weight unit` is not built: `D5`, the domain stores kilograms only);
+ * - **Rest timer** - auto-start, the `Default rest` row (opens a sheet),
+ *   vibrate and notification switches;
+ * - **During a workout** - keep screen awake, confirm before finishing and the
+ *   `Extra set fields` row (opens a sheet);
+ * - **Data** - `Archived exercises and plans` (the Archived screen) and, until
+ *   the dedicated Backup screen (`5d`, CP8) replaces them, the three backup
+ *   rows (`Saved` once an export is written; restore goes through the system
+ *   picker and the existing destructive confirmation), then the `Irreversible`
+ *   card over `Erase all data`, behind a typed confirmation;
  * - the footer.
  *
- * `4a`'s `Units` group is not built (`D5`: the domain stores kilograms only).
- * Every switch renders from [SettingsUiState.settings] - what is stored - and
- * waits, disabled, until it has loaded. The whole row is the switch's tap
- * target and it is announced as a switch with its state.
+ * Every switch, the theme and the two value rows render from
+ * [SettingsUiState.settings] - what is stored - and wait, disabled, until it
+ * has loaded. A switch's whole row is its tap target and it is announced as a
+ * switch with its state.
  */
 @Composable
 fun SettingsScreen(
@@ -68,6 +72,8 @@ fun SettingsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var exportSaved by rememberSaveable { mutableStateOf(false) }
     var showEraseConfirm by rememberSaveable { mutableStateOf(false) }
+    var showRestSheet by rememberSaveable { mutableStateOf(false) }
+    var showExtraSheet by rememberSaveable { mutableStateOf(false) }
     SettingsMessages(
         uiState = uiState,
         backupState = backupState,
@@ -87,6 +93,23 @@ fun SettingsScreen(
             },
             onDismiss = { showEraseConfirm = false },
         )
+    }
+
+    uiState.settings?.let { settings ->
+        if (showRestSheet) {
+            DefaultRestSheet(
+                currentSeconds = settings.defaultRestSeconds,
+                onSelect = actions.onDefaultRestSelected,
+                onDismiss = { showRestSheet = false },
+            )
+        }
+        if (showExtraSheet) {
+            ExtraSetFieldsSheet(
+                current = settings.extraSetFields,
+                onSelect = actions.onExtraSetFieldsSelected,
+                onDismiss = { showExtraSheet = false },
+            )
+        }
     }
 
     RepFlowScreenScaffold(
@@ -111,7 +134,12 @@ fun SettingsScreen(
                 meta = stringResource(R.string.settings_library_meta),
                 onClick = actions.onLibraryClick,
             )
-            SwitchGroups(uiState.settings, actions.onToggle)
+            SettingsGroups(
+                settings = uiState.settings,
+                actions = actions,
+                onDefaultRestClick = { showRestSheet = true },
+                onExtraSetFieldsClick = { showExtraSheet = true },
+            )
             DataGroup(
                 backupState = backupState,
                 exportSaved = exportSaved,
@@ -184,10 +212,15 @@ private fun SettingsMessages(
 }
 
 @Composable
-private fun SwitchGroups(
+private fun SettingsGroups(
     settings: AppSettings?,
-    onToggle: (SettingToggle, Boolean) -> Unit,
+    actions: SettingsActions,
+    onDefaultRestClick: () -> Unit,
+    onExtraSetFieldsClick: () -> Unit,
 ) {
+    val onToggle = actions.onToggle
+    SectionLabel(R.string.settings_section_units_appearance)
+    ThemeSegments(selected = settings?.theme, onSelect = actions.onThemeSelected)
     SectionLabel(R.string.settings_section_rest_timer)
     SettingsSwitchRow(
         R.string.settings_rest_auto_start,
@@ -195,6 +228,12 @@ private fun SwitchGroups(
         SettingToggle.REST_TIMER_AUTO_START,
         settings,
         onToggle,
+    )
+    SettingsValueRow(
+        title = stringResource(R.string.settings_default_rest_row),
+        meta = stringResource(R.string.settings_default_rest_row_meta),
+        value = settings?.let { formatRest(it.defaultRestSeconds) },
+        onClick = onDefaultRestClick,
     )
     SettingsSwitchRow(
         R.string.settings_rest_vibrate,
@@ -225,6 +264,12 @@ private fun SwitchGroups(
         settings,
         onToggle,
     )
+    SettingsValueRow(
+        title = stringResource(R.string.settings_extra_set_fields_row),
+        meta = stringResource(R.string.settings_extra_set_fields_row_meta),
+        value = settings?.let { stringResource(extraSetFieldsLabelRes(it.extraSetFields)) },
+        onClick = onExtraSetFieldsClick,
+    )
 }
 
 @Composable
@@ -236,6 +281,12 @@ private fun DataGroup(
 ) {
     val enabled = !backupState.isBusy
     SectionLabel(R.string.settings_section_data)
+    SettingsActionRow(
+        icon = RepFlowIcons.archive,
+        title = stringResource(R.string.settings_archived_row),
+        meta = "",
+        onClick = actions.onArchivedClick,
+    )
     SettingsActionRow(
         icon = RepFlowIcons.database,
         title = stringResource(R.string.backup_export_action),

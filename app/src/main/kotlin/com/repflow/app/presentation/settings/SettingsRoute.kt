@@ -22,6 +22,7 @@ import com.repflow.app.presentation.backup.rememberBackupFileActions
 fun SettingsRoute(
     onBack: () -> Unit,
     onLibraryClick: () -> Unit,
+    onArchivedClick: () -> Unit,
     settingsViewModel: SettingsViewModel = hiltViewModel(),
     backupViewModel: BackupViewModel = hiltViewModel(),
 ) {
@@ -39,7 +40,11 @@ fun SettingsRoute(
             SettingsActions(
                 onBack = onBack,
                 onLibraryClick = onLibraryClick,
+                onArchivedClick = onArchivedClick,
                 onToggle = settingsViewModel::onToggle,
+                onThemeSelected = settingsViewModel::onThemeSelected,
+                onDefaultRestSelected = settingsViewModel::onDefaultRestSelected,
+                onExtraSetFieldsSelected = settingsViewModel::onExtraSetFieldsSelected,
                 onExportBackup = backupActions.onExportBackup,
                 onRestoreBackup = backupActions.onRestoreBackup,
                 onExportCsv = backupActions.onExportCsv,

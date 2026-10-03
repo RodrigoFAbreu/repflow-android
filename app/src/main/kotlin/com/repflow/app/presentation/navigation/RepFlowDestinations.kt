@@ -85,6 +85,9 @@ object RepFlowDestinations {
     /** Settings, reached from Home; its Data group carries backup and restore (remediation-1 CP14). */
     const val SETTINGS = "settings"
 
+    /** Archived exercises and plans with `Restore`, reached only from Settings (remediation-1-remediation-1 CP7). */
+    const val ARCHIVED = "settings/archived"
+
     /**
      * Single source of truth for the bottom [androidx.compose.material3.NavigationBar]'s
      * items - the design's four top-level destinations (artboard `4a`,
