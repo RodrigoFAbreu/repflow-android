@@ -53,12 +53,15 @@ fun RepFlowLoadingIndicator(modifier: Modifier = Modifier) {
  * @param message already resolved by the caller, since which of several
  *   reasons applies is the screen's own business.
  * @param icon the surface's own glyph, decorative (the message is the label).
+ * @param action an optional action drawn under the message (the Library's
+ *   `Create "<query>"` when a search matches nothing).
  */
 @Composable
 fun RepFlowEmptyState(
     message: String,
     modifier: Modifier = Modifier,
     @DrawableRes icon: Int? = null,
+    action: (@Composable () -> Unit)? = null,
 ) {
     Box(
         modifier = modifier.fillMaxSize().padding(RepFlowSpacing.screenPadding),
@@ -81,6 +84,7 @@ fun RepFlowEmptyState(
                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = EmptyTextSize),
                 textAlign = TextAlign.Center,
             )
+            action?.invoke()
         }
     }
 }

@@ -99,8 +99,12 @@ class ExerciseListViewModel
             }
             val reason =
                 when {
-                    criteria.filter == ExerciseStatusFilter.ARCHIVED -> ExerciseListEmptyReason.NO_ARCHIVED
+                    // A query that matches nothing is "no results" on either filter (GF-2): only an
+                    // empty archive with no query is "No archived exercises."
                     criteria.query.isNotBlank() -> ExerciseListEmptyReason.NO_SEARCH_RESULTS
+
+                    criteria.filter == ExerciseStatusFilter.ARCHIVED -> ExerciseListEmptyReason.NO_ARCHIVED
+
                     else -> ExerciseListEmptyReason.NO_EXERCISES
                 }
             return ExerciseListContent.Empty(reason)

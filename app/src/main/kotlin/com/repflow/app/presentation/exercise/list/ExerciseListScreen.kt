@@ -127,11 +127,16 @@ fun ExerciseListScreen(
                 }
 
                 is ExerciseListContent.Empty -> {
-                    if (content.reason == ExerciseListEmptyReason.NO_SEARCH_RESULTS && createFromQuery != null) {
-                        CreateFromQueryFooter(
-                            query = createFromQuery,
-                            onCreateFromQueryClick = onCreateFromQueryClick,
-                            modifier = Modifier.padding(top = RepFlowSpacing.screenPadding),
+                    if (content.reason == ExerciseListEmptyReason.NO_SEARCH_RESULTS) {
+                        // GF-2: the magnifier and the no-match line, with `Create "<query>"` under it on Active.
+                        val query = uiState.query.trim()
+                        RepFlowEmptyState(
+                            message = stringResource(exerciseListNoMatchMessageRes(uiState.filter), query),
+                            icon = exerciseListEmptyIconRes(content.reason),
+                            action =
+                                createFromQuery?.let { fromQuery ->
+                                    { CreateFromQueryAction(fromQuery, onCreateFromQueryClick) }
+                                },
                         )
                     } else {
                         RepFlowEmptyState(
@@ -353,21 +358,30 @@ internal fun CreateFromQueryFooter(
             style = MaterialTheme.typography.bodySmall.copy(fontSize = FooterFontSize),
             color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
         )
-        Box(
-            modifier =
-                Modifier
-                    .heightIn(min = ExerciseFilterChipMinHeight)
-                    .clip(FooterActionShape)
-                    .clickable(role = Role.Button) { onCreateFromQueryClick(query) }
-                    .padding(horizontal = RepFlowSpacing.gapXs),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = stringResource(R.string.exercise_list_create_from_query, query),
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = FooterFontSize),
-                color = repFlowAccentOutlineColors(MaterialTheme.colorScheme).label,
-            )
-        }
+        CreateFromQueryAction(query, onCreateFromQueryClick)
+    }
+}
+
+/** The tappable `Create "<query>"`, shared by the footer and the no-results state; held at 44dp. */
+@Composable
+private fun CreateFromQueryAction(
+    query: String,
+    onCreateFromQueryClick: (String) -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .heightIn(min = ExerciseFilterChipMinHeight)
+                .clip(FooterActionShape)
+                .clickable(role = Role.Button) { onCreateFromQueryClick(query) }
+                .padding(horizontal = RepFlowSpacing.gapXs),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = stringResource(R.string.exercise_list_create_from_query, query),
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = FooterFontSize),
+            color = repFlowAccentOutlineColors(MaterialTheme.colorScheme).label,
+        )
     }
 }
 

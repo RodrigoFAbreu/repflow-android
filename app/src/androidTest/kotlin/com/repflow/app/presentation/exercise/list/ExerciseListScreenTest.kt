@@ -1,9 +1,11 @@
 package com.repflow.app.presentation.exercise.list
 
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -109,8 +111,9 @@ class ExerciseListScreenTest {
     }
 
     /**
-     * `2c`'s `Not here? Create "<query>"` replaces the old no-results line
-     * (remediation-1 CP10 item 3), and tapping it reaches the create route
+     * GF-2 (design `7c` N13): a query matching nothing on Active shows the
+     * magnifier and `Nothing called "<query>". Create it below.` with
+     * `Create "<query>"` under it, and tapping it reaches the create route
      * carrying the query.
      */
     @Test
@@ -125,9 +128,9 @@ class ExerciseListScreenTest {
         )
 
         composeRule
-            .onNodeWithText(
-                composeRule.activity.getString(R.string.exercise_list_empty_no_search_results),
-            ).assertIsDisplayed()
+            .onNodeWithText(composeRule.activity.getString(R.string.exercise_list_empty_no_match_active, "zzz"))
+            .assertIsDisplayed()
+        composeRule.onNodeWithTag(EMPTY_STATE_GLYPH_TAG).assertIsDisplayed()
         composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.exercise_list_create_from_query, "zzz"))
             .assertIsDisplayed()
@@ -152,9 +155,12 @@ class ExerciseListScreenTest {
         composeRule.onNodeWithTag(EMPTY_STATE_GLYPH_TAG).assertIsDisplayed()
     }
 
-    /** B4: the no-results reason also carries a glyph when there is no create-from-query footer to show. */
+    /**
+     * GF-2: on Archived a query matching nothing says no archived exercises match it, with the
+     * magnifier, no create action - and not `No archived exercises.`.
+     */
     @Test
-    fun theNoSearchResultsEmptyStateCarriesAGlyphOnTheArchivedFilter() {
+    fun theNoSearchResultsEmptyStateOnTheArchivedFilterNamesTheQueryAndOffersNoCreate() {
         setContent(
             ExerciseListUiState(
                 query = "zzz",
@@ -164,9 +170,15 @@ class ExerciseListScreenTest {
         )
 
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.exercise_list_empty_no_search_results))
+            .onNodeWithText(composeRule.activity.getString(R.string.exercise_list_empty_no_match_archived, "zzz"))
             .assertIsDisplayed()
         composeRule.onNodeWithTag(EMPTY_STATE_GLYPH_TAG).assertIsDisplayed()
+        composeRule
+            .onAllNodesWithText(composeRule.activity.getString(R.string.exercise_list_empty_no_archived))
+            .assertCountEquals(0)
+        composeRule
+            .onAllNodesWithText(composeRule.activity.getString(R.string.exercise_list_create_from_query, "zzz"))
+            .assertCountEquals(0)
     }
 
     /** B5: the Library's search is `2c`'s 48dp, not Material's 56dp. */

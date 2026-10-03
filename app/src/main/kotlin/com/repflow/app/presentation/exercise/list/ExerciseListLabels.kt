@@ -30,13 +30,25 @@ internal fun exerciseListFilterLabelRes(filter: ExerciseStatusFilter): Int =
         ExerciseStatusFilter.ARCHIVED -> R.string.exercise_list_filter_archived
     }
 
-/** Why the list is empty, in the user's words. */
+/**
+ * Why the list is empty, in the user's words. [ExerciseListEmptyReason.NO_SEARCH_RESULTS]
+ * takes the query as its argument, and says "Nothing called ..." on the Active filter and
+ * "No archived exercises match ..." on the Archived one ([exerciseListNoMatchMessageRes]).
+ */
 @StringRes
 internal fun exerciseListEmptyMessageRes(reason: ExerciseListEmptyReason): Int =
     when (reason) {
         ExerciseListEmptyReason.NO_EXERCISES -> R.string.exercise_list_empty_no_exercises
-        ExerciseListEmptyReason.NO_SEARCH_RESULTS -> R.string.exercise_list_empty_no_search_results
+        ExerciseListEmptyReason.NO_SEARCH_RESULTS -> exerciseListNoMatchMessageRes(ExerciseStatusFilter.ACTIVE)
         ExerciseListEmptyReason.NO_ARCHIVED -> R.string.exercise_list_empty_no_archived
+    }
+
+/** The no-results line for [filter] (design turn 7, `7c` N13); it takes the query as `%1$s`. */
+@StringRes
+internal fun exerciseListNoMatchMessageRes(filter: ExerciseStatusFilter): Int =
+    when (filter) {
+        ExerciseStatusFilter.ACTIVE -> R.string.exercise_list_empty_no_match_active
+        ExerciseStatusFilter.ARCHIVED -> R.string.exercise_list_empty_no_match_archived
     }
 
 /** The glyph over each empty reason: the library, the archive, the search. */

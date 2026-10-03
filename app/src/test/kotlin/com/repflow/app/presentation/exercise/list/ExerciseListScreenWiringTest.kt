@@ -50,9 +50,16 @@ class ExerciseListScreenWiringTest {
         val messages = ExerciseListEmptyReason.entries.map(::exerciseListEmptyMessageRes)
         assertEquals(messages.toSet().size, messages.size)
         assertEquals(
-            R.string.exercise_list_empty_no_search_results,
+            R.string.exercise_list_empty_no_match_active,
             exerciseListEmptyMessageRes(ExerciseListEmptyReason.NO_SEARCH_RESULTS),
         )
+    }
+
+    /** GF-2: the no-results line differs by filter, and the glyph is the magnifier. */
+    @Test
+    fun theNoMatchLineDiffersByFilterAndCarriesTheMagnifier() {
+        assertEquals(R.string.exercise_list_empty_no_match_active, exerciseListNoMatchMessageRes(ExerciseStatusFilter.ACTIVE))
+        assertEquals(R.string.exercise_list_empty_no_match_archived, exerciseListNoMatchMessageRes(ExerciseStatusFilter.ARCHIVED))
     }
 
     /**

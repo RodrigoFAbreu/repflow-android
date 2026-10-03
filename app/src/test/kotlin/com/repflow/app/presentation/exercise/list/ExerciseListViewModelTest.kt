@@ -168,6 +168,28 @@ class ExerciseListViewModelTest {
             }
         }
 
+    /** GF-2: on the Archived filter a query with no matches is "no results", not an empty archive. */
+    @Test
+    fun `a query with no matches on the archived filter reports NO_SEARCH_RESULTS`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            repository.seed(exercise("1", "Squat"))
+            repository.seed(exercise("2", "Old Press", archived = true))
+
+            viewModel.uiState.test {
+                awaitUntil { it.content !is ExerciseListContent.Loading }
+
+                viewModel.onFilterChanged(ExerciseStatusFilter.ARCHIVED)
+                viewModel.onQueryChanged("zzz")
+
+                val queried =
+                    awaitUntil {
+                        it.filter == ExerciseStatusFilter.ARCHIVED && it.query == "zzz" && it.content !is ExerciseListContent.Loading
+                    }
+                assertEquals(ExerciseListContent.Empty(ExerciseListEmptyReason.NO_SEARCH_RESULTS), queried.content)
+            }
+        }
+
     @Test
     fun `a query with no matches reports NO_SEARCH_RESULTS`() =
         runTest {
