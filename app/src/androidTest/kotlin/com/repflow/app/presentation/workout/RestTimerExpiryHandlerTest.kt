@@ -145,6 +145,25 @@ class RestTimerExpiryHandlerTest {
         assertEquals(listOf(expectedUsage()), vibrator.usages)
     }
 
+    /** The legacy channel is deleted at a rest end even when nothing is posted (Notify off). */
+    @Test
+    fun theLegacyChannelIsDeletedEvenWhenNothingIsPosted() {
+        manager.createNotificationChannel(
+            NotificationChannel(
+                RestTimerExpiredReceiver.LEGACY_CHANNEL_ID,
+                context.getString(R.string.workout_active_rest_timer_channel_name),
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply { enableVibration(true) },
+        )
+
+        runBlocking {
+            settings.update { settingsWith(notification = false, vibrate = false) }
+            handler.onRestEnded(context, notificationPermitted = true)
+        }
+
+        assertNull(manager.getNotificationChannel(RestTimerExpiredReceiver.LEGACY_CHANNEL_ID))
+    }
+
     @Test
     fun notificationTurnedOffAfterSchedulingPostsNothing() {
         assertSwitchChangedAfterScheduling(from = settingsWith(notification = true, vibrate = false)) {

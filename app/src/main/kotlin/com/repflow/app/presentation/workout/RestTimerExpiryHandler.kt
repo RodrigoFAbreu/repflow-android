@@ -55,6 +55,10 @@ class RestTimerExpiryHandler
             notificationPermitted: Boolean,
         ) {
             if (workoutRepository.findActiveSession()?.restTimer == null) return
+            // The old vibrating channel goes at the first rest end, whether or not this one posts.
+            context
+                .getSystemService(NotificationManager::class.java)
+                ?.deleteNotificationChannel(RestTimerExpiredReceiver.LEGACY_CHANNEL_ID)
             val settings = settingsRepository.get()
             val plan = restAlertPlan(settings.restTimerNotification, settings.restTimerVibrate)
             if (plan.postNotification && notificationPermitted) postNotification(context)
@@ -63,7 +67,6 @@ class RestTimerExpiryHandler
 
         private fun postNotification(context: Context) {
             val manager = context.getSystemService(NotificationManager::class.java) ?: return
-            manager.deleteNotificationChannel(RestTimerExpiredReceiver.LEGACY_CHANNEL_ID)
             manager.createNotificationChannel(
                 NotificationChannel(
                     RestTimerExpiredReceiver.CHANNEL_ID,
