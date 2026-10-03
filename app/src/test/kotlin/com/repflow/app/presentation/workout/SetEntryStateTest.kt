@@ -108,14 +108,35 @@ class SetEntryStateTest {
     }
 
     @Test
-    fun `Log set needs reps, or seconds for a timed exercise, and weight stays optional`() {
+    fun `Log set needs weight and reps for weight and reps, and an empty weight does not count`() {
         val entry = SetEntryState()
         assertFalse(entry.canLog(ExerciseTrackingType.WEIGHT_AND_REPS))
 
-        entry.enterLoad(BigDecimal("20"))
-        assertFalse(entry.canLog(ExerciseTrackingType.WEIGHT_AND_REPS))
         entry.enterReps(BigDecimal("5"))
+        assertFalse("reps alone are not enough", entry.canLog(ExerciseTrackingType.WEIGHT_AND_REPS))
+
+        entry.enterLoad(BigDecimal("20"))
         assertTrue(entry.canLog(ExerciseTrackingType.WEIGHT_AND_REPS))
+
+        val weightOnly = SetEntryState()
+        weightOnly.enterLoad(BigDecimal("20"))
+        assertFalse("weight alone is not enough", weightOnly.canLog(ExerciseTrackingType.WEIGHT_AND_REPS))
+    }
+
+    @Test
+    fun `0 kg is an explicit weight and counts`() {
+        val entry = SetEntryState()
+        entry.enterLoad(BigDecimal.ZERO)
+        assertFalse(entry.canLog(ExerciseTrackingType.WEIGHT_AND_REPS))
+        entry.enterReps(BigDecimal("7"))
+        assertTrue(entry.canLog(ExerciseTrackingType.WEIGHT_AND_REPS))
+    }
+
+    @Test
+    fun `reps only needs reps and a timed exercise needs seconds, as before`() {
+        val entry = SetEntryState()
+        assertFalse(entry.canLog(ExerciseTrackingType.REPS_ONLY))
+        entry.enterReps(BigDecimal("5"))
         assertTrue(entry.canLog(ExerciseTrackingType.REPS_ONLY))
         assertFalse(entry.canLog(ExerciseTrackingType.DURATION))
         entry.enterSeconds(BigDecimal("45"))

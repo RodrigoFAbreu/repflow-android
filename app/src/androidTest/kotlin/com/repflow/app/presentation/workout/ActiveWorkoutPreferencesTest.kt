@@ -58,7 +58,7 @@ class ActiveWorkoutPreferencesTest {
                     },
                 defaultRestSeconds = exerciseDefaultRestSeconds,
                 // Seeded with reps, so `Log set` is enabled (CP9).
-                seed = SetEntrySeed(reps = java.math.BigDecimal("8")),
+                seed = SetEntrySeed(load = java.math.BigDecimal("80"), reps = java.math.BigDecimal("8")),
             )
         composeRule.setContent {
             RepFlowTheme {

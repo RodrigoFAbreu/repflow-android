@@ -138,12 +138,18 @@ internal class SetEntryState {
         seconds = seed.seconds
     }
 
-    /** Whether `Log set` can succeed for [trackingType]: the value the domain requires is present (weight stays optional). */
+    /**
+     * Whether `Log set` can succeed for [trackingType] (functional review GF-3,
+     * design `8d`): a weight & reps exercise needs **both** a weight and reps -
+     * `0` is an explicit weight and counts, an empty value does not; reps-only
+     * needs reps and a timed exercise needs seconds. It gates logging only:
+     * sets already stored with no weight stay valid.
+     */
     fun canLog(trackingType: ExerciseTrackingType): Boolean =
-        if (trackingType == ExerciseTrackingType.DURATION) {
-            (seconds?.signum() ?: 0) > 0
-        } else {
-            (reps?.signum() ?: 0) > 0
+        when (trackingType) {
+            ExerciseTrackingType.DURATION -> (seconds?.signum() ?: 0) > 0
+            ExerciseTrackingType.REPS_ONLY -> (reps?.signum() ?: 0) > 0
+            ExerciseTrackingType.WEIGHT_AND_REPS -> load != null && (reps?.signum() ?: 0) > 0
         }
 
     fun clearAfterSet() {

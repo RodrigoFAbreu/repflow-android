@@ -344,8 +344,8 @@ class ActiveWorkoutScreenTest {
         var recordedRpe: Double? = null
         var recordedPain: Int? = null
         setContent(
-            // Seeded with reps: `Log set` waits for them (CP9).
-            exercise(ExerciseTrackingType.WEIGHT_AND_REPS, seed = SetEntrySeed(reps = java.math.BigDecimal("8"))),
+            // Seeded with weight and reps: `Log set` waits for both (CP9, GF-3).
+            exercise(ExerciseTrackingType.WEIGHT_AND_REPS, seed = SetEntrySeed(load = java.math.BigDecimal("80"), reps = java.math.BigDecimal("8"))),
             onRecordSet = { _, _, _, _, rpe, _, pain, _ ->
                 recordedRpe = rpe
                 recordedPain = pain

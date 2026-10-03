@@ -169,18 +169,17 @@ class ActiveWorkoutSetEntryTest {
     }
 
     @Test
-    fun anExerciseNeverDoneStaysEmptyAndLogSetWaitsForReps() {
+    fun anExerciseNeverDoneStaysEmptyAndLogSetWaitsForWeightAndReps() {
         start(exercise())
 
         composeRule.onAllNodesWithText(text(R.string.workout_focus_value_empty)).assertCountEquals(2)
         composeRule.onNodeWithText(text(R.string.workout_focus_log_set)).assertIsNotEnabled()
         composeRule.onAllNodesWithText("Last time", substring = true).assertCountEquals(0)
 
-        // The plan's rep range is a caption only; stepping reps once is enough to log.
-        composeRule
-            .onNodeWithContentDescription(text(R.string.workout_focus_more_reps))
-            .performScrollTo()
-            .performClick()
+        // GF-3: reps alone, or weight alone, are not enough; the plan's rep range is a caption only.
+        stepRepsUp()
+        composeRule.onNodeWithText(text(R.string.workout_focus_log_set)).assertIsNotEnabled()
+        stepWeightUp()
         composeRule.onNodeWithText(text(R.string.workout_focus_log_set)).assertIsEnabled()
     }
 
