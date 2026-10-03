@@ -39,7 +39,9 @@ import com.repflow.app.infrastructure.database.workout.WorkoutSetEntity
  * `workout_sessions.invalidated_at`, `training_plans.archived_at`) via
  * [MIGRATION_6_7]. Version 8 adds the single-row `settings` table, seeded
  * with today's defaults, via [MIGRATION_7_8] (remediation-1 CP14); a fresh
- * install seeds the same row through [SETTINGS_SEED_CALLBACK].
+ * install seeds the same row through [SETTINGS_SEED_CALLBACK]. Version 9 adds
+ * four additive columns to `settings` (`theme`, `default_rest_seconds`,
+ * `extra_set_fields`, `last_backup_at`) via [MIGRATION_8_9].
  */
 @Database(
     entities = [
@@ -55,11 +57,16 @@ import com.repflow.app.infrastructure.database.workout.WorkoutSetEntity
         ProgressionRecommendationEntity::class,
         SettingsEntity::class,
     ],
-    version = 8,
+    version = RepFlowDatabase.VERSION,
     exportSchema = true,
 )
 @Suppress("TooManyFunctions") // one accessor per DAO, as Room requires
 abstract class RepFlowDatabase : RoomDatabase() {
+    companion object {
+        /** The schema version; `@Database` is binary-retention, so tests read it here. */
+        const val VERSION = 9
+    }
+
     abstract fun exerciseDao(): ExerciseDao
 
     abstract fun trainingPlanDao(): TrainingPlanDao

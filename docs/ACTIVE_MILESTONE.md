@@ -135,7 +135,35 @@ registry `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediati
   testDebugUnitTest (678 tests, 0 failures), assembleDebug,
   assembleDebugAndroidTest green. AVD (`emulator-5554`, stopped afterwards): the
   five classes above 86/86 and `MainActivityNavHostSmokeTest` 9/9 pass.
-- **Next: CP5** (Settings schema 8 to 9: theme, default rest, extra set fields).
+- **CP5 (Settings schema 8 to 9) complete, 2026-10-03.** The only schema change
+  in this item. Room 8 to 9: explicit `MIGRATION_8_9` (four additive
+  `ALTER TABLE settings ADD COLUMN`: `theme TEXT NOT NULL DEFAULT 'SYSTEM'`,
+  `default_rest_seconds INTEGER NOT NULL DEFAULT 90`, `extra_set_fields TEXT NOT
+  NULL DEFAULT 'COLLAPSED'`, nullable `last_backup_at INTEGER`); exported
+  `9.json`; `RepFlowDatabase.VERSION = 9` used by `@Database`; one shared
+  `ALL_MIGRATIONS` in `RepFlowMigrations.kt`; `DatabaseModule.buildRepFlowDatabase(
+  context, name)` (no destructive fallback) used by the Hilt provider.
+  `INSERT_DEFAULT_SETTINGS_ROW_SQL` is untouched; the new columns take their DDL
+  defaults on the migration and fresh-install paths. `ThemeMode` and
+  `ExtraSetFields` (`application/settings`, stable `storageValue` strings, unknown
+  string reads the default), `AppSettings` (+`theme`, `defaultRestSeconds`,
+  `extraSetFields`, `lastBackupAt: Instant?`), `SettingsEntity` and
+  `LocalSettingsRepository` mapping. Backup snapshot/mapper unchanged; settings
+  stay outside the backup. Nothing reads the new fields yet (CP6/CP7/CP8). Tests
+  (instrumented, AVD): `RepFlowDatabaseMigrationTest` (8 to 9 keeps the switches
+  and gives the defaults; 7 to 9; full 1 to 9 chain through `ALL_MIGRATIONS`;
+  contents test against `RepFlowDatabase.VERSION`; production-registration test
+  opening a real v8 file `migration-8-9-registration-test`, seeded with
+  `keep_screen_awake = 1`, through `buildRepFlowDatabase` on `targetContext`),
+  `SettingsPersistenceTest` (fresh-install DDL defaults, round trips and stable
+  strings, unknown enum string, absent row, erase/restore leave the new columns
+  because `customised` now uses non-default values for all of them).
+  `LocalBackupRepositoryAtomicityTest` needed no change (it never touches
+  settings). No design artboard read: CP5 builds no screen. Gate:
+  spotlessCheck, detekt, lintDebug, testDebugUnitTest (678 tests, 0 failures),
+  assembleDebugAndroidTest green. AVD (`emulator-5580`, stopped afterwards): the
+  three classes above, 30 tests, 0 failures.
+- **Next: CP6** (apply the new preferences: theme, default rest, extra set fields).
 
 ---
 

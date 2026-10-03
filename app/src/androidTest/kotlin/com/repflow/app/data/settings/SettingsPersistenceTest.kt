@@ -6,6 +6,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.application.backup.EraseAllData
 import com.repflow.app.application.backup.RestoreBackup
 import com.repflow.app.application.settings.AppSettings
+import com.repflow.app.application.settings.ExtraSetFields
+import com.repflow.app.application.settings.ThemeMode
 import com.repflow.app.data.backup.LocalBackupRepository
 import com.repflow.app.data.backup.LocalTrainingDataRepository
 import com.repflow.app.domain.common.DomainResult
@@ -20,6 +22,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.time.Instant
 
 /**
  * Real-SQLite coverage for remediation-1 CP14's preferences row and the two
@@ -47,6 +50,10 @@ class SettingsPersistenceTest {
             restTimerNotification = true,
             keepScreenAwake = true,
             confirmBeforeFinishing = false,
+            theme = ThemeMode.DARK,
+            defaultRestSeconds = 150,
+            extraSetFields = ExtraSetFields.OFF,
+            lastBackupAt = Instant.ofEpochMilli(1_700_000_000_000L),
         )
 
     @Before
@@ -69,6 +76,53 @@ class SettingsPersistenceTest {
     fun aFreshDatabaseHasThePinnedRowAtTheDefaults() =
         runBlocking {
             assertNotNull("the seed callback must create the row", database.settingsDao().find())
+            assertEquals(AppSettings.DEFAULT, settings.get())
+        }
+
+    @Test
+    fun aFreshDatabaseHasTheNewColumnsAtTheirDdlDefaults() {
+        val row = checkNotNull(runBlocking { database.settingsDao().find() })
+
+        assertEquals("SYSTEM", row.theme)
+        assertEquals(90, row.defaultRestSeconds)
+        assertEquals("COLLAPSED", row.extraSetFields)
+        assertEquals(null, row.lastBackupAt)
+    }
+
+    @Test
+    fun everyNewFieldRoundTripsAndIsStoredAsAStableString() =
+        runBlocking {
+            ThemeMode.entries.forEach { mode ->
+                settings.update { it.copy(theme = mode) }
+                assertEquals(mode, settings.get().theme)
+                assertEquals(mode.name, database.settingsDao().find()?.theme)
+            }
+            ExtraSetFields.entries.forEach { mode ->
+                settings.update { it.copy(extraSetFields = mode) }
+                assertEquals(mode, settings.get().extraSetFields)
+                assertEquals(mode.name, database.settingsDao().find()?.extraSetFields)
+            }
+            settings.update { it.copy(defaultRestSeconds = 1800, lastBackupAt = Instant.ofEpochMilli(42)) }
+            assertEquals(1800, settings.get().defaultRestSeconds)
+            assertEquals(Instant.ofEpochMilli(42), settings.get().lastBackupAt)
+            settings.update { it.copy(lastBackupAt = null) }
+            assertEquals(null, settings.get().lastBackupAt)
+        }
+
+    @Test
+    fun anUnknownStoredEnumStringReadsTheDefaultInsteadOfThrowing() =
+        runBlocking {
+            database.openHelper.writableDatabase.execSQL("UPDATE settings SET theme = 'SEPIA', extra_set_fields = 'bogus'")
+
+            assertEquals(ThemeMode.SYSTEM, settings.get().theme)
+            assertEquals(ExtraSetFields.COLLAPSED, settings.get().extraSetFields)
+        }
+
+    @Test
+    fun anAbsentRowReadsDefault() =
+        runBlocking {
+            database.openHelper.writableDatabase.execSQL("DELETE FROM settings")
+
             assertEquals(AppSettings.DEFAULT, settings.get())
         }
 

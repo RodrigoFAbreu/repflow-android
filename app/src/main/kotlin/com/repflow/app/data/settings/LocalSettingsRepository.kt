@@ -6,14 +6,17 @@ import android.database.sqlite.SQLiteException
 import android.database.sqlite.SQLiteFullException
 import androidx.room.withTransaction
 import com.repflow.app.application.settings.AppSettings
+import com.repflow.app.application.settings.ExtraSetFields
 import com.repflow.app.application.settings.SettingsPersistenceError
 import com.repflow.app.application.settings.SettingsRepository
+import com.repflow.app.application.settings.ThemeMode
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.infrastructure.database.RepFlowDatabase
 import com.repflow.app.infrastructure.database.settings.SettingsEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import java.time.Instant
 import javax.inject.Inject
 
 /**
@@ -62,6 +65,10 @@ private fun SettingsEntity.toSettings(): AppSettings =
         restTimerNotification = restTimerNotification,
         keepScreenAwake = keepScreenAwake,
         confirmBeforeFinishing = confirmBeforeFinishing,
+        theme = ThemeMode.fromStorage(theme),
+        defaultRestSeconds = defaultRestSeconds,
+        extraSetFields = ExtraSetFields.fromStorage(extraSetFields),
+        lastBackupAt = lastBackupAt?.let(Instant::ofEpochMilli),
     )
 
 private fun AppSettings.toEntity(): SettingsEntity =
@@ -71,4 +78,8 @@ private fun AppSettings.toEntity(): SettingsEntity =
         restTimerNotification = restTimerNotification,
         keepScreenAwake = keepScreenAwake,
         confirmBeforeFinishing = confirmBeforeFinishing,
+        theme = theme.storageValue,
+        defaultRestSeconds = defaultRestSeconds,
+        extraSetFields = extraSetFields.storageValue,
+        lastBackupAt = lastBackupAt?.toEpochMilli(),
     )

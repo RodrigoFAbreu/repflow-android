@@ -2,13 +2,7 @@ package com.repflow.app.infrastructure.di
 
 import android.content.Context
 import androidx.room.Room
-import com.repflow.app.infrastructure.database.MIGRATION_1_2
-import com.repflow.app.infrastructure.database.MIGRATION_2_3
-import com.repflow.app.infrastructure.database.MIGRATION_3_4
-import com.repflow.app.infrastructure.database.MIGRATION_4_5
-import com.repflow.app.infrastructure.database.MIGRATION_5_6
-import com.repflow.app.infrastructure.database.MIGRATION_6_7
-import com.repflow.app.infrastructure.database.MIGRATION_7_8
+import com.repflow.app.infrastructure.database.ALL_MIGRATIONS
 import com.repflow.app.infrastructure.database.RepFlowDatabase
 import com.repflow.app.infrastructure.database.SETTINGS_SEED_CALLBACK
 import com.repflow.app.infrastructure.database.exercise.ExerciseDao
@@ -43,18 +37,22 @@ object DatabaseModule {
     @Singleton
     fun provideRepFlowDatabase(
         @ApplicationContext context: Context,
+    ): RepFlowDatabase = buildRepFlowDatabase(context, DATABASE_NAME)
+
+    /**
+     * The production builder: every migration in [ALL_MIGRATIONS] plus the
+     * settings seed, no destructive fallback. Extracted so a test can open a
+     * real older database through exactly this registration.
+     */
+    @Suppress("SpreadOperator") // once, at startup, over a nine-element array
+    fun buildRepFlowDatabase(
+        context: Context,
+        name: String,
     ): RepFlowDatabase =
         Room
-            .databaseBuilder(context, RepFlowDatabase::class.java, DATABASE_NAME)
-            .addMigrations(
-                MIGRATION_1_2,
-                MIGRATION_2_3,
-                MIGRATION_3_4,
-                MIGRATION_4_5,
-                MIGRATION_5_6,
-                MIGRATION_6_7,
-                MIGRATION_7_8,
-            ).addCallback(SETTINGS_SEED_CALLBACK)
+            .databaseBuilder(context, RepFlowDatabase::class.java, name)
+            .addMigrations(*ALL_MIGRATIONS)
+            .addCallback(SETTINGS_SEED_CALLBACK)
             .build()
 
     @Provides

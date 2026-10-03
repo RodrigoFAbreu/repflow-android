@@ -388,6 +388,41 @@ val MIGRATION_7_8: Migration =
     }
 
 /**
+ * The real, additive 8-to-9 migration (remediation-1-remediation-1 CP5): four
+ * `ALTER TABLE settings ADD COLUMN` statements, each with a default (or
+ * nullable) so the pinned row stays valid and no row is rewritten. Enum values
+ * are stable strings. [INSERT_DEFAULT_SETTINGS_ROW_SQL] is deliberately
+ * unchanged: `MIGRATION_7_8` runs it against the v8-shaped table.
+ */
+@Suppress("MagicNumber")
+val MIGRATION_8_9: Migration =
+    object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `settings` ADD COLUMN `theme` TEXT NOT NULL DEFAULT 'SYSTEM'")
+            db.execSQL("ALTER TABLE `settings` ADD COLUMN `default_rest_seconds` INTEGER NOT NULL DEFAULT 90")
+            db.execSQL("ALTER TABLE `settings` ADD COLUMN `extra_set_fields` TEXT NOT NULL DEFAULT 'COLLAPSED'")
+            db.execSQL("ALTER TABLE `settings` ADD COLUMN `last_backup_at` INTEGER")
+        }
+    }
+
+/**
+ * Every migration, in order, shared by the production database builder and the
+ * tests. A test pins it to [RepFlowDatabase.VERSION], so a future migration
+ * cannot be forgotten.
+ */
+val ALL_MIGRATIONS: Array<Migration> =
+    arrayOf(
+        MIGRATION_1_2,
+        MIGRATION_2_3,
+        MIGRATION_3_4,
+        MIGRATION_4_5,
+        MIGRATION_5_6,
+        MIGRATION_6_7,
+        MIGRATION_7_8,
+        MIGRATION_8_9,
+    )
+
+/**
  * Seeds the same default `settings` row on a fresh install, where Room creates
  * the schema at the current version and no migration runs - so every install,
  * upgraded or new, has the pinned row.
