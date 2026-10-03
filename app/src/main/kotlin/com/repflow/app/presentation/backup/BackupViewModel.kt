@@ -12,6 +12,7 @@ import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.presentation.workout.RestNotificationCanceller
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -105,7 +106,9 @@ class BackupViewModel
                 // NonCancellable: leaving the Backup route clears this ViewModel and cancels
                 // viewModelScope, which must not drop a stamp for a file that is already saved.
                 // The write is one short Room update, so it is not a leak.
-                viewModelScope.launch {
+                // UNDISPATCHED: the body must start before any cancellation can be observed, so a
+                // scope cancelled before a queued dispatch still enters the NonCancellable block.
+                viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
                     withContext(NonCancellable) { settingsRepository.update { it.copy(lastBackupAt = clock.now()) } }
                 }
             }

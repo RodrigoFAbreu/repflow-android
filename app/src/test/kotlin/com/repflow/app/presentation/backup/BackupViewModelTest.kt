@@ -26,6 +26,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -281,6 +282,24 @@ class BackupViewModelTest {
 
             assertEquals(Instant.parse("2026-10-03T12:00:00Z"), settingsRepository.get().lastBackupAt)
         }
+
+    @Test
+    fun `a last_backup_at write still lands when the scope is cancelled before a queued dispatch runs`() {
+        // A queued dispatcher (unlike the eager one set up for the other tests) holds the launched body
+        // until pending tasks are run, so this covers cancellation before the coroutine first executes.
+        val dispatcher = StandardTestDispatcher()
+        Dispatchers.setMain(dispatcher)
+        runTest(dispatcher) {
+            val model =
+                BackupViewModel(exportBackup, restoreBackup, exportWorkoutHistoryCsv, restNotificationCanceller, settingsRepository, clock)
+
+            model.onExportWriteSucceeded(BackupExportKind.BACKUP)
+            model.viewModelScope.cancel()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(Instant.parse("2026-10-03T12:00:00Z"), settingsRepository.get().lastBackupAt)
+        }
+    }
 
     @Test
     fun `a failed last_backup_at write does not fail the export`() =
