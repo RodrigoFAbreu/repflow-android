@@ -34,6 +34,7 @@ class WorkoutFocusModelTest {
         sets: List<ActiveSetUi> = emptyList(),
         target: PlannedTargetUi? = null,
         defaultLoadIncrement: BigDecimal? = null,
+        defaultRestSeconds: Int? = null,
     ) = ActiveExerciseUi(
         id = WorkoutExerciseId(id),
         name = id,
@@ -41,6 +42,7 @@ class WorkoutFocusModelTest {
         sets = sets,
         plannedTarget = target,
         defaultLoadIncrement = defaultLoadIncrement,
+        defaultRestSeconds = defaultRestSeconds,
     )
 
     private fun target(
@@ -125,9 +127,19 @@ class WorkoutFocusModelTest {
     }
 
     @Test
-    fun theWarmupHintStatesThePlannedRestElseTheDefault() {
-        assertEquals(45, exercise("a", target = target(working = 3, rest = 45)).restSecondsAfterSet())
-        assertEquals(DEFAULT_REST_TIMER_SECONDS, exercise("b").restSecondsAfterSet())
+    fun theWarmupHintStatesThePlannedRestElseTheExercisesDefaultElseTheAppDefault() {
+        assertEquals(45, exercise("a", target = target(working = 3, rest = 45), defaultRestSeconds = 150).restSecondsAfterSet(120))
+        assertEquals(150, exercise("b", target = target(working = 3), defaultRestSeconds = 150).restSecondsAfterSet(120))
+        assertEquals(150, exercise("adHoc", defaultRestSeconds = 150).restSecondsAfterSet(120))
+        assertEquals(120, exercise("c").restSecondsAfterSet(120))
+        assertEquals(DEFAULT_REST_TIMER_SECONDS, exercise("d").restSecondsAfterSet(DEFAULT_REST_TIMER_SECONDS))
+    }
+
+    @Test
+    fun theRestPrecedenceIsPlanThenExerciseThenApp() {
+        assertEquals(30, resolveRestSeconds(30, 60, 90))
+        assertEquals(60, resolveRestSeconds(null, 60, 90))
+        assertEquals(90, resolveRestSeconds(null, null, 90))
     }
 
     @Test

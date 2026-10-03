@@ -1,6 +1,5 @@
 package com.repflow.app.presentation.workout
 
-import com.repflow.app.application.workout.DEFAULT_REST_TIMER_SECONDS
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import java.math.BigDecimal
 
@@ -99,11 +98,25 @@ internal fun nextUnfinishedExercise(
 }
 
 /**
- * The rest that follows a set of this exercise, for the warm-up hint: the
- * plan's rest, else the app's default - exactly the rule
- * `ActiveWorkoutViewModel.onRecordSet` applies, warm-up or not (`D63`).
+ * The one rest-precedence rule (Q9): the plan row's rest if set, else the
+ * exercise's own `Default rest`, else the app-wide `Default rest`. Both the
+ * warm-up hint and `ActiveWorkoutViewModel.onRecordSet` resolve through it, so
+ * the rest shown and the rest started cannot disagree.
  */
-internal fun ActiveExerciseUi.restSecondsAfterSet(): Int = plannedTarget?.restSeconds ?: DEFAULT_REST_TIMER_SECONDS
+internal fun resolveRestSeconds(
+    plannedRestSeconds: Int?,
+    exerciseDefaultRestSeconds: Int?,
+    appDefaultRestSeconds: Int,
+): Int = plannedRestSeconds ?: exerciseDefaultRestSeconds ?: appDefaultRestSeconds
+
+/**
+ * The rest that follows a set of this exercise, for the warm-up hint: the
+ * plan's rest, else the exercise's `Default rest`, else [appDefaultRestSeconds]
+ * - exactly the rule `ActiveWorkoutViewModel.onRecordSet` applies, warm-up or
+ * not (`D63`, amended by Q9).
+ */
+internal fun ActiveExerciseUi.restSecondsAfterSet(appDefaultRestSeconds: Int): Int =
+    resolveRestSeconds(plannedTarget?.restSeconds, defaultRestSeconds, appDefaultRestSeconds)
 
 /** The weight stepper's step: the exercise's load increment, else the design's own 2.5 kg (`D61`). */
 internal fun ActiveExerciseUi.loadStep(): BigDecimal = defaultLoadIncrement ?: DEFAULT_LOAD_STEP_KG

@@ -7,6 +7,7 @@ import com.repflow.app.application.exercise.ObserveExercises
 import com.repflow.app.application.progression.ProgressionRecommendationRepository
 import com.repflow.app.application.recovery.GetWorkoutDayContext
 import com.repflow.app.application.settings.AppSettings
+import com.repflow.app.application.settings.ExtraSetFields
 import com.repflow.app.application.settings.SettingsRepository
 import com.repflow.app.application.trainingplan.ObserveTrainingPlans
 import com.repflow.app.application.trainingplan.TrainingPlanOverview
@@ -17,7 +18,6 @@ import com.repflow.app.application.workout.AddWorkoutExercise
 import com.repflow.app.application.workout.AddWorkoutExerciseCommand
 import com.repflow.app.application.workout.AdjustRestTimer
 import com.repflow.app.application.workout.CompleteWorkoutSession
-import com.repflow.app.application.workout.DEFAULT_REST_TIMER_SECONDS
 import com.repflow.app.application.workout.EditLastWorkoutSet
 import com.repflow.app.application.workout.EditLastWorkoutSetCommand
 import com.repflow.app.application.workout.ObserveActiveWorkoutSession
@@ -193,8 +193,8 @@ class ActiveWorkoutViewModel
                 }
 
         private val content =
-            combine(observeActiveWorkoutSession(), planLabels, exerciseDetails) { session, labels, details ->
-                toContent(session, session?.trainingPlanVersionId?.let { labels[it]?.planName }, details)
+            combine(observeActiveWorkoutSession(), planLabels, exerciseDetails, _settings) { session, labels, details, settings ->
+                toContent(session, session?.trainingPlanVersionId?.let { labels[it]?.planName }, details, settings)
             }.onStart { emit(ActiveWorkoutContent.Loading) }
                 .catch { failure ->
                     if (failure is CancellationException) throw failure
@@ -298,7 +298,7 @@ class ActiveWorkoutViewModel
             techniqueQuality: Int? = null,
         ) {
             val sessionId = activeSessionId() ?: return
-            val restSeconds = plannedRestSecondsFor(exerciseId) ?: DEFAULT_REST_TIMER_SECONDS
+            val exerciseUi = activeExercise(exerciseId)
             launchAction {
                 val result =
                     recordWorkoutSet(
@@ -315,8 +315,18 @@ class ActiveWorkoutViewModel
                         ),
                     )
                 // Read when the set is logged, so a switch changed mid-workout applies to the next set.
-                if (result is DomainResult.Success && settingsRepository.get().restTimerAutoStart) {
-                    startRestTimer(sessionId, restSeconds)
+                if (result is DomainResult.Success) {
+                    val settings = settingsRepository.get()
+                    if (settings.restTimerAutoStart) {
+                        // Q9: the plan row's rest, else the exercise's own `Default rest`, else the app default.
+                        val restSeconds =
+                            resolveRestSeconds(
+                                exerciseUi?.plannedTarget?.restSeconds,
+                                exerciseUi?.defaultRestSeconds,
+                                settings.defaultRestSeconds,
+                            )
+                        startRestTimer(sessionId, restSeconds)
+                    }
                 }
                 result
             }
@@ -450,6 +460,7 @@ class ActiveWorkoutViewModel
             session: WorkoutSession?,
             planName: String?,
             details: Map<ExerciseId, Exercise>,
+            settings: AppSettings?,
         ): ActiveWorkoutContent =
             if (session == null) {
                 ActiveWorkoutContent.NoActiveSession
@@ -460,6 +471,8 @@ class ActiveWorkoutViewModel
                     restTimer = session.restTimer?.toUi(),
                     exercises = session.exercises.map { exercise -> toExerciseUi(exercise, details[exercise.exerciseId]) },
                     planName = planName,
+                    appDefaultRestSeconds = settings?.defaultRestSeconds ?: AppSettings.DEFAULT_REST_SECONDS,
+                    extraSetFields = settings?.extraSetFields ?: ExtraSetFields.DEFAULT,
                 )
             }
 
@@ -492,15 +505,14 @@ class ActiveWorkoutViewModel
                 exerciseId = exercise.exerciseId,
                 defaultLoadIncrement = detail?.defaultLoadIncrement?.let { BigDecimal.valueOf(it.grams, GRAMS_TO_KG_SCALE) },
                 instructions = detail?.instructions?.value,
+                defaultRestSeconds = detail?.defaultRestDuration?.seconds?.toInt(),
             )
 
-        /** The exercise's planned rest, if it was seeded from a plan target; `null` for an ad-hoc exercise (Milestone 8, implementation-review finding #2). */
-        private fun plannedRestSecondsFor(exerciseId: WorkoutExerciseId): Int? =
+        /** The workout exercise as the screen shows it: its plan row's rest (Milestone 8, implementation-review finding #2) and its own `Default rest` (Q9) come from it. */
+        private fun activeExercise(exerciseId: WorkoutExerciseId): ActiveExerciseUi? =
             (uiState.value.content as? ActiveWorkoutContent.Active)
                 ?.exercises
                 ?.find { it.id == exerciseId }
-                ?.plannedTarget
-                ?.restSeconds
 
         private companion object {
             const val STOP_TIMEOUT_MILLIS = 5_000L

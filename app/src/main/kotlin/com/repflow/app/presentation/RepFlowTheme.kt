@@ -4,6 +4,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import com.repflow.app.application.settings.ThemeMode
 import com.repflow.app.presentation.designsystem.LocalRepFlowExtraColors
 import com.repflow.app.presentation.designsystem.LocalRepFlowSpacingScale
 import com.repflow.app.presentation.designsystem.RepFlowDarkColorScheme
@@ -32,10 +33,16 @@ import com.repflow.app.presentation.designsystem.repFlowExtraColors
  * scheme therefore cannot end up with light colours around a dark hairline.
  * They are provided inside `MaterialTheme` so that binding is visible at the
  * call site.
+ *
+ * [themeMode] is the stored `Theme` preference (`System` / `Light` / `Dark`);
+ * `System` follows the device, the other two override it ([isDarkTheme]).
  */
 @Composable
-fun RepFlowTheme(content: @Composable () -> Unit) {
-    val colorScheme = if (isSystemInDarkTheme()) RepFlowDarkColorScheme else RepFlowLightColorScheme
+fun RepFlowTheme(
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
+    content: @Composable () -> Unit,
+) {
+    val colorScheme = if (isDarkTheme(themeMode, isSystemInDarkTheme())) RepFlowDarkColorScheme else RepFlowLightColorScheme
     MaterialTheme(
         colorScheme = colorScheme,
         typography = RepFlowTypography,
@@ -48,3 +55,14 @@ fun RepFlowTheme(content: @Composable () -> Unit) {
         )
     }
 }
+
+/** Whether [mode] resolves to the dark scheme, given whether the system is dark: `System` follows it, `Light` and `Dark` ignore it. */
+internal fun isDarkTheme(
+    mode: ThemeMode,
+    systemDark: Boolean,
+): Boolean =
+    when (mode) {
+        ThemeMode.SYSTEM -> systemDark
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+    }

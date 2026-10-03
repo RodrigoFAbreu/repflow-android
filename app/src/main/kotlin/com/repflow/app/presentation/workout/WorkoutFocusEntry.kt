@@ -336,6 +336,9 @@ internal fun FocusFieldLabel(
  * (or "RPE, pain, technique"), a caret; open, it reveals the three scale rows
  * and the line saying they apply to the next set only.
  *
+ * [showHeader] `false` (`Extra set fields` set to `Always shown`) draws the rows
+ * alone, with no disclosure to toggle; pass [expanded] `true` with it.
+ *
  * Collapsing only hides the rows - the values live in [SetEntryState] and are
  * still submitted, then cleared once the set is logged, so nothing is carried
  * into the next set unseen.
@@ -350,6 +353,7 @@ internal fun SetDetailSection(
     entry: SetEntryState,
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
+    showHeader: Boolean = true,
 ) {
     val stateLabel =
         stringResource(
@@ -365,39 +369,41 @@ internal fun SetDetailSection(
         summaryParts.takeIf { it.isNotEmpty() }?.joinToString(separator = " · ")
             ?: stringResource(R.string.workout_active_set_detail_toggle)
     Column(verticalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapLg)) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = DisclosureMinHeight)
-                    .clip(DisclosureShape)
-                    .border(BorderStroke(1.dp, RepFlowColor.hairline), DisclosureShape)
-                    .clickable(role = Role.Button) { onExpandedChange(!expanded) }
-                    .semantics { stateDescription = stateLabel }
-                    .padding(horizontal = RepFlowSpacing.gapLg),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapMd),
-        ) {
-            Icon(
-                painter = painterResource(RepFlowIcons.sliders),
-                contentDescription = null,
-                tint = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
-                modifier = Modifier.size(DisclosureIconSize),
-            )
-            Text(
-                text = summary,
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = DisclosureFontSize, fontFeatureSettings = "tnum"),
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            Icon(
-                painter = painterResource(if (expanded) RepFlowIcons.caretUp else RepFlowIcons.caretDown),
-                contentDescription = null,
-                tint = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
-                modifier = Modifier.size(DisclosureCaretSize),
-            )
+        if (showHeader) {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = DisclosureMinHeight)
+                        .clip(DisclosureShape)
+                        .border(BorderStroke(1.dp, RepFlowColor.hairline), DisclosureShape)
+                        .clickable(role = Role.Button) { onExpandedChange(!expanded) }
+                        .semantics { stateDescription = stateLabel }
+                        .padding(horizontal = RepFlowSpacing.gapLg),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapMd),
+            ) {
+                Icon(
+                    painter = painterResource(RepFlowIcons.sliders),
+                    contentDescription = null,
+                    tint = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
+                    modifier = Modifier.size(DisclosureIconSize),
+                )
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = DisclosureFontSize, fontFeatureSettings = "tnum"),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(
+                    painter = painterResource(if (expanded) RepFlowIcons.caretUp else RepFlowIcons.caretDown),
+                    contentDescription = null,
+                    tint = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
+                    modifier = Modifier.size(DisclosureCaretSize),
+                )
+            }
         }
         if (expanded) {
             RpeScaleRow(selected = entry.rpe, onSelect = { entry.rpe = toggled(entry.rpe, it) })

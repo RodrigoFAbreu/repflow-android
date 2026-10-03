@@ -48,6 +48,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.repflow.app.R
+import com.repflow.app.application.settings.ExtraSetFields
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.workout.WorkoutExerciseId
@@ -101,6 +102,7 @@ internal fun WorkoutFocus(
     var detailExpanded by rememberSaveable(exercise.id.value) { mutableStateOf(false) }
     var correcting by rememberSaveable(exercise.id.value) { mutableStateOf(false) }
     val header = focusHeader(content.exercises, exercise)
+    val extraFieldsOn = content.extraSetFields != ExtraSetFields.OFF
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         FocusTopBar(startedAt = content.startedAt, onBackToBoard = onBackToBoard, onFinishClick = onFinishClick)
@@ -142,12 +144,24 @@ internal fun WorkoutFocus(
                 repRange = exercise.plannedTarget?.repRange,
                 durationRange = exercise.plannedTarget?.durationRangeSeconds,
             )
-            SetDetailSection(entry = entry, expanded = detailExpanded, onExpandedChange = { detailExpanded = it })
+            when (content.extraSetFields) {
+                ExtraSetFields.COLLAPSED -> {
+                    SetDetailSection(entry = entry, expanded = detailExpanded, onExpandedChange = { detailExpanded = it })
+                }
+
+                ExtraSetFields.ALWAYS_SHOWN -> {
+                    SetDetailSection(entry = entry, expanded = true, onExpandedChange = {}, showHeader = false)
+                }
+
+                ExtraSetFields.OFF -> {
+                    Unit
+                }
+            }
             TypeNote(exercise.trackingType)
             WarmupChipRow(
                 isWarmup = entry.isWarmup,
                 onWarmupChange = { entry.isWarmup = it },
-                restSeconds = exercise.restSecondsAfterSet(),
+                restSeconds = exercise.restSecondsAfterSet(content.appDefaultRestSeconds),
             )
         }
         restStrip()
@@ -159,10 +173,11 @@ internal fun WorkoutFocus(
                     entry.load?.toDouble(),
                     entry.reps?.toInt(),
                     entry.seconds?.toInt(),
-                    entry.rpe?.toDouble(),
+                    // `Off` hides the section, so nothing entered while it was shown is submitted.
+                    entry.rpe?.toDouble().takeIf { extraFieldsOn },
                     entry.isWarmup,
-                    entry.pain,
-                    entry.technique,
+                    entry.pain.takeIf { extraFieldsOn },
+                    entry.technique.takeIf { extraFieldsOn },
                 )
                 // Cleared immediately (Milestone 8, implementation-review finding #3):
                 // each set starts fresh rather than risking an accidental duplicate

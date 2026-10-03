@@ -163,7 +163,44 @@ registry `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediati
   spotlessCheck, detekt, lintDebug, testDebugUnitTest (678 tests, 0 failures),
   assembleDebugAndroidTest green. AVD (`emulator-5580`, stopped afterwards): the
   three classes above, 30 tests, 0 failures.
-- **Next: CP6** (apply the new preferences: theme, default rest, extra set fields).
+- **CP6 (apply the new preferences) complete, 2026-10-03.** Presentation only;
+  no schema. **Theme:** `RepFlowTheme(themeMode)` picks the scheme through the
+  pure `isDarkTheme(mode, systemDark)`; `MainActivity` observes
+  `SettingsRepository` (injected) and re-applies `enableEdgeToEdge` with an
+  explicit `SystemBarStyle` (transparent status bar, the framework's own
+  navigation scrims) keyed on the applied scheme. Until the stored mode loads
+  the first frame follows the system: the accepted, registered cold-start flash
+  (CP10 row; no splash dependency). **Default rest (Q9):** one shared
+  `resolveRestSeconds(plan, exercise, app)` (`WorkoutFocusModel.kt`); both
+  `ActiveWorkoutViewModel.onRecordSet` (app default read from settings when the
+  set is logged, so a change applies to the next set) and the warm-up hint
+  (`restSecondsAfterSet(appDefault)`, now taking the app default) use it.
+  `ActiveExerciseUi.defaultRestSeconds` carries the exercise's own `Default
+  rest`; `ActiveWorkoutContent.Active` carries `appDefaultRestSeconds` and
+  `extraSetFields`, put there by the ViewModel from the settings it observes.
+  An ad-hoc or mid-workout exercise therefore honours its own `Default rest`;
+  `DEFAULT_REST_TIMER_SECONDS` remains only as the setting's default and
+  `StartRestTimer`'s own default parameter. **Extra set fields (Q2):**
+  `COLLAPSED` the existing disclosure, `ALWAYS_SHOWN` the three rows with no
+  disclosure (`SetDetailSection(showHeader = false)`), `OFF` nothing drawn and
+  no RPE/pain/technique submitted; the warm-up chip and the corrections sheet
+  are unchanged. Tests: JVM `ActiveWorkoutRestPrecedenceTest` (new; ad-hoc with
+  and without an exercise rest, a changed app default applies to the next set,
+  the UI state carries the three values), `WorkoutFocusModelTest` (the hint's
+  three-way precedence; the shared resolver), `ThemeSelectionTest`; the plan-row
+  over app default case was already `ActiveWorkoutViewModelTest`'s. Instrumented
+  `ActiveWorkoutPreferencesTest` (new: three modes, hint precedence) and
+  `MainActivityThemeSmokeTest` (new: boots in Dark, Light and System; status-bar
+  icon appearance follows the applied scheme, theme restored to System). No
+  design artboard was read (CP6 builds no screen; design turn 7 does not touch
+  it). Gate: spotlessCheck, detekt, lintDebug (0 errors, 21 warnings, 1 hint),
+  testDebugUnitTest (684 tests, 109 classes, 0 failures), assembleDebug,
+  assembleDebugAndroidTest green. AVD (`emulator-5554`, stopped afterwards):
+  `ActiveWorkoutPreferencesTest`, `MainActivityThemeSmokeTest`,
+  `ActiveWorkoutScreenTest`, `MainActivityNavHostSmokeTest`: 50 tests, 0
+  failures. Not built, by the plan: the Settings controls that change these
+  values are CP7's.
+- **Next: CP7** (B1 Settings screen to `5c`, and the Archived screen).
 
 ---
 

@@ -1,5 +1,7 @@
 package com.repflow.app.presentation.workout
 
+import com.repflow.app.application.settings.AppSettings
+import com.repflow.app.application.settings.ExtraSetFields
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
@@ -56,6 +58,15 @@ sealed interface ActiveWorkoutContent {
         val restTimer: RestTimerUi? = null,
         /** The plan the session was started from, for the board's title; `null` for an ad-hoc session (`Untitled workout`) or a label that no longer resolves. Remediation-1 CP7. */
         val planName: String? = null,
+        /**
+         * The app-wide `Default rest` in seconds (remediation-1-remediation-1 CP6,
+         * Q9): the last link of the rest precedence, put here by the ViewModel
+         * from the settings it observes so the displayed and the started rest
+         * resolve from one value.
+         */
+        val appDefaultRestSeconds: Int = AppSettings.DEFAULT_REST_SECONDS,
+        /** How focus mode shows RPE, pain and technique (`Extra set fields`, Q2). */
+        val extraSetFields: ExtraSetFields = ExtraSetFields.DEFAULT,
     ) : ActiveWorkoutContent
 
     data class ObservationFailed(
@@ -83,6 +94,8 @@ data class ActiveExerciseUi(
     val defaultLoadIncrement: BigDecimal? = null,
     /** [com.repflow.app.domain.exercise.Exercise.instructions], shown as focus mode's technique notes; `null` when there are none (remediation-1 CP8). */
     val instructions: String? = null,
+    /** [com.repflow.app.domain.exercise.Exercise.defaultRestDuration] in seconds: the rest precedence's middle link (Q9); `null` when the exercise sets none. */
+    val defaultRestSeconds: Int? = null,
 )
 
 /**
