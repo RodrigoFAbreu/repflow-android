@@ -1,5 +1,32 @@
 # Active Milestone
 
+## `repflow-redesign-visual-foundation` — Functional review round 2: findings applied (2026-10-03, implementation revision 7 pending review)
+
+Round 2 of the parent's functional review (32 PASS, 5 FAIL, 7 findings) was
+applied in this item, not in a new child: every fix is a bounded change, so
+`/apply-functional-review`'s bounded branch applies. The technical approval was
+marked `STALE` first (`e289f2c`), and a fresh implementation-review round is
+required before the functional gate is reachable again. The children
+`-remediation-1` and `-remediation-1-remediation-1` stay `MILESTONE_COMPLETE`.
+
+| Finding | Class | Disposition | Commit |
+|---|---|---|---|
+| P2-F-1 History Back resets the list | defect | Fixed: the list's `LazyListState` is held above the detail; instrumented regression `backFromDetailKeepsTheListScrollPosition` (failed before, passes after) | `400d4c0` |
+| P2-F-5 `Rest done` strip shows dead buttons | defect | Fixed: the done strip is its own layout (check, copy, 44dp X); regression `theDoneRestStripOffersOnlyTheDismissX` (`D164`) | `c8246b6` |
+| P2-F-2 rest strip buttons wrap/clip at large font | defect | Fixed: a `FlowRow` of content-sized buttons; regression at 1.3 and 2.0 (`D163`) | `8e4fbd9` |
+| P2-F-3 resume card buttons break mid-word | defect | Fixed: actions stack above font scale 1.1; regression at 1.3 and 2.0 (`D163`) | `8ec9d18` |
+| P2-F-6 empty Recovery card shows two Log entries | defect | Fixed: header link hidden while empty, kept with an entry; two regressions (`D165`) | `c6c8e85` |
+| P2-F-4 `VOLUME (KG)` truncated at large font | defect | Fixed: the stat tile caption wraps and the row takes the tallest tile's height; regression at 1.3 and 2.0, failed before (`D163`) | `4e51142` |
+| P2-F-7 14 newer-design differences | enhancement | Not built, per the user's decision: registered as `D149`-`D162` for the post-PR follow-up item | this commit |
+
+Also: `5af2c90` moves the done strip into `RestDoneStrip.kt` (detekt
+`TooManyFunctions`), and `66e02fc` points the nav smoke test at `Log recovery`
+(the header link is gone while the card is empty).
+
+**Re-test (round 3, AVD only):** C2 (History Back keeps position), B7 (rest
+strip running and the done strip), A1 (resume card, empty Recovery card), G2
+and G3 (font 1.3 and 2.0: rest strip, resume card, History detail tiles).
+
 ## `repflow-redesign-visual-foundation` — Functional review checklist, ROUND 2 (parent, final end-to-end acceptance; implementation revision 6)
 
 The parent's new functional review. Round 1 (finding F1, "screens were
@@ -29,7 +56,7 @@ that write data.
 
 ### What does not count as a finding (already decided)
 
-- The registered deviations (inventory D1-D148):
+- The registered deviations (inventory D1-D165):
   `docs/milestones/repflow-redesign-visual-foundation-remediation-1-inventory.md`.
 - The follow-up list: number pad m:ss, permission-state Settings rows, loading
   placeholders, resume card in light theme, text contrast tiers (55%/70%),
