@@ -52,7 +52,135 @@ about the same helper. Test-only fix.
 | O-r8-1 helper comment inexact | Folded in: the comment now states what each check catches | `e2c37b5` |
 | Local O1-O4 | Still postponed (user rule) | n/a |
 
-## `repflow-redesign-visual-foundation` — Functional review checklist, ROUND 2 (parent, final end-to-end acceptance; implementation revision 6)
+## `repflow-redesign-visual-foundation` — Functional review checklist, ROUND 3 (parent, re-test of the round 2 failures; implementation revision 9)
+
+Technical approval is recorded (`e58949d`, implementation revision 9,
+`EXTERNAL_APPROVE`). Round 2 (checklist commit `b6a88e9`; findings
+`.ai-review/feedback/FUNCTIONAL_REVIEW.md`, consumed) passed 32 steps and failed
+5: **C2, B7, A1, G2, G3**. Revisions 7-9 fixed findings P2-F-1..P2-F-6 (and the
+tests behind them). P2-F-7 is register-only (`D149`-`D162`) and is not re-tested.
+**Per the user, this round re-tests only those five steps.** Every other
+round-2 step passed and is **not repeated**; the full round-2 checklist below
+stays the reference for setup, tags and the "what is not a finding" list.
+
+**Mapping of re-test steps to findings.**
+
+| Step | Re-checks | Fix |
+|---|---|---|
+| C2 | P2-F-1 | History Back keeps the list scroll position |
+| B7 | P2-F-5, P2-F-2 (font 1.0 part) | done strip is its own layout; strip is one 44dp row at font 1.0 |
+| A1 | P2-F-6, P2-F-3 (font 1.0 part) | empty Recovery card hides the header `Log ›`; resume card at normal font |
+| G2 | P2-F-2, P2-F-3, P2-F-4 at font 1.3 | rest strip labels whole; resume card buttons whole; `VOLUME (KG)` wraps |
+| G3 | P2-F-2, P2-F-3, P2-F-4 at font 2.0 | same at 2.0 |
+
+Findings go to `.ai-review/feedback/FUNCTIONAL_REVIEW.md` headed "round 3,
+repflow-redesign-visual-foundation" (overwrite the consumed round-2 file).
+Every command names the work-item id explicitly.
+
+**Tags and scope.** Every step is **[AVD]**: AVD `RepFlow_S24Ultra_384dp_API36`
+(`emulator-5554`, 384dp). **EMULATOR ONLY**; the phone is not used. Font scale
+is changed with `adb -s emulator-5554 shell settings put system font_scale <v>`;
+reset to `1.0` at the end. Do not start any other device.
+
+### Setup and automated state
+
+- `ANDROID_SERIAL=emulator-5554 ./gradlew installDebug` (Room 9). Seed or
+  restore the sample backup: Bench Press (weight and reps) with a history
+  of at least 21 workouts (needed to scroll History; one dated `Wed 5 Aug` or
+  any item far enough down to need scrolling), one plan, and a **fresh state for
+  the Recovery card** (no Recovery entry) plus a way to add one (C3 flow:
+  Recovery > `Log recovery`). Notifications allowed.
+- Automated state is current and not re-run by the checklist: revision 9
+  approved at `e58949d`; the regression tests named below ran in the
+  implementation reviews (ActiveWorkoutScreenTest + HomeScreenTest 46 tests, 0
+  failed).
+- Not findings: everything under round 2's "What does not count as a finding"
+  (registered deviations D1-D165, follow-up list, user decisions), and the
+  bottom-nav `Progr...` truncation at font 2.0 (noted only).
+
+### Re-test steps (run in this order; keep font 1.0 until G2)
+
+1. **[AVD] C2. History detail, Back keeps position (re-checks P2-F-1).**
+   Font 1.0. Open History (21+ workouts). Scroll down until an item well below
+   the first screen is visible (for example `Wed 5 Aug`); note the first
+   visible row. Open that workout's detail (exercises and sets as logged).
+   Press the **top-bar back arrow**; repeat with **system Back**.
+   **Expected:** after each Back the list is at the **same scroll position**
+   as before opening the detail (the same item still visible, the list does
+   not jump to the top). The detail itself still shows exercises and sets
+   matching what was logged.
+2. **[AVD] B7. Rest strip and done strip (re-checks P2-F-5 and the font 1.0
+   half of P2-F-2) (WRITES).** Font 1.0. Start a workout from the plan, log a
+   set so the rest strip runs; check it in **focus mode and on the Board**.
+   **Expected, running:** the strip is **one row, 44dp high**, with `-15s`,
+   `+15s` and `Skip rest` all on that row with whole labels, the same top and
+   equal height (no `Skip rest` taller than the other two); `-15s`/`+15s`
+   change the remaining time, `Skip rest` ends the rest.
+   Let a rest end (use a short rest, or `Skip`/wait as the rest timer allows).
+   **Expected, done:** the `Rest done` strip shows **only** the neutral edge,
+   the check, the text `Rest done` / `Next set is ready` and the **44dp X**.
+   **No `-15s`, `+15s` or `Skip rest` buttons are shown.** The X dismisses it;
+   logging the next set also clears it; it appears once.
+3. **[AVD] A1. Home resume card and empty Recovery card (re-checks P2-F-6 and
+   the font 1.0 half of P2-F-3).** Font 1.0. With a workout running, open
+   Home: the resume card shows `Resume` and `Finish it` as whole words, nothing
+   clipped. Then check the **Recovery card while it has no entry** (fresh
+   install, or after deleting the entries) and again **after adding one entry**
+   (Recovery > `Log recovery`, Save).
+   **Expected, empty:** the card shows **only one** log action, the in-card
+   `Log recovery`; the **header `Log ›` link is not shown**. **Expected, with an
+   entry:** the header link is shown again. Tapping each entry on Home works
+   and Back returns to Home.
+4. **[AVD] G2. Font scale 1.3 (re-checks P2-F-2, P2-F-3, P2-F-4).**
+   `adb -s emulator-5554 shell settings put system font_scale 1.3`.
+   - **Rest strip** (focus mode, Board and, with a rest ended, the done strip):
+     the labels `-15s`, `+15s` and `Skip rest` are **whole** on one line each:
+     no `-15`/`s` split, no `Skip` truncation, nothing clipped. The buttons
+     may wrap to a second row or grow; each label stays complete and legible.
+   - **Home resume card** (workout running): `Resume` and `Finish it` are
+     **whole words** (no `Resum`/`e`, no `Finis`/`h it`). The buttons may stack
+     vertically above scale 1.1.
+   - **History detail tiles:** the caption reads **`VOLUME (KG)` wrapped onto
+     two lines with the unit `(KG)` visible**; no `VOLUME...`. The tile row
+     takes the tallest tile's height (tiles equal height).
+   - Board, focus mode (`Log set` reachable) and Settings: text scaled, nothing
+     cut off, targets stay 44-56dp.
+5. **[AVD] G3. Font scale 2.0 (re-checks P2-F-2, P2-F-3, P2-F-4).**
+   `adb -s emulator-5554 shell settings put system font_scale 2.0`.
+   Same three checks as G2:
+   - Rest strip (running and done): `-15s`, `+15s`, `Skip rest` whole (never
+     `-1`/`5s`, never `Skip` alone); the done strip still shows only the check,
+     the text and the X.
+   - Resume card: `Resume`, `Finish it` whole (no `Resu`/`me`, `Finis`/`h it`).
+   - History detail tile caption `VOLUME (KG)` wraps and the unit stays visible
+     (no `VOL...`).
+   - Content may scroll, but `Log set`, Finish, Save and dialog buttons stay
+     reachable; no text clipped to illegibility. The bottom-nav `Progr...`
+     truncation is noted only, not a finding.
+   **Reset:** `adb -s emulator-5554 shell settings put system font_scale 1.0`,
+   and abandon any leftover test workout.
+
+### Known limitations and out of scope
+
+- Round 2's steps A2, A3, B1-B6, B8-B12, C1, C3, C4, D1-D4, E1-E5, F1-F3, G1, G4,
+  H1, H2 passed and are **not repeated**.
+- `D149`-`D162` (P2-F-7) are registered follow-ups, not built.
+- No phone: real vibration, sound and haptic feel are not tested.
+
+### Expected result and what happens next
+
+All five steps behave as stated and nothing regressed. If clean:
+`/accept-milestone repflow-redesign-visual-foundation` is the only acceptance
+command and needs every checkpoint in this item's own registry `COMPLETE`; an
+outstanding checkpoint goes to `/milestone-implement`. No command records
+acceptance of a partial round. Findings go to
+`.ai-review/feedback/FUNCTIONAL_REVIEW.md`, then
+`/apply-functional-review repflow-redesign-visual-foundation` (bounded branch
+for a same-scope fix, broad branch for a `<parent-id>-remediation-<n>` child).
+
+---
+
+## `repflow-redesign-visual-foundation` — Functional review checklist, round 2 (superseded by round 3 above for C2, B7, A1, G2, G3; parent, final end-to-end acceptance; implementation revision 6)
 
 The parent's new functional review. Round 1 (finding F1, "screens were
 reskinned, not converted to the Claude Design layouts") was routed to
