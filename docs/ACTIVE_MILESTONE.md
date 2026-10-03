@@ -478,6 +478,283 @@ registry `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediati
 
 ---
 
+## `repflow-redesign-visual-foundation-remediation-1-remediation-1` — Functional review checklist, round 1 (implementation revision 4)
+
+Functional review ROUND 1 of group B. Technical approval of **revision 4** is
+recorded (commit `7159408`). Scope: B1 to B7 (Settings `5c` and the Archived
+screen; Backup `5d` with `Last backup`; Progress `5b`; set-entry carry-over and
+seeding; 48dp search fields and empty-state glyphs; Progress ignoring 0-set
+exercises; the rest notification cleared on finish, abandon, erase and
+restore), the Q1 to Q9 behaviour (Default rest sheet, Extra set fields
+Always/Collapsed/Off, Theme System/Light/Dark, rest precedence plan > exercise
+> app) and the three review fixes (Backup screen not crashing, chart taps after
+a metric switch, `Last backup` stamp after leaving the screen). Findings go to
+`.ai-review/feedback/FUNCTIONAL_REVIEW.md` (headed "round 1", this item). Every
+command names the id explicitly (`active_work_item_id` still points at the
+top-level parent).
+
+**Tags.** **[AVD]** the AVD `RepFlow_S24Ultra_384dp_API36` (`emulator-5554`):
+may write data, use Save, Restore and Export. **[PHONE]** the physical SM-S928B
+(`RFCXA0RLSVT`), only with the user's permission: **look-only**, except step
+G2, one test workout that is abandoned afterwards. On the phone never save an
+editor, never Restore, Erase or Export, never change a setting. A step that
+changes a setting is **AVD-only** and says so. **[BOTH]** either, AVD first and
+look-only on the phone. Steps that write data say **WRITES**.
+
+### Known items for this round (user decisions; to be raised as findings)
+
+These are recorded in the CP10 entry above and in
+`/home/rodrigo/.local/share/claude-lanes/repflow-lane/design-turn7-guidance.md`.
+Testers **confirm the current state; they do not judge these as new defects**.
+They are raised as findings so `/apply-functional-review` routes them.
+
+1. **`Log set` must require weight AND reps** for a weight-and-reps exercise
+   (`8d`). Today weight is optional (reps only gates it). Confirm that.
+2. **Turn-8 in-scope tweaks**, current state to confirm, not new:
+   - Settings regroup: now `Library` / `Units and appearance` / `Rest timer` /
+     `During a workout` / `Data`; the design wants `Appearance` / `Rest timer` /
+     `During a workout` / `Your data`.
+   - Settings row label is `Archived exercises and plans`; the design wants
+     `Archived` with the subtitle `Exercises and plans`.
+   - The `Backup and restore` row has no subtitle; the design wants `Last backup
+     ...`.
+   - Progress: metric captions, the span line, the unavailable-metric copy
+     (`No sessions in this range yet.`), the kept `Only valid sessions count`
+     note (the design removes it), and range-pill/chip check marks.
+
+### Setup and automated state
+
+- Build and install on the AVD: `ANDROID_SERIAL=emulator-5554 ./gradlew
+  installDebug`. Room 9 (migration 8 to 9). Seed the AVD per "Test data" below.
+  On the phone install the same debug build only after the user backs up.
+  Notifications and `Alarms & reminders` allowed for the rest-notification steps.
+- **Automated verification is current and not re-run here.** The working tree
+  is clean and `git diff <last app commit> HEAD -- app` is only the review
+  fixes already gated. Last full gate: spotlessCheck, detekt, lintDebug (0
+  errors), JVM unit tests 731, 0 failures; AVD instrumented 378, 0 failures.
+
+### Test data
+
+Seed the AVD, not the phone. Restore a backup file (copy it to
+`/sdcard/Download/` with `adb -s emulator-5554 push`, then Settings -> Backup and
+restore -> Restore from a backup) with: `Bench Press` (weight and reps), `Pull
+Up` (reps only), `Plank` (duration), one archived exercise, two active plans and
+one archived plan (one plan with a rest set on a row), **at least eight
+completed workouts of Bench Press across at least four calendar months** (so
+`3m`, `6m` and `All` differ, with some sessions with RPE), one session where an
+exercise was added but has **0 sets**, and an exercise with no history. Also
+keep a **fresh install** for the empty states.
+
+### A. Settings `5c` and the Archived screen (B1)
+
+1. **[BOTH] A1. Layout.** Settings > scroll the whole screen. Expect the groups
+   in order `Library`, `Units and appearance`, `Rest timer`, `During a workout`,
+   `Data`, then the `Irreversible` card and footer; `Data` holds `Archived
+   exercises and plans` and `Backup and restore`. Compare with `5c`/`8c`
+   (known items 2: do not report the regroup or label as new). Nothing clipped
+   at default font scale.
+2. **[AVD] A2. Theme (WRITES a setting).** Choose `Light`, `Dark`, `System`. The
+   app recolours at once and the status-bar icons stay legible; the choice
+   survives leaving and reopening the app. Leave it on `System`.
+3. **[AVD] A3. Default rest sheet (WRITES a setting).** Tap `Default rest`. The
+   caption reads `Used when neither the plan nor the exercise sets a rest.`
+   Chips `1:00 1:30 2:00 3:00` and `Other`. A preset saves and closes and the row
+   shows it. `Other` opens the numeric keypad (whole seconds); enter `45`: the
+   chip row shows a selected `45` chip that reopens the keypad. Restore `1:30`.
+4. **[AVD] A4. Extra set fields sheet (WRITES a setting).** Three radio rows
+   (`Always shown`, `Collapsed`, `Off`) with explanations; a pick saves and
+   closes and the row shows it. Leave it on `Collapsed`.
+5. **[BOTH] A5. Archived screen.** Settings > `Archived exercises and plans`.
+   Sections `Exercises` and `Plans`; each row has the name, `Archived d MMM yyyy`
+   and an outlined `Restore`; most recently archived first. Back returns to
+   Settings; the bottom bar is hidden. On the phone look only, do not tap
+   `Restore`.
+6. **[AVD] A6. Restore and Undo (WRITES).** Tap `Restore` on the archived
+   exercise: the row leaves at once, snackbar `<name> restored` with `Undo`; Undo
+   re-archives it. Restore again, confirm the exercise is in the Library, then
+   archive it again from the Library.
+7. **[AVD] A7. Empty Archived.** With nothing archived (restore all, or a fresh
+   install) the screen shows the archive glyph and `Nothing archived. Archived
+   exercises and plans show up here.`; with only one section empty the inline
+   row (`No archived plans.`) shows.
+
+### B. Backup `5d` with Last backup (B1)
+
+1. **[BOTH] B1. Opens without crashing.** Settings > `Backup and restore`. The
+   screen opens (the earlier crash fix), title `Backup and restore`; bottom bar
+   hidden; back returns to Settings.
+2. **[BOTH] B2. By eye, BEFORE an export, with real data.** On a database that
+   has never exported: hero with the shield-warning glyph, `No backup yet` over
+   `Your data lives only on this phone`; the primary button reads `Export your
+   first backup`; the note, `Export for other tools` with `Workout history as
+   CSV`, the `Replaces everything` card with `Restore from a backup`. Compare
+   with `5d`/`8c`; nothing clipped. (A phone that has exported before shows
+   `Last backup ...` instead: look only.)
+3. **[AVD] B3. Export a backup (WRITES).** Tap the export button, choose a place
+   in the system picker, confirm. `Saved` shows on the hero.
+4. **[AVD] B4. By eye, AFTER the export.** Hero now shield-check, `Last backup
+   today` over `d MMM, HH:mm`, button `Export backup now`. The stamp is the time
+   you exported.
+5. **[AVD] B5. Stamp after leaving.** Start an export, and press Back (or leave
+   the screen) as soon as the picker returns. Reopen: `Last backup` shows the
+   new time (review fix).
+6. **[AVD] B6. CSV does not stamp.** Note the time, export `Workout history as
+   CSV`: `Last backup` does not change. Cancel a backup export from the picker:
+   no change either.
+7. **[AVD] B7. Restore (WRITES).** `Restore from a backup`, pick the file,
+   confirm in the destructive dialog: `Backup restored`, data matches the file.
+   Cancelling the dialog or the picker changes nothing. Re-seed afterwards if
+   needed.
+8. **[AVD] B8. Large text.** Font scale 1.3 (Settings app, not RepFlow): Backup
+   and Settings wrap and nothing is clipped. Restore the font scale.
+
+### C. Progress `5b` (B2)
+
+1. **[BOTH] C1. By eye with real data.** Progress with Bench Press: the exercise
+   picker button, three metric buttons, the chart card with caption, the `3m`
+   `6m` `All` pills (default `All`), value with delta, readout strip, chart with
+   gridlines and date labels that do not overlap and include the first and last;
+   `Sessions` / `Avg RPE` tiles, `Training frequency` bars, `Records`. Compare
+   with `5b`. Known items 2 cover the copy, span line, `Only valid sessions
+   count` and pill checks.
+2. **[BOTH] C2. Several sessions across months.** With sessions in four or more
+   months, `3m`, `6m` and `All` give different spans, headline, delta and
+   first/last labels; labels read the year when the series spans years.
+3. **[BOTH] C3. Chart taps after a metric switch (review fix).** Tap the
+   chart, change the metric (for example `Most reps in a set`), tap the chart
+   again, drag across it: the readout and dot follow each touch, the first touch
+   after the switch works.
+4. **[BOTH] C4. Exercise picker.** `Track an exercise` sheet lists exercises,
+   the chosen row is tinted with a check; pick another and the range keeps its
+   choice; the sheet scrolls with many rows.
+5. **[BOTH] C5. Edge states.** An exercise with one session shows a lone dot and
+   no delta; a range with no sessions shows `No sessions in this range yet.`
+   with the pills kept; an exercise without RPE shows `—` for `Avg RPE`; with no
+   set of 12 reps or fewer `Best est. 1RM — —`. The empty Progress (fresh
+   install) shows its empty state.
+6. **[BOTH] C6. Progress ignores 0-set exercises (B6).** An exercise that was
+   added to a session but had no sets there does not appear as a point or
+   session, and one never trained is not in the picker. (Seed: the 0-set
+   session.)
+
+### D. Set entry keeps its numbers and seeds (B3)
+
+1. **[AVD] D1. Seed from the last session (WRITES a workout).** Start a workout
+   with Bench Press (history exists). Before any set the steppers show the last
+   working set from the last valid session and `Last time: 80 kg × 8` style line
+   shows. Never-done exercise: steppers empty (`—`) and `Log set` disabled.
+2. **[AVD] D2. Carry-over.** Log a set: weight and reps stay in the steppers
+   (not cleared); RPE, pain, technique and warm-up clear; `Last time` gives way
+   to `Last:` with `Undo last`. Log again.
+3. **[AVD] D3. Typed values stay.** Type a weight, rotate the screen (or leave to
+   the Board and come back): the typed value stays; an untouched entry may take a
+   late seed but a typed one never changes.
+4. **[AVD] D4. Known item 1.** For Bench Press with weight emptied and reps
+   entered, `Log set` is enabled today. Confirm only; do not report as new.
+5. **[AVD] D5. Timed and reps-only.** Plank (seconds) and Pull Up (reps) seed and
+   gate `Log set` on the value they need.
+6. **[AVD] D6. Abandon the test workout.** Abandon it afterwards (see G).
+
+### E. 48dp search fields and empty-state glyphs (B4, B5)
+
+1. **[BOTH] E1. Search fields.** The Library search, the workout exercise picker
+   and the plan-editor exercise picker: field is 48dp tall, hairline, magnifier,
+   a clear button appears only with text, the keyboard's Search action hides the
+   keyboard. The workout picker field is the darker control colour like the
+   design. Do not save anything on the phone.
+2. **[BOTH] E2. Empty glyphs.** Library with no exercises shows the barbell
+   glyph, the archived filter with none shows the archive glyph, a search with no
+   result shows the magnifying glass (the create-from-query footer still shows
+   where it did); Recovery history empty shows the moon-and-stars glyph. On the
+   phone use a search that matches nothing (look-only).
+3. **[AVD] E3. Large text.** Font scale 2.0: the search field grows, text not
+   clipped. Restore the scale.
+
+### F. Rest notification cleared on finish (B7)
+
+1. **[AVD] F1. Finish.** Start a workout, log a set so rest runs, let the rest
+   end so the `Rest done` notification shows (notifications allowed), then
+   `Finish`: the notification is gone from the shade.
+
+### G. Rest notification cleared on abandon, erase, restore (B7)
+
+1. **[AVD] G1. Abandon from Home.** With a workout in progress and the rest
+   notification showing, `Abandon` from Home: the notification clears.
+2. **[BOTH] G2. WRITES a test workout (phone: the one allowed test workout).**
+   Start a workout, log one set, let the rest end so the notification shows,
+   then `Abandon` the workout from the active workout screen: the notification
+   clears. Do not finish it; the abandon removes the data. Never use Erase or
+   Restore on the phone.
+3. **[AVD] G3. Erase (WRITES).** With the notification showing, Settings >
+   `Erase all data` and confirm: the notification clears. Re-seed afterwards.
+4. **[AVD] G4. Restore (WRITES).** With the notification showing, restore a
+   backup (B7): the notification clears. A failed restore (a non-RepFlow file)
+   leaves the notification.
+
+### H. Q1 to Q9 behaviour
+
+1. **[AVD] H1. Rest precedence.** Plan row with a rest > exercise `Default rest`
+   > the app `Default rest` (Settings, A3). Start a workout from a plan whose row
+   has a rest, one with no row rest on an exercise with its own `Default rest`,
+   and one ad-hoc exercise with neither: logging a set starts the timer with
+   the plan value, the exercise value, the app value respectively. Change the app
+   default and the next set picks it up. (WRITES a setting and workouts.)
+2. **[AVD] H2. Extra set fields.** Set `Always shown`: RPE, pain and technique
+   rows show under every set without a disclosure. `Collapsed`: the disclosure.
+   `Off`: nothing shown, and logging records no RPE/pain/technique. The warm-up
+   chip and the corrections sheet still work. (WRITES a setting; restore
+   `Collapsed`.)
+3. **[AVD] H3. Theme in a workout.** In `Light` and `Dark` the active workout,
+   done screen and Progress read correctly; reset to `System`.
+
+### Phone tester list
+
+Back up the phone's data first and use the user's permission. Everything is
+look-only; no step saves, restores, erases, exports or changes a setting.
+
+1. **[BOTH] A1** Settings layout (look-only).
+2. **[BOTH] A5** Archived screen (look-only, do not tap `Restore`).
+3. **[BOTH] B1** Backup screen opens and back works.
+4. **[BOTH] B2** Backup hero by eye (look-only; do not export).
+5. **[BOTH] C1** Progress by eye with real data.
+6. **[BOTH] C2** `3m`/`6m`/`All` across months.
+7. **[BOTH] C3** Chart taps after a metric switch.
+8. **[BOTH] C4** Exercise picker.
+9. **[BOTH] C5** Edge states (look-only).
+10. **[BOTH] C6** 0-set exercises absent.
+11. **[BOTH] E1** Search fields 48dp (do not save).
+12. **[BOTH] E2** Empty glyphs.
+13. **[BOTH] G2** One test workout, then `Abandon`.
+
+### Known limitations and out of scope
+
+- The Known items above (weight AND reps for `Log set`, turn-8 Settings and
+  Progress tweaks) are raised as findings; do not re-judge them.
+- Follow-ups, not findings: dimmed pending-row targets, the `Just logged` bar,
+  index/warm-up row layout, first `+` at the plan range's bottom, the number pad
+  (open on the current value, `Done`), permission-state Settings rows, loading
+  placeholders, Resume card in light theme, contrast tiers, exact-match search,
+  notification icon and tap action, funnel-x and chart-line glyphs, `m:ss` in
+  the `Other` keypad, the `Last backup` setting not being in the backup file.
+- Registered deviations (CP10 `D115` to `D142`): no recent-files list, no
+  `Share`, no safety-snapshot row, no restore `Undo` toast; the cold-start
+  theme flash; `Last time:` with a colon.
+- Weight unit not built (`D5`).
+
+### Expected result and what happens next
+
+Every step behaves as stated, nothing crashes, no earlier area regressed. If
+clean: `/accept-milestone repflow-redesign-visual-foundation-remediation-1-remediation-1`
+is the only acceptance command and it needs every checkpoint in this item's
+registry `COMPLETE`. A checkpoint still outstanding goes to
+`/milestone-implement`; no command records acceptance of a partial round.
+Findings go to `.ai-review/feedback/FUNCTIONAL_REVIEW.md`, then
+`/apply-functional-review repflow-redesign-visual-foundation-remediation-1-remediation-1`
+(bounded branch for a same-scope fix, broad branch for a
+`...-remediation-<n>` child).
+
+---
+
 ## In implementation: `repflow-redesign-visual-foundation-remediation-1`
 
 The remediation child that discharges the parent's functional-review finding
