@@ -274,6 +274,37 @@ class ProgressScreenTest {
         composeRule.onNodeWithText(string(R.string.progress_readout_latest, "26 May")).assertDoesNotExist()
     }
 
+    /**
+     * Review I-2: the chart's gesture handlers outlive a recomposition, so one
+     * that captured the first touch's callback kept writing to a discarded
+     * selection after the metric changed to one with the same point count.
+     */
+    @Test
+    fun tappingTheChartAfterTouchingItAndSwitchingToAMetricWithTheSamePointCountStillMovesTheReadout() {
+        val sameCount =
+            benchProgress.copy(
+                series =
+                    mapOf(
+                        ProgressMetric.TOP_SET to series("72.5", "75", "80", "82.5"),
+                        ProgressMetric.ESTIMATED_ONE_REP_MAX to series("88"),
+                        ProgressMetric.VOLUME to series("1740", "1800", "1900", "2310"),
+                    ),
+            )
+        setStatefulScreen(loaded().copy(exercises = listOf(sameCount)))
+
+        // Touch the chart first, so its gesture coroutines start with this metric's callback.
+        composeRule.onNodeWithTag(PROGRESS_CHART_TAG).performTouchInput { click(Offset(1f, centerY)) }
+        composeRule.onNodeWithText("72.5 kg").assertIsDisplayed()
+
+        composeRule.onNodeWithText(string(R.string.progress_metric_volume)).performClick()
+        composeRule.onNodeWithText(string(R.string.progress_readout_latest, "26 May")).assertIsDisplayed()
+
+        composeRule.onNodeWithTag(PROGRESS_CHART_TAG).performTouchInput { click(Offset(1f, centerY)) }
+
+        composeRule.onNodeWithText("5 May").assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.progress_readout_latest, "26 May")).assertDoesNotExist()
+    }
+
     @Test
     fun volumeReadsInKilogramsTotal() {
         setScreen(loaded(metric = ProgressMetric.VOLUME))

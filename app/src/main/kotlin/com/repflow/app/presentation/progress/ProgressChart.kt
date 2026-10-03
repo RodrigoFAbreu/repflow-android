@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -99,6 +101,10 @@ internal fun ProgressChart(
         val shown =
             remember(values.size, plotWidth, labelWidthPx, gapPx) { xLabelIndices(values.size, plotWidth, labelWidthPx.toFloat(), gapPx) }
 
+        // The gesture coroutines outlive a recomposition (they restart only when a key changes), so
+        // they must read the latest callback, not the one captured when the first touch arrived.
+        val currentOnSelect by rememberUpdatedState(onSelect)
+
         Column {
             Canvas(
                 modifier =
@@ -108,10 +114,10 @@ internal fun ProgressChart(
                         .testTag(PROGRESS_CHART_TAG)
                         .semantics { contentDescription = description }
                         .pointerInput(values.size, plotLeft, plotWidth) {
-                            detectTapGestures { onSelect(nearestPointIndex(it.x, plotLeft, plotWidth, values.size)) }
+                            detectTapGestures { currentOnSelect(nearestPointIndex(it.x, plotLeft, plotWidth, values.size)) }
                         }.pointerInput(values.size, plotLeft, plotWidth) {
                             detectHorizontalDragGestures { change, _ ->
-                                onSelect(nearestPointIndex(change.position.x, plotLeft, plotWidth, values.size))
+                                currentOnSelect(nearestPointIndex(change.position.x, plotLeft, plotWidth, values.size))
                             }
                         },
             ) {
