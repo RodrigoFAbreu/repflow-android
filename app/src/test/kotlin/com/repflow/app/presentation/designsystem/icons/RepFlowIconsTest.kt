@@ -172,6 +172,12 @@ class RepFlowIconsTest {
                 "ic_ph_table",
                 "ic_ph_check",
                 "ic_ph_warning",
+                // Backup screen (remediation-1-remediation-1 CP8, `8c`): the hero's two
+                // shields, `Export backup now` and `Restore from a backup`.
+                "ic_ph_shield_check_fill",
+                "ic_ph_shield_warning",
+                "ic_ph_download_simple",
+                "ic_ph_upload_simple",
             )
     }
 }

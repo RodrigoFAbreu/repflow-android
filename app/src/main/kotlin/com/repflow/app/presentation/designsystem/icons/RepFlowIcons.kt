@@ -123,9 +123,25 @@ object RepFlowIcons {
     @DrawableRes
     val clockCounterClockwiseFill: Int = R.drawable.ic_ph_clock_counter_clockwise_fill
 
-    /** Settings' `Export a backup` row (`4a`, `ph-database`). Remediation-1 CP14. */
+    /** Settings' `Backup and restore` row (`ph-database`). Remediation-1 CP14, re-pointed by remediation-1-remediation-1 CP8. */
     @DrawableRes
     val database: Int = R.drawable.ic_ph_database
+
+    /** The Backup screen's `Export backup now` button (`8c`, `ph-download-simple`). Remediation-1-remediation-1 CP8. */
+    @DrawableRes
+    val downloadSimple: Int = R.drawable.ic_ph_download_simple
+
+    /** The Backup screen's `Restore from a backup` button (`8c`, `ph-upload-simple`). Remediation-1-remediation-1 CP8. */
+    @DrawableRes
+    val uploadSimple: Int = R.drawable.ic_ph_upload_simple
+
+    /** The Backup screen's hero once a backup exists (`8c`, `ph-fill ph-shield-check`). Remediation-1-remediation-1 CP8. */
+    @DrawableRes
+    val shieldCheckFill: Int = R.drawable.ic_ph_shield_check_fill
+
+    /** The Backup screen's hero before the first backup (`8c`, `ph-shield-warning`). Remediation-1-remediation-1 CP8. */
+    @DrawableRes
+    val shieldWarning: Int = R.drawable.ic_ph_shield_warning
 
     /** The board's status chip for an exercise with some sets logged (`6b`, `ph-dot-outline`). Remediation-1 CP7. */
     @DrawableRes

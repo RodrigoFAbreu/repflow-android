@@ -23,17 +23,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.repflow.app.R
 import com.repflow.app.application.settings.AppSettings
 import com.repflow.app.presentation.designsystem.RepFlowColor
 import com.repflow.app.presentation.designsystem.RepFlowSpacing
@@ -112,23 +107,21 @@ private fun SwitchTrack(checked: Boolean) {
     }
 }
 
-/** A navigating or acting row: glyph at 60%, label over meta, a trailing caret unless [trailing] replaces it. */
+/** A navigating row: glyph at 60%, label over meta, a trailing caret. */
 @Composable
 internal fun SettingsActionRow(
     @DrawableRes icon: Int,
     title: String,
     meta: String,
     onClick: () -> Unit,
-    enabled: Boolean = true,
-    trailing: (@Composable () -> Unit)? = null,
 ) {
-    Column(modifier = Modifier.alpha(if (enabled) 1f else DISABLED_ALPHA)) {
+    Column {
         Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .heightIn(min = SettingsRowMinHeight)
-                    .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+                    .clickable(role = Role.Button, onClick = onClick)
                     .padding(vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapLg),
@@ -140,16 +133,12 @@ internal fun SettingsActionRow(
                 modifier = Modifier.size(LeadingIconSize),
             )
             RowText(title, meta, modifier = Modifier.weight(1f))
-            if (trailing != null) {
-                trailing()
-            } else {
-                Icon(
-                    painter = painterResource(RepFlowIcons.caretRight),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = RepFlowColor.trailingCaretAlpha),
-                    modifier = Modifier.size(CaretSize),
-                )
-            }
+            Icon(
+                painter = painterResource(RepFlowIcons.caretRight),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = RepFlowColor.trailingCaretAlpha),
+                modifier = Modifier.size(CaretSize),
+            )
         }
         RowDivider()
     }
@@ -183,33 +172,10 @@ internal fun RowDivider() {
     HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = ROW_DIVIDER_ALPHA))
 }
 
-/** `4a`'s `Saved` beside `Export a backup`, announced politely when it appears. */
-@Composable
-internal fun SavedMark() {
-    Row(
-        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-    ) {
-        Icon(
-            painter = painterResource(RepFlowIcons.check),
-            contentDescription = null,
-            tint = RepFlowColor.accent300,
-            modifier = Modifier.size(13.dp),
-        )
-        Text(
-            text = stringResource(R.string.backup_export_saved),
-            style = MaterialTheme.typography.bodySmall,
-            color = RepFlowColor.accent300,
-        )
-    }
-}
-
 internal val SettingsRowMinHeight = 60.dp
 internal val RowTitleFontSize = 14.5.sp
 private const val ROW_DIVIDER_ALPHA = 0.08f
 private const val LEADING_ICON_ALPHA = 0.6f
-private const val DISABLED_ALPHA = 0.38f
 private val LeadingIconSize = 19.dp
 private val CaretSize = 16.dp
 private val SwitchTrackWidth = 44.dp

@@ -25,8 +25,6 @@ import com.repflow.app.application.settings.AppSettings
 import com.repflow.app.application.settings.ExtraSetFields
 import com.repflow.app.application.settings.ThemeMode
 import com.repflow.app.presentation.RepFlowTheme
-import com.repflow.app.presentation.backup.BackupStatusMessage
-import com.repflow.app.presentation.backup.BackupUiState
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -39,8 +37,8 @@ import org.junit.runner.RunWith
  * value and report their own choice (the two rows through their sheets); all
  * of it waits disabled until the settings have loaded; the Library and
  * Archived rows lead where they say; and `Erase all data` sits behind a typed
- * confirmation. The Data group's three backup rows stay until CP8's Backup
- * screen replaces them.
+ * confirmation. The Data group's `Backup and restore` row leads to CP8's
+ * Backup screen, which carries the backup actions.
  */
 @RunWith(AndroidJUnit4::class)
 class SettingsScreenTest {
@@ -53,35 +51,28 @@ class SettingsScreenTest {
     private val extraFields = mutableListOf<ExtraSetFields>()
     private var libraryClicks = 0
     private var archivedClicks = 0
+    private var backupClicks = 0
     private var eraseConfirms = 0
 
-    private fun actions(
-        onBackupStatusShown: () -> Unit = {},
-        onSettingsMessageShown: () -> Unit = {},
-    ) = SettingsActions(
-        onBack = {},
-        onLibraryClick = { libraryClicks++ },
-        onArchivedClick = { archivedClicks++ },
-        onToggle = { toggle, on -> toggles += toggle to on },
-        onThemeSelected = { themes += it },
-        onDefaultRestSelected = { rests += it },
-        onExtraSetFieldsSelected = { extraFields += it },
-        onExportBackup = {},
-        onRestoreBackup = {},
-        onExportCsv = {},
-        onRestoreConfirmed = {},
-        onRestoreCancelled = {},
-        onBackupStatusShown = onBackupStatusShown,
-        onEraseAllDataConfirmed = { eraseConfirms++ },
-        onSettingsMessageShown = onSettingsMessageShown,
-    )
+    private fun actions(onSettingsMessageShown: () -> Unit = {}) =
+        SettingsActions(
+            onBack = {},
+            onLibraryClick = { libraryClicks++ },
+            onArchivedClick = { archivedClicks++ },
+            onBackupClick = { backupClicks++ },
+            onToggle = { toggle, on -> toggles += toggle to on },
+            onThemeSelected = { themes += it },
+            onDefaultRestSelected = { rests += it },
+            onExtraSetFieldsSelected = { extraFields += it },
+            onEraseAllDataConfirmed = { eraseConfirms++ },
+            onSettingsMessageShown = onSettingsMessageShown,
+        )
 
     private fun render(settings: AppSettings?) {
         composeRule.setContent {
             RepFlowTheme {
                 SettingsScreen(
                     uiState = SettingsUiState(settings = settings),
-                    backupState = BackupUiState(),
                     versionName = "0.1",
                     actions = actions(),
                 )
@@ -254,39 +245,34 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun theDataGroupKeepsTheThreeBackupRowsUntilTheBackupScreenReplacesThem() {
+    fun theBackupRowLeadsToTheBackupScreenAndTheBackupActionsAreNoLongerHere() {
         render(AppSettings.DEFAULT)
 
-        composeRule.onNodeWithText(string(R.string.backup_export_action)).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText(string(R.string.backup_restore_action)).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText(string(R.string.backup_csv_export_action)).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.settings_backup_row)).performScrollTo().performClick()
+
+        assertEquals(1, backupClicks)
+        composeRule.onNodeWithText(string(R.string.backup_export_action)).assertDoesNotExist()
+        composeRule.onNodeWithText(string(R.string.backup_restore_action)).assertDoesNotExist()
+        composeRule.onNodeWithText(string(R.string.backup_csv_export_action)).assertDoesNotExist()
     }
 
     /**
-     * Remediation-1 CP16: both messages are consumed only once their snackbar
-     * has been shown. Consuming first cleared the key the showing effect is
-     * keyed on, and the restart cancelled the snackbar before it was ever on
-     * screen - found by the device run of the backup route tests.
+     * Remediation-1 CP16: a message is consumed only once its snackbar has been
+     * shown. Consuming first cleared the key the showing effect is keyed on, and
+     * the restart cancelled the snackbar before it was ever on screen - found by
+     * the device run of the backup route tests.
      */
     @Test
     fun aMessageStaysOnScreenAfterItIsConsumed() {
-        var backupShown = 0
         var settingsShown = 0
         composeRule.setContent {
-            var backupState by remember { mutableStateOf(BackupUiState(statusMessage = BackupStatusMessage.OperationFailed)) }
-            var uiState by remember { mutableStateOf(SettingsUiState(settings = AppSettings.DEFAULT)) }
+            var uiState by remember { mutableStateOf(SettingsUiState(settings = AppSettings.DEFAULT, message = SettingsMessage.ERASED)) }
             RepFlowTheme {
                 SettingsScreen(
                     uiState = uiState,
-                    backupState = backupState,
                     versionName = "0.1",
                     actions =
                         actions(
-                            onBackupStatusShown = {
-                                backupShown++
-                                backupState = backupState.copy(statusMessage = null)
-                                uiState = uiState.copy(message = SettingsMessage.ERASED)
-                            },
                             onSettingsMessageShown = {
                                 settingsShown++
                                 uiState = uiState.copy(message = null)
@@ -296,8 +282,6 @@ class SettingsScreenTest {
             }
         }
 
-        composeRule.onNodeWithText(string(R.string.backup_message_operation_failed)).assertIsDisplayed()
-        composeRule.waitUntil(SNACKBAR_WAIT_MILLIS) { backupShown == 1 }
         composeRule.onNodeWithText(string(R.string.settings_message_erased)).assertIsDisplayed()
         composeRule.waitUntil(SNACKBAR_WAIT_MILLIS) { settingsShown == 1 }
     }

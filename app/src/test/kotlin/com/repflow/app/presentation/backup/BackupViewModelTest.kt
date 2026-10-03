@@ -5,10 +5,14 @@ import com.repflow.app.application.backup.ExportBackup
 import com.repflow.app.application.backup.ExportWorkoutHistoryCsv
 import com.repflow.app.application.backup.InMemoryBackupRepository
 import com.repflow.app.application.backup.RestoreBackup
+import com.repflow.app.application.exercise.FixedClock
 import com.repflow.app.application.exercise.InMemoryExerciseRepository
 import com.repflow.app.application.progression.InMemoryProgressionRecommendationRepository
 import com.repflow.app.application.recovery.InMemoryFutsalRepository
 import com.repflow.app.application.recovery.InMemoryRecoveryRepository
+import com.repflow.app.application.settings.AppSettings
+import com.repflow.app.application.settings.InMemorySettingsRepository
+import com.repflow.app.application.settings.SettingsPersistenceError
 import com.repflow.app.application.trainingplan.InMemoryTrainingPlanRepository
 import com.repflow.app.application.trainingplan.ObserveTrainingPlanVersionLabels
 import com.repflow.app.application.workout.InMemoryWorkoutRepository
@@ -26,6 +30,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class BackupViewModelTest {
@@ -52,11 +57,16 @@ class BackupViewModelTest {
         ExportWorkoutHistoryCsv(workoutRepository, ObserveTrainingPlanVersionLabels(trainingPlanRepository))
 
     private val restNotificationCanceller = RecordingRestNotificationCanceller()
-    private val viewModel = BackupViewModel(exportBackup, restoreBackup, exportWorkoutHistoryCsv, restNotificationCanceller)
+    private val settingsRepository = InMemorySettingsRepository()
+    private val clock = FixedClock(Instant.parse("2026-10-03T12:00:00Z"))
+    private lateinit var viewModel: BackupViewModel
 
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        // Built after the Main dispatcher is set: the ViewModel starts observing the settings in `init`.
+        viewModel =
+            BackupViewModel(exportBackup, restoreBackup, exportWorkoutHistoryCsv, restNotificationCanceller, settingsRepository, clock)
     }
 
     @After
@@ -193,5 +203,79 @@ class BackupViewModelTest {
             viewModel.onStatusMessageShown()
 
             assertNull(viewModel.uiState.value.statusMessage)
+        }
+
+    @Test
+    fun `a backup export that is written records last_backup_at`() =
+        runTest {
+            assertNull(settingsRepository.get().lastBackupAt)
+            viewModel.onExportBackupRequested { }
+
+            viewModel.onExportWriteSucceeded(BackupExportKind.BACKUP)
+
+            assertEquals(Instant.parse("2026-10-03T12:00:00Z"), settingsRepository.get().lastBackupAt)
+            assertEquals(Instant.parse("2026-10-03T12:00:00Z"), viewModel.uiState.value.lastBackupAt)
+            assertEquals(true, viewModel.uiState.value.isLastBackupLoaded)
+        }
+
+    @Test
+    fun `the hero state starts from the stored last_backup_at`() =
+        runTest {
+            val stored = Instant.parse("2026-09-30T21:04:00Z")
+            val repository = InMemorySettingsRepository(AppSettings.DEFAULT.copy(lastBackupAt = stored))
+
+            val model = BackupViewModel(exportBackup, restoreBackup, exportWorkoutHistoryCsv, restNotificationCanceller, repository, clock)
+
+            assertEquals(stored, model.uiState.value.lastBackupAt)
+            assertEquals(true, model.uiState.value.isLastBackupLoaded)
+        }
+
+    @Test
+    fun `a CSV export never records last_backup_at`() =
+        runTest {
+            viewModel.onCsvExportRequested { }
+
+            viewModel.onExportWriteSucceeded(BackupExportKind.CSV)
+
+            assertNull(settingsRepository.get().lastBackupAt)
+            assertNull(viewModel.uiState.value.lastBackupAt)
+        }
+
+    @Test
+    fun `a cancelled or failed backup export never records last_backup_at`() =
+        runTest {
+            viewModel.onExportBackupRequested { }
+            viewModel.onExportWriteCancelled()
+            viewModel.onExportBackupRequested { }
+            viewModel.onExportWriteFailed()
+
+            assertNull(settingsRepository.get().lastBackupAt)
+        }
+
+    @Test
+    fun `a failed last_backup_at write does not fail the export`() =
+        runTest {
+            settingsRepository.nextUpdateFailure = SettingsPersistenceError.Unavailable
+            viewModel.onExportBackupRequested { }
+
+            viewModel.onExportWriteSucceeded(BackupExportKind.BACKUP)
+
+            assertEquals(BackupStatusMessage.ExportSucceeded, viewModel.uiState.value.statusMessage)
+            assertEquals(false, viewModel.uiState.value.isBusy)
+            assertNull(settingsRepository.get().lastBackupAt)
+        }
+
+    @Test
+    fun `a successful restore leaves last_backup_at alone`() =
+        runTest {
+            var exported: String? = null
+            viewModel.onExportBackupRequested { exported = it }
+            viewModel.onExportWriteSucceeded(BackupExportKind.BACKUP)
+            val recorded = settingsRepository.get().lastBackupAt
+            viewModel.onRestoreFilePicked(exported!!)
+
+            viewModel.onRestoreConfirmed()
+
+            assertEquals(recorded, settingsRepository.get().lastBackupAt)
         }
 }

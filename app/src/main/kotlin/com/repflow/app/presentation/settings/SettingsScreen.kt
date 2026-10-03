@@ -28,9 +28,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.repflow.app.R
 import com.repflow.app.application.settings.AppSettings
-import com.repflow.app.presentation.backup.BackupRestoreConfirmDialog
-import com.repflow.app.presentation.backup.BackupStatusMessage
-import com.repflow.app.presentation.backup.BackupUiState
 import com.repflow.app.presentation.designsystem.RepFlowColor
 import com.repflow.app.presentation.designsystem.RepFlowSpacing
 import com.repflow.app.presentation.designsystem.components.RepFlowScreenScaffold
@@ -49,11 +46,9 @@ import com.repflow.app.presentation.designsystem.repFlowSecondaryTextColor
  *   vibrate and notification switches;
  * - **During a workout** - keep screen awake, confirm before finishing and the
  *   `Extra set fields` row (opens a sheet);
- * - **Data** - `Archived exercises and plans` (the Archived screen) and, until
- *   the dedicated Backup screen (`5d`, CP8) replaces them, the three backup
- *   rows (`Saved` once an export is written; restore goes through the system
- *   picker and the existing destructive confirmation), then the `Irreversible`
- *   card over `Erase all data`, behind a typed confirmation;
+ * - **Data** - `Archived exercises and plans` (the Archived screen) and `Backup
+ *   and restore` (the Backup screen, `5d`, CP8), then the `Irreversible` card
+ *   over `Erase all data`, behind a typed confirmation;
  * - the footer.
  *
  * Every switch, the theme and the two value rows render from
@@ -64,27 +59,16 @@ import com.repflow.app.presentation.designsystem.repFlowSecondaryTextColor
 @Composable
 fun SettingsScreen(
     uiState: SettingsUiState,
-    backupState: BackupUiState,
     versionName: String?,
     actions: SettingsActions,
     modifier: Modifier = Modifier,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
-    var exportSaved by rememberSaveable { mutableStateOf(false) }
     var showEraseConfirm by rememberSaveable { mutableStateOf(false) }
     var showRestSheet by rememberSaveable { mutableStateOf(false) }
     var showExtraSheet by rememberSaveable { mutableStateOf(false) }
-    SettingsMessages(
-        uiState = uiState,
-        backupState = backupState,
-        snackbarHostState = snackbarHostState,
-        onExportSaved = { exportSaved = true },
-        actions = actions,
-    )
+    SettingsMessages(uiState = uiState, snackbarHostState = snackbarHostState, actions = actions)
 
-    if (backupState.pendingRestoreJson != null) {
-        BackupRestoreConfirmDialog(onConfirm = actions.onRestoreConfirmed, onCancel = actions.onRestoreCancelled)
-    }
     if (showEraseConfirm) {
         EraseAllDataDialog(
             onConfirm = {
@@ -140,15 +124,7 @@ fun SettingsScreen(
                 onDefaultRestClick = { showRestSheet = true },
                 onExtraSetFieldsClick = { showExtraSheet = true },
             )
-            DataGroup(
-                backupState = backupState,
-                exportSaved = exportSaved,
-                onExportBackup = {
-                    exportSaved = false
-                    actions.onExportBackup()
-                },
-                actions = actions,
-            )
+            DataGroup(actions = actions)
             EraseCard(enabled = !uiState.isErasing, onEraseClick = { showEraseConfirm = true })
             Text(
                 text =
@@ -163,41 +139,17 @@ fun SettingsScreen(
     }
 }
 
-/**
- * Both message channels: the backup actions' status (an export's success is the
- * row's own `Saved`, not a snackbar - `4a`'s `nBackupDone`) and Settings' own.
- */
+/** Settings' own messages: a save that failed, and the outcome of `Erase all data`. */
 @Composable
 private fun SettingsMessages(
     uiState: SettingsUiState,
-    backupState: BackupUiState,
     snackbarHostState: SnackbarHostState,
-    onExportSaved: () -> Unit,
     actions: SettingsActions,
 ) {
-    val restoreSucceeded = stringResource(R.string.backup_message_restore_succeeded)
-    val csvSucceeded = stringResource(R.string.backup_message_csv_succeeded)
-    val invalidBackup = stringResource(R.string.backup_message_invalid_backup)
-    val operationFailed = stringResource(R.string.backup_message_operation_failed)
     val erased = stringResource(R.string.settings_message_erased)
     val eraseFailed = stringResource(R.string.settings_message_erase_failed)
     val saveFailed = stringResource(R.string.settings_message_save_failed)
 
-    LaunchedEffect(backupState.statusMessage) {
-        val message = backupState.statusMessage ?: return@LaunchedEffect
-        val text =
-            when (message) {
-                BackupStatusMessage.ExportSucceeded -> null
-                BackupStatusMessage.RestoreSucceeded -> restoreSucceeded
-                BackupStatusMessage.CsvExportSucceeded -> csvSucceeded
-                BackupStatusMessage.InvalidBackup -> invalidBackup
-                BackupStatusMessage.OperationFailed -> operationFailed
-            }
-        // Shown first, consumed after: consuming clears the key this effect is
-        // keyed on, and the restart would cancel a snackbar still on screen.
-        if (text == null) onExportSaved() else snackbarHostState.showSnackbar(text)
-        actions.onBackupStatusShown()
-    }
     LaunchedEffect(uiState.message) {
         val message = uiState.message ?: return@LaunchedEffect
         val text =
@@ -273,13 +225,7 @@ private fun SettingsGroups(
 }
 
 @Composable
-private fun DataGroup(
-    backupState: BackupUiState,
-    exportSaved: Boolean,
-    onExportBackup: () -> Unit,
-    actions: SettingsActions,
-) {
-    val enabled = !backupState.isBusy
+private fun DataGroup(actions: SettingsActions) {
     SectionLabel(R.string.settings_section_data)
     SettingsActionRow(
         icon = RepFlowIcons.archive,
@@ -289,25 +235,9 @@ private fun DataGroup(
     )
     SettingsActionRow(
         icon = RepFlowIcons.database,
-        title = stringResource(R.string.backup_export_action),
-        meta = stringResource(R.string.backup_export_meta),
-        onClick = onExportBackup,
-        enabled = enabled,
-        trailing = if (exportSaved) ({ SavedMark() }) else ({}),
-    )
-    SettingsActionRow(
-        icon = RepFlowIcons.arrowCounterClockwise,
-        title = stringResource(R.string.backup_restore_action),
-        meta = stringResource(R.string.backup_restore_meta),
-        onClick = actions.onRestoreBackup,
-        enabled = enabled,
-    )
-    SettingsActionRow(
-        icon = RepFlowIcons.table,
-        title = stringResource(R.string.backup_csv_export_action),
-        meta = stringResource(R.string.backup_csv_export_meta),
-        onClick = actions.onExportCsv,
-        enabled = enabled,
+        title = stringResource(R.string.settings_backup_row),
+        meta = "",
+        onClick = actions.onBackupClick,
     )
 }
 

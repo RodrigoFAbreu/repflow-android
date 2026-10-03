@@ -6,6 +6,8 @@ import com.repflow.app.application.backup.BackupRestoreError
 import com.repflow.app.application.backup.ExportBackup
 import com.repflow.app.application.backup.ExportWorkoutHistoryCsv
 import com.repflow.app.application.backup.RestoreBackup
+import com.repflow.app.application.common.Clock
+import com.repflow.app.application.settings.SettingsRepository
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.presentation.workout.RestNotificationCanceller
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,8 +18,13 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Owns the backup/restore/CSV-export state - Settings' Data group since
- * remediation-1 CP14. [rememberBackupFileActions] hosts the SAF
+ * Owns the backup/restore/CSV-export state, for the dedicated Backup screen
+ * (`5d`, remediation-1-remediation-1 CP8; it was Settings' Data group from
+ * remediation-1 CP14). It also tracks when the last **backup** export
+ * succeeded - `last_backup_at`, a device setting kept out of the backup file -
+ * and writes it after a successful backup export, never a CSV one (a "Last
+ * backup" after a CSV export would mislead the user about data safety).
+ * [rememberBackupFileActions] hosts the SAF
  * ([androidx.activity.result.contract.ActivityResultContracts]) launchers and
  * passes already-opened text content in/out - this ViewModel never touches
  * `Uri`, `ContentResolver` or any Android I/O type directly.
@@ -30,9 +37,21 @@ class BackupViewModel
         private val restoreBackup: RestoreBackup,
         private val exportWorkoutHistoryCsv: ExportWorkoutHistoryCsv,
         private val restNotificationCanceller: RestNotificationCanceller,
+        private val settingsRepository: SettingsRepository,
+        private val clock: Clock,
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow(BackupUiState())
+        private val _uiState = MutableStateFlow(BackupUiState(now = clock.now()))
         val uiState = _uiState.asStateFlow()
+
+        init {
+            viewModelScope.launch {
+                settingsRepository.observe().collect { settings ->
+                    _uiState.update {
+                        it.copy(lastBackupAt = settings.lastBackupAt, isLastBackupLoaded = true, now = clock.now())
+                    }
+                }
+            }
+        }
 
         /**
          * Builds the backup JSON text; [onReady] is called with it so the
@@ -68,6 +87,12 @@ class BackupViewModel
                     BackupExportKind.CSV -> BackupStatusMessage.CsvExportSucceeded
                 }
             _uiState.update { it.copy(isBusy = false, statusMessage = message) }
+            if (kind == BackupExportKind.BACKUP) {
+                // A failed write is dropped on purpose: the file is already saved, so the
+                // export does not fail - the hero keeps showing the previous time (or
+                // `No backup yet`).
+                viewModelScope.launch { settingsRepository.update { it.copy(lastBackupAt = clock.now()) } }
+            }
         }
 
         /** The user dismissed the SAF picker without choosing a destination - not an error, just clears busy silently. */

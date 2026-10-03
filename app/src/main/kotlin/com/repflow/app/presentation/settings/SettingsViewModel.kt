@@ -66,8 +66,8 @@ data class SettingsUiState(
 
 /**
  * Drives Settings' switches from [SettingsRepository] and runs `Erase all data`
- * through [EraseAllData] (remediation-1 CP14). The backup rows beside them are
- * [com.repflow.app.presentation.backup.BackupViewModel]'s, unchanged.
+ * through [EraseAllData] (remediation-1 CP14). Backup and restore are
+ * [com.repflow.app.presentation.backup.BackupViewModel]'s, on their own screen.
  *
  * Each switch writes straight through; the switch then shows what the
  * repository re-emits, so what is drawn is always what is stored.

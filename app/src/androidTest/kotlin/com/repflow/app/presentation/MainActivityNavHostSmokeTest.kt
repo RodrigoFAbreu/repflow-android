@@ -139,12 +139,18 @@ class MainActivityNavHostSmokeTest {
         composeRule.onNodeWithText(string(R.string.exercise_list_search_hint)).assertIsDisplayed()
     }
 
-    /** Since remediation-1 CP14 backup and restore are Settings' own Data rows (`4a`), not a screen of their own. */
+    /** Backup and restore is its own screen again (`5d`, remediation-1-remediation-1 CP8), reached from Settings and left by back. */
     @Test
-    fun backupIsReachableFromSettings() {
+    fun backupIsReachableFromSettingsAndBackReturnsThere() {
         clickByDescription(R.string.home_settings_content_description)
-        composeRule.onNodeWithText(string(R.string.backup_export_action)).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.settings_backup_row)).performScrollTo().performClick()
+        composeRule.onNodeWithText(string(R.string.backup_title)).assertIsDisplayed()
         composeRule.onNodeWithText(string(R.string.backup_restore_action)).performScrollTo().assertIsDisplayed()
+        assertBottomNavAbsent()
+
+        clickByDescription(R.string.backup_back_content_description)
+
+        composeRule.onNodeWithText(string(R.string.settings_title)).assertIsDisplayed()
     }
 
     /**

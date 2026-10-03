@@ -9,48 +9,38 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.repflow.app.presentation.backup.BackupViewModel
-import com.repflow.app.presentation.backup.rememberBackupFileActions
 
 /**
  * Stateful Settings route (remediation-1 CP14): owns [SettingsViewModel] for
- * the switches and `Erase all data`, and [BackupViewModel] with its SAF
- * launchers for the Data group's backup rows - the actions the Backup screen
- * used to carry before `4a` put them inline here.
+ * the switches, the choices and `Erase all data`. Backup and restore live on
+ * their own screen again (`5d`, remediation-1-remediation-1 CP8), reached by
+ * [onBackupClick].
  */
 @Composable
 fun SettingsRoute(
     onBack: () -> Unit,
     onLibraryClick: () -> Unit,
     onArchivedClick: () -> Unit,
+    onBackupClick: () -> Unit,
     settingsViewModel: SettingsViewModel = hiltViewModel(),
-    backupViewModel: BackupViewModel = hiltViewModel(),
 ) {
     val uiState by settingsViewModel.uiState.collectAsStateWithLifecycle()
-    val backupState by backupViewModel.uiState.collectAsStateWithLifecycle()
-    val backupActions = rememberBackupFileActions(backupViewModel)
     val context = LocalContext.current
     val versionName = remember(context) { appVersionName(context) }
 
     SettingsScreen(
         uiState = uiState,
-        backupState = backupState,
         versionName = versionName,
         actions =
             SettingsActions(
                 onBack = onBack,
                 onLibraryClick = onLibraryClick,
                 onArchivedClick = onArchivedClick,
+                onBackupClick = onBackupClick,
                 onToggle = settingsViewModel::onToggle,
                 onThemeSelected = settingsViewModel::onThemeSelected,
                 onDefaultRestSelected = settingsViewModel::onDefaultRestSelected,
                 onExtraSetFieldsSelected = settingsViewModel::onExtraSetFieldsSelected,
-                onExportBackup = backupActions.onExportBackup,
-                onRestoreBackup = backupActions.onRestoreBackup,
-                onExportCsv = backupActions.onExportCsv,
-                onRestoreConfirmed = backupViewModel::onRestoreConfirmed,
-                onRestoreCancelled = backupViewModel::onRestoreCancelled,
-                onBackupStatusShown = backupViewModel::onStatusMessageShown,
                 onEraseAllDataConfirmed = settingsViewModel::onEraseAllDataConfirmed,
                 onSettingsMessageShown = settingsViewModel::onMessageShown,
             ),

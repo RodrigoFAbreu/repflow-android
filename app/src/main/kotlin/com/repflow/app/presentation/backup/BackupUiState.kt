@@ -1,10 +1,20 @@
 package com.repflow.app.presentation.backup
 
-/** The backup actions' state - in Settings' Data group since remediation-1 CP14: busy, a transient status message, a restore awaiting confirmation. */
+import java.time.Instant
+
+/**
+ * The Backup screen's state: busy, a transient status message, a restore
+ * awaiting confirmation, and the hero's `Last backup` - [lastBackupAt] is when
+ * a backup export last succeeded on this device (`null`: none yet, once
+ * [isLastBackupLoaded]), read against [now].
+ */
 data class BackupUiState(
     val isBusy: Boolean = false,
     val statusMessage: BackupStatusMessage? = null,
     val pendingRestoreJson: String? = null,
+    val lastBackupAt: Instant? = null,
+    val isLastBackupLoaded: Boolean = false,
+    val now: Instant = Instant.EPOCH,
 )
 
 sealed interface BackupStatusMessage {

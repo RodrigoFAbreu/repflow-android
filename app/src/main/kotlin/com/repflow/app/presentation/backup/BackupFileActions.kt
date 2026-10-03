@@ -26,9 +26,9 @@ import java.nio.charset.StandardCharsets
  * The three backup actions, wired to their SAF (Storage Access Framework)
  * pickers: export a backup, restore from a file, export history as CSV.
  *
- * Since remediation-1 CP14 they are rows in Settings' `Data` group (`4a`)
- * rather than buttons on a Backup screen of their own; the wiring is the old
- * Backup route's, unchanged. Only this file touches `Uri`/`ContentResolver` -
+ * They are the Backup screen's buttons (`5d`, remediation-1-remediation-1
+ * CP8; rows in Settings' `Data` group from remediation-1 CP14 until then);
+ * the wiring is the original Backup route's, unchanged. Only this file touches `Uri`/`ContentResolver` -
  * [BackupViewModel] works with plain text.
  */
 class BackupFileActions(

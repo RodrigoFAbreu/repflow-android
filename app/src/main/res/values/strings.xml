@@ -364,14 +364,23 @@
     <string name="history_date_picker_confirm">Set</string>
     <string name="history_date_picker_clear">Clear</string>
 
-    <!-- Backup actions, in Settings' Data group since remediation-1 CP14 (4a). The ids are kept: the backup route tests read them. -->
-    <string name="backup_export_action">Export a backup</string>
-    <string name="backup_export_meta">One file, everything, readable without the app</string>
+    <!-- The Backup screen (5d, turn 8's 8c; remediation-1-remediation-1 CP8). The action ids are kept: the backup route tests read them. -->
+    <string name="backup_title">Backup and restore</string>
+    <string name="backup_back_content_description">Back</string>
+    <string name="backup_last_today">Last backup today</string>
+    <string name="backup_last_yesterday">Last backup yesterday</string>
+    <string name="backup_last_days_ago">Last backup %1$d days ago</string>
+    <string name="backup_last_date_time">%1$s, %2$s</string>
+    <string name="backup_none_title">No backup yet</string>
+    <string name="backup_none_meta">Your data lives only on this phone</string>
+    <string name="backup_export_action">Export backup now</string>
+    <string name="backup_export_first_action">Export your first backup</string>
+    <string name="backup_export_note">One file with every exercise, plan, workout, recovery entry and suggestion. You choose where it\'s saved. RepFlow never uploads it.</string>
     <string name="backup_export_saved">Saved</string>
-    <string name="backup_restore_action">Restore from a file</string>
-    <string name="backup_restore_meta">Nothing is replaced until you confirm</string>
+    <string name="backup_section_other_tools">Export for other tools</string>
     <string name="backup_csv_export_action">Workout history as CSV</string>
-    <string name="backup_csv_export_meta">For spreadsheets and other tools</string>
+    <string name="backup_restore_note">Restoring replaces all data on this phone with the file\'s contents. Your settings stay. It can\'t be undone, so export a backup first.</string>
+    <string name="backup_restore_action">Restore from a backup</string>
     <string name="backup_message_restore_succeeded">Backup restored</string>
     <string name="backup_message_csv_succeeded">History exported as CSV</string>
     <string name="backup_message_invalid_backup">That file isn\'t a valid RepFlow backup.</string>
@@ -668,6 +677,7 @@
     <string name="settings_extra_set_fields_row_meta">RPE, pain, technique</string>
     <string name="settings_value_content_description">%1$s: %2$s</string>
     <string name="settings_archived_row">Archived exercises and plans</string>
+    <string name="settings_backup_row">Backup and restore</string>
     <string name="settings_default_rest_sheet_title">Default rest</string>
     <string name="settings_default_rest_sheet_caption">Used when neither the plan nor the exercise sets a rest.</string>
     <string name="settings_default_rest_other">Other</string>

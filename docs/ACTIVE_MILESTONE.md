@@ -258,7 +258,65 @@ registry `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediati
   and `BackupRouteUnreadableRestoreFileTest`, `BackupRouteSafCancellationTest` and
   `MainActivityThemeSmokeTest` (5 tests, 0 failures), which also use the Settings
   screen. The side-by-side visual pass against `5c` is CP10's.
-- **Next: CP8** (B1 dedicated Backup screen, `5d`).
+- **CP8 (B1 dedicated Backup screen, `5d`) complete, 2026-10-03.**
+  Presentation plus one write of CP5's `last_backup_at`; no schema change, no
+  dependency. The live `5d` artboard and the designer's newer **turn 8** (`8c`,
+  "replaces 5c and 5d", added after the turn-7 guidance) were read first; `8c`'s
+  Backup screen matches Q5 exactly (it drops the same recent-files, `Share`,
+  safety-snapshot, size/schema, in-app file chooser and `Undo` items), so the
+  layout follows it: title `Backup and restore`; a hero card (shield-check glyph,
+  `Last backup <today | yesterday | N days ago>` over `d MMM, HH:mm`, or the
+  shield-warning glyph, `No backup yet` over `Your data lives only on this phone`
+  before the first), the 56dp primary `Export backup now` (`Export your first
+  backup` before the first) and the note `One file with every exercise, plan,
+  workout, recovery entry and suggestion. You choose where it's saved. RepFlow
+  never uploads it.`; `Export for other tools` with a 52dp `Workout history as
+  CSV` row; the `Replaces everything` card (destructive ring, the `Restoring
+  replaces all data on this phone ...` note, outlined `Restore from a backup`).
+  New `presentation/backup/`: `BackupScreen`, `BackupScreenActions`,
+  `BackupRoute` (route `settings/backup`, `RepFlowDestinations.BACKUP`, reached
+  only from Settings), and the pure `lastBackupLabel` (calendar days in the
+  device zone). Four Phosphor glyphs added (`shield-check` fill, `shield-warning`,
+  `download-simple`, `upload-simple`; upstream path data, `RepFlowIconsTest`'s
+  enumerated set extended). **Settings:** the three backup rows and `Saved`
+  leave; the `Data` group is `Archived exercises and plans ›` and `Backup and
+  restore ›` (the `database` glyph, no subtitle), and `SettingsScreen`/`Route`
+  no longer take the backup state or `BackupViewModel` (`SettingsActions` drops
+  six callbacks, gains `onBackupClick`; unused `SettingsActionRow` `enabled` and
+  `trailing` parameters removed). **`BackupViewModel`** now takes
+  `SettingsRepository` and `Clock`: it observes `lastBackupAt` into
+  `BackupUiState` (`lastBackupAt`, `isLastBackupLoaded`, `now`) and writes
+  `lastBackupAt = clock.now()` after a successful **`BackupExportKind.BACKUP`**
+  export only, never a CSV export, a cancel or a failure; a failed write is
+  dropped (the export still reports success). Restore is unchanged: the system
+  picker, the existing destructive confirmation (`BackupRestoreConfirmDialog`,
+  our dialog text kept per the guidance, B10) and today's `Backup restored`
+  snackbar. An export's success is the hero's own `Saved` mark (moved from
+  Settings' row). Registered deviations (Q5, for CP10): no recent-files list, no
+  `Share`, no safety-snapshot row, no file metadata, no restore `Undo` toast, no
+  restore file sheet with a preview, no `Backup restored · N workouts` toast
+  copy; also not built: `8c`'s `Last backup <when>` subtitle on Settings'
+  `Backup and restore` row and its `Your data` regrouping (CP7's committed
+  Settings layout stands; follow-up). Tests: JVM `BackupViewModelTest` (+6: stamp
+  written on a backup success, hero starts from the stored value, not on a CSV
+  success, not on a cancel or failure, a failed stamp write does not fail the
+  export, a restore leaves it alone), new `LastBackupLabelTest` (4); instrumented
+  new `BackupScreenTest` (8: no-backup and backup hero, today, the three actions,
+  disabled while busy, restore confirmation still required, confirm, `Saved` and
+  snackbars), `SettingsScreenTest` (the three-backup-rows test replaced by the
+  `Backup and restore` row test; the message test no longer carries backup
+  state), `BackupRouteSafCancellationTest` and `BackupRouteUnreadableRestoreFileTest`
+  re-pointed Settings -> `Backup and restore` -> the screen's button,
+  `MainActivityNavHostSmokeTest` (Settings, Backup, back; bottom nav absent).
+  Gate: spotlessCheck, detekt, lintDebug (0 errors, 22 warnings, 1 hint; the new
+  one is `PluralsCandidate` on `backup_last_days_ago`, the same category as four
+  existing strings), testDebugUnitTest (707 tests, 111 classes, 0 failures),
+  assembleDebug, assembleDebugAndroidTest green. AVD (`emulator-5560`, stopped
+  afterwards): `BackupScreenTest`, `BackupRouteSafCancellationTest`,
+  `BackupRouteUnreadableRestoreFileTest`, `SettingsScreenTest`,
+  `MainActivityNavHostSmokeTest` 34/34. Not visually compared side by side with
+  `8c`: that is CP10's.
+- **Next: CP9** (B3 set entry keeps its numbers and seeds from last session).
 
 ---
 
