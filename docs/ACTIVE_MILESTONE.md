@@ -431,6 +431,22 @@ registry `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediati
      notification icon and tap action, funnel-x and chart-line glyphs (`D142`):
      follow-ups once the designer answers `DESIGN_FOLLOWUP.md` section C.
   **Instrumented tests still needing a device:** none; all ran on the AVD.
+- **Implementation review round 1 applied, 2026-10-03** (local review, REVISE,
+  0 Blocking, 3 Important, 11 Optional). Each Important finding was fixed
+  with a test that failed before the fix. **I-1** `BackupViewModel` settings
+  `.catch` (rethrows only `CancellationException`, marks the hero loaded),
+  `897e22e`. **I-2** `ProgressChart` reads `onSelect` through
+  `rememberUpdatedState`, `02af222`; the self-review's "not reproduced"
+  rejection is withdrawn (its repro switched the metric before any touch).
+  **I-3** the `Off` extra-set-fields test now enters RPE, pain and technique
+  in `Collapsed`, switches to `Off`, logs and asserts all three null,
+  `18d5984`; it fails with the `takeIf { extraFieldsOn }` guards removed.
+  Optional: O-1 (`897e22e`) and O-6 (`041d4e6`) applied; O-2 to O-5, O-7 to
+  O-11 and the extra missing tests are recorded as not applied, with reasons,
+  in the bundle's `IMPLEMENTATION_SUMMARY.md`. The functional-review items above are
+  untouched. Gate: spotlessCheck, detekt, lintDebug (0 errors, 22 warnings),
+  testDebugUnitTest 729 tests 0 failures; AVD instrumented 378 tests
+  (94 + 87 + 197) 0 failures.
 
 ---
 
