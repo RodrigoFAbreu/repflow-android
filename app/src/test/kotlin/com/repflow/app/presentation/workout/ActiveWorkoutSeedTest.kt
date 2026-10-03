@@ -252,6 +252,20 @@ class ActiveWorkoutSeedTest {
         }
 
     @Test
+    fun `this session's working set beats a later warm-up for the seed`() {
+        val sets =
+            listOf(
+                ActiveSetUi(WorkoutSetId("w"), 1, load = 80.0, reps = 8, durationSeconds = null),
+                ActiveSetUi(WorkoutSetId("u"), 2, load = 40.0, reps = 10, durationSeconds = null, isWarmup = true),
+            )
+
+        assertEquals(
+            SetEntrySeed(load = BigDecimal.valueOf(80.0), reps = BigDecimal(8)),
+            entrySeedOf(ExerciseTrackingType.WEIGHT_AND_REPS, sets, null),
+        )
+    }
+
+    @Test
     fun `the seed carries only the fields the tracking type records`() {
         val sets = listOf(ActiveSetUi(WorkoutSetId("s"), 1, load = 20.0, reps = 9, durationSeconds = null))
 
