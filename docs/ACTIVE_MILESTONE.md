@@ -515,7 +515,173 @@ layout and copy, the Backup row subtitle, the check on the Default rest chips
 and none on Theme; C Progress (no note, span line, captions, unavailable
 copy); G2 on the phone: one buzz at rest end, with the notification's sound.
 
-## `repflow-redesign-visual-foundation-remediation-1-remediation-1` — Functional review checklist, round 1 (implementation revision 4)
+## `repflow-redesign-visual-foundation-remediation-1-remediation-1` — Functional review checklist, ROUND 2 (implementation revision 6)
+
+Functional review ROUND 2. Technical re-approval of **revision 6** is recorded
+(commit `5b97352`, EXTERNAL_APPROVE). Round 1's findings
+(`.ai-review/feedback/FUNCTIONAL_REVIEW.md`, consumed) and their outcome are in
+"Functional review round 1: findings applied" above. This round re-tests
+**only what round 1 and its review fixes changed** (GF-1 to GF-5, plus review
+fixes GXI4-I1 and O1) and a short regression pass. For everything else, refer
+back to the round 1 checklist below (superseded here for the changed areas).
+Findings go to `.ai-review/feedback/FUNCTIONAL_REVIEW.md` (headed "round 2",
+this item). Every command names the id explicitly.
+
+**Tags.** **[AVD]** the AVD `RepFlow_S24Ultra_384dp_API36` (`emulator-5554`):
+may write data and use Save, Restore and Export. **[PHONE]** the physical
+SM-S928B, only with the user's permission: **look-only**, with one exception:
+a single test workout, abandoned afterwards, used for GF-1, GF-3 and GF-5 on
+real hardware. On the phone never save an editor, never Restore, Erase or
+Export, never change a setting. A step that changes a setting is **[AVD]**.
+**[BOTH]** AVD first, look-only on the phone. WRITES marks steps that write.
+
+### R2 setup and automated state
+
+- `ANDROID_SERIAL=emulator-5554 ./gradlew installDebug` (Room 9). Seed and test
+  data as in round 1 "Test data" (Bench Press weight and reps with at least
+  eight sessions across four months, Pull Up reps only, Plank timed, one
+  archived exercise, plans, one never-done exercise, a fresh install for empty
+  states). Notifications and `Alarms & reminders` allowed.
+- Automated state: last full gate (round 1 fixes): spotlessCheck, detekt,
+  lintDebug 0 errors, 737 JVM unit tests 0 failures, AVD instrumented 392 0
+  failures. Revision 6 added two small app changes since (`WorkoutFocus.kt`
+  seed effect keyed by the entry; `RestTimerExpiryHandler.kt` legacy channel
+  deleted at every rest end) with tests, covered by the technical review. Not
+  re-run here; the working tree is clean.
+
+### R2-A. GF-1: unlogged values survive
+
+1. **[BOTH] R2-A1. Seeded exercise, Board round trip. WRITES a workout (phone:
+   the one test workout).** Start a workout with Bench Press (history). Open it
+   in focus, type or step weight and reps to values that differ from the seed
+   (do not log). Go to the Board, reopen it: your values are there, not the
+   seed.
+2. **[BOTH] R2-A2. Never-done exercise.** Add a never-done exercise, step a
+   weight and reps (do not log), Board and back: values kept. Untouched, it
+   stays empty (`—`).
+3. **[BOTH] R2-A3. Next/Previous.** With unlogged values in exercise 1, press
+   Next, edit exercise 2 unlogged, press Previous then Next: both keep their
+   values.
+4. **[AVD] R2-A4. Recreation.** With unlogged values, visit the Board, then rotate the
+   screen: values kept.
+5. **[AVD] R2-A5. GXI4-I1 late seed.** Cold start the app (force-stop, then open
+   the active workout straight away) and open two exercises in focus quickly,
+   before history arrives, then switch between them: the **second** exercise
+   gets its seed too (not blank), and a typed value is never overwritten. If
+   history arrives too fast to catch, say so; the unit test covers it.
+6. **[AVD] R2-A6. Log clears per set.** Log a set: weight and reps stay for the
+   next set; RPE/pain/technique/warm-up clear (unchanged from round 1).
+
+### R2-B. GF-2: Library no-results
+
+1. **[BOTH] R2-B1. Active.** Library, Active filter, search a name that matches
+   nothing: magnifier, `Nothing called "…". Create it below.`, then the
+   `Create "…"` row.
+2. **[BOTH] R2-B2. Archived, no match.** Archived filter with at least one
+   archived exercise, search a non-matching name: magnifier and
+   `No archived exercises match "…".` (no create row).
+3. **[AVD] R2-B3. Truly empty archive.** With nothing archived (restore it, or
+   fresh install) and no query: archive glyph and `No archived exercises.`
+   Clearing the query on B2 returns the list.
+
+### R2-C. GF-3: Log set needs weight and reps
+
+1. **[BOTH] R2-C1. Weight and reps.** Never-done weight and reps exercise
+   (phone: the test workout): `Log set` disabled when both empty; still disabled
+   with reps only; still disabled with weight only; enabled with both.
+2. **[BOTH] R2-C2. 0 kg.** Weight `0` and reps `5`: `Log set` enabled and logs
+   `0 kg × 5`. Clear the weight to empty: disabled again.
+3. **[AVD] R2-C3. Unchanged types.** Pull Up (reps only): reps alone enables
+   `Log set`. Plank (timed): the duration alone enables it.
+
+### R2-D. GF-4: Settings and Progress copy
+
+1. **[BOTH] R2-D1. Settings groups.** Scroll all of Settings: groups in order
+   `Appearance`, `Rest timer`, `During a workout`, `Your data`, then the Erase
+   card and footer. Nothing clipped. Compare with `8c`.
+2. **[BOTH] R2-D2. Rows.** `Your data` holds a row `Archived` with subtitle
+   `Exercises and plans`, and the Backup row whose subtitle reads `Last backup
+   …` (a phone that has exported) or `No backup yet`. Row copy matches `8c`.
+   The Erase card text names recovery entries and suggestions.
+3. **[AVD] R2-D3. Chips and checks (WRITES a setting).** `Default rest` sheet:
+   the selected chip has a check, others none; pick another and reopen, the
+   check moved. Theme choices (`System`, `Light`, `Dark`) show **no** check
+   (look only on the phone: open and close without choosing, never on the
+   phone for Default rest). Restore `1:30` and `System`.
+4. **[BOTH] R2-D4. Progress copy.** Progress for Bench Press: the span line
+   under the chart (e.g. the date span of the range), the metric captions,
+   `Records · all time`, and **no** `Only valid sessions count` note. The range
+   pills (`3m` `6m` `All`) have no check.
+5. **[BOTH] R2-D5. Unavailable copy.** A range or metric with nothing to show
+   reads the new unavailable copy (a range with no sessions; a metric with no
+   data such as `Best est. 1RM` with no set of 12 reps or fewer).
+
+### R2-E. GF-5: one buzz, sound kept, channel renamed
+
+1. **[BOTH] R2-E1. One buzz. WRITES a workout (phone: the same test workout).**
+   Log a set so rest runs, lock the phone or leave the app, let the rest end:
+   **exactly one** vibration (the app's 400 ms), not two, and the notification
+   still plays its sound (phone not on silent/DND).
+2. **[BOTH] R2-E2. Channel.** Settings app > RepFlow > Notifications (look
+   only), or `adb shell dumpsys notification | grep rest_timer` on the AVD: the
+   channel is `rest_timer_v2` and the old `rest_timer` is not listed. Open
+   RepFlow after an update from the earlier build to confirm the old one is
+   removed (AVD with the revision 4 build first, optional).
+3. **[AVD] R2-E3. Notification still posts and is cleared** at Finish and at
+   Abandon (round 1 F1, G1).
+
+### R2-F. Short regression pass
+
+1. **[BOTH] R2-F1. Rest timer.** `Skip` ends the rest; `-15s` and `+15s` change
+   the remaining time; a `-15s` that ends the rest gives one alert.
+2. **[AVD] R2-F2. Notification cleared on finish and abandon.** Rest
+   notification showing, `Finish`: cleared; again with `Abandon`: cleared. On
+   the phone only the abandon, in the test workout.
+3. **[AVD] R2-F3. Editors (WRITES).** Exercise editor and plan editor: Save
+   persists the change; leaving with edits and discarding does not.
+4. **[AVD] R2-F4. Backup export stamps Last backup (WRITES).** Export a backup:
+   the Backup screen shows `Last backup today`, and the Settings Backup row
+   subtitle shows `Last backup …` too. CSV does not stamp.
+5. **[AVD] R2-F5. Abandon the test workout.** Abandon any workout left over.
+
+### R2 phone tester list
+
+Back up the phone first and use the user's permission. Look-only except the one
+test workout (abandon it at the end); no save, Restore, Erase, Export or
+setting change.
+
+1. **[BOTH] R2-D1, R2-D2** Settings groups and rows (look-only).
+2. **[BOTH] R2-D4, R2-D5** Progress copy (look-only).
+3. **[BOTH] R2-B1, R2-B2** Library no-results (type a search only).
+4. **[BOTH] R2-A1 to R2-A3, R2-C1, R2-C2, R2-E1, R2-F1** one test workout:
+   GF-1, GF-3, one buzz with the notification sound, rest timer; then
+   `Abandon`.
+5. **[BOTH] R2-E2** channel check (look-only).
+
+### R2 known limitations and out of scope
+
+- Not changed and not findings: m:ss pad, permission-state Settings rows,
+  stacked dialog order, empty-range and single-session extra lines, Undo after
+  Restore re-archiving with today's date, an older `Rest done` staying in the
+  shade, the landscape rest panel over the steppers.
+- Customisation of the old rest channel resets (accepted). Weight unit not
+  built (`D5`).
+
+### R2 expected result and what happens next
+
+Every step behaves as stated, nothing crashes, no earlier area regressed. If
+clean: `/accept-milestone repflow-redesign-visual-foundation-remediation-1-remediation-1`
+is the only acceptance command and needs every checkpoint in the registry
+`COMPLETE`; an outstanding checkpoint goes to `/milestone-implement`. No
+command records acceptance of a partial round. Findings go to
+`.ai-review/feedback/FUNCTIONAL_REVIEW.md`, then
+`/apply-functional-review repflow-redesign-visual-foundation-remediation-1-remediation-1`
+(bounded branch for a same-scope fix, broad branch for a `...-remediation-<n>`
+child).
+
+---
+
+## `repflow-redesign-visual-foundation-remediation-1-remediation-1` — Functional review checklist, round 1 (implementation revision 4; superseded by round 2 above for the changed areas)
 
 Functional review ROUND 1 of group B. Technical approval of **revision 4** is
 recorded (commit `7159408`). Scope: B1 to B7 (Settings `5c` and the Archived
