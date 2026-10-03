@@ -70,7 +70,8 @@ internal fun RecoveryCard(
     RepFlowCard(modifier = Modifier.fillMaxWidth(), contentPadding = CardPadding) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             RepFlowSectionLabel(text = stringResource(R.string.home_recovery_label), modifier = Modifier.weight(1f))
-            LogButton(onLogClick)
+            // `7a` I7 / `9a`: an empty card offers only `Log recovery`, not a second entry point.
+            if (readiness != HomeReadiness.NotLogged) LogButton(onLogClick)
         }
         when (readiness) {
             is HomeReadiness.Logged -> {

@@ -162,6 +162,23 @@ class HomeScreenTest {
         assertEquals(1, logRecovery)
     }
 
+    /** An empty Recovery card hides the header `Log ›`; the one entry point is `Log recovery` (P2-F-6). */
+    @Test
+    fun anEmptyRecoveryCardHidesTheHeaderLogLink() {
+        show(HomeUiState(date = today, readiness = HomeReadiness.NotLogged))
+
+        composeRule.onNodeWithText(string(R.string.home_recovery_empty_action)).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(string(R.string.home_recovery_log_content_description)).assertDoesNotExist()
+    }
+
+    /** With an entry the header `Log ›` stays. */
+    @Test
+    fun aLoggedRecoveryCardKeepsTheHeaderLogLink() {
+        show(HomeUiState(date = today, readiness = HomeReadiness.Logged(seedReadiness())))
+
+        composeRule.onNodeWithContentDescription(string(R.string.home_recovery_log_content_description)).assertIsDisplayed()
+    }
+
     /** At 1.3x and 2.0x font the resume card's `Resume` and `Finish it` stay whole words on one line (design 9f, P2-F-3). */
     @Test
     fun theResumeCardsLabelsStayWholeAtLargeFontSizes() {
