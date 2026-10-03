@@ -441,6 +441,10 @@ internal fun RestTimerBar(
     }
     val resting = remainingSeconds > 0
     val dismissDescription = stringResource(R.string.workout_rest_dismiss_content_description)
+    if (!resting) {
+        RestDoneStrip(onDismiss = onSkipRestTimer, dismissDescription = dismissDescription)
+        return
+    }
     RepFlowCard(
         modifier =
             Modifier
@@ -455,15 +459,11 @@ internal fun RestTimerBar(
             ) {
                 Text(
                     text =
-                        if (resting) {
-                            stringResource(
-                                R.string.workout_rest_remaining,
-                                remainingSeconds / MINUTE_SECONDS,
-                                remainingSeconds % MINUTE_SECONDS,
-                            )
-                        } else {
-                            stringResource(R.string.workout_rest_done)
-                        },
+                        stringResource(
+                            R.string.workout_rest_remaining,
+                            remainingSeconds / MINUTE_SECONDS,
+                            remainingSeconds % MINUTE_SECONDS,
+                        ),
                     style =
                         RepFlowNumericTextStyle.copy(
                             fontSize = RestTimerCountdownFontSize,
@@ -475,7 +475,7 @@ internal fun RestTimerBar(
                 )
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(RestStripSubGap)) {
                     Text(
-                        text = stringResource(if (resting) R.string.workout_rest_resting else R.string.workout_rest_ready),
+                        text = stringResource(R.string.workout_rest_resting),
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = RestStripSubFontSize),
                         color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
                         maxLines = 1,
@@ -529,6 +529,60 @@ internal fun RestTimerBar(
 }
 
 /**
+ * The strip once the rest has ended (design `9c`/`8e`, R3): a neutral edge, a
+ * check, `Rest done` over `Next set is ready`, and the 44dp dismiss `X`. No
+ * nudge or skip buttons - there is no rest left to change - and no fill.
+ * Logging the next set clears it, as before.
+ */
+@Composable
+private fun RestDoneStrip(
+    onDismiss: () -> Unit,
+    dismissDescription: String,
+) {
+    RepFlowCard(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(start = RestStripSideMargin, end = RestStripSideMargin, bottom = RestStripBottomMargin),
+        contentPadding = PaddingValues(start = RestStripHorizontalPadding, end = RestDoneEndPadding),
+    ) {
+        Row(
+            modifier = Modifier.heightIn(min = RestDoneMinHeight),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapLg),
+        ) {
+            Icon(
+                painter = painterResource(RepFlowIcons.checkCircle),
+                contentDescription = null,
+                tint = repFlowAccentOutlineColors(MaterialTheme.colorScheme).label,
+                modifier = Modifier.size(RestDoneCheckSize),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.workout_rest_done),
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = RestDoneTitleFontSize),
+                )
+                Text(
+                    text = stringResource(R.string.workout_rest_ready),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = RestStripSubFontSize),
+                    color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
+                )
+            }
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.semantics { contentDescription = dismissDescription },
+            ) {
+                Icon(
+                    painter = painterResource(RepFlowIcons.x),
+                    contentDescription = null,
+                    modifier = Modifier.size(RestTimerIconSize),
+                )
+            }
+        }
+    }
+}
+
+/**
  * How much of the planned rest is still to run, as the progress bar's own
  * 0..1 fraction.
  *
@@ -575,6 +629,12 @@ private val RestStripHorizontalPadding = 14.dp
 private val RestStripVerticalPadding = 12.dp
 private val RestStripSubGap = 6.dp
 private val RestStripSubFontSize = 12.sp
+
+/** `9c` done strip: `min-height:56px`, `padding:0 4px 0 12px`, a 20px check, 15/500 title. */
+private val RestDoneMinHeight = 56.dp
+private val RestDoneEndPadding = 4.dp
+private val RestDoneCheckSize = 20.dp
+private val RestDoneTitleFontSize = 15.sp
 
 /** The strip's three buttons are one row at `6b`'s 44 floor, `Skip rest` included. */
 private val RestStripButtonHeight = 44.dp

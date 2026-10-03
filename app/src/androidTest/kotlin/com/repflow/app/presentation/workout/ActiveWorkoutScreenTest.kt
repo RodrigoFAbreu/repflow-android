@@ -857,6 +857,34 @@ class ActiveWorkoutScreenTest {
         assertEquals(1, results.single().lineCount)
     }
 
+    /** The done strip is neutral: check, `Rest done` / `Next set is ready` and the X, with no nudge or skip buttons (P2-F-5). */
+    @Test
+    fun theDoneRestStripOffersOnlyTheDismissX() {
+        var dismissed = 0
+        composeRule.setContent {
+            RepFlowTheme {
+                Box(Modifier.width(384.dp)) {
+                    RestTimerBar(
+                        timer = RestTimerUi(endAt = Instant.now().minusSeconds(1), totalDurationSeconds = 90),
+                        onAddRestTime = {},
+                        onRemoveRestTime = {},
+                        onSkipRestTimer = { dismissed++ },
+                    )
+                }
+            }
+        }
+
+        node(R.string.workout_rest_done).assertIsDisplayed()
+        node(R.string.workout_rest_ready).assertIsDisplayed()
+        node(R.string.workout_rest_skip).assertDoesNotExist()
+        node(R.string.workout_active_rest_timer_add).assertDoesNotExist()
+        node(R.string.workout_active_rest_timer_remove).assertDoesNotExist()
+        composeRule
+            .onNodeWithContentDescription(composeRule.activity.getString(R.string.workout_rest_dismiss_content_description))
+            .performClick()
+        assertEquals(1, dismissed)
+    }
+
     /** A one-kilo step reads "1 step", not "1 steps" (functional review A3). */
     @Test
     fun theWeightCaptionIsSingularForAOneKiloStep() {
