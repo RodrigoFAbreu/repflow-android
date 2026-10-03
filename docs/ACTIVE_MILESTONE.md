@@ -51,7 +51,61 @@ registry `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediati
   (0 errors, 21 warnings, 1 hint), testDebugUnitTest (670 tests, 107 classes,
   0 failures), assembleDebugAndroidTest all green. CP2 builds no screen, so no
   device run; the `5b` artboard was re-read (matches the plan's summary).
-- **Next: CP3** (B2 Progress screen conversion to 5b; also owns `xLabelIndices`).
+- **CP3 (B2 Progress screen to `5b`) complete, 2026-10-03.** Presentation
+  only; no schema. The live `5b` artboard (`RepFlow.dc.html`, id `5b`) was
+  re-read first. Chips and the segmented control are replaced by the
+  full-width exercise picker button (52, radius 10, barbell, caret) opening
+  the `Track an exercise` `RepFlowSheet` (rows 56, chosen row tinted with a
+  check-fat, scrolls at 60% of the window height) and three metric buttons (40
+  at radius 8 inside a 44 touch target, check on the chosen one).
+  `ProgressCard` is now the chart card: metric caption (`Heaviest working set`
+  / `Most reps in a set` / `Longest set` / `Estimated 1RM` / `Volume per
+  session`), the `3m` `6m` `All` pills (32 inside a 44 target, default `All`),
+  the 30/500 value with `+10 kg · +14%` (no percent from a 0 start, no delta
+  with one point), the live-region readout strip (`Latest · 26 May`, or the
+  touched date), and `ProgressChart` (Compose Canvas, no dependency): 96 tall,
+  y gridlines and labels at max/mid/min (one label for a flat series), 2.4
+  line, area, dashed cursor, 4.5 dot; one accessibility node with a spoken
+  summary; tap and horizontal drag pick the **nearest point**
+  (`nearestPointIndex`). Date labels are width-aware (GX-I2): the widest label
+  is measured and `xLabelIndices(pointCount, plotWidthPx, labelWidthPx, gapPx)`
+  (`ProgressModel.kt`) picks the smallest stride that leaves at least
+  label + 8dp, always drawing the first and last labels (the stride-aligned
+  label nearest the last is the one dropped); labels carry the year only when
+  the series spans years. `ProgressStatsSection` draws the `Sessions` / `Avg
+  RPE` tiles (`RepFlowStatRow`, `—` with no RPE), `Training frequency` (8
+  weekly bars, last in the accent, `8 weeks ago` / `this week`, `N sessions a
+  week on average`, a spoken per-week summary) and `Records` (`Heaviest set —
+  82.5 kg × 7`, `Best est. 1RM — 99 kg` or `Best est. 1RM — —` with no eligible
+  set, `Most reps in a set`, `Longest hold`; each dated). `ProgressUiState`
+  gains `range`, `now`, `zone`, the range-narrowed `series` and `stats`
+  (the CP2 12-point bridge is gone); `ProgressViewModel` takes `SavedStateHandle`
+  and `Clock`, keeps exercise, metric and range in the handle (an unknown
+  stored metric or range reads the default), and stamps `now` on each history
+  emission and range choice. Decided here, not drawn by the design (CP10
+  registers): no session in the range shows the card's `progress_metric_empty`
+  (reworded: `No sessions in this range yet.`) in place of value and chart with
+  the pills kept; one session shows value, readout and a lone dot; the records
+  second row uses `trend-up` (no new asset, the plan's optional `repeat` icon
+  is not added); a pill's selected state is tint, ring and medium weight (no
+  check, they would not fit beside the caption); the `Only valid sessions
+  count` note stays under the sections (`5b` omits it); `progress_best` and the
+  bar-chart helpers (`barHeightFractions`, `barMonthLabels`) are removed.
+  Tests: JVM `ProgressModelTest` (scale, flat, `xLabelIndices` incl. 2 to 400
+  points at 360 and 384dp widths, nearest point, point x, date, numbers),
+  `ProgressViewModelTest` (range default and kept across exercises, narrowing,
+  restored and garbled handle, an exercise leaving the list); instrumented
+  `ProgressScreenTest` rewritten (13 tests; the three named methods rewritten,
+  the four named kept and adjusted, new: pills change the headline, tap moves
+  the readout, one-point, empty range, tiles/frequency/records, dense 70-session
+  `All` labels disjoint by 8dp with first and last shown at 360 and 384dp).
+  Gate: spotlessCheck, detekt, lintDebug (0 errors, no new warning in the
+  progress files), testDebugUnitTest (678 tests, 0 failures),
+  assembleDebugAndroidTest, assembleDebug all green. AVD
+  (`RepFlow_S24Ultra_384dp_API36`, `emulator-5554`, stopped afterwards):
+  `ProgressScreenTest` 13/13 and `MainActivityNavHostSmokeTest` 9/9 pass. The
+  side-by-side visual pass against `5b` is CP10's.
+- **Next: CP4** (B5 and B4: shared 48dp search field and empty-state glyphs).
 
 ---
 

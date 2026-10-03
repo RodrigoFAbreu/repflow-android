@@ -658,7 +658,7 @@
     <string name="settings_footer">RepFlow %1$s · offline, no account</string>
     <string name="settings_footer_no_version">RepFlow · offline, no account</string>
 
-    <!-- Progress tab (remediation-1 CP15, 4a). -->
+    <!-- Progress tab (remediation-1 CP15, 4a; remediation-1-remediation-1 CP3, 5b). -->
     <string name="progress_empty">Your progress shows up here once you have logged a few workouts.</string>
     <string name="progress_metric_top_set">Top set</string>
     <string name="progress_metric_estimated_one_rep_max">Est. 1RM</string>
@@ -667,16 +667,46 @@
     <string name="progress_unit_kg_total">kg total</string>
     <string name="progress_unit_reps">reps</string>
     <string name="progress_unit_seconds">s</string>
-    <string name="progress_delta">%1$s %2$s since %3$s</string>
-    <string name="progress_best">Best: %1$s %2$s · %3$d-session window</string>
-    <string name="progress_metric_empty">Not enough sessions yet. A trend needs at least two.</string>
+    <string name="progress_delta">%1$s %2$s</string>
+    <string name="progress_delta_percent">%1$s %2$s · %3$s%%</string>
+    <string name="progress_metric_empty">No sessions in this range yet.</string>
     <string name="progress_estimate_needs_shorter_set">Est. 1RM needs a set of 12 reps or fewer.</string>
     <string name="progress_load_metrics_unavailable">Est. 1RM and Volume need a recorded load.</string>
     <string name="progress_valid_sessions_note">Only valid sessions count. Invalidating a workout in History removes its points from this chart.</string>
+    <string name="progress_picker_title">Track an exercise</string>
+    <string name="progress_caption_top_set">Heaviest working set</string>
+    <string name="progress_caption_most_reps">Most reps in a set</string>
+    <string name="progress_caption_longest_set">Longest set</string>
+    <string name="progress_caption_estimated_one_rep_max">Estimated 1RM</string>
+    <string name="progress_caption_volume">Volume per session</string>
+    <string name="progress_range_3m">3m</string>
+    <string name="progress_range_6m">6m</string>
+    <string name="progress_range_all">All</string>
+    <string name="progress_range_3m_spoken">the last 3 months</string>
+    <string name="progress_range_6m_spoken">the last 6 months</string>
+    <string name="progress_range_all_spoken">all time</string>
+    <string name="progress_readout_latest">Latest · %1$s</string>
     <plurals name="progress_chart_description">
-        <item quantity="one">%1$s over the last %2$d session, from %3$s to %4$s</item>
-        <item quantity="other">%1$s over the last %2$d sessions, from %3$s to %4$s</item>
+        <item quantity="one">%1$s over %2$s: one session, %4$s</item>
+        <item quantity="other">%1$s over %2$s: %3$d sessions, from %4$s to %5$s</item>
     </plurals>
+    <string name="progress_tile_sessions">Sessions</string>
+    <string name="progress_tile_avg_rpe">Avg RPE</string>
+    <string name="progress_none">—</string>
+    <string name="progress_frequency_title">Training frequency</string>
+    <string name="progress_frequency_start">8 weeks ago</string>
+    <string name="progress_frequency_end">this week</string>
+    <string name="progress_frequency_description">Sessions per week over the last 8 weeks, oldest first: %1$s</string>
+    <plurals name="progress_frequency_average">
+        <item quantity="one">%1$s session a week on average</item>
+        <item quantity="other">%1$s sessions a week on average</item>
+    </plurals>
+    <string name="progress_records_title">Records</string>
+    <string name="progress_record_heaviest">Heaviest set — %1$s × %2$d</string>
+    <string name="progress_record_estimate">Best est. 1RM — %1$s</string>
+    <string name="progress_record_estimate_none">Best est. 1RM — —</string>
+    <string name="progress_record_most_reps">Most reps in a set — %1$d</string>
+    <string name="progress_record_longest_hold">Longest hold — %1$s</string>
     <string name="progress_value_with_unit">%1$s %2$s</string>
 
     <!-- Design-system primitives (remediation-1 CP3). -->

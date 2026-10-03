@@ -13,5 +13,6 @@ fun ProgressRoute(viewModel: ProgressViewModel = hiltViewModel()) {
         uiState = uiState,
         onExerciseSelected = viewModel::onExerciseSelected,
         onMetricSelected = viewModel::onMetricSelected,
+        onRangeSelected = viewModel::onRangeSelected,
     )
 }

@@ -3,7 +3,6 @@ package com.repflow.app.presentation.progress
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +23,10 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,9 +41,9 @@ import androidx.compose.ui.unit.sp
 import com.repflow.app.R
 import com.repflow.app.application.progress.ExerciseProgress
 import com.repflow.app.application.progress.ProgressMetric
+import com.repflow.app.application.progress.ProgressRange
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.presentation.designsystem.RepFlowColor
-import com.repflow.app.presentation.designsystem.RepFlowShapes
 import com.repflow.app.presentation.designsystem.RepFlowSpacing
 import com.repflow.app.presentation.designsystem.components.RepFlowLoadingIndicator
 import com.repflow.app.presentation.designsystem.components.RepFlowScreenScaffold
@@ -49,14 +52,14 @@ import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
 import com.repflow.app.presentation.designsystem.repFlowSecondaryTextColor
 
 /*
- * The Progress tab (remediation-1 CP15), `4a`'s `nTabProgress`
- * (`RepFlow.dc.html:1013-1050`, script `:3743-3771`): the title, a row of
- * exercise chips, the `Top set` / `Est. 1RM` / `Volume` segmented control, the
- * card ([ProgressCard]) and the note that only valid sessions count.
+ * The Progress tab (remediation-1-remediation-1 CP3), `5b`: the title, a
+ * full-width exercise picker button and the `Top set` / `Est. 1RM` / `Volume`
+ * buttons stay put; under them one scrolling column holds the chart card
+ * ([ProgressCard]), the tiles, `Training frequency` and `Records`
+ * ([ProgressStatsSection]), and the note that only valid sessions count.
  *
- * The chips scroll sideways as `4a` draws them (`overflow:auto`); the selected
- * chip and segment are accent-tinted **and** carry a check, so the choice is
- * never shown by colour alone (`6b`).
+ * The chosen metric button is accent-tinted **and** carries a check, so the
+ * choice is never shown by colour alone (`6b`).
  */
 
 @Composable
@@ -64,6 +67,7 @@ fun ProgressScreen(
     uiState: ProgressUiState,
     onExerciseSelected: (ExerciseId) -> Unit,
     onMetricSelected: (ProgressMetric) -> Unit,
+    onRangeSelected: (ProgressRange) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     RepFlowScreenScaffold(title = stringResource(R.string.nav_progress_title), modifier = modifier) { padding ->
@@ -84,6 +88,7 @@ fun ProgressScreen(
                     padding = padding,
                     onExerciseSelected = onExerciseSelected,
                     onMetricSelected = onMetricSelected,
+                    onRangeSelected = onRangeSelected,
                 )
             }
         }
@@ -97,114 +102,76 @@ private fun ProgressContent(
     padding: PaddingValues,
     onExerciseSelected: (ExerciseId) -> Unit,
     onMetricSelected: (ProgressMetric) -> Unit,
+    onRangeSelected: (ProgressRange) -> Unit,
 ) {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(top = TitleGap, bottom = RepFlowSpacing.gapSm),
-    ) {
-        ExerciseChips(exercises = uiState.exercises, selectedId = exercise.exerciseId, onSelect = onExerciseSelected)
-        MetricSegments(
+    var pickerOpen by rememberSaveable { mutableStateOf(false) }
+    Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+        ExercisePickerButton(name = exercise.name, onClick = { pickerOpen = true }, modifier = Modifier.padding(top = TitleGap))
+        MetricButtons(
             offered = exercise.offeredMetrics,
             selected = uiState.metric,
             onSelect = onMetricSelected,
-            modifier = Modifier.padding(vertical = RepFlowSpacing.gapLg),
+            modifier = Modifier.padding(top = RepFlowSpacing.gapMd),
         )
-        ProgressCard(
-            exercise = exercise,
-            metric = uiState.metric,
-            series = uiState.series,
-            showsLoadMetricsUnavailable = uiState.showsLoadMetricsUnavailable,
-        )
-        ValidSessionsNote(Modifier.padding(top = NoteTopGap))
-    }
-}
-
-/** `4a`'s exercise chips (`:1016-1019`): 12.5 text, padding 8/13, 40 tall, a pill, 6 apart, in a sideways-scrolling row. */
-@Composable
-private fun ExerciseChips(
-    exercises: List<ExerciseProgress>,
-    selectedId: ExerciseId,
-    onSelect: (ExerciseId) -> Unit,
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapXs),
-    ) {
-        exercises.forEach { exercise ->
-            ExerciseChip(
-                label = exercise.name,
-                selected = exercise.exerciseId == selectedId,
-                onClick = { onSelect(exercise.exerciseId) },
+        Column(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(top = BodyTopGap, bottom = RepFlowSpacing.gapSm),
+        ) {
+            ProgressCard(
+                exercise = exercise,
+                metric = uiState.metric,
+                range = uiState.range,
+                series = uiState.series,
+                zone = uiState.zone,
+                showsLoadMetricsUnavailable = uiState.showsLoadMetricsUnavailable,
+                onRangeSelected = onRangeSelected,
             )
+            uiState.stats?.let { stats ->
+                ProgressStatsSection(
+                    stats = stats,
+                    unit = unitsOf(exercise.trackingType, uiState.metric).short,
+                    now = uiState.now,
+                    zone = uiState.zone,
+                )
+            }
+            ValidSessionsNote(Modifier.padding(top = NoteTopGap))
         }
     }
-}
-
-@Composable
-private fun ExerciseChip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    val selectedColors = repFlowSelectedPillColors(MaterialTheme.colorScheme)
-    val fill = if (selected) selectedColors.fill else Color.Transparent
-    val border = if (selected) selectedColors.border else RepFlowColor.hairline
-    val content = if (selected) selectedColors.label else MaterialTheme.colorScheme.onSurface.copy(alpha = CHIP_LABEL_ALPHA)
-    Row(
-        modifier =
-            Modifier
-                .heightIn(min = ChipMinHeight)
-                .clip(RepFlowShapes.pill)
-                .background(fill, RepFlowShapes.pill)
-                .border(BorderStroke(1.dp, border), RepFlowShapes.pill)
-                .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
-                .padding(horizontal = ChipHorizontalPadding),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(CheckGap),
-    ) {
-        if (selected) {
-            Icon(
-                painter = painterResource(RepFlowIcons.checkFat),
-                contentDescription = null,
-                tint = content,
-                modifier = Modifier.size(CheckSize),
-            )
-        }
-        Text(text = label, style = MaterialTheme.typography.bodySmall, color = content, maxLines = 1, softWrap = false)
+    if (pickerOpen) {
+        ExercisePickerSheet(
+            exercises = uiState.exercises,
+            selectedId = exercise.exerciseId,
+            onSelect = {
+                pickerOpen = false
+                onExerciseSelected(it)
+            },
+            onDismiss = { pickerOpen = false },
+        )
     }
 }
 
 /**
- * `4a`'s metric control (`:1021-1025`): a hairline ring, radius 10, padding 3,
- * segments 40 tall at radius 8, 13 text, 4 apart. A reps-only or timed
- * exercise offers `Top set` alone (`D22`).
+ * `5b`'s metric buttons: three equal buttons 6 apart, each 40 tall at radius 8
+ * with 13 text inside a 44 tall touch target (registered). A reps-only or
+ * timed exercise offers `Top set` alone (`D22`).
  */
 @Composable
-private fun MetricSegments(
+private fun MetricButtons(
     offered: List<ProgressMetric>,
     selected: ProgressMetric,
     onSelect: (ProgressMetric) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .border(BorderStroke(1.dp, RepFlowColor.hairline), SegmentRingShape)
-                .padding(SegmentRingPadding)
-                .selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(SegmentGap),
+        modifier = modifier.fillMaxWidth().selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(MetricGap),
     ) {
         offered.forEach { metric ->
-            MetricSegment(
+            MetricButton(
                 label = metricLabel(metric),
                 selected = metric == selected,
                 onClick = { onSelect(metric) },
@@ -215,40 +182,48 @@ private fun MetricSegments(
 }
 
 @Composable
-private fun MetricSegment(
+private fun MetricButton(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier,
 ) {
-    val selectedColors = repFlowSelectedPillColors(MaterialTheme.colorScheme)
-    val content = if (selected) selectedColors.label else repFlowSecondaryTextColor(MaterialTheme.colorScheme)
-    Row(
+    val colors = repFlowSelectedPillColors(MaterialTheme.colorScheme)
+    val content = if (selected) colors.label else repFlowSecondaryTextColor(MaterialTheme.colorScheme)
+    Box(
         modifier =
             modifier
-                .heightIn(min = SegmentMinHeight)
-                .clip(SegmentShape)
-                .background(if (selected) selectedColors.fill else Color.Transparent, SegmentShape)
-                .then(if (selected) Modifier.border(BorderStroke(1.dp, selectedColors.border), SegmentShape) else Modifier)
+                .heightIn(min = TouchTarget)
                 .selectable(selected = selected, role = Role.RadioButton, onClick = onClick),
-        horizontalArrangement = Arrangement.spacedBy(CheckGap, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
+        contentAlignment = Alignment.Center,
     ) {
-        if (selected) {
-            Icon(
-                painter = painterResource(RepFlowIcons.checkFat),
-                contentDescription = null,
-                tint = content,
-                modifier = Modifier.size(CheckSize),
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = MetricHeight)
+                    .clip(MetricShape)
+                    .background(if (selected) colors.fill else Color.Transparent, MetricShape)
+                    .border(BorderStroke(1.dp, if (selected) colors.border else RepFlowColor.hairline), MetricShape),
+            horizontalArrangement = Arrangement.spacedBy(CheckGap, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (selected) {
+                Icon(
+                    painter = painterResource(RepFlowIcons.checkFat),
+                    contentDescription = null,
+                    tint = content,
+                    modifier = Modifier.size(CheckSize),
+                )
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = MetricFontSize),
+                color = content,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = SegmentFontSize),
-            color = content,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 
@@ -260,7 +235,7 @@ internal fun metricLabel(metric: ProgressMetric): String =
         ProgressMetric.VOLUME -> stringResource(R.string.progress_metric_volume)
     }
 
-/** "Only valid sessions count…" with `ph-info` (`:1045-1048`, plan item 4). */
+/** "Only valid sessions count…" with `ph-info` (`4a`, plan item 4); `5b` does not draw it and it is kept. */
 @Composable
 private fun ValidSessionsNote(modifier: Modifier = Modifier) {
     val color = repFlowSecondaryTextColor(MaterialTheme.colorScheme)
@@ -305,22 +280,18 @@ private fun ProgressEmptyState(modifier: Modifier = Modifier) {
     }
 }
 
-/** The unselected chip's word: `rgba(233,233,237,.7)`. */
-private const val CHIP_LABEL_ALPHA = 0.7f
 internal const val EMPTY_GLYPH_ALPHA = 0.35f
 
 /** The title's `margin-bottom:12px`. */
 private val TitleGap = 12.dp
-private val ChipMinHeight = 44.dp
-private val ChipHorizontalPadding = 13.dp
+private val BodyTopGap = 14.dp
+private val MetricGap = 6.dp
+private val MetricHeight = 40.dp
+private val TouchTarget = 44.dp
+private val MetricShape = RoundedCornerShape(8.dp)
+private val MetricFontSize = 13.sp
 private val CheckSize = 13.dp
 private val CheckGap = 5.dp
-private val SegmentRingShape = RoundedCornerShape(10.dp)
-private val SegmentShape = RoundedCornerShape(8.dp)
-private val SegmentRingPadding = 3.dp
-private val SegmentGap = 4.dp
-private val SegmentMinHeight = 44.dp
-private val SegmentFontSize = 13.sp
 private val NoteTopGap = 14.dp
 private val NoteIconGap = 9.dp
 private val NoteIconSize = 15.dp

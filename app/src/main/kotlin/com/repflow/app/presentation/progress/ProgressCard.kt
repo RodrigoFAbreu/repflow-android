@@ -1,121 +1,99 @@
 package com.repflow.app.presentation.progress
 
 import androidx.annotation.StringRes
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.RoundRect
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.repflow.app.R
 import com.repflow.app.application.progress.ExerciseProgress
 import com.repflow.app.application.progress.ProgressMetric
+import com.repflow.app.application.progress.ProgressRange
 import com.repflow.app.application.progress.ProgressSeries
 import com.repflow.app.domain.exercise.ExerciseTrackingType
+import com.repflow.app.presentation.designsystem.RepFlowColor
+import com.repflow.app.presentation.designsystem.RepFlowShapes
 import com.repflow.app.presentation.designsystem.RepFlowSpacing
 import com.repflow.app.presentation.designsystem.components.RepFlowCard
 import com.repflow.app.presentation.designsystem.components.repFlowSelectedPillColors
 import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
 import com.repflow.app.presentation.designsystem.repFlowSecondaryTextColor
 import java.math.BigDecimal
-import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.TextStyle
 import java.util.Locale
 
 /*
- * `4a`'s Progress card (`RepFlow.dc.html:1026-1044`, script `:3758-3771`): the
- * exercise and the delta since the window's first session, the latest value at
- * 30/500 with its unit, one bar per session in the window - the latest in the
- * accent, a month under each bar where a month starts - and the best in the
- * window. Bars are drawn with Compose `Canvas`, no charting dependency (plan
- * item 5).
+ * `5b`'s chart card: the metric's caption and the `3m` / `6m` / `All` pills, the
+ * value at 30/500 with the change over the range (`+10 kg · +14%`), a strip
+ * reading the selected point, and the line chart ([ProgressChart]).
  *
- * An offered metric with fewer than two points shows the empty state instead
- * of the chart (plan item 7); a reps-only or timed exercise also says why it
- * offers `Top set` alone (plan item 6, `D22`).
+ * States the design does not draw, decided here: no session in the range shows
+ * `progress_metric_empty` in place of the value and chart (the pills stay, so a
+ * wider range is one tap away); one session shows its value and readout and a
+ * lone dot, with no delta; `Est. 1RM` with no eligible set says why (J6).
  */
 
 @Composable
 internal fun ProgressCard(
     exercise: ExerciseProgress,
     metric: ProgressMetric,
+    range: ProgressRange,
     series: ProgressSeries?,
+    zone: ZoneId,
     showsLoadMetricsUnavailable: Boolean,
+    onRangeSelected: (ProgressRange) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val units = unitsOf(exercise.trackingType, metric)
     val secondary = repFlowSecondaryTextColor(MaterialTheme.colorScheme)
-    RepFlowCard(
-        modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(CardPadding),
-    ) {
-        CardHeader(name = exercise.name, series = series, deltaUnit = units.short)
-        series?.latest?.let { latest ->
-            Row(
-                modifier = Modifier.padding(top = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapXs),
-            ) {
-                Text(
-                    text = plainNumber(latest.value, currentLocale()),
-                    style = MaterialTheme.typography.displaySmall.copy(fontSize = ValueFontSize, fontFeatureSettings = "tnum"),
-                    letterSpacing = ValueLetterSpacing,
-                    modifier = Modifier.alignByBaseline(),
-                )
-                Text(
-                    text = units.long,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = UnitFontSize),
-                    color = secondary,
-                    modifier = Modifier.alignByBaseline(),
-                )
-            }
-        }
-        if (series != null && series.hasTrend) {
-            BarChart(series = series, metric = metric, unit = units.short, modifier = Modifier.padding(top = ChartTopGap))
-            Text(
-                text =
-                    stringResource(
-                        R.string.progress_best,
-                        plainNumber(requireNotNull(series.best), currentLocale()),
-                        units.short,
-                        series.points.size,
-                    ),
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, fontFeatureSettings = "tnum"),
-                color = secondary,
-                modifier = Modifier.padding(top = RepFlowSpacing.gapMd),
-            )
+    val points = series?.points.orEmpty()
+    RepFlowCard(modifier = modifier.fillMaxWidth(), contentPadding = PaddingValues(CardPadding)) {
+        CardHeader(
+            caption = metricCaption(exercise.trackingType, metric),
+            range = range,
+            onRangeSelected = onRangeSelected,
+        )
+        if (series != null && points.isNotEmpty()) {
+            ValueAndDelta(series = series, units = units)
+            ChartWithReadout(series = series, metric = metric, range = range, zone = zone, unit = units.short)
         } else {
             MetricEmptyState(
                 messageRes =
@@ -138,36 +116,109 @@ internal fun ProgressCard(
     }
 }
 
-/** The exercise at 13 (`.6`) and, with a trend, `+10 kg since 5 May` - in the accent when up, destructive when down; the sign says which either way. */
 @Composable
 private fun CardHeader(
-    name: String,
-    series: ProgressSeries?,
-    deltaUnit: String,
+    caption: String,
+    range: ProgressRange,
+    onRangeSelected: (ProgressRange) -> Unit,
 ) {
-    val delta = series?.delta
-    val since = series?.first
-    Row(horizontalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapSm)) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapSm)) {
         Text(
-            text = name,
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+            text = caption.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
             color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f).alignByBaseline(),
+            modifier = Modifier.weight(1f),
         )
-        if (delta != null && since != null) {
+        Row(modifier = Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(PillGap)) {
+            ProgressRange.entries.forEach { entry ->
+                RangePill(
+                    label = rangeLabel(entry),
+                    selected = entry == range,
+                    onClick = { onRangeSelected(entry) },
+                )
+            }
+        }
+    }
+}
+
+/** A range pill: 11.5 text, a 32 tall pill inside a 44 tall touch target (registered), selected one tinted and in the medium weight. */
+@Composable
+private fun RangePill(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = repFlowSelectedPillColors(MaterialTheme.colorScheme)
+    val shape = RepFlowShapes.pill
+    Box(
+        modifier =
+            Modifier
+                .heightIn(min = TouchTarget)
+                .widthIn(min = TouchTarget)
+                .selectable(selected = selected, role = Role.RadioButton, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .heightIn(min = PillHeight)
+                    .clip(shape)
+                    .background(if (selected) colors.fill else Color.Transparent, shape)
+                    .border(BorderStroke(1.dp, if (selected) colors.border else RepFlowColor.hairline), shape)
+                    .padding(horizontal = PillHorizontalPadding),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = PillFontSize),
+                fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+                color = if (selected) colors.label else MaterialTheme.colorScheme.onSurface.copy(alpha = PILL_LABEL_ALPHA),
+            )
+        }
+    }
+}
+
+/** The latest value at 30/500 and, with a trend, `+10 kg · +14%` - the sign carries the direction, colour only repeats it. */
+@Composable
+private fun ValueAndDelta(
+    series: ProgressSeries,
+    units: ProgressUnits,
+) {
+    val locale = currentProgressLocale()
+    val latest = requireNotNull(series.latest)
+    val delta = series.delta
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = ValueTopGap, bottom = ValueBottomGap),
+        horizontalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapSm),
+    ) {
+        Text(
+            text = plainNumber(latest.value, locale),
+            style = MaterialTheme.typography.displaySmall.copy(fontSize = ValueFontSize, fontFeatureSettings = "tnum"),
+            letterSpacing = ValueLetterSpacing,
+            modifier = Modifier.alignByBaseline(),
+        )
+        Text(
+            text = units.long,
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = UnitFontSize),
+            color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
+            modifier = Modifier.alignByBaseline(),
+        )
+        if (delta != null) {
+            val percent = series.deltaPercent
             Text(
                 text =
-                    stringResource(
-                        R.string.progress_delta,
-                        signedNumber(delta, currentLocale()),
-                        deltaUnit,
-                        sinceDate(since.startedAt, series),
-                    ),
+                    if (percent == null) {
+                        stringResource(R.string.progress_delta, signedNumber(delta, locale), units.short)
+                    } else {
+                        stringResource(
+                            R.string.progress_delta_percent,
+                            signedNumber(delta, locale),
+                            units.short,
+                            signedNumber(percent, locale),
+                        )
+                    },
                 style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
                 color = deltaColor(delta),
-                maxLines = 1,
                 modifier = Modifier.alignByBaseline(),
             )
         }
@@ -179,105 +230,96 @@ private fun CardHeader(
 private fun deltaColor(delta: BigDecimal): Color =
     if (delta.signum() >= 0) repFlowSelectedPillColors(MaterialTheme.colorScheme).label else MaterialTheme.colorScheme.error
 
-/** `5 May`, or `5 May 2025` when the window started in an earlier year than its latest session. */
 @Composable
-private fun sinceDate(
-    startedAt: Instant,
-    series: ProgressSeries,
-): String {
-    val zone = ZoneId.systemDefault()
-    val locale = currentLocale()
-    val start = startedAt.atZone(zone)
-    val latestYear =
-        series.latest
-            ?.startedAt
-            ?.atZone(zone)
-            ?.year
-    val pattern = if (latestYear == null || latestYear == start.year) SINCE_PATTERN else SINCE_PATTERN_WITH_YEAR
-    return DateTimeFormatter.ofPattern(pattern, locale).format(start)
-}
-
-/**
- * The bars (`:1035-1042`): 132 tall in all, 5 apart, radius 3 at the top; the
- * latest in the accent, the rest at half its strength; a 10 month label under
- * each bar where a month starts. One spoken description stands for the chart.
- */
-@Composable
-private fun BarChart(
+private fun ChartWithReadout(
     series: ProgressSeries,
     metric: ProgressMetric,
+    range: ProgressRange,
+    zone: ZoneId,
     unit: String,
-    modifier: Modifier = Modifier,
 ) {
-    val window = series.points
-    val heights = barHeightFractions(window.map { it.value })
-    val months = barMonthLabels(window, ZoneId.systemDefault())
-    val locale = currentLocale()
-    val accent = MaterialTheme.colorScheme.primary
-    val older = accent.copy(alpha = OLDER_BAR_ALPHA)
+    val locale = currentProgressLocale()
+    val points = series.points
+    var picked by remember(points) { mutableStateOf<Int?>(null) }
+    val selectedIndex = (picked ?: points.lastIndex).coerceIn(0, points.lastIndex)
+    val latestYear =
+        points
+            .last()
+            .startedAt
+            .atZone(zone)
+            .year
+    val spansYears =
+        points
+            .first()
+            .startedAt
+            .atZone(zone)
+            .year != latestYear
+    val dateLabels = points.map { dateLabel(it.startedAt, zone, locale, withYear = spansYears) }
+    val selectedWhen =
+        dateLabel(
+            points[selectedIndex].startedAt,
+            zone,
+            locale,
+            withYear =
+                points[selectedIndex].startedAt.atZone(zone).year != latestYear,
+        )
+    val readoutWhen =
+        if (selectedIndex == points.lastIndex) stringResource(R.string.progress_readout_latest, selectedWhen) else selectedWhen
+    val readoutValue = stringResource(R.string.progress_value_with_unit, plainNumber(points[selectedIndex].value, locale), unit)
+    SelectionReadout(whenText = readoutWhen, valueText = readoutValue)
     val description =
         pluralStringResource(
             R.plurals.progress_chart_description,
-            window.size,
+            points.size,
             metricLabel(metric),
-            window.size,
-            stringResource(R.string.progress_value_with_unit, plainNumber(window.first().value, currentLocale()), unit),
-            stringResource(R.string.progress_value_with_unit, plainNumber(window.last().value, currentLocale()), unit),
+            rangeSpoken(range),
+            points.size,
+            stringResource(R.string.progress_value_with_unit, plainNumber(points.first().value, locale), unit),
+            stringResource(R.string.progress_value_with_unit, plainNumber(points.last().value, locale), unit),
         )
-    Column(modifier = modifier.fillMaxWidth()) {
-        Canvas(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(PlotHeight)
-                    .semantics { contentDescription = description },
-        ) {
-            val gap = BarGap.toPx()
-            val barWidth = (size.width - gap * (heights.size - 1)) / heights.size
-            val radius = CornerRadius(BarRadius.toPx())
-            heights.forEachIndexed { index, fraction ->
-                val barHeight = size.height * fraction
-                val left = index * (barWidth + gap)
-                val path =
-                    Path().apply {
-                        addRoundRect(
-                            RoundRect(
-                                rect = Rect(Offset(left, size.height - barHeight), Size(barWidth, barHeight)),
-                                topLeft = radius,
-                                topRight = radius,
-                                bottomRight = CornerRadius.Zero,
-                                bottomLeft = CornerRadius.Zero,
-                            ),
-                        )
-                    }
-                drawPath(path, color = if (index == heights.lastIndex) accent else older)
-            }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = LabelTopGap).clearAndSetSemantics { },
-            horizontalArrangement = Arrangement.spacedBy(BarGap),
-        ) {
-            months.forEach { month ->
-                Text(
-                    text = month?.month?.getDisplayName(TextStyle.SHORT, locale).orEmpty(),
-                    style =
-                        MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 10.sp,
-                            letterSpacing = 0.sp,
-                            fontWeight = FontWeight.Normal,
-                        ),
-                    color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    softWrap = false,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
+    ProgressChart(
+        values = points.map { it.value },
+        dateLabels = dateLabels,
+        selectedIndex = selectedIndex,
+        onSelect = { picked = it },
+        description = description,
+        modifier = Modifier.padding(top = ReadoutBottomGap),
+    )
+}
+
+/** The strip above the chart (`5b`): `Latest · 12 Aug` or the picked date on the left, its value on the right; read out when it changes. */
+@Composable
+private fun SelectionReadout(
+    whenText: String,
+    valueText: String,
+) {
+    val shape = RoundedCornerShape(ReadoutRadius)
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = READOUT_FILL_ALPHA), shape)
+                .padding(horizontal = ReadoutHorizontalPadding, vertical = ReadoutVerticalPadding),
+        horizontalArrangement = Arrangement.spacedBy(ReadoutGap),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = whenText,
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = ReadoutWhenFontSize),
+            color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = valueText,
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = ReadoutValueFontSize, fontFeatureSettings = "tnum"),
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.End,
+        )
     }
 }
 
-/** Fewer than two points for an offered metric (plan item 7): `1d`'s glyph at 35% and one line. */
+/** No point in the range: `1d`'s glyph at 35% and one line. */
 @Composable
 private fun MetricEmptyState(
     @StringRes messageRes: Int,
@@ -302,45 +344,29 @@ private fun MetricEmptyState(
     }
 }
 
-/** The value's unit (`kg`, `kg total`, `reps`, `s`) and the shorter one the delta and best line use. */
-private data class ProgressUnits(
-    val long: String,
-    val short: String,
-)
-
 @Composable
-private fun unitsOf(
-    trackingType: ExerciseTrackingType,
-    metric: ProgressMetric,
-): ProgressUnits {
-    val short =
-        when (trackingType) {
-            ExerciseTrackingType.WEIGHT_AND_REPS -> stringResource(R.string.progress_unit_kg)
-            ExerciseTrackingType.REPS_ONLY -> stringResource(R.string.progress_unit_reps)
-            ExerciseTrackingType.DURATION -> stringResource(R.string.progress_unit_seconds)
-        }
-    val long = if (metric == ProgressMetric.VOLUME) stringResource(R.string.progress_unit_kg_total) else short
-    return ProgressUnits(long = long, short = short)
-}
+internal fun currentProgressLocale(): Locale = LocalConfiguration.current.locales[0]
 
-@Composable
-private fun currentLocale(): Locale = LocalConfiguration.current.locales[0]
-
-private const val SINCE_PATTERN = "d MMM"
-private const val SINCE_PATTERN_WITH_YEAR = "d MMM yyyy"
-
-/** `#5d5294` against the latest bar's `#9184d9`: the accent at about half strength, in both themes. */
-private const val OLDER_BAR_ALPHA = 0.5f
+private const val PILL_LABEL_ALPHA = 0.7f
+private const val READOUT_FILL_ALPHA = 0.05f
 
 private val CardPadding = 14.dp
 private val ValueFontSize = 30.sp
 private const val VALUE_LETTER_SPACING_EM = -0.02f
 private val ValueLetterSpacing = VALUE_LETTER_SPACING_EM.em
 private val UnitFontSize = 13.sp
+private val ValueTopGap = 4.dp
+private val ValueBottomGap = 12.dp
 private val ChartTopGap = 14.dp
-
-/** The 132 of `:1035` less the month row beneath it. */
-private val PlotHeight = 112.dp
-private val LabelTopGap = 6.dp
-private val BarGap = 5.dp
-private val BarRadius = 3.dp
+private val ReadoutBottomGap = 8.dp
+private val ReadoutRadius = 9.dp
+private val ReadoutHorizontalPadding = 10.dp
+private val ReadoutVerticalPadding = 7.dp
+private val ReadoutGap = 10.dp
+private val ReadoutWhenFontSize = 12.5.sp
+private val ReadoutValueFontSize = 13.5.sp
+private val PillGap = 5.dp
+private val PillHeight = 32.dp
+private val PillHorizontalPadding = 9.dp
+private val PillFontSize = 11.5.sp
+private val TouchTarget = 44.dp

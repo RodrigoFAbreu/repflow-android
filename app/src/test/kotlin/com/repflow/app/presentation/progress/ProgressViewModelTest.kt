@@ -1,7 +1,10 @@
 package com.repflow.app.presentation.progress
 
+import androidx.lifecycle.SavedStateHandle
+import com.repflow.app.application.exercise.FixedClock
 import com.repflow.app.application.progress.ObserveExerciseProgress
 import com.repflow.app.application.progress.ProgressMetric
+import com.repflow.app.application.progress.ProgressRange
 import com.repflow.app.application.workout.InMemoryWorkoutRepository
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.exercise.ExerciseId
@@ -47,7 +50,10 @@ class ProgressViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel() = ProgressViewModel(ObserveExerciseProgress(repository))
+    private val clock = FixedClock(day0.plus(Duration.ofDays(200)))
+
+    private fun viewModel(handle: SavedStateHandle = SavedStateHandle()) =
+        ProgressViewModel(ObserveExerciseProgress(repository), handle, clock)
 
     private fun <T> success(result: DomainResult<T, *>): T =
         when (result) {
@@ -59,7 +65,7 @@ class ProgressViewModelTest {
         day: Long,
         exerciseId: ExerciseId,
         type: ExerciseTrackingType,
-    ) {
+    ): WorkoutSession {
         val id = WorkoutSessionId("s${nextId++}")
         val startedAt = day0.plus(Duration.ofDays(day))
         val set =
@@ -90,7 +96,7 @@ class ProgressViewModelTest {
                     sets = listOf(set),
                 ),
             )
-        repository.insert(
+        val session =
             success(
                 WorkoutSession.reconstruct(
                     id = id,
@@ -100,8 +106,9 @@ class ProgressViewModelTest {
                     endedAt = startedAt.plus(Duration.ofHours(1)),
                     exercises = listOf(exercise),
                 ),
-            ),
-        )
+            )
+        repository.insert(session)
+        return session
     }
 
     @Test
@@ -169,6 +176,101 @@ class ProgressViewModelTest {
             assertTrue(
                 viewModel.uiState.value.series!!
                     .hasTrend,
+            )
+        }
+
+    @Test
+    fun `the range defaults to All, is kept across exercises, and narrows the series by date`() =
+        runTest {
+            seed(0, bench, ExerciseTrackingType.WEIGHT_AND_REPS)
+            seed(150, bench, ExerciseTrackingType.WEIGHT_AND_REPS)
+            seed(190, bench, ExerciseTrackingType.WEIGHT_AND_REPS)
+            seed(195, pullUps, ExerciseTrackingType.REPS_ONLY)
+            val viewModel = viewModel()
+            viewModel.onExerciseSelected(bench)
+            assertEquals(ProgressRange.ALL, viewModel.uiState.value.range)
+            assertEquals(
+                3,
+                viewModel.uiState.value.series!!
+                    .points.size,
+            )
+
+            viewModel.onRangeSelected(ProgressRange.THREE_MONTHS)
+            assertEquals(
+                2,
+                viewModel.uiState.value.series!!
+                    .points.size,
+            )
+            assertEquals(
+                2,
+                viewModel.uiState.value.stats!!
+                    .sessions,
+            )
+
+            viewModel.onExerciseSelected(pullUps)
+            assertEquals(ProgressRange.THREE_MONTHS, viewModel.uiState.value.range)
+            viewModel.onExerciseSelected(bench)
+            assertEquals(ProgressRange.THREE_MONTHS, viewModel.uiState.value.range)
+        }
+
+    @Test
+    fun `the picker's choices survive a restored handle, and a garbled one reads the defaults`() =
+        runTest {
+            seed(0, bench, ExerciseTrackingType.WEIGHT_AND_REPS)
+            seed(1, bench, ExerciseTrackingType.WEIGHT_AND_REPS)
+            seed(2, pullUps, ExerciseTrackingType.REPS_ONLY)
+            val handle = SavedStateHandle()
+            val first = viewModel(handle)
+            first.onExerciseSelected(bench)
+            first.onMetricSelected(ProgressMetric.VOLUME)
+            first.onRangeSelected(ProgressRange.SIX_MONTHS)
+
+            val restored = viewModel(handle).uiState.value
+            assertEquals(bench, restored.exercise?.exerciseId)
+            assertEquals(ProgressMetric.VOLUME, restored.metric)
+            assertEquals(ProgressRange.SIX_MONTHS, restored.range)
+
+            val garbled = viewModel(SavedStateHandle(mapOf("progress.metric" to "bogus", "progress.range" to "bogus"))).uiState.value
+            assertEquals(ProgressMetric.TOP_SET, garbled.metric)
+            assertEquals(ProgressRange.ALL, garbled.range)
+        }
+
+    @Test
+    fun `an exercise that leaves the list falls back to the most recent one`() =
+        runTest {
+            seed(0, bench, ExerciseTrackingType.WEIGHT_AND_REPS)
+            val pullUpSession = seed(1, pullUps, ExerciseTrackingType.REPS_ONLY)
+            val viewModel = viewModel()
+            viewModel.onExerciseSelected(pullUps)
+            assertEquals(
+                pullUps,
+                viewModel.uiState.value.exercise
+                    ?.exerciseId,
+            )
+
+            repository.update(
+                success(
+                    WorkoutSession.reconstruct(
+                        id = pullUpSession.id,
+                        trainingPlanVersionId = null,
+                        status = WorkoutSessionStatus.COMPLETED,
+                        startedAt = pullUpSession.startedAt,
+                        endedAt = pullUpSession.endedAt,
+                        exercises = pullUpSession.exercises,
+                        invalidatedAt = pullUpSession.endedAt,
+                    ),
+                ),
+            )
+
+            assertEquals(
+                listOf(bench),
+                viewModel.uiState.value.exercises
+                    .map { it.exerciseId },
+            )
+            assertEquals(
+                bench,
+                viewModel.uiState.value.exercise
+                    ?.exerciseId,
             )
         }
 }

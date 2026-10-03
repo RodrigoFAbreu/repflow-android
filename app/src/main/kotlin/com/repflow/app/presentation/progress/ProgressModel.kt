@@ -1,47 +1,71 @@
 package com.repflow.app.presentation.progress
 
-import com.repflow.app.application.progress.ProgressPoint
 import java.math.BigDecimal
-import java.math.RoundingMode
 import java.text.NumberFormat
-import java.time.YearMonth
+import java.time.Instant
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.ceil
+import kotlin.math.roundToInt
 
 /*
- * The Progress card's plain values (remediation-1 CP15, `4a`), kept out of the
- * composables so a JVM test can pin them: each bar's height, which bars carry
- * a month label, and how a value and a delta read.
+ * The Progress chart's plain maths (remediation-1-remediation-1 CP3, `5b`),
+ * kept out of the composables so a JVM test can pin it: which points carry a
+ * date label so none overlap, which point a touch lands on, and how a value, a
+ * date and a delta read. The y axis is [ChartScale].
  */
 
 /**
- * Each bar's height as a fraction of the plot, by the prototype's own rule
- * (`RepFlow.dc.html:3767`): the window's lowest value sits at 14%, its highest
- * at 96%, and no bar is shorter than 6%. A flat series draws every bar at 14%.
+ * Which points carry a date label under the chart, so no two overlap
+ * (functional review GX-I2). The prototype labelled every third point because
+ * it never drew more than twelve; `All` now draws every session, so the stride
+ * comes from what fits: the smallest `n` such that `n` points' spacing is at
+ * least the label's width plus [gapPx]. Labels sit at points `0, n, 2n ...`;
+ * the first and the last point are always labelled, and when the last
+ * stride-aligned label would sit closer to the last point's than the gap
+ * allows, it is the one dropped.
+ *
+ * @param plotWidthPx the distance from the first point to the last.
+ * @param labelWidthPx the widest plotted label.
  */
-internal fun barHeightFractions(values: List<BigDecimal>): List<Float> {
-    val min = values.minOrNull() ?: return emptyList()
-    val max = values.max()
-    val span = max.subtract(min)
-    return values.map { value ->
-        val normalised = if (span.signum() == 0) 0.0 else value.subtract(min).divide(span, NORMALISE_SCALE, RoundingMode.HALF_UP).toDouble()
-        val percent = maxOf(MIN_BAR_PERCENT, Math.round(normalised * BAR_RANGE_PERCENT).toInt() + BAR_FLOOR_PERCENT)
-        percent / PERCENT
-    }
+internal fun xLabelIndices(
+    pointCount: Int,
+    plotWidthPx: Float,
+    labelWidthPx: Float,
+    gapPx: Float,
+): List<Int> {
+    if (pointCount <= 0) return emptyList()
+    if (pointCount == 1) return listOf(0)
+    val last = pointCount - 1
+    val spacing = plotWidthPx / last
+    val needed = labelWidthPx + gapPx
+    val stride = if (spacing <= 0f) last else ceil(needed / spacing).toInt().coerceIn(1, last)
+    val aligned = (0 until last step stride).toMutableList()
+    val nearest = aligned.last()
+    if (nearest != 0 && (last - nearest) * spacing < needed) aligned.removeAt(aligned.lastIndex)
+    return aligned + last
 }
 
-/**
- * The month under each bar, or `null` for none: `4a` labels a bar where a new
- * month starts (`May · · Jun · · Jul …`, `PMONTHS` at `:3123`), so the first
- * bar and each bar whose session falls in a later month than the one before.
- */
-internal fun barMonthLabels(
-    points: List<ProgressPoint>,
-    zone: ZoneId,
-): List<YearMonth?> {
-    val months = points.map { YearMonth.from(it.startedAt.atZone(zone)) }
-    return months.mapIndexed { index, month -> if (index == 0 || month != months[index - 1]) month else null }
+/** The point a touch at [x] lands on: the nearest one, however many there are. */
+internal fun nearestPointIndex(
+    x: Float,
+    plotLeftPx: Float,
+    plotWidthPx: Float,
+    pointCount: Int,
+): Int {
+    if (pointCount <= 1 || plotWidthPx <= 0f) return 0
+    val spacing = plotWidthPx / (pointCount - 1)
+    return ((x - plotLeftPx) / spacing).roundToInt().coerceIn(0, pointCount - 1)
 }
+
+/** A point's x position: evenly spaced across the plot, a lone point in the middle. */
+internal fun pointX(
+    index: Int,
+    pointCount: Int,
+    plotLeftPx: Float,
+    plotWidthPx: Float,
+): Float = if (pointCount <= 1) plotLeftPx + plotWidthPx / 2f else plotLeftPx + plotWidthPx * index / (pointCount - 1)
 
 /** `82.5`, `80`, `2,310` - grouped as History groups its volume, never `80.0` or `8.25E+1`. */
 internal fun plainNumber(
@@ -61,8 +85,14 @@ internal fun signedNumber(
 
 private const val MAX_FRACTION_DIGITS = 6
 private const val MINUS = "−"
-private const val NORMALISE_SCALE = 6
-private const val MIN_BAR_PERCENT = 6
-private const val BAR_RANGE_PERCENT = 82
-private const val BAR_FLOOR_PERCENT = 14
-private const val PERCENT = 100f
+
+/** `12 Aug`; `12 Aug 2025` when the date is not in the year of the series' latest point, so a long `All` never reads ambiguously. */
+internal fun dateLabel(
+    at: Instant,
+    zone: ZoneId,
+    locale: Locale,
+    withYear: Boolean,
+): String = DateTimeFormatter.ofPattern(if (withYear) DATE_WITH_YEAR else DATE, locale).format(at.atZone(zone))
+
+private const val DATE = "d MMM"
+private const val DATE_WITH_YEAR = "d MMM yyyy"
