@@ -515,6 +515,7 @@ class ActiveWorkoutLeaveRouteTest {
             abandonWorkoutSession = AbandonWorkoutSession(workouts, clock),
             settingsRepository = LocalSettingsRepository(database),
             restNotificationCanceller = RestNotificationCanceller { },
+            workoutRepository = workouts,
         )
     }
 

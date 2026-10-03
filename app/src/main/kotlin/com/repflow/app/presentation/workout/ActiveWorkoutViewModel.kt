@@ -20,6 +20,7 @@ import com.repflow.app.application.workout.AdjustRestTimer
 import com.repflow.app.application.workout.CompleteWorkoutSession
 import com.repflow.app.application.workout.EditLastWorkoutSet
 import com.repflow.app.application.workout.EditLastWorkoutSetCommand
+import com.repflow.app.application.workout.LastPerformance
 import com.repflow.app.application.workout.ObserveActiveWorkoutSession
 import com.repflow.app.application.workout.RecordWorkoutSet
 import com.repflow.app.application.workout.RecordWorkoutSetCommand
@@ -32,6 +33,8 @@ import com.repflow.app.application.workout.StartWorkoutSessionFromPlan
 import com.repflow.app.application.workout.StartWorkoutSessionFromPlanCommand
 import com.repflow.app.application.workout.UndoLastWorkoutSet
 import com.repflow.app.application.workout.WorkoutOperationError
+import com.repflow.app.application.workout.WorkoutRepository
+import com.repflow.app.application.workout.lastPerformancesOf
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.exercise.Exercise
 import com.repflow.app.domain.exercise.ExerciseId
@@ -52,6 +55,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
@@ -102,6 +106,7 @@ class ActiveWorkoutViewModel
         private val abandonWorkoutSession: AbandonWorkoutSession,
         private val settingsRepository: SettingsRepository,
         private val restNotificationCanceller: RestNotificationCanceller,
+        private val workoutRepository: WorkoutRepository,
     ) : ViewModel() {
         private val error = MutableStateFlow<ActiveWorkoutErrorReason?>(null)
         private val _dayContext = MutableStateFlow<WorkoutDayContextUi?>(null)
@@ -111,6 +116,15 @@ class ActiveWorkoutViewModel
 
         /** The finish sheet's confirm, from request to the completed session's id (remediation-1 CP9). */
         val finish: StateFlow<WorkoutFinishState> = _finish
+
+        /**
+         * Each exercise's last performance (CP9, Q8), read once when the ViewModel
+         * is created and again when a workout completes - the only moment history
+         * gains a session - and not subscribed to history, so logging a set never
+         * re-reads and re-maps it. Empty until the read lands (the seed is applied
+         * to an untouched entry whenever it arrives) and when it fails.
+         */
+        private val lastPerformances = MutableStateFlow<Map<ExerciseId, LastPerformance>>(emptyMap())
 
         private val _settings = MutableStateFlow<AppSettings?>(null)
 
@@ -140,6 +154,7 @@ class ActiveWorkoutViewModel
         private val trainingPlanOverviewsFlow = MutableStateFlow<List<TrainingPlanOverview>>(emptyList())
 
         init {
+            refreshLastPerformances()
             viewModelScope.launch {
                 val context = getWorkoutDayContext()
                 _dayContext.value =
@@ -193,8 +208,14 @@ class ActiveWorkoutViewModel
                 }
 
         private val content =
-            combine(observeActiveWorkoutSession(), planLabels, exerciseDetails, _settings) { session, labels, details, settings ->
-                toContent(session, session?.trainingPlanVersionId?.let { labels[it]?.planName }, details, settings)
+            combine(
+                observeActiveWorkoutSession(),
+                planLabels,
+                exerciseDetails,
+                _settings,
+                lastPerformances,
+            ) { session, labels, details, settings, lasts ->
+                toContent(session, session?.trainingPlanVersionId?.let { labels[it]?.planName }, details, settings, lasts)
             }.onStart { emit(ActiveWorkoutContent.Loading) }
                 .catch { failure ->
                     if (failure is CancellationException) throw failure
@@ -396,6 +417,7 @@ class ActiveWorkoutViewModel
                 when (val result = completeWorkoutSession(sessionId)) {
                     is DomainResult.Success -> {
                         restNotificationCanceller.cancel()
+                        refreshLastPerformances()
                         _finish.value = WorkoutFinishState.Finished(sessionId)
                     }
 
@@ -434,6 +456,20 @@ class ActiveWorkoutViewModel
         private suspend fun latestRecommendationUi(exerciseId: ExerciseId): ProgressionRecommendationUi? =
             progressionRecommendationRepository.findLatestForExercise(exerciseId)?.toSummaryUi()
 
+        private fun refreshLastPerformances() {
+            viewModelScope.launch {
+                lastPerformances.value =
+                    workoutRepository
+                        .observeCompletedSessions(includeInvalidated = false)
+                        .map(::lastPerformancesOf)
+                        .catch { failure ->
+                            // History is only a seed: a failed read leaves the steppers empty rather than failing the workout.
+                            if (failure is CancellationException) throw failure
+                            emit(emptyMap())
+                        }.firstOrNull() ?: emptyMap()
+            }
+        }
+
         private fun activeSessionId(): WorkoutSessionId? = (uiState.value.content as? ActiveWorkoutContent.Active)?.sessionId
 
         private fun launchAction(action: suspend () -> DomainResult<*, WorkoutOperationError>) {
@@ -461,6 +497,7 @@ class ActiveWorkoutViewModel
             planName: String?,
             details: Map<ExerciseId, Exercise>,
             settings: AppSettings?,
+            lasts: Map<ExerciseId, LastPerformance>,
         ): ActiveWorkoutContent =
             if (session == null) {
                 ActiveWorkoutContent.NoActiveSession
@@ -469,7 +506,10 @@ class ActiveWorkoutViewModel
                     sessionId = session.id,
                     startedAt = session.startedAt,
                     restTimer = session.restTimer?.toUi(),
-                    exercises = session.exercises.map { exercise -> toExerciseUi(exercise, details[exercise.exerciseId]) },
+                    exercises =
+                        session.exercises.map { exercise ->
+                            toExerciseUi(exercise, details[exercise.exerciseId], lasts[exercise.exerciseId])
+                        },
                     planName = planName,
                     appDefaultRestSeconds = settings?.defaultRestSeconds ?: AppSettings.DEFAULT_REST_SECONDS,
                     extraSetFields = settings?.extraSetFields ?: ExtraSetFields.DEFAULT,
@@ -479,25 +519,27 @@ class ActiveWorkoutViewModel
         private suspend fun toExerciseUi(
             exercise: WorkoutExercise,
             detail: Exercise?,
-        ): ActiveExerciseUi =
-            ActiveExerciseUi(
+            last: LastPerformance?,
+        ): ActiveExerciseUi {
+            val sets =
+                exercise.sets.map { set ->
+                    ActiveSetUi(
+                        id = set.id,
+                        setNumber = set.order + 1,
+                        load = set.load,
+                        reps = set.reps,
+                        durationSeconds = set.durationSeconds,
+                        rpe = set.rpe,
+                        isWarmup = set.isWarmup,
+                        pain = set.pain,
+                        techniqueQuality = set.techniqueQuality,
+                    )
+                }
+            return ActiveExerciseUi(
                 id = exercise.id,
                 name = exercise.exerciseNameSnapshot,
                 trackingType = exercise.trackingType,
-                sets =
-                    exercise.sets.map { set ->
-                        ActiveSetUi(
-                            id = set.id,
-                            setNumber = set.order + 1,
-                            load = set.load,
-                            reps = set.reps,
-                            durationSeconds = set.durationSeconds,
-                            rpe = set.rpe,
-                            isWarmup = set.isWarmup,
-                            pain = set.pain,
-                            techniqueQuality = set.techniqueQuality,
-                        )
-                    },
+                sets = sets,
                 plannedTarget =
                     exercise.plannedExerciseId
                         ?.let { trainingPlanRepository.findPlannedExercise(it) }
@@ -506,7 +548,10 @@ class ActiveWorkoutViewModel
                 defaultLoadIncrement = detail?.defaultLoadIncrement?.let { BigDecimal.valueOf(it.grams, GRAMS_TO_KG_SCALE) },
                 instructions = detail?.instructions?.value,
                 defaultRestSeconds = detail?.defaultRestDuration?.seconds?.toInt(),
+                lastPerformance = last,
+                seed = entrySeedOf(exercise.trackingType, sets, last),
             )
+        }
 
         /** The workout exercise as the screen shows it: its plan row's rest (Milestone 8, implementation-review finding #2) and its own `Default rest` (Q9) come from it. */
         private fun activeExercise(exerciseId: WorkoutExerciseId): ActiveExerciseUi? =

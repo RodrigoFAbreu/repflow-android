@@ -316,7 +316,61 @@ registry `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediati
   `BackupRouteUnreadableRestoreFileTest`, `SettingsScreenTest`,
   `MainActivityNavHostSmokeTest` 34/34. Not visually compared side by side with
   `8c`: that is CP10's.
-- **Next: CP9** (B3 set entry keeps its numbers and seeds from last session).
+- **CP9 (B3 set entry keeps its numbers and seeds from the last session) complete,
+  2026-10-03.** Replaces `D60` (CP10 records the accidental-double-submit
+  trade-off; `Undo last`, `Last:` and the correction sheet remain). Live `8d`
+  (set entry) and turn 9 re-read first; `4a`'s `Last time` line was already
+  in the live file. New `application/workout/LastPerformance.kt`:
+  `LastPerformance(load, reps, durationSeconds, date)` and the pure
+  `lastPerformancesOf(sessions)`: per exercise, the last **working** set of the
+  most recent valid (completed, not invalidated) session with at least one
+  working set of it; warm-up-only, empty and invalidated sessions are passed
+  over. `ActiveWorkoutViewModel` takes `WorkoutRepository` (new constructor
+  argument, six construction sites updated), reads it once at creation and
+  again when a finish succeeds, not subscribed to history; a failed read
+  leaves the steppers empty. It carries on `ActiveExerciseUi` the
+  `lastPerformance` and a precomputed `seed: SetEntrySeed?`
+  (`entrySeedOf`: this session's last working set, a warm-up-only exercise
+  falling back to its last set, else `LastPerformance`; only the fields the
+  tracking type records; never the plan). `SetEntryState`: `load`, `reps` and
+  `seconds` are set through `enterLoad`/`enterReps`/`enterSeconds` (which set
+  `touched`), `applySeed` fills an untouched entry and never marks it touched,
+  `clearAfterSet()` (replacing `clear()`) leaves weight, reps and seconds and
+  clears RPE, pain, technique and warm-up, `Saver` persists `touched` as an
+  eighth item. `WorkoutFocus` seeds in the first frame and re-applies on a
+  changed seed (late data), so a reopen, a late read and a recreation all
+  behave per the plan. `Last time: 80 kg × 8` (colon, `4a`'s wording;
+  `8d` draws a middle dot, a register row for CP10) shows only before this
+  session's first set. `Log set` is disabled until the value the domain
+  requires is present (reps; seconds for a timed exercise); weight stays
+  optional because `WorkoutSet` accepts a loadless weight-and-reps set (`8d`
+  would also require weight: open question, below). Tests: JVM new
+  `LastPerformanceTest` (7), `ActiveWorkoutSeedTest` (6: history seed, never
+  done, this session's set wins, warm-up-only fallback, re-read after a finish,
+  per-type fields; new class because `ActiveWorkoutViewModelTest` is at
+  detekt's `LargeClass` limit), `SetEntryStateTest` (7, incl. saver round trip
+  with the flag); instrumented new `ActiveWorkoutSetEntryTest` (stateful
+  harness: seeded and `Last time`, never-done empty and `Log set` disabled,
+  `Last time` gives way to `Last:`, late seed fills untouched and never a typed
+  entry, reopen via the Board and via Next shows this session's numbers,
+  `StateRestorationTester` typed-stays, typed-stays-with-late-seed and
+  untouched-takes-late-seed), `ActiveWorkoutScreenTest`
+  `tappingAddSetClearsTheEntryFields` rewritten to
+  `tappingLogSetKeepsWeightAndRepsAndClearsTheRest`; fixture-only edits to
+  one `ActiveWorkoutScreenTest` test and `ActiveWorkoutPreferencesTest` (a seed
+  with reps, so `Log set` is enabled) and the two route tests' constructor call.
+  Gate: spotlessCheck, detekt, lintDebug (0 errors, 22 warnings, 1 hint, the
+  baseline), testDebugUnitTest (727 tests, 114 classes, 0 failures),
+  assembleDebug, assembleDebugAndroidTest green. AVD (`emulator-5554`, killed
+  afterwards): `ActiveWorkoutSetEntryTest`, `ActiveWorkoutScreenTest`,
+  `ActiveWorkoutPreferencesTest`, `ActiveWorkoutLeaveRouteTest`,
+  `ProgressionRecommendationRouteTest` 59/59. Not built (follow-up per the
+  design guidance): dimmed pending-row targets, the tinted `Just logged` bar,
+  index/warm-up row layout; `8d`'s "first + starts reps at the bottom of the
+  plan range" (the stepper's first + still gives 1) and its weight-required
+  `Log set`. Open question for CP10's register: whether a weight-and-reps set
+  may be logged without a weight.
+- **Next: CP10** (verification, deviation register and decision records).
 
 ---
 

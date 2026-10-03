@@ -94,6 +94,7 @@ class ActiveWorkoutFocusPlumbingTest {
             abandonWorkoutSession = AbandonWorkoutSession(workoutRepository, clock),
             settingsRepository = InMemorySettingsRepository(),
             restNotificationCanceller = RecordingRestNotificationCanceller(),
+            workoutRepository = workoutRepository,
         )
 
     @After

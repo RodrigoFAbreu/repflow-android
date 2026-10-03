@@ -83,24 +83,69 @@ import java.math.BigDecimal
  * What the user has dialled in for the next set. Held by focus mode rather
  * than by any one control, so the bottom bar's `Log set` reads it and the
  * disclosure can collapse without dropping anything; saved across a rotation.
- * [clear] runs after every logged set - the next set starts fresh, which is the
- * contract `ActiveWorkoutScreenTest.tappingAddSetClearsTheEntryFields` pins
- * (`D60`).
+ *
+ * [clearAfterSet] runs after every logged set (CP9, replacing `D60`): weight,
+ * reps and seconds **stay** - the next set is usually the same numbers - while
+ * RPE, pain, technique and the warm-up flag clear (`8d`'s rule).
+ *
+ * [touched] is "the user has typed or stepped a value": until then the entry is
+ * *untouched* and takes the seed ([applySeed]); once set it never takes one
+ * again. Saved state, so a rotation or process death cannot turn a typed entry
+ * back into an untouched one; [clearAfterSet] leaves it alone.
  */
 @Stable
 internal class SetEntryState {
     var load by mutableStateOf<BigDecimal?>(null)
+        private set
     var reps by mutableStateOf<BigDecimal?>(null)
+        private set
     var seconds by mutableStateOf<BigDecimal?>(null)
+        private set
     var rpe by mutableStateOf<Int?>(null)
     var pain by mutableStateOf<Int?>(null)
     var technique by mutableStateOf<Int?>(null)
     var isWarmup by mutableStateOf(false)
+    var touched by mutableStateOf(false)
+        private set
 
-    fun clear() {
-        load = null
-        reps = null
-        seconds = null
+    /** The user typed or stepped the weight. */
+    fun enterLoad(value: BigDecimal) {
+        load = value
+        touched = true
+    }
+
+    /** The user typed or stepped the reps. */
+    fun enterReps(value: BigDecimal) {
+        reps = value
+        touched = true
+    }
+
+    /** The user typed or stepped the seconds. */
+    fun enterSeconds(value: BigDecimal) {
+        seconds = value
+        touched = true
+    }
+
+    /**
+     * Fills the numbers from [seed] when the entry is untouched; never marks it
+     * touched, and never replaces a value the user entered.
+     */
+    fun applySeed(seed: SetEntrySeed?) {
+        if (touched || seed == null) return
+        load = seed.load
+        reps = seed.reps
+        seconds = seed.seconds
+    }
+
+    /** Whether `Log set` can succeed for [trackingType]: the value the domain requires is present (weight stays optional). */
+    fun canLog(trackingType: ExerciseTrackingType): Boolean =
+        if (trackingType == ExerciseTrackingType.DURATION) {
+            (seconds?.signum() ?: 0) > 0
+        } else {
+            (reps?.signum() ?: 0) > 0
+        }
+
+    fun clearAfterSet() {
         rpe = null
         pain = null
         technique = null
@@ -119,6 +164,7 @@ internal class SetEntryState {
                         it.pain,
                         it.technique,
                         it.isWarmup,
+                        it.touched,
                     )
                 },
                 restore = { saved ->
@@ -130,6 +176,7 @@ internal class SetEntryState {
                         pain = saved[INDEX_PAIN] as Int?
                         technique = saved[INDEX_TECHNIQUE] as Int?
                         isWarmup = saved[INDEX_WARMUP] as Boolean
+                        touched = saved[INDEX_TOUCHED] as Boolean
                     }
                 },
             )
@@ -141,6 +188,7 @@ internal class SetEntryState {
         private const val INDEX_PAIN = 4
         private const val INDEX_TECHNIQUE = 5
         private const val INDEX_WARMUP = 6
+        private const val INDEX_TOUCHED = 7
     }
 }
 

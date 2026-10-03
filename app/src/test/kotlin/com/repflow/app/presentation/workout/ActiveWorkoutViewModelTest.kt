@@ -106,6 +106,7 @@ class ActiveWorkoutViewModelTest {
             abandonWorkoutSession = AbandonWorkoutSession(workoutRepository, clock),
             settingsRepository = settingsRepository,
             restNotificationCanceller = RecordingRestNotificationCanceller(),
+            workoutRepository = workoutRepository,
         )
 
     private fun <T> requireSuccess(result: DomainResult<T, *>): T =

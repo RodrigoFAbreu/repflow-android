@@ -2,6 +2,7 @@ package com.repflow.app.presentation.workout
 
 import com.repflow.app.application.settings.AppSettings
 import com.repflow.app.application.settings.ExtraSetFields
+import com.repflow.app.application.workout.LastPerformance
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
@@ -96,6 +97,25 @@ data class ActiveExerciseUi(
     val instructions: String? = null,
     /** [com.repflow.app.domain.exercise.Exercise.defaultRestDuration] in seconds: the rest precedence's middle link (Q9); `null` when the exercise sets none. */
     val defaultRestSeconds: Int? = null,
+    /**
+     * What the user did on this exercise last time (Q8: the last working set of
+     * the most recent valid session), for focus mode's `Last time:` line;
+     * `null` for a never-done exercise (remediation-1-remediation-1 CP9).
+     */
+    val lastPerformance: LastPerformance? = null,
+    /** What an untouched set entry starts from, computed by the ViewModel ([entrySeedOf]); `null` when there is nothing to seed. */
+    val seed: SetEntrySeed? = null,
+)
+
+/**
+ * The numbers an untouched set entry takes: this session's last logged set of
+ * the exercise, else its [LastPerformance]. Only the fields the exercise's
+ * tracking type records are set.
+ */
+data class SetEntrySeed(
+    val load: BigDecimal? = null,
+    val reps: BigDecimal? = null,
+    val seconds: BigDecimal? = null,
 )
 
 /**

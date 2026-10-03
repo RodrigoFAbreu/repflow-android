@@ -93,6 +93,7 @@ class ActiveWorkoutRestPrecedenceTest {
             abandonWorkoutSession = AbandonWorkoutSession(workoutRepository, clock),
             settingsRepository = settingsRepository,
             restNotificationCanceller = canceller,
+            workoutRepository = workoutRepository,
         )
 
     @After

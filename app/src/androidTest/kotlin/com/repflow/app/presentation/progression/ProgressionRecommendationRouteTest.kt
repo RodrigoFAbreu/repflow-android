@@ -312,6 +312,7 @@ class ProgressionRecommendationRouteTest {
             abandonWorkoutSession = AbandonWorkoutSession(workouts, clock),
             settingsRepository = LocalSettingsRepository(database),
             restNotificationCanceller = RestNotificationCanceller { },
+            workoutRepository = workouts,
         )
     }
 

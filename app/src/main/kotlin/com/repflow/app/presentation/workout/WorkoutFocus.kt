@@ -26,6 +26,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -98,7 +99,13 @@ internal fun WorkoutFocus(
     onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
     restStrip: @Composable () -> Unit,
 ) {
-    val entry = rememberSaveable(exercise.id.value, saver = SetEntryState.Saver) { SetEntryState() }
+    val entry =
+        rememberSaveable(exercise.id.value, saver = SetEntryState.Saver) {
+            // Seeded in the first frame, so a reopened exercise never flashes empty steppers first.
+            SetEntryState().also { it.applySeed(exercise.seed) }
+        }
+    // The seed may arrive (or change) after focus opened; an untouched entry takes it, a touched one never does.
+    LaunchedEffect(exercise.seed) { entry.applySeed(exercise.seed) }
     var detailExpanded by rememberSaveable(exercise.id.value) { mutableStateOf(false) }
     var correcting by rememberSaveable(exercise.id.value) { mutableStateOf(false) }
     val header = focusHeader(content.exercises, exercise)
@@ -124,6 +131,7 @@ internal fun WorkoutFocus(
             exercise.instructions?.let { TechniqueNotes(exerciseKey = exercise.id.value, instructions = it) }
             FocusSetList(exercise = exercise, onCorrectLast = { correcting = true })
             LastSetLine(exercise = exercise, onUndo = { onUndoLastSet(exercise.id) })
+            LastTimeLine(exercise = exercise)
             val exerciseId = exercise.exerciseId
             if (recommendation != null && exerciseId != null) {
                 SuggestionStrip(
@@ -135,11 +143,11 @@ internal fun WorkoutFocus(
             EntrySteppers(
                 trackingType = exercise.trackingType,
                 load = entry.load,
-                onLoadChange = { entry.load = it },
+                onLoadChange = entry::enterLoad,
                 reps = entry.reps,
-                onRepsChange = { entry.reps = it },
+                onRepsChange = entry::enterReps,
                 seconds = entry.seconds,
-                onSecondsChange = { entry.seconds = it },
+                onSecondsChange = entry::enterSeconds,
                 loadStep = exercise.loadStep(),
                 repRange = exercise.plannedTarget?.repRange,
                 durationRange = exercise.plannedTarget?.durationRangeSeconds,
@@ -179,11 +187,11 @@ internal fun WorkoutFocus(
                     entry.pain.takeIf { extraFieldsOn },
                     entry.technique.takeIf { extraFieldsOn },
                 )
-                // Cleared immediately (Milestone 8, implementation-review finding #3):
-                // each set starts fresh rather than risking an accidental duplicate
-                // submit (`D60`).
-                entry.clear()
+                // Weight, reps and seconds stay for the next set (CP9, replacing `D60`);
+                // the rest clears.
+                entry.clearAfterSet()
             },
+            canLog = entry.canLog(exercise.trackingType),
             onNext = onNextExercise,
         )
     }
@@ -462,6 +470,43 @@ private fun LastSetLine(
 }
 
 /**
+ * `Last time: 80 kg × 8` (`4a`, CP9): the previous session's last working set,
+ * as plain text. Shown only before this session's first set of the exercise -
+ * after it, `Last:` and `Undo last` take over - and never for a never-done one.
+ */
+@Composable
+private fun LastTimeLine(exercise: ActiveExerciseUi) {
+    if (exercise.sets.isNotEmpty()) return
+    val last = exercise.lastPerformance ?: return
+    val load = last.load
+    val reps = last.reps
+    val seconds = last.durationSeconds
+    val text =
+        when {
+            exercise.trackingType == ExerciseTrackingType.DURATION && seconds != null -> {
+                stringResource(R.string.workout_focus_last_time_duration, seconds)
+            }
+
+            exercise.trackingType == ExerciseTrackingType.WEIGHT_AND_REPS && load != null && reps != null -> {
+                stringResource(R.string.workout_focus_last_time_weight_reps, RepFlowStepperMath.format(BigDecimal.valueOf(load)), reps)
+            }
+
+            exercise.trackingType != ExerciseTrackingType.DURATION && reps != null -> {
+                pluralStringResource(R.plurals.workout_focus_last_time_reps, reps, reps)
+            }
+
+            else -> {
+                return
+            }
+        }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+        color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
+    )
+}
+
+/**
  * The suggestion strip (`:1278-1284`): the exercise's progression
  * recommendation - the proposed action and the policy's top reason - and
  * `Why ›` into the recommendation screen (`D27`; plan CP8 item 5). Absent when
@@ -524,6 +569,7 @@ private fun SuggestionStrip(
 @Composable
 private fun FocusBottomBar(
     isWarmup: Boolean,
+    canLog: Boolean,
     onLogSet: () -> Unit,
     onNext: () -> Unit,
 ) {
@@ -532,6 +578,7 @@ private fun FocusBottomBar(
             RepFlowPrimaryButton(
                 text = stringResource(if (isWarmup) R.string.workout_focus_log_warmup else R.string.workout_focus_log_set),
                 onClick = onLogSet,
+                enabled = canLog,
                 leadingIcon = RepFlowIcons.checkFat,
                 modifier = Modifier.weight(1f),
             )

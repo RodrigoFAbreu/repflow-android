@@ -81,6 +81,7 @@ class ActiveWorkoutRestNotificationTest {
             abandonWorkoutSession = AbandonWorkoutSession(workoutRepository, clock),
             settingsRepository = InMemorySettingsRepository(),
             restNotificationCanceller = canceller,
+            workoutRepository = workoutRepository,
         )
 
     @After

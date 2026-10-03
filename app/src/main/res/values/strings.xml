@@ -510,6 +510,12 @@
         <item quantity="other">Last: %1$d reps</item>
     </plurals>
     <string name="workout_focus_last_duration">Last: %1$d s</string>
+    <string name="workout_focus_last_time_weight_reps">Last time: %1$s kg × %2$d</string>
+    <plurals name="workout_focus_last_time_reps">
+        <item quantity="one">Last time: %1$d rep</item>
+        <item quantity="other">Last time: %1$d reps</item>
+    </plurals>
+    <string name="workout_focus_last_time_duration">Last time: %1$d s</string>
     <string name="workout_focus_undo_last">Undo last</string>
     <string name="workout_focus_correct_action">Correct this set</string>
     <string name="workout_focus_correct_title">Set %1$d</string>

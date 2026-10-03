@@ -1,5 +1,7 @@
 package com.repflow.app.presentation.workout
 
+import com.repflow.app.application.workout.LastPerformance
+import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import java.math.BigDecimal
 
@@ -149,4 +151,41 @@ internal fun ActiveExerciseUi.setsWithExtraFlag(): List<Pair<ActiveSetUi, Boolea
             }
         set to isExtra
     }
+}
+
+/**
+ * The seed for an untouched set entry (CP9, Q8 refined by review I-2): this
+ * session's last logged **working** set of the exercise when it has one (a
+ * warm-up-only exercise falls back to its last set), otherwise [last], the
+ * previous session's last working set. `null` for a never-done exercise, whose
+ * steppers stay empty - the plan's rep range is a caption, never a seed. Only
+ * the fields [trackingType] records are carried.
+ */
+internal fun entrySeedOf(
+    trackingType: ExerciseTrackingType,
+    sets: List<ActiveSetUi>,
+    last: LastPerformance?,
+): SetEntrySeed? {
+    val own = sets.lastOrNull { !it.isWarmup } ?: sets.lastOrNull()
+    val load: Double?
+    val reps: Int?
+    val seconds: Int?
+    if (own != null) {
+        load = own.load
+        reps = own.reps
+        seconds = own.durationSeconds
+    } else if (last != null) {
+        load = last.load
+        reps = last.reps
+        seconds = last.durationSeconds
+    } else {
+        return null
+    }
+    val seed =
+        SetEntrySeed(
+            load = load?.takeIf { trackingType.supportsLoad }?.let(BigDecimal::valueOf),
+            reps = reps?.takeIf { trackingType != ExerciseTrackingType.DURATION }?.toBigDecimal(),
+            seconds = seconds?.takeIf { trackingType == ExerciseTrackingType.DURATION }?.toBigDecimal(),
+        )
+    return seed.takeIf { it.load != null || it.reps != null || it.seconds != null }
 }

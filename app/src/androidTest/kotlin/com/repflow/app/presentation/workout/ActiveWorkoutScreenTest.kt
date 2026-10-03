@@ -120,6 +120,7 @@ class ActiveWorkoutScreenTest {
         plannedTarget: PlannedTargetUi? = null,
         exerciseId: ExerciseId? = null,
         instructions: String? = null,
+        seed: SetEntrySeed? = null,
     ) = ActiveExerciseUi(
         id = WorkoutExerciseId("exercise-1"),
         name = "Bench Press",
@@ -128,6 +129,7 @@ class ActiveWorkoutScreenTest {
         plannedTarget = plannedTarget,
         exerciseId = exerciseId,
         instructions = instructions,
+        seed = seed,
     )
 
     private fun set(
@@ -342,7 +344,8 @@ class ActiveWorkoutScreenTest {
         var recordedRpe: Double? = null
         var recordedPain: Int? = null
         setContent(
-            exercise(ExerciseTrackingType.WEIGHT_AND_REPS),
+            // Seeded with reps: `Log set` waits for them (CP9).
+            exercise(ExerciseTrackingType.WEIGHT_AND_REPS, seed = SetEntrySeed(reps = java.math.BigDecimal("8"))),
             onRecordSet = { _, _, _, _, rpe, _, pain, _ ->
                 recordedRpe = rpe
                 recordedPain = pain
@@ -390,17 +393,24 @@ class ActiveWorkoutScreenTest {
     }
 
     /**
-     * Rewritten by remediation-1 CP8 to drive the weight stepper and its
-     * keypad, since a stepper cannot take `performTextInput`. The contract is
-     * unchanged: logging a set clears what was entered, so the next set starts
-     * fresh (`D60`).
+     * Replaces `tappingAddSetClearsTheEntryFields` (remediation-1-remediation-1
+     * CP9, B3; its `D60` is superseded): logging a set keeps weight and reps for
+     * the next one, and clears RPE, pain, technique and the warm-up flag.
      */
     @Test
-    fun tappingAddSetClearsTheEntryFields() {
+    fun tappingLogSetKeepsWeightAndRepsAndClearsTheRest() {
         var recordedLoad: Double? = null
+        var recordedReps: Int? = null
+        var recordedWarmup = false
+        var recordedRpe: Double? = null
         setContent(
             exercise(ExerciseTrackingType.WEIGHT_AND_REPS),
-            onRecordSet = { _, load, _, _, _, _, _, _ -> recordedLoad = load },
+            onRecordSet = { _, load, reps, _, rpe, warmup, _, _ ->
+                recordedLoad = load
+                recordedReps = reps
+                recordedRpe = rpe
+                recordedWarmup = warmup
+            },
         )
 
         composeRule
@@ -410,11 +420,29 @@ class ActiveWorkoutScreenTest {
         composeRule.onNodeWithText("2.5").performScrollTo().performClick()
         listOf("6", "0").forEach { key -> composeRule.onNodeWithText(key).performClick() }
         composeRule.onNodeWithText(composeRule.activity.getString(R.string.repflow_keypad_confirm)).performClick()
-        composeRule.onNodeWithText("60").performScrollTo().assertIsDisplayed()
-        node(R.string.workout_focus_log_set).performClick()
+        composeRule
+            .onNodeWithContentDescription(composeRule.activity.getString(R.string.workout_focus_more_reps))
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithText("1").performScrollTo().performClick()
+        listOf("4", "5").forEach { key -> composeRule.onNodeWithText(key).performClick() }
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.repflow_keypad_confirm)).performClick()
+        node(R.string.workout_active_set_detail_toggle).performScrollTo().performClick()
+        composeRule.onNode(hasText("8") and isSelectable()).performScrollTo().performClick()
+        node(R.string.workout_active_warmup_label).performScrollTo().performClick()
+        node(R.string.workout_focus_log_warmup).assertIsDisplayed()
+        node(R.string.workout_focus_log_warmup).performClick()
 
         assertEquals(60.0, recordedLoad)
-        composeRule.onNodeWithText("60").assertDoesNotExist()
+        assertEquals(45, recordedReps)
+        assertEquals(8.0, recordedRpe)
+        assertTrue(recordedWarmup)
+        // Weight and reps stay...
+        composeRule.onNodeWithText("60").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("45").performScrollTo().assertIsDisplayed()
+        // ...and the rest clears: no RPE summary, and the warm-up chip is off again.
+        node(R.string.workout_active_set_detail_toggle).performScrollTo().assertIsDisplayed()
+        node(R.string.workout_focus_log_set).assertIsDisplayed()
     }
 
     /**
