@@ -461,6 +461,20 @@ registry `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediati
   functional-review items are untouched. Gate: spotlessCheck, detekt,
   lintDebug, testDebugUnitTest 730 tests 0 failures; AVD instrumented 378
   tests 0 failures.
+- **External implementation review round 2 applied, 2026-10-03** (manual
+  Codex review of revision 3, REVISE, 0 Blocking, 1 Important, 0 Optional).
+  **GXI2-I1** fixed in `46b4731`: the stamp was launched with the default start,
+  so a scope cancelled before the queued body first ran never entered
+  `withContext(NonCancellable)`. It now uses
+  `launch(start = CoroutineStart.UNDISPATCHED)` with the existing
+  `NonCancellable` block. Write rules unchanged. New test `BackupViewModelTest`
+  "a last_backup_at write still lands when the scope is cancelled before a
+  queued dispatch runs" (a `StandardTestDispatcher` set up only for that test:
+  call, cancel `viewModelScope`, run pending tasks, assert the stamp) failed
+  before the fix (1 of 19) and passes after; the suspended-write test is kept.
+  The functional-review items are untouched. Gate: spotlessCheck, detekt,
+  lintDebug, assembleDebugAndroidTest, testDebugUnitTest 731 tests 0 failures.
+  No instrumented run: the change is a JVM-only ViewModel launch start.
 
 ---
 
