@@ -1,11 +1,22 @@
 package com.repflow.app.presentation.home
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
 import com.repflow.app.domain.common.DomainResult
@@ -16,6 +27,7 @@ import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
 import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.presentation.RepFlowTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -150,6 +162,50 @@ class HomeScreenTest {
         assertEquals(1, logRecovery)
     }
 
+    /** At 1.3x and 2.0x font the resume card's `Resume` and `Finish it` stay whole words on one line (design 9f, P2-F-3). */
+    @Test
+    fun theResumeCardsLabelsStayWholeAtLargeFontSizes() {
+        val scale = mutableStateOf(LARGE_FONT_SCALE_MEDIUM)
+        composeRule.setContent {
+            val base = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(base.density, scale.value)) {
+                RepFlowTheme {
+                    Box(Modifier.width(384.dp)) {
+                        ResumeCard(
+                            workout =
+                                HomeActiveWorkout(
+                                    WorkoutSessionId("s"),
+                                    planName = "Push day",
+                                    startedAt = Instant.now(),
+                                    setsLogged = 3,
+                                ),
+                            onResumeClick = {},
+                            onFinishClick = {},
+                            onAbandonClick = {},
+                        )
+                    }
+                }
+            }
+        }
+        listOf(LARGE_FONT_SCALE_MEDIUM, LARGE_FONT_SCALE_MAX).forEach { fontScale ->
+            composeRule.runOnIdle { scale.value = fontScale }
+            composeRule.waitForIdle()
+            listOf(R.string.home_resume, R.string.home_finish_it).forEach { label ->
+                val results = mutableListOf<TextLayoutResult>()
+                val node = composeRule.onNodeWithText(string(label))
+                node.assertIsDisplayed()
+                node
+                    .fetchSemanticsNode()
+                    .config[SemanticsActions.GetTextLayoutResult]
+                    .action
+                    ?.invoke(results)
+                assertEquals("label $label wraps at font $fontScale", 1, results.single().lineCount)
+                val bounds = node.getUnclippedBoundsInRoot()
+                assertTrue("label $label is clipped at font $fontScale: $bounds", bounds.left >= 0.dp && bounds.right <= 384.dp)
+            }
+        }
+    }
+
     /** The prototype's seed check-in: 75, Ready. */
     private fun seedReadiness(): ReadinessScore {
         val at = Instant.parse("2026-08-11T07:00:00Z")
@@ -172,3 +228,6 @@ class HomeScreenTest {
         return ReadinessScore.of((entry as DomainResult.Success).value)
     }
 }
+
+private const val LARGE_FONT_SCALE_MEDIUM = 1.3f
+private const val LARGE_FONT_SCALE_MAX = 2.0f

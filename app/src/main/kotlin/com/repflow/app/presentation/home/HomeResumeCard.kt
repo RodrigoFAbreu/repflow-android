@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -46,6 +47,9 @@ import java.time.Instant
  */
 
 private val ResumeGlyphSize = 20.dp
+
+/** Above this font scale the three actions stack instead of sharing a row. */
+private const val STACK_ACTIONS_FONT_SCALE = 1.1f
 private const val ELAPSED_TICK_MILLIS = 1_000L
 private const val MILLIS_PER_SECOND = 1_000L
 
@@ -99,33 +103,61 @@ internal fun ResumeCard(
                     )
                 }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = RepFlowSpacing.gapLg),
-                horizontalArrangement = Arrangement.spacedBy(CardActionsGap),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                RepFlowPrimaryButton(
-                    text = stringResource(R.string.home_resume),
-                    onClick = onResumeClick,
-                    modifier = Modifier.weight(1f),
-                )
-                RepFlowAccentOutlineButton(
-                    text = stringResource(R.string.home_finish_it),
-                    onClick = onFinishClick,
-                    modifier = Modifier.weight(1f).heightIn(min = ActionRowMinHeight),
-                )
-                TextButton(
-                    onClick = onAbandonClick,
-                    modifier = Modifier.heightIn(min = ActionRowMinHeight),
+            if (LocalDensity.current.fontScale > STACK_ACTIONS_FONT_SCALE) {
+                // Large font (design 9f): labels never break mid-word, so the actions stack.
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(top = RepFlowSpacing.gapLg),
+                    verticalArrangement = Arrangement.spacedBy(CardActionsGap),
                 ) {
-                    Icon(
-                        painter = painterResource(RepFlowIcons.trash),
-                        contentDescription = stringResource(R.string.home_abandon_content_description),
-                        tint = MaterialTheme.colorScheme.error,
+                    RepFlowPrimaryButton(
+                        text = stringResource(R.string.home_resume),
+                        onClick = onResumeClick,
+                        modifier = Modifier.fillMaxWidth(),
                     )
+                    RepFlowAccentOutlineButton(
+                        text = stringResource(R.string.home_finish_it),
+                        onClick = onFinishClick,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = ActionRowMinHeight),
+                    )
+                    AbandonButton(onAbandonClick, Modifier.align(Alignment.End))
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = RepFlowSpacing.gapLg),
+                    horizontalArrangement = Arrangement.spacedBy(CardActionsGap),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RepFlowPrimaryButton(
+                        text = stringResource(R.string.home_resume),
+                        onClick = onResumeClick,
+                        modifier = Modifier.weight(1f),
+                    )
+                    RepFlowAccentOutlineButton(
+                        text = stringResource(R.string.home_finish_it),
+                        onClick = onFinishClick,
+                        modifier = Modifier.weight(1f).heightIn(min = ActionRowMinHeight),
+                    )
+                    AbandonButton(onAbandonClick)
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun AbandonButton(
+    onAbandonClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    TextButton(
+        onClick = onAbandonClick,
+        modifier = modifier.heightIn(min = ActionRowMinHeight),
+    ) {
+        Icon(
+            painter = painterResource(RepFlowIcons.trash),
+            contentDescription = stringResource(R.string.home_abandon_content_description),
+            tint = MaterialTheme.colorScheme.error,
+        )
     }
 }
 
