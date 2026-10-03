@@ -285,4 +285,74 @@ class ActiveWorkoutSetEntryTest {
 
         assertSteppers("80", "8")
     }
+
+    private fun stepRepsUp() {
+        composeRule
+            .onNodeWithContentDescription(text(R.string.workout_focus_more_reps))
+            .performScrollTo()
+            .performClick()
+    }
+
+    /** GF-1: a seeded exercise keeps what was stepped when the Board is visited. */
+    @Test
+    fun anUnloggedSeededEntryKeepsItsStepsAcrossTheBoard() {
+        start(exercise(last = lastTime, seed = lastTimeSeed))
+        stepWeightUp()
+        composeRule.onNodeWithText("82.5").performScrollTo().assertIsDisplayed()
+
+        goToBoardAndReopen("Bench Press")
+
+        assertSteppers("82.5", "8")
+        composeRule.onAllNodesWithText("80").assertCountEquals(0)
+    }
+
+    /** GF-1: a never-done exercise keeps both stepped values - it came back as empty before. */
+    @Test
+    fun anUnloggedNeverDoneEntryKeepsItsStepsAcrossTheBoard() {
+        start(exercise())
+        stepWeightUp()
+        stepRepsUp()
+
+        goToBoardAndReopen("Bench Press")
+
+        composeRule.onAllNodesWithText(text(R.string.workout_focus_value_empty)).assertCountEquals(0)
+        composeRule.onNodeWithText(text(R.string.workout_focus_log_set)).assertIsEnabled()
+    }
+
+    /** GF-1: each exercise keeps its own entry when focus moves to another exercise and back. */
+    @Test
+    fun eachExerciseKeepsItsOwnUnloggedEntryWhenFocusMovesAwayAndBack() {
+        start(
+            exercise(last = lastTime, seed = lastTimeSeed),
+            exercise(id = "e2", name = "Row"),
+        )
+        stepWeightUp()
+        composeRule.onNodeWithText("82.5").performScrollTo().assertIsDisplayed()
+
+        composeRule.onNodeWithText(text(R.string.workout_focus_next)).performClick()
+        composeRule.runOnIdle { assertEquals(WorkoutExerciseId("e2"), focusedId) }
+        composeRule.onAllNodesWithText(text(R.string.workout_focus_value_empty)).assertCountEquals(2)
+        stepRepsUp()
+
+        composeRule.runOnIdle { focusedId = WorkoutExerciseId("e1") }
+        assertSteppers("82.5", "8")
+
+        composeRule.runOnIdle { focusedId = WorkoutExerciseId("e2") }
+        composeRule.onAllNodesWithText(text(R.string.workout_focus_value_empty)).assertCountEquals(1)
+    }
+
+    /** GF-1: the held entries are saved across recreation, after a Board visit as well. */
+    @Test
+    fun anUnloggedEntryKeptAcrossTheBoardSurvivesRecreation() {
+        val restoration = StateRestorationTester(composeRule)
+        exercises = listOf(exercise(last = lastTime, seed = lastTimeSeed))
+        focusedId = exercises.first().id
+        restoration.setContent { Screen() }
+        stepWeightUp()
+        goToBoardAndReopen("Bench Press")
+
+        restoration.emulateSavedInstanceStateRestore()
+
+        assertSteppers("82.5", "8")
+    }
 }

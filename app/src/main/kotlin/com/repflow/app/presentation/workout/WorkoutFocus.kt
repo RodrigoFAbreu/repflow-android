@@ -89,6 +89,7 @@ import java.math.BigDecimal
 internal fun WorkoutFocus(
     content: ActiveWorkoutContent.Active,
     exercise: ActiveExerciseUi,
+    entry: SetEntryState,
     recommendation: ProgressionRecommendationUi?,
     onBackToBoard: () -> Unit,
     onFinishClick: () -> Unit,
@@ -99,11 +100,8 @@ internal fun WorkoutFocus(
     onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
     restStrip: @Composable () -> Unit,
 ) {
-    val entry =
-        rememberSaveable(exercise.id.value, saver = SetEntryState.Saver) {
-            // Seeded in the first frame, so a reopened exercise never flashes empty steppers first.
-            SetEntryState().also { it.applySeed(exercise.seed) }
-        }
+    // [entry] is held above focus mode (GF-1), already seeded when first created, so a reopened exercise
+    // keeps what was typed and never flashes empty steppers.
     // The seed may arrive (or change) after focus opened; an untouched entry takes it, a touched one never does.
     LaunchedEffect(exercise.seed) { entry.applySeed(exercise.seed) }
     var detailExpanded by rememberSaveable(exercise.id.value) { mutableStateOf(false) }

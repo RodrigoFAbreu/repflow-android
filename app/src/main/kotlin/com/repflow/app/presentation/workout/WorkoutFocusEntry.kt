@@ -29,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.mapSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -152,34 +153,28 @@ internal class SetEntryState {
         isWarmup = false
     }
 
+    /** The plain, bundle-safe form [Saver] and [FocusEntries.Saver] persist. */
+    fun toSaved(): ArrayList<Any?> =
+        arrayListOf(load?.toPlainString(), reps?.toPlainString(), seconds?.toPlainString(), rpe, pain, technique, isWarmup, touched)
+
     companion object {
         val Saver: Saver<SetEntryState, Any> =
             listSaver(
-                save = {
-                    listOf(
-                        it.load?.toPlainString(),
-                        it.reps?.toPlainString(),
-                        it.seconds?.toPlainString(),
-                        it.rpe,
-                        it.pain,
-                        it.technique,
-                        it.isWarmup,
-                        it.touched,
-                    )
-                },
-                restore = { saved ->
-                    SetEntryState().apply {
-                        load = (saved[INDEX_LOAD] as String?)?.toBigDecimal()
-                        reps = (saved[INDEX_REPS] as String?)?.toBigDecimal()
-                        seconds = (saved[INDEX_SECONDS] as String?)?.toBigDecimal()
-                        rpe = saved[INDEX_RPE] as Int?
-                        pain = saved[INDEX_PAIN] as Int?
-                        technique = saved[INDEX_TECHNIQUE] as Int?
-                        isWarmup = saved[INDEX_WARMUP] as Boolean
-                        touched = saved[INDEX_TOUCHED] as Boolean
-                    }
-                },
+                save = { it.toSaved() },
+                restore = { saved -> fromSaved(saved) },
             )
+
+        fun fromSaved(saved: List<Any?>): SetEntryState =
+            SetEntryState().apply {
+                load = (saved[INDEX_LOAD] as String?)?.toBigDecimal()
+                reps = (saved[INDEX_REPS] as String?)?.toBigDecimal()
+                seconds = (saved[INDEX_SECONDS] as String?)?.toBigDecimal()
+                rpe = saved[INDEX_RPE] as Int?
+                pain = saved[INDEX_PAIN] as Int?
+                technique = saved[INDEX_TECHNIQUE] as Int?
+                isWarmup = saved[INDEX_WARMUP] as Boolean
+                touched = saved[INDEX_TOUCHED] as Boolean
+            }
 
         private const val INDEX_LOAD = 0
         private const val INDEX_REPS = 1
@@ -189,6 +184,39 @@ internal class SetEntryState {
         private const val INDEX_TECHNIQUE = 5
         private const val INDEX_WARMUP = 6
         private const val INDEX_TOUCHED = 7
+    }
+}
+
+/**
+ * Every exercise's unlogged [SetEntryState], held above focus mode (functional
+ * review GF-1). Focus mode leaves composition when the Board shows and
+ * re-keys on Next / Previous, so an entry remembered inside it was lost
+ * with it; held here, each exercise keeps what was typed or stepped for as long
+ * as the workout screen is up, and saved across a rotation. The seed rules are
+ * unchanged: [entryFor] seeds an entry only when it is first created, and
+ * [SetEntryState.applySeed] still never overwrites a touched one.
+ */
+@Stable
+internal class FocusEntries(
+    initial: Map<String, SetEntryState> = emptyMap(),
+) {
+    private val entries = HashMap(initial)
+
+    /** The entry for [exerciseId], created (and seeded from [seed]) on first use. */
+    fun entryFor(
+        exerciseId: String,
+        seed: SetEntrySeed?,
+    ): SetEntryState = entries.getOrPut(exerciseId) { SetEntryState().also { it.applySeed(seed) } }
+
+    companion object {
+        val Saver: Saver<FocusEntries, Any> =
+            mapSaver(
+                save = { holder -> holder.entries.mapValues { (_, entry) -> entry.toSaved() } },
+                restore = { saved ->
+                    @Suppress("UNCHECKED_CAST")
+                    FocusEntries(saved.mapValues { (_, value) -> SetEntryState.fromSaved(value as List<Any?>) })
+                },
+            )
     }
 }
 

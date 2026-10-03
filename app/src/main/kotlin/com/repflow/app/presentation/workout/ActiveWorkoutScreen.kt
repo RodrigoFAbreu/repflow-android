@@ -287,10 +287,13 @@ private fun WorkoutMode(
         if (focused != null) onFocusExercise(null) else overlay = WorkoutOverlay.LEAVE_SHEET
     }
 
+    // One unlogged entry per exercise, held here so it survives the Board and Next / Previous (GF-1).
+    val entries = rememberSaveable(saver = FocusEntries.Saver) { FocusEntries() }
     if (focused != null) {
         WorkoutFocus(
             content = content,
             exercise = focused,
+            entry = entries.entryFor(focused.id.value, focused.seed),
             recommendation =
                 focused.exerciseId?.let { exerciseId ->
                     availableExercises.find { it.id == exerciseId }?.recommendation
