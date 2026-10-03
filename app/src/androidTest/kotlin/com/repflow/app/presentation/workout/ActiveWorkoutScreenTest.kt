@@ -4,7 +4,10 @@ import androidx.activity.ComponentActivity
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -26,6 +29,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.width
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -857,6 +861,49 @@ class ActiveWorkoutScreenTest {
         assertEquals(1, results.single().lineCount)
     }
 
+    /** At 1.3x and 2.0x font the strip's button labels stay whole: one line, no overflow (design 9f, P2-F-2). */
+    @Test
+    fun theRestStripsButtonLabelsStayWholeAtLargeFontSizes() {
+        val scale = mutableStateOf(LARGE_FONT_SCALE_MEDIUM)
+        composeRule.setContent {
+            val base = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(base.density, scale.value)) {
+                RepFlowTheme {
+                    Box(Modifier.width(384.dp)) {
+                        RestTimerBar(
+                            timer = RestTimerUi(endAt = Instant.now().plusSeconds(90), totalDurationSeconds = 90),
+                            onAddRestTime = {},
+                            onRemoveRestTime = {},
+                            onSkipRestTimer = {},
+                        )
+                    }
+                }
+            }
+        }
+        listOf(LARGE_FONT_SCALE_MEDIUM, LARGE_FONT_SCALE_MAX).forEach { fontScale ->
+            composeRule.runOnIdle { scale.value = fontScale }
+            composeRule.waitForIdle()
+            listOf(
+                R.string.workout_active_rest_timer_remove,
+                R.string.workout_active_rest_timer_add,
+                R.string.workout_rest_skip,
+            ).forEach { label ->
+                val results = mutableListOf<TextLayoutResult>()
+                val node = node(label)
+                node.assertIsDisplayed()
+                node
+                    .fetchSemanticsNode()
+                    .config[SemanticsActions.GetTextLayoutResult]
+                    .action
+                    ?.invoke(results)
+                val layout = results.single()
+                assertEquals("label $label wraps at font $fontScale", 1, layout.lineCount)
+                val bounds = node.getUnclippedBoundsInRoot()
+                assertTrue("label $label is clipped at font $fontScale: $bounds", bounds.left >= 0.dp && bounds.right <= 384.dp)
+            }
+        }
+    }
+
     /** The done strip is neutral: check, `Rest done` / `Next set is ready` and the X, with no nudge or skip buttons (P2-F-5). */
     @Test
     fun theDoneRestStripOffersOnlyTheDismissX() {
@@ -902,3 +949,6 @@ class ActiveWorkoutScreenTest {
         composeRule.onNodeWithText("kg · 2.5 steps").assertIsDisplayed()
     }
 }
+
+private const val LARGE_FONT_SCALE_MEDIUM = 1.3f
+private const val LARGE_FONT_SCALE_MAX = 2.0f

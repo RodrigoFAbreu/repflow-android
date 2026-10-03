@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -506,22 +507,26 @@ internal fun RestTimerBar(
                     )
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapSm)) {
+            // A FlowRow, not a fixed-weight Row: at large font sizes a label must stay whole
+            // (design 9f), so a button that no longer fits drops to the next line instead of
+            // wrapping its own text. Buttons size to their labels (no fixed weights); at 384dp
+            // and font 1.0 all three share one row.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapSm),
+                verticalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapSm),
+            ) {
                 RepFlowNeutralOutlineButton(
                     text = stringResource(R.string.workout_active_rest_timer_remove),
                     onClick = onRemoveRestTime,
-                    modifier = Modifier.weight(1f),
                 )
                 RepFlowNeutralOutlineButton(
                     text = stringResource(R.string.workout_active_rest_timer_add),
                     onClick = onAddRestTime,
-                    modifier = Modifier.weight(1f),
                 )
                 RepFlowPrimaryButton(
                     text = stringResource(R.string.workout_rest_skip),
                     onClick = onSkipRestTimer,
-                    // Wider than the two nudges so `Skip rest` stays on one line at 384dp.
-                    modifier = Modifier.weight(REST_STRIP_SKIP_WEIGHT).height(RestStripButtonHeight),
+                    modifier = Modifier.heightIn(min = RestStripButtonHeight),
                 )
             }
         }
@@ -621,8 +626,6 @@ private val RestTimerTrackHeight = 4.dp
 private val RestTimerTrackGap = 0.dp
 
 /** `margin:0 12px 10px` and `padding:12px 14px`. */
-private const val REST_STRIP_SKIP_WEIGHT = 1.7f
-
 private val RestStripSideMargin = 12.dp
 private val RestStripBottomMargin = 10.dp
 private val RestStripHorizontalPadding = 14.dp
