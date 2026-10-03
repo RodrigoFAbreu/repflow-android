@@ -13,12 +13,16 @@ import com.repflow.app.application.recovery.InMemoryRecoveryRepository
 import com.repflow.app.application.settings.AppSettings
 import com.repflow.app.application.settings.InMemorySettingsRepository
 import com.repflow.app.application.settings.SettingsPersistenceError
+import com.repflow.app.application.settings.SettingsRepository
 import com.repflow.app.application.trainingplan.InMemoryTrainingPlanRepository
 import com.repflow.app.application.trainingplan.ObserveTrainingPlanVersionLabels
 import com.repflow.app.application.workout.InMemoryWorkoutRepository
+import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.presentation.workout.RecordingRestNotificationCanceller
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -266,7 +270,30 @@ class BackupViewModelTest {
         }
 
     @Test
-    fun `a successful restore leaves last_backup_at alone`() =
+    fun `a settings read failure leaves the screen alive with the hero loaded and export still working`() =
+        runTest {
+            val failing =
+                object : SettingsRepository {
+                    override fun observe(): Flow<AppSettings> = flow { throw IllegalStateException("settings row unreadable") }
+
+                    override suspend fun get(): AppSettings = AppSettings.DEFAULT
+
+                    override suspend fun update(transform: (AppSettings) -> AppSettings) = DomainResult.Success(Unit)
+                }
+
+            val failedViewModel =
+                BackupViewModel(exportBackup, restoreBackup, exportWorkoutHistoryCsv, restNotificationCanceller, failing, clock)
+
+            assertEquals(true, failedViewModel.uiState.value.isLastBackupLoaded)
+            assertNull(failedViewModel.uiState.value.lastBackupAt)
+            var delivered: String? = null
+            failedViewModel.onExportBackupRequested { delivered = it }
+            assertNotNull(delivered)
+        }
+
+    /** Guards the ViewModel only: the in-memory backup fake cannot reach the settings fake, so a repository-level write is the instrumented restore test's to catch. */
+    @Test
+    fun `a successful restore does not make the ViewModel write last_backup_at`() =
         runTest {
             var exported: String? = null
             viewModel.onExportBackupRequested { exported = it }

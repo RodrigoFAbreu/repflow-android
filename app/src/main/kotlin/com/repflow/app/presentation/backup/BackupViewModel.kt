@@ -11,8 +11,10 @@ import com.repflow.app.application.settings.SettingsRepository
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.presentation.workout.RestNotificationCanceller
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -45,11 +47,18 @@ class BackupViewModel
 
         init {
             viewModelScope.launch {
-                settingsRepository.observe().collect { settings ->
-                    _uiState.update {
-                        it.copy(lastBackupAt = settings.lastBackupAt, isLastBackupLoaded = true, now = clock.now())
+                settingsRepository
+                    .observe()
+                    .catch { failure ->
+                        // A settings read failure must not crash the screen: the hero falls back to
+                        // `No backup yet`, and export and restore still work.
+                        if (failure is CancellationException) throw failure
+                        _uiState.update { it.copy(isLastBackupLoaded = true) }
+                    }.collect { settings ->
+                        _uiState.update {
+                            it.copy(lastBackupAt = settings.lastBackupAt, isLastBackupLoaded = true, now = clock.now())
+                        }
                     }
-                }
             }
         }
 
