@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -88,6 +90,9 @@ fun HistoryScreen(
     HistoryMessages(uiState.messages, snackbarHostState, onMessageShown)
     val snackbarHost: @Composable () -> Unit = { SnackbarHost(snackbarHostState) { HistorySnackbar(it) } }
 
+    // Hoisted above the detail's early return: the list leaves composition while a
+    // detail is open, so its scroll position has to live here to survive Back (9c, 9e).
+    val listState = rememberLazyListState()
     val selectedSession = uiState.selectedSession
     val summary =
         remember(selectedSession, uiState.sessions) {
@@ -143,6 +148,7 @@ fun HistoryScreen(
                             sessions = visibleSessions,
                             uiState = uiState,
                             onSessionClick = onSessionClick,
+                            listState = listState,
                         )
                     }
                 }
@@ -242,6 +248,7 @@ private fun SessionList(
     sessions: List<WorkoutSession>,
     uiState: HistoryUiState,
     onSessionClick: (WorkoutSessionId) -> Unit,
+    listState: LazyListState,
 ) {
     val zone = ZoneId.systemDefault()
     val locale = LocalConfiguration.current.locales[0]
@@ -249,6 +256,7 @@ private fun SessionList(
     val monthFormatter = remember(locale) { DateTimeFormatter.ofPattern(MONTH_PATTERN, locale) }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = PaddingValues(bottom = RepFlowSpacing.gapLg),
     ) {
         sections.forEachIndexed { index, section ->

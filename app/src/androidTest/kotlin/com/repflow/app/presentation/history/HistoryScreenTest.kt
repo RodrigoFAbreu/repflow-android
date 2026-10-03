@@ -1,11 +1,15 @@
 package com.repflow.app.presentation.history
 
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
 import com.repflow.app.domain.common.DomainResult
@@ -282,7 +286,58 @@ class HistoryScreenTest {
         assertEquals(ExerciseId("bench-press"), selectedExerciseId)
     }
 
+    @Test
+    fun backFromDetailKeepsTheListScrollPosition() {
+        val sessions =
+            (1..SCROLL_SESSION_COUNT).map { day ->
+                val started = Instant.parse("2026-01-01T10:00:00Z").plusSeconds(day * SECONDS_PER_DAY)
+                val session = WorkoutSession.start(WorkoutSessionId("session-$day"), null, started)
+                (session.complete(started.plusSeconds(SECONDS_PER_HOUR)) as DomainResult.Success).value
+            }
+        val whenOf = { index: Int ->
+            java.time.format.DateTimeFormatter
+                .ofPattern("EEE d MMM", java.util.Locale.getDefault())
+                .format(sessions[index].startedAt.atZone(java.time.ZoneId.systemDefault()))
+        }
+        val state = mutableStateOf(HistoryUiState(isLoading = false, sessions = sessions))
+        composeRule.setContent {
+            RepFlowTheme {
+                HistoryScreen(
+                    uiState = state.value,
+                    onSessionClick = { state.value = state.value.copy(selectedSessionId = it) },
+                    onDetailDismissed = { state.value = state.value.copy(selectedSessionId = null) },
+                    onInvalidateClicked = {},
+                    onExerciseFilterChanged = {},
+                    onPlanFilterChanged = {},
+                    onStartDateChanged = {},
+                    onEndDateChanged = {},
+                    onShowInvalidatedChanged = {},
+                    onSortOrderChanged = {},
+                    onMessageShown = {},
+                )
+            }
+        }
+        // Newest first: the list's top is the last session; scroll well past it.
+        val newestWhen = whenOf(SCROLL_SESSION_COUNT - 1)
+        val deepWhen = whenOf(SCROLL_TARGET_INDEX)
+        composeRule.onNodeWithText(newestWhen, substring = true).assertIsDisplayed()
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasText(deepWhen, substring = true))
+        composeRule.onNodeWithText(deepWhen, substring = true).assertIsDisplayed()
+
+        composeRule.onNodeWithText(deepWhen, substring = true).performClick()
+        composeRule
+            .onNodeWithContentDescription(composeRule.activity.getString(R.string.history_detail_back))
+            .performClick()
+
+        composeRule.onNodeWithText(deepWhen, substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText(newestWhen, substring = true).assertDoesNotExist()
+    }
+
     private companion object {
+        const val SCROLL_SESSION_COUNT = 21
+        const val SCROLL_TARGET_INDEX = 4
+        const val SECONDS_PER_DAY = 86_400L
+        const val SECONDS_PER_HOUR = 3_600L
         const val SNACKBAR_AUTO_DISMISS_TIMEOUT_MILLIS = 8_000L
     }
 }
