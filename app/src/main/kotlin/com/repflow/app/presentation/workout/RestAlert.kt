@@ -8,7 +8,7 @@ import java.time.Instant
 
 /**
  * What happens when a rest ends, from Settings' two independent switches
- * (remediation-1 CP14): the notification - posted on the `rest_timer` channel
+ * (remediation-1 CP14): the notification - posted on the `rest_timer_v2` channel
  * with that channel's sound, when the permission allows - and an explicit
  * buzz through the system vibrator. Neither depends on the other, and no
  * channel's vibration is relied on.

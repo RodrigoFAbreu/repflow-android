@@ -21,10 +21,12 @@ import javax.inject.Inject
  *
  * - **Notification** - only when the switch is on *and* [notificationPermitted]
  *   (the receiver's own `POST_NOTIFICATIONS` check, first, unchanged: denied
- *   means no notification). It posts on today's `rest_timer` channel: same id,
- *   `IMPORTANCE_HIGH`, the default notification sound, vibration not enabled -
- *   created only if absent, never deleted, so a user's per-channel changes on
- *   an upgraded install survive.
+ *   means no notification). It posts on the `rest_timer_v2` channel: `IMPORTANCE_HIGH`,
+ *   the default notification sound, vibration disabled, so the app's own buzz
+ *   is the only one (GF-5). The channel is created if absent (a no-op once it
+ *   exists, so the user's changes to it survive) and the old `rest_timer`
+ *   channel, whose vibration cannot be changed, is deleted; any customisation
+ *   of that old channel resets.
  * - **Vibration** - the explicit one-shot buzz through [vibrator], only when the
  *   Vibrate switch is on, with notification usage ([restAlertVibrationUsage]).
  *   It needs no notification permission, so it fires even when that is denied.
@@ -61,12 +63,13 @@ class RestTimerExpiryHandler
 
         private fun postNotification(context: Context) {
             val manager = context.getSystemService(NotificationManager::class.java) ?: return
+            manager.deleteNotificationChannel(RestTimerExpiredReceiver.LEGACY_CHANNEL_ID)
             manager.createNotificationChannel(
                 NotificationChannel(
                     RestTimerExpiredReceiver.CHANNEL_ID,
                     context.getString(R.string.workout_active_rest_timer_channel_name),
                     NotificationManager.IMPORTANCE_HIGH,
-                ),
+                ).apply { enableVibration(false) },
             )
             val notification =
                 NotificationCompat

@@ -28,7 +28,7 @@ import javax.inject.Inject
  *   `POST_NOTIFICATIONS` is granted (Android 13+) - this permission check is
  *   unchanged and comes first: denied means no notification, the
  *   "notification behavior when permission is denied" decision in
- *   milestone-4-reference.md. The notification plays the `rest_timer`
+ *   milestone-4-reference.md. The notification plays the `rest_timer_v2`
  *   channel's sound; that channel does not vibrate;
  * - the phone buzzes, through the system vibrator, only when the Vibrate
  *   switch is on - and since that needs no notification permission, it buzzes
@@ -67,7 +67,17 @@ class RestTimerExpiredReceiver : BroadcastReceiver() {
             PackageManager.PERMISSION_GRANTED
 
     companion object {
-        const val CHANNEL_ID = "rest_timer"
+        /**
+         * The rest alert's channel. `rest_timer_v2` replaced `rest_timer`
+         * (functional review GF-5): channel settings cannot change after
+         * creation, and `rest_timer` was created with the system's default
+         * vibration, so every rest end buzzed twice - the app's own buzz and
+         * the channel's.
+         */
+        const val CHANNEL_ID = "rest_timer_v2"
+
+        /** The pre-GF-5 channel, deleted when [CHANNEL_ID] is created. */
+        const val LEGACY_CHANNEL_ID = "rest_timer"
         const val NOTIFICATION_ID = 1001
     }
 }

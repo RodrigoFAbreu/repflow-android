@@ -21,7 +21,7 @@ fun interface RestNotificationCanceller {
 
 /**
  * The production [RestNotificationCanceller]: cancels notification
- * [RestTimerExpiredReceiver.NOTIFICATION_ID] only. The `rest_timer` channel is
+ * [RestTimerExpiredReceiver.NOTIFICATION_ID] only. The `rest_timer_v2` channel is
  * left in place, since it carries the user's own sound and importance choices.
  */
 class SystemRestNotificationCanceller

@@ -30,6 +30,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -44,7 +45,7 @@ import java.time.Instant
  * For every combination of the two switches, with the notification permission
  * granted and denied, it asserts whether the buzz fired (and with the
  * notification usage for this device's SDK), whether the notification was
- * posted, and that a posted one is on `rest_timer` - not vibrating, with a
+ * posted, and that a posted one is on `rest_timer_v2` - not vibrating, with a
  * sound. It runs once without the channel and once with it pre-created, as on
  * an upgraded install, which must survive. And it changes each switch after
  * the alarm is scheduled and before the rest ends, both ways, and asserts the
@@ -105,13 +106,43 @@ class RestTimerExpiryHandlerTest {
                 RestTimerExpiredReceiver.CHANNEL_ID,
                 context.getString(R.string.workout_active_rest_timer_channel_name),
                 NotificationManager.IMPORTANCE_HIGH,
-            ),
+            ).apply { enableVibration(false) },
         )
         assertEveryCombination()
         assertNotNull(
             "the existing channel must never be deleted",
             manager.getNotificationChannel(RestTimerExpiredReceiver.CHANNEL_ID),
         )
+    }
+
+    /**
+     * GF-5: an upgraded install still has the old `rest_timer` channel, created
+     * with the system's default vibration. A rest end must delete it and post
+     * on `rest_timer_v2`, whose vibration is disabled, so only the app's own
+     * buzz is felt.
+     */
+    @Test
+    fun theLegacyVibratingChannelIsReplacedByAQuietV2Channel() {
+        manager.deleteNotificationChannel(RestTimerExpiredReceiver.CHANNEL_ID)
+        manager.createNotificationChannel(
+            NotificationChannel(
+                RestTimerExpiredReceiver.LEGACY_CHANNEL_ID,
+                context.getString(R.string.workout_active_rest_timer_channel_name),
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply { enableVibration(true) },
+        )
+        assertTrue(manager.getNotificationChannel(RestTimerExpiredReceiver.LEGACY_CHANNEL_ID).shouldVibrate())
+
+        runBlocking {
+            settings.update { settingsWith(notification = true, vibrate = true) }
+            handler.onRestEnded(context, notificationPermitted = true)
+        }
+
+        assertEquals("rest_timer_v2", RestTimerExpiredReceiver.CHANNEL_ID)
+        assertNull("the old channel must be deleted", manager.getNotificationChannel(RestTimerExpiredReceiver.LEGACY_CHANNEL_ID))
+        assertChannelIsTodays("upgraded install")
+        assertEquals(NotificationManager.IMPORTANCE_HIGH, manager.getNotificationChannel(RestTimerExpiredReceiver.CHANNEL_ID).importance)
+        assertEquals(listOf(expectedUsage()), vibrator.usages)
     }
 
     @Test
