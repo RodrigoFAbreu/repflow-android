@@ -64,10 +64,15 @@ internal fun ProgressStatsSection(
     RepFlowStatRow(
         stats =
             listOf(
-                RepFlowStat(stringResource(R.string.progress_tile_sessions), stats.sessions.toString()),
+                RepFlowStat(
+                    stringResource(R.string.progress_tile_sessions),
+                    stats.sessions.toString(),
+                    note = stringResource(R.string.progress_tile_sessions_note),
+                ),
                 RepFlowStat(
                     stringResource(R.string.progress_tile_avg_rpe),
                     stats.averageRpe?.let { plainNumber(it, locale) } ?: stringResource(R.string.progress_none),
+                    note = stringResource(R.string.progress_tile_avg_rpe_note),
                 ),
             ),
         modifier = Modifier.padding(top = SectionTopGap),
@@ -124,29 +129,15 @@ private fun FrequencyCard(frequency: WeeklyFrequency) {
                 drawPath(path, color = if (index == counts.lastIndex) current else older)
             }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = RepFlowSpacing.gapSm),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(stringResource(R.string.progress_frequency_start), style = axisStyle(), color = secondary)
-            Text(stringResource(R.string.progress_frequency_end), style = axisStyle(), color = secondary)
-        }
+        // `8b`: no axis labels - the caption says the window (Monday to Sunday, the last 8 weeks) and the average.
         Text(
-            text =
-                pluralStringResource(
-                    R.plurals.progress_frequency_average,
-                    if (frequency.averagePerWeek.compareTo(BigDecimal.ONE) == 0) 1 else 2,
-                    plainNumber(frequency.averagePerWeek, locale),
-                ),
+            text = stringResource(R.string.progress_frequency_caption, plainNumber(frequency.averagePerWeek, locale)),
             style = MaterialTheme.typography.bodySmall.copy(fontSize = AverageFontSize),
             color = secondary,
             modifier = Modifier.padding(top = RepFlowSpacing.gapSm),
         )
     }
 }
-
-@Composable
-private fun axisStyle() = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, letterSpacing = 0.sp)
 
 @Composable
 private fun RecordRows(

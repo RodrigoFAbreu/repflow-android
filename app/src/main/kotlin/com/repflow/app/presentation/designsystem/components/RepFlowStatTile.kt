@@ -35,14 +35,19 @@ object RepFlowStatTileDefaults {
     val valueFontSize = 19.sp
     val valueLineHeight = 24.sp
     val captionGap = 4.dp
+    val noteFontSize = 11.5.sp
     val tileGap = 10.dp
 }
 
-/** One tile's caption and figure, already formatted by the caller. */
+/**
+ * One tile's caption and figure, already formatted by the caller. [note] is an
+ * optional line under the figure (`8b`'s `In the chosen range`).
+ */
 @Immutable
 data class RepFlowStat(
     val label: String,
     val value: String,
+    val note: String? = null,
 )
 
 /**
@@ -83,6 +88,13 @@ fun RepFlowStatTile(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+        if (stat.note != null) {
+            Text(
+                text = stat.note,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = RepFlowStatTileDefaults.noteFontSize),
+                color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
+            )
+        }
     }
 }
 

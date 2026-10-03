@@ -724,14 +724,14 @@
     <string name="progress_delta_percent">%1$s %2$s · %3$s%%</string>
     <string name="progress_metric_empty">No sessions in this range yet.</string>
     <string name="progress_estimate_needs_shorter_set">Est. 1RM needs a set of 12 reps or fewer.</string>
-    <string name="progress_load_metrics_unavailable">Est. 1RM and Volume need a recorded load.</string>
-    <string name="progress_valid_sessions_note">Only valid sessions count. Invalidating a workout in History removes its points from this chart.</string>
+    <string name="progress_load_metrics_unavailable_reps">Est. 1RM and Volume need a load. This exercise is logged in reps.</string>
+    <string name="progress_load_metrics_unavailable_duration">Est. 1RM and Volume need a load. This exercise is logged in time.</string>
     <string name="progress_picker_title">Track an exercise</string>
-    <string name="progress_caption_top_set">Heaviest working set</string>
-    <string name="progress_caption_most_reps">Most reps in a set</string>
-    <string name="progress_caption_longest_set">Longest set</string>
-    <string name="progress_caption_estimated_one_rep_max">Estimated 1RM</string>
-    <string name="progress_caption_volume">Volume per session</string>
+    <string name="progress_caption_top_set">Top set</string>
+    <string name="progress_caption_most_reps">Most reps · top set</string>
+    <string name="progress_caption_longest_set">Longest hold · top set</string>
+    <string name="progress_caption_estimated_one_rep_max">Est. 1RM</string>
+    <string name="progress_caption_volume">Volume</string>
     <string name="progress_range_3m">3m</string>
     <string name="progress_range_6m">6m</string>
     <string name="progress_range_all">All</string>
@@ -744,17 +744,18 @@
         <item quantity="other">%1$s over %2$s: %3$d sessions, from %4$s to %5$s</item>
     </plurals>
     <string name="progress_tile_sessions">Sessions</string>
+    <string name="progress_tile_sessions_note">In the chosen range</string>
     <string name="progress_tile_avg_rpe">Avg RPE</string>
+    <string name="progress_tile_avg_rpe_note">Sets with RPE, chosen range</string>
     <string name="progress_none">—</string>
     <string name="progress_frequency_title">Training frequency</string>
-    <string name="progress_frequency_start">8 weeks ago</string>
-    <string name="progress_frequency_end">this week</string>
     <string name="progress_frequency_description">Sessions per week over the last 8 weeks, oldest first: %1$s</string>
-    <plurals name="progress_frequency_average">
-        <item quantity="one">%1$s session a week on average</item>
-        <item quantity="other">%1$s sessions a week on average</item>
+    <string name="progress_frequency_caption">Sessions per week, Monday to Sunday, last 8 weeks · %1$s a week on average</string>
+    <string name="progress_records_title">Records · all time</string>
+    <plurals name="progress_span">
+        <item quantity="one">%1$s · %2$d session</item>
+        <item quantity="other">%1$s · %2$d sessions</item>
     </plurals>
-    <string name="progress_records_title">Records</string>
     <string name="progress_record_heaviest">Heaviest set — %1$s × %2$d</string>
     <string name="progress_record_estimate">Best est. 1RM — %1$s</string>
     <string name="progress_record_estimate_none">Best est. 1RM — —</string>

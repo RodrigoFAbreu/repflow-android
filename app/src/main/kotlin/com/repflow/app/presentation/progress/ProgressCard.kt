@@ -93,6 +93,7 @@ internal fun ProgressCard(
         )
         if (series != null && points.isNotEmpty()) {
             ValueAndDelta(series = series, units = units)
+            SpanLine(series = series, zone = zone)
             ChartWithReadout(series = series, metric = metric, range = range, zone = zone, unit = units.short)
         } else {
             MetricEmptyState(
@@ -107,7 +108,14 @@ internal fun ProgressCard(
         }
         if (showsLoadMetricsUnavailable) {
             Text(
-                text = stringResource(R.string.progress_load_metrics_unavailable),
+                text =
+                    stringResource(
+                        if (exercise.trackingType == ExerciseTrackingType.DURATION) {
+                            R.string.progress_load_metrics_unavailable_duration
+                        } else {
+                            R.string.progress_load_metrics_unavailable_reps
+                        },
+                    ),
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                 color = secondary,
                 modifier = Modifier.padding(top = RepFlowSpacing.gapSm),
@@ -223,6 +231,22 @@ private fun ValueAndDelta(
             )
         }
     }
+}
+
+/** `5 Jul – 2 Oct 2026 · 30 sessions`, under the value (`8b`): the span the series covers and how many sessions are in it. */
+@Composable
+private fun SpanLine(
+    series: ProgressSeries,
+    zone: ZoneId,
+) {
+    val points = series.points
+    val dates = spanDates(points.first().startedAt, points.last().startedAt, zone, currentProgressLocale())
+    Text(
+        text = pluralStringResource(R.plurals.progress_span, points.size, dates, points.size),
+        style = MaterialTheme.typography.bodySmall.copy(fontSize = SpanFontSize, fontFeatureSettings = "tnum"),
+        color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
+        modifier = Modifier.padding(bottom = SpanBottomGap),
+    )
 }
 
 /** Up (or level) in the selected-accent tone, down in the destructive one. */
@@ -356,7 +380,9 @@ private const val VALUE_LETTER_SPACING_EM = -0.02f
 private val ValueLetterSpacing = VALUE_LETTER_SPACING_EM.em
 private val UnitFontSize = 13.sp
 private val ValueTopGap = 4.dp
-private val ValueBottomGap = 12.dp
+private val ValueBottomGap = 2.dp
+private val SpanBottomGap = 8.dp
+private val SpanFontSize = 12.sp
 private val ChartTopGap = 14.dp
 private val ReadoutBottomGap = 8.dp
 private val ReadoutRadius = 9.dp

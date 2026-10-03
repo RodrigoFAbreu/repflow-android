@@ -94,5 +94,28 @@ internal fun dateLabel(
     withYear: Boolean,
 ): String = DateTimeFormatter.ofPattern(if (withYear) DATE_WITH_YEAR else DATE, locale).format(at.atZone(zone))
 
+/**
+ * The span under the headline value (`8b`): `5 Jul – 2 Oct 2026`. The year
+ * stands once, on the end, when both ends are in the same year, and on both
+ * ends when they are not; a single date (one session, or both on one day)
+ * stands alone with its year.
+ */
+internal fun spanDates(
+    first: Instant,
+    last: Instant,
+    zone: ZoneId,
+    locale: Locale,
+): String {
+    val start = first.atZone(zone)
+    val end = last.atZone(zone)
+    val endText = DateTimeFormatter.ofPattern(DATE_WITH_YEAR, locale).format(end)
+    return when {
+        start.toLocalDate() == end.toLocalDate() -> endText
+        start.year == end.year -> "${DateTimeFormatter.ofPattern(DATE, locale).format(start)}$SPAN_DASH$endText"
+        else -> "${DateTimeFormatter.ofPattern(DATE_WITH_YEAR, locale).format(start)}$SPAN_DASH$endText"
+    }
+}
+
+private const val SPAN_DASH = " – "
 private const val DATE = "d MMM"
 private const val DATE_WITH_YEAR = "d MMM yyyy"

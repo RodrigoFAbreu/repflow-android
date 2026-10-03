@@ -208,7 +208,11 @@ class ProgressScreenTest {
                     "82.5 kg",
                 ),
             ).assertIsDisplayed()
-        composeRule.onNodeWithText(string(R.string.progress_valid_sessions_note)).performScrollTo().assertIsDisplayed()
+        // GF-4 (`8b`): the span under the value, and no "Only valid sessions count" note.
+        composeRule
+            .onNodeWithText(composeRule.activity.resources.getQuantityString(R.plurals.progress_span, 4, "5 May – 26 May 2026", 4))
+            .assertIsDisplayed()
+        composeRule.onAllNodesWithText("Only valid sessions", substring = true).assertCountEquals(0)
     }
 
     @Test
@@ -345,7 +349,11 @@ class ProgressScreenTest {
         composeRule.onNodeWithText(string(R.string.progress_metric_top_set)).assertIsSelected()
         composeRule.onNodeWithText(string(R.string.progress_metric_estimated_one_rep_max)).assertDoesNotExist()
         composeRule.onNodeWithText(string(R.string.progress_metric_volume)).assertDoesNotExist()
-        composeRule.onNodeWithText(string(R.string.progress_load_metrics_unavailable)).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.progress_load_metrics_unavailable_reps)).performScrollTo().assertIsDisplayed()
+        assertEquals(
+            "Est. 1RM and Volume need a load. This exercise is logged in reps.",
+            string(R.string.progress_load_metrics_unavailable_reps),
+        )
         composeRule.onNodeWithText(string(R.string.progress_delta_percent, "+3", "reps", "+50")).assertIsDisplayed()
         composeRule.onNodeWithText(string(R.string.progress_caption_most_reps).uppercase()).assertIsDisplayed()
     }
@@ -388,11 +396,9 @@ class ProgressScreenTest {
         composeRule.onNodeWithText("4").assertIsDisplayed()
         composeRule.onNodeWithText("8.3").assertIsDisplayed()
         composeRule.onNodeWithText(string(R.string.progress_frequency_title).uppercase()).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText(string(R.string.progress_frequency_start)).assertIsDisplayed()
-        composeRule.onNodeWithText(string(R.string.progress_frequency_end)).assertIsDisplayed()
-        composeRule
-            .onNodeWithText(composeRule.activity.resources.getQuantityString(R.plurals.progress_frequency_average, 2, "0.5"))
-            .assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.progress_tile_sessions_note)).assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.progress_tile_avg_rpe_note)).assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.progress_frequency_caption, "0.5")).assertIsDisplayed()
         composeRule.onNodeWithText(string(R.string.progress_records_title).uppercase()).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText(string(R.string.progress_record_heaviest, "82.5 kg", 7)).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText(string(R.string.progress_record_estimate, "99 kg")).performScrollTo().assertIsDisplayed()

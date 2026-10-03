@@ -99,6 +99,23 @@ class ProgressModelTest {
     }
 
     @Test
+    fun `the span line puts the year once on the end within one year and on both ends across years`() {
+        val first = Instant.parse("2026-07-05T12:00:00Z")
+        val last = Instant.parse("2026-10-02T12:00:00Z")
+        assertEquals("5 Jul – 2 Oct 2026", spanDates(first, last, ZoneOffset.UTC, Locale.UK))
+        assertEquals(
+            "5 Jul 2025 – 2 Oct 2026",
+            spanDates(Instant.parse("2025-07-05T12:00:00Z"), last, ZoneOffset.UTC, Locale.UK),
+        )
+    }
+
+    @Test
+    fun `a single date stands alone with its year`() {
+        val at = Instant.parse("2026-09-28T12:00:00Z")
+        assertEquals("28 Sep 2026", spanDates(at, at, ZoneOffset.UTC, Locale.US))
+    }
+
+    @Test
     fun `a delta always carries its sign`() {
         assertEquals("+10", signedNumber(BigDecimal("10.0"), Locale.US))
         assertEquals("+0", signedNumber(BigDecimal.ZERO, Locale.US))

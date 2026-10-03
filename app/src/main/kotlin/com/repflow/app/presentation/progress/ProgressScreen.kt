@@ -138,7 +138,6 @@ private fun ProgressContent(
                     zone = uiState.zone,
                 )
             }
-            ValidSessionsNote(Modifier.padding(top = NoteTopGap))
         }
     }
     if (pickerOpen) {
@@ -235,25 +234,6 @@ internal fun metricLabel(metric: ProgressMetric): String =
         ProgressMetric.VOLUME -> stringResource(R.string.progress_metric_volume)
     }
 
-/** "Only valid sessions count…" with `ph-info` (`4a`, plan item 4); `5b` does not draw it and it is kept. */
-@Composable
-private fun ValidSessionsNote(modifier: Modifier = Modifier) {
-    val color = repFlowSecondaryTextColor(MaterialTheme.colorScheme)
-    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(NoteIconGap)) {
-        Icon(
-            painter = painterResource(RepFlowIcons.info),
-            contentDescription = null,
-            tint = color,
-            modifier = Modifier.padding(top = 1.dp).size(NoteIconSize),
-        )
-        Text(
-            text = stringResource(R.string.progress_valid_sessions_note),
-            style = MaterialTheme.typography.bodySmall.copy(lineHeight = NoteLineHeight),
-            color = color,
-        )
-    }
-}
-
 /**
  * Nothing trained yet: `1d`'s empty state - a 26 glyph at 35% and one 13.5
  * line - the treatment the CP2 placeholder already used, with its words.
@@ -292,9 +272,5 @@ private val MetricShape = RoundedCornerShape(8.dp)
 private val MetricFontSize = 13.sp
 private val CheckSize = 13.dp
 private val CheckGap = 5.dp
-private val NoteTopGap = 14.dp
-private val NoteIconGap = 9.dp
-private val NoteIconSize = 15.dp
-private val NoteLineHeight = 19.sp
 internal val EmptyGlyphSize = 26.dp
 internal val EmptyTextSize = 13.5.sp
