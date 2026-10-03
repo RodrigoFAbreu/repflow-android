@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -22,6 +23,7 @@ import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.unit.dp
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
@@ -547,6 +549,9 @@ class TrainingPlanEditorScreenTest {
         composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_picker_title))
             .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.training_plan_editor_picker_search_hint))
+            .assertHeightIsEqualTo(48.dp)
         composeRule.onNodeWithText("Romanian Deadlift").performClick()
 
         assertEquals(7L to "ex-rdl", selected)

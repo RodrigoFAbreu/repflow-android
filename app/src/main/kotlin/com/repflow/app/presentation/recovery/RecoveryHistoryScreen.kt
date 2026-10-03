@@ -61,7 +61,11 @@ fun RecoveryHistoryScreen(
             }
 
             uiState.recoveryEntries.isEmpty() && uiState.futsalSessions.isEmpty() -> {
-                RepFlowEmptyState(stringResource(R.string.recovery_history_empty), Modifier.padding(padding))
+                RepFlowEmptyState(
+                    message = stringResource(R.string.recovery_history_empty),
+                    modifier = Modifier.padding(padding),
+                    icon = RepFlowIcons.moonStars,
+                )
             }
 
             else -> {

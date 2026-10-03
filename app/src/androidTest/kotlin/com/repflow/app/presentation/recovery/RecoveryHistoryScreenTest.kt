@@ -4,6 +4,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -15,6 +16,7 @@ import com.repflow.app.domain.recovery.FutsalSessionId
 import com.repflow.app.domain.recovery.RecoveryEntry
 import com.repflow.app.domain.recovery.RecoveryEntryId
 import com.repflow.app.presentation.RepFlowTheme
+import com.repflow.app.presentation.designsystem.components.EMPTY_STATE_GLYPH_TAG
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -159,6 +161,7 @@ class RecoveryHistoryScreenTest {
         setScreen(RecoveryHistoryUiState(isLoading = false, today = today))
 
         composeRule.onNodeWithText(string(R.string.recovery_history_empty)).assertIsDisplayed()
+        composeRule.onNodeWithTag(EMPTY_STATE_GLYPH_TAG).assertIsDisplayed()
     }
 
     @Test

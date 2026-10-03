@@ -1,18 +1,22 @@
 package com.repflow.app.presentation.exercise.list
 
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
 import com.repflow.app.application.exercise.ExerciseStatusFilter
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.presentation.RepFlowTheme
+import com.repflow.app.presentation.designsystem.components.EMPTY_STATE_GLYPH_TAG
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -101,6 +105,7 @@ class ExerciseListScreenTest {
             .onNodeWithText(
                 composeRule.activity.getString(R.string.exercise_list_empty_no_exercises),
             ).assertIsDisplayed()
+        composeRule.onNodeWithTag(EMPTY_STATE_GLYPH_TAG).assertIsDisplayed()
     }
 
     /**
@@ -144,6 +149,36 @@ class ExerciseListScreenTest {
             .onNodeWithText(
                 composeRule.activity.getString(R.string.exercise_list_empty_no_archived),
             ).assertIsDisplayed()
+        composeRule.onNodeWithTag(EMPTY_STATE_GLYPH_TAG).assertIsDisplayed()
+    }
+
+    /** B4: the no-results reason also carries a glyph when there is no create-from-query footer to show. */
+    @Test
+    fun theNoSearchResultsEmptyStateCarriesAGlyphOnTheArchivedFilter() {
+        setContent(
+            ExerciseListUiState(
+                query = "zzz",
+                filter = ExerciseStatusFilter.ARCHIVED,
+                content = ExerciseListContent.Empty(ExerciseListEmptyReason.NO_SEARCH_RESULTS),
+            ),
+        )
+
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.exercise_list_empty_no_search_results))
+            .assertIsDisplayed()
+        composeRule.onNodeWithTag(EMPTY_STATE_GLYPH_TAG).assertIsDisplayed()
+    }
+
+    /** B5: the Library's search is `2c`'s 48dp, not Material's 56dp. */
+    @Test
+    fun theSearchFieldIsExactly48dpTall() {
+        setContent(
+            ExerciseListUiState(content = ExerciseListContent.Empty(ExerciseListEmptyReason.NO_EXERCISES)),
+        )
+
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.exercise_list_search_hint))
+            .assertHeightIsEqualTo(48.dp)
     }
 
     @Test

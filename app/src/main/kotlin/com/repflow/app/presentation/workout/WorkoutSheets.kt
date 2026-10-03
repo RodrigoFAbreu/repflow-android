@@ -41,9 +41,11 @@ import androidx.compose.ui.unit.sp
 import com.repflow.app.R
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseTrackingType
+import com.repflow.app.presentation.designsystem.RepFlowColor
 import com.repflow.app.presentation.designsystem.RepFlowSpacing
 import com.repflow.app.presentation.designsystem.components.RepFlowAccentOutlineButton
 import com.repflow.app.presentation.designsystem.components.RepFlowNeutralOutlineButton
+import com.repflow.app.presentation.designsystem.components.RepFlowSearchField
 import com.repflow.app.presentation.designsystem.components.RepFlowSheet
 import com.repflow.app.presentation.designsystem.components.repFlowAccentOutlineColors
 import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
@@ -155,38 +157,13 @@ internal fun ExercisePickerSheet(
     val matches = remember(availableExercises, query) { filterPickerItems(availableExercises, query) }
     RepFlowSheet(onDismissRequest = onDismissRequest) {
         Column(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = RepFlowSpacing.screenPadding)
-                        .heightIn(min = SearchFieldMinHeight),
-                placeholder = { Text(stringResource(R.string.workout_picker_search_hint)) },
-                leadingIcon = {
-                    Icon(
-                        painter = painterResource(RepFlowIcons.magnifyingGlass),
-                        contentDescription = null,
-                        modifier = Modifier.size(SearchIconSize),
-                    )
-                },
-                trailingIcon =
-                    if (query.isNotEmpty()) {
-                        {
-                            IconButton(onClick = { query = "" }) {
-                                Icon(
-                                    painter = painterResource(RepFlowIcons.xCircle),
-                                    contentDescription = stringResource(R.string.workout_picker_clear_search),
-                                    modifier = Modifier.size(SearchIconSize),
-                                )
-                            }
-                        }
-                    } else {
-                        null
-                    },
-                singleLine = true,
-                shape = SearchFieldShape,
+            RepFlowSearchField(
+                query = query,
+                onQueryChange = { query = it },
+                placeholder = stringResource(R.string.workout_picker_search_hint),
+                clearContentDescription = stringResource(R.string.workout_picker_clear_search),
+                modifier = Modifier.padding(horizontal = RepFlowSpacing.screenPadding),
+                containerColor = RepFlowColor.control,
             )
             RepFlowAccentOutlineButton(
                 text = stringResource(R.string.workout_picker_create),
@@ -298,8 +275,5 @@ private val SheetActionShape = RoundedCornerShape(10.dp)
 private val SheetActionIconSize = 18.dp
 private val SheetActionFontSize = 15.sp
 
-private val SearchFieldMinHeight = 48.dp
-private val SearchFieldShape = RoundedCornerShape(10.dp)
-private val SearchIconSize = 18.dp
 private val PickerRowMinHeight = 60.dp
 private val PickerPlusIconSize = 20.dp

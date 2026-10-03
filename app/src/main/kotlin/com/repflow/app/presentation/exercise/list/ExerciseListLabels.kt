@@ -1,8 +1,10 @@
 package com.repflow.app.presentation.exercise.list
 
+import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import com.repflow.app.R
 import com.repflow.app.application.exercise.ExerciseStatusFilter
+import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
 
 /*
  * The exercise list's plain-data mapping: which words the screen puts on a
@@ -35,4 +37,13 @@ internal fun exerciseListEmptyMessageRes(reason: ExerciseListEmptyReason): Int =
         ExerciseListEmptyReason.NO_EXERCISES -> R.string.exercise_list_empty_no_exercises
         ExerciseListEmptyReason.NO_SEARCH_RESULTS -> R.string.exercise_list_empty_no_search_results
         ExerciseListEmptyReason.NO_ARCHIVED -> R.string.exercise_list_empty_no_archived
+    }
+
+/** The glyph over each empty reason: the library, the archive, the search. */
+@DrawableRes
+internal fun exerciseListEmptyIconRes(reason: ExerciseListEmptyReason): Int =
+    when (reason) {
+        ExerciseListEmptyReason.NO_EXERCISES -> RepFlowIcons.barbell
+        ExerciseListEmptyReason.NO_SEARCH_RESULTS -> RepFlowIcons.magnifyingGlass
+        ExerciseListEmptyReason.NO_ARCHIVED -> RepFlowIcons.archive
     }

@@ -10,6 +10,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
@@ -461,6 +462,22 @@ class ActiveWorkoutScreenTest {
             .performClick()
 
         assertEquals(squat, opened)
+    }
+
+    /** B5: the workout picker's search is `2c`'s 48dp (it had no search test before this). */
+    @Test
+    fun theWorkoutPickersSearchFieldIsExactly48dpTall() {
+        setContent(
+            exercise(ExerciseTrackingType.WEIGHT_AND_REPS),
+            availableExercises = listOf(benchPickerItem(recommendation = null)),
+            openFirstExercise = false,
+        )
+
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.workout_active_add_exercise)).performScrollTo().performClick()
+
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.workout_picker_search_hint))
+            .assertHeightIsEqualTo(48.dp)
     }
 
     // ---- The workout board (remediation-1 CP7) ----

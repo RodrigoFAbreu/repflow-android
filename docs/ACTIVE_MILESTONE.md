@@ -105,7 +105,37 @@ registry `docs/ai-workflow/registry/repflow-redesign-visual-foundation-remediati
   (`RepFlow_S24Ultra_384dp_API36`, `emulator-5554`, stopped afterwards):
   `ProgressScreenTest` 13/13 and `MainActivityNavHostSmokeTest` 9/9 pass. The
   side-by-side visual pass against `5b` is CP10's.
-- **Next: CP4** (B5 and B4: shared 48dp search field and empty-state glyphs).
+- **CP4 (B5 and B4) complete, 2026-10-03.** Presentation only; no schema, no
+  dependency. The `2c` artboard (search field 48 min, radius 10, glyph 18,
+  14.5 text, hairline) was re-read first. New
+  `designsystem/components/RepFlowSearchField`: a `BasicTextField` decorated by
+  `OutlinedTextFieldDefaults.DecorationBox` (Material's 56dp minimum lives on
+  `OutlinedTextField`, not on the decoration box), `heightIn(min = 48.dp)`
+  with 8dp vertical content padding so it is exactly 48 at default font scale
+  and grows only when a larger font needs it; hairline, magnifier, a clear
+  button (48dp `IconButton`, only once there is text), IME action Search
+  (hides the keyboard). `containerColor` defaults to `surface` (the Library,
+  as before); the workout picker and the plan-editor picker pass `control`
+  (the plan editor's was already `control`; the workout picker's was Material's
+  transparent default and now matches the design's `#292b31`). Replaces the
+  inline fields in `ExerciseListScreen`, `WorkoutSheets` and
+  `TrainingPlanEditorPicker`; their `SearchFieldMinHeight`/`SearchMinHeight`
+  constants are gone. The plan-editor picker gains the clear button (it had
+  none), reusing `exercise_list_search_clear_content_description`. B4:
+  `exerciseListEmptyIconRes` (barbell / archive / magnifying glass for
+  `NO_EXERCISES` / `NO_ARCHIVED` / `NO_SEARCH_RESULTS`; the create-from-query
+  footer is unchanged) and Recovery history's empty state passes `moonStars`.
+  `RepFlowEmptyState`'s glyph carries `EMPTY_STATE_GLYPH_TAG`. Tests: new
+  instrumented `RepFlowSearchFieldTest` (48dp exactly at 1x; 200% font scale
+  grows, text layout fits the field; clear; IME Search); `ExerciseListScreenTest`
+  (48dp, glyph for no-exercises, archived, and a no-results case on the
+  archived filter where no footer shows), `TrainingPlanEditorScreenTest` (48dp),
+  `ActiveWorkoutScreenTest` (new picker 48dp case), `RecoveryHistoryScreenTest`
+  (glyph). Gate: spotlessCheck, detekt, lintDebug (no new issue),
+  testDebugUnitTest (678 tests, 0 failures), assembleDebug,
+  assembleDebugAndroidTest green. AVD (`emulator-5554`, stopped afterwards): the
+  five classes above 86/86 and `MainActivityNavHostSmokeTest` 9/9 pass.
+- **Next: CP5** (Settings schema 8 to 9: theme, default rest, extra set fields).
 
 ---
 

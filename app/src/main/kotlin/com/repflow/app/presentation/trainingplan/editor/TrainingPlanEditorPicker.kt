@@ -34,6 +34,7 @@ import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.presentation.designsystem.RepFlowColor
 import com.repflow.app.presentation.designsystem.RepFlowSpacing
 import com.repflow.app.presentation.designsystem.components.RepFlowAccentOutlineButton
+import com.repflow.app.presentation.designsystem.components.RepFlowSearchField
 import com.repflow.app.presentation.designsystem.components.RepFlowSheet
 import com.repflow.app.presentation.designsystem.components.repFlowAccentOutlineColors
 import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
@@ -97,33 +98,16 @@ private fun PickerSearchField(
     query: String,
     onQueryChanged: (String) -> Unit,
 ) {
-    val scheme = MaterialTheme.colorScheme
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChanged,
-        placeholder = { Text(stringResource(R.string.training_plan_editor_picker_search_hint)) },
-        singleLine = true,
-        shape = SearchShape,
-        colors =
-            OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = RepFlowColor.control,
-                unfocusedContainerColor = RepFlowColor.control,
-                unfocusedBorderColor = RepFlowColor.hairline,
-            ),
-        leadingIcon = {
-            Icon(
-                painter = painterResource(RepFlowIcons.magnifyingGlass),
-                contentDescription = null,
-                tint = repFlowSecondaryTextColor(scheme),
-                modifier = Modifier.size(PickerGlyphSize),
-            )
-        },
+    RepFlowSearchField(
+        query = query,
+        onQueryChange = onQueryChanged,
+        placeholder = stringResource(R.string.training_plan_editor_picker_search_hint),
+        clearContentDescription = stringResource(R.string.exercise_list_search_clear_content_description),
         modifier =
             Modifier
-                .fillMaxWidth()
                 .padding(horizontal = RepFlowSpacing.screenPadding)
-                .padding(bottom = RepFlowSpacing.gapMd)
-                .heightIn(min = SearchMinHeight),
+                .padding(bottom = RepFlowSpacing.gapMd),
+        containerColor = RepFlowColor.control,
     )
 }
 
@@ -176,8 +160,6 @@ private fun trackingTypeLabel(trackingType: ExerciseTrackingType): String =
         ExerciseTrackingType.DURATION -> stringResource(R.string.exercise_tracking_type_duration)
     }
 
-private val SearchShape = RoundedCornerShape(10.dp)
-private val SearchMinHeight = 48.dp
 private val PickerRowMinHeight = 60.dp
 private val PickerRowVerticalPadding = 12.dp
 private val PickerGlyphSize = 18.dp

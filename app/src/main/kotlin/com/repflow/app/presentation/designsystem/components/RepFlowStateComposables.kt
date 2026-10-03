@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -72,7 +73,7 @@ fun RepFlowEmptyState(
                     painter = painterResource(icon),
                     contentDescription = null,
                     tint = LocalContentColor.current.copy(alpha = EMPTY_GLYPH_ALPHA),
-                    modifier = Modifier.size(EmptyGlyphSize),
+                    modifier = Modifier.size(EmptyGlyphSize).testTag(EMPTY_STATE_GLYPH_TAG),
                 )
             }
             Text(
@@ -83,6 +84,9 @@ fun RepFlowEmptyState(
         }
     }
 }
+
+/** Test tag on [RepFlowEmptyState]'s glyph, so a screen test can tell one was drawn. */
+const val EMPTY_STATE_GLYPH_TAG = "repflow-empty-state-glyph"
 
 /** `1d`'s empty state: a 26 glyph at 35% over a 13.5 line. */
 private const val EMPTY_GLYPH_ALPHA = 0.35f

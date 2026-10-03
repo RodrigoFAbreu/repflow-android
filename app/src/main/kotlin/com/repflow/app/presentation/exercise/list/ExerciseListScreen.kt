@@ -55,6 +55,7 @@ import com.repflow.app.presentation.designsystem.components.RepFlowFailureState
 import com.repflow.app.presentation.designsystem.components.RepFlowLoadingIndicator
 import com.repflow.app.presentation.designsystem.components.RepFlowPrimaryButton
 import com.repflow.app.presentation.designsystem.components.RepFlowScreenScaffold
+import com.repflow.app.presentation.designsystem.components.RepFlowSearchField
 import com.repflow.app.presentation.designsystem.components.repFlowAccentOutlineColors
 import com.repflow.app.presentation.designsystem.components.repFlowSelectedPillColors
 import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
@@ -133,7 +134,10 @@ fun ExerciseListScreen(
                             modifier = Modifier.padding(top = RepFlowSpacing.screenPadding),
                         )
                     } else {
-                        RepFlowEmptyState(message = stringResource(exerciseListEmptyMessageRes(content.reason)))
+                        RepFlowEmptyState(
+                            message = stringResource(exerciseListEmptyMessageRes(content.reason)),
+                            icon = exerciseListEmptyIconRes(content.reason),
+                        )
                     }
                 }
 
@@ -262,43 +266,11 @@ private fun ExerciseSearchField(
     query: String,
     onQueryChanged: (String) -> Unit,
 ) {
-    val clearContentDescription = stringResource(R.string.exercise_list_search_clear_content_description)
-    val scheme = MaterialTheme.colorScheme
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChanged,
-        placeholder = { Text(stringResource(R.string.exercise_list_search_hint)) },
-        singleLine = true,
-        shape = SearchFieldShape,
-        colors =
-            OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = scheme.surface,
-                unfocusedContainerColor = scheme.surface,
-                unfocusedBorderColor = RepFlowColor.hairline,
-            ),
-        leadingIcon = {
-            Icon(
-                painter = painterResource(RepFlowIcons.magnifyingGlass),
-                contentDescription = null,
-                tint = repFlowSecondaryTextColor(scheme),
-                modifier = Modifier.size(ExerciseFieldIconSize),
-            )
-        },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(
-                    onClick = { onQueryChanged("") },
-                    modifier = Modifier.semantics { contentDescription = clearContentDescription },
-                ) {
-                    Icon(
-                        painter = painterResource(RepFlowIcons.xCircle),
-                        contentDescription = null,
-                        modifier = Modifier.size(ExerciseFieldIconSize),
-                    )
-                }
-            }
-        },
-        modifier = Modifier.fillMaxWidth().heightIn(min = SearchFieldMinHeight),
+    RepFlowSearchField(
+        query = query,
+        onQueryChange = onQueryChanged,
+        placeholder = stringResource(R.string.exercise_list_search_hint),
+        clearContentDescription = stringResource(R.string.exercise_list_search_clear_content_description),
     )
 }
 
@@ -412,8 +384,6 @@ internal val ExerciseRowActionSize = 44.dp
 internal val ExerciseFieldIconSize = 18.dp
 
 private val SnackbarShape = RoundedCornerShape(12.dp)
-private val SearchFieldMinHeight = 48.dp
-private val SearchFieldShape = RoundedCornerShape(10.dp)
 private val FilterRowTopGap = 4.dp
 private val FooterFontSize = 13.sp
 private val FooterActionShape = RoundedCornerShape(8.dp)
