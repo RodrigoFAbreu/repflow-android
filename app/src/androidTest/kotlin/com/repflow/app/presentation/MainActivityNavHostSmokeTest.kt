@@ -51,6 +51,11 @@ class MainActivityNavHostSmokeTest {
         composeRule.onNodeWithContentDescription(string(id)).performClick()
     }
 
+    /** A fresh install has no check-in, so the card is empty and `Log recovery` is its only entry point (P2-F-6). */
+    private fun openRecoveryFromHome() {
+        composeRule.onNodeWithText(string(R.string.home_recovery_empty_action)).performScrollTo().performClick()
+    }
+
     private fun clickByText(
         @StringRes id: Int,
     ) {
@@ -110,7 +115,7 @@ class MainActivityNavHostSmokeTest {
      */
     @Test
     fun recoveryIsReachableFromHome() {
-        clickByDescription(R.string.home_recovery_log_content_description)
+        openRecoveryFromHome()
         composeRule
             .onNodeWithText(string(R.string.recovery_futsal_save_entry))
             .assertIsDisplayed()
@@ -118,7 +123,7 @@ class MainActivityNavHostSmokeTest {
 
     @Test
     fun recoveryHistoryIsReachableBehindRecovery() {
-        clickByDescription(R.string.home_recovery_log_content_description)
+        openRecoveryFromHome()
         clickByDescription(R.string.recovery_futsal_view_history_content_description)
         composeRule.onNodeWithText(string(R.string.recovery_history_title)).assertIsDisplayed()
     }
