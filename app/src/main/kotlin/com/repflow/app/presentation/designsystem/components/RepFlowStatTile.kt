@@ -5,7 +5,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -74,8 +77,6 @@ fun RepFlowStatTile(
             text = stat.label.uppercase(),
             style = MaterialTheme.typography.labelSmall,
             color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
         Text(
             text = stat.value,
@@ -105,9 +106,9 @@ fun RepFlowStatRow(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier,
+        modifier = modifier.height(IntrinsicSize.Min),
         horizontalArrangement = Arrangement.spacedBy(RepFlowStatTileDefaults.tileGap),
     ) {
-        stats.forEach { stat -> RepFlowStatTile(stat = stat, modifier = Modifier.weight(1f)) }
+        stats.forEach { stat -> RepFlowStatTile(stat = stat, modifier = Modifier.weight(1f).fillMaxHeight()) }
     }
 }

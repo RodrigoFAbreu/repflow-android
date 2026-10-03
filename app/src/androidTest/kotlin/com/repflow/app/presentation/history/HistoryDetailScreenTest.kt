@@ -1,6 +1,10 @@
 package com.repflow.app.presentation.history
 
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -8,6 +12,8 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.Density
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
 import com.repflow.app.application.history.BestSet
@@ -90,6 +96,51 @@ class HistoryDetailScreenTest {
                     onInvalidateConfirmed = {},
                 )
             }
+        }
+    }
+
+    /** At 1.3x and 2.0x font the Volume tile's caption wraps instead of ellipsizing, so `(KG)` stays visible (P2-F-4). */
+    @Test
+    fun theVolumeCaptionKeepsItsUnitAtLargeFontSizes() {
+        val set =
+            (
+                WorkoutSet.create(
+                    id = WorkoutSetId("set-1"),
+                    order = 0,
+                    trackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
+                    load = 60.0,
+                    reps = 8,
+                    durationSeconds = null,
+                    rpe = null,
+                    isWarmup = false,
+                    createdAt = Instant.parse("2026-01-01T00:10:00Z"),
+                    updatedAt = Instant.parse("2026-01-01T00:10:00Z"),
+                ) as DomainResult.Success
+            ).value
+        val summary = summaryOf(sessionWithSet(set))
+        val scale = mutableStateOf(LARGE_FONT_SCALE_MEDIUM)
+        composeRule.setContent {
+            val base = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(base.density, scale.value)) {
+                RepFlowTheme {
+                    HistoryDetailScreen(summary = summary, planLabel = null, onBackClick = {}, onInvalidateConfirmed = {})
+                }
+            }
+        }
+        listOf(LARGE_FONT_SCALE_MEDIUM, LARGE_FONT_SCALE_MAX).forEach { fontScale ->
+            composeRule.runOnIdle { scale.value = fontScale }
+            composeRule.waitForIdle()
+            val results = mutableListOf<TextLayoutResult>()
+            val node = composeRule.onNodeWithText("VOLUME (KG)", useUnmergedTree = true)
+            node.assertIsDisplayed()
+            node
+                .fetchSemanticsNode()
+                .config[SemanticsActions.GetTextLayoutResult]
+                .action
+                ?.invoke(results)
+            val layout = results.single()
+            val ellipsized = (0 until layout.lineCount).any { layout.isLineEllipsized(it) }
+            assertEquals("caption is ellipsized at font $fontScale", false, ellipsized)
         }
     }
 
@@ -309,3 +360,6 @@ class HistoryDetailScreenTest {
         assertEquals(true, backClicked)
     }
 }
+
+private const val LARGE_FONT_SCALE_MEDIUM = 1.3f
+private const val LARGE_FONT_SCALE_MAX = 2.0f
