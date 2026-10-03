@@ -1,7 +1,10 @@
 package com.repflow.app.presentation
 
-import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
@@ -12,11 +15,20 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 
 /**
- * Asserts a button's label is fully rendered (design 9f, no mid-word wrap):
- * one line, no ellipsis, every character laid out, the text
- * wide enough inside its own node, and the text inside its button's bounds.
- * A one-line label that is merely cut off or ellipsized fails this, where a
- * line-count or "is displayed" check would pass.
+ * Asserts a button's label is fully rendered (design 9f, no mid-word wrap).
+ * Each check catches a different failure, and none is redundant:
+ * - one line: catches a mid-word or word wrap;
+ * - no ellipsis and every character laid out: catches a label truncated by
+ *   `maxLines`/`overflow`;
+ * - line right edge within the text node's width: catches horizontal
+ *   overflow of the text box;
+ * - line bottom within the text node's height: catches a label cut off
+ *   vertically (a fixed-height button at large font keeps one line, every
+ *   character and no ellipsis, yet the text node is shorter than the line);
+ * - the text node's unclipped rectangle inside its button's unclipped
+ *   rectangle: catches a text box that sticks out of its button. Unclipped
+ *   bounds are used on purpose, because `boundsInRoot` is already
+ *   intersected with ancestor clips and so can never show an overflow.
  */
 internal fun ComposeTestRule.assertButtonLabelWhole(
     label: String,
@@ -41,8 +53,12 @@ internal fun ComposeTestRule.assertButtonLabelWhole(
         "$tag is wider (${layout.getLineRight(0)}px) than its text box (${node.size.width}px)",
         layout.getLineRight(0) <= node.size.width + 1,
     )
-    val textBounds = node.boundsInRoot
-    val buttonBounds = buttonNode.fetchSemanticsNode().boundsInRoot
+    assertTrue(
+        "$tag is cut off vertically (line bottom ${layout.getLineBottom(0)}px, text box ${node.size.height}px)",
+        layout.getLineBottom(0) <= node.size.height + 1,
+    )
+    val textBounds = node.unclippedBounds()
+    val buttonBounds = buttonNode.fetchSemanticsNode().unclippedBounds()
     assertTrue(
         "$tag is clipped by its button: text $textBounds, button $buttonBounds",
         textBounds.left >= buttonBounds.left - 1 &&
@@ -51,3 +67,6 @@ internal fun ComposeTestRule.assertButtonLabelWhole(
             textBounds.bottom <= buttonBounds.bottom + 1,
     )
 }
+
+/** Layout rectangle in root coordinates, without the ancestor clipping `boundsInRoot` applies. */
+private fun SemanticsNode.unclippedBounds(): Rect = Rect(positionInRoot, Size(size.width.toFloat(), size.height.toFloat()))
