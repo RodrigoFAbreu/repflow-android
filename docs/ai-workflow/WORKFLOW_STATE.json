@@ -6049,5 +6049,50 @@
       "state_revision": 50,
       "last_transition": "2026-10-03T19:58:50Z"
     }
+  },
+  "gate_policy_adoption": {
+    "sha256": "f5b32ba65d146f425c17b3a194c684acf6c08bc9fd2c373c2465c45d4f433b2c",
+    "adopted_at": "2026-10-04T01:14:56.348882+00:00",
+    "confirmation": "gate_policy f5b32ba65d14",
+    "policy": {
+      "schema_version": 1,
+      "human_approval": true
+    },
+    "history": [],
+    "lowered": []
+  },
+  "gate_policy_floor": {
+    "policy": {
+      "plan_approval": {
+        "human": true,
+        "require": [
+          "distinct_reviewer_models"
+        ]
+      },
+      "technical_approval": {
+        "human": true,
+        "require": [
+          "distinct_reviewer_models"
+        ]
+      },
+      "acceptance": {
+        "human": true,
+        "require_ci": true,
+        "required_flows": [],
+        "requires_pr_approved": false
+      },
+      "pr_review": {
+        "enabled": true,
+        "reopen_on": [
+          "changes_requested",
+          "checks_failed"
+        ]
+      }
+    },
+    "digest": "87f21ab7735e02f13fe573120f0775a3b216a671b4425d20af3139dce1080b59",
+    "recorded_at": "2026-10-04T01:14:56.348882+00:00",
+    "observed": [
+      "f5b32ba65d146f425c17b3a194c684acf6c08bc9fd2c373c2465c45d4f433b2c"
+    ]
   }
 }
