@@ -39,7 +39,7 @@ import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.exercise.LoadIncrement
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -67,7 +67,7 @@ class ActiveWorkoutFocusPlumbingTest {
     private val trainingPlanRepository = InMemoryTrainingPlanRepository()
     private val recommendations = InMemoryProgressionRecommendationRepository()
     private val dayContext = GetWorkoutDayContext(InMemoryRecoveryRepository(), InMemoryFutsalRepository(), clock)
-    private val viewModel =
+    private val viewModel by lazy {
         ActiveWorkoutViewModel(
             observeActiveWorkoutSession = ObserveActiveWorkoutSession(workoutRepository),
             observeExercises = ObserveExercises(exerciseRepository),
@@ -96,6 +96,7 @@ class ActiveWorkoutFocusPlumbingTest {
             restNotificationCanceller = RecordingRestNotificationCanceller(),
             workoutRepository = workoutRepository,
         )
+    }
 
     @After
     fun resetMainDispatcher() {
@@ -130,7 +131,7 @@ class ActiveWorkoutFocusPlumbingTest {
     @Test
     fun aWorkoutExerciseCarriesItsExerciseIdLoadIncrementInKgAndTechniqueNotes() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val bench = exercise("exercise-bench", "Bench Press", incrementGrams = 1_250, instructions = "Shoulder blades back.")
             val curl = exercise("exercise-curl", "Curl", incrementGrams = null, instructions = null).archive(now)
             exerciseRepository.seed(bench)
@@ -168,7 +169,7 @@ class ActiveWorkoutFocusPlumbingTest {
     @Test
     fun anArchivedExercisesIncrementAndNotesStillReachTheWorkout() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val press = exercise("exercise-press", "Overhead Press", incrementGrams = 500, instructions = "Brace.").archive(now)
             exerciseRepository.seed(press)
             val sessionId = success(StartWorkoutSession(workoutRepository, clock, ids)(StartWorkoutSessionCommand(null)))
