@@ -25,7 +25,7 @@ import com.repflow.app.domain.exercise.ExerciseOrigin
 import com.repflow.app.domain.exercise.ExerciseTrackingType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -41,13 +41,14 @@ class ExerciseListViewModelTest {
     private val repository = InMemoryExerciseRepository()
     private val clock = FixedClock(Instant.parse("2026-01-03T00:00:00Z"))
     private val planRepository = InMemoryTrainingPlanRepository()
-    private val viewModel =
+    private val viewModel by lazy {
         ExerciseListViewModel(
             ObserveExercises(repository),
             ArchiveExercise(repository, clock),
             RestoreExercise(repository, clock),
             ObserveExercisePlanUsage(planRepository),
         )
+    }
 
     @After
     fun resetMainDispatcher() {
@@ -86,7 +87,7 @@ class ExerciseListViewModelTest {
      * assuming a fixed emission count (Milestone 8, CP15 root-cause fix,
      * matching the pattern CP7/CP11/CP12 already established elsewhere):
      * `uiState` here is `combine(contentState, messages)`, and under
-     * [UnconfinedTestDispatcher] the repository write inside an archive/
+     * [StandardTestDispatcher] the repository write inside an archive/
      * restore call and the separate `messages.update` it triggers can each
      * produce their own combine tick in either order, so [predicate] must
      * describe the final state across every field it cares about together -
@@ -103,7 +104,7 @@ class ExerciseListViewModelTest {
     @Test
     fun `starts loading then shows the NO_EXERCISES empty state when there are none`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             viewModel.uiState.test {
                 assertEquals(ExerciseListContent.Loading, awaitItem().content)
                 val loaded = awaitUntil { it.content !is ExerciseListContent.Loading }
@@ -117,7 +118,7 @@ class ExerciseListViewModelTest {
     @Test
     fun `shows the seeded active exercises as content`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             repository.seed(exercise("1", "Squat"))
             repository.seed(exercise("2", "Bench Press"))
 
@@ -131,7 +132,7 @@ class ExerciseListViewModelTest {
     @Test
     fun `onFilterChanged switches between active and archived exercises`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             repository.seed(exercise("1", "Squat"))
             repository.seed(exercise("2", "Retired Lift", archived = true))
 
@@ -151,7 +152,7 @@ class ExerciseListViewModelTest {
     @Test
     fun `an empty archived filter reports NO_ARCHIVED rather than NO_EXERCISES`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             repository.seed(exercise("1", "Squat"))
 
             viewModel.uiState.test {
@@ -172,7 +173,7 @@ class ExerciseListViewModelTest {
     @Test
     fun `a query with no matches on the archived filter reports NO_SEARCH_RESULTS`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             repository.seed(exercise("1", "Squat"))
             repository.seed(exercise("2", "Old Press", archived = true))
 
@@ -193,7 +194,7 @@ class ExerciseListViewModelTest {
     @Test
     fun `a query with no matches reports NO_SEARCH_RESULTS`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             repository.seed(exercise("1", "Squat"))
 
             viewModel.uiState.test {
@@ -213,7 +214,7 @@ class ExerciseListViewModelTest {
     @Test
     fun `an observation failure is visible and retry resubscribes to fresh content`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             repository.seed(exercise("1", "Squat"))
             repository.observeFailureOnNextSubscription = true
 
@@ -235,7 +236,7 @@ class ExerciseListViewModelTest {
     @Test
     fun `archiving queues an Archived message and removes the exercise from the active list`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             repository.seed(exercise("1", "Squat"))
 
             viewModel.uiState.test {
@@ -257,7 +258,7 @@ class ExerciseListViewModelTest {
     @Test
     fun `onMessageShown removes only the given message id and preserves a newer one`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             repository.seed(exercise("1", "Squat"))
             repository.seed(exercise("2", "Bench Press"))
 
@@ -290,7 +291,7 @@ class ExerciseListViewModelTest {
     @Test
     fun `undo archive restores the exercise via RestoreExercise`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             repository.seed(exercise("1", "Squat"))
 
             viewModel.uiState.test {
@@ -314,7 +315,7 @@ class ExerciseListViewModelTest {
     @Test
     fun `undo archive is idempotent when the exercise is already active`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             repository.seed(exercise("1", "Squat"))
 
             viewModel.uiState.test {
@@ -329,7 +330,7 @@ class ExerciseListViewModelTest {
     @Test
     fun `a failed archive queues an OperationFailed message`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             repository.seed(exercise("1", "Squat"))
             repository.nextUpdateFailure = ExercisePersistenceError.Unavailable
 
@@ -347,7 +348,7 @@ class ExerciseListViewModelTest {
     @Test
     fun `restoring from the archived filter moves the exercise back to active`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             repository.seed(exercise("1", "Squat", archived = true))
 
             viewModel.uiState.test {
@@ -376,7 +377,7 @@ class ExerciseListViewModelTest {
     @Test
     fun `plan usage counts the non-archived plans that hold an exercise`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             repository.seed(exercise("bench", "Bench Press"))
             repository.seed(exercise("squat", "Squat"))
             val createPlan = CreateTrainingPlan(planRepository, repository, clock, SequentialIdentifierGenerator("plan"))
