@@ -13,6 +13,11 @@ Enter the `AWAITING_FUNCTIONAL_REVIEW` state of
 `<feedback_dir>` below resolves per
 `docs/ai-workflow/REVIEW_PROTOCOL.md`'s "Bundle location"
 (`workflow_fingerprint.resolve_feedback_dir`).
+`resolve_feedback_dir` decides `<feedback_dir>` by the item's durable
+`feedback_layout` (`D-Feedback-Layout`, workflow-2.6.0):
+`.ai-review/<work_item_id>/feedback/` unconditionally, by construction, for
+a `feedback_layout: "scoped"` item; the unchanged legacy scoped-else-flat
+rule for an item without the field.
 
 0. **Resolve the target** (D-Legacy phase 2, `WF-M8b`): the work-item id
    named in `$ARGUMENTS`, or `active_work_item_id` from
@@ -47,11 +52,22 @@ Enter the `AWAITING_FUNCTIONAL_REVIEW` state of
     4. On success, persist the returned state to
        `docs/ai-workflow/WORKFLOW_STATE.json`. `active_work_item_id` now
        points at the target, `governing_workflow_version` has transitioned
-       `"1"` → `"2.1"`, and `phase` is now `AWAITING_FUNCTIONAL_REVIEW` —
-       `technical_approval` itself (`basis: LEGACY_V1`) is unchanged.
-       Proceed to step 1 for this same target; do not stop here — adoption
-       is not itself the functional-review checklist, step 1 still runs in
-       this same invocation.
+       `"1"` → `"2.1"` -- **always the literal `"2.1"`, never
+       `config["default_workflow_version"]`, even once a repository has
+       separately activated `"2.2"` as its own default** (`workflow-2.5.0`
+       correction, `LOCAL_MODEL_PLAN_REVIEW` round 6, optional finding 1):
+       a legacy item's adoption target is fixed by what it is adopted
+       *past* (both implementation-review stages, already complete by
+       construction for a legacy import), never by whatever this
+       repository's current default happens to be -- and `phase` is now
+       `AWAITING_FUNCTIONAL_REVIEW` — `technical_approval` itself (`basis:
+       LEGACY_V1`) is unchanged. Proceed to step 1 for this same target; do
+       not stop here — adoption is not itself the functional-review
+       checklist, step 1 still runs in this same invocation. **Steps 1-5
+       below are themselves version-independent** (`workflow-2.5.0`),
+       reachable identically for a `"1"`, `"2.1"`, or `"2.2"` item alike
+       (the newly-adopted `"2.1"` item included) — this command's own
+       checklist-preparation mechanics read no version-gated field.
 1. Confirm the automated verification state is current (rerun only if the
    working tree changed since the last full run in
    `/milestone-implement`/`/apply-implementation-review`).
@@ -139,8 +155,17 @@ Enter the `AWAITING_FUNCTIONAL_REVIEW` state of
          would mean the state write never happened.
     4. Record the resulting (existing or newly created) commit SHA and its
        committed blob as this invocation's checklist-evidence identity.
-4. State clearly that findings should be placed at
-   `<feedback_dir>/FUNCTIONAL_REVIEW.md`, and report the exact checklist
+4. Call `workflow_fingerprint.ensure_feedback_dir(repo_root, work_item_id)`
+   (`D-Feedback-Layout`, workflow-2.6.0) so the resolved `<feedback_dir>`
+   exists for the user to write into -- a `feedback_layout: "scoped"`
+   item's directory is created by no earlier step, and for a legacy item it
+   creates only the already-resolved directory, never flipping resolution.
+   State clearly that findings should be placed at
+   `<feedback_dir>/FUNCTIONAL_REVIEW.md`, printing that exact resolved
+   path (the directory `ensure_feedback_dir` returned; equivalently the
+   `functional_review_path` field of `python3 scripts/workflow_fingerprint.py
+   --resolve-feedback-path <work_item_id>`), never a hard-coded flat path,
+   and report the exact checklist
    evidence commit SHA and blob from step 3a to the user, so they know
    precisely which committed content they are reviewing (never merely "the
    current file," which could otherwise drift before or after this

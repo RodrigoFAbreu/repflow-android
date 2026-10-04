@@ -19,10 +19,18 @@ Where they disagree, see [Known discrepancies](#known-discrepancies).
 - **States/phases** live in `docs/ai-workflow/WORKFLOW_STATE.json` per work
   item (`work_items[<id>].phase`). Check ground truth with:
   `python3 -c "import json;print(json.load(open('docs/ai-workflow/WORKFLOW_STATE.json'))['work_items'])"`
-- **Two governing versions** exist per work item, fixed at creation:
-  `"1"` (single-stage plan review) and `"2.1"` (two-stage plan review,
-  current default in `WORKFLOW_CONFIG.json`). A `"2.1"` item's plan review
-  is the part most people get wrong — see below.
+- **Three governing versions** exist per work item, fixed at creation
+  (`workflow-2.5.0` widened this from two): `"1"` (single-stage plan
+  review, single-stage implementation review), `"2.1"` (two-stage plan
+  review, single-stage implementation review; current default in
+  `WORKFLOW_CONFIG.json` for a repository that has not activated `"2.2"`),
+  and `"2.2"` (two-stage plan review — identical mechanism to `"2.1"`'s —
+  **plus** two-stage implementation review, `D-Implementation-Review-Stages`).
+  A `"2.1"`/`"2.2"` item's two-stage plan review is the part most people get
+  wrong — see below. A `"2.2"` item's two-stage *implementation* review
+  mirrors it at the technical-approval gate — see the `/review-implementation`,
+  `/record-manual-implementation-review`, and `AWAITING_LOCAL_IMPLEMENTATION_REVIEW`/
+  `AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW` sections below.
 - **User-only commands** (`/approve-review`, `/accept-milestone`) carry
   `disable-model-invocation: true`.
   Claude cannot run them, and they refuse to write anything unless *your
@@ -104,7 +112,24 @@ Key points:
     paste, `/record-manual-plan-review`). `APPROVE` at stage 2 →
     `/approve-review plan`.
   - **`BLOCK`** (either stage) → nothing is recorded, the phase does not
-    change. Resolve it with the user explicitly, then re-run.
+    change. Resolve it with the user explicitly, then re-run. Since
+    `workflow-2.6.0`, either re-review the unchanged content, or edit the
+    plan and withdraw it with `/milestone-plan <work-item-id>`;
+    `/apply-plan-review` refuses a plan-stage `BLOCK`
+    (`FeedbackStatusNotApplicableError`).
+- **Publish, then bind** (`workflow-2.6.0`, `D-Plan-Review-Bundle-Binding`).
+  `publish_plan_revision` only mirrors the revision and records the
+  content as `PUBLISHED`; the item reaches `AWAITING_LOCAL_PLAN_REVIEW`
+  only when `bind_plan_review_bundle` binds a verified bundle of exactly
+  that content. The three plan-review readers (`/review-plan`,
+  `/record-manual-plan-review`, `/approve-review plan`) refuse any other
+  bundle, naming the remedy. Content already reviewed, amended away or
+  withdrawn is `CONSUMED` and never binds again without an edit: every
+  consumed id is kept in the work item's `consumed_plan_review_content_ids`
+  history (workflow-2.7.0), so restoring earlier content byte for byte is
+  refused, and any edit gives it a new id.
+  `python3 scripts/workflow_state.py --plan-review-publication-status
+  <work-item-id>` prints where an item stands (one JSON object, read-only).
 - The two ledger stage names are `LOCAL_MODEL_PLAN_REVIEW` and
   `MANUAL_EXTERNAL_PLAN_REVIEW` — `SCREAMING_SNAKE_CASE` is canonical
   everywhere: in `plan_review_stages` keys, in what `/review-plan` writes,
@@ -140,7 +165,9 @@ exactly like `AWAITING_TECHNICAL_APPROVAL` is for both versions.
 | `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW` | Upload the named bundle, paste the verdict into `REVIEW_FEEDBACK.md`, then `/record-manual-plan-review` |
 | `AWAITING_EXTERNAL_PLAN_REVIEW` (`"1"` only) | Paste external feedback, then `/apply-plan-review` |
 | Any plan verdict was `REVISE` | `/apply-plan-review` → returns a `"2.1"` item to `AWAITING_LOCAL_PLAN_REVIEW`; a `"1"` item stays at `AWAITING_EXTERNAL_PLAN_REVIEW` |
-| Any verdict was `BLOCK` | Nothing. Resolve with the user, then re-run the same command |
+| Any verdict was `BLOCK` | Nothing. Resolve with the user, then re-run the same command (a plan-stage `BLOCK`, `workflow-2.6.0`: re-review the unchanged content, or edit and withdraw with `/milestone-plan <work-item-id>`) |
+| A plan at `AWAITING_LOCAL_PLAN_REVIEW`/`AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW`/`AWAITING_PLAN_APPROVAL` must change (`"2.1"`/`"2.2"`) | `/milestone-plan <work-item-id>` — the explicit id is required; it withdraws the item from review (both recorded stages are discarded). To undo an accidental edit instead, restore the bound bytes from `current/files/<path>` |
+| A plan-stage generation failed after the publish (`PUBLISHED_UNBOUND`) | Re-run the same command with the explicit id — `/milestone-plan <work-item-id>` or `/apply-plan-review <work-item-id>` — it regenerates and binds without advancing the revision |
 | `REVISING_PLAN` | `/apply-plan-review` |
 | `AWAITING_PLAN_APPROVAL` | **You**: `/approve-review plan <work-item-id>` with literal confirmation |
 | `IMPLEMENTING` | `/milestone-implement` — once per checkpoint, repeat until it reports all complete |
@@ -155,27 +182,61 @@ exactly like `AWAITING_TECHNICAL_APPROVAL` is for both versions.
 | `AWAITING_FUNCTIONAL_REVIEW`, want a second opinion on checklist completeness first | `/review-functional` (optional) — report-only, writes nothing |
 | Functional testing produced findings | `/apply-functional-review` |
 | Functional testing clean, **all** own checkpoints `COMPLETE` | **You**: `/accept-milestone` |
-| Functional testing clean, a checkpoint still outstanding | `/milestone-implement` — finish it, then return to this gate |
+| Functional testing clean, a checkpoint still outstanding | No command completes it from this phase (`/milestone-implement` cannot start a checkpoint here; defect `v2.6.0-003`). Ordinary flow never gets here; a legacy promotion or a hand-constructed state does |
 | Review needed for work outside the gates | `/prepare-review` |
+| Not sure, or driving the item from an orchestrator | `python3 scripts/workflow_protocol.py next-action` — the protocol's own answer to this table; see [Driving the Workflow by protocol](#driving-the-workflow-by-protocol) |
 | Driving the `workflow-v2-1-core` item | `/bootstrap-workflow-v2` — its only driver, but that item is `MILESTONE_COMPLETE`, so every path through it now fails closed (ledger `O16`) |
 
 There is only one acceptance command. `/accept-milestone` refuses while the
-item's own registry has any checkpoint that is not `COMPLETE`, and its
-refusal names the outstanding checkpoint plus the three supported ways
-forward: finish the checkpoint with `/milestone-implement` if it is still
-in scope; `/apply-functional-review`'s bounded branch for a same-scope
-functional fix; its broad branch — a `<parent-id>-remediation-<n>` child
-work item — for new or wider scope. Nothing records functional acceptance
-of a partial round: `/accept-scoped-remediation` did, and was retired as an
-unreachable dead contract (ledger `I10`).
+item's own registry has any checkpoint that is not `COMPLETE`, naming the
+outstanding checkpoint. No command completes that checkpoint from
+`AWAITING_FUNCTIONAL_REVIEW`: `/milestone-implement` cannot start one at
+this phase, whatever the refusal's 2.6.0 message suggests (defect
+`v2.6.0-003`). A functional-review finding goes through
+`/apply-functional-review`: its bounded branch for a same-scope fix, its
+broad branch — a `<parent-id>-remediation-<n>` child work item — for new or
+wider scope. Nothing records functional acceptance of a partial round:
+`/accept-scoped-remediation` did, and was retired as an unreachable dead
+contract (ledger `I10`).
+
+---
+
+## Driving the Workflow by protocol
+
+Workflow 2.7.0 ships Orchestration Protocol v1,
+`scripts/workflow_protocol.py`, specified in
+`docs/ai-workflow/ORCHESTRATION_PROTOCOL.md`. It is how an orchestrator
+drives a work item without copying any of this reference, and it is also a
+quick answer to "which command do I run next?":
+
+```text
+python3 scripts/workflow_protocol.py next-action [--work-item <id>]
+```
+
+prints one JSON envelope whose result names the matching catalogue row,
+a disposition (`automatic`, `human_gate`, `external_gate`, `blocked` or
+`complete`), the action with its rendered command, and a reason with a
+remedy. It reads the state and writes nothing. The other operations are
+`describe`, `verify` (a read-only health check), `reconcile` (classifies
+what an automatic action did), `resolve-artifact` and
+`record-external-result`, which records a pasted manual verdict through
+the same ingest `/record-manual-plan-review` and
+`/record-manual-implementation-review` use.
+
+The protocol adds no gate and changes no command. A `human_gate` action is
+still a person's — the user-only commands keep their literal-confirmation
+guard — and an orchestrator runs `automatic` actions only. Where a command
+would refuse, `next-action` reports the state as `blocked` with the
+command's own remedy instead of offering it.
 
 ---
 
 ## Command reference
 
-`.claude/commands/` holds 15 files today, and all 15 are sectioned below
+`.claude/commands/` holds 16 files today, and all 16 are sectioned below
 — including `/review-implementation` and `/review-functional`
-(`workflow-v2-3`), previously undocumented here. `[work-item-id]` defaults
+(`workflow-v2-3`) and `/request-plan-amendment` (`workflow-2.4.0`),
+previously undocumented here. `[work-item-id]` defaults
 to `active_work_item_id` where accepted; naming it explicitly is what lets
 you drive a work item that is **not** the active one, which is exactly how
 a remediation child is run (see [Remediation
@@ -187,8 +248,8 @@ What is actually guaranteed about that inventory, precisely:
 set of `### /<name>` sections in this document and the set of
 `.claude/commands/*.md` stems on disk and asserts the two are **equal** —
 that part is derived, so a command added or removed without a section here
-fails. The number 15 itself is *not* derived: it is a hardcoded tripwire
-in that same test (`assertEqual(len(on_disk), 15)`) whose job is to make a
+fails. The number 16 itself is *not* derived: it is a hardcoded tripwire
+in that same test (`assertEqual(len(on_disk), 16)`) whose job is to make a
 change in the roster size a deliberate, reviewed edit. So the set equality
 is mechanical; the count in this paragraph and in the test is a
 hand-maintained pair that must be updated together. If they disagree, the
@@ -207,17 +268,31 @@ test fails and is authoritative about which one moved.
 - **Expects**: `PLANNING`, or an existing non-terminal work item to resume.
 - **Does**: identifies the next incomplete milestone, writes the execution
   plan, generates the registry/mapping/artifacts declarations, self-reviews,
-  and builds the plan bundle.
+  and builds the plan bundle. For a `"2.1"`/`"2.2"` item (`workflow-2.6.0`):
+  publishes after self-review (mirror-only), generates, then binds the
+  bundle, which is what writes `AWAITING_LOCAL_PLAN_REVIEW`. Named with an
+  explicit id at a ready phase, it first **withdraws** the item from review
+  (`withdraw_plan_review`: back to `REVISING_PLAN`, or `AMENDING_PLAN`
+  during an amendment; both recorded stages discarded; the reviewed
+  content consumed).
 - **Writes**: plan doc, `registry/<id>-registry.json`,
   `requirements/<id>-mapping.json`, `registry/<id>-artifacts.json`,
-  `WORKFLOW_STATE.json`, plan bundle. No commits.
+  `WORKFLOW_STATE.json`, the plan-stage author inputs under
+  `.ai-review/<id>/plan-inputs/` (`workflow-2.6.0`), plan bundle. No commits.
 - **Next**: `AWAITING_LOCAL_PLAN_REVIEW` (`"2.1"`) or
   `AWAITING_EXTERNAL_PLAN_REVIEW` (`"1"`).
 - **Refuses**: reuse of a terminal or previously-used `work_item_id`; a
   checkpoint id reintroduced after retirement; a `REJECTED` bundle marker;
   an argument that resolves as neither a `work_items` key nor a commit; a
   `<base-sha>` conflicting with a selected entry's own stored
-  `base_commit`.
+  `base_commit`. For a `"2.1"`/`"2.2"` item (`workflow-2.6.0`): a phase
+  outside plan review (`PlanReviewPhaseNotPlanStageError` — use
+  `/request-plan-amendment` from `IMPLEMENTING`); a withdrawal without the
+  explicit id (`PlanReviewWithdrawalNeedsExplicitIdError`) or during an
+  open plan-approval transaction (`PlanApprovalInProgressError`);
+  publishing unchanged or restored, already-reviewed content
+  (`ConsumedPlanReviewContentError`). A generator failure after the
+  publish leaves `PUBLISHED_UNBOUND`; re-run `/milestone-plan <id>`.
 - **Never**: repoints `active_work_item_id` away from another live item.
   `route_work_item` claims the pointer only when it is free or already
   this item's.
@@ -225,7 +300,7 @@ test fails and is authoritative about which one moved.
 ### `/review-plan [work-item-id]`
 - **When**: immediately after `/milestone-plan` or `/apply-plan-review`, on a
   `"2.1"` item. Strongly recommended in a **fresh session**.
-- **Expects**: `phase == AWAITING_LOCAL_PLAN_REVIEW`, `"2.1"` only.
+- **Expects**: `phase == AWAITING_LOCAL_PLAN_REVIEW`, `"2.1"`/`"2.2"` only (widened workflow-2.5.0 from a bare `"2.1"` check -- `TWO_STAGE_PLAN_REVIEW_VERSIONS` membership).
 - **Does**: independently re-verifies the plan against the repository —
   including every finding the plan claims as addressed — and decides
   `APPROVE`/`REVISE`/`BLOCK`.
@@ -237,12 +312,16 @@ test fails and is authoritative about which one moved.
   `REVISING_PLAN`; `BLOCK` → stays put.
 - **Refuses**: a `"1"` item; wrong phase (including a re-run after this
   round already completed); a stale bundle vs. `MANIFEST.md`; a worktree/HEAD
-  mismatch; a `REJECTED` bundle.
+  mismatch; a `REJECTED` bundle; a bundle that is not the bound one
+  (`workflow-2.6.0`: `ReviewedContentDriftError` — restore from
+  `current/files/` or withdraw with `/milestone-plan <id>`;
+  `PlanReviewBundleUnverifiedError` — regenerate or withdraw). A
+  wrapper-only `bundle_id` change after the bind only warns.
 
 ### `/record-manual-plan-review [work-item-id]`
 - **When**: after you have pasted the external reviewer's verdict into
   `REVIEW_FEEDBACK.md`, in the same turn.
-- **Expects**: `phase == AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW`, `"2.1"` only.
+- **Expects**: `phase == AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW`, `"2.1"`/`"2.2"` only (widened workflow-2.5.0 from a bare `"2.1"` check -- `TWO_STAGE_PLAN_REVIEW_VERSIONS` membership).
 - **Does**: mechanically ingests and binds that verdict. Evaluates nothing.
 - **Writes**: `WORKFLOW_STATE.json` only (ledger stage on `APPROVE`, phase on
   `APPROVE`/`REVISE`). Never the feedback file, plan, registry, or bundle.
@@ -254,8 +333,10 @@ test fails and is authoritative about which one moved.
   a local-role, unlabeled or otherwise-named file is not); a
   `review_content_id` that does not match
   the current recomputed value (hard); a missing current local `APPROVE`; a
-  duplicate ingestion for the same `review_content_id`. A mismatched
-  `bundle_id` **warns only**. Not an approval gate.
+  duplicate ingestion for the same `review_content_id`; a bundle that is
+  not the bound one (`workflow-2.6.0`, same two errors and remedies as
+  `/review-plan`). A mismatched `bundle_id` **warns only**. Not an
+  approval gate.
 
 ### `/apply-plan-review [work-item-id]`
 - **When**: a plan review returned `REVISE` (either stage, or a `"1"` item's
@@ -265,30 +346,44 @@ test fails and is authoritative about which one moved.
 - **Does**: validates every finding against the repository, applies accepted
   ones, records evidence-based rejections inline in the plan.
 - **Writes**: plan doc, bundle `PLAN.md`, registry/mapping when the plan
-  revision advances, `WORKFLOW_STATE.json`, regenerated plan bundle. No
-  product code.
+  revision advances, `WORKFLOW_STATE.json`, the plan-stage author inputs
+  under `.ai-review/<id>/plan-inputs/` (`workflow-2.6.0`), regenerated plan
+  bundle — generated once per round, at step 5. No product code.
 - **Next**: `"2.1"` → **always** `AWAITING_LOCAL_PLAN_REVIEW`, regardless of
-  edit size (`transition_to_awaiting_local_plan_review`, step 7'). `"1"` →
+  edit size — since `workflow-2.6.0` written by `bind_plan_review_bundle`
+  in step 7', after step 5's mirror-only publish and single generation
+  (`2.5.1`'s `transition_to_awaiting_local_plan_review` is retired). A
+  generator failure after the publish leaves `PUBLISHED_UNBOUND`; re-run
+  `/apply-plan-review <id>`. `"1"` →
   the phase is left at `AWAITING_EXTERNAL_PLAN_REVIEW`; step 7 *reports*
   `AWAITING_PLAN_APPROVAL` as the next gate but writes no phase, since
   nothing writes that phase for a `"1"` item.
 - **Refuses**: missing feedback; feedback whose bundle/base/work-item binding
   fields do not match; a `REJECTED` bundle. Never self-declares the plan
-  ready on a `"2.1"` item.
+  ready on a `"2.1"` item. For a `"2.1"`/`"2.2"` item (`workflow-2.6.0`):
+  any status but `REVISE` (`FeedbackStatusNotApplicableError`); a phase
+  outside plan review (`PlanReviewPhaseNotPlanStageError`); after a
+  regeneration, feedback not for the consumed (reviewed) content
+  (`FeedbackNotForConsumedContentError`).
 
 ### `/approve-review <plan|implementation> [work-item-id]` — user-only
-- **When**: `plan` at `AWAITING_PLAN_APPROVAL` for a `"2.1"` item (a real
-  persisted phase) or at `AWAITING_EXTERNAL_PLAN_REVIEW` for a `"1"` one
-  (where the same gate has no phase of its own);
+- **When**: `plan` at `AWAITING_PLAN_APPROVAL` for a `"2.1"`/`"2.2"` item (a
+  real persisted phase) or at `AWAITING_EXTERNAL_PLAN_REVIEW` for a `"1"`
+  one (where the same gate has no phase of its own);
   `implementation` at `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` with the
   technical-approval gate **computed** reachable
   (`technical_approval_gate_reachable`) — `AWAITING_TECHNICAL_APPROVAL` is
   a gate name, never a phase the item is parked in.
-- **Expects**: the matching gate to be reachable. For `plan` on a `"2.1"`
-  item, both ledger stages must be current. For `implementation`: the
+- **Expects**: the matching gate to be reachable. For `plan` on a
+  `"2.1"`/`"2.2"` item, both plan-review ledger stages must be current
+  (`TWO_STAGE_PLAN_REVIEW_VERSIONS` covers both). For `implementation`: the
   latest round `APPROVE`/`REVISE` (never `BLOCK`, and never a durably
   pinned `BLOCK`), no dirty protected path, and HEAD matching
-  `reviewed_implementation_head` through the provenance interval.
+  `reviewed_implementation_head` through the provenance interval --
+  **`workflow-2.5.0`**: for a `"2.2"` item specifically, also both
+  implementation-review ledger stages (`LOCAL_MODEL_IMPLEMENTATION_REVIEW`/
+  `MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW`) current against the same
+  `review_content_id`, mirroring the plan-stage ledger check exactly.
 - **Does**: recomputes `bundle_id`/`review_content_id` fresh, resolves the
   approval basis (`EXTERNAL_APPROVE` when the current feedback says
   `APPROVE` and its bundle id matches exactly, otherwise `USER_OVERRIDE`),
@@ -304,7 +399,9 @@ test fails and is authoritative about which one moved.
   durably pinned `BLOCK` even if the feedback file was later edited); a
   dirty protected path; a stale worktree/HEAD; a failed provenance interval;
   an already-open approval journal (report evidence and stop — takeover needs
-  a separate literal authorization).
+  a separate literal authorization); at the plan stage for a
+  `"2.1"`/`"2.2"` item, a bundle that is not the bound one
+  (`workflow-2.6.0`, same errors and remedies as `/review-plan`).
 
 ### `/milestone-implement [work-item-id]`
 - **When**: `IMPLEMENTING`, once per checkpoint.
@@ -325,6 +422,59 @@ test fails and is authoritative about which one moved.
   another worktree; a blocked checkpoint with unmet dependencies. Never loops
   across checkpoints, and never crosses the last-checkpoint→wrap-up boundary
   in one invocation.
+
+### `/request-plan-amendment [work-item-id]` — user-only
+- **When**: `IMPLEMENTING` or `SELF_REVIEWING_IMPLEMENTATION` — the only two
+  phases this release supports (`workflow-2.4.0`, `D-Plan-Amendment-1`).
+- **Expects**: no checkpoint `IN_PROGRESS` and no outstanding checkpoint
+  claim; no open `/approve-review plan` transaction; the current
+  `plan_approval`'s own approval commit still discoverable and an ancestor
+  of `HEAD`; every checkpoint id in the work item's own current registry
+  of the shape `CP<digits>[A-Z]?` -- `CP` followed by one or more digits,
+  optionally followed by exactly one uppercase letter (widened,
+  workflow-2.5.1, `D-Checkpoint-Id-Anchor-Grammar-Widening`, IMPL2-R1) --
+  the only shape `validate_post_anchor_coverage` can ever match.
+- **Does**: supersedes the current plan approval and moves the item to
+  `AMENDING_PLAN` in one transaction — same authority shape as
+  `/approve-review`/`/accept-milestone` (`disable-model-invocation: true`
+  plus a literal confirmation naming the work item and the word
+  `amendment`, plus a required, non-empty `reason` recorded verbatim). It
+  never reads, writes, or compares against `USER_OVERRIDE`.
+- **Writes**: `plan_approval.status = "SUPERSEDED"`; one append-only
+  `amendment_history` entry (bounded, content-addressed — a single
+  `pre_amendment_approval_commit` SHA, never a stored copy of the plan or
+  registry documents); `amendment_base_commit`; `WORKFLOW_STATE.json`,
+  committed alone.
+- **Next**: `AMENDING_PLAN` — the very next `/milestone-plan [work-item-id]`
+  resumes it through that command's own existing dual-mode branch, exactly
+  like any other non-terminal entry. No new plan-review machinery: the
+  full two-stage review protocol and `/approve-review plan` run completely
+  unmodified. Checkpoint reconciliation happens once, folded into that
+  eventual `/approve-review plan`'s own `apply_plan_approval` computation
+  (`D-Plan-Amendment-4`), never here. The amended plan document drafted in
+  response must delimit every registry checkpoint id with a
+  `<!-- CPn -->`/`<!-- /CPn -->` anchor pair (`n` is the same widened
+  `CP<digits>[A-Z]?` shape named above), or `/approve-review plan`
+  step 4c's `validate_post_anchor_coverage` refuses approval naming the
+  first uncovered id.
+- **Refuses**: the wrong phase
+  (`WrongPhaseForAmendmentRequestError`); a checkpoint still `IN_PROGRESS`
+  or an outstanding checkpoint claim (`AmendmentCheckpointActiveError`,
+  XMODEL-R4-B1, checked *before* superseding anything and *authoritatively*
+  inside `request_plan_amendment` itself, not only this command's own
+  preflight read -- closing the race in which a checkpoint claim is
+  published to the filesystem claims directory, step 1d, before
+  `WORKFLOW_STATE.json` shows anything IN_PROGRESS; the independent second
+  half, refusing a checkpoint's own `IN_PROGRESS` publication once the item
+  has left `IMPLEMENTING`, is `transition_checkpoint_in_progress`'s own
+  `IllegalCheckpointStartPhaseError`); a registry row with no `id` key
+  (`AmendmentRegistryMissingIdError`, IMPL4-O2); an unreachable approval
+  commit (`AmendmentApprovalCommitUnreachableError`, checked *before*
+  superseding anything); a registry checkpoint id not of the shape
+  `CP<digits>[A-Z]?` (`AmendmentCheckpointIdShapeError`, also checked
+  *before* superseding anything, naming every offending id -- IMPL2-R1);
+  an open plan-approval transaction; no literal confirmation/`reason` this
+  turn.
 
 ### `/review-implementation [work-item-id]` — review command
 - **When**: optional, repeatable, repository-local second opinion while a
@@ -365,26 +515,91 @@ test fails and is authoritative about which one moved.
   (`FeedbackOwnedByOtherWorkItemError` — the composed report still prints
   in full, only the write is refused, naming both work-item ids); any
   phase other than `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`.
+- **`workflow-2.5.0`, `"2.2"` authoritative branch**: for a `"2.2"` item at
+  `AWAITING_LOCAL_IMPLEMENTATION_REVIEW` specifically, this command is no
+  longer advisory-only — it is the authoritative
+  `LOCAL_MODEL_IMPLEMENTATION_REVIEW` stage writer
+  (`D-Implementation-Review-Stages`), mirroring `/review-plan`'s own `"2.1"`
+  role. It writes the `implementation_review_stages` ledger and does
+  advance `phase` on `APPROVE` (→ `AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW`)
+  and `REVISE` (→ `APPLYING_REVIEW_FEEDBACK` directly, no
+  `enter_applying_review_feedback` call). A `"2.2"` item at any *other*
+  phase — most commonly its own terminal `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`
+  once both implementation-review stages have already approved — still
+  takes the advisory branch described above, unchanged. See
+  `.claude/commands/review-implementation.md`'s own "`"2.2"` authoritative
+  branch" section for the full step sequence.
+
+### `/record-manual-implementation-review [work-item-id]` (`workflow-2.5.0`, `"2.2"` only)
+- **When**: after you have pasted the external reviewer's verdict into
+  `REVIEW_FEEDBACK.md`, in the same turn, for a `"2.2"` item sitting at
+  `AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW`. Mirrors
+  `/record-manual-plan-review` exactly, substituted for the implementation
+  stage.
+- **Expects**: `governing_workflow_version == "2.2"` (this two-stage
+  *implementation*-review protocol is `"2.2"`-only, unlike the plan-review
+  protocol which also covers `"2.1"`); `phase ==
+  AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW`.
+- **Does**: mechanically ingests and binds that verdict. Evaluates nothing
+  — not a user-authority gate, no `disable-model-invocation`/
+  `user_confirmation` requirement.
+- **Writes**: `WORKFLOW_STATE.json` only (ledger stage on `APPROVE`, phase
+  on `APPROVE`/`REVISE`). Never the feedback file, plan/registry/mapping,
+  source, or bundle.
+- **Next**: `APPROVE` → `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` (the
+  existing terminal phase name, reused, not a new one); `REVISE` →
+  `APPLYING_REVIEW_FEEDBACK` directly (no `enter_applying_review_feedback`
+  call — that writer's own only legal source phase,
+  `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`, is wrong for this branch);
+  `BLOCK` → stays put.
+- **Refuses**: any `governing_workflow_version` other than `"2.2"`; a
+  `Reviewer role:` other than exactly `MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW`
+  (no legacy-cased alias exists for this ledger — it is new at `"2.2"`); a
+  `review_content_id` that does not match the current recomputed value
+  (hard); a missing current local `LOCAL_MODEL_IMPLEMENTATION_REVIEW` `APPROVE`; a
+  duplicate ingestion for the same `review_content_id`. A mismatched
+  `bundle_id` **warns only**. Not an approval gate.
 
 ### `/apply-implementation-review [work-item-id]`
 - **When**: external implementation-review feedback has been pasted **and
   says `REVISE` or `BLOCK`**. Not the `APPROVE` path — see the caveat
   below.
-- **Expects**: `phase == AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` — refuses
-  outright otherwise, naming the actual phase. Enters
-  `APPLYING_REVIEW_FEEDBACK` (`enter_applying_review_feedback`, this
-  state's only writer).
+- **Expects**: `phase == AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` for a
+  `"1"`/`"2.1"` item — refuses outright otherwise, naming the actual phase.
+  Enters `APPLYING_REVIEW_FEEDBACK` (`enter_applying_review_feedback`, this
+  state's only writer for those two versions). **`workflow-2.5.0`**: for a
+  `"2.2"` item, whether this command calls `enter_applying_review_feedback`
+  is phase-conditional, never version-conditional (this file's own
+  dual-mode note above states the general rule). The ordinary two-stage
+  `REVISE` loop arrives at `APPLYING_REVIEW_FEEDBACK` already — written
+  directly by `/review-implementation`'s or
+  `/record-manual-implementation-review`'s own `REVISE` branch — so step
+  0's version-independent guard finds that phase already set and skips the
+  call. The `"2.2"` terminal-phase escape (a late fix committed after both
+  implementation-review stages already `APPROVE`d and the item reached
+  `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`) is still at that phase when
+  this command runs, so the call *does* fire for it, exactly as the
+  `APPLYING_REVIEW_FEEDBACK` row below states (in its `Phase -> writer`
+  table, not by line number, since that table's own line numbers have
+  moved in four of the last five rounds). Steps 1-8 below run
+  identically regardless of which path got here.
 - **Does**: reproduces and validates every Blocking/Important finding, fixes
   what is real, records evidence-based rejections, reruns narrow tests then
   the full suite, commits, and regenerates the `post-fix` bundle.
 - **Writes**: source/tests, `IMPLEMENTATION_SUMMARY.md`,
   `WORKFLOW_STATE.json` (durable `BLOCK` pin, bundle-generation record),
   fix commits, one generation-record commit, bundle.
-- **Next**: `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` — always, on both
-  branches. Step 7's `record_bundle_generation` is the writer, and that is
-  the phase it always writes. If blocking findings remain or the fix was
-  structurally significant, another external round runs from there;
-  otherwise `/approve-review implementation` is next, which is what the
+- **Next**: `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` for a `"1"`/`"2.1"`
+  item — always, on both branches. Step 7's `record_bundle_generation` is
+  the writer, and that is the phase it always writes for those versions.
+  **`workflow-2.5.0`**: for a `"2.2"` item, that same writer's own
+  version-dependent `bundle_generation_target_phase` resolver instead
+  writes `AWAITING_LOCAL_IMPLEMENTATION_REVIEW` — a `"2.2"` post-fix round
+  re-enters both implementation-review stages, never going straight back to
+  the terminal phase. If blocking findings remain or the fix was
+  structurally significant, another local (`"2.2"`) or external
+  (`"1"`/`"2.1"`) round runs from there; otherwise, once at the terminal
+  phase, `/approve-review implementation` is next, which is what the
   command means when it reports "`AWAITING_TECHNICAL_APPROVAL` is the next
   state" — that is a *gate name*, not a phase the item ever occupies.
 - **Caveats**: a `BLOCK` verdict is pinned durably to the bundle id, so
@@ -401,8 +616,16 @@ test fails and is authoritative about which one moved.
 - **When**: `/approve-review implementation` fails its provenance check only
   because a legitimate excluded-only commit (docs, `scripts/`) landed on top
   of the bundle-generation-record commit.
-- **Expects**: `phase == AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` — the only
-  legal source phase.
+- **Expects**: for a `"1"`/`"2.1"` item, `phase ==
+  AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` — the only legal source phase.
+  **`workflow-2.5.0`**: for a `"2.2"` item, `phase` must be a member of
+  `bundle_generation_recovered_role_legal_committed_phases("2.2")` — the
+  three-phase set `{AWAITING_LOCAL_IMPLEMENTATION_REVIEW,
+  AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW,
+  AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW}`, every phase a `"2.2"` item can
+  occupy between a generation-record commit `T` and technical approval.
+  This command's own phase guard and that function's return value are, by
+  construction, the identical set.
 - **Does**: diagnoses read-only, then records the wider still-identical
   interval with one recovery commit and regenerates the bundle at the new tip.
 - **Writes**: `WORKFLOW_STATE.json` (`state_revision`/`last_transition`
@@ -410,7 +633,9 @@ test fails and is authoritative about which one moved.
   `Workflow-Work-Item` + `Workflow-Supersedes` trailers, regenerated bundle.
   `reviewed_implementation_head`/`implementation_revision` are untouched;
   the phase does not change.
-- **Next**: unchanged — still `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`.
+- **Next**: unchanged — still whichever of the legal source phases above
+  this invocation was run from (`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`
+  for `"1"`/`"2.1"`, byte-identical to before `workflow-2.5.0`).
 - **Refuses**: any other phase; content that genuinely changed; no literal
   current-turn confirmation naming the work item **and** the superseded
   commit SHA. Afterwards the `bundle_id` has changed, so prior external
@@ -554,12 +779,21 @@ test fails and is authoritative about which one moved.
 ### `/prepare-review <base-sha> <stage> [work-item-id]`
 - **When**: a one-off review of work that is not part of a tracked milestone
   checkpoint.
-- **Expects**: nothing — no phase requirement. One of the three commands
-  declaring `state_writer: false`; the other two are the report-only
-  review commands `/review-implementation` (writes only
-  `REVIEW_FEEDBACK.md`) and `/review-functional` (writes nothing at all).
-  `/review-plan` is *not* one of them: it records a ledger stage and a
-  phase, so it declares `state_writer: true`.
+- **Expects**: nothing — no phase requirement. One of the two commands
+  unconditionally declaring `state_writer: false`; the other is the
+  report-only review command `/review-functional` (writes nothing at all).
+  `/review-implementation` (`workflow-2.5.0`) is no longer among them: its
+  frontmatter now declares `state_writer: true`, because for a `"2.2"` item
+  at `AWAITING_LOCAL_IMPLEMENTATION_REVIEW` it is the authoritative
+  `LOCAL_MODEL_IMPLEMENTATION_REVIEW` stage writer. It still writes
+  `REVIEW_FEEDBACK.md` and nothing else, exactly as before, for a
+  `"1"`/`"2.1"` item or a `"2.2"` item outside that phase -- the declaration
+  is membership in `discover_state_writers`' writer census, whose vocabulary
+  is the closed set `true`/`false`/`"publisher"` (a missing or unparseable
+  value fails closed, so there is no "conditional" to declare), never a claim
+  that every invocation writes. `/review-plan` is *not* one of them either:
+  it records a ledger stage and a phase, so it declares `state_writer: true`
+  on every branch it has.
 - **Does**: writes the author-side bundle files and runs
   `scripts/prepare-ai-review.sh <base-sha> <stage> [work-item-id]`.
 - **Writes**: bundle files only. No state, no commits.
@@ -575,7 +809,7 @@ test fails and is authoritative about which one moved.
   file says it is "retired — deleted — only at this work item's own
   `MILESTONE_COMPLETE`". That condition is now met — `workflow-v2-1-core`
   is `MILESTONE_COMPLETE` — but the file has not been deleted, so the
-  command is still on disk and still in this reference's roster of 15.
+  command is still on disk and still in this reference's roster of 16.
   Retiring it is a scoped act of its own (the way
   `/accept-scoped-remediation`'s retirement was); until then, treat it as
   live-but-unreachable: its target is terminal, so every invocation refuses
@@ -609,14 +843,25 @@ These apply across most commands and are usually what you are hitting:
 - **Binding fields** — every review round's `REVIEW_FEEDBACK.md` must carry
   `Reviewed bundle ID:`, `Reviewed base commit:`, and `Work item:`, matching
   the current values. `FUNCTIONAL_REVIEW.md` has no binding requirement.
+- **Feedback location** (`D-Feedback-Layout`, workflow-2.6.0) —
+  `REVIEW_FEEDBACK.md`/`FUNCTIONAL_REVIEW.md` always live in
+  `<feedback_dir>`: `.ai-review/<work_item_id>/feedback/` for every work
+  item created under `2.6.0` or later (stamped `feedback_layout: "scoped"`),
+  so a completed item's leftover file never blocks a new one; a legacy item
+  keeps its pre-`2.6.0` scoped-else-flat resolution. `python3
+  scripts/workflow_fingerprint.py --resolve-feedback-path <work-item-id>`
+  prints the exact path (`REVIEW_PROTOCOL.md` "Feedback directory").
 - **Wrong phase** — commands name the actual phase and stop rather than
   guessing or silently re-running.
 
 ## Phases
 
 `KNOWN_PHASES` in `scripts/workflow_state.py` is an **allowlist, not a
-transition graph** — its own comment says so. Seventeen names are declared;
-thirteen are ever written into `work_items[<id>].phase`. Confusing the two
+transition graph** — its own comment says so. Twenty names are declared
+(`workflow-2.4.0` added `AMENDING_PLAN`, additive; `workflow-2.5.0` added
+`AWAITING_LOCAL_IMPLEMENTATION_REVIEW`/
+`AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW`, also additive); sixteen
+are ever written into `work_items[<id>].phase`. Confusing the two
 sets is the single most common way to misread this workflow, so the census
 below is derived mechanically and kept honest by
 `workflow_state_test.TestPersistedPhaseWriterCensus` (an AST walk of every
@@ -630,17 +875,20 @@ phase assignment) and independently by
 |---|---|
 | `PLANNING` | `default_work_item` (a freshly created work item, including a remediation child) |
 | `AWAITING_EXTERNAL_PLAN_REVIEW` | `publish_plan_revision`, `"1"` branch |
-| `AWAITING_LOCAL_PLAN_REVIEW` (2.1) | `publish_plan_revision` `"2.1"` branch; `transition_to_awaiting_local_plan_review` |
+| `AWAITING_LOCAL_PLAN_REVIEW` (2.1) | `bind_plan_review_bundle` — the sole writer since `workflow-2.6.0` (`D-Plan-Review-Bundle-Binding`), for a verified bundle of the published content only; `publish_plan_revision` is mirror-only for a `"2.1"`/`"2.2"` item, and `2.5.1`'s `transition_to_awaiting_local_plan_review` is retired (always raises `PlanReviewWriterRetiredError`) |
 | `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW` (2.1) | `record_local_plan_review` on `APPROVE` |
-| `REVISING_PLAN` (2.1) | `record_local_plan_review` / `record_manual_plan_review`, both on `REVISE` — both refuse a `"1"` item, so that version never occupies it either |
+| `REVISING_PLAN` (2.1) | `record_local_plan_review` / `record_manual_plan_review`, both on `REVISE` — both refuse a `"1"` item, so that version never occupies it either; `withdraw_plan_review` (`workflow-2.6.0`), from a ready phase with no open amendment |
 | `AWAITING_PLAN_APPROVAL` (2.1) | `record_manual_plan_review` on `APPROVE` — a `"1"` item never reaches it; for that version it is a gate name only |
 | `IMPLEMENTING` | `apply_plan_approval` |
 | `SELF_REVIEWING_IMPLEMENTATION` | `complete_checkpoint`, when that completion makes every checkpoint `COMPLETE`; `enter_self_reviewing_implementation`, the wrap-up writer for the case where they already all are (e.g. after a plan re-approval) |
-| `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` | `record_bundle_generation` — every stage, every outcome |
-| `APPLYING_REVIEW_FEEDBACK` | `enter_applying_review_feedback` |
+| `AWAITING_LOCAL_IMPLEMENTATION_REVIEW` (2.2, `workflow-2.5.0`) | `record_bundle_generation`'s version-dependent `bundle_generation_target_phase` resolver — first-round and post-fix alike; no separate transition writer |
+| `AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW` (2.2, `workflow-2.5.0`) | `record_local_implementation_review` on `APPROVE` |
+| `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` | `record_bundle_generation` — every `"1"`/`"2.1"` stage/outcome; for `"2.2"`, `record_manual_implementation_review` on `APPROVE` (the terminal "ready for approval" phase, reused rather than a new name) |
+| `APPLYING_REVIEW_FEEDBACK` | `enter_applying_review_feedback`, for every version -- but for `"2.2"` (`workflow-2.5.0`) the ordinary two-stage `REVISE` loop never reaches this writer: `record_local_implementation_review`/`record_manual_implementation_review`'s own `REVISE` branch already writes this phase directly, so `/apply-implementation-review`'s step 0 finds `phase` already `APPLYING_REVIEW_FEEDBACK` and skips its call under that command's version-independent phase-conditional guard. The `"2.2"` terminal-phase escape -- a late fix committed after both implementation-review stages already `APPROVE`d and the item reached `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` -- does call `enter_applying_review_feedback` |
 | `AWAITING_FUNCTIONAL_REVIEW` | `apply_technical_approval`; `promote_legacy_work_item` |
 | `MILESTONE_COMPLETE` | `complete_work_item` — the only terminal phase |
 | `LEGACY_READY` | `import_legacy_work_item` — dormant, **not** terminal |
+| `AMENDING_PLAN` (`workflow-2.4.0`) | `request_plan_amendment` — a re-entry phase, left by the next `/milestone-plan` invocation, not a fresh-item phase; `withdraw_plan_review` (`workflow-2.6.0`), from a ready phase with an open amendment |
 
 **Declared but never written** — vocabulary only. Nothing assigns these,
 so no work item is ever found at one, and no command can be "run from"
@@ -666,16 +914,25 @@ whole plan lane persists exactly three phases — `PLANNING` →
 `IMPLEMENTING`. For that version, `REVISING_PLAN` and
 `AWAITING_PLAN_APPROVAL` are names, like the four above.
 
+**Scope of that claim (`workflow-2.4.0`, `I-R19-1`)**: it describes the
+one-shot, pre-approval `PLANNING` → `IMPLEMENTING` sequence only. It says
+nothing about `AMENDING_PLAN` (`workflow-2.4.0`): that phase is reached
+only *after* a first `IMPLEMENTING`/`SELF_REVIEWING_IMPLEMENTATION` entry,
+by `/request-plan-amendment`, and re-enters this same lane via
+`/milestone-plan`'s existing dual-mode branch — a `"1"`-governed item can
+be amended too, and re-runs the identical three-phase lane above on its way
+back to `IMPLEMENTING`, one or more times.
+
 ### "Enter the `X` state" in a command file
 
-Ten of the fifteen command files open with an `Enter ...` line naming a
+Twelve of the seventeen command files open with an `Enter ...` line naming a
 phase. It is inherited v1 wording and does **not** mean the command writes
 that phase. Three things it can mean, and which command means which —
 derived from whether the file actually calls a writer of it:
 
 | Meaning | Commands |
 |---|---|
-| It really writes that phase | `/accept-milestone` (`complete_work_item`), `/apply-implementation-review` (`enter_applying_review_feedback`), `/prepare-functional-review` — but only on the `LEGACY_READY` adoption branch (`promote_legacy_work_item`) |
+| It really writes that phase | `/accept-milestone` (`complete_work_item`), `/apply-implementation-review` (`enter_applying_review_feedback`, for every version — but for `"2.2"` the ordinary two-stage `REVISE` loop never reaches this writer, since `record_local_implementation_review`/`record_manual_implementation_review`'s own `REVISE` branch already writes `APPLYING_REVIEW_FEEDBACK` directly; the `"2.2"` terminal-phase escape does call it, exactly as the `APPLYING_REVIEW_FEEDBACK` row above states), `/prepare-functional-review` — but only on the `LEGACY_READY` adoption branch (`promote_legacy_work_item`), `/request-plan-amendment` (`request_plan_amendment`, `workflow-2.4.0`), `/review-implementation` (`workflow-2.5.0`, `"2.2"` authoritative branch only — `record_local_implementation_review`), `/record-manual-implementation-review` (`workflow-2.5.0`, `record_manual_implementation_review`) |
 | It names the phase the command runs **in**, and writes a different one | `/milestone-plan` (writes `PLANNING` only when creating a fresh item, then moves it on), `/review-plan`, `/milestone-implement`, `/apply-plan-review`, and `/record-manual-plan-review`, whose "Enter the **exit of** `AWAITING_MANUAL_EXTERNAL_PLAN_REVIEW`" is the one phrasing that says so precisely |
 | It names a **gate**, not a phase | `/approve-review` ("Enter `AWAITING_PLAN_APPROVAL` or `AWAITING_TECHNICAL_APPROVAL`" — the first is a real phase for a `"2.1"` item only, the second never; what it writes is `IMPLEMENTING` or `AWAITING_FUNCTIONAL_REVIEW`) and `/apply-functional-review` (`FIXING_FUNCTIONAL_FINDINGS`, which nothing writes at all) |
 
@@ -691,8 +948,13 @@ phases (the last three rows of the table above cover them): at the
 technical-approval gate the item's phase reads
 `AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW`, and at the user-acceptance gate
 it reads `AWAITING_FUNCTIONAL_REVIEW`. A `"2.1"` item also stops at the two
-plan-review states, so it stops in seven places in practice — do not use
-the number six to predict stops.
+plan-review states, so it stops in seven places in practice. A `"2.2"` item
+(`workflow-2.5.0`) stops at those same two plan-review states **plus** the
+two new implementation-review states
+(`AWAITING_LOCAL_IMPLEMENTATION_REVIEW`/
+`AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW`), so it stops in nine
+places in practice — do not use the number six to predict stops for any
+version.
 
 ## Remediation children: a child work item's own cycle
 
@@ -724,8 +986,11 @@ The sequence, in full:
 /record-manual-plan-review <child-id>   → AWAITING_PLAN_APPROVAL
 /approve-review plan <child-id>         → IMPLEMENTING
 /milestone-implement <child-id>  (× N)  → SELF_REVIEWING_IMPLEMENTATION
-                                        → AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW
-/review-implementation <child-id>       (optional)
+                                        → AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW ("1"/"2.1")
+                                        → AWAITING_LOCAL_IMPLEMENTATION_REVIEW ("2.2")
+/review-implementation <child-id>       (optional for "1"/"2.1"; authoritative for "2.2")
+                                        → AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW ("2.2" only)
+/record-manual-implementation-review <child-id>  ("2.2" only) → AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW
 /approve-review implementation <child-id> → AWAITING_FUNCTIONAL_REVIEW
 /prepare-functional-review <child-id>
 /review-functional <child-id>           (optional)
@@ -737,7 +1002,18 @@ A `"1"`-governed child (only possible if `default_workflow_version` was
 `"1"` when the broad branch ran) replaces the two plan-review commands
 with a single `/apply-plan-review <child-id>` against pasted external
 feedback, exactly as any other `"1"` item does; everything below the plan
-lane is identical.
+lane is identical except that it also skips both implementation-review
+commands the diagram marks `"2.2" only` (a `"1"` item's terminal phase is
+reached directly by `/milestone-implement`'s own bundle-generation step, as
+always).
+
+A `"2.2"`-governed child (`workflow-2.5.0`) runs the two implementation-
+review commands the diagram marks `"2.2" only`, mirroring the plan lane's
+own local/manual-external split exactly, substituted for the
+implementation stage; a `"1"`/`"2.1"` child skips both and reaches
+`AWAITING_EXTERNAL_IMPLEMENTATION_REVIEW` directly from
+`/milestone-implement`'s own bundle-generation step, running
+`/review-implementation <child-id>` only optionally and advisorily.
 
 `REVISE` diverts through `/apply-plan-review <child-id>` or
 `/apply-implementation-review <child-id>`; the child's own functional
@@ -769,32 +1045,27 @@ Proven end to end by acceptance-matrix rows `C6`/`C7`
 (`workflow_acceptance_matrix_test.py`), including a plan-review `REVISE`
 round driven while the parent still holds the pointer.
 
+**`workflow-2.4.0`: the child can amend its own plan too.** Once it reaches
+`IMPLEMENTING`/`SELF_REVIEWING_IMPLEMENTATION`, running
+`/request-plan-amendment <child-id>` followed by `/milestone-plan
+<child-id>` re-enters the sequence above at its own `/milestone-plan
+<child-id>` step, on exactly the terms `D-Plan-Amendment-1`/`-2` grant any
+work item — never `active_work_item_id`, same as every other command on
+this child's own lifecycle.
+
 ## Known discrepancies
 
 Found while checking this document against the live command files and
 `scripts/workflow_state.py`, and re-verified against the current tree each
 time this section is touched. Recorded, not fixed — this document changes
 no behavior. Items resolved by a later repair are removed, not left
-standing.
+standing (`workflow-2.6.0`, `D-Plan-Review-Bundle-Binding`, removed three:
+`/milestone-plan` step 6's heading now names the phase its own bind writes
+for a two-stage item; `MILESTONE_WORKFLOW.md`'s `AWAITING_LOCAL_PLAN_REVIEW`
+entry now names that bind as the phase's one writer; and
+`/apply-plan-review` step 6 is now stated as `"1"`-only).
 
-1. **`/milestone-plan` step 6 names the wrong state for a `"2.1"` item.**
-   The step is headed "Enter `AWAITING_EXTERNAL_PLAN_REVIEW`" and step 7 says
-   to wait for `REVIEW_FEEDBACK.md`. But for a `"2.1"` item, step 3 has
-   already called `publish_plan_revision`, which sets the phase to
-   `AWAITING_LOCAL_PLAN_REVIEW` (`workflow_state.py`: `"2.1"` →
-   `AWAITING_LOCAL_PLAN_REVIEW`, `"1"` → `AWAITING_EXTERNAL_PLAN_REVIEW`).
-   The real next action is `/review-plan`, not an external upload. **The
-   code is authoritative**; treat step 6's heading as `"1"`-only wording.
-   This is the most likely source of the plan-review confusion.
-
-2. **`MILESTONE_WORKFLOW.md`'s `AWAITING_LOCAL_PLAN_REVIEW` entry condition
-   is incomplete.** It lists only "`REVISING_PLAN`'s exit condition is met,
-   or `/apply-plan-review` has just applied an accepted plan edit". It omits
-   the first entry, straight from `/milestone-plan`'s own
-   `publish_plan_revision` call — which is how a fresh `"2.1"` item actually
-   arrives there.
-
-3. **`REVIEW_PROTOCOL.md`'s feedback template omits fields the `"2.1"` plan
+1. **`REVIEW_PROTOCOL.md`'s feedback template omits fields the `"2.1"` plan
    commands require, and only one other document fills the gap.** Its
    "Required structure" lists `Status:` and the three binding fields
    (`Reviewed bundle ID:`, `Reviewed base commit:`, `Work item:`) and
@@ -809,25 +1080,20 @@ standing.
    revision of this section claimed both documents covered both fields;
    that was wrong about `PLAN_REVIEW_WORKFLOW.md` and is corrected here.
 
-4. **`MILESTONE_WORKFLOW.md`'s "broad remediation" paragraph names the
+2. **`MILESTONE_WORKFLOW.md`'s "broad remediation" paragraph names the
    `"1"` entry phase for what is normally a `"2.1"` child.** It says the
    child "routes through the full normal cycle (`AWAITING_EXTERNAL_PLAN_REVIEW`
    → ... → `MILESTONE_COMPLETE`)". There is no remediation-specific entry
-   rule: the child is an ordinary work item, so `publish_plan_revision`'s
-   version branch decides, and a child created under this repository's own
+   rule: the child is an ordinary work item, so the ordinary per-version
+   writers decide (`publish_plan_revision` for a `"1"` child;
+   `bind_plan_review_bundle`, after a mirror-only publish, for a two-stage
+   child, `workflow-2.6.0`), and a child created under this repository's own
    `default_workflow_version: "2.1"` enters at
    `AWAITING_LOCAL_PLAN_REVIEW`. The named phase is correct only for a
    `"1"`-governed child. See [Remediation
    children](#remediation-children-a-child-work-items-own-cycle).
 
-5. **`/apply-plan-review` step 6 is `"1"`-only wording with no `"2.1"`
-   meaning.** It says a `BLOCK` status should "stay in
-   `AWAITING_EXTERNAL_PLAN_REVIEW`", a state a `"2.1"` item never occupies.
-   On a `"2.1"` item a `BLOCK` never routes into this command at all (neither
-   verdict command transitions on `BLOCK`), and step 7' overrides the exit to
-   `AWAITING_LOCAL_PLAN_REVIEW` regardless.
-
-6. **`MILESTONE_WORKFLOW.md` gives each of the four unwritten phases its
+3. **`MILESTONE_WORKFLOW.md` gives each of the four unwritten phases its
    own `### <PHASE>` section, with entry/exit conditions.** That is
    consistent with what that document is — a state machine written as
    narrative, predating the persisted-phase vocabulary — but read
@@ -837,7 +1103,7 @@ standing.
    `AWAITING_PLAN_APPROVAL`, which that document describes without version
    scoping.
 
-7. **`/approve-review plan` still refuses `workflow-v2-1-core`.** Its step 4a
+4. **`/approve-review plan` still refuses `workflow-v2-1-core`.** Its step 4a
    interim scope guard refuses while
    `docs/ai-workflow/WORKFLOW_V2_PLAN.md` still contains the heading
    "Bootstrap plan-approval procedure" — which it currently does. That item
