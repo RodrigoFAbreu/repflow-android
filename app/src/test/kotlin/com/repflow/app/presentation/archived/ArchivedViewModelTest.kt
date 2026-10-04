@@ -26,7 +26,7 @@ import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.trainingplan.TrainingPlanId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -45,7 +45,7 @@ class ArchivedViewModelTest {
     private val exerciseRepository = InMemoryExerciseRepository()
     private val planRepository = InMemoryTrainingPlanRepository()
     private val createPlan = CreateTrainingPlan(planRepository, exerciseRepository, clock, SequentialIdentifierGenerator("plan"))
-    private val viewModel =
+    private val viewModel by lazy {
         ArchivedViewModel(
             ObserveExercises(exerciseRepository),
             ObserveTrainingPlans(planRepository),
@@ -54,6 +54,7 @@ class ArchivedViewModelTest {
             ArchiveExercise(exerciseRepository, clock),
             ArchiveTrainingPlan(planRepository, clock),
         )
+    }
 
     @After
     fun resetMainDispatcher() {
@@ -139,7 +140,7 @@ class ArchivedViewModelTest {
     @Test
     fun `both lists hold only what is archived, most recently archived first`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             seedExercise("e1", "Cable Fly", Instant.parse("2026-08-03T10:00:00Z"))
             seedExercise("e2", "Smith Machine Squat", Instant.parse("2026-09-12T10:00:00Z"))
             val active = seedExercise("e3", "Barbell Row", archivedAt = null)
@@ -158,7 +159,7 @@ class ArchivedViewModelTest {
     @Test
     fun `nothing archived loads as two empty lists`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
 
             viewModel.uiState.test {
                 val loaded = awaitLoaded().content as ArchivedContent.Loaded
@@ -171,7 +172,7 @@ class ArchivedViewModelTest {
     @Test
     fun `restoring an exercise removes its row at once and queues a restored message`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val id = seedExercise("e1", "Cable Fly", Instant.parse("2026-08-03T10:00:00Z"))
 
             viewModel.uiState.test {
@@ -193,7 +194,7 @@ class ArchivedViewModelTest {
     @Test
     fun `restoring a plan restores it and undo archives it again`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val exerciseId = seedExercise("e1", "Barbell Row", archivedAt = null)
             val planId = seedPlan("Old Plan", exerciseId, archivedAt = Instant.parse("2026-02-02T10:00:00Z"))
 
@@ -218,7 +219,7 @@ class ArchivedViewModelTest {
     @Test
     fun `a failed restore queues the generic failure and the row stays`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val id = seedExercise("e1", "Cable Fly", Instant.parse("2026-08-03T10:00:00Z"))
             exerciseRepository.nextUpdateFailure =
                 ExercisePersistenceError.Unavailable
@@ -239,7 +240,7 @@ class ArchivedViewModelTest {
     @Test
     fun `onMessageShown removes only that message`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             seedExercise("e1", "Cable Fly", Instant.parse("2026-08-03T10:00:00Z"))
             seedExercise("e2", "Leg Press", Instant.parse("2026-08-04T10:00:00Z"))
 
@@ -263,7 +264,7 @@ class ArchivedViewModelTest {
     @Test
     fun `an observation failure shows the failed state and retry recovers`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             seedExercise("e1", "Cable Fly", Instant.parse("2026-08-03T10:00:00Z"))
             exerciseRepository.observeFailureOnNextSubscription = true
 

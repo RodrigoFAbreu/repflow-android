@@ -27,7 +27,7 @@ import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.trainingplan.TrainingPlanId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -48,7 +48,7 @@ class TrainingPlanListViewModelTest {
     private val exerciseRepository = InMemoryExerciseRepository()
     private val createTrainingPlan = CreateTrainingPlan(planRepository, exerciseRepository, clock, ids)
     private val workoutRepository = InMemoryWorkoutRepository()
-    private val viewModel =
+    private val viewModel by lazy {
         TrainingPlanListViewModel(
             ObserveTrainingPlans(planRepository),
             ArchiveTrainingPlan(planRepository, clock),
@@ -60,6 +60,7 @@ class TrainingPlanListViewModelTest {
                 SequentialIdentifierGenerator(prefix = "session"),
             ),
         )
+    }
 
     @After
     fun resetMainDispatcher() {
@@ -122,7 +123,7 @@ class TrainingPlanListViewModelTest {
     @Test
     fun `starts loading then shows the empty state when there are no plans`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             viewModel.uiState.test {
                 assertEquals(TrainingPlanListContent.Loading, awaitItem().content)
                 assertEquals(TrainingPlanListContent.Empty(TrainingPlanListEmptyReason.NO_PLANS), awaitItem().content)
@@ -132,7 +133,7 @@ class TrainingPlanListViewModelTest {
     @Test
     fun `shows the seeded plans as content with their planned exercise count`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val exerciseId = seedExercise()
             seedPlan("Push Pull Legs", exerciseId)
 
@@ -148,7 +149,7 @@ class TrainingPlanListViewModelTest {
     @Test
     fun `a card carries the latest version number and an archived plan its archive instant`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val exerciseId = seedExercise()
             seedPlan("Active Plan", exerciseId)
             val archivedPlanId = seedPlan("Retired Plan", exerciseId)
@@ -168,7 +169,7 @@ class TrainingPlanListViewModelTest {
     @Test
     fun `starting a plan starts a session from its latest version and asks to open the workout`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val exerciseId = seedExercise()
             val planId = seedPlan("Push Pull Legs", exerciseId)
             val versionId = requireNotNull(planRepository.findOverviewByPlanId(planId)).latestVersion.id
@@ -191,7 +192,7 @@ class TrainingPlanListViewModelTest {
     @Test
     fun `starting a plan while a workout is running reports it and opens nothing`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val exerciseId = seedExercise()
             val firstPlan = seedPlan("Push Pull Legs", exerciseId)
             val secondPlan = seedPlan("Upper Lower", exerciseId)
@@ -216,7 +217,7 @@ class TrainingPlanListViewModelTest {
     @Test
     fun `onRetry resubscribes and still reflects current content`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val exerciseId = seedExercise()
             seedPlan("Push Pull Legs", exerciseId)
 
@@ -234,7 +235,7 @@ class TrainingPlanListViewModelTest {
     @Test
     fun `onFilterChanged switches between active and archived plans`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val exerciseId = seedExercise()
             seedPlan("Active Plan", exerciseId)
             val archivedPlanId = seedPlan("Retired Plan", exerciseId)
@@ -255,7 +256,7 @@ class TrainingPlanListViewModelTest {
     @Test
     fun `an empty archived filter reports NO_ARCHIVED rather than NO_PLANS`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val exerciseId = seedExercise()
             seedPlan("Active Plan", exerciseId)
 
@@ -271,7 +272,7 @@ class TrainingPlanListViewModelTest {
     @Test
     fun `archiving queues an Archived message and removes the plan from the active list`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val exerciseId = seedExercise()
             val planId = seedPlan("Push Pull Legs", exerciseId)
 
@@ -294,7 +295,7 @@ class TrainingPlanListViewModelTest {
     @Test
     fun `onMessageShown removes only the given message id and preserves a newer one`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val exerciseId = seedExercise()
             val planId1 = seedPlan("Plan One", exerciseId)
             val planId2 = seedPlan("Plan Two", exerciseId)
@@ -322,7 +323,7 @@ class TrainingPlanListViewModelTest {
     @Test
     fun `undo archive restores the plan via RestoreTrainingPlan`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val exerciseId = seedExercise()
             val planId = seedPlan("Push Pull Legs", exerciseId)
 
@@ -342,7 +343,7 @@ class TrainingPlanListViewModelTest {
     @Test
     fun `undo archive is idempotent when the plan is already active`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val exerciseId = seedExercise()
             val planId = seedPlan("Push Pull Legs", exerciseId)
 
@@ -358,7 +359,7 @@ class TrainingPlanListViewModelTest {
     @Test
     fun `a failed archive queues an OperationFailed message`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val exerciseId = seedExercise()
             val planId = seedPlan("Push Pull Legs", exerciseId)
             planRepository.nextUpdatePlanFailure = TrainingPlanPersistenceError.Unavailable
@@ -377,7 +378,7 @@ class TrainingPlanListViewModelTest {
     @Test
     fun `restoring from the archived filter moves the plan back to active`() =
         runTest {
-            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val exerciseId = seedExercise()
             val planId = seedPlan("Push Pull Legs", exerciseId)
             archivePlan(planId)
