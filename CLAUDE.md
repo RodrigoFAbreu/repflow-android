@@ -62,6 +62,7 @@ Load only what the task actually needs:
 - Room/persistence/migrations/backup → `docs/adr/0002-offline-first-local-database-source-of-truth.md`
 - domain terminology/business rules → `docs/DOMAIN_GLOSSARY.md`
 - navigation/UI/interaction → `docs/UX_FLOWS.md`
+- visual design/tokens/components/motion/UI audits → `docs/DESIGN_SYSTEM.md`
 - toolchain/dependency decisions, incl. "Open decisions" (do not silently
   finalize these) → `docs/TECHNICAL_DECISIONS.md`
 - historical context on a completed feature → `docs/milestones/completed/`
