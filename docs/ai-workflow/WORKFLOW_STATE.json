@@ -6052,7 +6052,7 @@
   },
   "gate_policy_adoption": {
     "sha256": "346a9af34091da97cb1529cd14c62215c1c1c23462b28d2fecb2bbb7d453d2a3",
-    "adopted_at": "2026-10-17T09:56:10Z",
+    "adopted_at": "2026-10-17T14:55:54Z",
     "confirmation": "I confirm adopting gate_policy 346a9af34091",
     "policy": {
       "schema_version": 1,
@@ -6067,12 +6067,10 @@
       }
     },
     "history": [
-      "f5b32ba65d146f425c17b3a194c684acf6c08bc9fd2c373c2465c45d4f433b2c"
+      "f5b32ba65d146f425c17b3a194c684acf6c08bc9fd2c373c2465c45d4f433b2c",
+      "346a9af34091da97cb1529cd14c62215c1c1c23462b28d2fecb2bbb7d453d2a3"
     ],
-    "lowered": [
-      "plan_approval.human",
-      "technical_approval.human"
-    ]
+    "lowered": []
   },
   "gate_policy_floor": {
     "policy": {
@@ -6103,7 +6101,7 @@
       }
     },
     "digest": "d02c6040120a4e4e4683a14030a611080c46d74f38e63521afb94ed5414dd68c",
-    "recorded_at": "2026-10-17T09:56:10Z",
+    "recorded_at": "2026-10-17T14:55:54Z",
     "observed": [
       "346a9af34091da97cb1529cd14c62215c1c1c23462b28d2fecb2bbb7d453d2a3"
     ]
