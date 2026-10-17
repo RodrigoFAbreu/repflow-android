@@ -1,1 +1,1 @@
-{"schema_version": 1, "human_approval": true}
+{"schema_version": 1, "human_approval": true, "gates": {"plan_approval": {"human": false}, "technical_approval": {"human": false}}}
