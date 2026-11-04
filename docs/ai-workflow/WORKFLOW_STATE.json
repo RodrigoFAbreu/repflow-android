@@ -6058,12 +6058,12 @@
       "registry_path": "docs/ai-workflow/registry/fix-workout-errors-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/fix-workout-errors-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "SELF_REVIEWING_IMPLEMENTATION",
+      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
       "plan_revision": 3,
-      "implementation_revision": null,
+      "implementation_revision": 1,
       "functional_review_round": null,
       "base_commit": "408bc4e1a8abb5e7592fd2d8bb41b06eb882a3a2",
-      "reviewed_implementation_head": null,
+      "reviewed_implementation_head": "402f11c9e5263c64284df6d976e681842df2acaa",
       "current_checkpoint_id": null,
       "last_completed_checkpoint_id": "CP2",
       "checkpoints": {
@@ -6202,8 +6202,8 @@
           "external": 0
         }
       },
-      "state_revision": 18,
-      "last_transition": "2026-11-04T21:54:57Z",
+      "state_revision": 19,
+      "last_transition": "2026-11-04T23:16:02Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
