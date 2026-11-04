@@ -105,8 +105,7 @@ is planned future work (WF1a, per `WORKFLOW_V2_PLAN.md`'s checkpoint
 registry) and does not exist yet — not named here until it does
 (`OPUS-R8-011`: a decision entry must name only files that exist). CI runs
 the hermetic `workflow_fingerprint_test.py` suite on every PR
-(`.github/workflows/ci.yml`'s "Workflow fingerprint conformance suite"
-step); there is no unpinned dependency to install, since it is stdlib-only.
+(in the managed `.github/workflows/workflow-conformance.yml`); there is no unpinned dependency to install, since it is stdlib-only.
 `workflow_fingerprint_demo_test.py` is deliberately **not** run in CI — it
 computes plan-stage classification from a fixed historical base commit, so
 wiring it into generic CI would fail on any later, unrelated product PR

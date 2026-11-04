@@ -1,0 +1,70 @@
+# The one orchestrator workflow: runs on every pull request and on every push to main.
+# It calls android-checks.yml, and on main release.yml, which publishes a GitHub Release with the APK
+# for a `feat:` or `fix:` merge. Budgets: a pull request under 20 minutes, a push to main under 25.
+# Two workflows stay outside it on purpose: workflow-conformance.yml is managed by workflow-manager
+# and never patched here, and pr-title.yml must re-run when a title is edited without repeating the build.
+name: Pipeline
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pipeline-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  android-checks:
+    uses: ./.github/workflows/android-checks.yml
+
+  # Named for the required check, so a change to the jobs above never touches branch protection.
+  build-and-verify:
+    needs: android-checks
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Time budget
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: sh tools/ci_time_budget.sh 20 "checks"
+      - name: The checks must have passed
+        env:
+          RESULT: ${{ needs.android-checks.result }}
+        run: test "$RESULT" = success
+
+  release:
+    needs: build-and-verify
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    uses: ./.github/workflows/release.yml
+    permissions:
+      contents: write
+    secrets:
+      signing-keystore: ${{ secrets.REPFLOW_DEBUG_KEYSTORE_B64 }}
+
+  release-time:
+    needs: release
+    if: always() && needs.release.result != 'skipped'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Time budget
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: sh tools/ci_time_budget.sh 25 "push to main"

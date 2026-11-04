@@ -6,7 +6,7 @@
     "enabled": true,
     "branch_format": "milestone/{work_item_id}",
     "pull_request": {"draft": true, "ready_requires_green_checks": true, "merge_method": "squash",
-                     "auto_merge": true, "release_workflow": "main.yml"}
+                     "auto_merge": true, "release_workflow": "pipeline.yml"}
   },
   "release": {
     "enabled": true,

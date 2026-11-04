@@ -81,8 +81,12 @@ Never push, merge, rebase, force-push, or create a pull request.
 ./gradlew assembleDebug                 # assemble debug APK
 ```
 
-CI (`.github/workflows/ci.yml`) runs, in order: `spotlessCheck`, `detekt`,
+CI (`.github/workflows/pipeline.yml`, the orchestrator, calling `android-checks.yml` and on `main` `release.yml`) runs, in order: `spotlessCheck`, `detekt`,
 `lintDebug`, `testDebugUnitTest`, `assembleDebug`, `assembleDebugAndroidTest`
 (instrumented tests compile but don't run in CI — no device available). Run
 the narrowest relevant check per checkpoint; run the full suite before
 considering a milestone done.
+
+Budgets: a pull request's CI stays under 20 minutes and a push to `main` under 25. A run over budget gets
+a warning from `tools/ci_time_budget.sh`; find the cause, since more shards alone isn't a fix. Every `feat:`
+or `fix:` merge publishes a GitHub Release with the APK, so pull request titles must be conventional commits.

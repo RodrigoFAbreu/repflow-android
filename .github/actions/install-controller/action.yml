@@ -1,0 +1,17 @@
+name: Install the Controller's release code
+description: Downloads the pinned Workflow Controller wheel, checks it against its checksums and installs it, for tools/release.py.
+inputs:
+  github-token:
+    description: Token for the download
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        CONTROLLER_VERSION: "1.27.8"
+      run: |
+        gh release download "v$CONTROLLER_VERSION" -R RodrigoFAbreu/workflow-controller -D "$RUNNER_TEMP/wc"
+        (cd "$RUNNER_TEMP/wc" && sha256sum -c SHA256SUMS)
+        pip install "$RUNNER_TEMP"/wc/*.whl
