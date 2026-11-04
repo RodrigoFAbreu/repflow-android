@@ -37,3 +37,6 @@ __pycache__/
 *.pyc
 # Playwright CLI output (may contain credentials)
 .playwright-cli/
+
+# Release APKs built by tools/release_build.sh
+dist/

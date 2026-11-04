@@ -1,0 +1,127 @@
+# Publishes a GitHub Release with the APK for every pull request merged with a `feat:` or `fix:` title.
+# The Controller's release wait reads this workflow's runs (release_workflow in .workflow-controller/policy.json).
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: main-release
+
+env:
+  CONTROLLER_VERSION: "1.27.8"
+
+jobs:
+  release-plan:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    outputs:
+      state: ${{ steps.classify.outputs.state }}
+      version: ${{ steps.classify.outputs.version }}
+      commit: ${{ steps.classify.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the Controller's release code
+        run: |
+          gh release download "v$CONTROLLER_VERSION" -R RodrigoFAbreu/workflow-controller -D "$RUNNER_TEMP/wc"
+          (cd "$RUNNER_TEMP/wc" && sha256sum -c SHA256SUMS)
+          pip install "$RUNNER_TEMP"/wc/*.whl
+      - name: Classify
+        id: classify
+        env:
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: credential.https://github.com.helper
+          GIT_CONFIG_VALUE_0: "!gh auth git-credential"
+        run: python3 tools/release.py classify --commit "$(git rev-parse "$GITHUB_SHA^{commit}")"
+
+  build:
+    needs: release-plan
+    if: needs.release-plan.outputs.state == 'RELEASE_DUE' || needs.release-plan.outputs.state == 'RESUME'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_VERSION: ${{ needs.release-plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-plan.outputs.commit }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the Controller's release code
+        run: |
+          gh release download "v$CONTROLLER_VERSION" -R RodrigoFAbreu/workflow-controller -D "$RUNNER_TEMP/wc"
+          (cd "$RUNNER_TEMP/wc" && sha256sum -c SHA256SUMS)
+          pip install "$RUNNER_TEMP"/wc/*.whl
+      - name: Restore the signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.REPFLOW_DEBUG_KEYSTORE_B64 }}
+        run: |
+          mkdir -p ~/.android
+          printf '%s' "$KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
+      - name: Build
+        run: python3 tools/release.py build
+      - name: Verify
+        run: python3 tools/release.py verify
+      - name: Checksums
+        run: python3 tools/release.py checksums dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: [release-plan, build]
+    if: needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      COMMIT: ${{ needs.release-plan.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install the Controller's release code
+        run: |
+          gh release download "v$CONTROLLER_VERSION" -R RodrigoFAbreu/workflow-controller -D "$RUNNER_TEMP/wc"
+          (cd "$RUNNER_TEMP/wc" && sha256sum -c SHA256SUMS)
+          pip install "$RUNNER_TEMP"/wc/*.whl
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Publish
+        env:
+          RELEASE_VERSION: ${{ needs.release-plan.outputs.version }}
+        run: python3 tools/release.py publish --commit "$COMMIT"
