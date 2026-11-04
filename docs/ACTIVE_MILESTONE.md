@@ -76,6 +76,50 @@ failed.
 | Route passes `onRetry = viewModel::onErrorShown`, ViewModel fixed | `tryAgainOnTheLoadFailureStateShowsTheBoardWithTheSession`, on the board never appearing |
 | `onRetryObservation` does nothing, in the new test file | Both `ActiveWorkoutObservationRetryTest` tests, timing out |
 
+### Functional review checklist (implementation revision 1)
+
+**Scope under test:** R1-R4 of `docs/milestones/fix-workout-errors-execution.md`. The
+app has no fault hook in `app/src/main`, so a failed save or a failed read **cannot be
+forced by hand**; R1, R3 and the failure half of R2 are covered only by the automated
+tests listed under "Automated evidence". The manual flows below check that the
+success paths and the wording did not regress. Sandbox-friendly flows (no network, no
+`gh`, read-only clone) are marked **[offline]**.
+
+**Setup**
+
+1. On `milestone/fix-workout-errors`: `./gradlew assembleDebug`, install on the AVD
+   (`start-avd.sh`, within the memory caps) or a phone (ask before using the phone).
+2. Test data: any exercise with a plan, so a workout can start. Seed at least one
+   exercise with sets; no feature flag needed.
+
+**Flows**
+
+| # | Flow | Expected |
+|---|---|---|
+| F1 | Start a workout, enter RPE 8, pain, a technique note and the warm-up flag, tap `Log set`. | The set is saved and RPE, pain, technique and warm-up clear, as before this item. No error snackbar. |
+| F2 | After F1, change RPE right after tapping `Log set` on a second set (edit within a moment of the tap). | The set saves; the freshly typed RPE is not wiped by a late clear. (Timing-sensitive; the unit test `aValueChangedDuringTheSaveSurvivesItAndTheRestClears` is the authoritative check.) |
+| F3 | During a rest, tap `+15s`, `-15s`, `Skip rest`; also undo a set, edit a set, add an exercise. | Each works as before. No `Couldn't complete that. Try again.` snackbar appears on success. |
+| F4 | Finish a workout; start another and abandon it. | Both complete normally. No error snackbar. |
+| F5 | In Focus mode and in Board mode, scroll the workout area to the bottom. | The rest strip and `Log set` are fully visible; nothing new overlaps them. |
+| F6 **[offline]** | `grep -rn ">Retry<" app/src/main/res` | No output. The five `*_retry` strings read `Try again`: `grep -rn "Try again" app/src/main/res/values/strings.xml`. |
+| F7 **[offline]** | Read `ActiveWorkoutRoute.kt`: `onRetry` is wired to `viewModel::onRetryObservation`, not `onErrorShown`. | Confirmed by reading the file. |
+
+**Automated evidence (the only coverage for the failure paths)**
+
+- Unit: `./gradlew testDebugUnitTest --tests "com.repflow.app.presentation.workout.*"`
+  (`ActiveWorkoutActionErrorTest`, `ActiveWorkoutObservationRetryTest`, `SetEntryStateTest`).
+- Instrumented (AVD): `ActiveWorkoutErrorRouteTest` (message, position, failed-save,
+  route wiring, `Try again` recovering the board), `ActiveWorkoutScreenTest`,
+  `ActiveWorkoutSetEntryTest`.
+- Gates: `./gradlew spotlessCheck detekt lintDebug`.
+
+**Known limitations / out of scope**
+
+- The message is deliberately generic (no per-reason text) and a failed action is not
+  retried automatically.
+- No other screen's error handling changed; no Room, domain, navigation or schema change.
+- A forced-failure manual check does not exist; that is by design, not a gap to fail.
+
 ## `repflow-redesign-visual-foundation` — complete (accepted 2026-10-03)
 
 The user accepted the milestone after functional-review round 3 (PASS: C2, B7,
