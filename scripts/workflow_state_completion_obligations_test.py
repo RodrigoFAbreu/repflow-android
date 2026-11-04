@@ -9,7 +9,9 @@
 `UnsatisfiedCompletionObligationError` gate -- missing-test items
 356/357/358/360/361), covering the `WFO-STATE-SERIALIZATION` obligation
 `WF8b` continued scope declares, plus `verify_wfo_ledger_coverage`
-(`WFO-LEDGER-COVERAGE`, `WFR-68`, `WF8c` item (m)).
+(`WFO-LEDGER-COVERAGE`, `WFR-68`, `WF8c` item (m)), and the backlog module
+`workflow_backlog` (`Backlog*` groups: parser, schema, selection, edit, page), and the retention
+report `workflow_retention` (`RetentionReport`, workflow-2.20.0).
 
 Runs entirely against disposable scratch Git repositories, mirroring
 `workflow_state_test.py`'s own pattern. `resolve_completion_obligations`'s
@@ -25,19 +27,26 @@ Stdlib-only. Run: python3 scripts/workflow_state_completion_obligations_test.py
 from __future__ import annotations
 
 import ast
+import errno
+import hashlib
 import json
 import multiprocessing
 import os
 import re
 import shutil
+import stat
 import subprocess
+import sys
 import tempfile
+import textwrap
 import time
 import unittest
 import unittest.mock
 from pathlib import Path
 
+import workflow_backlog as wb
 import workflow_fingerprint as fingerprint
+import workflow_retention as wr
 import workflow_state as ws
 
 
@@ -2384,6 +2393,5040 @@ class TestVerifyWfoLedgerCoverage(unittest.TestCase):
             ws.COMPLETION_OBLIGATION_CONFORMANCE.get("WFO-LEDGER-COVERAGE"), "verify_wfo_ledger_coverage",
         )
         self.assertTrue(callable(getattr(ws, "verify_wfo_ledger_coverage", None)))
+
+
+# ---------------------------------------------------------------------------
+# workflow_backlog (workflow-2.17.0, `backlog-file`, CP1)
+# ---------------------------------------------------------------------------
+
+try:
+    import yaml as _yaml
+except ImportError:  # the cross-check is an aid, skipped without PyYAML
+    _yaml = None
+
+_BACKLOG_HEAD = ["version: 1", "items:", "  - id: a", "    title: Alpha", "    status: next", "    order: 1"]
+
+_BACKLOG_SAMPLE = """# Backlog
+version: 1
+items:
+  # first
+  - id: alpha
+    title: Alpha thing # trailing
+    status: done
+    order: 1
+    release: "2.0.0"
+  - id: beta
+    title: "Beta: the \\"second\\""
+    status: next # soon
+    order: 2
+    depends_on: [alpha]
+    size: 3
+    detail: docs/items/beta.md
+  - id: gamma
+    title: 'It''s gamma'
+    status: idea
+    order: 3
+    depends_on:
+      - alpha
+      - beta
+"""
+
+
+def _bl(*replace_or_add, replace_line=None):
+    """The head item with `replace_line` (1-based) replaced, then lines added."""
+    rows = list(_BACKLOG_HEAD)
+    if replace_line is not None:
+        rows[replace_line - 1] = "    " + replace_or_add[0]
+        replace_or_add = replace_or_add[1:]
+    return "\n".join(rows + list(replace_or_add)) + "\n"
+
+
+def _backlog_refusal_line(text):
+    with unittest.TestCase().assertRaises(wb.BacklogFormatError) as cm:
+        wb.parse_backlog(text)
+    return cm.exception.line
+
+
+class BacklogParser(unittest.TestCase):
+    def test_accepts_the_complete_example(self):
+        data, lines = wb.parse_backlog(_BACKLOG_SAMPLE)
+        self.assertEqual(data["version"], 1)
+        self.assertEqual([i["id"] for i in data["items"]], ["alpha", "beta", "gamma"])
+        self.assertEqual(data["items"][0]["title"], "Alpha thing")
+        self.assertEqual(data["items"][1]["title"], 'Beta: the "second"')
+        self.assertEqual(data["items"][2]["title"], "It's gamma")
+        self.assertEqual(data["items"][1]["depends_on"], ["alpha"])
+        self.assertEqual(data["items"][2]["depends_on"], ["alpha", "beta"])
+        self.assertEqual(data["items"][1]["size"], 3)
+        self.assertEqual(data["items"][0]["release"], "2.0.0")
+        self.assertEqual(lines["item"][1]["status"], 12)
+        self.assertEqual(lines["item"][1]["_item"], 10)
+
+    def test_empty_backlog_and_top_level_order(self):
+        self.assertEqual(wb.parse_backlog("version: 1\nitems: []\n")[0], {"version": 1, "items": []})
+        data, _ = wb.parse_backlog("items:\n  - id: a\n    title: A\n    status: next\n    order: 1\nversion: 1\n")
+        self.assertEqual(len(data["items"]), 1)
+        self.assertEqual(wb.parse_backlog("version: 1\nitems: [] # none\n")[0]["items"], [])
+
+    def test_a_quoted_question_mark_entry_is_still_accepted(self):
+        data, _ = wb.parse_backlog(_bl('    depends_on: ["a?b"]'))
+        self.assertEqual(data["items"][0]["depends_on"], ["a?b"])
+
+    def test_a_trailing_comment_on_a_key_with_no_inline_value_is_accepted(self):
+        # As YAML does: `items: # x` and `depends_on: # x` open their block like the bare key.
+        data, _ = wb.parse_backlog(_BACKLOG_SAMPLE.replace("items:", "items: # x", 1))
+        self.assertEqual([i["id"] for i in data["items"]], ["alpha", "beta", "gamma"])
+        data, _ = wb.parse_backlog(_BACKLOG_SAMPLE.replace("    depends_on:\n", "    depends_on: # x\n", 1))
+        self.assertEqual(data["items"][2]["depends_on"], ["alpha", "beta"])
+
+    def test_empty_depends_on_forms(self):
+        self.assertEqual(wb.parse_backlog(_bl("    depends_on: []"))[0]["items"][0]["depends_on"], [])
+
+    def test_accepted_counterparts_a_looser_reading_would_refuse(self):
+        for title, expected in (
+            ("R&D", "R&D"), ('"a *b"', "a *b"), ("Caf é", "Caf é"), ("Alpha \U0001F600", "Alpha \U0001F600"),
+            ('"abc "', "abc "), ("abc # note", "abc"), ("Yes please", "Yes please"), ("a:b", "a:b"),
+            ('"1abc"', "1abc"), ("'true'", "true"), ('"say \\\\ and \\" "', 'say \\ and " '),
+        ):
+            with self.subTest(title=title):
+                text = _bl(f"title: {title}", replace_line=4)
+                data, _ = wb.parse_backlog(text)
+                self.assertEqual(data["items"][0]["title"], expected)
+                if _yaml is not None:
+                    self.assertEqual(_yaml.safe_load(text), data)
+
+    def test_no_final_newline_is_accepted(self):
+        self.assertEqual(wb.parse_backlog("\n".join(_BACKLOG_HEAD))[0]["items"][0]["id"], "a")
+
+    def test_refusals_name_their_line(self):
+        cases = {
+            "tab": (_bl("title:\tabc", replace_line=4), 4),
+            "carriage return": (_bl("title: abc\r", replace_line=4), 4),
+            "Cc control": (_bl("title: a\x01b", replace_line=4), 4),
+            "DEL": (_bl("title: a\x7fb", replace_line=4), 4),
+            "NEL U+0085": (_bl("title: a\u0085b", replace_line=4), 4),
+            "U+2028": (_bl("title: a b", replace_line=4), 4),
+            "U+2029": (_bl("title: a b", replace_line=4), 4),
+            "FEFF in the middle": (_bl("title: a﻿b", replace_line=4), 4),
+            "U+FFFE": (_bl("title: a￾b", replace_line=4), 4),
+            "U+FFFF": (_bl("title: a￿b", replace_line=4), 4),
+            "BOM": ("﻿" + _bl(), 1),
+            "document marker": ("---\n" + _bl(), 1),
+            "document end marker": (_bl("..."), 7),
+            "directive": ("%YAML 1.2\n" + _bl(), 1),
+            "anchor": (_bl("title: &x a", replace_line=4), 4),
+            "alias": (_bl("title: *x", replace_line=4), 4),
+            "tag": (_bl("title: !t a", replace_line=4), 4),
+            "block scalar |": (_bl("title: |", replace_line=4), 4),
+            "block scalar >": (_bl("title: >", replace_line=4), 4),
+            "flow mapping": (_bl("title: {a: b}", replace_line=4), 4),
+            "flow list in a string field": (_bl("title: [a]", replace_line=4), 4),
+            "empty value": (_bl("title:", replace_line=4), 4),
+            "null": (_bl("title: null", replace_line=4), 4),
+            "tilde": (_bl("title: ~", replace_line=4), 4),
+            "unknown top-level key": (_bl("foo: 1"), 7),
+            "repeated top-level key": (_bl("version: 1"), 7),
+            "unknown item key": (_bl("    foo: bar"), 7),
+            "repeated item key": (_bl("    title: B"), 7),
+            "wrong indent": (_bl("   - id: b"), 7),
+            "list entry outside depends_on": (_bl("      - x"), 7),
+            "dash at four spaces": (_bl("    - x"), 7),
+            "item outside items": ("version: 1\nitems: []\n  - id: a\n", 3),
+            "two spaces after the item dash": (_bl("  -  id: b"), 7),
+            "plain digit start": (_bl("title: 1abc", replace_line=4), 4),
+            "colon space in plain": (_bl("title: a: b", replace_line=4), 4),
+            "plain ending in colon": (_bl("title: abc:", replace_line=4), 4),
+            "bracket in plain": (_bl("title: a[b", replace_line=4), 4),
+            "brace in plain": (_bl("title: a}b", replace_line=4), 4),
+            "comma in plain": (_bl("title: a,b", replace_line=4), 4),
+            "quoted number": (_bl('order: "1"', replace_line=6), 6),
+            "leading zero": (_bl("order: 01", replace_line=6), 6),
+            "signed number": (_bl("order: -1", replace_line=6), 6),
+            "plus number": (_bl("order: +1", replace_line=6), 6),
+            "seven digits": (_bl("order: 1234567", replace_line=6), 6),
+            "float": (_bl("order: 1.5", replace_line=6), 6),
+            "word as number": (_bl("order: abc", replace_line=6), 6),
+            "unknown escape": (_bl('title: "a\\nb"', replace_line=4), 4),
+            "unterminated double quote": (_bl('title: "abc', replace_line=4), 4),
+            "text after a quote": (_bl('title: "a" x', replace_line=4), 4),
+            "unterminated single quote": (_bl("title: 'abc", replace_line=4), 4),
+            "depends_on scalar": (_bl("    depends_on: a"), 7),
+            "flow list trailing comma": (_bl("    depends_on: [a, ]"), 7),
+            "flow list empty entry": (_bl("    depends_on: [a, , b]"), 7),
+            "flow list only a comma": (_bl("    depends_on: [,]"), 7),
+            "flow list no space after comma": (_bl("    depends_on: [a,b]"), 7),
+            "flow list two spaces after comma": (_bl("    depends_on: [a,  b]"), 7),
+            "flow list space after [": (_bl("    depends_on: [ a, b]"), 7),
+            "flow list space before ]": (_bl("    depends_on: [a, b ]"), 7),
+            "flow list space before comma": (_bl("    depends_on: [a , b]"), 7),
+            "flow list unterminated": (_bl("    depends_on: [a, b"), 7),
+            "question mark in a plain flow entry": (_bl("    depends_on: [a?b]"), 7),
+            "empty depends_on at end of file": (_bl("    depends_on:"), 7),
+            "empty depends_on before a key": (_bl("    depends_on:", "    size: 3"), 7),
+            "empty depends_on before an item": (_bl("    depends_on:", "  - id: b"), 7),
+            "three spaces after the colon": (_bl("title:   abc", replace_line=4), 4),
+            "no space after the colon": (_bl("title:abc", replace_line=4), 4),
+            "trailing space on a value": (_bl("title: abc ", replace_line=4), 4),
+            "two spaces before #": (_bl("title: abc  # x", replace_line=4), 4),
+            "trailing space on a comment line": (_bl("# note "), 7),
+            "trailing space on a blank line": (_bl(" "), 7),
+            "missing version": ("items: []\n", 1),
+            "missing items": ("version: 1\n", 1),
+            "items with no item": ("version: 1\nitems:\n", 2),
+            "items with no item before version": ("items:\nversion: 1\n", 1),
+            "items with no item before version, comments between": ("items:\n# c\n\n# d\nversion: 1\n", 1),
+            "long line": (_bl("# " + "a" * 999), 7),
+            "too many lines": ("\n" * 2001, 2001),
+            "oversize": (("# " + "a" * 997 + "\n") * 270, 1),
+        }
+        for word in ("true", "false", "null", "yes", "no", "on", "off", "y", "n"):
+            for form in (word, word.upper(), word.capitalize()):
+                cases[f"reserved {form}"] = (_bl(f"title: {form}", replace_line=4), 4)
+        for label, (text, line) in cases.items():
+            with self.subTest(label), self.assertRaises(wb.BacklogFormatError) as cm:
+                wb.parse_backlog(text)
+            self.assertEqual(cm.exception.line, line, f"{label}: {cm.exception}")
+
+    def test_bytes_entry_refuses_bom_and_bad_utf8(self):
+        with self.assertRaises(wb.BacklogFormatError) as cm:
+            wb.parse_backlog_bytes(b"\xef\xbb\xbfversion: 1\n")
+        self.assertEqual(cm.exception.line, 1)
+        with self.assertRaises(wb.BacklogFormatError) as cm:
+            wb.parse_backlog_bytes(b"version: 1\nitems: []\n# \xff\n")
+        self.assertEqual(cm.exception.line, 3)
+        self.assertEqual(wb.parse_backlog_bytes(b"version: 1\nitems: []\n")[0]["items"], [])
+
+    @unittest.skipIf(_yaml is None, "PyYAML is not installed (an aid, not a gate)")
+    def test_pyyaml_cross_check(self):
+        self.assertEqual(_yaml.safe_load(_BACKLOG_SAMPLE), wb.parse_backlog(_BACKLOG_SAMPLE)[0])
+        empty_depends = _bl("    depends_on:", "    size: 3")
+        self.assertIsNone(_yaml.safe_load(empty_depends)["items"][0]["depends_on"])
+        self.assertEqual(_backlog_refusal_line(empty_depends), 7)
+        line_sep = _bl("title: Alpha x", replace_line=4)
+        self.assertEqual(_backlog_refusal_line(line_sep), 4)
+        try:
+            loaded = _yaml.safe_load(line_sep)
+        except _yaml.YAMLError:
+            return
+        self.assertNotEqual(loaded["items"][0].get("title"), "Alpha x")
+
+
+class _BacklogRepo:
+    def __enter__(self):
+        self.root = Path(tempfile.mkdtemp(prefix="wfo-backlog-"))
+        (self.root / "docs" / "items").mkdir(parents=True)
+        (self.root / "docs" / "items" / "beta.md").write_text("beta\n")
+        return self
+
+    def __exit__(self, *exc):
+        shutil.rmtree(self.root, ignore_errors=True)
+
+
+def _schema_error(text, root):
+    try:
+        wb.validate_backlog(*wb.parse_backlog(text), root)
+    except wb.BacklogError as exc:
+        return exc
+    return None
+
+
+def _items(*rows):
+    out = ["version: 1", "items:"]
+    for n, row in enumerate(rows, 1):
+        fields = {"id": f"i{n}", "title": f"T{n}", "status": "next", "order": n}
+        fields.update(row)
+        first = True
+        for key, value in fields.items():
+            out.append(("  - " if first else "    ") + f"{key}: {value}")
+            first = False
+    return "\n".join(out) + "\n"
+
+
+class BacklogSchema(unittest.TestCase):
+    def setUp(self):
+        self.repo = _BacklogRepo().__enter__()
+        self.addCleanup(self.repo.__exit__)
+
+    def refused(self, text, fragment, line=None):
+        exc = _schema_error(text, self.repo.root)
+        self.assertIsNotNone(exc, f"{fragment!r} was accepted")
+        self.assertEqual(exc.code, "backlog_invalid")
+        self.assertIn(fragment, exc.message)
+        if line is not None:
+            self.assertIn(f"line {line}:", exc.message)
+
+    def test_sample_is_valid(self):
+        self.assertIsNone(_schema_error(_BACKLOG_SAMPLE, self.repo.root))
+
+    def test_version(self):
+        self.refused(_BACKLOG_SAMPLE.replace("version: 1", "version: 2"), "`version` must be 1", 2)
+
+    def test_missing_required_fields(self):
+        self.refused("version: 1\nitems:\n  - id: a\n    title: A\n    order: 1\n", "no `status`", 3)
+
+    def test_id_rules(self):
+        self.refused(_items({"id": "Bad_Id"}), "`id` `Bad_Id` must match", 3)
+        self.refused(_items({"id": '"-x"'}), "must match")
+        self.refused(_items({"id": '"' + "a" * 65 + '"'}), "must match")
+        self.refused(_items({"id": "same"}, {"id": "same"}), "`id` `same` repeats line 3")
+
+    def test_title_status_order(self):
+        self.refused(_items({"title": '""'}), "`title` must be 1 to 200")
+        self.refused(_items({"title": '"' + "x" * 201 + '"'}), "`title` must be 1 to 200")
+        self.refused(_items({"status": "started"}), "`status` must be one of")
+        self.refused(_items({"order": 0}), "`order` must be 1 to 999999")
+        self.refused(_items({"order": 5}, {"order": 5}), "`order` 5 repeats line")
+        # the order is total across done and idea items too
+        self.refused(_items({"status": "done", "order": 4}, {"status": "idea", "order": 4}), "repeats line")
+
+    def test_depends_on(self):
+        self.refused(_items({"depends_on": "[zzz]"}), "`zzz`, which is not an item")
+        self.refused(_items({"depends_on": "[i1]"}), "depends on itself")
+        self.refused(_items({}, {"depends_on": "[i1, i1]"}), "`i1` twice")
+
+    def test_cycles_name_one(self):
+        self.refused(_items({"depends_on": "[i2]"}, {"depends_on": "[i1]"}), "dependency cycle: i1 -> i2 -> i1")
+        self.refused(_items({"depends_on": "[i2]"}, {"depends_on": "[i3]"}, {"depends_on": "[i1]"}),
+                     "dependency cycle: i1 -> i2 -> i3 -> i1")
+
+    def test_size(self):
+        self.refused(_items({"size": 0}), "`size` must be 1 to 99")
+        self.refused(_items({"size": 100}), "`size` must be 1 to 99")
+        self.assertIsNone(_schema_error(_items({"size": 99}), self.repo.root))
+
+    def test_detail_rules(self):
+        root = self.repo.root
+        (root / "docs" / "other.md").write_text("x\n")
+        (root / "docs" / "items" / "dir.md").mkdir()
+        (root / "docs" / "items" / "a b.md").write_text("x\n")
+        (root / "docs" / "items" / "p(1).md").write_text("x\n")
+        (root / "docs" / "items" / "p).md").write_text("x\n")
+        (root / "docs" / "items" / "a|b.md").write_text("x\n")
+        outside = Path(tempfile.mkdtemp(prefix="wfo-backlog-out-"))
+        self.addCleanup(shutil.rmtree, outside, True)
+        (outside / "t.md").write_text("x\n")
+        os.symlink(root / "docs" / "items" / "beta.md", root / "docs" / "items" / "in.md")
+        os.symlink(outside / "t.md", root / "docs" / "items" / "out.md")
+        os.symlink(root / "docs", root / "docs" / "items" / "subdir")
+        os.symlink(outside, root / "docs" / "items" / "outdir")
+        self.assertIsNone(_schema_error(_items({"detail": "docs/items/beta.md"}), root))
+        for detail, fragment in (
+            ("docs/items/missing.md", "does not exist"),
+            ("docs/items/dir.md", "not a regular file"),
+            ("docs/items/../other.md", "`..` segment"),
+            ("docs/other.md", "under `docs/items/`"),
+            ('"/etc/passwd"', "repository-relative"),
+            ('"docs/items/a b.md"', "may contain only"),
+            ('"docs/items/p(1).md"', "may contain only"),
+            ('"docs/items/p).md"', "may contain only"),
+            ('"docs/items/a|b.md"', "may contain only"),
+            ("docs/items/in.md", "symbolic link"),
+            ("docs/items/out.md", "symbolic link"),
+            ("docs/items/subdir/items/beta.md", "symbolic link"),
+            ("docs/items/outdir/t.md", "symbolic link"),
+            ("docs/items/", "empty, `.` or `..` segment"),
+            ("docs/items", "under `docs/items/`"),
+        ):
+            with self.subTest(detail):
+                self.refused(_items({"detail": detail}), fragment, 7)
+
+    def test_release_rules(self):
+        self.refused(_items({"release": '"1.0"'}), "only allowed on a `done` item")
+        self.refused(_items({"status": "done", "release": '"-1"'}), "`release` must be")
+        self.refused(_items({"status": "done", "release": '"' + "1" * 41 + '"'}), "`release` must be")
+        self.assertIsNone(_schema_error(_items({"status": "done", "release": '"2.17.0"'}), self.repo.root))
+        self.assertIsNone(_schema_error(_items({"status": "done", "release": "v1.0+rc_1"}), self.repo.root))
+
+    def test_a_done_item_may_depend_on_an_unfinished_one(self):
+        self.assertIsNone(_schema_error(_items({"status": "done", "depends_on": "[i2]"}, {}), self.repo.root))
+
+    def test_all_violations_listed_ten_shown(self):
+        exc = _schema_error(_items(*[{"status": "bogus"}] * 12), self.repo.root)
+        self.assertEqual(len(exc.violations), 12)
+        shown = [l for l in exc.message.splitlines() if l.startswith("line ")]
+        self.assertEqual(len(shown), 10)
+        self.assertIn("and 2 more", exc.message)
+
+    def test_parse_and_validate_names_the_file(self):
+        with self.assertRaises(wb.BacklogError) as cm:
+            wb.parse_and_validate(_bl("title: 1abc", replace_line=4), self.repo.root, "docs/backlog.yaml")
+        self.assertTrue(cm.exception.message.startswith("docs/backlog.yaml:4:"))
+        with self.assertRaises(wb.BacklogError) as cm:
+            wb.parse_and_validate(_items({"status": "bogus"}), self.repo.root, "docs/backlog.yaml")
+        self.assertTrue(cm.exception.message.startswith("docs/backlog.yaml:"))
+        self.assertEqual(cm.exception.code, "backlog_invalid")
+        self.assertIn("check", cm.exception.next_step)
+        data, _ = wb.parse_and_validate(_BACKLOG_SAMPLE.encode(), self.repo.root)
+        self.assertEqual(len(data["items"]), 3)
+
+    def test_path_problem(self):
+        root = self.repo.root
+        for rel, fragment in (
+            ("", "empty"), ("/abs", "leading"), ("a\\b", "backslash"), ("a//b", "segment"), ("a/./b", "segment"),
+            ("a/../b", "segment"), ("a\x01b", "control"), (".git/x", "under"), (".GIT/x", "under"),
+            (".ai-review/x", "under"),
+        ):
+            with self.subTest(rel):
+                self.assertIn(fragment, wb.path_problem(root, rel))
+        self.assertIsNone(wb.path_problem(root, "docs/not-yet/there.md"))
+        self.assertIsNone(wb.path_problem(root, "docs/items/beta.md"))
+        if not (root / "DOCS").exists():  # a case-insensitive filesystem finds the entry; a sensitive one does not
+            self.assertIsNone(wb.path_problem(root, "DOCS/ROADMAP.md"))
+        else:
+            self.assertIn("differs in case", wb.path_problem(root, "DOCS/ROADMAP.md"))
+
+
+class BacklogSelect(unittest.TestCase):
+    @staticmethod
+    def data(*specs):
+        items = []
+        for n, (item_id, status, deps) in enumerate(specs, 1):
+            item = {"id": item_id, "title": item_id.upper(), "status": status, "order": n * 10}
+            if deps:
+                item["depends_on"] = list(deps)
+            items.append(item)
+        return {"version": 1, "items": items}
+
+    def test_lowest_ready_next(self):
+        out = wb.select_next(self.data(("a", "done", ()), ("b", "next", ()), ("c", "next", ())))
+        self.assertEqual(out["item"]["id"], "b")
+        self.assertEqual(out["item"]["depends_on"], [])
+        self.assertIsNone(out["item"]["size"])
+        self.assertEqual((out["also_in_progress"], out["warnings"]), ([], []))
+
+    def test_in_progress_ready_comes_first_and_lowest_order(self):
+        out = wb.select_next(self.data(("a", "next", ()), ("b", "in-progress", ()), ("c", "in-progress", ())))
+        self.assertEqual(out["item"]["id"], "b")
+        self.assertEqual(out["also_in_progress"], ["c"])
+
+    def test_blocked_in_progress_is_warned_and_skipped(self):
+        out = wb.select_next(self.data(("a", "next", ()), ("b", "in-progress", ("a",))))
+        self.assertEqual(out["item"]["id"], "a")
+        self.assertEqual(len(out["warnings"]), 1)
+        self.assertIn("`b`", out["warnings"][0])
+        self.assertIn("a", out["warnings"][0])
+
+    def test_blocked_lower_next_is_skipped_for_a_ready_higher_one(self):
+        out = wb.select_next(self.data(("a", "idea", ()), ("b", "next", ("a",)), ("c", "next", ())))
+        self.assertEqual(out["item"]["id"], "c")
+
+    def test_dependency_done_unblocks(self):
+        out = wb.select_next(self.data(("a", "done", ()), ("b", "next", ("a",))))
+        self.assertEqual(out["item"]["id"], "b")
+
+    def test_nothing_next(self):
+        for backlog in (self.data(), self.data(("a", "idea", ()), ("b", "done", ()))):
+            with self.assertRaises(wb.BacklogError) as cm:
+                wb.select_next(backlog)
+            self.assertEqual(cm.exception.code, "no_ready_item")
+            self.assertIn("no item is `next` or `in-progress`", cm.exception.message)
+
+    def test_all_blocked_lists_the_waiting_ids(self):
+        with self.assertRaises(wb.BacklogError) as cm:
+            wb.select_next(self.data(("a", "idea", ()), ("b", "next", ("a",)), ("c", "in-progress", ("a", "b"))))
+        self.assertEqual(cm.exception.code, "no_ready_item")
+        self.assertIn("`b` waits for a", cm.exception.message)
+        self.assertIn("`c` waits for a, b", cm.exception.message)
+        self.assertIn("/milestone-plan", cm.exception.next_step)
+
+    def test_done_is_never_chosen(self):
+        with self.assertRaises(wb.BacklogError):
+            wb.select_next(self.data(("a", "done", ())))
+
+
+class BacklogEdit(unittest.TestCase):
+    def edit(self, item, status, release=None, text=_BACKLOG_SAMPLE):
+        data, lines = wb.parse_backlog(text)
+        return wb.set_status_text(text, data, lines, item, status, release)
+
+    def changed_lines(self, old, new):
+        import difflib
+        return [l for l in difflib.ndiff(old.split("\n"), new.split("\n")) if l[0] in "+-"]
+
+    def test_status_changed_everything_else_kept(self):
+        new = self.edit("beta", "done")
+        self.assertEqual(self.changed_lines(_BACKLOG_SAMPLE, new),
+                         ["-     status: next # soon", "+     status: done # soon"])
+        self.assertIn("# first", new)
+        self.assertEqual(wb.parse_backlog(new)[0]["items"][1]["status"], "done")
+
+    def test_release_inserted_and_replaced(self):
+        new = self.edit("beta", "done", "2.17.0")
+        self.assertIn('    status: done # soon\n    release: "2.17.0"\n    order: 2\n', new)
+        self.assertEqual(wb.parse_backlog(new)[0]["items"][1]["release"], "2.17.0")
+        replaced = self.edit("alpha", "done", "2.0.1")
+        self.assertEqual(self.changed_lines(_BACKLOG_SAMPLE, replaced),
+                         ['-     release: "2.0.0"', '+     release: "2.0.1"'])
+
+    def test_no_op_when_equal(self):
+        self.assertEqual(self.edit("alpha", "done"), _BACKLOG_SAMPLE)
+        self.assertEqual(self.edit("alpha", "done", "2.0.0"), _BACKLOG_SAMPLE)
+
+    def test_item_first_line_status_and_last_line_without_newline(self):
+        text = "version: 1\nitems:\n  - status: next\n    id: a\n    title: A\n    order: 1"
+        new = self.edit("a", "done", "1.0", text)
+        self.assertEqual(wb.parse_backlog(new)[0]["items"][0]["release"], "1.0")
+        self.assertFalse(new.endswith("\n"))
+        self.assertIn("  - status: done\n    release: \"1.0\"\n    id: a", new)
+
+    def test_refusals(self):
+        for args, code in (
+            (("nope", "done"), "item_unknown"),
+            (("beta", "started"), "backlog_invalid"),
+            (("beta", "next", "1.0"), "backlog_invalid"),
+            (("beta", "done", "-bad"), "backlog_invalid"),
+            (("alpha", "next"), "backlog_invalid"),
+        ):
+            with self.subTest(args), self.assertRaises(wb.BacklogError) as cm:
+                self.edit(*args)
+            self.assertEqual(cm.exception.code, code)
+
+    def test_a_reparse_that_differs_is_refused(self):
+        data, lines = wb.parse_backlog(_BACKLOG_SAMPLE)
+        other = {"version": 1, "items": []}
+        with unittest.mock.patch.object(wb, "parse_backlog", return_value=(other, {})):
+            with self.assertRaises(wb.BacklogError) as cm:
+                wb.set_status_text(_BACKLOG_SAMPLE, data, lines, "beta", "done")
+        self.assertEqual(cm.exception.code, "backlog_invalid")
+        self.assertIn("more than", cm.exception.message)
+
+
+class BacklogRender(unittest.TestCase):
+    def page(self, text=_BACKLOG_SAMPLE, file="docs/backlog.yaml", roadmap="docs/ROADMAP.md"):
+        return wb.render_roadmap(wb.parse_backlog(text)[0], file, roadmap)
+
+    def test_exact_page_sorted_by_order(self):
+        text = _BACKLOG_SAMPLE.replace("order: 1\n", "order: 30\n", 1).replace("order: 3\n", "order: 1\n", 1)
+        page = self.page(text)
+        self.assertEqual(page, "\n".join([
+            "# Roadmap",
+            "",
+            "<!-- Generated from docs/backlog.yaml by scripts/workflow_backlog.py. Do not edit by hand: edit the "
+            "backlog file and run `python3 scripts/workflow_backlog.py generate`. -->",
+            "",
+            "| Order | Item | Status | Size | Depends on |",
+            "| --- | --- | --- | --- | --- |",
+            "| 1 | It's gamma `gamma` | Idea | - | alpha, beta |",
+            "| 2 | [Beta: the \"second\"](items/beta.md) `beta` | Next | 3 | alpha |",
+            "| 30 | Alpha thing `alpha` | Done (2.0.0) | - | - |",
+            "",
+        ]))
+
+    def test_four_status_words_and_plain_done(self):
+        text = _items({"status": "idea"}, {"status": "next"}, {"status": "in-progress"}, {"status": "done"})
+        rows = self.page(text).splitlines()[6:]
+        self.assertEqual([r.split(" | ")[2] for r in rows], ["Idea", "Next", "In progress", "Done"])
+
+    def test_link_is_relative_to_the_page_directory(self):
+        for roadmap, target in (("docs/ROADMAP.md", "items/beta.md"), ("ROADMAP.md", "docs/items/beta.md"),
+                                ("docs/sub/ROADMAP.md", "../items/beta.md"), ("docs/items/R.md", "beta.md")):
+            with self.subTest(roadmap):
+                self.assertIn(f"]({target})", self.page(roadmap=roadmap))
+
+    def test_titles_are_escaped_and_rows_stay_intact(self):
+        title = 'a|b [c] <d> \\e `f`'
+        quoted = title.replace("\\", "\\\\")
+        text = _items({"title": f'"{quoted}"', "detail": "docs/items/a_b-c.1.md", "size": 2})
+        page = self.page(text)
+        self.assertIn(r"[a\|b \[c\] \<d\> \\e \`f\`](items/a_b-c.1.md) `i1`", page)
+        for row in page.splitlines():
+            if row.startswith("| 1 "):
+                self.assertEqual(len(re.split(r"(?<!\\)\|", row)), 7)
+
+    def test_byte_stable_and_empty_backlog(self):
+        self.assertEqual(self.page(), self.page())
+        self.assertTrue(self.page().endswith("\n"))
+        self.assertNotIn("\r", self.page())
+        empty = self.page("version: 1\nitems: []\n")
+        self.assertEqual(len(empty.splitlines()), 6)
+
+    def test_file_path_cannot_close_the_comment(self):
+        with self.assertRaises(wb.BacklogError) as cm:
+            self.page(file="docs/a-->b.yaml")
+        self.assertEqual(cm.exception.code, "declaration_invalid")
+
+
+# --------------------------------------------------------------------------
+# CP2: the declaration, the command line and the generator
+# --------------------------------------------------------------------------
+
+_BACKLOG_SCRIPT = Path(wb.__file__).resolve()
+_SIMPLE_BACKLOG = """\
+version: 1
+items:
+  - id: alpha
+    title: Alpha
+    status: in-progress
+    order: 1
+  - id: beta
+    title: Beta
+    status: next
+    order: 2
+    depends_on: [alpha]
+"""
+
+
+class _Decl:
+    """A scratch repository with the script installed and a `backlog` key."""
+
+    def __init__(self, backlog="docs/backlog.yaml", text=_SIMPLE_BACKLOG, extra=None, config=True):
+        self.backlog, self.text, self.extra, self.config = backlog, text, extra or {}, config
+
+    def __enter__(self):
+        self.root = Path(tempfile.mkdtemp(prefix="wfo-decl-"))
+        (self.root / "scripts").mkdir()
+        shutil.copy(_BACKLOG_SCRIPT, self.root / "scripts" / "workflow_backlog.py")
+        (self.root / "docs" / "ai-workflow").mkdir(parents=True)
+        if self.config:
+            self.write_config({"backlog": {"file": self.backlog, **self.extra}})
+        if self.text is not None:
+            self.write(self.backlog, self.text)
+        return self
+
+    def __exit__(self, *exc):
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def write_config(self, value):
+        raw = value if isinstance(value, str) else json.dumps(value)
+        (self.root / wb.CONFIG_REL).write_text(raw)
+
+    def write(self, rel, text):
+        path = self.root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if isinstance(text, str):
+            path.write_text(text)
+        else:
+            path.write_bytes(text)
+
+    def read(self, rel):
+        return (self.root / rel).read_bytes()
+
+    def exists(self, rel):
+        return os.path.lexists(self.root / rel)
+
+    def run(self, *args):
+        done = subprocess.run(["python3", "-I", str(self.root / "scripts" / "workflow_backlog.py"), *args],
+                              cwd=self.root, capture_output=True, text=True)
+        return done.returncode, done.stdout, done.stderr
+
+    def ok(self, *args):
+        code, out, err = self.run(*args)
+        assert code == 0, (code, out, err)
+        return json.loads(out)
+
+    def refused(self, *args, code=2):
+        got, out, err = self.run(*args)
+        assert got == code, (got, out, err)
+        lines = err.strip().split("\n")
+        assert lines[0].startswith("error: ") and "next step: " in err, err
+        return lines[0].split(": ", 2)[1], err
+
+    def tree(self):
+        out = {}
+        for path in sorted(self.root.rglob("*")):
+            if path.is_file() and not path.is_symlink():
+                out[str(path.relative_to(self.root))] = path.read_bytes()
+        return out
+
+
+class BacklogDeclaration(unittest.TestCase):
+    def declared(self, value):
+        with _Decl(config=False) as d:
+            d.write_config({"backlog": value})
+            return wb.load_declaration(d.root)
+
+    def refusal(self, value):
+        with _Decl(config=False) as d:
+            d.write_config({"backlog": value})
+            with self.assertRaises(wb.BacklogError) as cm:
+                wb.load_declaration(d.root)
+            return cm.exception
+
+    def test_undeclared_forms_write_nothing(self):
+        for label, config in (("no key", '{"other": 1}'), ("unparsable", "{not json"), ("array", "[1, 2]"),
+                              ("missing file", None)):
+            with self.subTest(label), _Decl(config=False) as d:
+                if config is not None:
+                    d.write_config(config)
+                before = d.tree()
+                self.assertIsNone(wb.load_declaration(d.root))
+                self.assertEqual(wb.declared_paths(d.root), [])
+                for args in (["status"], ["next"], ["check"], ["generate"], ["preflight-accept", "alpha"],
+                             ["accept", "alpha"]):
+                    self.assertEqual(d.ok(*args), {"declared": False})
+                self.assertEqual(d.tree(), before)
+
+    def test_defaults_and_full_declaration(self):
+        self.assertEqual(self.declared({"file": "docs/backlog.yaml"}),
+                         {"file": "docs/backlog.yaml", "roadmap": "docs/ROADMAP.md", "generator": None})
+        self.assertEqual(self.declared({"file": "b.yaml", "roadmap": "R.md", "generator": ["python3", "g.py"]}),
+                         {"file": "b.yaml", "roadmap": "R.md", "generator": ["python3", "g.py"]})
+
+    def test_every_declaration_invalid_refusal(self):
+        cases = {
+            "null": None, "string": "docs/backlog.yaml", "no file": {}, "unknown key": {"file": "a", "x": 1},
+            "file not str": {"file": 3}, "roadmap not str": {"file": "a", "roadmap": []},
+            "same path": {"file": "a.yaml", "roadmap": "a.yaml"},
+            "absolute": {"file": "/a.yaml"}, "backslash": {"file": "a\\b.yaml"}, "dotdot": {"file": "../a.yaml"},
+            "dot": {"file": "./a.yaml"}, "empty segment": {"file": "a//b.yaml"}, "empty": {"file": ""},
+            "control": {"file": "a\x01.yaml"}, "under .git": {"file": ".git/a.yaml"},
+            "under .ai-review": {"file": ".ai-review/a.yaml"},
+            "generator string": {"file": "a", "generator": "make"}, "generator empty": {"file": "a", "generator": []},
+            "generator null": {"file": "a", "generator": None},
+            "generator entry empty": {"file": "a", "generator": ["python3", ""]},
+            "generator entry not str": {"file": "a", "generator": ["python3", 1]},
+        }
+        for label, value in cases.items():
+            with self.subTest(label):
+                exc = self.refusal(value)
+                self.assertEqual(exc.code, "declaration_invalid")
+                self.assertTrue(exc.next_step)
+
+    def test_symbolic_links_are_refused_from_every_subcommand(self):
+        for label, file in (("last component", "docs/link.yaml"), ("directory to inside", "docs/via/backlog.yaml"),
+                            ("directory to outside", "docs/out/backlog.yaml")):
+            with self.subTest(label), tempfile.TemporaryDirectory(prefix="wfo-outside-") as outside:
+                with _Decl(backlog=file, text=None) as d:
+                    (d.root / "scripts" / "keep.txt").write_text("x")
+                    if label == "last component":
+                        (d.root / "docs" / "link.yaml").symlink_to(d.root / "scripts" / "keep.txt")
+                    elif label == "directory to inside":
+                        (d.root / "docs" / "via").symlink_to("../scripts")
+                    else:
+                        (d.root / "docs" / "out").symlink_to(outside)
+                    before = d.tree()
+                    for args in (["next"], ["check"], ["generate"], ["accept", "alpha"],
+                                 ["preflight-accept", "alpha"]):
+                        code, message = d.refused(*args)
+                        self.assertEqual(code, "declaration_invalid")
+                        self.assertIn("symbolic link", message)
+                    report = d.ok("status")
+                    self.assertEqual(report["error"]["code"], "declaration_invalid")
+                    self.assertIn("symbolic link", report["error"]["message"])
+                    self.assertEqual(d.tree(), before)
+                    self.assertEqual(list(Path(outside).iterdir()), [])
+                    self.assertEqual(wb.declared_paths(d.root), [])
+
+    def test_missing_components_are_fine_and_case_mismatch_is_refused(self):
+        with _Decl(backlog="new/dir/backlog.yaml", text=None) as d:
+            self.assertEqual(wb.load_declaration(d.root)["file"], "new/dir/backlog.yaml")
+        with _Decl(backlog="Scripts/backlog.yaml", text=None) as d:
+            real_listdir, real_lstat = os.listdir, os.lstat
+
+            def fold_lstat(path, *args, **kwargs):  # a case-insensitive filesystem finds `scripts` as `Scripts`
+                path = Path(path)
+                return real_lstat(path.with_name("scripts") if path.name == "Scripts" else path, *args, **kwargs)
+
+            with unittest.mock.patch("os.lstat", side_effect=fold_lstat):
+                with self.assertRaises(wb.BacklogError) as cm:
+                    wb.load_declaration(d.root)
+            self.assertEqual(cm.exception.code, "declaration_invalid")
+            self.assertIn("differs in case", cm.exception.message)
+            self.assertIn("scripts", real_listdir(d.root))
+
+    def test_protected_conflicts_predicate(self):
+        declaration = {"plan_stage": {"protected_paths": ["docs/P.md"], "excluded_paths": {"docs/backlog.yaml": "x"}},
+                       "implementation_stage": {"protected_paths": {"a/own.json": "x"},
+                                                "protected_prefixes": {"scripts/": "x"}}}
+        paths = ["docs/P.md", "docs/backlog.yaml", "scripts/backlog.yaml", "a/own.json", "docs/items/x.md"]
+        self.assertEqual(wb.protected_conflicts(paths, declaration),
+                         [("plan_stage", "docs/P.md"), ("implementation_stage", "scripts/backlog.yaml"),
+                          ("implementation_stage", "a/own.json")])
+        self.assertEqual(wb.protected_conflicts(["docs/backlog.yaml"], {}), [])
+
+    def test_protected_conflicts_reports_any_protected_item_page_path_or_prefix(self):
+        paths = ["docs/backlog.yaml", wb.REPRESENTATIVE_ITEM_PAGE]
+
+        def conflicts(**stages):
+            return wb.protected_conflicts(paths, stages)
+
+        self.assertEqual(
+            conflicts(plan_stage={"protected_paths": ["docs/items/foo.md"]}),
+            [("plan_stage", "docs/items/foo.md")])
+        self.assertEqual(
+            conflicts(implementation_stage={"protected_paths": {"docs/items/foo.md": "x"}}),
+            [("implementation_stage", "docs/items/foo.md")])
+        self.assertEqual(
+            conflicts(implementation_stage={"protected_prefixes": {"docs/items/team/": "x"}}),
+            [("implementation_stage", "docs/items/team/")])
+        # A prefix that is the page prefix itself, or shorter, is caught through the representative page.
+        self.assertEqual(
+            conflicts(plan_stage={"protected_prefixes": ["docs/items/"]}),
+            [("plan_stage", wb.REPRESENTATIVE_ITEM_PAGE)])
+        for unrelated in ({"protected_paths": ["docs/other.md"]}, {"protected_prefixes": ["docs/other/"]}):
+            self.assertEqual(conflicts(plan_stage=unrelated), [])
+        # Without a path under the item-page prefix the extra rule does not apply.
+        self.assertEqual(
+            wb.protected_conflicts(["docs/backlog.yaml"], {"plan_stage": {"protected_paths": ["docs/items/foo.md"]}}),
+            [])
+
+
+class BacklogCli(unittest.TestCase):
+    def test_status_next_and_the_usage_error(self):
+        with _Decl() as d:
+            status = d.ok("status")
+            self.assertEqual((status["declared"], status["valid"], status["items"]), (True, True, 2))
+            self.assertFalse(status["roadmap_fresh"])
+            nxt = d.ok("next")
+            self.assertEqual(nxt["item"]["id"], "alpha")
+            self.assertEqual((nxt["declared"], nxt["file"], nxt["warnings"]), (True, "docs/backlog.yaml", []))
+            code, out, err = d.run("frobnicate")
+            self.assertEqual((code, out), (2, ""))
+            self.assertEqual(d.run("accept", "alpha", "--release", "../x")[0], 2)
+            self.assertEqual(d.run("accept", "alpha", "--release", "2.17.0 ")[0], 2)
+
+    def test_status_reports_an_invalid_file_and_exits_zero(self):
+        with _Decl(text="version: 2\nitems: []\n") as d:
+            status = d.ok("status")
+            self.assertFalse(status["valid"])
+            self.assertEqual(status["error"]["code"], "backlog_invalid")
+
+    def test_refusal_codes_with_two_lines_and_exit_two(self):
+        with _Decl(text=None) as d:
+            self.assertEqual(d.refused("next")[0], "backlog_missing")
+            self.assertEqual(d.refused("check")[0], "backlog_missing")
+        bad = "version: 1\nitems:\n  - id: a\n    title: A\n    status: bogus\n    order: 1\n"
+        with _Decl(text=bad) as d:
+            code, err = d.refused("next")
+            self.assertEqual(code, "backlog_invalid")
+            self.assertIn("docs/backlog.yaml:", err)
+            self.assertIn("docs/ai-workflow/BACKLOG_FILE.md", err.split("next step: ", 1)[1])
+            self.assertIn("scripts/workflow_backlog.py check", err)
+        with _Decl(text=_SIMPLE_BACKLOG.replace("in-progress", "idea").replace("next", "idea")) as d:
+            self.assertEqual(d.refused("next")[0], "no_ready_item")
+            self.assertEqual(d.refused("preflight-accept", "alpha")[0], "status_not_acceptable")
+            self.assertEqual(d.refused("accept", "alpha")[0], "status_not_acceptable")
+        with _Decl() as d:
+            self.assertEqual(d.refused("preflight-accept", "nope")[0], "item_unknown")
+            code, err = d.refused("accept", "nope")
+            self.assertEqual(code, "item_unknown")
+            self.assertIn("then run `python3 scripts/workflow_backlog.py accept nope` "
+                          "and continue the acceptance at step 4", err)
+        with _Decl(extra={"bogus": 1}) as d:
+            self.assertEqual(d.refused("next")[0], "declaration_invalid")
+            report = d.ok("status")  # `status` always exits 0 and reports
+            self.assertEqual((report["valid"], report["error"]["code"]), (False, "declaration_invalid"))
+
+    def test_check_exit_one_when_stale(self):
+        with _Decl() as d:
+            code, out, err = d.run("check")
+            self.assertEqual((code, out), (1, ""))
+            self.assertIn("error: roadmap_stale:", err)
+            d.ok("generate")
+            self.assertEqual(d.ok("check")["fresh"], True)
+
+    def test_builtin_generate_check_and_stale_line(self):
+        with _Decl() as d:
+            self.assertEqual(d.ok("generate"),
+                             {"declared": True, "generated": "docs/ROADMAP.md", "generator": "built-in"})
+            first = d.read("docs/ROADMAP.md")
+            d.ok("generate")
+            self.assertEqual(d.read("docs/ROADMAP.md"), first)
+            d.ok("check")
+            d.write("docs/ROADMAP.md", first.replace(b"| Next |", b"| Done |"))
+            code, err = d.refused("check", code=1)
+            self.assertEqual(code, "roadmap_stale")
+            self.assertIn("at line 8", err)
+
+    def test_hand_written_page_is_refused_then_replaced_once(self):
+        with _Decl() as d:
+            d.write("docs/ROADMAP.md", "# Roadmap\n\nprose\n")
+            before = d.tree()
+            for args in (["generate"], ["accept", "alpha"], ["preflight-accept", "alpha"]):
+                self.assertEqual(d.refused(*args)[0], "roadmap_not_generated")
+                self.assertEqual(d.tree(), before)
+            d.ok("generate", "--replace")
+            d.ok("check")
+            d.ok("generate")
+
+    def test_a_refusal_preserves_the_modes_of_the_existing_files(self):
+        with _Decl() as d:
+            d.write("docs/ROADMAP.md", "# Roadmap\n\nprose\n")
+            paths = [d.root / "docs" / "backlog.yaml", d.root / "docs" / "ROADMAP.md"]
+            for path in paths:
+                os.chmod(path, 0o644)
+            for args in (["generate"], ["accept", "alpha"]):
+                self.assertEqual(d.refused(*args)[0], "roadmap_not_generated")
+                self.assertEqual([stat.S_IMODE(os.stat(p).st_mode) for p in paths], [0o644, 0o644])
+
+    def test_a_successful_write_preserves_the_modes_of_the_existing_files(self):
+        with _Decl() as d:
+            d.write("docs/ROADMAP.md", "# Roadmap\n\nprose\n")
+            paths = [d.root / "docs" / "backlog.yaml", d.root / "docs" / "ROADMAP.md"]
+            for path in paths:
+                os.chmod(path, 0o664)
+            d.ok("generate", "--replace")
+            d.ok("accept", "alpha", "--release", "2.17.0")
+            self.assertEqual([stat.S_IMODE(os.stat(p).st_mode) for p in paths], [0o664, 0o664])
+
+    def test_accept_edits_only_status_and_release_and_is_idempotent(self):
+        with _Decl() as d:
+            self.assertEqual(d.ok("preflight-accept", "alpha")["ok"], True)
+            result = d.ok("accept", "alpha", "--release", "2.17.0")
+            self.assertEqual(result["paths"], ["docs/backlog.yaml", "docs/ROADMAP.md"])
+            text = d.read("docs/backlog.yaml").decode()
+            data = wb.parse_backlog(text)[0]
+            self.assertEqual((data["items"][0]["status"], data["items"][0]["release"]), ("done", "2.17.0"))
+            self.assertEqual(text.count("\n"), _SIMPLE_BACKLOG.count("\n") + 1)
+            self.assertIn("Done (2.17.0)", d.read("docs/ROADMAP.md").decode())
+            d.ok("check")
+            snapshot = d.tree()
+            d.ok("accept", "alpha")
+            self.assertEqual(d.tree(), snapshot)
+            d.write("docs/ROADMAP.md", d.read("docs/ROADMAP.md").replace(b"Done", b"Idea"))
+            d.ok("accept", "alpha")
+            d.ok("check")
+            self.assertEqual(d.tree(), snapshot)
+
+    def test_accept_works_without_any_workflow_state(self):
+        with _Decl() as d:
+            self.assertFalse(d.exists("docs/ai-workflow/WORKFLOW_STATE.json"))
+            self.assertEqual(d.ok("accept", "beta")["item"], "beta")
+
+    def test_undeclared_writes_nothing_even_with_a_stray_file(self):
+        with _Decl(config=False) as d:
+            before = d.tree()
+            for args in (["status"], ["next"], ["check"], ["generate"], ["accept", "alpha"]):
+                self.assertEqual(d.ok(*args), {"declared": False})
+            self.assertEqual(d.tree(), before)
+
+
+GOOD_PAGE = 'open("docs/ROADMAP.md", "w").write("# R\\n<!-- backlog-sha256: " + d + " -->\\nrow\\n")'
+
+
+def _generator(body):
+    prelude = 'import os,sys,hashlib\nd = hashlib.sha256(open("docs/backlog.yaml", "rb").read()).hexdigest()\n'
+    return {"generator": ["python3", "-c", prelude + body]}
+
+
+class BacklogGenerator(unittest.TestCase):
+    def test_good_generator_is_stamped_in_place(self):
+        body = 'assert os.environ["WORKFLOW_BACKLOG_SHA256"] == d\n' + GOOD_PAGE
+        with _Decl(extra=_generator(body)) as d:
+            result = d.ok("accept", "alpha")
+            self.assertEqual(result["paths"], ["docs/backlog.yaml", "docs/ROADMAP.md"])
+            digest = hashlib.sha256(d.read("docs/backlog.yaml")).hexdigest()
+            self.assertEqual(
+                d.read("docs/ROADMAP.md"),
+                b"# R\n<!-- backlog-sha256: " + digest.encode() + b" page-sha256: "
+                + hashlib.sha256(b"# R\nrow\n").hexdigest().encode() + b" -->\nrow\n")
+            d.ok("check")
+            self.assertEqual(d.ok("generate")["generator"], "declared")
+            d.ok("check")
+
+    def test_marker_as_last_line_without_lf(self):
+        body = 'open("docs/ROADMAP.md", "w").write("# R\\n<!-- backlog-sha256: " + d + " -->")'
+        with _Decl(extra=_generator(body)) as d:
+            d.ok("generate")
+            page = d.read("docs/ROADMAP.md")
+            self.assertFalse(page.endswith(b"\n"))
+            self.assertIn(hashlib.sha256(b"# R\n").hexdigest().encode(), page)
+            d.ok("check")
+
+    def failing(self, body, *, page=None, expect=None):
+        with _Decl(extra=_generator(body)) as d:
+            if page is not None:
+                d.write("docs/ROADMAP.md", page)
+            before = d.tree()
+            for args in (["generate"], ["accept", "alpha"]):
+                code, err = d.refused(*args)
+                self.assertEqual(code, "generator_failed", err)
+                if expect:
+                    self.assertIn(expect, err)
+                self.assertEqual(d.tree(), before)
+
+    def test_freshness_contract_failures_restore_everything(self):
+        marker = '"<!-- backlog-sha256: " + d + " -->\\n"'
+        self.failing("pass", expect="no page")
+        self.failing("pass", page="# R\n<!-- backlog-sha256: " + "0" * 64 + " -->\n", expect="not the digest")
+        self.failing("pass", page="# R\nno marker\n", expect="exactly one line")
+        stamped = "# R\n<!-- backlog-sha256: " + "a" * 64 + " page-sha256: " + "b" * 64 + " -->\n"
+        self.failing("pass", page=stamped, expect="stamped")
+        self.failing(f'open("docs/ROADMAP.md", "w").write({marker} + {marker})', expect="found 2")
+        self.failing('open("docs/ROADMAP.md", "w").write("<!-- backlog-sha256: " + d + " -->\\r\\n")', expect="found 0")
+        self.failing(f'open("docs/ROADMAP.md", "w").write({marker}); open("docs/backlog.yaml", "a").write("# x\\n")',
+                     expect="changed the backlog file")
+        self.failing("sys.exit(3)", expect="exited 3")
+
+    def test_copying_the_old_stamped_line_forward_fails(self):
+        body = ('old = open("docs/ROADMAP.md").read() if os.path.exists("docs/ROADMAP.md") else ""\n'
+                'open("docs/ROADMAP.md", "w").write(old + "<!-- backlog-sha256: " + d + " -->\\n")')
+        with _Decl(extra=_generator(body)) as d:
+            d.ok("generate")
+            before = d.tree()
+            self.assertEqual(d.refused("generate")[0], "generator_failed")
+            self.assertEqual(d.tree(), before)
+
+    def test_page_as_symlink_or_directory_fails(self):
+        for kind in ("symlink", "directory"):
+            body = ('import shutil\nshutil.rmtree("docs/ROADMAP.md", ignore_errors=True)\n'
+                    + ('os.symlink("backlog.yaml", "docs/ROADMAP.md")' if kind == "symlink"
+                       else 'os.mkdir("docs/ROADMAP.md")'))
+            with self.subTest(kind), _Decl(extra=_generator(body)) as d:
+                before = d.tree()
+                self.assertEqual(d.refused("accept", "alpha")[0], "generator_failed")
+                self.assertEqual(d.tree(), before)
+                self.assertFalse(d.exists("docs/ROADMAP.md"))
+
+    def test_partial_page_then_failure_or_timeout_restores_or_removes(self):
+        with _Decl(extra=_generator('open("docs/ROADMAP.md", "w").write("half"); sys.exit(1)')) as d:
+            self.assertEqual(d.refused("accept", "alpha")[0], "generator_failed")
+            self.assertFalse(d.exists("docs/ROADMAP.md"))
+            self.assertEqual(d.read("docs/backlog.yaml").decode(), _SIMPLE_BACKLOG)
+        slow = 'open("docs/ROADMAP.md", "w").write("half")\nimport time; time.sleep(30)'
+        with _Decl(extra=_generator(slow)) as d:
+            d.write("docs/ROADMAP.md", "old\n")
+            with unittest.mock.patch.object(wb, "GENERATOR_TIMEOUT", 1):
+                with self.assertRaises(wb.BacklogError) as cm:
+                    wb.cmd_accept(d.root, "alpha")
+            self.assertEqual(cm.exception.code, "generator_failed")
+            self.assertIn("timed out", cm.exception.message)
+            self.assertEqual(d.read("docs/ROADMAP.md"), b"old\n")
+            self.assertEqual(d.read("docs/backlog.yaml").decode(), _SIMPLE_BACKLOG)
+
+    def test_reaccepting_with_a_noop_generator_fails_and_a_real_one_repairs(self):
+        with _Decl(extra={"generator": ["python3", "-c", "pass"]}) as d:
+            self.assertEqual(d.refused("accept", "alpha")[0], "generator_failed")
+        with _Decl(extra=_generator(GOOD_PAGE)) as d:
+            d.ok("accept", "alpha")
+            stamped = d.read("docs/ROADMAP.md")
+            d.write("docs/ROADMAP.md", stamped + b"hand edit\n")
+            self.assertEqual(d.refused("check", code=1)[0], "roadmap_stale")
+            d.ok("accept", "alpha")
+            self.assertEqual(d.read("docs/ROADMAP.md"), stamped)
+            d.ok("check")
+            d.write("docs/ROADMAP.md", stamped + b"hand edit\n")
+            d.write_config({"backlog": {"file": "docs/backlog.yaml", "generator": ["python3", "-c", "pass"]}})
+            edited = d.tree()
+            self.assertEqual(d.refused("accept", "alpha")[0], "generator_failed")
+            self.assertEqual(d.tree(), edited)
+
+    def test_unresolvable_generator_is_a_preflight_refusal(self):
+        with _Decl(extra={"generator": ["no-such-binary-xyz"]}) as d:
+            before = d.tree()
+            code, err = d.refused("preflight-accept", "alpha")
+            self.assertEqual(code, "generator_failed")
+            self.assertNotIn("<id>", err)
+            self.assertEqual(d.tree(), before)
+
+    def test_check_with_declared_generator_runs_no_user_code_and_detects_every_edit(self):
+        body = ('open("docs/ROADMAP.md", "w").write("# R\\nrow one\\nrow two\\n'
+                '<!-- backlog-sha256: " + d + " -->\\n")')
+        with _Decl(extra=_generator(body)) as d:
+            d.ok("generate")
+            d.ok("check")
+            fresh = d.read("docs/ROADMAP.md")
+            d.write("scripts/boom.py", "raise SystemExit(7)")
+            d.write_config({"backlog": {"file": "docs/backlog.yaml", "generator": ["python3", "scripts/boom.py"]}})
+            d.ok("check")
+
+            def stale(page, *needle):
+                d.write("docs/ROADMAP.md", page)
+                code, err = d.refused("check", code=1)
+                self.assertEqual(code, "roadmap_stale")
+                for text in needle:
+                    self.assertIn(text, err)
+
+            stale(fresh.replace(b"row one", b"row ONE"), "edited after")
+            stale(fresh + b"added\n", "edited after")
+            stale(fresh.replace(b"row two\n", b""), "edited after")
+            stale(fresh.replace(b" page-sha256", b" x-sha256"), "no stamped")
+            stale(fresh + fresh.split(b"\n")[3] + b"\n", "exactly one")
+            stale(fresh.split(b"<!--")[0], "no stamped")
+            unstamped = b" ".join(fresh.split(b"<!--")[1].split(b" ")[:3]) + b" -->\n"
+            stale(fresh.split(b"<!--")[0] + b"<!--" + unstamped.split(b"\n")[0].split(b"<!--")[-1] + b"\n", "not stamped")
+            os.unlink(d.root / "docs/ROADMAP.md")
+            self.assertIn("does not exist", d.refused("check", code=1)[1])
+            d.write("docs/ROADMAP.md", fresh)
+            original = d.read("docs/backlog.yaml")
+            d.write("docs/backlog.yaml", original + b"# comment\n")
+            self.assertIn("file digest", d.refused("check", code=1)[1])
+            d.write("docs/backlog.yaml", original)
+            d.ok("check")
+
+
+class BacklogAcceptAtomicity(unittest.TestCase):
+    def test_a_refusal_after_accept_began_restores_the_file_and_the_page(self):
+        with _Decl() as d:
+            d.ok("generate")
+            before = d.tree()
+            boom = wb.BacklogError("generator_failed", "boom", "x")
+            with unittest.mock.patch.object(wb, "_generate_page", side_effect=boom):
+                with self.assertRaises(wb.BacklogError):
+                    wb.cmd_accept(d.root, "alpha", "1.0")
+            self.assertEqual(d.tree(), before)
+
+    def test_reparse_mismatch_writes_nothing_and_names_the_recovery(self):
+        with _Decl() as d:
+            before = d.tree()
+            mismatch = wb.BacklogError("backlog_invalid", "mismatch", "fix")
+            with unittest.mock.patch.object(wb, "set_status_text", side_effect=mismatch):
+                with self.assertRaises(wb.BacklogError) as cm:
+                    wb.cmd_accept(d.root, "alpha")
+            self.assertIn("continue the acceptance at step 4", cm.exception.next_step)
+            self.assertEqual(d.tree(), before)
+
+
+class BacklogDeclarationConflict(unittest.TestCase):
+    def artifacts(self, d, protected_paths=(), protected_prefixes=()):
+        d.write("docs/ai-workflow/registry/alpha-artifacts.json", json.dumps({
+            "plan_stage": {"protected_paths": list(protected_paths)},
+            "implementation_stage": {"protected_prefixes": {p: "x" for p in protected_prefixes}},
+        }))
+
+    def test_preflight_and_accept_refuse_a_protected_path_and_write_nothing(self):
+        for label, kwargs in (("plan file", {"protected_paths": ["docs/backlog.yaml"]}),
+                              ("implementation prefix", {"protected_prefixes": ["docs/"]}),
+                              ("item pages", {"protected_prefixes": ["docs/items/"]})):
+            with self.subTest(label), _Decl() as d:
+                self.artifacts(d, **kwargs)
+                d.write("docs/ROADMAP.md", "keep\n")
+                before = d.tree()
+                for args in (["preflight-accept", "alpha"], ["accept", "alpha"]):
+                    code, err = d.refused(*args)
+                    self.assertEqual(code, "declaration_conflict")
+                    self.assertIn("move the path out of the protected area", err)
+                self.assertEqual(d.tree(), before)
+
+    def test_an_exact_item_page_or_a_prefix_under_the_page_prefix_is_a_conflict(self):
+        for label, kwargs, named, stage in (
+                ("exact page", {"protected_paths": ["docs/items/foo.md"]}, "docs/items/foo.md", "plan stage"),
+                ("prefix under the pages", {"protected_prefixes": ["docs/items/team/"]},
+                 "docs/items/team/", "implementation stage")):
+            with self.subTest(label), _Decl() as d:
+                self.artifacts(d, **kwargs)
+                before = d.tree()
+                for args in (["preflight-accept", "alpha"], ["accept", "alpha"]):
+                    code, err = d.refused(*args)
+                    self.assertEqual(code, "declaration_conflict")
+                    self.assertIn(f"`{named}` ({stage})", err)
+                self.assertEqual(d.tree(), before)
+        with _Decl() as d:
+            self.artifacts(d, protected_paths=["docs/other.md"], protected_prefixes=["docs/other/"])
+            d.ok("preflight-accept", "alpha")
+
+    def test_an_unprotected_or_unreadable_declaration_is_not_a_conflict(self):
+        with _Decl() as d:
+            self.artifacts(d, protected_paths=["docs/P.md"], protected_prefixes=["scripts/"])
+            d.ok("preflight-accept", "alpha")
+        with _Decl() as d:
+            d.ok("preflight-accept", "alpha")
+            d.write("docs/ai-workflow/registry/alpha-artifacts.json", "{broken")
+            d.ok("preflight-accept", "alpha")
+
+
+_BACKLOG_DOC_REL = "docs/ai-workflow/BACKLOG_FILE.md"
+
+
+def _backlog_doc():
+    return (_repo_root() / _BACKLOG_DOC_REL).read_text(encoding="utf-8")
+
+
+def _doc_block(name):
+    """The fenced block that follows `<!-- backlog-example:NAME -->`, dedented."""
+    match = re.search(r"^[ ]*<!-- backlog-example:" + name + r" -->\n[ ]*```\w*\n(.*?)\n[ ]*```",
+                      _backlog_doc(), re.M | re.S)
+    assert match, f"no backlog-example:{name} block"
+    return textwrap.dedent(match.group(1)) + "\n"
+
+
+class BacklogDocument(unittest.TestCase):
+    """The shipped reference cannot drift from the script it documents."""
+
+    def test_starter_is_a_valid_minimal_file(self):
+        with _Decl(text=_doc_block("starter")) as d:
+            data, _ = wb.parse_and_validate(d.read("docs/backlog.yaml"), d.root)
+            self.assertEqual([(i["id"], i["status"], i["order"]) for i in data["items"]],
+                             [("first-item", "next", 1)])
+            self.assertEqual(d.ok("next")["item"]["id"], "first-item")
+
+    def test_complete_example_parses_and_validates(self):
+        with _Decl(text=_doc_block("full")) as d:
+            d.write("docs/items/login.md", "Login.\n")
+            data, _ = wb.parse_and_validate(d.read("docs/backlog.yaml"), d.root)
+            self.assertEqual(len(data["items"]), 4)
+            by_id = {i["id"]: i for i in data["items"]}
+            self.assertEqual(by_id["login"]["release"], "1.0.0")
+            self.assertEqual(by_id["settings"]["depends_on"], ["login", "profile"])
+            self.assertEqual(by_id["dark-mode"]["title"], "Dark mode (it's optional)")
+            self.assertEqual(d.ok("next")["item"]["id"], "profile")
+            d.ok("generate")
+            d.ok("check")
+
+    def test_trailing_comment_after_a_block_list_key_is_documented(self):
+        doc = " ".join(_backlog_doc().split())
+        self.assertIn("A trailing comment is also allowed after `items:` and after `depends_on:` "
+                      "when the value is a block list on the following lines", doc)
+
+    def test_way_back_says_the_copied_page_header_is_not_edited(self):
+        doc = " ".join(_backlog_doc().split())
+        self.assertIn("still name `scripts/workflow_backlog.py`", doc)
+        self.assertIn("must not be hand-edited, because `check` compares the page byte for byte", doc)
+
+    def test_every_error_code_of_the_script_is_documented(self):
+        source = Path(wb.__file__).read_text(encoding="utf-8")
+        codes = set(re.findall(r'BacklogError\(\s*"([a-z_]+)"', source))
+        codes.add("declaration_conflict")
+        self.assertTrue({"declaration_invalid", "backlog_missing", "backlog_invalid", "no_ready_item",
+                         "item_unknown", "status_not_acceptable", "roadmap_not_generated",
+                         "generator_failed", "roadmap_stale", "declaration_conflict"} <= codes, codes)
+        doc = _backlog_doc()
+        for code in sorted(codes):
+            with self.subTest(code):
+                self.assertIn(f"`{code}`", doc)
+
+    def test_the_script_names_this_document_by_its_path(self):
+        self.assertTrue((_repo_root() / _BACKLOG_DOC_REL).is_file())
+        self.assertIn(_BACKLOG_DOC_REL, wb._DECLARATION_NEXT)
+        self.assertIn(_BACKLOG_DOC_REL, Path(wb.__file__).read_text(encoding="utf-8"))
+
+    def test_the_repair_section_it_cites_exists(self):
+        heading = "Repairing an artifact declaration after an approval"
+        doc = _backlog_doc()
+        self.assertIn("REVIEW_PROTOCOL.md", doc)
+        self.assertIn(heading, doc)
+        protocol = (_repo_root() / "docs/ai-workflow/REVIEW_PROTOCOL.md").read_text(encoding="utf-8")
+        self.assertIn("### " + heading, protocol)
+
+    def _generator_repo(self, d):
+        d.write("tools/roadmap.py", _doc_block("generator"))
+
+    def test_example_generator_satisfies_the_freshness_contract(self):
+        extra = {"generator": ["python3", "tools/roadmap.py"]}
+        with _Decl(text=_doc_block("starter"), extra=extra) as d:
+            self._generator_repo(d)
+            self.assertEqual(d.ok("generate")["generator"], "declared")
+            d.ok("check")
+            page = d.read("docs/ROADMAP.md")
+            self.assertIn(b"page-sha256:", page)
+            d.write("docs/ROADMAP.md", page + b"hand edit\n")
+            code, _ = d.refused("check", code=1)
+            self.assertEqual(code, "roadmap_stale")
+            d.ok("generate")
+            d.ok("check")
+            d.write("docs/backlog.yaml", _doc_block("starter").replace("My first item", "Another title"))
+            self.assertEqual(d.refused("check", code=1)[0], "roadmap_stale")
+            d.ok("accept", "first-item")
+            d.ok("check")
+
+    def test_document_names_the_downgrade_procedure(self):
+        doc = _backlog_doc()
+        for needle in ("tools/workflow_backlog.py", "python3 tools/workflow_backlog.py check",
+                       "never run the generator directly"):
+            self.assertIn(needle, doc)
+
+    def test_keep_the_backlog_procedure_leaves_check_passing(self):
+        extra = {"generator": ["python3", "tools/roadmap.py"]}
+        with _Decl(text=_doc_block("starter"), extra=extra) as d:
+            self._generator_repo(d)
+            d.write("tools/workflow_backlog.py", Path(wb.__file__).read_bytes())
+            shutil.rmtree(d.root / "scripts")
+
+            def copy(*args):
+                return subprocess.run(["python3", "-I", "tools/workflow_backlog.py", *args], cwd=d.root,
+                                      capture_output=True, text=True)
+
+            self.assertEqual(copy("generate").returncode, 0)
+            self.assertEqual(copy("check").returncode, 0)
+            d.write("docs/backlog.yaml", _doc_block("starter").replace("status: next", "status: done"))
+            self.assertEqual(copy("check").returncode, 1)
+            self.assertEqual(copy("generate").returncode, 0)
+            done = copy("check")
+            self.assertEqual(done.returncode, 0, done.stderr)
+
+    def test_copy_nested_below_the_root_reads_the_repository_declaration(self):
+        with _Decl(text=_doc_block("starter")) as d:
+            d.write("tools/backlog/workflow_backlog.py", Path(wb.__file__).read_bytes())
+            shutil.rmtree(d.root / "scripts")
+            subprocess.run(["git", "init", "-q"], cwd=d.root, check=True)
+
+            def copy(*args, cwd=d.root):
+                return subprocess.run(["python3", "-I", str(d.root / "tools/backlog/workflow_backlog.py"), *args],
+                                      cwd=cwd, capture_output=True, text=True)
+
+            # the page is missing: a copy that lost the declaration would pass here
+            missing = copy("check")
+            self.assertEqual(missing.returncode, 1, missing.stdout + missing.stderr)
+            self.assertIn("roadmap_stale", missing.stderr)
+            self.assertEqual(copy("generate").returncode, 0)
+            self.assertEqual(copy("check").returncode, 0)
+            d.write("docs/ROADMAP.md", d.read("docs/ROADMAP.md") + b"hand edit\n")
+            sub = d.root / "docs"
+            self.assertEqual(copy("check", cwd=sub).returncode, 1)
+
+
+# ---------------------------------------------------------------------------
+# workflow-2.20.0: the retention report (workflow_retention)
+# ---------------------------------------------------------------------------
+
+_RR_NOW = __import__("datetime").datetime(2026, 11, 1, 12, 0, 0, tzinfo=__import__("datetime").timezone.utc)
+
+
+def _rr_commit(item_id: str) -> str:
+    return hashlib.sha1(item_id.encode()).hexdigest()
+
+
+def _rr_raw(state: str, number: int = 7) -> str:
+    if state == "none":
+        return "[]"
+    return json.dumps([{"number": number, "url": f"https://github.com/acme/widgets/pull/{number}",
+                        "state": state.upper(), "headRefOid": "a" * 40}])
+
+
+def _rr_item(phase="MILESTONE_COMPLETE", last="2026-10-01T00:00:00Z", parent=None, anchor=True, **extra):
+    item = {"phase": phase, "last_transition": last, "parent_work_item_id": parent}
+    if anchor is True:
+        item["reviewed_implementation_head"] = "PLACEHOLDER"
+    item.update(extra)
+    return item
+
+
+def _rr_snapshot(*roots):
+    seen = {}
+    for root in roots:
+        for directory, dirs, names in os.walk(root):
+            dirs.sort()
+            for name in names + dirs:
+                full = os.path.join(directory, name)
+                if os.path.islink(full):
+                    seen[full] = ("link", os.readlink(full))
+                elif os.path.isfile(full):
+                    seen[full] = ("file", hashlib.sha256(Path(full).read_bytes()).hexdigest())
+                else:
+                    seen[full] = ("dir",)
+    return seen
+
+
+def _rr_find_pycache(*roots):
+    return sorted(os.path.join(d, n) for root in roots for d, dirs, _ in os.walk(root) for n in dirs
+                  if n == "__pycache__")
+
+
+class _RR:
+    """A scratch repository with a `github.com` origin, a hand-built state
+    file, an archive root, and the forge seam (no network, no `gh`)."""
+
+    def __init__(self, items, origin=True, outcomes=None):
+        self.items, self.origin, self.outcomes = items, origin, outcomes or {}
+        self.queried = []
+
+    def __enter__(self):
+        self.repo = ScratchRepo().__enter__()
+        self.root = self.repo.root
+        if self.origin:
+            _run(["git", "remote", "add", "origin", "https://github.com/acme/widgets.git"], cwd=self.root)
+        self.archive_root = Path(tempfile.mkdtemp(prefix="wfo-archive-"))
+        (self.archive_root / "widgets").mkdir()
+        self.write_state(self.items)
+        return self
+
+    def __exit__(self, *exc):
+        shutil.rmtree(self.archive_root, ignore_errors=True)
+        self.repo.__exit__(*exc)
+
+    def write_state(self, items):
+        entries = {}
+        for key, item in items.items():
+            item = dict(item)
+            if item.get("reviewed_implementation_head") == "PLACEHOLDER":
+                item["reviewed_implementation_head"] = _rr_commit(key)
+            entries[key] = item
+        _write(self.repo, "docs/ai-workflow/WORKFLOW_STATE.json", json.dumps({"work_items": entries}))
+
+    def run(self, argv, timeout):
+        commit = argv[argv.index("--search") + 1]
+        self.queried.append(commit)
+        outcome = self.outcomes.get(commit, "merged")
+        if isinstance(outcome, BaseException):
+            raise outcome
+        return _rr_raw(outcome)
+
+    @staticmethod
+    def resolve(repo_root):
+        return {"path": "/usr/bin/gh", "sha256": "0" * 64}
+
+    def build(self, ttl_days=30, now=_RR_NOW):
+        return wr.build_report(self.root, archive_root=self.archive_root, ttl_days=ttl_days, now=now,
+                               run=self.run, resolve=self.resolve)
+
+    def cli(self, *args, capture=True):
+        import contextlib
+        import io
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = wr.main(["report", "--repo-root", str(self.root), "--archive-root", str(self.archive_root), *args],
+                           run=self.run, resolve=self.resolve, now=_RR_NOW)
+        return code, out.getvalue(), err.getvalue()
+
+    def archive(self, name, age_seconds, size=10):
+        path = self.archive_root / "widgets" / name
+        path.write_bytes(b"x" * size)
+        stamp = _RR_NOW.timestamp() - age_seconds
+        os.utime(path, (stamp, stamp))
+        return path
+
+    def reasons(self, report):
+        return {r["work_item_id"]: r["reason"] for r in report["not_finished"]}
+
+
+def _rr_many(count, **extra):
+    return {f"w{n:02d}": _rr_item(last=f"2026-09-{n + 1:02d}T00:00:00Z", **extra) for n in range(count)}
+
+
+class RetentionReport(unittest.TestCase):
+    def test_t1_merged_is_finished_open_phase_is_not_and_the_stored_fact_is_ignored(self):
+        items = _rr_many(5)
+        items["busy"] = _rr_item(phase="IMPLEMENTING")
+        items["stale-merged"] = _rr_item(last="2026-08-01T00:00:00Z", gate_evidence={"pr": {"state": "merged"}})
+        items["stale-open"] = _rr_item(last="2026-08-02T00:00:00Z", gate_evidence={"pr": {"state": "open"}})
+        outcomes = {_rr_commit("stale-merged"): "open"}
+        with _RR(items, outcomes=outcomes) as rr:
+            report = rr.build()
+            self.assertEqual(rr.reasons(report)["busy"], "open_phase")
+            self.assertEqual(rr.reasons(report)["stale-merged"], "pr_not_merged:open")
+            finished = [r["work_item_id"] for r in report["finished"]]
+            self.assertIn("stale-open", finished)
+            self.assertNotIn("stale-merged", finished)
+            self.assertNotIn("busy", finished)
+
+    def test_t2_a_parent_or_child_that_is_not_complete_is_family_open(self):
+        items = {"parent": _rr_item(), "kid": _rr_item(parent="parent", last="2026-10-02T00:00:00Z"),
+                 "slow-kid": _rr_item(phase="PLANNING", parent="parent"),
+                 "orphan": _rr_item(parent="missing"),
+                 "child-of-open": _rr_item(parent="open-parent"), "open-parent": _rr_item(phase="IMPLEMENTING")}
+        with _RR(items) as rr:
+            reasons = rr.reasons(rr.build())
+            self.assertEqual(reasons["parent"], "family_open")
+            self.assertEqual(reasons["orphan"], "family_open")
+            self.assertEqual(reasons["child-of-open"], "family_open")
+            self.assertEqual(reasons["slow-kid"], "open_phase")
+            self.assertEqual(reasons["open-parent"], "open_phase")
+
+    def test_t3_the_three_newest_merged_are_kept_with_ties_broken_by_id(self):
+        items = _rr_many(4)
+        for key in ("tie-b", "tie-a"):
+            items[key] = _rr_item(last="2026-10-20T00:00:00Z")
+        with _RR(items) as rr:
+            report = rr.build()
+            self.assertEqual([r["work_item_id"] for r in report["kept_recent"]], ["tie-a", "tie-b", "w03"])
+            self.assertEqual([r["work_item_id"] for r in report["finished"]], ["w02", "w01", "w00"])
+            self.assertEqual(report["totals"]["finished"], 3)
+
+    def test_t4_every_query_outcome_and_a_missing_anchor_is_not_finished_with_its_reason(self):
+        from workflow_forge import ForgeUnavailableError, ForgeUndecidableError
+        items = {"ok-a": _rr_item(last="2026-10-09T00:00:00Z"), "unavail": _rr_item(last="2026-10-08T00:00:00Z"),
+                 "undecid": _rr_item(last="2026-10-07T00:00:00Z"), "boom": _rr_item(last="2026-10-06T00:00:00Z"),
+                 "nopr": _rr_item(last="2026-10-05T00:00:00Z"), "shut": _rr_item(last="2026-10-04T00:00:00Z"),
+                 "ok-b": _rr_item(last="2026-10-03T00:00:00Z"), "anchorless": _rr_item(anchor=False),
+                 "busy": _rr_item(phase="IMPLEMENTING"), "Bad Id": _rr_item()}
+        outcomes = {_rr_commit("unavail"): ForgeUnavailableError("gh gone"),
+                    _rr_commit("undecid"): ForgeUndecidableError("two"), _rr_commit("boom"): RuntimeError("x"),
+                    _rr_commit("nopr"): "none", _rr_commit("shut"): "closed"}
+        with _RR(items, outcomes=outcomes) as rr:
+            reasons = rr.reasons(rr.build())
+            self.assertEqual(reasons["unavail"], "query_failed:forge_unavailable")
+            self.assertEqual(reasons["undecid"], "query_failed:forge_undecidable")
+            self.assertEqual(reasons["boom"], "query_failed:unexpected")
+            self.assertEqual(reasons["nopr"], "no_pull_request")
+            self.assertEqual(reasons["shut"], "pr_not_merged:closed")
+            self.assertEqual(reasons["anchorless"], "no_anchor")
+            self.assertEqual(reasons["Bad Id"], "invalid_id")
+            self.assertEqual(set(rr.queried), {_rr_commit(k) for k in ("ok-a", "unavail", "undecid", "boom", "nopr", "shut", "ok-b")})
+            # newest first, one at a time
+            self.assertEqual(rr.queried[0], _rr_commit("ok-a"))
+            self.assertEqual(rr.queried[-1], _rr_commit("ok-b"))
+            self.assertEqual(len(rr.queried), 7)
+
+    # -- T1, T7, T8 of the unreadable-input refusals (W37) -------------------
+
+    def test_w37_t1_the_readlink_helper_reads_or_refuses_by_errno(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            os.symlink("a.txt", os.path.join(tmp, "ln"))
+            fd = os.open(tmp, os.O_RDONLY | os.O_DIRECTORY)
+            self.addCleanup(os.close, fd)
+            self.assertEqual(wr._readlink_at("ln", fd, "ln"), "a.txt")
+            for err, code, phrase in ((errno.ENOENT, "folder_changed", "changed while it was read"),
+                                      (errno.EINVAL, "folder_changed", "changed while it was read"),
+                                      (errno.EACCES, "unreadable", "cannot be read"),
+                                      (errno.EIO, "unreadable", "cannot be read"),
+                                      (errno.ELOOP, "unreadable", "cannot be read"),
+                                      (errno.ENAMETOOLONG, "unreadable", "cannot be read")):
+                with self.subTest(err=errno.errorcode[err]):
+                    with _readlink_fails("test_w37_t1_the_readlink_helper_reads_or_refuses_by_errno", "ln",
+                                         err) as counted:
+                        with self.assertRaises(wr.RetentionError) as ctx:
+                            wr._readlink_at("ln", fd, "sub/ln")
+                    self.assertEqual(len(counted), 1)  # the injector fires through the helper
+                    self.assertEqual(ctx.exception.code, code)
+                    self.assertEqual(ctx.exception.message, f"sub/ln {phrase} ({os.strerror(err)})")
+                    self.assertTrue(ctx.exception.next_step)
+                    self.assertIsNone(ctx.exception.__cause__)
+            with _readlink_fails("test_w37_t1_the_readlink_helper_reads_or_refuses_by_errno", "ln", errno.EIO):
+                with self.assertRaises(RuntimeError) as ctx:  # `fail` builds the refusal
+                    wr._readlink_at("ln", fd, "ln", fail=lambda code, message, step: RuntimeError(code))
+            self.assertEqual(str(ctx.exception), "unreadable")
+
+    def test_w37_t7_a_state_file_that_is_not_utf8_is_state_invalid(self):
+        with _RR(_rr_many(2)) as rr:
+            (rr.root / "docs/ai-workflow/WORKFLOW_STATE.json").write_bytes(b'{"work_items": "\xff"}')
+            before = _ra_snap(rr.root, rr.archive_root, times=False)
+            with self.assertRaises(wr.RetentionError) as ctx:
+                wr._load_state(rr.root)
+            self.assertEqual(ctx.exception.code, "state_invalid")
+            self.assertEqual(ctx.exception.message,
+                             "docs/ai-workflow/WORKFLOW_STATE.json is not valid UTF-8 (byte 16)")
+            self.assertEqual(ctx.exception.next_step, "repair the state file")
+            for argv in (["report"], ["archive", "w00"], ["archive", "w00", "--apply"], ["remove", "w00"],
+                         ["remove", "w00", "--apply"], ["prune", "w00"]):
+                with self.subTest(argv=argv):
+                    out, err = io.StringIO(), io.StringIO()
+                    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                        code = wr.main([*argv, "--repo-root", str(rr.root), "--archive-root", str(rr.archive_root)],
+                                       run=rr.run, resolve=rr.resolve, now=_RR_NOW)
+                    self.assertEqual(code, 2)
+                    self.assertIn("state_invalid", err.getvalue())
+                    self.assertIn("is not valid UTF-8", err.getvalue())
+                    self.assertIn("next step:", err.getvalue())
+            self.assertEqual(_ra_snap(rr.root, rr.archive_root, times=False), before)
+
+    def ls_files_stand_in(self, stdout=b"", stderr=b"", returncode=0):
+        """A `subprocess.run` that answers `git ls-files` with bytes, as the real
+        call does, and decodes them strictly when `text` is requested."""
+        real = subprocess.run
+
+        def run(args, *a, **kwargs):
+            if list(args[:2]) != ["git", "ls-files"]:
+                return real(args, *a, **kwargs)
+            out, err = stdout, stderr
+            if kwargs.get("text"):
+                out, err = out.decode(), err.decode()
+            return subprocess.CompletedProcess(args, returncode, out, err)
+        return unittest.mock.patch.object(wr.subprocess, "run", run)
+
+    def test_w37_t8_a_tracked_path_that_is_not_utf8_is_repository_unknown(self):
+        with _RR(_rr_many(2)) as rr:
+            with self.ls_files_stand_in(b".ai-review/w00/ok\0.ai-review/w00/bad\xff\0"):
+                with self.assertRaises(wr.RetentionError) as ctx:
+                    wr._tracked_counts(rr.root)
+                self.assertEqual(ctx.exception.code, "repository_unknown")
+                self.assertEqual(ctx.exception.message, "git ls-files printed a path under .ai-review that is "
+                                 "not valid UTF-8")
+                self.assertIn("rename or untrack that path", ctx.exception.next_step)
+                code, out, err = rr.cli()
+                self.assertEqual(code, 2)
+                self.assertIn("repository_unknown", err)
+                self.assertIn("next step:", err)
+                self.assertTrue(wr._git_tracked(rr.root, "w00"))  # already safe: nothing is decoded
+            with self.ls_files_stand_in("\u00e9/\u00fc".join([".ai-review/w00/", "\0.ai-review/w01/x"]).encode()):
+                self.assertEqual(wr._tracked_counts(rr.root), {"w00": 1, "w01": 1})
+            with self.ls_files_stand_in(stderr=b"fatal: \xff", returncode=128):
+                with self.assertRaises(wr.RetentionError) as ctx:
+                    wr._tracked_counts(rr.root)
+                self.assertEqual((ctx.exception.code, ctx.exception.message[:20]),
+                                 ("repository_unknown", "git ls-files failed:"))
+
+    def test_t4b_the_anchor_is_the_technical_approval_commit_only_with_its_identity(self):
+        approved = {"reviewed_content_commit": "b" * 40, "approved_review_content_id": "c" * 64}
+        half = {"reviewed_content_commit": "d" * 40}
+        items = {"with-id": _rr_item(technical_approval=approved), "without-id": _rr_item(technical_approval=half)}
+        with _RR(items) as rr:
+            rr.build()
+            self.assertIn("b" * 40, rr.queried)
+            self.assertIn(_rr_commit("without-id"), rr.queried)
+            self.assertNotIn("d" * 40, rr.queried)
+
+    def test_t5_folder_sizes_symlinks_and_tracked_files(self):
+        items = _rr_many(4)
+        with _RR(items) as rr:
+            _write(rr.repo, ".ai-review/w00/a.txt", "12345")
+            _write(rr.repo, ".ai-review/w00/sub/b.txt", "123")
+            elsewhere = Path(tempfile.mkdtemp(prefix="wfo-elsewhere-"))
+            self.addCleanup(shutil.rmtree, elsewhere, True)
+            (elsewhere / "big").write_text("x" * 1000)
+            os.symlink(elsewhere / "big", rr.root / ".ai-review/w00/link")
+            os.symlink(elsewhere, rr.root / ".ai-review/w00/dirlink")
+            os.symlink(elsewhere, rr.root / ".ai-review/w01")
+            _write(rr.repo, ".ai-review/w02/t.txt", "1")
+            _run(["git", "add", "-f", ".ai-review/w02/t.txt"], cwd=rr.root)
+            by_id = {r["work_item_id"]: r for r in rr.build()["finished"] + rr.build()["kept_recent"]}
+            self.assertEqual(by_id["w00"]["review_folder"], {"present": True, "complete": True, "files": 2, "bytes": 8, "tracked_files": 0})
+            self.assertFalse(by_id["w01"]["review_folder"]["present"])
+            self.assertEqual(by_id["w02"]["review_folder"]["tracked_files"], 1)
+            self.assertEqual(by_id["w03"]["review_folder"], {"present": False, "complete": True, "files": 0, "bytes": 0, "tracked_files": 0})
+
+    def test_t6_archive_presence_age_and_prunable(self):
+        items = _rr_many(6)
+        day = 86400
+        with _RR(items) as rr:
+            rr.archive("w00.tar.zst", 30 * day)
+            rr.archive("w01.tar.zst", 30 * day + 23 * 3600)
+            rr.archive("w02.tar.zst", 31 * day + 1)
+            real = rr.archive_root / "widgets" / "real"
+            real.write_bytes(b"x")
+            os.symlink(real, rr.archive_root / "widgets" / "w03.tar.zst")
+            rr.archive("w04.tar.zst", 100 * day)          # recent (kept) item
+            rr.archive("w99.tar.zst", 40 * day)           # no such item
+            rr.archive("notes.txt", 40 * day)
+            report = rr.build()
+            archive = {r["work_item_id"]: r["archive"] for r in report["finished"]}
+            self.assertFalse(archive["w00"]["prunable"])
+            self.assertEqual(archive["w00"]["age_days"], 30)
+            self.assertFalse(archive["w01"]["prunable"])
+            self.assertEqual(archive["w01"]["age_days"], 30)
+            self.assertTrue(archive["w02"]["prunable"])
+            self.assertEqual(archive["w02"]["age_days"], 31)
+            self.assertEqual(archive["w02"]["modified"], "2026-10-01T11:59:59Z")
+            self.assertEqual(archive["w02"]["bytes"], 10)
+            self.assertEqual(report["kept_recent"][0]["work_item_id"], "w05")
+            self.assertEqual({a["name"]: a["item"] for a in report["archives"]},
+                             {"w00.tar.zst": "finished", "w01.tar.zst": "finished", "w02.tar.zst": "finished",
+                              "w04.tar.zst": "recent", "w99.tar.zst": "other"})
+            self.assertEqual(report["totals"]["prunable"], 3)
+            self.assertEqual(report["totals"]["archives"], 5)
+            self.assertEqual(rr.build(ttl_days=60)["totals"]["prunable"], 1)
+
+    def test_t6b_an_archive_of_a_reopened_item_is_open_and_an_absent_archive_is_null(self):
+        items = {"reopened": _rr_item(phase="IMPLEMENTING"), **_rr_many(4)}
+        with _RR(items) as rr:
+            rr.archive("reopened.tar.zst", 90 * 86400)
+            report = rr.build()
+            self.assertEqual([a["item"] for a in report["archives"]], ["open"])
+            self.assertEqual(report["finished"][0]["archive"],
+                             {"present": False, "readable": True, "bytes": None, "modified": None, "age_days": None,
+                              "prunable": False})
+
+    def _every_failure_path(self):
+        from workflow_forge import ForgeUnavailableError, ForgeUndecidableError
+        items = {"a": _rr_item(), "b": _rr_item(), "c": _rr_item(), "d": _rr_item(), "e": _rr_item(),
+                 "f": _rr_item(), "g": _rr_item(), "h": _rr_item(anchor=False), "i": _rr_item(phase="IMPLEMENTING")}
+        outcomes = {_rr_commit("a"): ForgeUnavailableError("x"), _rr_commit("b"): ForgeUndecidableError("x"),
+                    _rr_commit("c"): RuntimeError("x"), _rr_commit("d"): "none", _rr_commit("e"): "closed"}
+        return items, outcomes
+
+    def _populate(self, rr):
+        _write(rr.repo, ".ai-review/a/x.txt", "data")
+        rr.archive("a.tar.zst", 10 * 86400)
+        rr.archive("zzz.tar.zst", 50 * 86400)
+
+    def test_t7_nothing_is_written_on_any_path(self):
+        items, outcomes = self._every_failure_path()
+        with _RR(items, outcomes=outcomes) as rr:
+            self._populate(rr)
+            before = _rr_snapshot(rr.root, rr.archive_root)
+            self.assertGreater(len(before), 20)
+            self.assertTrue(any(k.endswith("x.txt") for k in before))
+            self.assertTrue(any(k.endswith("zzz.tar.zst") for k in before))
+            rr.build()
+            self.assertEqual(rr.cli("--json")[0], 0)
+            self.assertEqual(rr.cli()[0], 0)
+            self.assertEqual(_rr_snapshot(rr.root, rr.archive_root), before)
+
+    def test_t7b_nothing_is_written_when_every_query_fails_or_a_refusal_happens(self):
+        from workflow_forge import ForgeUnavailableError
+        items = _rr_many(6)
+        every = {_rr_commit(k): ForgeUnavailableError("x") for k in items}
+        with _RR(items, outcomes=every) as rr:
+            self._populate(rr)
+            before = _rr_snapshot(rr.root, rr.archive_root)
+            self.assertEqual(rr.cli()[0], 0)
+            self.assertEqual(rr.build()["finished"], [])
+            for bad in ("0", "abc"):
+                self.assertEqual(rr.cli("--ttl-days", bad)[0], 2)
+                self.assertEqual(_rr_snapshot(rr.root, rr.archive_root), before)
+            self.assertEqual(_rr_snapshot(rr.root, rr.archive_root), before)
+        with _RR(items, origin=False) as rr:
+            self._populate(rr)
+            state_path = rr.root / "docs/ai-workflow/WORKFLOW_STATE.json"
+
+            def refused_leaves_everything_as_it_was():
+                before = _rr_snapshot(rr.root, rr.archive_root)
+                self.assertEqual(rr.cli()[0], 2)
+                self.assertEqual(_rr_snapshot(rr.root, rr.archive_root), before)
+
+            refused_leaves_everything_as_it_was()          # repository_unknown
+            os.unlink(state_path)
+            refused_leaves_everything_as_it_was()          # state_missing
+            _write(rr.repo, "docs/ai-workflow/WORKFLOW_STATE.json", "{not json")
+            refused_leaves_everything_as_it_was()          # state_invalid
+
+    def _deny(self, path):
+        mode = os.stat(path).st_mode
+        os.chmod(path, 0)
+
+        def restore():
+            try:
+                os.chmod(path, mode)
+            except FileNotFoundError:
+                pass
+
+        self.addCleanup(restore)
+
+    def test_t7c_unreadable_review_and_archive_paths_are_marked_incomplete_and_nothing_is_written(self):
+        if os.geteuid() == 0:
+            self.skipTest("permission denial cannot be provoked as root")
+        with _RR(_rr_many(4)) as rr:
+            _write(rr.repo, ".ai-review/w00/a.txt", "12345")
+            _write(rr.repo, ".ai-review/w00/sub/b.txt", "123")
+            _write(rr.repo, ".ai-review/w00/sub/deep/c.txt", "12")
+            _write(rr.repo, ".ai-review/w01/keep.txt", "1")
+            rr.archive("w00.tar.zst", 40 * 86400, size=20)
+            clean = {r["work_item_id"]: r for r in rr.build()["finished"] + rr.build()["kept_recent"]}
+            self.assertEqual(clean["w00"]["review_folder"]["bytes"], 10)
+            self.assertTrue(rr.build()["complete"])
+            before = _rr_snapshot(rr.root, rr.archive_root)
+            sub = rr.root / ".ai-review/w00/sub"
+            self._deny(sub)
+            for args in ((), ("--json",)):
+                code, out, err = rr.cli(*args)
+                self.assertEqual(code, 0)
+                self.assertTrue(err.startswith("warning: incomplete: 1 path(s)"), err)
+                self.assertIn("INCOMPLETE" if not args else '"complete": false', out)
+            report = rr.build()
+            by_id = {r["work_item_id"]: r for r in report["finished"] + report["kept_recent"]}
+            self.assertFalse(by_id["w00"]["review_folder"]["complete"])
+            self.assertEqual(by_id["w00"]["review_folder"]["bytes"], 5)
+            self.assertTrue(by_id["w01"]["review_folder"]["complete"])
+            self.assertFalse(report["complete"])
+            self.assertEqual([e["path"] for e in report["read_errors"]], [str(sub)])
+            self.assertIn("PermissionError", report["read_errors"][0]["error"])
+            os.chmod(sub, 0o755)
+            nested = sub / "deep"
+            self._deny(nested)
+            self.assertEqual([e["path"] for e in rr.build()["read_errors"]], [str(nested)])
+            os.chmod(nested, 0o755)
+            # an unreadable file's directory: entries cannot be examined
+            self._deny(rr.root / ".ai-review/w00/sub")
+            os.chmod(rr.root / ".ai-review/w00/sub", 0o644)
+            self.assertFalse(rr.build()["complete"])
+            os.chmod(rr.root / ".ai-review/w00/sub", 0o755)
+            # the archive root cannot be searched: absence is not claimed
+            self._deny(rr.archive_root)
+            report = rr.build()
+            self.assertFalse(report["complete"])
+            self.assertEqual(report["archives"], [])
+            archive = {r["work_item_id"]: r["archive"] for r in report["finished"]}
+            self.assertFalse(archive["w00"]["readable"])
+            self.assertFalse(report["read_errors"] == [])
+            self.assertTrue(all("PermissionError" in e["error"] for e in report["read_errors"]))
+            code, out, err = rr.cli("--json")
+            self.assertEqual(code, 0)
+            self.assertFalse(json.loads(out)["complete"])
+            self.assertIn("warning: incomplete", err)
+            os.chmod(rr.archive_root, 0o755)
+            # the archive directory itself cannot be listed
+            self._deny(rr.archive_root / "widgets")
+            report = rr.build()
+            self.assertFalse(report["complete"])
+            self.assertEqual(report["archives"], [])
+            self.assertIn(str(rr.archive_root / "widgets"), [e["path"] for e in report["read_errors"]])
+            os.chmod(rr.archive_root / "widgets", 0o755)
+            self.assertEqual(_rr_snapshot(rr.root, rr.archive_root), before)
+            self.assertTrue(rr.build()["complete"])
+
+    def test_t8_cli_json_text_and_refusals(self):
+        items = _rr_many(5)
+        items["busy"] = _rr_item(phase="IMPLEMENTING")
+        with _RR(items) as rr:
+            rr.archive("w00.tar.zst", 40 * 86400)
+            code, out, err = rr.cli("--json")
+            self.assertEqual((code, err), (0, ""))
+            self.assertTrue(out.endswith("\n"))
+            report = json.loads(out)
+            self.assertEqual(sorted(report), ["archive_dir", "archives", "complete", "finished", "generated_at",
+                                              "keep_recent", "kept_recent", "kind", "not_finished", "read_errors",
+                                              "removing", "repository", "schema_version", "totals", "ttl_days"])
+            self.assertEqual((report["complete"], report["read_errors"]), (True, []))
+            self.assertEqual(report["repository"], "acme/widgets")
+            self.assertEqual(report["kind"], "retention-report")
+            self.assertEqual(report["generated_at"], "2026-11-01T12:00:00Z")
+            self.assertEqual(sorted(report["finished"][0]), ["archive", "last_transition", "pull_request",
+                                                             "review_folder", "work_item_id"])
+            self.assertEqual(sorted(report["kept_recent"][0]), ["last_transition", "pull_request",
+                                                                "review_folder", "work_item_id"])
+            self.assertEqual(report["finished"][0]["pull_request"],
+                             {"number": 7, "url": "https://github.com/acme/widgets/pull/7"})
+            self.assertEqual(sorted(report["totals"]), ["archives", "finished", "finished_folder_bytes", "prunable"])
+            self.assertEqual(out, json.dumps(report, sort_keys=True) + "\n")
+            code, text, err = rr.cli()
+            self.assertEqual(code, 0)
+            for needle in ("acme/widgets", "Finished (2)", "Kept as recent (3)", "Not finished (1)",
+                           "open_phase: 1", "prunable (1)", "w00.tar.zst"):
+                self.assertIn(needle, text)
+            for argv in (["--ttl-days", "0"], ["--ttl-days", "abc"], ["--ttl-days", "3651"], ["--bogus"]):
+                code, out, err = rr.cli(*argv)
+                self.assertEqual(code, 2, argv)
+                self.assertEqual(out, "")
+                self.assertTrue(err.startswith("error: usage: "), err)
+                self.assertIn("\nnext step: ", err)
+            self.assertEqual(rr.cli("--ttl-days", "3650")[0], 0)
+
+    def test_t8b_refusal_codes(self):
+        with _RR({}, origin=False) as rr:
+            code, out, err = rr.cli()
+            self.assertEqual((code, out), (2, ""))
+            self.assertTrue(err.startswith("error: repository_unknown: "), err)
+            os.unlink(rr.root / "docs/ai-workflow/WORKFLOW_STATE.json")
+            self.assertTrue(rr.cli()[2].startswith("error: state_missing: "))
+            _write(rr.repo, "docs/ai-workflow/WORKFLOW_STATE.json", "[]")
+            self.assertTrue(rr.cli()[2].startswith("error: state_invalid: "))
+            _write(rr.repo, "docs/ai-workflow/WORKFLOW_STATE.json", "{")
+            self.assertTrue(rr.cli()[2].startswith("error: state_invalid: "))
+
+    def test_t8c_a_real_subprocess_without_origin_exits_2_with_repository_unknown(self):
+        with _RR(_rr_many(1), origin=False) as rr:
+            script = Path(wr.__file__).resolve()
+            proc = subprocess.run(["python3", "-I", str(script), "report", "--repo-root", str(rr.root),
+                                   "--archive-root", str(rr.archive_root)], capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 2, proc.stderr)
+            self.assertIn("error: repository_unknown", proc.stderr)
+            self.assertIn("next step:", proc.stderr)
+            usage = subprocess.run(["python3", "-I", str(script)], capture_output=True, text=True)
+            self.assertEqual(usage.returncode, 2)
+            self.assertIn("error: usage", usage.stderr)
+
+    def _child_env(self):
+        env = {k: v for k, v in os.environ.items()
+               if k not in ("PYTHONDONTWRITEBYTECODE", "PYTHONPYCACHEPREFIX", "PYTHONPATH")}
+        return env
+
+    def _scripts_copy(self):
+        copy = Path(tempfile.mkdtemp(prefix="wfo-scripts-"))
+        self.addCleanup(shutil.rmtree, copy, True)
+        for name in ("workflow_retention.py", "workflow_forge.py"):
+            shutil.copy(Path(wr.__file__).resolve().parent / name, copy / name)
+        return copy
+
+    def test_t9_bytecode_contract_from_fresh_interpreters(self):
+        env = self._child_env()
+        # (a) the CLI form leaves no __pycache__ anywhere
+        with _RR(_rr_many(1), origin=False) as rr:
+            copy = self._scripts_copy()
+            self.assertEqual(_rr_find_pycache(copy, rr.root, rr.archive_root), [])
+            proc = subprocess.run(["python3", "-I", str(copy / "workflow_retention.py"), "report",
+                                   "--repo-root", str(rr.root), "--archive-root", str(rr.archive_root)],
+                                  capture_output=True, text=True, env=env)
+            self.assertEqual(proc.returncode, 2, proc.stderr)
+            self.assertEqual(_rr_find_pycache(copy, rr.root, rr.archive_root), [])
+        # (b) the import form with the assignment before the import leaves none
+        code = ("import sys\nsys.dont_write_bytecode = True\nsys.path.insert(0, sys.argv[1])\n"
+                "import datetime, workflow_retention as w\n"
+                "w.build_report(sys.argv[2], archive_root=sys.argv[3], now=datetime.datetime.now(datetime.timezone.utc),\n"
+                "               run=lambda argv, timeout: '[]', resolve=lambda r: {'path': '/usr/bin/gh', 'sha256': '0'})\n")
+        with _RR({}) as rr:
+            copy = self._scripts_copy()
+            proc = subprocess.run(["python3", "-I", "-c", code, str(copy), str(rr.root), str(rr.archive_root)],
+                                  capture_output=True, text=True, env=env)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(_rr_find_pycache(copy, rr.root, rr.archive_root), [])
+        # (c) control: the same import without the assignment does create one
+        copy = self._scripts_copy()
+        proc = subprocess.run(["python3", "-I", "-c", "import sys; sys.path.insert(0, sys.argv[1]); import workflow_retention",
+                               str(copy)], capture_output=True, text=True, env=env)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(len(_rr_find_pycache(copy)), 1)
+
+    def test_t10_the_output_is_a_pure_function_of_state_folders_archives_and_now(self):
+        items = {**_rr_many(6), "busy": _rr_item(phase="IMPLEMENTING")}
+        with _RR(items) as rr:
+            for name in ("w00", "w01"):
+                rr.archive(f"{name}.tar.zst", 40 * 86400)
+            _write(rr.repo, ".ai-review/w00/a", "1")
+            first = rr.cli("--json")[1]
+            rr.write_state(dict(reversed(list(items.items()))))
+            for name in ("w00", "w01"):
+                os.unlink(rr.archive_root / "widgets" / f"{name}.tar.zst")
+            for name in ("w01", "w00"):
+                rr.archive(f"{name}.tar.zst", 40 * 86400)
+            self.assertEqual(rr.cli("--json")[1], first)
+            report = json.loads(first)
+            self.assertEqual([a["name"] for a in report["archives"]], ["w00.tar.zst", "w01.tar.zst"])
+
+
+
+# ---------------------------------------------------------------------------
+# workflow-2.21.0: the retention archive (workflow_retention archive)
+# ---------------------------------------------------------------------------
+
+import contextlib  # noqa: E402
+import errno  # noqa: E402
+import io  # noqa: E402
+import sys  # noqa: E402
+import tarfile  # noqa: E402
+import threading  # noqa: E402
+
+_HAVE_ZSTD = shutil.which("zstd") is not None
+_AS_ROOT = hasattr(os, "geteuid") and os.geteuid() == 0
+_REAL = {name: getattr(os, name) for name in ("unlink", "utime", "symlink", "rename", "mkdir", "rmdir", "link")}
+_RA_MUTATING = ("rename", "replace", "unlink", "rmdir", "mkdir", "link", "symlink", "utime", "chmod", "chown",
+                "truncate", "ftruncate", "write", "mkfifo", "mknod")
+
+
+def _ra_target(root, args, kwargs, position=0):
+    """The absolute path a mutating call names, or None when it names none."""
+    if len(args) <= position:
+        return None
+    path = args[position]
+    if isinstance(path, int):
+        try:
+            return os.readlink(f"/proc/self/fd/{path}")
+        except OSError:
+            return None
+    if not isinstance(path, (str, bytes, os.PathLike)):
+        return None
+    path = os.fsdecode(path)
+    if not os.path.isabs(path):
+        dir_fd = kwargs.get("dir_fd", kwargs.get("src_dir_fd"))
+        if dir_fd is None:
+            return os.path.abspath(path)
+        try:
+            return os.path.join(os.readlink(f"/proc/self/fd/{dir_fd}"), path)
+        except OSError:
+            return None
+    return path
+
+
+@contextlib.contextmanager
+def _ra_write_guard(root, violations):
+    """A18: every mutating call of `os`/`shutil` whose target is under the
+    repository root is recorded and refused."""
+    root = os.path.realpath(root)
+    real = {name: getattr(os, name) for name in _RA_MUTATING if hasattr(os, name)}
+    real_open, real_rmtree = os.open, shutil.rmtree
+
+    def under(path):
+        return path is not None and (os.path.realpath(path) == root or os.path.realpath(path).startswith(root + os.sep))
+
+    def wrap(name):
+        def call(*args, **kwargs):
+            positions = (0, 1) if name in ("rename", "replace", "link", "symlink") else (0,)
+            for position in positions:
+                if name == "symlink" and position == 0:
+                    continue
+                if under(_ra_target(root, args, kwargs, position)):
+                    violations.append((name, args))
+                    raise AssertionError(f"a write to the repository: os.{name}{args}")
+            return real[name](*args, **kwargs)
+        return call
+
+    def open_(path, flags, *args, **kwargs):
+        if flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC | os.O_APPEND) \
+                and under(_ra_target(root, (path,), kwargs)):
+            violations.append(("open", (path, flags)))
+            raise AssertionError(f"a write to the repository: os.open({path!r}, {flags})")
+        return real_open(path, flags, *args, **kwargs)
+
+    def rmtree(path, *args, **kwargs):
+        if under(os.path.abspath(os.fsdecode(path))):
+            violations.append(("rmtree", (path,)))
+            raise AssertionError(f"a write to the repository: shutil.rmtree({path!r})")
+        return real_rmtree(path, *args, **kwargs)
+
+    patches = [unittest.mock.patch.object(os, name, wrap(name)) for name in real]
+    patches += [unittest.mock.patch.object(os, "open", open_), unittest.mock.patch.object(shutil, "rmtree", rmtree)]
+    with contextlib.ExitStack() as stack:
+        for patch in patches:
+            stack.enter_context(patch)
+        yield
+
+
+def _ra_snap(*roots, times=True):
+    """Path, kind, mode, size, mtime_ns, ctime_ns and hash of everything below
+    (`times=False` leaves the directories' own timestamps out)."""
+    seen = {}
+    for root in roots:
+        for directory, dirs, names in os.walk(root, followlinks=False):
+            dirs.sort()
+            for name in sorted(names + dirs):
+                full = os.path.join(directory, name)
+                info = os.lstat(full)
+                digest = None
+                if stat.S_ISLNK(info.st_mode):
+                    digest = os.readlink(full)
+                elif stat.S_ISREG(info.st_mode):
+                    digest = hashlib.sha256(Path(full).read_bytes()).hexdigest()
+                if times:
+                    seen[full] = (stat.S_IFMT(info.st_mode), stat.S_IMODE(info.st_mode), info.st_size,
+                                  info.st_mtime_ns, info.st_ctime_ns, digest)
+                else:
+                    seen[full] = (stat.S_IFMT(info.st_mode), stat.S_IMODE(info.st_mode),
+                                  None if stat.S_ISDIR(info.st_mode) else info.st_size, digest)
+    return seen
+
+
+class _Killed(BaseException):
+    pass
+
+
+@contextlib.contextmanager
+def _stat_fails(site, name, err, skip=0):
+    """Fails the `lstat` of `name` (a call with a `dir_fd`) that the function
+    `site` makes through `_lstat_at` or `_lstat_raw`, after `skip` earlier ones
+    passed. A direct `os.stat` of the site itself is not counted. Yields the
+    list of the calls counted for the site."""
+    real = os.stat
+    counted = []
+
+    def fails(path, *args, **kwargs):
+        if kwargs.get("dir_fd") is not None and path == name:
+            frame = sys._getframe(1)
+            if frame.f_code.co_name == "_lstat_raw":
+                frame = frame.f_back
+                if frame.f_code.co_name == "_lstat_at":
+                    frame = frame.f_back
+                if frame.f_code.co_name == site:
+                    counted.append(path)
+                    if len(counted) > skip:
+                        raise OSError(err, os.strerror(err))
+        return real(path, *args, **kwargs)
+    with unittest.mock.patch.object(os, "stat", fails):
+        yield counted
+
+
+@contextlib.contextmanager
+def _readlink_fails(site, name, err, skip=0):
+    """Fails the `readlink` of `name` (a call with a `dir_fd`) that the function
+    `site` makes, directly or through `_readlink_at`, after `skip` earlier ones
+    passed. Yields the list of the calls counted for the site."""
+    real = os.readlink
+    counted = []
+
+    def fails(path, *args, **kwargs):
+        if kwargs.get("dir_fd") is not None and path == name:
+            frame = sys._getframe(1)
+            if frame.f_code.co_name == "_readlink_at":
+                frame = frame.f_back
+            if frame.f_code.co_name == site:
+                counted.append(path)
+                if len(counted) > skip:
+                    raise OSError(err, os.strerror(err))
+        return real(path, *args, **kwargs)
+    with unittest.mock.patch.object(os, "readlink", fails):
+        yield counted
+
+
+class _Result:
+    def __init__(self, code, result=None, error=None):
+        self.code, self.result, self.error = code, result, error
+
+    @property
+    def err_code(self):
+        return self.error.code if self.error else None
+
+
+class _RA(_RR):
+    """`_RR` plus a review folder per item, the real archive engine through
+    `archive_item` (the engine's refusals as `_Result`s) and the write guard."""
+
+    def __init__(self, items=None, **kwargs):
+        super().__init__(items if items is not None else _rr_many(7), **kwargs)
+        self.violations = []
+
+    def __enter__(self):
+        super().__enter__()
+        self.outside = Path(tempfile.mkdtemp(prefix="wfo-outside-"))
+        (self.outside / "sentinel").write_text("SENTINEL-OUTSIDE-BYTES" * 7)
+        (self.outside / "tree").mkdir()
+        (self.outside / "tree" / "inner").write_text("outside inner")
+        self.adir = self.archive_root / "widgets"
+        return self
+
+    def __exit__(self, *exc):
+        for path in (self.root, self.archive_root, self.outside):
+            for directory, dirs, _ in os.walk(path):
+                for name in dirs:
+                    with contextlib.suppress(OSError):
+                        os.chmod(os.path.join(directory, name), 0o755)
+        shutil.rmtree(self.outside, ignore_errors=True)
+        super().__exit__(*exc)
+
+    def folder(self, item="w00", links=True):
+        """A populated review folder: files, nested directories, an empty one,
+        a symlink to a file and one to a directory outside the tree."""
+        _write(self.repo, f".ai-review/{item}/a.txt", f"hello {item}\n")
+        _write(self.repo, f".ai-review/{item}/sub/b.txt", "bbb\n")
+        _write(self.repo, f".ai-review/{item}/sub/deeper/c.bin", "c" * 3000)
+        (self.root / ".ai-review" / item / "empty").mkdir(exist_ok=True)
+        if links:
+            os.symlink("a.txt", self.root / ".ai-review" / item / "ln")
+            os.symlink(self.outside / "tree", self.root / ".ai-review" / item / "dirlink")
+        return self.root / ".ai-review" / item
+
+    def call(self, item="w00", apply=False, **kwargs):
+        kwargs.setdefault("archive_root", self.archive_root)
+        kwargs.setdefault("repo_root", self.root)
+        kwargs.setdefault("now", _RR_NOW)
+        repo_root = kwargs.pop("repo_root")
+        try:
+            with _ra_write_guard(self.root, self.violations):
+                result = wr.archive_item(repo_root, item, apply=apply, run=self.run, resolve=self.resolve, **kwargs)
+        except wr.RetentionError as exc:
+            self.last_error = exc
+            return _Result(2, error=exc)
+        finally:
+            assert not self.violations, self.violations
+        return _Result(0, result)
+
+    def main(self, item, *args, zstd=None):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), \
+                _ra_write_guard(self.root, self.violations):
+            code = wr.main(["archive", item, "--repo-root", str(self.root), "--archive-root", str(self.archive_root),
+                            *args], run=self.run, resolve=self.resolve, now=_RR_NOW, zstd=zstd)
+        assert not self.violations, self.violations
+        return code, out.getvalue(), err.getvalue()
+
+    def snap(self, times=True):
+        return _ra_snap(self.root, self.archive_root, times=times)
+
+    def direct(self, item, apply):
+        """`archive_item` without the guard (for the threaded case)."""
+        try:
+            return _Result(0, wr.archive_item(self.root, item, apply=apply, archive_root=self.archive_root,
+                                              now=_RR_NOW, run=self.run, resolve=self.resolve))
+        except wr.RetentionError as exc:
+            return _Result(2, error=exc)
+
+    def refused(self, test, result, code, item_folder=None):
+        test.assertEqual(result.code, 2, result.result)
+        test.assertEqual(result.err_code, code, getattr(result.error, "message", None))
+
+
+def _ra_extract(archive, into):
+    out = subprocess.run(["zstd", "-dc", str(archive)], capture_output=True, check=True).stdout
+    with tarfile.open(fileobj=io.BytesIO(out), mode="r:") as tar:
+        names = [m.name for m in tar.getmembers()]
+        tar.extractall(into, filter="tar")
+    return names
+
+
+@unittest.skipUnless(_HAVE_ZSTD, "the archive tests need the zstd program on PATH")
+class RetentionArchive(unittest.TestCase):
+    def setUp(self):
+        self._dirs = []
+
+    def tearDown(self):
+        for directory in self._dirs:
+            shutil.rmtree(directory, ignore_errors=True)
+
+    def ra(self, items=None, **kwargs):
+        rr = _RA(items, **kwargs)
+        self.addCleanup(rr.__exit__, None, None, None)
+        rr.__enter__()
+        return rr
+
+    def stand_in(self, body):
+        """A `zstd` stand-in script (`$real` is the real program)."""
+        directory = Path(tempfile.mkdtemp(prefix="wfo-zstd-"))
+        self._dirs.append(directory)
+        script = directory / "zstd"
+        script.write_text("#!/bin/sh\nreal=" + shutil.which("zstd") + "\n" + body)
+        script.chmod(0o755)
+        return str(script), directory
+
+    def hook(self, name, before=None, after=None):
+        """Wraps `os.<name>`: `before(*args, **kwargs)` runs ahead of the real call."""
+        real = getattr(os, name)
+
+        def call(*args, **kwargs):
+            if before is not None:
+                before(*args, **kwargs)
+            result = real(*args, **kwargs)
+            if after is not None:
+                after(result, *args, **kwargs)
+            return result
+        patch = unittest.mock.patch.object(os, name, call)
+        patch.start()
+        self.addCleanup(patch.stop)
+        return real
+
+    # -- T2, T3 of the unreadable-input refusals (W37) -----------------------
+
+    def link_refused(self, result, code, err, shown="ln"):
+        self.assertEqual((result.code, result.err_code), (2, code), getattr(result.error, "message", None))
+        phrase = "changed while it was read" if code == "folder_changed" else "cannot be read"
+        self.assertTrue(result.error.message.startswith(f"{shown} {phrase} ({os.strerror(err)})"),
+                        result.error.message)
+        self.assertTrue(result.error.next_step)
+
+    def test_w37_t2_an_unreadable_symlink_in_the_scan_refuses_the_archive_with_nothing_written(self):
+        rr = self.ra()
+        rr.folder("w00")
+        before, fds = rr.snap(times=False), _fd_count()
+        for err, code in ((errno.EACCES, "unreadable"), (errno.ENOENT, "folder_changed")):
+            for apply in (False, True):
+                with self.subTest(err=errno.errorcode[err], apply=apply):
+                    with _readlink_fails("_scan", "ln", err) as counted:
+                        result = rr.call("w00", apply=apply)
+                    self.assertEqual(len(counted), 1)
+                    self.link_refused(result, code, err)
+                    self.assertEqual(rr.snap(times=False), before)
+                    self.assertEqual(_fd_count(), fds)
+        # the re-check after the pack: the temporary, the archive and the index line are undone
+        with _readlink_fails("_scan", "ln", errno.EIO, skip=1) as counted:
+            result = rr.call("w00", apply=True)
+        self.assertEqual(len(counted), 2)
+        self.link_refused(result, "unreadable", errno.EIO)
+        self.assertEqual(rr.snap(times=False), before)
+        self.assertEqual(_fd_count(), fds)
+        self.assertEqual(rr.call("w00", apply=True).code, 0)  # the lock was released
+
+    def test_w37_t3_an_unreadable_symlink_in_the_pack_is_unreadable_not_pack_failed(self):
+        rr = self.ra()
+        rr.folder("w00")
+        before, fds = rr.snap(times=False), _fd_count()
+        for err, code in ((errno.EIO, "unreadable"), (errno.ENOENT, "folder_changed")):
+            with self.subTest(err=errno.errorcode[err]):
+                with _readlink_fails("_pack", "ln", err) as counted:
+                    result = rr.call("w00", apply=True)
+                self.assertEqual(len(counted), 1)
+                self.link_refused(result, code, err)
+                self.assertEqual(rr.snap(times=False), before)
+                self.assertEqual(_fd_count(), fds)
+        self.assertEqual(rr.call("w00", apply=True).code, 0)
+
+    # -- T1, T9 of the stat-error refusal (W33) -----------------------------
+
+    def stat_refused(self, rr, result, code, shown, errname):
+        self.assertEqual((result.code, result.err_code), (2, code), getattr(result.error, "message", None))
+        self.assertTrue(result.error.message.startswith(f"{shown} cannot be examined: {errname} "),
+                        result.error.message)
+        self.assertIn(shown, result.error.next_step)
+        self.assertIn("check the permissions of", result.error.next_step)
+
+    def test_w33_t1_a_stat_error_of_the_archive_or_the_temporary_is_unreadable(self):
+        rr = self.ra()
+        rr.folder("w00")
+        rr.folder("w01")
+        self.assertEqual(rr.call("w01", apply=True).code, 0)  # the archive directory is present
+        before, fds = rr.snap(times=False), _fd_count()
+        for name, err, errname in (("w00.tar.zst", errno.EACCES, "EACCES"), ("w00.tar.zst", errno.ELOOP, "ELOOP"),
+                                   ("w00.tar.zst", errno.EIO, "EIO"), (".w00.partial", errno.EACCES, "EACCES")):
+            for apply in (False, True):
+                with self.subTest(name=name, errname=errname, apply=apply):
+                    with _stat_fails("_judge_archive_side", name, err):
+                        result = rr.call("w00", apply=apply)
+                    self.stat_refused(rr, result, "unreadable", str(rr.adir / name), errname)
+                    self.assertEqual(rr.snap(times=False), before)
+                    self.assertEqual(_fd_count(), fds)
+        # S1b: the second call, under the lock, after the temporary was written and verified
+        with _stat_fails("_judge_archive_side", "w00.tar.zst", errno.EIO, skip=1) as counted:
+            result = rr.call("w00", apply=True)
+        self.assertEqual(len(counted), 2)
+        self.stat_refused(rr, result, "unreadable", str(rr.adir / "w00.tar.zst"), "EIO")
+        self.assertIn("nothing was archived", result.error.next_step)
+        self.assertEqual(rr.snap(times=False), before)
+        self.assertEqual(_fd_count(), fds)
+        self.assertEqual(rr.call("w00", apply=True).code, 0)  # the lock was released
+        # S1b with no archive directory: the walk created the hierarchy, `_undo` removes it
+        rr = self.ra()
+        rr.folder("w00")
+        if rr.adir.exists():
+            self.assertEqual(os.listdir(rr.adir), [])
+            rr.adir.rmdir()
+        before, fds = rr.snap(times=False), _fd_count()
+        with _stat_fails("_judge_archive_side", "w00.tar.zst", errno.EACCES) as counted:
+            result = rr.call("w00", apply=True)
+        self.assertEqual(len(counted), 1)
+        self.stat_refused(rr, result, "unreadable", str(rr.adir / "w00.tar.zst"), "EACCES")
+        self.assertFalse(rr.adir.exists())
+        self.assertEqual(rr.snap(times=False), before)
+        self.assertEqual(_fd_count(), fds)
+        self.assertEqual(rr.call("w00", apply=True).code, 0)
+
+    def test_w33_t9_the_helper_returns_none_for_absent_and_refuses_every_other_error(self):
+        directory = Path(tempfile.mkdtemp(prefix="wfo-lstat-"))
+        self._dirs.append(directory)
+        (directory / "here").write_text("x")
+        fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, fd)
+        self.assertIsNone(wr._lstat_at("gone", fd, shown="/p/gone"))
+        self.assertIsNone(wr._lstat_raw("gone", fd))
+        self.assertEqual(wr._lstat_at("here", fd, shown="/p/here").st_size, 1)
+        self.assertEqual(wr._lstat_raw("here", fd).st_size, 1)
+        for err in (errno.EACCES, errno.ELOOP, errno.ENAMETOOLONG, errno.EIO, errno.ENOTDIR):
+            with self.subTest(errno=errno.errorcode[err]):
+                with unittest.mock.patch.object(os, "stat", side_effect=OSError(err, os.strerror(err))):
+                    with self.assertRaises(wr.RetentionError) as caught:
+                        wr._lstat_at("here", fd, shown="/p/here")
+                    self.assertEqual(caught.exception.code, "unreadable")
+                    self.assertTrue(caught.exception.message.startswith(
+                        f"/p/here cannot be examined: {errno.errorcode[err]} "), caught.exception.message)
+                    self.assertIn("check the permissions of /p/here", caught.exception.next_step)
+                    self.assertIn("nothing was written or removed", caught.exception.next_step)
+                    with self.assertRaises(wr.RetentionError) as other:
+                        wr._lstat_at("here", fd, shown="/p/here", code="restore_failed", after="it stays")
+                    self.assertEqual(other.exception.code, "restore_failed")
+                    self.assertTrue(other.exception.next_step.endswith("it stays"))
+                    with self.assertRaises(OSError) as raw:
+                        wr._lstat_raw("here", fd)
+                    self.assertEqual(raw.exception.errno, err)
+
+    # -- A1 -------------------------------------------------------------
+
+    def test_a1_the_dry_run_is_the_default_lists_everything_and_writes_nothing(self):
+        rr = self.ra()
+        folder = rr.folder()
+        before, folder_before = rr.snap(), _ra_snap(folder)
+        result = rr.call()
+        self.assertEqual(result.code, 0)
+        data = result.result
+        self.assertEqual(data["mode"], "dry-run")
+        self.assertEqual(data["result"], {"archived": False})
+        self.assertEqual([(e["path"], e["type"]) for e in data["review_folder"]["entries"]],
+                         [("a.txt", "file"), ("dirlink", "symlink"), ("empty", "dir"), ("ln", "symlink"),
+                          ("sub", "dir"), ("sub/b.txt", "file"), ("sub/deeper", "dir"), ("sub/deeper/c.bin", "file")])
+        self.assertEqual(data["review_folder"]["files"], 3)
+        self.assertEqual(data["review_folder"]["bytes"], len("hello w00\n") + 4 + 3000)
+        self.assertEqual(data["target"]["archive"], str(rr.adir / "w00.tar.zst"))
+        self.assertEqual(data["target"]["temporary"], str(rr.adir / ".w00.partial"))
+        self.assertEqual(data["target"]["index"], str(rr.adir / "index.jsonl"))
+        self.assertEqual(data["pull_request"], {"number": 7, "url": "https://github.com/acme/widgets/pull/7"})
+        self.assertTrue(data["zstd"].endswith("zstd"))
+        self.assertGreater(len(before), 20)
+        self.assertEqual(rr.snap(), before)
+        self.assertEqual(_ra_snap(folder), folder_before)
+        code, out, err = rr.main("w00")
+        self.assertEqual((code, err), (0, ""))
+        self.assertIn("dry run: nothing was written; pass --apply to archive", out)
+        self.assertIn("sub/deeper/c.bin", out)
+        code, out, _ = rr.main("w00", "--json")
+        self.assertEqual(json.loads(out)["mode"], "dry-run")
+        self.assertEqual(rr.snap(), before)
+
+    # -- A2, A3 ---------------------------------------------------------
+
+    def test_a2_apply_archives_the_folder_exactly_and_touches_nothing_else(self):
+        rr = self.ra()
+        folder = rr.folder()
+        rr.folder("w01")
+        _run(["git", "add", "-f", ".ai-review/w01/a.txt"], cwd=rr.root)  # a tracked file elsewhere
+        others_before = _ra_snap(rr.root / ".ai-review" / "w01")
+        folder_before = _ra_snap(folder)
+        tracked_before = subprocess.run(["git", "ls-files"], cwd=rr.root, capture_output=True, text=True).stdout
+        result = rr.call(apply=True)
+        self.assertEqual(result.code, 0, result.error)
+        archive = rr.adir / "w00.tar.zst"
+        self.assertTrue(archive.is_file())
+        self.assertEqual(_ra_snap(folder), folder_before)
+        self.assertEqual(_ra_snap(rr.root / ".ai-review" / "w01"), others_before)
+        self.assertEqual(subprocess.run(["git", "ls-files"], cwd=rr.root, capture_output=True, text=True).stdout,
+                         tracked_before)
+        self.assertEqual(sorted(os.listdir(rr.adir)), ["index.jsonl", "w00.tar.zst"])
+        extracted = Path(tempfile.mkdtemp(prefix="wfo-extract-"))
+        self._dirs.append(extracted)
+        names = _ra_extract(archive, extracted)
+        self.assertEqual(names, ["w00", "w00/a.txt", "w00/dirlink", "w00/ln", "w00/empty", "w00/sub",
+                                 "w00/sub/b.txt", "w00/sub/deeper", "w00/sub/deeper/c.bin"])
+        got = extracted / "w00"
+        self.assertTrue(os.path.islink(got / "dirlink"))
+        self.assertEqual(os.readlink(got / "dirlink"), str(rr.outside / "tree"))
+        self.assertEqual(os.readlink(got / "ln"), "a.txt")
+        self.assertEqual((got / "a.txt").read_text(), "hello w00\n")
+        self.assertEqual((got / "sub/deeper/c.bin").read_text(), "c" * 3000)
+        self.assertTrue((got / "empty").is_dir())
+        lines = (rr.adir / "index.jsonl").read_text().splitlines()
+        self.assertEqual(len(lines), 1)
+        line = json.loads(lines[0])
+        self.assertEqual(line, {"archived_at": "2026-11-01T12:00:00Z", "bytes": archive.stat().st_size, "files": 3,
+                                "pull_request": {"number": 7, "url": "https://github.com/acme/widgets/pull/7"},
+                                "work_item_id": "w00"})
+        self.assertEqual(lines[0], json.dumps(line, sort_keys=True))
+        self.assertEqual(result.result["result"]["bytes"], archive.stat().st_size)
+        self.assertEqual((rr.adir / "index.jsonl").stat().st_mode & 0o777, 0o600)
+
+    def test_a3_the_report_afterwards_sees_the_archive_and_its_mtime_is_the_temporarys(self):
+        rr = self.ra()
+        rr.folder()
+        seen = {}
+        real_link = os.link
+
+        def link(src, dst, *args, **kwargs):
+            seen["tmp_mtime"] = os.stat(src, dir_fd=kwargs["src_dir_fd"]).st_mtime_ns
+            return real_link(src, dst, *args, **kwargs)
+        with unittest.mock.patch.object(os, "link", link):
+            self.assertEqual(rr.call(apply=True).code, 0)
+        archive = rr.adir / "w00.tar.zst"
+        self.assertEqual(archive.stat().st_mtime_ns, seen["tmp_mtime"])
+        report = rr.build()
+        record = next(r for r in report["finished"] if r["work_item_id"] == "w00")
+        self.assertTrue(record["archive"]["present"])
+        self.assertFalse(record["archive"]["prunable"])
+        self.assertTrue(record["review_folder"]["present"])
+        self.assertEqual(report["archives"][0]["name"], "w00.tar.zst")
+        # a second run changes nothing, the archive's mtime included (A7)
+        before = rr.snap()
+        again = rr.call(apply=True)
+        rr.refused(self, again, "already_archived")
+        self.assertIn("nothing to do", again.error.next_step)
+        self.assertEqual(rr.snap(), before)
+
+    # -- A4 -------------------------------------------------------------
+
+    def test_a4_every_selection_refusal_has_its_code_and_writes_nothing(self):
+        from workflow_forge import ForgeUnavailableError
+        items = {**_rr_many(7), "busy": _rr_item(phase="IMPLEMENTING"),
+                 "nopr": _rr_item(last="2026-08-01T00:00:00Z"),
+                 "failing": _rr_item(last="2026-08-02T00:00:00Z"),
+                 "runtime": _rr_item(), "archive": _rr_item()}
+        outcomes = {_rr_commit("nopr"): "none", _rr_commit("failing"): ForgeUnavailableError("gh gone")}
+        rr = self.ra(items, outcomes=outcomes)
+        for name in ("w00", "w01", "w02", "busy", "nopr", "failing"):
+            rr.folder(name, links=False)
+
+        def expect(item, code, *, apply=False, message=None, **kwargs):
+            before = rr.snap()
+            result = rr.call(item, apply=apply, **kwargs)
+            rr.refused(self, result, code)
+            self.assertEqual(rr.snap(), before, f"{code} wrote something")
+            return result
+
+        for apply in (False, True):
+            with self.subTest(apply=apply):
+                expect("busy", "not_finished:open_phase", apply=apply)
+                expect("nopr", "not_finished:no_pull_request", apply=apply)
+                expect("failing", "not_finished:query_failed:forge_unavailable", apply=apply)
+                expect("w06", "kept_recent", apply=apply)
+                expect("w99", "unknown_item", apply=apply)
+                expect("runtime", "invalid_id", apply=apply)
+                expect("archive", "invalid_id", apply=apply)
+                expect("Bad Id", "invalid_id", apply=apply)
+                expect("w03", "review_folder_absent", apply=apply)
+                # a symlinked folder is absent
+                os.symlink(rr.outside / "tree", rr.root / ".ai-review" / "w03")
+                expect("w03", "review_folder_absent", apply=apply)
+                os.unlink(rr.root / ".ai-review" / "w03")
+        # tracked file under the folder
+        _run(["git", "add", "-f", ".ai-review/w01/a.txt"], cwd=rr.root)
+        for apply in (False, True):
+            expect("w01", "tracked_files", apply=apply)
+        # an existing archive, an existing index line, a bad index, a leftover temporary
+        rr.archive("w02.tar.zst", 100)
+        for apply in (False, True):
+            expect("w02", "already_archived", apply=apply)
+        os.unlink(rr.adir / "w02.tar.zst")
+        (rr.adir / "index.jsonl").write_text(json.dumps({"work_item_id": "w02"}) + "\n")
+        for apply in (False, True):
+            result = expect("w02", "already_indexed", apply=apply)
+            self.assertIn("pruned or removed by hand", result.error.next_step)
+        (rr.adir / "index.jsonl").write_text('{"work_item_id": "w02"}\nnot json\n')
+        for apply in (False, True):
+            expect("w02", "index_invalid", apply=apply)
+        (rr.adir / "index.jsonl").unlink()
+        (rr.adir / ".w02.partial").write_text("someone else's")
+        for apply in (False, True):
+            expect("w02", "partial_present", apply=apply)
+        self.assertEqual((rr.adir / ".w02.partial").read_text(), "someone else's")
+        (rr.adir / ".w02.partial").unlink()
+        # an unsupported entry
+        fifo = rr.root / ".ai-review" / "w02" / "pipe"
+        os.mkfifo(fifo)
+        for apply in (False, True):
+            expect("w02", "unsupported_entry", apply=apply)
+        os.unlink(fifo)
+        os.link(rr.root / ".ai-review" / "w02" / "a.txt", rr.root / ".ai-review" / "w02" / "twin")
+        for apply in (False, True):
+            expect("w02", "unsupported_entry", apply=apply)
+        os.unlink(rr.root / ".ai-review" / "w02" / "twin")
+        # a symlinked per-repository directory
+        shutil.rmtree(rr.adir)
+        os.symlink(rr.outside / "tree", rr.adir)
+        for apply in (False, True):
+            expect("w02", "archive_dir_unsafe", apply=apply)
+        # a repository named ..
+        os.unlink(rr.adir)
+        _run(["git", "remote", "set-url", "origin", "https://github.com/acme/...git"], cwd=rr.root)
+        for apply in (False, True):
+            result = rr.call("w02", apply=apply)
+            self.assertEqual(result.err_code, "repository_unknown")
+        # a repository that is not a Workflow repository / no origin
+        _run(["git", "remote", "remove", "origin"], cwd=rr.root)
+        self.assertEqual(rr.call("w02").err_code, "repository_unknown")
+
+    def test_a4b_the_text_form_of_a_refusal_and_exit_two(self):
+        rr = self.ra()
+        rr.folder()
+        code, out, err = rr.main("w06")
+        self.assertEqual((code, out), (2, ""))
+        self.assertTrue(err.startswith("error: kept_recent: "), err)
+        self.assertIn("\nnext step: ", err)
+        code, _, err = rr.main("w00", "--bogus")
+        self.assertEqual(code, 2)
+        self.assertTrue(err.startswith("error: usage: "), err)
+
+    # -- A5 -------------------------------------------------------------
+
+    def _fails(self, rr, code, item="w00", **kwargs):
+        before = rr.snap(times=False)
+        folder_before = _ra_snap(rr.root / ".ai-review" / item)
+        result = rr.call(item, apply=True, **kwargs)
+        rr.refused(self, result, code)
+        self.assertEqual(rr.snap(times=False), before, f"{code} left the archive directory changed")
+        self.assertEqual(_ra_snap(rr.root / ".ai-review" / item), folder_before)
+        return result
+
+    def test_a5_the_index_count_and_the_result_state_what_was_archived_not_what_the_selection_scan_saw(self):
+        rr = self.ra()
+        folder = rr.folder()
+        real_popen, fired = subprocess.Popen, []
+
+        def popen(argv, *args, **kwargs):
+            if "-T1" in argv and not fired:
+                fired.append(True)
+                (folder / "late.txt").write_text("late arrival\n")
+            return real_popen(argv, *args, **kwargs)
+        with unittest.mock.patch.object(subprocess, "Popen", popen):
+            result = rr.call(apply=True)
+        self.assertEqual(result.code, 0, result.error)
+        self.assertTrue(fired)
+        extracted = Path(tempfile.mkdtemp(prefix="wfo-extract-"))
+        self._dirs.append(extracted)
+        names = _ra_extract(rr.adir / "w00.tar.zst", extracted)
+        self.assertIn("w00/late.txt", names)
+        archived = [n for n in names if (extracted / n).is_file() and not os.path.islink(extracted / n)]
+        line = json.loads((rr.adir / "index.jsonl").read_text().splitlines()[0])
+        self.assertEqual(line["files"], len(archived))
+        self.assertEqual(line["files"], 4)
+        self.assertEqual(result.result["result"]["index_line"]["files"], 4)
+        self.assertEqual(result.result["review_folder"]["files"], 4)
+        self.assertIn("late.txt", [e["path"] for e in result.result["review_folder"]["entries"]])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file, so the refusal cannot be provoked")
+    def test_a5_a_file_this_user_cannot_read_is_unreadable_with_an_access_next_step_and_nothing_is_kept(self):
+        rr = self.ra()
+        folder = rr.folder()
+        os.chmod(folder / "a.txt", 0)
+        self.addCleanup(os.chmod, folder / "a.txt", 0o644)
+        before = _ra_snap(rr.archive_root, times=False)
+        result = rr.call(apply=True)
+        rr.refused(self, result, "unreadable")
+        self.assertIn("a.txt", result.error.message)
+        self.assertIn("grant read access", result.error.next_step)
+        self.assertNotIn("run it again", result.error.next_step)
+        self.assertEqual(_ra_snap(rr.archive_root, times=False), before)
+
+    def test_a5_zstd_missing_is_refused_in_both_modes_with_an_empty_path(self):
+        rr = self.ra()
+        rr.folder()
+        bin_dir = Path(tempfile.mkdtemp(prefix="wfo-bin-"))
+        self._dirs.append(bin_dir)
+        os.symlink(shutil.which("git"), bin_dir / "git")      # git stays, zstd goes
+        with unittest.mock.patch.dict(os.environ, {"PATH": str(bin_dir)}):
+            for apply in (False, True):
+                before = rr.snap()
+                result = rr.call(apply=apply)
+                rr.refused(self, result, "zstd_missing")
+                self.assertIn("install zstd", result.error.next_step)
+                self.assertEqual(rr.snap(), before)
+
+    def test_a5_a_failed_pack_reaps_its_child_and_a_truncated_stream_is_not_placed(self):
+        rr = self.ra()
+        rr.folder()
+        stand_in, directory = self.stand_in(
+            'if [ "$1" = "-dc" ]; then exec "$real" "$@"; fi\necho $$ > "$(dirname "$0")/pid"\ncat > /dev/null\nexit 1\n')
+        result = self._fails(rr, "pack_failed", zstd=stand_in)
+        pid = int((directory / "pid").read_text())
+        with self.assertRaises(ProcessLookupError):
+            os.kill(pid, 0)
+        self.assertIn("zstd exited 1", result.error.message)
+        stand_in, directory = self.stand_in(
+            'if [ "$1" = "-dc" ]; then exec "$real" "$@"; fi\n"$real" "$@" | head -c 40\n')
+        self._fails(rr, "verify_failed", zstd=stand_in)
+        # a stand-in that writes a valid stream of the wrong content
+        stand_in, directory = self.stand_in(
+            'if [ "$1" = "-dc" ]; then exec "$real" "$@"; fi\ncat > /dev/null\nprintf x | "$real" -q -c\n')
+        self._fails(rr, "verify_failed", zstd=stand_in)
+
+    def test_a5_an_index_that_cannot_be_appended_to_leaves_no_archive(self):
+        rr = self.ra()
+        rr.folder()
+        index = rr.adir / "index.jsonl"
+        index.write_text('{"work_item_id": "w02"}\n')
+        index.chmod(0o444)
+        if _AS_ROOT:
+            self.skipTest("running as root: a read-only file is still writable")
+        result = self._fails(rr, "index_failed")
+        self.assertEqual(index.read_text(), '{"work_item_id": "w02"}\n')
+
+    def test_a5_a_temporary_made_by_another_run_between_the_check_and_the_open_is_left_alone(self):
+        rr = self.ra()
+        rr.folder()
+
+        def before(path, flags, *args, **kwargs):
+            if path == ".w00.partial" and flags & os.O_EXCL:
+                (rr.adir / ".w00.partial").write_text("another run's")
+        self.hook("open", before)
+        before_snap = rr.snap(times=False)
+        result = rr.call(apply=True)
+        rr.refused(self, result, "partial_present")
+        self.assertEqual((rr.adir / ".w00.partial").read_text(), "another run's")
+        self.assertEqual(sorted(os.listdir(rr.adir)), [".w00.partial"])
+
+    def test_a5_a_final_name_created_between_the_check_and_the_link_is_left_alone(self):
+        rr = self.ra()
+        rr.folder()
+
+        def before(src, dst, **kwargs):
+            (rr.adir / "w00.tar.zst").write_text("foreign")
+        self.hook("link", before)
+        result = rr.call(apply=True)
+        rr.refused(self, result, "already_archived")
+        self.assertEqual((rr.adir / "w00.tar.zst").read_text(), "foreign")
+        self.assertEqual(sorted(os.listdir(rr.adir)), ["w00.tar.zst"])
+
+    def test_a5_an_index_append_that_fails_partway_is_rolled_back(self):
+        for pre_existing in (True, False):
+            with self.subTest(pre_existing=pre_existing):
+                rr = self.ra()
+                rr.folder()
+                index = rr.adir / "index.jsonl"
+                if pre_existing:
+                    index.write_text('{"work_item_id": "w02"}\n')
+                real_write = os.write
+
+                def write(fd, data, _real=real_write):
+                    if os.readlink(f"/proc/self/fd/{fd}").endswith("index.jsonl"):
+                        _real(fd, data[:len(data) // 2])
+                        raise OSError(errno.ENOSPC, "No space left on device")
+                    return _real(fd, data)
+                with unittest.mock.patch.object(os, "write", write):
+                    result = self._fails(rr, "index_failed")
+                self.assertNotIn("w00.tar.zst", os.listdir(rr.adir))
+                self.assertEqual(os.path.exists(index), pre_existing)
+                if pre_existing:
+                    self.assertEqual(index.read_bytes(), b'{"work_item_id": "w02"}\n')
+
+    def test_a5_the_states_a_killed_run_leaves_are_refused_with_the_documented_next_step(self):
+        rr = self.ra()
+        rr.folder()
+        self.assertEqual(rr.call(apply=True).code, 0)
+        archive, index = rr.adir / "w00.tar.zst", rr.adir / "index.jsonl"
+        line = index.read_text()
+
+        def both(code):
+            for apply in (False, True):
+                before = rr.snap()
+                result = rr.call(apply=apply)
+                rr.refused(self, result, code)
+                self.assertEqual(rr.snap(), before)
+            return result
+        # (i) killed before the link: only the temporary
+        archive.unlink()
+        index.unlink()
+        (rr.adir / ".w00.partial").write_text("half")
+        self.assertIn("remove that file by hand", both("partial_present").error.next_step)
+        # (ii) killed after the link, before the unlink: both names, no index line
+        os.unlink(rr.adir / ".w00.partial")
+        rr.archive("w00.tar.zst", 10)
+        os.link(archive, rr.adir / ".w00.partial")
+        step = both("already_archived").error.next_step
+        self.assertIn(".w00.partial", step)
+        self.assertIn("has no line for w00", step)
+        # (iii) killed after the unlink, before the append: the archive, no line
+        os.unlink(rr.adir / ".w00.partial")
+        step = both("already_archived").error.next_step
+        self.assertIn("has no line for w00", step)
+        self.assertIn("the folder is intact", step)
+        # following it gives a state the engine runs from
+        archive.unlink()
+        self.assertEqual(rr.call(apply=True).code, 0)
+        # (iv) killed in the middle of the append: half a line and the final archive
+        index.write_text(line[:30])
+        result = both("index_invalid")
+        # the line completed: archived, nothing to do
+        index.write_text(line)
+        self.assertIn("nothing to do", both("already_archived").error.next_step)
+        # the half line removed instead: the no-line case
+        index.write_text("")
+        self.assertIn("has no line for w00", both("already_archived").error.next_step)
+        archive.unlink()
+        self.assertEqual(rr.call(apply=True).code, 0)
+
+    # -- A8, A9, A10 ----------------------------------------------------
+
+    def test_a8_the_reports_half_of_the_obligations(self):
+        items = {**_rr_many(7), "runtime": _rr_item(), "archive": _rr_item()}
+        rr = self.ra(items)
+        reasons = rr.reasons(rr.build())
+        self.assertEqual((reasons["runtime"], reasons["archive"]), ("invalid_id", "invalid_id"))
+        for name in ("..", "."):
+            with unittest.mock.patch.object(wr.workflow_forge, "origin_repository", lambda root, name=name: f"acme/{name}"):
+                with self.assertRaises(wr.RetentionError) as caught:
+                    rr.build()
+                self.assertEqual(caught.exception.code, "repository_unknown")
+        shutil.rmtree(rr.adir)
+        os.symlink(rr.outside / "tree", rr.adir)
+        rr.archive_link = rr.outside / "tree" / "w00.tar.zst"
+        rr.archive_link.write_bytes(b"x" * 50)
+        report = rr.build()
+        self.assertFalse(report["complete"])
+        self.assertEqual([e["path"] for e in report["read_errors"]], [str(rr.adir)])
+        self.assertEqual(report["archives"], [])
+        self.assertFalse(next(r for r in report["finished"] if r["work_item_id"] == "w00")["archive"]["present"])
+
+    def test_a9_a_real_interpreter_dry_run_leaves_no_bytecode_and_no_origin_is_refused(self):
+        env = {k: v for k, v in os.environ.items()
+               if k not in ("PYTHONDONTWRITEBYTECODE", "PYTHONPYCACHEPREFIX", "PYTHONPATH")}
+        copy = Path(tempfile.mkdtemp(prefix="wfo-scripts-"))
+        self._dirs.append(copy)
+        for name in ("workflow_retention.py", "workflow_forge.py"):
+            shutil.copy(Path(wr.__file__).resolve().parent / name, copy / name)
+        items = {**_rr_many(7), "busy": _rr_item(phase="IMPLEMENTING")}
+        rr = self.ra(items)
+        rr.folder("busy")
+        before = rr.snap()
+        proc = subprocess.run(["python3", "-I", str(copy / "workflow_retention.py"), "archive", "busy",
+                               "--repo-root", str(rr.root), "--archive-root", str(rr.archive_root)],
+                              capture_output=True, text=True, env=env)
+        self.assertEqual(proc.returncode, 2, proc.stderr)
+        self.assertIn("error: not_finished:open_phase", proc.stderr)
+        self.assertEqual(_rr_find_pycache(copy, rr.root, rr.archive_root), [])
+        self.assertEqual(rr.snap(), before)
+        _run(["git", "remote", "remove", "origin"], cwd=rr.root)
+        proc = subprocess.run(["python3", "-I", str(copy / "workflow_retention.py"), "archive", "w00",
+                               "--repo-root", str(rr.root), "--archive-root", str(rr.archive_root)],
+                              capture_output=True, text=True, env=env)
+        self.assertEqual(proc.returncode, 2, proc.stderr)
+        self.assertIn("error: repository_unknown", proc.stderr)
+        self.assertEqual(_rr_find_pycache(copy, rr.root, rr.archive_root), [])
+
+    def test_a10_the_dry_run_is_deterministic(self):
+        rr = self.ra()
+        rr.folder()
+        first = rr.main("w00", "--json")
+        second = rr.main("w00", "--json")
+        self.assertEqual(first, second)
+        self.assertEqual(first[0], 0)
+        self.assertTrue(first[1].endswith("\n"))
+        self.assertEqual(first[1], json.dumps(json.loads(first[1]), sort_keys=True) + "\n")
+        text = rr.main("w00")
+        self.assertEqual(text, rr.main("w00"))
+
+    # -- A11 ------------------------------------------------------------
+
+    def test_a11_a_folder_that_moves_while_it_is_read_is_never_placed(self):
+        folder_moments = ("before the file's open", "after its read", "after verification")
+        changes = ("add", "same-size change with mtime restored", "remove")
+        for moment in folder_moments:
+            for change in changes:
+                with self.subTest(moment=moment, change=change):
+                    rr = self.ra()
+                    folder = rr.folder(links=False)
+                    stamp = os.stat(folder / "a.txt")
+                    fired = []
+                    after_hook = {}
+
+                    def mutate():
+                        if fired:
+                            return
+                        fired.append(True)
+                        if change == "add":
+                            (folder / "added.txt").write_text("new")
+                        elif change == "remove":
+                            _REAL["unlink"](folder / "a.txt")
+                        else:
+                            (folder / "a.txt").write_text("HELLO W00\n")
+                            _REAL["utime"](folder / "a.txt", ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+                        after_hook["folder"] = _ra_snap(folder)
+
+                    if moment == "after verification":
+                        scans = []
+                        real_scan = wr._scan
+
+                        def scan(*args, **kwargs):
+                            scans.append(1)
+                            if len(scans) == 2:
+                                mutate()
+                            return real_scan(*args, **kwargs)
+                        patch = unittest.mock.patch.object(wr, "_scan", scan)
+                    else:
+                        target = "a.txt" if moment == "before the file's open" else "b.txt"
+                        real_open = os.open
+
+                        def open_(path, flags, *args, _t=target, _real=real_open, **kwargs):
+                            if path == _t and kwargs.get("dir_fd") is not None and flags & os.O_NOFOLLOW:
+                                mutate()
+                            return _real(path, flags, *args, **kwargs)
+                        patch = unittest.mock.patch.object(os, "open", open_)
+                    before = rr.snap(times=False)
+                    with patch:
+                        result = rr.call(apply=True)
+                    rr.refused(self, result, "folder_changed")
+                    self.assertTrue(fired)
+                    self.assertEqual(rr.snap(times=False).get(str(rr.adir / "w00.tar.zst")), None)
+                    self.assertEqual(sorted(os.listdir(rr.adir)), [])
+                    self.assertEqual(_ra_snap(folder), after_hook["folder"])
+
+    # -- A12 ------------------------------------------------------------
+
+    def test_a12_a_symlinked_review_root_is_never_read_by_the_engine_or_the_report(self):
+        rr = self.ra()
+        outside_ai = rr.outside / "ext-review"
+        (outside_ai / "w00" / "sub").mkdir(parents=True)
+        (outside_ai / "w00" / "big").write_bytes(b"z" * 54321)
+        (outside_ai / "w00" / "sub" / "x").write_text("x")
+        os.symlink(outside_ai, rr.root / ".ai-review")
+        outside_before = _ra_snap(rr.outside)
+        for apply in (False, True):
+            before = rr.snap()
+            rr.refused(self, rr.call(apply=apply), "path_unsafe")
+            self.assertEqual(rr.snap(), before)
+        self.assertEqual(_ra_snap(rr.outside), outside_before)
+        code, out, err = rr.cli("--json")
+        self.assertEqual(code, 0, err)
+        report = json.loads(out)
+        self.assertNotIn("54321", out)
+        self.assertFalse(report["complete"])
+        self.assertEqual([e["path"] for e in report["read_errors"]], [str(rr.root / ".ai-review")])
+        for record in report["finished"] + report["kept_recent"]:
+            self.assertEqual(record["review_folder"]["files"], 0)
+            self.assertFalse(record["review_folder"]["present"])
+        self.assertEqual(_ra_snap(rr.outside), outside_before)
+
+    def test_a12_a_directory_link_inside_the_folder_is_packed_as_a_link(self):
+        rr = self.ra()
+        rr.folder()
+        before = _ra_snap(rr.outside)
+        self.assertEqual(rr.call(apply=True).code, 0)
+        raw = subprocess.run(["zstd", "-dc", str(rr.adir / "w00.tar.zst")], capture_output=True, check=True).stdout
+        self.assertNotIn(b"SENTINEL", raw)
+        self.assertNotIn(b"outside inner", raw)
+        self.assertEqual(_ra_snap(rr.outside), before)
+
+    def test_a12_a_file_replaced_by_a_symlink_after_the_walk_is_opened_with_no_follow(self):
+        rr = self.ra()
+        folder = rr.folder(links=False)
+        sentinel = rr.outside / "sentinel"
+        sentinel_ino = os.stat(sentinel).st_ino
+        opens, reads, inodes, fired = [], [], [], []
+        real_open, real_read, real_fstat = os.open, os.read, os.fstat
+
+        def open_(path, flags, *args, **kwargs):
+            if path == "a.txt" and kwargs.get("dir_fd") is not None and not fired:
+                fired.append(True)
+                _REAL["unlink"](folder / "a.txt")
+                _REAL["symlink"](sentinel, folder / "a.txt")
+            try:
+                fd = real_open(path, flags, *args, **kwargs)
+            except OSError as exc:
+                opens.append((path, flags, exc.errno))
+                raise
+            opens.append((path, flags, None))
+            return fd
+
+        def read(fd, n):
+            data = real_read(fd, n)
+            reads.append(data)
+            return data
+
+        def fstat(fd):
+            info = real_fstat(fd)
+            inodes.append(info.st_ino)
+            return info
+        with unittest.mock.patch.object(os, "open", open_), unittest.mock.patch.object(os, "read", read), \
+                unittest.mock.patch.object(os, "fstat", fstat):
+            result = rr.call(apply=True)
+        rr.refused(self, result, "folder_changed")
+        (substituted,) = [o for o in opens if o[0] == "a.txt"]
+        self.assertEqual(substituted[2], errno.ELOOP)
+        self.assertTrue(substituted[1] & os.O_NOFOLLOW)
+        self.assertFalse(any(b"SENTINEL" in data for data in reads))
+        self.assertNotIn(sentinel_ino, inodes)
+        self.assertEqual(os.listdir(rr.adir), [])
+
+    def test_a12_the_archive_directory_swapped_for_a_link_before_its_open_is_not_followed(self):
+        rr = self.ra()
+        rr.folder()
+        outside_before = _ra_snap(rr.outside)
+        seen = []
+        real_open = os.open
+
+        def open_(path, flags, *args, **kwargs):
+            if path == "widgets" and kwargs.get("dir_fd") is not None:
+                seen.append(1)
+                if len(seen) == 2:
+                    _REAL["rename"](rr.adir, str(rr.adir) + ".moved")
+                    _REAL["symlink"](rr.outside / "tree", rr.adir)
+            return real_open(path, flags, *args, **kwargs)
+        with unittest.mock.patch.object(os, "open", open_):
+            result = rr.call(apply=True)
+        rr.refused(self, result, "archive_dir_unsafe")
+        self.assertEqual(len(seen), 2)
+        self.assertEqual(_ra_snap(rr.outside), outside_before)
+
+    def test_a12_a_tracked_entry_at_the_folder_is_refused_and_the_report_misses_a_gitlink(self):
+        rr = self.ra()
+        rr.folder(links=False)
+        sha = rr.repo.head()
+
+        def tracked(*args):
+            before = rr.snap()
+            for apply in (False, True):
+                rr.refused(self, rr.call(apply=apply), "tracked_files")
+            self.assertEqual(rr.snap(), before)
+        _run(["git", "update-index", "--add", "--cacheinfo", f"160000,{sha},.ai-review/w00"], cwd=rr.root)
+        record = next(r for r in rr.build()["finished"] if r["work_item_id"] == "w00")
+        self.assertEqual(record["review_folder"]["tracked_files"], 0)   # the report's blind spot
+        tracked()
+        _run(["git", "update-index", "--force-remove", ".ai-review/w00"], cwd=rr.root)
+        for rel in (".ai-review/w00/a.txt", ".ai-review/w00/sub/deeper/c.bin"):
+            _run(["git", "add", "-f", rel], cwd=rr.root)
+            tracked()
+            _run(["git", "rm", "-q", "--cached", rel], cwd=rr.root)
+        self.assertEqual(rr.call().code, 0)
+
+    # -- A13 ------------------------------------------------------------
+
+    def test_a13_the_destination_must_be_outside_the_repository(self):
+        rr = self.ra()
+        rr.folder()
+        inside = rr.root / "inside"
+        inside.mkdir()
+        os.symlink(inside, rr.root / "link-in")
+        os.symlink(inside, rr.outside / "pointer")
+        cases = {"existing directory inside": inside, "child not yet existing": rr.root / "nope" / "deeper",
+                 "symlink inside to inside": rr.root / "link-in",
+                 "symlink outside to inside": rr.outside / "pointer"}
+        for name, root in cases.items():
+            for apply in (False, True):
+                with self.subTest(case=name, apply=apply):
+                    before = rr.snap()
+                    rr.refused(self, rr.call(apply=apply, archive_root=root), "archive_inside_repository")
+                    self.assertEqual(rr.snap(), before)
+        self.assertFalse((rr.root / "nope").exists())
+        # controls: a repository reached through a link, an archive root that is a link outside
+        link_repo = rr.outside / "repo-link"
+        os.symlink(rr.root, link_repo)
+        self.assertEqual(rr.call(apply=True, repo_root=link_repo).code, 0)
+        self.assertTrue((rr.adir / "w00.tar.zst").is_file())
+        real_root = Path(tempfile.mkdtemp(prefix="wfo-realroot-"))
+        self._dirs.append(real_root)
+        os.symlink(real_root, rr.outside / "root-link")
+        rr.folder("w01")
+        self.assertEqual(rr.call("w01", apply=True, archive_root=rr.outside / "root-link").code, 0)
+        self.assertTrue((real_root / "widgets" / "w01.tar.zst").is_file())
+
+    def test_a13_the_chain_walk_has_its_own_codes_in_both_modes(self):
+        rr = self.ra()
+        rr.folder()
+        base = Path(tempfile.mkdtemp(prefix="wfo-chain-"))
+        self._dirs.append(base)
+        self.addCleanup(lambda: [os.chmod(p, 0o755) for p in base.iterdir() if p.is_dir() and not p.is_symlink()])
+        # an execute-only ancestor cannot be opened for fsync
+        if _AS_ROOT:
+            self.skipTest("running as root: permission bits do not apply")
+        (base / "anc" / "root").mkdir(parents=True)
+        os.chmod(base / "anc", 0o311)
+        for apply in (False, True):
+            with self.subTest(case="execute-only", apply=apply):
+                before = rr.snap()
+                result = rr.call(apply=apply, archive_root=base / "anc" / "root")
+                rr.refused(self, result, "unreadable")
+                self.assertEqual(rr.snap(), before)
+        # an ancestor swapped for a link after the resolution
+        for apply in (False, True):
+            with self.subTest(case="swapped", apply=apply):
+                name = f"swap{int(apply)}"
+                (base / name / "root").mkdir(parents=True)
+                real_open, fired = os.open, []
+
+                def open_(path, flags, *args, _n=name, _real=real_open, **kwargs):
+                    if path == _n and kwargs.get("dir_fd") is not None and not fired:
+                        fired.append(True)
+                        _REAL["rename"](base / _n, base / f"{_n}.moved")
+                        _REAL["symlink"](base / f"{_n}.moved", base / _n)
+                    return _real(path, flags, *args, **kwargs)
+                before = rr.snap()
+                with unittest.mock.patch.object(os, "open", open_):
+                    result = rr.call(apply=apply, archive_root=base / name / "root")
+                rr.refused(self, result, "archive_dir_unsafe")
+                self.assertEqual(rr.snap(), before)
+                self.assertEqual(os.listdir(base / f"{name}.moved" / "root"), [])
+
+    # -- A14 ------------------------------------------------------------
+
+    def test_a14_two_items_share_the_index_safely(self):
+        for pre_existing in (True, False):
+            with self.subTest(pre_existing=pre_existing):
+                rr = self.ra()
+                rr.folder("w00")
+                rr.folder("w01")
+                index = rr.adir / "index.jsonl"
+                other = b'{"work_item_id": "w02"}\n'
+                if pre_existing:
+                    index.write_bytes(other)
+                at_append, release = threading.Event(), threading.Event()
+                real_write = os.write
+
+                def write(fd, data, _real=real_write):
+                    if os.readlink(f"/proc/self/fd/{fd}").endswith("index.jsonl") and not at_append.is_set():
+                        at_append.set()
+                        release.wait(30)
+                        _real(fd, data[:len(data) // 2])
+                        raise OSError(errno.ENOSPC, "No space left on device")
+                    return _real(fd, data)
+                outcome = {}
+                with _ra_write_guard(rr.root, rr.violations), unittest.mock.patch.object(os, "write", write):
+                    thread = threading.Thread(target=lambda: outcome.update(first=rr.direct("w00", True)))
+                    thread.start()
+                    self.assertTrue(at_append.wait(30))
+                    folder_before = _ra_snap(rr.root / ".ai-review" / "w01")
+                    second = rr.direct("w01", True)
+                    release.set()
+                    thread.join(30)
+                rr.refused(self, second, "archive_busy")
+                self.assertEqual(_ra_snap(rr.root / ".ai-review" / "w01"), folder_before)
+                rr.refused(self, outcome["first"], "index_failed")
+                self.assertEqual(sorted(os.listdir(rr.adir)), ["index.jsonl"] if pre_existing else [])
+                if pre_existing:
+                    self.assertEqual(index.read_bytes(), other)
+                # sequentially afterwards both succeed and no earlier line is erased
+                self.assertEqual(rr.call("w00", apply=True).code, 0)
+                self.assertEqual(rr.call("w01", apply=True).code, 0)
+                lines = index.read_bytes().splitlines()
+                self.assertEqual([json.loads(l)["work_item_id"] for l in lines],
+                                 (["w02"] if pre_existing else []) + ["w00", "w01"])
+                if pre_existing:
+                    self.assertEqual(lines[0] + b"\n", other)
+
+    # -- A15 ------------------------------------------------------------
+
+    def _index_variants(self, rr):
+        """Name -> a function that puts something unsafe at `index.jsonl`."""
+        target = rr.outside / "other.jsonl"
+        target.write_text('{"work_item_id": "elsewhere"}\n')
+        repo_file = rr.root / "tracked.jsonl"
+        repo_file.write_text('{"work_item_id": "in-repo"}\n')
+
+        def fresh():
+            if os.path.lexists(rr.adir / "index.jsonl"):
+                _REAL["unlink"](rr.adir / "index.jsonl") if not (rr.adir / "index.jsonl").is_dir() \
+                    or (rr.adir / "index.jsonl").is_symlink() else os.rmdir(rr.adir / "index.jsonl")
+
+        def symlink_outside():
+            fresh()
+            os.symlink(target, rr.adir / "index.jsonl")
+
+        def symlink_repo():
+            fresh()
+            os.symlink(repo_file, rr.adir / "index.jsonl")
+
+        def hardlink():
+            fresh()
+            (rr.adir / "index.jsonl").write_text('{"work_item_id": "w02"}\n')
+            os.link(rr.adir / "index.jsonl", rr.outside / "shared.jsonl")
+
+        def directory():
+            fresh()
+            (rr.adir / "index.jsonl").mkdir()
+
+        def fifo():
+            fresh()
+            os.mkfifo(rr.adir / "index.jsonl")
+        return {"symlink to an outside file": symlink_outside, "symlink to a repository file": symlink_repo,
+                "hard link": hardlink, "directory": directory, "FIFO": fifo}, target, repo_file
+
+    def test_a15_an_index_that_is_not_an_ordinary_file_is_refused_before_any_write(self):
+        rr = self.ra()
+        rr.folder()
+        variants, target, repo_file = self._index_variants(rr)
+        for name, make in variants.items():
+            make()
+            watched = {p: p.read_bytes() for p in (target, repo_file, rr.outside / "shared.jsonl") if p.exists()}
+            for apply in (False, True):
+                with self.subTest(case=name, apply=apply):
+                    before = rr.snap()
+                    rr.refused(self, rr.call(apply=apply), "index_unsafe")
+                    self.assertEqual(rr.snap(), before)
+                    self.assertEqual({p: p.read_bytes() for p in watched}, watched)
+        os.unlink(rr.adir / "index.jsonl") if os.path.lexists(rr.adir / "index.jsonl") and not (rr.adir / "index.jsonl").is_dir() else None
+        # a missing final newline is an invalid index, not an unsafe one
+        shutil.rmtree(rr.adir / "index.jsonl", ignore_errors=True)
+        (rr.adir / "index.jsonl").write_text('{"work_item_id": "w02"}')
+        rr.refused(self, rr.call(apply=True), "index_invalid")
+
+    def test_a15_the_substitutions_made_after_the_selection_are_refused_by_the_open_itself(self):
+        rr = self.ra()
+        rr.folder()
+        variants, target, repo_file = self._index_variants(rr)
+        for name in ("symlink to an outside file", "symlink to a repository file", "hard link", "directory", "FIFO"):
+            make = variants[name]
+            with self.subTest(case=name):
+                (rr.adir / "index.jsonl").write_text('{"work_item_id": "w02"}\n') \
+                    if not os.path.lexists(rr.adir / "index.jsonl") else None
+                real_open, fired = os.open, []
+
+                def open_(path, flags, *args, _make=make, _real=real_open, **kwargs):
+                    if path == "index.jsonl" and flags & os.O_RDWR and not fired:
+                        fired.append(True)
+                        _make()
+                    return _real(path, flags, *args, **kwargs)
+                watched = {p: p.read_bytes() for p in (target, repo_file) if p.exists()}
+                with unittest.mock.patch.object(os, "open", open_):
+                    result = rr.call(apply=True)
+                self.assertTrue(fired)
+                rr.refused(self, result, "index_unsafe")
+                self.assertFalse((rr.adir / "w00.tar.zst").exists())
+                self.assertFalse((rr.adir / ".w00.partial").exists())
+                self.assertEqual({p: p.read_bytes() for p in watched}, watched)
+                shutil.rmtree(rr.adir / "index.jsonl", ignore_errors=True)
+                if os.path.lexists(rr.adir / "index.jsonl"):
+                    os.unlink(rr.adir / "index.jsonl")
+
+    # -- A16 ------------------------------------------------------------
+
+    def _order(self, rr, **kwargs):
+        """Runs `--apply` recording the durability-relevant calls in order."""
+        events = []
+        real = {name: getattr(os, name) for name in ("fsync", "mkdir", "link", "rmdir", "write", "unlink")}
+
+        def label(fd):
+            try:
+                return os.readlink(f"/proc/self/fd/{fd}")
+            except OSError:
+                return "?"
+
+        def make(name):
+            def call(*args, **kw):
+                if name == "fsync":
+                    events.append(("fsync", label(args[0])))
+                elif name == "mkdir":
+                    events.append(("mkdir", args[0]))
+                elif name == "link":
+                    events.append(("link", args[1]))
+                elif name == "rmdir":
+                    events.append(("rmdir", args[0]))
+                elif name == "write" and label(args[0]).endswith("index.jsonl"):
+                    events.append(("append", "index.jsonl"))
+                elif name == "unlink":
+                    events.append(("unlink", args[0]))
+                inject = kwargs_inject.get(name)
+                if inject is not None and inject(len([e for e in events if e[0] == name])):
+                    raise OSError(errno.EIO, "injected")
+                return real[name](*args, **kw)
+            return call
+        kwargs_inject = kwargs.pop("inject", {})
+        patches = [unittest.mock.patch.object(os, name, make(name)) for name in real]
+        with contextlib.ExitStack() as stack:
+            for patch in patches:
+                stack.enter_context(patch)
+            result = rr.call(apply=True, **kwargs)
+        events.append(("exit", result.code))
+        return result, events
+
+    def _chain_of(self, path):
+        parts = [p for p in os.path.realpath(path).split(os.sep) if p]
+        return ["/"] + [os.sep + os.sep.join(parts[:i]) for i in range(1, len(parts) + 1)]
+
+    def _assert_durable_order(self, events, adir, index_created=True):
+        chain = self._chain_of(adir)
+        fsyncs = [(n, e[1]) for n, e in enumerate(events) if e[0] == "fsync"]
+        tmp_at = next(n for n, path in fsyncs if path.endswith(".w00.partial"))
+        link_at = next(n for n, e in enumerate(events) if e[0] == "link")
+        self.assertLess(tmp_at, link_at)
+        for i in range(1, len(chain)):
+            own = next((n for n, path in fsyncs if path == chain[i]), None)
+            self.assertIsNotNone(own, f"{chain[i]} was never fsynced")
+            parent = next((n for n, path in fsyncs if path == chain[i - 1] and n > own), None)
+            self.assertIsNotNone(parent, f"the parent of {chain[i]} was not fsynced after it")
+            self.assertLess(parent, tmp_at)
+        tail = [(e[0], e[1]) for e in events[link_at + 1:] if e[0] in ("fsync", "append", "exit")]
+        expected = [("fsync", adir), ("append", "index.jsonl"), ("fsync", adir + "/index.jsonl")]
+        if index_created:
+            expected.append(("fsync", adir))
+        expected.append(("exit", 0))
+        self.assertEqual(tail, expected)
+
+    def test_a16_everything_new_is_durable_before_the_run_counts_as_archived(self):
+        rr = self.ra()
+        rr.folder()
+        base = Path(tempfile.mkdtemp(prefix="wfo-durable-"))
+        self._dirs.append(base)
+        root = base / "a" / "b"
+        adir = str(Path(os.path.realpath(base)) / "a" / "b" / "widgets")
+        result, events = self._order(rr, archive_root=root)
+        self.assertEqual(result.code, 0, result.error)
+        self.assertEqual([e[1] for e in events if e[0] == "mkdir"], ["a", "b", "widgets"])
+        self._assert_durable_order(events, adir)
+        # an injected failure at each fsync (and at each mkdir) leaves nothing this run created
+        total = len([e for e in events if e[0] == "fsync"])
+        for k in range(1, total + 1):
+            with self.subTest(fsync=k):
+                fresh = Path(tempfile.mkdtemp(prefix="wfo-durable-"))
+                self._dirs.append(fresh)
+                before = _ra_snap(fresh)
+                result, got = self._order(rr, archive_root=fresh / "a" / "b", inject={"fsync": lambda n, k=k: n == k})
+                self.assertIn(result.err_code, ("place_failed", "index_failed"), (k, got))
+                self.assertEqual(_ra_snap(fresh), before)
+        for j in (1, 2, 3):
+            with self.subTest(mkdir=j):
+                fresh = Path(tempfile.mkdtemp(prefix="wfo-durable-"))
+                self._dirs.append(fresh)
+                result, got = self._order(rr, archive_root=fresh / "a" / "b", inject={"mkdir": lambda n, j=j: n == j})
+                self.assertEqual(result.err_code, "place_failed")
+                self.assertEqual(os.listdir(fresh), [])
+
+    def test_a16_a_hierarchy_another_run_made_is_made_durable_by_this_one(self):
+        rr = self.ra()
+        rr.folder()
+        real_mkdir = os.mkdir
+
+        def adopting_mkdir(name, *args, **kwargs):
+            if name == "b" and kwargs.get("dir_fd") is not None:
+                with contextlib.suppress(FileExistsError):
+                    real_mkdir("b", 0o755, dir_fd=kwargs["dir_fd"])   # an unfinished second run's, never synced
+            return real_mkdir(name, *args, **kwargs)
+
+        for case in ("adopted", "pre-existing"):
+            with self.subTest(case=case), contextlib.ExitStack() as stack:
+                if case == "adopted":
+                    stack.enter_context(unittest.mock.patch.object(os, "mkdir", adopting_mkdir))
+
+                def fresh_root():
+                    fresh = Path(tempfile.mkdtemp(prefix="wfo-durable-"))
+                    self._dirs.append(fresh)
+                    if case == "pre-existing":
+                        (fresh / "a" / "b" / "widgets").mkdir(parents=True)
+                    return fresh
+                fresh = fresh_root()
+                adir = str(Path(os.path.realpath(fresh)) / "a" / "b" / "widgets")
+                result, events = self._order(rr, archive_root=fresh / "a" / "b")
+                self.assertEqual(result.code, 0, result.error)
+                self._assert_durable_order(events, adir)
+                # an injection at each chain fsync is place_failed and keeps what this run did not create
+                for k in range(1, 2 * (len(self._chain_of(adir)) - 1) + 1):
+                    again = fresh_root()
+                    result, got = self._order(rr, archive_root=again / "a" / "b",
+                                              inject={"fsync": lambda n, k=k: n == k})
+                    self.assertEqual(result.err_code, "place_failed", (case, k))
+                    self.assertFalse((again / "a" / "b" / "widgets" / "w00.tar.zst").exists())
+                    self.assertFalse((again / "a" / "b" / "widgets" / ".w00.partial").exists())
+                    if case == "pre-existing":
+                        self.assertTrue((again / "a" / "b" / "widgets").is_dir())
+                    else:
+                        self.assertTrue((again / "a" / "b").is_dir())     # the adopted directory stays
+
+    # -- A18 ------------------------------------------------------------
+
+    def test_a18_the_write_guard_catches_a_write_under_the_repository(self):
+        rr = self.ra()
+        folder = rr.folder()
+        with _ra_write_guard(rr.root, rr.violations):
+            for action in (lambda: os.unlink(folder / "a.txt"), lambda: os.rename(folder / "a.txt", folder / "z"),
+                           lambda: os.utime(folder / "a.txt"), lambda: shutil.rmtree(folder),
+                           lambda: os.open(folder / "a.txt", os.O_WRONLY), lambda: os.chmod(folder, 0o700),
+                           lambda: os.symlink("x", folder / "newlink"), lambda: os.mkdir(folder / "d")):
+                with self.assertRaises(AssertionError):
+                    action()
+            os.open(folder / "a.txt", os.O_RDONLY)  # a read is allowed
+        self.assertEqual(len(rr.violations), 8)
+        rr.violations.clear()
+        self.assertEqual((folder / "a.txt").read_text(), "hello w00\n")
+
+
+# ---------------------------------------------------------------------------
+# workflow-2.22.0: the removal (`retention-removal`)
+# ---------------------------------------------------------------------------
+
+class _RM(_RA):
+    """`_RA` plus the removal: `rm` runs `remove_item` under the write guard
+    (which allows exactly the rename out of `.ai-review/<id>` and back, through
+    the engine's `_rename` seam, and the unlinks beneath `.removing`)."""
+
+    def __enter__(self):
+        super().__enter__()
+        self.renames = []
+        self.removing = self.adir / ".removing"
+        return self
+
+    def prepared(self, item="w00", links=True):
+        """A populated folder and a real archive of it made by the engine."""
+        folder = self.folder(item, links=links)
+        result = self.call(item, apply=True)
+        assert result.code == 0, result.error
+        return folder
+
+    def rm(self, item="w00", apply=False, guard=True, **kwargs):
+        kwargs.setdefault("archive_root", self.archive_root)
+        kwargs.setdefault("now", _RR_NOW)
+        real = wr._rename
+        root = os.path.realpath(self.root)
+
+        def seam(src, dst, **kw):
+            self.renames.append((src, dst))
+            return real(src, dst, **kw)
+
+        try:
+            with unittest.mock.patch.object(wr, "_rename", seam):
+                if guard:
+                    with _ra_write_guard(self.root, self.violations):
+                        result = wr.remove_item(self.root, item, apply=apply, run=self.run, resolve=self.resolve,
+                                                **kwargs)
+                else:
+                    result = wr.remove_item(self.root, item, apply=apply, run=self.run, resolve=self.resolve,
+                                            **kwargs)
+        except wr.RetentionError as exc:
+            self.last_error = exc
+            return _Result(2, error=exc)
+        finally:
+            assert not self.violations, self.violations
+        return _Result(0, result)
+
+    def main_rm(self, item, *args, zstd=None):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = wr.main(["remove", item, "--repo-root", str(self.root), "--archive-root", str(self.archive_root),
+                            *args], run=self.run, resolve=self.resolve, now=_RR_NOW, zstd=zstd)
+        return code, out.getvalue(), err.getvalue()
+
+    def leftover(self, item="w00"):
+        return self.removing / item
+
+    def park(self, item="w00"):
+        """Builds the leftover by hand: the folder moved into `.removing`."""
+        self.removing.mkdir(mode=0o700, exist_ok=True)
+        _REAL["rename"](self.root / ".ai-review" / item, self.removing / item)
+        return self.removing / item
+
+    def files(self, folder):
+        """Every entry below `folder`: kind, link target or hash and, for a file, its mtime."""
+        seen = {}
+        for directory, dirs, names in os.walk(folder, followlinks=False):
+            for name in sorted(names + dirs):
+                full = os.path.join(directory, name)
+                info = os.lstat(full)
+                rel = os.path.relpath(full, folder)
+                if stat.S_ISLNK(info.st_mode):
+                    seen[rel] = ("link", os.readlink(full))
+                elif stat.S_ISREG(info.st_mode):
+                    seen[rel] = ("file", hashlib.sha256(Path(full).read_bytes()).hexdigest(), info.st_mtime_ns)
+                else:
+                    seen[rel] = ("dir",)
+        return seen
+
+    def outside_snap(self):
+        return _ra_snap(self.outside)
+
+
+def _fd_count():
+    for path in ("/proc/self/fd", "/dev/fd"):
+        if os.path.isdir(path):
+            return len(os.listdir(path))
+    return -1
+
+
+@unittest.skipUnless(_HAVE_ZSTD, "the removal tests need the zstd program on PATH")
+class RetentionRemove(unittest.TestCase):
+    def setUp(self):
+        self._dirs = []
+
+    def tearDown(self):
+        for directory in self._dirs:
+            shutil.rmtree(directory, ignore_errors=True)
+
+    def env(self, items=None, **kwargs):
+        rr = _RM(items, **kwargs)
+        self.addCleanup(rr.__exit__, None, None, None)
+        rr.__enter__()
+        return rr
+
+    def patch(self, target, name, replacement):
+        patcher = unittest.mock.patch.object(target, name, replacement)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def refused(self, rr, result, code):
+        self.assertEqual(result.code, 2, result.result)
+        self.assertEqual(result.err_code, code, getattr(result.error, "message", None))
+
+    def same_bytes_changed(self, path):
+        """Changes a file's bytes without changing its size or modification time."""
+        info = os.stat(path)
+        data = Path(path).read_bytes()
+        Path(path).write_bytes(bytes([data[0] ^ 1]) + data[1:])
+        os.utime(path, ns=(info.st_atime_ns, info.st_mtime_ns))
+
+    def whole(self, rr, item="w00"):
+        """The snapshot a refusal must leave: the repository and the archive store."""
+        return rr.snap(times=False), rr.files(rr.root / ".ai-review" / item) if \
+            (rr.root / ".ai-review" / item).exists() else None
+
+    # -- T4 to T6 of the unreadable-input refusals (W37) ---------------------
+
+    def link_refused(self, result, code, err, shown="ln"):
+        self.assertEqual((result.code, result.err_code), (2, code), getattr(result.error, "message", None))
+        phrase = "changed while it was read" if code == "folder_changed" else "cannot be read"
+        self.assertTrue(result.error.message.startswith(f"{shown} {phrase} ({os.strerror(err)})"),
+                        result.error.message)
+        self.assertTrue(result.error.next_step)
+
+    def test_w37_t4_an_unreadable_symlink_before_the_rename_moves_nothing(self):
+        rr = self.env()
+        rr.prepared()
+        before, folder_before, fds = rr.snap(times=False), rr.files(rr.root / ".ai-review" / "w00"), _fd_count()
+        # (site, apply, skip): the dry run's scan and hash; the selection and the re-selection under the lock
+        for site, apply, skip in (("_scan", False, 0), ("_hash_folder", False, 0), ("_scan", True, 0),
+                                  ("_scan", True, 1)):
+            for err, code in ((errno.EACCES, "unreadable"), (errno.ENOENT, "folder_changed")):
+                with self.subTest(site=site, apply=apply, skip=skip, err=errno.errorcode[err]):
+                    with _readlink_fails(site, "ln", err, skip=skip) as counted:
+                        result = rr.rm(apply=apply)
+                    self.assertEqual(len(counted), skip + 1)
+                    self.link_refused(result, code, err)
+                    self.untouched(rr, before, folder_before, fds)
+                    self.assertEqual(rr.renames, [])
+        self.assertEqual(rr.rm(apply=True).code, 0)  # the lock was released
+
+    def test_w37_t5_an_unreadable_symlink_after_the_rename_puts_the_folder_back(self):
+        # L0: the hash (skip 0) and the re-check scan (skip 2) run after this run renamed the folder
+        for site, skip in (("_hash_folder", 0), ("_scan", 2)):
+            with self.subTest(site=site):
+                rr = self.env()
+                rr.prepared()
+                before, folder_before, fds = rr.snap(times=False), rr.files(rr.root / ".ai-review" / "w00"), \
+                    _fd_count()
+                with _readlink_fails(site, "ln", errno.EIO, skip=skip) as counted:
+                    result = rr.rm(apply=True)
+                self.assertEqual(len(counted), skip + 1)
+                self.link_refused(result, "unreadable", errno.EIO)
+                self.assertEqual(len(rr.renames), 2)  # out and back
+                self.assertTrue(result.error.message.endswith(
+                    f"; the folder is back in {rr.root / '.ai-review' / 'w00'}"), result.error.message)
+                self.assertFalse((rr.removing / "w00").exists())
+                self.untouched(rr, before, folder_before, fds)
+                self.assertEqual(rr.rm(apply=True).code, 0)
+
+    def test_w37_t5b_an_unreadable_symlink_in_a_leftover_keeps_it_where_it_is(self):
+        rr = self.env()
+        rr.prepared()
+        rr.park()
+        leftover_before, fds = rr.files(rr.removing / "w00"), _fd_count()
+        with _readlink_fails("_hash_folder", "ln", errno.EIO) as counted:
+            result = rr.rm(apply=True)
+        self.assertEqual(len(counted), 1)
+        self.link_refused(result, "unreadable", errno.EIO)
+        self.assertEqual(rr.renames, [])
+        # step 6's own text: the hash failed before the comparison, so the leftover stays put
+        self.assertTrue(result.error.message.endswith(
+            f"; the folder is in {rr.removing / 'w00'}, it may be incomplete and the missing entries exist only in "
+            "the archive"), result.error.message)
+        self.assertTrue(result.error.next_step.endswith("; repair the cause and run `remove w00 --apply` again"),
+                        result.error.next_step)
+        self.assertEqual(rr.files(rr.removing / "w00"), leftover_before)
+        self.assertEqual(_fd_count(), fds)
+        self.assertEqual(rr.rm(apply=True).code, 0)
+
+    def test_w37_t5c_an_unreadable_symlink_at_the_recheck_puts_an_incomplete_leftover_back(self):
+        rr = self.env()
+        rr.prepared()
+        leftover = rr.park()
+        os.unlink(leftover / "sub/b.txt")
+        leftover_before, fds = rr.files(leftover), _fd_count()
+        # the leftover's scans: the selection, the re-selection under the lock, the re-check at step 5 (skip 2)
+        with _readlink_fails("_scan", "ln", errno.EIO, skip=2) as counted:
+            result = rr.rm(apply=True)
+        self.assertEqual(len(counted), 3)
+        self.link_refused(result, "unreadable", errno.EIO)
+        self.assertEqual(len(rr.renames), 1)  # back only: a leftover is not moved out by this run
+        self.assertTrue(result.error.message.endswith(
+            f"; the folder is back in {rr.root / '.ai-review' / 'w00'}"), result.error.message)
+        self.assertIn("1 archived entries are missing because an earlier run already deleted them",
+                      result.error.next_step)
+        self.assertIn(str(rr.adir / "w00.tar.zst"), result.error.next_step)
+        self.assertFalse((rr.removing / "w00").exists())
+        self.assertEqual(rr.files(rr.root / ".ai-review" / "w00"), leftover_before)
+        self.assertEqual(_fd_count(), fds)
+
+    def test_w37_t6_an_unreadable_symlink_while_deleting_stops_with_the_count(self):
+        for err, code in ((errno.EACCES, "unreadable"), (errno.ENOENT, "folder_changed")):
+            with self.subTest(err=errno.errorcode[err]):
+                rr = self.env()
+                rr.prepared()
+                archive_before = (rr.adir / "w00.tar.zst").read_bytes()
+                everything = rr.files(rr.root / ".ai-review" / "w00")
+                with _readlink_fails("_remove_tree", "ln", err) as counted:
+                    result = rr.rm(apply=True)
+                self.assertEqual(len(counted), 1)
+                self.link_refused(result, code, err)
+                rest = rr.files(rr.removing / "w00")
+                deleted = len(everything) - len(rest)
+                self.assertGreater(deleted, 0)
+                self.assertIn("ln", rest)
+                self.assertIn(f"; stopped after deleting {deleted} entries, each proven archived; the rest is in ",
+                              result.error.message)
+                self.assertEqual(result.error.next_step, "run `remove w00 --apply` again")
+                self.assertEqual((rr.adir / "w00.tar.zst").read_bytes(), archive_before)
+                self.assertEqual(rr.rm(apply=True).code, 0)  # the run without the injector finishes
+                self.assertFalse((rr.removing / "w00").exists())
+
+    # -- T2 to T6 of the stat-error refusal (W33) ----------------------------
+
+    def stat_refused(self, result, code, shown, errname):
+        self.assertEqual((result.code, result.err_code), (2, code), getattr(result.error, "message", None))
+        self.assertIn(f"{shown} cannot be examined: {errname} ", result.error.message)
+        self.assertIn("check the permissions of", result.error.next_step)
+        self.assertIn(shown, result.error.next_step)
+
+    def untouched(self, rr, before, folder_before, fds, item="w00"):
+        self.assertEqual(rr.snap(times=False), before)
+        self.assertEqual(rr.files(rr.root / ".ai-review" / item), folder_before)
+        self.assertEqual(_fd_count(), fds)
+
+    def test_w33_t2_a_stat_error_of_the_archive_file_is_unreadable(self):
+        rr = self.env()
+        rr.prepared()
+        before, folder_before, fds = rr.snap(times=False), rr.files(rr.root / ".ai-review" / "w00"), _fd_count()
+        for apply in (False, True):
+            with self.subTest(apply=apply):
+                with _stat_fails("_judge_removal_archive", "w00.tar.zst", errno.EACCES):
+                    result = rr.rm(apply=apply)
+                self.stat_refused(result, "unreadable", str(rr.adir / "w00.tar.zst"), "EACCES")
+                self.untouched(rr, before, folder_before, fds)
+        self.assertEqual(rr.renames, [])
+        self.assertEqual(rr.rm(apply=True).code, 0)
+
+    def test_w33_t3_a_stat_error_of_a_leftover_probe_is_unreadable_in_the_selection_and_under_the_lock(self):
+        # probe 1 and 2 with an empty `.removing`; probe 3 with the folder parked there
+        for parked, probe in ((False, 0), (False, 1), (True, 0), (True, 1), (True, 2)):
+            with self.subTest(parked=parked, probe=probe):
+                rr = self.env()
+                rr.prepared()
+                if parked:
+                    rr.park()
+                else:
+                    rr.removing.mkdir(mode=0o700)
+                shown = str(rr.removing / "w00") if probe != 1 else str(rr.root / ".ai-review" / "w00")
+                before, folder_before = rr.snap(times=False), None if parked else rr.files(rr.root / ".ai-review" / "w00")
+                leftover_before = rr.files(rr.removing / "w00") if parked else None
+                fds = _fd_count()
+                probes = 3 if parked else 2  # the calls the selection makes before the re-run under the lock
+                runs = [(False, probe), (True, probe), (True, probes + probe)]
+                for apply, skip in runs:
+                    with _stat_fails("_select_removal", "w00", errno.ELOOP, skip=skip) as counted:
+                        result = rr.rm(apply=apply)
+                    self.stat_refused(result, "unreadable", shown, "ELOOP")
+                    self.assertEqual(len(counted), skip + 1)
+                    self.assertEqual(rr.snap(times=False), before)
+                    if parked:
+                        self.assertEqual(rr.files(rr.removing / "w00"), leftover_before)
+                    else:
+                        self.assertEqual(rr.files(rr.root / ".ai-review" / "w00"), folder_before)
+                    self.assertEqual(_fd_count(), fds)
+                    self.assertEqual(rr.renames, [])
+                self.assertEqual(rr.rm(apply=True).code, 0)
+
+    def test_w33_t4_a_stat_error_under_the_lock_before_the_rename_leaves_everything_in_place(self):
+        rr = self.env()
+        rr.prepared()
+        before, folder_before, fds = rr.snap(times=False), rr.files(rr.root / ".ai-review" / "w00"), _fd_count()
+        with _stat_fails("_flow", "w00", errno.EACCES) as counted:
+            result = rr.rm(apply=True)
+        self.assertEqual(len(counted), 1)
+        self.stat_refused(result, "unreadable", str(rr.removing / "w00"), "EACCES")
+        self.assertIn("nothing was moved or deleted", result.error.next_step)
+        self.assertFalse(rr.removing.exists())
+        self.untouched(rr, before, folder_before, fds)
+        self.assertEqual(rr.renames, [])
+        self.assertEqual(rr.rm(apply=True).code, 0)
+
+    def test_w33_t5_a_stat_error_after_the_rename_names_where_the_folder_is(self):
+        # L0: this run renamed the folder; the first counted stat is step 3's, the second is step 4's
+        rr = self.env()
+        rr.prepared()
+        folder_before = rr.files(rr.root / ".ai-review" / "w00")
+        archive_before = (rr.adir / "w00.tar.zst").read_bytes()
+        fds = _fd_count()
+        with _stat_fails("_flow", "w00", errno.EIO, skip=1) as counted:
+            result = rr.rm(apply=True)
+        self.assertEqual(len(counted), 2)
+        self.stat_refused(result, "unreadable", str(rr.removing / "w00"), "EIO")
+        self.assertIn("the folder is whole in", result.error.next_step)
+        self.assertIn("remove w00 --apply", result.error.next_step)
+        self.assertEqual(rr.files(rr.removing / "w00"), folder_before)
+        self.assertFalse((rr.root / ".ai-review" / "w00").exists())
+        self.assertEqual((rr.adir / "w00.tar.zst").read_bytes(), archive_before)
+        self.assertEqual(_fd_count(), fds)
+        self.assertEqual(rr.rm(apply=True).code, 0)  # the resume
+        self.assertFalse((rr.removing / "w00").exists())
+        # L1: a leftover of an earlier run; this run renamed nothing and step 4 is the first counted stat
+        rr = self.env()
+        rr.prepared()
+        rr.park()
+        leftover_before = rr.files(rr.removing / "w00")
+        fds = _fd_count()
+        with _stat_fails("_flow", "w00", errno.EIO) as counted:
+            result = rr.rm(apply=True)
+        self.assertEqual(len(counted), 1)
+        self.stat_refused(result, "unreadable", str(rr.removing / "w00"), "EIO")
+        self.assertIn("may be incomplete", result.error.next_step)
+        self.assertIn("only in the archive", result.error.next_step)
+        self.assertNotIn("whole", result.error.next_step)
+        self.assertEqual(rr.files(rr.removing / "w00"), leftover_before)
+        self.assertEqual(_fd_count(), fds)
+        self.assertEqual(rr.rm(apply=True).code, 0)
+
+    def test_w33_t6_a_stat_error_while_restoring_is_restore_failed_with_both_causes(self):
+        rr = self.env()
+        folder = rr.prepared()
+        self.same_bytes_changed(folder / "a.txt")  # the verification refuses archive_mismatch
+        fds = _fd_count()
+        with _stat_fails("_restore", "w00", errno.EIO) as counted:
+            result = rr.rm(apply=True)
+        self.assertEqual(len(counted), 1)
+        ai_place = str(rr.root / ".ai-review" / "w00")
+        self.assertEqual((result.code, result.err_code), (2, "restore_failed"), getattr(result.error, "message", None))
+        self.assertIn(f"{ai_place} cannot be examined: EIO ", result.error.message)
+        self.assertIn("the refusal was archive_mismatch", result.error.message)
+        self.assertIn(str(rr.removing / "w00"), result.error.next_step)
+        self.assertIn("once it is readable `mv` it to " + ai_place, result.error.next_step)
+        self.assertTrue((rr.removing / "w00" / "a.txt").exists())
+        self.assertEqual(_fd_count(), fds)
+
+    # -- T1 -------------------------------------------------------------
+
+    def test_t1_the_dry_run_lists_everything_and_writes_nothing(self):
+        rr = self.env()
+        folder = rr.prepared()
+        before, folder_before, times = rr.snap(), rr.files(folder), _ra_snap(folder)
+        result = rr.rm()
+        self.assertEqual(result.code, 0, result.error)
+        data = result.result
+        self.assertEqual((data["kind"], data["mode"], data["verify"], data["result"]),
+                         ("retention-remove", "dry-run", {"matches": True}, {"removed": False}))
+        self.assertEqual(data["review_folder"]["state"], "in_place")
+        self.assertEqual((data["review_folder"]["files"], data["review_folder"]["bytes"]), (3, len("hello w00\n") + 4 + 3000))
+        self.assertEqual(data["archive"], {"path": str(rr.adir / "w00.tar.zst"),
+                                           "bytes": (rr.adir / "w00.tar.zst").stat().st_size, "indexed": True})
+        self.assertEqual(data["target"], {"removing": str(rr.removing / "w00")})
+        self.assertEqual(rr.snap(), before)
+        self.assertEqual(_ra_snap(folder), times)
+        self.assertEqual(rr.renames, [])
+        self.assertFalse(rr.removing.exists())
+        self.assertEqual(sorted(os.listdir(rr.adir)), ["index.jsonl", "w00.tar.zst"])
+        code, out, err = rr.main_rm("w00")
+        self.assertEqual((code, err), (0, ""))
+        self.assertIn("dry run: nothing was written; pass --apply to remove", out)
+        code, out, _ = rr.main_rm("w00", "--json")
+        self.assertEqual(json.loads(out)["mode"], "dry-run")
+        self.assertEqual(rr.snap(), before)
+        # a changed folder is the archive_mismatch refusal, with nothing on stdout, in both forms
+        self.same_bytes_changed(folder / "a.txt")
+        for extra in ((), ("--json",)):
+            code, out, err = rr.main_rm("w00", *extra)
+            self.assertEqual((code, out), (2, ""))
+            self.assertTrue(err.startswith("error: archive_mismatch: "), err)
+            self.assertIn("a.txt (differs)", err)
+        self.assertFalse(rr.removing.exists())
+
+    def test_t1_a_real_interpreter_dry_run_leaves_no_bytecode(self):
+        env = {k: v for k, v in os.environ.items()
+               if k not in ("PYTHONDONTWRITEBYTECODE", "PYTHONPYCACHEPREFIX", "PYTHONPATH")}
+        copy = Path(tempfile.mkdtemp(prefix="wfo-scripts-"))
+        self._dirs.append(copy)
+        for name in ("workflow_retention.py", "workflow_forge.py"):
+            shutil.copy(Path(wr.__file__).resolve().parent / name, copy / name)
+        rr = self.env({**_rr_many(7), "busy": _rr_item(phase="IMPLEMENTING")})
+        rr.folder("busy")
+        before = rr.snap()
+        proc = subprocess.run(["python3", "-I", str(copy / "workflow_retention.py"), "remove", "busy",
+                               "--repo-root", str(rr.root), "--archive-root", str(rr.archive_root)],
+                              capture_output=True, text=True, env=env)
+        self.assertEqual(proc.returncode, 2, proc.stderr)
+        self.assertIn("error: not_finished:open_phase", proc.stderr)
+        self.assertEqual(_rr_find_pycache(copy, rr.root, rr.archive_root), [])
+        self.assertEqual(rr.snap(), before)
+
+    # -- T2, T11 --------------------------------------------------------
+
+    def test_t2_apply_removes_only_that_folder_after_the_verify(self):
+        rr = self.env()
+        rr.prepared()
+        rr.prepared("w01")
+        _run(["git", "add", "-f", ".ai-review/w01/a.txt"], cwd=rr.root)
+        archive = rr.adir / "w00.tar.zst"
+        archive_bytes, archive_mtime = archive.read_bytes(), archive.stat().st_mtime_ns
+        index = (rr.adir / "index.jsonl").read_bytes()
+        others, state, outside = _ra_snap(rr.root / ".ai-review" / "w01"), \
+            (rr.root / "docs/ai-workflow/WORKFLOW_STATE.json").read_bytes(), rr.outside_snap()
+        tracked = subprocess.run(["git", "ls-files"], cwd=rr.root, capture_output=True, text=True).stdout
+        order = []
+        real_unlink = os.unlink
+        self.patch(os, "unlink", lambda *a, **k: (order.append("unlink"), real_unlink(*a, **k))[1])
+        result = rr.rm(apply=True)
+        self.assertEqual(result.code, 0, result.error)
+        self.assertEqual(result.result["result"], {"removed": True, "files": 3, "bytes": len("hello w00\n") + 4 + 3000})
+        self.assertFalse((rr.root / ".ai-review" / "w00").exists())
+        self.assertEqual(_ra_snap(rr.root / ".ai-review" / "w01"), others)
+        self.assertEqual((rr.root / "docs/ai-workflow/WORKFLOW_STATE.json").read_bytes(), state)
+        self.assertEqual(subprocess.run(["git", "ls-files"], cwd=rr.root, capture_output=True, text=True).stdout,
+                         tracked)
+        self.assertEqual((archive.read_bytes(), archive.stat().st_mtime_ns), (archive_bytes, archive_mtime))
+        self.assertEqual((rr.adir / "index.jsonl").read_bytes(), index)
+        self.assertEqual(os.listdir(rr.removing), [])
+        self.assertEqual(rr.outside_snap(), outside)           # T11: the link to a directory was unlinked, not followed
+        self.assertEqual(len(rr.renames), 1)
+        self.assertEqual(rr.renames[0][0], "w00")
+        self.assertEqual(order.count("unlink"), 5)             # three files and the two symlinks
+        report = wr.build_report(rr.root, archive_root=rr.archive_root, now=_RR_NOW, run=rr.run, resolve=rr.resolve)
+        finished = {r["work_item_id"]: r for r in report["finished"]}
+        self.assertFalse(finished["w00"]["review_folder"]["present"])
+        self.assertTrue(finished["w00"]["archive"]["present"])
+        self.assertEqual(report["removing"], [])
+        self.assertEqual(report["read_errors"], [])
+        code, out, _ = rr.main_rm("w00", "--json")
+        self.assertEqual(code, 2)        # a second run: the folder is gone
+
+    # -- T3 -------------------------------------------------------------
+
+    def test_t3_a_difference_refuses_and_nothing_is_lost(self):
+        cases = {
+            "same-size changed bytes, mtime restored": (lambda rr, f: self.same_bytes_changed(f / "a.txt"), "a.txt"),
+            "an added file": (lambda rr, f: (f / "added.txt").write_text("new"), "added.txt"),
+            "a removed file": (lambda rr, f: os.unlink(f / "sub/b.txt"), "sub/b.txt"),
+            "a retargeted symlink": (lambda rr, f: (os.unlink(f / "ln"), os.symlink("sub/b.txt", f / "ln")), "ln"),
+            "a changed nested file": (lambda rr, f: self.same_bytes_changed(f / "sub/deeper/c.bin"),
+                                      "sub/deeper/c.bin"),
+        }
+        for label, (change, path) in cases.items():
+            for apply in (False, True):
+                with self.subTest(label, apply=apply):
+                    rr = self.env()
+                    folder = rr.prepared()
+                    change(rr, folder)
+                    before, files = rr.snap(times=False), rr.files(folder)
+                    calls = []
+                    real_unlink, real_rmdir = os.unlink, os.rmdir
+                    with unittest.mock.patch.object(os, "unlink", lambda *a, **k: (calls.append(("unlink", a)),
+                                                                                    real_unlink(*a, **k))[1]), \
+                            unittest.mock.patch.object(os, "rmdir", lambda *a, **k: (calls.append(("rmdir", a)),
+                                                                                      real_rmdir(*a, **k))[1]):
+                        result = rr.rm(apply=apply)
+                    self.refused(rr, result, "archive_mismatch")
+                    self.assertIn(path, result.error.message)
+                    self.assertEqual(rr.files(folder), files)
+                    self.assertEqual(rr.snap(times=False), before)
+                    self.assertFalse(rr.removing.exists())
+                    self.assertEqual([c for c in calls if c[0] == "unlink"], [])
+                    self.assertEqual([c[1][0] for c in calls if c[0] == "rmdir"], [".removing"] if apply else [])
+                    self.assertIn("keep them", result.error.next_step)
+                    self.assertNotIn("delete", (result.error.message + result.error.next_step).replace(
+                        "already deleted", ""))
+
+    # -- T4 -------------------------------------------------------------
+
+    def test_t4_every_selection_refusal_has_its_code_and_writes_nothing(self):
+        from workflow_forge import ForgeUnavailableError
+        items = {**_rr_many(7), "busy": _rr_item(phase="IMPLEMENTING"),
+                 "runtime": _rr_item(), "archive": _rr_item()}
+
+        def prep(rr, *names):
+            for name in names:
+                rr.prepared(name)
+
+        def unarchived(rr):
+            rr.folder("w01")
+
+        def no_line(rr):
+            prep(rr, "w01")
+            (rr.adir / "index.jsonl").write_text("")
+
+        def no_file(rr):
+            prep(rr, "w01")
+            (rr.adir / "w01.tar.zst").unlink()
+
+        def half_line(rr):
+            prep(rr, "w01")
+            with open(rr.adir / "index.jsonl", "ab") as handle:
+                handle.write(b'{"work_item_id": "w0')
+
+        def linked_index(rr):
+            prep(rr, "w01")
+            real = rr.adir / "index.jsonl"
+            keep = rr.outside / "index.jsonl"
+            shutil.move(real, keep)
+            os.symlink(keep, real)
+
+        def linked_root(rr):
+            prep(rr, "w01")
+            shutil.move(rr.root / ".ai-review", rr.outside / "moved")
+            os.symlink(rr.outside / "moved", rr.root / ".ai-review")
+
+        def linked_adir(rr):
+            prep(rr, "w01")
+            shutil.move(rr.adir, rr.outside / "store")
+            os.symlink(rr.outside / "store", rr.adir)
+
+        def linked_removing(rr):
+            prep(rr, "w01")
+            os.symlink(rr.outside / "tree", rr.adir / ".removing")
+
+        def tracked_file(rr):
+            prep(rr, "w01")
+            _run(["git", "add", "-f", ".ai-review/w01/a.txt"], cwd=rr.root)
+
+        def tracked_gitlink(rr):
+            prep(rr, "w01")
+            _run(["git", "update-index", "--add", "--cacheinfo", f"160000,{'a' * 40},.ai-review/w01"], cwd=rr.root)
+
+        def fifo(rr):
+            prep(rr, "w01")
+            os.mkfifo(rr.root / ".ai-review" / "w01" / "pipe")
+
+        def absent(rr):
+            prep(rr, "w01")
+            shutil.rmtree(rr.root / ".ai-review" / "w01")
+
+        def no_state(rr):
+            prep(rr, "w01")
+            (rr.root / "docs/ai-workflow/WORKFLOW_STATE.json").unlink()
+
+        def bad_state(rr):
+            prep(rr, "w01")
+            (rr.root / "docs/ai-workflow/WORKFLOW_STATE.json").write_text("{")
+
+        def no_origin(rr):
+            prep(rr, "w01")
+            _run(["git", "remote", "remove", "origin"], cwd=rr.root)
+
+        def unreadable_dir(rr):
+            prep(rr, "w01")
+            os.chmod(rr.root / ".ai-review" / "w01" / "sub", 0)
+
+        table = [("busy", "not_finished:open_phase", None), ("w06", "kept_recent", None),
+                 ("w99", "unknown_item", None), ("runtime", "invalid_id", None), ("archive", "invalid_id", None),
+                 ("Bad Id", "invalid_id", None), ("w01", "not_archived", unarchived), ("w01", "not_archived", no_line),
+                 ("w01", "not_archived", no_file), ("w01", "index_invalid", half_line),
+                 ("w01", "index_unsafe", linked_index), ("w01", "path_unsafe", linked_root),
+                 ("w01", "archive_dir_unsafe", linked_adir), ("w01", "unreadable", linked_removing),
+                 ("w01", "tracked_files", tracked_file), ("w01", "tracked_files", tracked_gitlink),
+                 ("w01", "unsupported_entry", fifo), ("w01", "review_folder_absent", absent),
+                 ("w01", "state_missing", no_state), ("w01", "state_invalid", bad_state),
+                 ("w01", "repository_unknown", no_origin)]
+        if not _AS_ROOT:
+            table.append(("w01", "unreadable", unreadable_dir))
+        for item, code, setup in table:
+            for apply in (False, True):
+                with self.subTest(item=item, code=code, setup=getattr(setup, "__name__", None), apply=apply):
+                    rr = self.env(items, outcomes={})
+                    rr.folder("busy", links=False)
+                    if setup is not None:
+                        setup(rr)
+                    before = rr.snap(times=False)
+                    fds = _fd_count()
+                    result = rr.rm(item, apply=apply)
+                    self.refused(rr, result, code)
+                    self.assertEqual(_fd_count(), fds, "a descriptor leaked")
+                    self.assertEqual(rr.snap(times=False), before, f"{code} wrote something")
+        # an archive store inside the checkout
+        rr = self.env(items)
+        rr.prepared("w01")
+        inside = rr.root / "store"
+        shutil.copytree(rr.archive_root, inside, symlinks=True)
+        for apply in (False, True):
+            result = rr.rm("w01", apply=apply, archive_root=inside)
+            self.refused(rr, result, "archive_inside_repository")
+        # zstd missing
+        rr = self.env(items)
+        rr.prepared("w01")
+        with unittest.mock.patch.object(shutil, "which", lambda *a, **k: None):
+            for apply in (False, True):
+                self.refused(rr, rr.rm("w01", apply=apply), "zstd_missing")
+        # a held lock: only an apply refuses
+        rr = self.env(items)
+        rr.prepared("w01")
+        import fcntl
+        held = os.open(rr.adir, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, held)
+        fcntl.flock(held, fcntl.LOCK_EX)
+        before = rr.snap(times=False)
+        self.assertEqual(rr.rm("w01").code, 0)
+        self.refused(rr, rr.rm("w01", apply=True), "archive_busy")
+        self.assertEqual(rr.snap(times=False), before)
+        self.assertEqual(rr.rm("w01").result["result"], {"removed": False})
+        # a forge that cannot be reached
+        rr = self.env({**items, "failing": _rr_item(last="2026-08-02T00:00:00Z")},
+                      outcomes={_rr_commit("failing"): ForgeUnavailableError("gh gone")})
+        rr.folder("failing")
+        self.refused(rr, rr.rm("failing"), "not_finished:query_failed:forge_unavailable")
+
+    # -- T5 -------------------------------------------------------------
+
+    def test_t5_cross_device_refuses_before_and_during_the_rename(self):
+        rr = self.env()
+        folder = rr.prepared()
+        before, files = rr.snap(times=False), rr.files(folder)
+        self.patch(wr, "_same_device", lambda a, b: False)
+        for apply in (False, True):
+            self.refused(rr, rr.rm(apply=apply), "cross_device")
+        self.assertEqual(rr.snap(times=False), before)
+        self.assertEqual(rr.renames, [])
+        unittest.mock.patch.stopall()
+        self.patch(wr, "_rename", lambda *a, **k: (_ for _ in ()).throw(OSError(errno.EXDEV, "cross-device")))
+        result = rr.rm(apply=True, guard=False)
+        self.refused(rr, result, "cross_device")
+        self.assertEqual(rr.files(folder), files)
+        self.assertEqual(rr.snap(times=False), before)
+        self.assertFalse(rr.removing.exists())          # created by this run, removed again
+
+    # -- T6, T8 ---------------------------------------------------------
+
+    def test_t6_the_rename_back_never_replaces_anything(self):
+        rr = self.env()
+        folder = rr.prepared()
+        self.same_bytes_changed(folder / "a.txt")
+        parked = rr.files(folder)
+        real = wr._rename
+
+        def seam(src, dst, **kw):
+            real(src, dst, **kw)
+            if kw.get("dst_dir_fd") is not None and src == "w00" and not (rr.root / ".ai-review" / "w00").exists() \
+                    and (rr.removing / "w00").exists():
+                _REAL["mkdir"](rr.root / ".ai-review" / "w00")
+                (rr.root / ".ai-review" / "w00" / "someone.txt").write_text("populated")
+
+        self.patch(wr, "_rename", seam)
+        result = rr.rm(apply=True, guard=False)
+        self.refused(rr, result, "restore_failed")
+        self.assertIn(str(rr.removing / "w00"), result.error.message)
+        self.assertIn("a.txt (differs)", result.error.message)
+        self.assertEqual(rr.files(rr.removing / "w00"), parked)
+        self.assertEqual(os.listdir(rr.root / ".ai-review" / "w00"), ["someone.txt"])
+        # an empty directory in the way would be replaced silently by the rename: the lstat guard refuses it
+        unittest.mock.patch.stopall()
+        rr = self.env()
+        folder = rr.prepared()
+        self.same_bytes_changed(folder / "a.txt")
+        parked = rr.files(folder)
+        real = wr._rename
+
+        def seam_empty(src, dst, **kw):
+            real(src, dst, **kw)
+            if src == "w00" and kw.get("src_dir_fd") is not None and (rr.removing / "w00").exists() \
+                    and not (rr.root / ".ai-review" / "w00").exists():
+                _REAL["mkdir"](rr.root / ".ai-review" / "w00")
+
+        self.patch(wr, "_rename", seam_empty)
+        result = rr.rm(apply=True, guard=False)
+        self.refused(rr, result, "restore_failed")
+        self.assertEqual(rr.files(rr.removing / "w00"), parked)
+        self.assertEqual(os.listdir(rr.root / ".ai-review" / "w00"), [])
+
+    def test_t8_a_directory_swapped_in_after_the_rename_is_neither_deleted_nor_renamed_back(self):
+        rr = self.env()
+        rr.prepared()
+        real = wr._rename
+
+        def seam(src, dst, **kw):
+            real(src, dst, **kw)
+            if dst == "w00" and kw.get("src_dir_fd") is not None and src == "w00":
+                _REAL["rename"](rr.removing / "w00", rr.outside / "moved-folder")
+                _REAL["mkdir"](rr.removing / "w00")
+                (rr.removing / "w00" / "stranger.txt").write_text("not the folder")
+
+        self.patch(wr, "_rename", seam)
+        calls = []
+        real_unlink = os.unlink
+        self.patch(os, "unlink", lambda *a, **k: (calls.append(a), real_unlink(*a, **k))[1])
+        result = rr.rm(apply=True, guard=False)
+        self.refused(rr, result, "folder_changed")
+        self.assertEqual(calls, [])
+        self.assertEqual(os.listdir(rr.removing / "w00"), ["stranger.txt"])
+        self.assertFalse((rr.root / ".ai-review" / "w00").exists())
+        self.assertTrue((rr.outside / "moved-folder" / "a.txt").exists())
+
+    # -- T7 -------------------------------------------------------------
+
+    def test_t7_a_late_writer_stops_the_delete_and_the_rerun_renames_the_remainder_back(self):
+        rr = self.env()
+        rr.prepared()
+        real = os.fwalk
+        done = []
+
+        def fwalk(top, *args, **kwargs):
+            if kwargs.get("topdown") is False and not done:
+                done.append(1)
+                with open(rr.removing / "w00" / "a.txt", "ab") as handle:
+                    handle.write(b"LATE")
+                (rr.removing / "w00" / "extra.txt").write_text("late arrival")
+            return real(top, *args, **kwargs)
+
+        self.patch(os, "fwalk", fwalk)
+        result = rr.rm(apply=True, guard=False)
+        self.refused(rr, result, "folder_changed")
+        message = result.error.message
+        self.assertRegex(message, r"stopped after deleting [1-9][0-9]* entries, each proven archived")
+        self.assertIn(str(rr.removing / "w00"), message)
+        self.assertIn("remove w00 --apply", result.error.next_step)
+        left = rr.files(rr.removing / "w00")
+        self.assertIn("a.txt", left)
+        self.assertIn("extra.txt", left)
+        unittest.mock.patch.stopall()
+        second = rr.rm(apply=True)
+        self.refused(rr, second, "archive_mismatch")
+        self.assertIn("extra.txt", second.error.message)
+        self.assertIn("a.txt", second.error.message)
+        self.assertRegex(second.error.next_step, r"[1-9][0-9]* archived entries are missing")
+        self.assertIn(str(rr.adir / "w00.tar.zst"), second.error.next_step)
+        self.assertEqual((rr.root / ".ai-review" / "w00" / "extra.txt").read_text(), "late arrival")
+        self.assertTrue((rr.root / ".ai-review" / "w00" / "a.txt").read_bytes().endswith(b"LATE"))
+        self.assertTrue(rr.removing.is_dir())
+        self.assertEqual(os.listdir(rr.removing), [])
+
+    # -- T9 -------------------------------------------------------------
+
+    def test_t9_a_killed_run_leaves_a_leftover_the_next_run_completes(self):
+        import signal
+        rr = self.env()
+        folder = rr.prepared()
+        original = rr.files(folder)
+        copy = Path(tempfile.mkdtemp(prefix="wfo-scripts-"))
+        self._dirs.append(copy)
+        for name in ("workflow_retention.py", "workflow_forge.py"):
+            shutil.copy(Path(wr.__file__).resolve().parent / name, copy / name)
+        driver = copy / "driver.py"
+        # a real process, killed with SIGKILL by itself at the first read of the archive, which is after the rename
+        # (a stand-in `zstd` that sleeps would leave two re-parented processes for the orphan wrapper to list)
+        driver.write_text(textwrap.dedent(f"""
+            import sys, os, json, signal, datetime
+            sys.dont_write_bytecode = True
+            sys.path.insert(0, {str(copy)!r})
+            import workflow_retention as wr
+            def run(argv, timeout):
+                return json.dumps([{{"number": 7, "url": "https://github.com/acme/widgets/pull/7",
+                                    "state": "MERGED", "headRefOid": "a" * 40}}])
+            def resolve(root):
+                return {{"path": "/usr/bin/gh", "sha256": "0" * 64}}
+            def die(*args, **kwargs):
+                os.kill(os.getpid(), signal.SIGKILL)
+            wr._archive_table = die
+            sys.exit(wr.main(sys.argv[1:], run=run, resolve=resolve,
+                             now=datetime.datetime(2026, 11, 1, 12, tzinfo=datetime.timezone.utc)))
+        """))
+        proc = subprocess.run(["python3", "-I", str(driver), "remove", "w00", "--apply", "--repo-root",
+                               str(rr.root), "--archive-root", str(rr.archive_root)], capture_output=True)
+        self.assertEqual(proc.returncode, -signal.SIGKILL, proc.stderr)
+        self.assertFalse((rr.root / ".ai-review" / "w00").exists())
+        self.assertEqual(rr.files(rr.removing / "w00"), original)
+        self.assertEqual(rr.build()["removing"], ["w00"])
+        done = rr.rm(apply=True)
+        self.assertEqual(done.code, 0, done.error)
+        self.assertEqual(done.result["review_folder"]["state"], "leftover")
+        self.assertFalse((rr.removing / "w00").exists())
+        self.assertFalse((rr.root / ".ai-review" / "w00").exists())
+        self.assertEqual(rr.build()["removing"], [])
+
+    # -- T10 ------------------------------------------------------------
+
+    def test_t10_leftover_states_built_by_hand(self):
+        # (a) whole, resumed and deleted; (b) partly deleted, finished
+        rr = self.env()
+        rr.prepared()
+        rr.park()
+        result = rr.rm(apply=True)
+        self.assertEqual(result.code, 0, result.error)
+        self.assertEqual(result.result["review_folder"]["state"], "leftover")
+        self.assertFalse((rr.removing / "w00").exists())
+        rr = self.env()
+        rr.prepared()
+        leftover = rr.park()
+        os.unlink(leftover / "sub/b.txt")
+        os.unlink(leftover / "ln")
+        self.assertEqual(rr.rm().code, 0)          # the dry run forgives what is missing
+        self.assertEqual(rr.rm(apply=True).code, 0)
+        self.assertFalse((rr.removing / "w00").exists())
+        # (c) same-size changed bytes, mtime restored: renamed back, the difference named, no offer to delete
+        rr = self.env()
+        rr.prepared()
+        leftover = rr.park()
+        self.same_bytes_changed(leftover / "a.txt")
+        files = rr.files(leftover)
+        result = rr.rm(apply=True)
+        self.refused(rr, result, "archive_mismatch")
+        self.assertIn("a.txt (differs)", result.error.message)
+        self.assertEqual(rr.files(rr.root / ".ai-review" / "w00"), files)
+        self.assertEqual(os.listdir(rr.removing), [])
+        text = result.error.message + " " + result.error.next_step
+        for offer in ("rm ", "rm -", "delete the folder", "--force"):
+            self.assertNotIn(offer, text)
+        # (d) an extra file in a partly deleted leftover: renamed back, the extra file, the count missing, the archive
+        rr = self.env()
+        rr.prepared()
+        leftover = rr.park()
+        os.unlink(leftover / "sub/b.txt")
+        (leftover / "extra.txt").write_text("extra")
+        result = rr.rm(apply=True)
+        self.refused(rr, result, "archive_mismatch")
+        self.assertIn("extra.txt (not in archive)", result.error.message)
+        self.assertIn("1 archived entries are missing", result.error.next_step)
+        self.assertIn(str(rr.adir / "w00.tar.zst"), result.error.next_step)
+        self.assertIn("zstd -dc", result.error.next_step)
+        self.assertEqual((rr.root / ".ai-review" / "w00" / "extra.txt").read_text(), "extra")
+        self.assertFalse((rr.root / ".ai-review" / "w00" / "sub/b.txt").exists())
+        # a whole leftover with an extra file: the difference only
+        rr = self.env()
+        rr.prepared()
+        leftover = rr.park()
+        (leftover / "extra.txt").write_text("extra")
+        result = rr.rm(apply=True)
+        self.refused(rr, result, "archive_mismatch")
+        self.assertNotIn("missing", result.error.next_step)
+        # (e) both folders present
+        rr = self.env()
+        rr.prepared()
+        leftover = rr.park()
+        rr.folder("w00", links=False)
+        before = rr.snap(times=False)
+        for apply in (False, True):
+            self.refused(rr, rr.rm(apply=apply), "leftover_conflict")
+        self.assertEqual(rr.snap(times=False), before)
+        # (f) the archive gone, (g) a half index line: untouched, with the leftover note
+        for label in ("archive", "index"):
+            rr = self.env()
+            rr.prepared()
+            leftover = rr.park()
+            if label == "archive":
+                (rr.adir / "w00.tar.zst").unlink()
+                code = "not_archived"
+            else:
+                with open(rr.adir / "index.jsonl", "ab") as handle:
+                    handle.write(b'{"work_i')
+                code = "index_invalid"
+            before = rr.snap(times=False)
+            for apply in (False, True):
+                result = rr.rm(apply=apply)
+                self.refused(rr, result, code)
+                self.assertIn("remove w00 --apply", result.error.next_step)
+            self.assertEqual(rr.snap(times=False), before)
+        # (h) a file or a symlink where the leftover should be
+        for kind in ("file", "link"):
+            rr = self.env()
+            rr.prepared()
+            shutil.move(rr.root / ".ai-review" / "w00", rr.outside / "w00-folder")
+            rr.removing.mkdir(mode=0o700)
+            if kind == "file":
+                (rr.removing / "w00").write_text("not a directory")
+            else:
+                os.symlink(rr.outside / "w00-folder", rr.removing / "w00")
+            self.refused(rr, rr.rm(apply=True), "leftover_conflict")
+            self.assertTrue((rr.outside / "w00-folder" / "a.txt").exists())
+        # (i) `.ai-review` absent with a different leftover, from an unrelated working directory
+        rr = self.env()
+        rr.prepared()
+        leftover = rr.park()
+        self.same_bytes_changed(leftover / "a.txt")
+        shutil.rmtree(rr.root / ".ai-review")
+        elsewhere = Path(tempfile.mkdtemp(prefix="wfo-cwd-"))
+        self._dirs.append(elsewhere)
+        files = rr.files(leftover)
+        here = os.getcwd()
+        os.chdir(elsewhere)
+        try:
+            result = rr.rm(apply=True)
+        finally:
+            os.chdir(here)
+        self.refused(rr, result, "restore_failed")
+        self.assertIn(str(leftover), result.error.message)
+        self.assertIn(".ai-review", result.error.message)
+        self.assertIn("a.txt (differs)", result.error.message)
+        self.assertEqual(rr.files(leftover), files)
+        self.assertEqual(os.listdir(elsewhere), [])
+        self.assertFalse((rr.root / ".ai-review").exists())
+        # (j) the archive truncated
+        for state in ("fresh", "partial"):
+            rr = self.env()
+            rr.prepared()
+            leftover = rr.park() if state == "partial" else None
+            if leftover is not None:
+                os.unlink(leftover / "sub/b.txt")
+            archive = rr.adir / "w00.tar.zst"
+            archive.write_bytes(archive.read_bytes()[:len(archive.read_bytes()) // 2])
+            result = rr.rm(apply=True)
+            self.refused(rr, result, "unreadable")
+            if state == "fresh":
+                self.assertTrue((rr.root / ".ai-review" / "w00" / "a.txt").exists())
+                self.assertFalse((rr.removing / "w00").exists())
+            else:
+                self.assertTrue((leftover / "a.txt").exists())
+                self.assertFalse((rr.root / ".ai-review" / "w00").exists())
+                self.assertIn("incomplete", result.error.message)
+                self.assertIn("only in the archive", result.error.message)
+        # (l) the leftover note on every refusal after the leftover is known
+        def tracked(rr, leftover):
+            _run(["git", "add", "-f", ".ai-review/w00/a.txt"], cwd=rr.root)
+
+        def pipe(rr, leftover):
+            os.mkfifo(leftover / "pipe")
+
+        for label, mutate, code in (("tracked", tracked, "tracked_files"), ("pipe", pipe, "unsupported_entry")):
+            rr = self.env()
+            rr.prepared()
+            if label == "tracked":
+                tracked(rr, None)
+                leftover = rr.park()
+            else:
+                leftover = rr.park()
+                mutate(rr, leftover)
+            result = rr.rm(apply=True)
+            self.refused(rr, result, code)
+            self.assertIn(str(rr.removing / "w00"), result.error.next_step)
+            self.assertIn("run `remove w00 --apply` again", result.error.next_step)
+        rr = self.env()
+        rr.prepared()
+        rr.park()
+        with unittest.mock.patch.object(shutil, "which", lambda *a, **k: None):
+            result = rr.rm(apply=True)
+        self.refused(rr, result, "zstd_missing")
+        self.assertIn(str(rr.removing / "w00"), result.error.next_step)
+        import fcntl
+        held = os.open(rr.adir, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, held)
+        fcntl.flock(held, fcntl.LOCK_EX)
+        result = rr.rm(apply=True)
+        self.refused(rr, result, "archive_busy")
+        self.assertIn(str(rr.removing / "w00"), result.error.next_step)
+
+    # -- T12 ------------------------------------------------------------
+
+    def test_t12_failures_during_the_delete_and_the_place(self):
+        rr = self.env()
+        rr.prepared()
+        real = os.unlink
+        count = []
+
+        def unlink(path, *args, **kwargs):
+            count.append(path)
+            if len(count) == 3:
+                raise OSError(errno.EIO, "Input/output error")
+            return real(path, *args, **kwargs)
+
+        with unittest.mock.patch.object(os, "unlink", unlink):
+            result = rr.rm(apply=True)
+        self.refused(rr, result, "remove_failed")
+        self.assertRegex(result.error.message, r"stopped after deleting 3 entries, each proven archived; the rest is "
+                                               r"in .*/\.removing/w00")
+        self.assertIn("run `remove w00 --apply` again", result.error.next_step)
+        self.assertIn("check the permissions of `.removing/w00`", result.error.next_step)
+        self.assertEqual(rr.rm(apply=True).code, 0)
+        self.assertFalse((rr.removing / "w00").exists())
+        rr = self.env()
+        rr.prepared()
+        real_rmdir = os.rmdir
+
+        def rmdir(path, *args, **kwargs):
+            if path == "deeper":
+                raise OSError(errno.ENOTEMPTY, "Directory not empty")
+            return real_rmdir(path, *args, **kwargs)
+
+        with unittest.mock.patch.object(os, "rmdir", rmdir):
+            self.refused(rr, rr.rm(apply=True), "folder_changed")
+        self.assertTrue((rr.removing / "w00").is_dir())
+        # `.removing` cannot be created
+        rr = self.env()
+        folder = rr.prepared()
+        files = rr.files(folder)
+        real_mkdir = os.mkdir
+        with unittest.mock.patch.object(os, "mkdir", lambda path, *a, **k: (_ for _ in ()).throw(
+                PermissionError(errno.EACCES, "denied")) if path == ".removing" else real_mkdir(path, *a, **k)):
+            self.refused(rr, rr.rm(apply=True), "place_failed")
+        self.assertEqual(rr.files(folder), files)
+        # `.removing/w00` appearing after the selection
+        rr = self.env()
+        folder = rr.prepared()
+        files = rr.files(folder)
+        real_fsync, fired = os.fsync, []
+
+        def fsync(fd):
+            if not fired:
+                fired.append(1)
+                _REAL["mkdir"](rr.removing / "w00")
+            return real_fsync(fd)
+
+        with unittest.mock.patch.object(os, "fsync", fsync):
+            result = rr.rm(apply=True, guard=False)
+        self.refused(rr, result, "leftover_conflict")
+        self.assertEqual(rr.files(folder), files)
+
+    # -- T13 ------------------------------------------------------------
+
+    def test_t13_the_report_and_the_cli(self):
+        rr = self.env()
+        rr.prepared()
+        self.assertEqual(rr.build()["removing"], [])
+        rr.park()
+        report = rr.build()
+        self.assertEqual((report["removing"], report["complete"]), (["w00"], True))
+        text = wr.render_text(report)
+        self.assertIn("Interrupted removals (1): w00, finish them with `remove <id> --apply`", text)
+        self.assertNotIn("Interrupted removals", wr.render_text({**report, "removing": []}))
+        shutil.move(rr.removing, rr.outside / "moved-removing")
+        os.symlink(rr.outside / "moved-removing", rr.removing)
+        report = rr.build()
+        self.assertEqual(report["removing"], [])
+        self.assertFalse(report["complete"])
+        self.assertEqual([e["path"] for e in report["read_errors"]], [str(rr.removing)])
+        for command in ("archive", "remove"):
+            kwargs = {"archive_root": rr.archive_root, "now": _RR_NOW, "run": rr.run, "resolve": rr.resolve}
+            with self.assertRaises(wr.RetentionError) as caught:
+                (wr.archive_item if command == "archive" else wr.remove_item)(rr.root, "w00", apply=True, **kwargs)
+            self.assertEqual(caught.exception.code, "unreadable")
+            self.assertIn(f"does not {command} from a partial view", caught.exception.next_step)
+        os.unlink(rr.removing)
+        rr.removing.write_text("a file")
+        self.assertFalse(rr.build()["complete"])
+        # the CLI
+        rr = self.env()
+        rr.prepared()
+        code, out, err = rr.main_rm("w00", "--apply")
+        self.assertEqual((code, err), (0, ""))
+        self.assertIn("removed 3 file(s)", out)
+        rr = self.env()
+        rr.prepared()
+        code, out, err = rr.main_rm("w00", "--apply", "--json")
+        self.assertEqual((code, err), (0, ""))
+        data = json.loads(out)
+        self.assertEqual(sorted(data), ["archive", "generated_at", "kind", "mode", "pull_request", "repository",
+                                        "result", "review_folder", "schema_version", "target", "verify",
+                                        "work_item_id", "zstd"])
+        self.assertEqual(data["result"], {"removed": True, "files": 3, "bytes": 3014})
+        self.assertEqual(rr.main_rm("w00")[0], 2)
+        for argv in ([], ["remove"], ["remove", "w00", "--bogus"]):
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = wr.main(argv)
+            self.assertEqual((code, out.getvalue()), (2, ""))
+            self.assertTrue(err.getvalue().startswith("error: usage: "), err.getvalue())
+
+    # -- T14 ------------------------------------------------------------
+
+    def test_t14_an_interruption_at_every_transition_loses_nothing(self):
+        def run_case(label, arm, expect_folder, expect_leftover):
+            rr = self.env()
+            folder = rr.prepared()
+            original = rr.files(folder)
+            if label == "rename back":
+                self.same_bytes_changed(folder / "a.txt")
+                original = rr.files(folder)
+            killer = arm(rr)
+            with self.assertRaises(_Killed):
+                rr.rm(apply=True, guard=False)
+            unittest.mock.patch.stopall()
+            here, there = rr.root / ".ai-review" / "w00", rr.removing / "w00"
+            self.assertEqual((here.exists(), there.exists()), (expect_folder, expect_leftover), label)
+            for place in (here, there):
+                if place.exists():
+                    for rel, entry in rr.files(place).items():
+                        self.assertEqual(entry, original[rel], f"{label}: {rel}")     # the T7 subset rule
+            if label != "rename back":
+                again = rr.rm(apply=True)
+                self.assertEqual(again.code, 0 if expect_leftover or expect_folder else 2, label)
+                self.assertFalse(here.exists() or there.exists(), label)
+            return rr
+
+        real_rename = wr._rename
+
+        def before_rename(rr):
+            self.patch(wr, "_rename", lambda *a, **k: (_ for _ in ()).throw(_Killed()))
+
+        def after_rename(rr):
+            def seam(src, dst, **kw):
+                real_rename(src, dst, **kw)
+                raise _Killed()
+            self.patch(wr, "_rename", seam)
+
+        def after_compare(rr):
+            real = wr._differences
+
+            def differences(*args, **kwargs):
+                real(*args, **kwargs)
+                raise _Killed()
+            self.patch(wr, "_differences", differences)
+
+        def after_second_unlink(rr):
+            real, seen = os.unlink, []
+
+            def unlink(*args, **kwargs):
+                real(*args, **kwargs)
+                seen.append(1)
+                if len(seen) == 2:
+                    raise _Killed()
+            self.patch(os, "unlink", unlink)
+
+        def after_last_rmdir(rr):
+            real = os.rmdir
+
+            def rmdir(path, *args, **kwargs):
+                real(path, *args, **kwargs)
+                if path == "w00":
+                    raise _Killed()
+            self.patch(os, "rmdir", rmdir)
+
+        def after_rename_back(rr):
+            calls = []
+
+            def seam(src, dst, **kw):
+                calls.append(1)
+                real_rename(src, dst, **kw)
+                if len(calls) == 2:
+                    raise _Killed()
+            self.patch(wr, "_rename", seam)
+
+        run_case("before the rename", before_rename, True, False)
+        run_case("after the rename", after_rename, False, True)
+        run_case("after the compare", after_compare, False, True)
+        rr = run_case("after the second unlink", after_second_unlink, False, True)
+        run_case("after the last rmdir", after_last_rmdir, False, False)
+        rr = run_case("rename back", after_rename_back, True, False)
+        self.assertEqual(rr.rm(apply=True).err_code, "archive_mismatch")           # a rerun reaches restored again
+
+    # -- T15 ------------------------------------------------------------
+
+    def test_t15_a_failure_after_a_completed_step_names_the_place_it_reached(self):
+        real_rename = wr._rename
+        # the rename back fails with EIO
+        rr = self.env()
+        folder = rr.prepared()
+        self.same_bytes_changed(folder / "a.txt")
+        calls = []
+
+        def eio_back(src, dst, **kw):
+            calls.append(1)
+            if len(calls) == 2:
+                raise OSError(errno.EIO, "Input/output error")
+            return real_rename(src, dst, **kw)
+        self.patch(wr, "_rename", eio_back)
+        result = rr.rm(apply=True, guard=False)
+        self.refused(rr, result, "restore_failed")
+        self.assertIn(str(rr.removing / "w00"), result.error.message)
+        self.assertIn("a.txt (differs)", result.error.message)
+        unittest.mock.patch.stopall()
+        # fsync fails after the outward rename
+        rr = self.env()
+        rr.prepared()
+        flag, real_fsync = [], os.fsync
+
+        def marking(src, dst, **kw):
+            real_rename(src, dst, **kw)
+            flag.append(1)
+        self.patch(wr, "_rename", marking)
+
+        def fsync(fd):
+            if flag:
+                raise OSError(errno.EIO, "Input/output error")
+            return real_fsync(fd)
+        self.patch(os, "fsync", fsync)
+        result = rr.rm(apply=True, guard=False)
+        self.refused(rr, result, "place_failed")
+        text = result.error.message + " " + result.error.next_step
+        self.assertIn(str(rr.removing / "w00"), text)
+        self.assertIn("rename is done", text)
+        self.assertNotIn("nothing was kept", text)
+        unittest.mock.patch.stopall()
+        self.assertEqual(rr.rm(apply=True).code, 0)
+        # fsync fails after the rename back
+        rr = self.env()
+        folder = rr.prepared()
+        self.same_bytes_changed(folder / "a.txt")
+        back = []
+
+        def marking_back(src, dst, **kw):
+            real_rename(src, dst, **kw)
+            if kw.get("dst_dir_fd") is not None and (rr.root / ".ai-review" / "w00").exists():
+                back.append(1)
+        self.patch(wr, "_rename", marking_back)
+
+        def fsync_back(fd):
+            if back:
+                raise OSError(errno.EIO, "Input/output error")
+            return real_fsync(fd)
+        self.patch(os, "fsync", fsync_back)
+        result = rr.rm(apply=True, guard=False)
+        self.refused(rr, result, "restore_failed")
+        self.assertIn(str(rr.root / ".ai-review" / "w00"), result.error.message + result.error.next_step)
+        self.assertNotIn("nothing was kept", result.error.message + result.error.next_step)
+        self.assertTrue((rr.root / ".ai-review" / "w00" / "a.txt").exists())
+        unittest.mock.patch.stopall()
+        # fsync fails after the last rmdir
+        rr = self.env()
+        rr.prepared()
+        real_rmdir, gone = os.rmdir, []
+
+        def rmdir(path, *args, **kwargs):
+            real_rmdir(path, *args, **kwargs)
+            if path == "w00":
+                gone.append(1)
+        self.patch(os, "rmdir", rmdir)
+
+        def fsync_gone(fd):
+            if gone:
+                raise OSError(errno.EIO, "Input/output error")
+            return real_fsync(fd)
+        self.patch(os, "fsync", fsync_gone)
+        result = rr.rm(apply=True, guard=False)
+        self.refused(rr, result, "remove_failed")
+        self.assertIn("is deleted", result.error.next_step)
+        self.assertNotIn("nothing was kept", result.error.message + result.error.next_step)
+        self.assertFalse((rr.removing / "w00").exists())
+
+
+# ---------------------------------------------------------------------------
+# workflow-2.24.0: the archive prune (`retention-prune`)
+# ---------------------------------------------------------------------------
+
+_RP_MUTATING = tuple(name for name in _RA_MUTATING if name != "write")
+
+
+class _RP(_RA):
+    """`_RA` plus the prune: archives made by the real engine and aged with
+    `os.utime` in the scratch store, and a write guard that allows exactly the
+    `unlink` of a named `<id>.tar.zst` beneath the scratch archive directory and
+    records every `open`, the index's included."""
+
+    AGES = {"w00": 40, "w01": 50, "w02": 60, "w03": 5}
+
+    def __enter__(self):
+        super().__enter__()
+        self.real = {name: getattr(os, name) for name in _RP_MUTATING if hasattr(os, name)}
+        self.opened, self.events, self.unlinks = [], [], []
+        return self
+
+    def made(self, ages=None):
+        """The archives of w00..w03, made by the engine and aged."""
+        for item, days in (ages or self.AGES).items():
+            self.folder(item, links=False)
+            assert self.call(item, apply=True).code == 0
+            self.age(item, days)
+
+    def age(self, item, days):
+        stamp = _RR_NOW.timestamp() - days * 86400 - 3600
+        self.real["utime"](self.adir / f"{item}{wr.ARCHIVE_SUFFIX}", (stamp, stamp))
+
+    @contextlib.contextmanager
+    def guard(self, allow_unlink):
+        adir = os.path.realpath(self.adir)
+        real_open, real_fsync = os.open, os.fsync
+        builtin_open = open
+
+        def wrap(name):
+            def call(*args, **kwargs):
+                target = _ra_target(self.root, args, kwargs)
+                if name == "unlink" and allow_unlink and target is not None and os.path.dirname(target) == adir \
+                        and target.endswith(wr.ARCHIVE_SUFFIX) and kwargs.get("dir_fd") is not None \
+                        and os.fsdecode(args[0]) == os.path.basename(target):
+                    self.unlinks.append(os.path.basename(target))
+                    self.events.append(("unlink", os.path.basename(target)))
+                    return self.real[name](*args, **kwargs)
+                self.violations.append((name, args))
+                raise AssertionError(f"a write the prune must not make: os.{name}{args}")
+            return call
+
+        def open_(path, flags, *args, **kwargs):
+            self.opened.append(_ra_target(self.root, (path,), kwargs))
+            if flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC | os.O_APPEND):
+                self.violations.append(("open", (path, flags)))
+                raise AssertionError(f"a write the prune must not make: os.open({path!r}, {flags})")
+            return real_open(path, flags, *args, **kwargs)
+
+        def fsync(fd):
+            self.events.append(("fsync", os.path.realpath(f"/proc/self/fd/{fd}")))
+            return real_fsync(fd)
+
+        def builtin(path, *args, **kwargs):
+            self.opened.append(os.fspath(path) if isinstance(path, (str, bytes, os.PathLike)) else None)
+            return builtin_open(path, *args, **kwargs)
+
+        patches = [unittest.mock.patch.object(os, name, wrap(name)) for name in self.real]
+        patches += [unittest.mock.patch.object(os, "open", open_), unittest.mock.patch.object(os, "fsync", fsync),
+                    unittest.mock.patch("builtins.open", builtin), unittest.mock.patch("io.open", builtin)]
+        with contextlib.ExitStack() as stack:
+            for patch in patches:
+                stack.enter_context(patch)
+            yield
+
+    def pr(self, ids, apply=False, guard=True, **kwargs):
+        kwargs.setdefault("archive_root", self.archive_root)
+        kwargs.setdefault("now", _RR_NOW)
+        kwargs.setdefault("repo_root", self.root)
+        repo_root = kwargs.pop("repo_root")
+        try:
+            if guard:
+                with self.guard(allow_unlink=apply):
+                    result = wr.prune_archives(repo_root, ids, apply=apply, run=self.run, resolve=self.resolve,
+                                               **kwargs)
+            else:
+                result = wr.prune_archives(repo_root, ids, apply=apply, run=self.run, resolve=self.resolve, **kwargs)
+        except wr.RetentionError as exc:
+            self.last_error = exc
+            return _Result(2, error=exc)
+        finally:
+            assert not self.violations, self.violations
+        return _Result(0, result)
+
+    def main_pr(self, *args):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = wr.main(["prune", *args, "--repo-root", str(self.root), "--archive-root", str(self.archive_root)],
+                           run=self.run, resolve=self.resolve, now=_RR_NOW)
+        return code, out.getvalue(), err.getvalue()
+
+    def twin(self, path):
+        """Swaps `path` for a symlink to an outside file of the same size and
+        modification time: only an `lstat` tells it from the archive."""
+        info = os.stat(path)
+        twin = self.outside / "twin"
+        twin.write_bytes(b"y" * info.st_size)
+        self.real["utime"](twin, ns=(info.st_atime_ns, info.st_mtime_ns))
+        self.real["unlink"](path)
+        self.real["symlink"](twin, path)
+
+    def archive_name(self, item):
+        return self.adir / f"{item}{wr.ARCHIVE_SUFFIX}"
+
+    def index_opened(self):
+        return [p for p in self.opened if p and os.path.basename(os.fsdecode(p)) == "index.jsonl"]
+
+
+@unittest.skipUnless(_HAVE_ZSTD, "the prune tests need the zstd program on PATH (the archives are made by it)")
+class RetentionPrune(unittest.TestCase):
+    def env(self, items=None, ages=None, outcomes=None, **kwargs):
+        rr = _RP(items, **kwargs)
+        self.addCleanup(rr.__exit__, None, None, None)
+        rr.__enter__()
+        rr.made(ages)
+        rr.outcomes = outcomes or {}
+        return rr
+
+    def hook(self, target, name, before=None, after=None):
+        real = getattr(target, name)
+
+        def call(*args, **kwargs):
+            if before is not None:
+                before(*args, **kwargs)
+            result = real(*args, **kwargs)
+            if after is not None:
+                after(result, *args, **kwargs)
+            return result
+        patch = unittest.mock.patch.object(target, name, call)
+        patch.start()
+        self.addCleanup(patch.stop)
+        return real
+
+    @staticmethod
+    def outside_of(rr):
+        """What lies outside the store, the test's own `twin` left out."""
+        return {k: v for k, v in _ra_snap(rr.outside).items() if not k.endswith("/twin")}
+
+    def refused(self, rr, ids, code, apply=True, snapshot=True, **kwargs):
+        """A refusal: exit 2, the stable code, the repository and the store
+        identical (unless the test's own hook changed them), and no descriptor
+        left open."""
+        before, fds = rr.snap(), _fd_count()
+        result = rr.pr(ids, apply=apply, **kwargs)
+        self.assertEqual(result.code, 2, result.result)
+        self.assertEqual(result.err_code, code, getattr(result.error, "message", None))
+        if snapshot:
+            self.assertEqual(rr.snap(), before)
+        self.assertEqual(_fd_count(), fds)
+        self.assertEqual(rr.unlinks, [])
+        return result
+
+    # -- P1 -------------------------------------------------------------
+
+    def test_p1_the_dry_run_lists_and_writes_nothing(self):
+        rr = self.env()
+        before, fds = rr.snap(), _fd_count()
+        result = rr.pr(["w01", "w00"])
+        self.assertEqual(result.code, 0, getattr(result.error, "message", None))
+        data = result.result
+        self.assertEqual((data["mode"], data["kind"], data["result"]), ("dry-run", "retention-prune",
+                                                                          {"removed": [], "bytes": 0}))
+        self.assertEqual([(a["work_item_id"], a["item"]) for a in data["archives"]],
+                         [("w00", "finished"), ("w01", "finished")])
+        self.assertEqual(data["index"], os.path.join(data["archive_dir"], "index.jsonl"))
+        self.assertEqual(rr.snap(), before)
+        self.assertEqual(_fd_count(), fds)
+        self.assertEqual((rr.unlinks, rr.index_opened()), ([], []))
+        self.assertFalse(any(e[0] == "fsync" for e in rr.events))
+        # a fresh interpreter leaves no bytecode and no cache directory
+        scripts = Path(wr.__file__).resolve().parent
+        caches = _rr_find_pycache(scripts, rr.root)
+        pyc = sorted(str(p) for p in scripts.rglob("*.pyc"))
+        bin_dir = Path(tempfile.mkdtemp(prefix="wfo-bin-"))
+        self.addCleanup(shutil.rmtree, bin_dir, ignore_errors=True)
+        os.symlink(shutil.which("git"), bin_dir / "git")
+        env = {"PATH": str(bin_dir), "HOME": str(bin_dir)}
+        run = subprocess.run([sys.executable, "-I", str(scripts / "workflow_retention.py"), "prune", "w00",
+                              "--repo-root", str(rr.root), "--archive-root", str(rr.archive_root)],
+                             capture_output=True, text=True, env=env)
+        self.assertEqual(run.returncode, 2, run.stderr)
+        self.assertEqual(run.stdout, "")
+        self.assertEqual((_rr_find_pycache(scripts, rr.root), sorted(str(p) for p in scripts.rglob("*.pyc"))),
+                         (caches, pyc))
+        self.assertEqual(rr.snap(), before)
+
+    # -- P2 -------------------------------------------------------------
+
+    def test_p2_apply_removes_only_the_named_prunable_archives(self):
+        rr = self.env()
+        index = rr.adir / "index.jsonl"
+        index_before = (index.read_bytes(), os.stat(index).st_mtime_ns)
+        names = {n: rr.archive_name(n).read_bytes() for n in ("w02", "w03")}
+        review = _ra_snap(rr.root / ".ai-review")
+        tracked = _ra_snap(rr.root / "README.md") if (rr.root / "README.md").is_dir() else None
+        fds = _fd_count()
+        result = rr.pr(["w00", "w01"], apply=True)
+        self.assertEqual(result.code, 0, getattr(result.error, "message", None))
+        self.assertEqual(result.result["result"]["removed"], ["w00", "w01"])
+        self.assertEqual(result.result["result"]["bytes"], sum(a["bytes"] for a in result.result["archives"]))
+        self.assertFalse(rr.archive_name("w00").exists() or rr.archive_name("w01").exists())
+        for name, data in names.items():
+            self.assertEqual(rr.archive_name(name).read_bytes(), data)
+        self.assertEqual((index.read_bytes(), os.stat(index).st_mtime_ns), index_before)
+        self.assertEqual(_ra_snap(rr.root / ".ai-review"), review)
+        self.assertEqual(_fd_count(), fds)
+        adir = os.path.realpath(rr.adir)
+        self.assertEqual(rr.events, [("unlink", "w00.tar.zst"), ("fsync", adir), ("unlink", "w01.tar.zst"),
+                                     ("fsync", adir)])
+        self.assertEqual(rr.index_opened(), [])
+        self.assertEqual([a["name"] for a in rr.build()["archives"]], ["w02.tar.zst", "w03.tar.zst"])
+        self.assertEqual((rr.root / "README.md").read_text(), "base\n")
+        self.assertEqual(rr.call("w00", apply=True).err_code, "already_indexed")
+        self.assertEqual(rr.pr(["w00"], apply=True).err_code, "not_in_report")
+
+    # -- P3 -------------------------------------------------------------
+
+    def test_p3_the_refusals_in_the_order_of_d_selection(self):
+        rr = self.env()
+        for bad in ("../w00", "W00", "", "runtime", "archive", "w00/x", "-w00"):
+            with self.subTest(bad=bad):
+                self.refused(rr, ["w00", bad], "invalid_id")
+        # the platform
+        with unittest.mock.patch.object(os, "supports_dir_fd", set()):
+            self.refused(rr, ["w00"], "path_unsafe")
+        # the report's own refusals, passed through
+        rr.write_state({})
+        os.unlink(rr.root / "docs/ai-workflow/WORKFLOW_STATE.json")
+        self.refused(rr, ["w00"], "state_missing")
+        _write(rr.repo, "docs/ai-workflow/WORKFLOW_STATE.json", "{not json")
+        self.refused(rr, ["w00"], "state_invalid")
+        rr.write_state(rr.items)
+        _run(["git", "remote", "set-url", "origin", "https://github.com/acme/..git"], cwd=rr.root)
+        self.refused(rr, ["w00"], "repository_unknown")
+        _run(["git", "remote", "set-url", "origin", "https://github.com/acme/widgets.git"], cwd=rr.root)
+        # a path inside the checkout
+        inside = rr.root / "store"
+        (inside / "widgets").mkdir(parents=True)
+        self.refused(rr, ["w00"], "archive_inside_repository", archive_root=inside)
+        # a symlinked per-repository directory
+        outside_root = Path(tempfile.mkdtemp(prefix="wfo-root-"))
+        self.addCleanup(shutil.rmtree, outside_root, ignore_errors=True)
+        os.symlink(rr.adir, outside_root / "widgets")
+        self.refused(rr, ["w00"], "archive_dir_unsafe", archive_root=outside_root)
+        # a broken (symlinked) .removing
+        os.symlink(rr.outside / "tree", rr.adir / ".removing")
+        self.refused(rr, ["w00"], "unreadable")
+        os.unlink(rr.adir / ".removing")
+        # not in the report
+        self.refused(rr, ["w00", "nope"], "not_in_report")
+        os.symlink(rr.outside / "sentinel", rr.adir / "ln.tar.zst")
+        self.refused(rr, ["ln"], "not_in_report")
+        (rr.adir / "dir.tar.zst").mkdir()
+        self.refused(rr, ["dir"], "not_in_report")
+        shutil.rmtree(rr.adir / "dir.tar.zst")
+        os.unlink(rr.adir / "ln.tar.zst")
+        # an interrupted removal
+        (rr.adir / ".removing" / "w00").mkdir(parents=True)
+        self.refused(rr, ["w00"], "removal_interrupted")
+        self.refused(rr, ["w01", "w00"], "removal_interrupted", apply=False)
+        shutil.rmtree(rr.adir / ".removing")
+        # the time to live: exactly at it against one past it
+        rr.age("w03", 30)
+        result = self.refused(rr, ["w03"], "not_prunable")
+        self.assertIn("30", result.error.message)
+        self.assertIn("days", result.error.message)
+        rr.age("w03", 31)
+        self.assertEqual(rr.pr(["w03"], apply=False).code, 0)
+        rr.age("w03", 5)
+        # the class of the item
+        with_open = _rr_many(7)
+        rr2 = self.env(with_open, ages=dict(_RP.AGES), outcomes={_rr_commit("w00"): RuntimeError("down")})
+        self.refused(rr2, ["w00"], "item_not_finished")
+        self.refused(rr2, ["w00"], "item_not_finished", apply=False)
+        rr3 = self.env()
+        for item in ("w05",):
+            rr3.folder(item, links=False)
+        rr3.archive("w05.tar.zst", 40 * 86400 + 3600)
+        self.refused(rr3, ["w05"], "item_not_finished")
+        rr3.archive("zz.tar.zst", 40 * 86400 + 3600)
+        self.assertEqual(rr3.pr(["zz"], apply=True).result["result"]["removed"], ["zz"])
+        self.assertEqual(rr3.pr(["w00"], apply=True).result["result"]["removed"], ["w00"])
+        # a mixed run removes nothing
+        rr4 = self.env()
+        self.refused(rr4, ["w00", "w03"], "not_prunable")
+        self.refused(rr4, ["w00", "w01", "nope"], "not_in_report")
+
+    def test_p3b_the_lock_and_the_re_read_under_it(self):
+        import fcntl
+        rr = self.env()
+        # held by another run: apply is busy, the dry run never looks at the lock
+        fd = os.open(rr.adir, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(lambda: os.close(fd) if fd >= 0 else None)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        self.refused(rr, ["w00"], "archive_busy")
+        self.assertEqual(rr.pr(["w00"], apply=False).code, 0)
+        os.close(fd)
+        fd = -1
+        real_flock = fcntl.flock
+
+        def after_lock(do):
+            def flock(handle, how):
+                real_flock(handle, how)
+                if how & fcntl.LOCK_EX:
+                    do()
+            patch = unittest.mock.patch.object(fcntl, "flock", flock)
+            patch.start()
+            self.addCleanup(patch.stop)
+
+        # .removing becomes a symlink after step 9: unreadable, not "no interrupted removal"
+        after_lock(lambda: rr.real["symlink"](rr.outside / "tree", rr.adir / ".removing"))
+        self.refused(rr, ["w00"], "unreadable", snapshot=False)
+        self.assertTrue(all(rr.archive_name(n).exists() for n in ("w00", "w01", "w02", "w03")))
+        os.unlink(rr.adir / ".removing")
+        unittest.mock.patch.stopall()
+        # a remove began after step 6
+        after_lock(lambda: (rr.real["mkdir"](rr.adir / ".removing"), rr.real["mkdir"](rr.adir / ".removing" / "w00")))
+        self.refused(rr, ["w00"], "removal_interrupted", snapshot=False)
+        self.assertTrue(all(rr.archive_name(n).exists() for n in ("w00", "w01", "w02", "w03")))
+
+    # -- P4 -------------------------------------------------------------
+
+    def test_p4_a_change_after_the_preview_removes_nothing(self):
+        import fcntl
+        real_flock = fcntl.flock
+        changes = {
+            "size": lambda p, rr: p.write_bytes(p.read_bytes() + b"x"),
+            "mtime": lambda p, rr: rr.real["utime"](p, (1, 1)),
+            "symlink": lambda p, rr: rr.twin(p),
+            "directory": lambda p, rr: (rr.real["unlink"](p), rr.real["mkdir"](p)),
+        }
+        for kind, change in changes.items():
+            with self.subTest(change=kind):
+                rr = self.env()
+                target = rr.archive_name("w01")
+                sentinel = rr.outside / "sentinel"
+                outside = self.outside_of(rr)
+
+                def flock(handle, how, change=change, rr=rr, target=target):
+                    real_flock(handle, how)
+                    if how & fcntl.LOCK_EX:
+                        change(target, rr)
+                with unittest.mock.patch.object(fcntl, "flock", flock):
+                    before = {n: rr.archive_name(n).read_bytes() for n in ("w00", "w02")}
+                    result = rr.pr(["w00", "w01"], apply=True)
+                self.assertEqual((result.code, result.err_code), (2, "archive_changed"))
+                self.assertTrue(rr.archive_name("w00").exists())
+                self.assertEqual(rr.unlinks, [])
+                self.assertEqual(rr.archive_name("w02").read_bytes(), before["w02"])
+                self.assertEqual(self.outside_of(rr), outside)
+                self.assertTrue(sentinel.exists())
+        # after the first unlink the second changes: the first stays removed
+        rr = self.env()
+        second = rr.archive_name("w01")
+        def swap(result, name, *a, **k):
+            if name == "w00.tar.zst":
+                rr.twin(second)
+        self.hook(os, "unlink", after=swap)
+        outside = self.outside_of(rr)
+        result = rr.pr(["w00", "w01", "w02"], apply=True, guard=False)
+        self.assertEqual((result.code, result.err_code), (2, "archive_changed"))
+        self.assertIn("removed: w00", result.error.message)
+        self.assertIn("not removed: w01, w02", result.error.message)
+        self.assertFalse(rr.archive_name("w00").exists())
+        self.assertTrue(rr.archive_name("w02").exists())
+        self.assertEqual(self.outside_of(rr), outside)
+
+    # -- T7, T8 of the stat-error refusal (W33) ------------------------------
+
+    def test_w33_t7_a_stat_error_at_the_selection_is_prune_failed_with_the_lists(self):
+        rr = self.env()
+        resolved = os.path.join(os.path.realpath(rr.archive_root), "widgets")
+        for apply in (False, True):
+            with self.subTest(apply=apply):
+                before, fds = rr.snap(times=False), _fd_count()
+                with _stat_fails("_prune_select", "w00.tar.zst", errno.EACCES):
+                    result = rr.pr(["w00", "w01", "w02"], apply=apply)
+                self.assertEqual((result.code, result.err_code), (2, "prune_failed"), getattr(result.error, "message", None))
+                self.assertEqual(result.error.message, "w00.tar.zst could not be examined: EACCES Permission denied; "
+                                 "removed: none; not removed: w00, w01, w02")
+                self.assertEqual(result.error.next_step, f"check the permissions of {resolved}; run `prune` again "
+                                 "for a fresh preview")
+                self.assertEqual(rr.snap(times=False), before)
+                self.assertEqual(_fd_count(), fds)
+                self.assertEqual(rr.unlinks, [])
+        code, out, err = rr.main_pr("w00", "w01", "w02", "--apply")
+        self.assertEqual(code, 0, err)
+
+    def test_w33_t8_steps_12_and_13a_keep_their_lists_and_the_leftover_probe_still_swallows(self):
+        for skip, removed, pending in ((0, "none", "w00, w01, w02"), (1, "w00", "w01, w02")):
+            with self.subTest(skip=skip):
+                rr = self.env()
+                name = "w00.tar.zst" if skip == 0 else "w01.tar.zst"
+                with _stat_fails("_unchanged", name, errno.EIO, skip=skip):
+                    result = rr.pr(["w00", "w01", "w02"], apply=True, guard=False)
+                self.assertEqual((result.code, result.err_code), (2, "prune_failed"))
+                self.assertIn("could not be examined: EIO", result.error.message)
+                self.assertTrue(result.error.message.endswith(f"removed: {removed}; not removed: {pending}"),
+                                result.error.message)
+                self.assertEqual(rr.archive_name("w00").exists(), skip == 0)
+                self.assertTrue(rr.archive_name("w02").exists())
+        # the swallowing probe: an error reads as "no leftover"
+        rr = self.env()
+        fd = os.open(rr.adir, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, fd)
+        os.mkdir(rr.adir / ".removing")
+        os.mkdir(rr.adir / ".removing" / "w00")
+        self.assertTrue(wr._has_leftover(fd, "w00"))
+        with unittest.mock.patch.object(os, "stat", side_effect=OSError(errno.EACCES, "Permission denied")):
+            self.assertFalse(wr._has_leftover(fd, "w00"))
+
+    # -- P5 -------------------------------------------------------------
+
+    def test_p5_a_failure_stops_the_run_and_names_both_lists(self):
+        rr = self.env()
+        real_unlink = os.unlink
+
+        def failing(name, *a, **k):
+            if name == "w01.tar.zst":
+                raise OSError(errno.EIO, "Input/output error")
+            return real_unlink(name, *a, **k)
+        with unittest.mock.patch.object(os, "unlink", failing):
+            result = rr.pr(["w00", "w01", "w02"], apply=True, guard=False)
+        self.assertEqual((result.code, result.err_code), (2, "prune_failed"))
+        for text in ("removed: w00", "not removed: w01, w02", "EIO"):
+            self.assertIn(text, result.error.message)
+        self.assertIn("permissions", result.error.next_step)
+        self.assertFalse(rr.archive_name("w00").exists())
+        self.assertTrue(rr.archive_name("w01").exists() and rr.archive_name("w02").exists())
+        # a failed fsync after an unlink: that archive is removed
+        rr = self.env()
+        real_fsync = os.fsync
+
+        def fsync_fails(fd):
+            raise OSError(errno.EIO, "Input/output error")
+        with unittest.mock.patch.object(os, "fsync", fsync_fails):
+            result = rr.pr(["w00", "w01"], apply=True, guard=False)
+        self.assertEqual((result.code, result.err_code), (2, "prune_failed"))
+        self.assertIn("w00.tar.zst is removed", result.error.message)
+        self.assertIn("not removed: w01", result.error.message)
+        self.assertFalse(rr.archive_name("w00").exists())
+        self.assertTrue(rr.archive_name("w01").exists())
+        self.assertEqual(rr.pr(["w01"], apply=True).code, 0)
+        # a stat error other than ENOENT on the second archive's final check, after the first unlink
+        rr = self.env()
+        real_stat, unlinks = os.stat, []
+        real_unlink = os.unlink
+
+        def counting(name, *a, **k):
+            unlinks.append(name)
+            return real_unlink(name, *a, **k)
+
+        def stat_fails(path, *a, **k):
+            if path == "w01.tar.zst" and k.get("dir_fd") is not None and unlinks:
+                raise OSError(errno.EIO, "Input/output error")
+            return real_stat(path, *a, **k)
+        fds = _fd_count()
+        with unittest.mock.patch.object(os, "unlink", counting), unittest.mock.patch.object(os, "stat", stat_fails):
+            result = rr.pr(["w00", "w01", "w02"], apply=True, guard=False)
+        self.assertEqual((result.code, result.err_code, result.result), (2, "prune_failed", None))
+        for text in ("removed: w00", "not removed: w01, w02", "EIO"):
+            self.assertIn(text, result.error.message)
+        self.assertEqual(unlinks, ["w00.tar.zst"])
+        self.assertFalse(rr.archive_name("w00").exists())
+        self.assertTrue(rr.archive_name("w01").exists() and rr.archive_name("w02").exists())
+        self.assertEqual(_fd_count(), fds)
+        self.assertEqual(rr.pr(["w01", "w02"], apply=True).code, 0)  # the lock was released
+        # an interruption before the first unlink and one between two
+        for stop_at, left in ((0, ["w00", "w01"]), (1, ["w01"])):
+            with self.subTest(stop_at=stop_at):
+                rr = self.env()
+                count = []
+
+                def killer(name, *a, **k):
+                    if len(count) == stop_at:
+                        raise _Killed()
+                    count.append(name)
+                    return real_unlink(name, *a, **k)
+                fds = _fd_count()
+                with unittest.mock.patch.object(os, "unlink", killer):
+                    with self.assertRaises(_Killed):
+                        rr.pr(["w00", "w01"], apply=True, guard=False)
+                self.assertEqual(_fd_count(), fds)
+                self.assertEqual([n for n in ("w00", "w01") if rr.archive_name(n).exists()], left)
+                self.assertEqual(rr.pr(left, apply=True).code, 0)
+                self.assertFalse(rr.archive_name("w00").exists() or rr.archive_name("w01").exists())
+
+    # -- P6 -------------------------------------------------------------
+
+    def test_p6_the_index_is_never_opened(self):
+        rr = self.env()
+        self.refused(rr, ["w03"], "not_prunable")
+        self.assertEqual(rr.pr(["w00"], apply=False).code, 0)
+        self.assertEqual(rr.pr(["w00", "w01"], apply=True).code, 0)
+        self.assertEqual(rr.pr(["w02"], apply=True).code, 0)
+        self.assertEqual(rr.index_opened(), [])
+        lines = (rr.adir / "index.jsonl").read_text().splitlines()
+        self.assertEqual(sorted(json.loads(l)["work_item_id"] for l in lines), ["w00", "w01", "w02", "w03"])
+
+    # -- P7 -------------------------------------------------------------
+
+    def test_p7_ttl_days_agrees_with_the_report(self):
+        rr = self.env(ages={"w00": 2, "w01": 50, "w02": 60, "w03": 5})
+        self.refused(rr, ["w00"], "not_prunable")
+        self.assertEqual(rr.pr(["w00"], ttl_days=1).code, 0)
+        code, out, _ = rr.cli("--ttl-days", "1", "--json")
+        self.assertEqual(code, 0)
+        self.assertTrue(next(a for a in json.loads(out)["archives"] if a["work_item_id"] == "w00")["prunable"])
+        self.assertEqual(rr.main_pr("w00", "--ttl-days", "1")[0], 0)
+        for bad in ("0", "abc", "3651", "-1", "1.5"):
+            with self.subTest(ttl=bad):
+                code, out, err = rr.main_pr("w01", "--ttl-days", bad)
+                self.assertEqual((code, out), (2, ""))
+                self.assertIn("usage", err)
+
+    # -- P8 -------------------------------------------------------------
+
+    def test_p8_the_command_line(self):
+        rr = self.env()
+        code, out, err = rr.main_pr("w00", "w01")
+        self.assertEqual((code, err), (0, ""))
+        self.assertIn("dry run", out)
+        self.assertIn("w00.tar.zst", out)
+        code, out, err = rr.main_pr("w00", "--json")
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertEqual((data["mode"], list(data) == sorted(data)), ("dry-run", True))
+        self.assertTrue(rr.archive_name("w00").exists())
+        code, out, err = rr.main_pr("w00", "w01", "--apply")
+        self.assertEqual((code, err), (0, ""))
+        self.assertIn("removed 2 archive(s)", out)
+        self.assertFalse(rr.archive_name("w00").exists())
+        # no names is a usage error
+        code, out, err = rr.main_pr()
+        self.assertEqual((code, out), (2, ""))
+        self.assertIn("error: usage", err)
+        # a refusal prints nothing on stdout, --json included
+        for extra in ((), ("--json",), ("--apply",), ("--apply", "--json")):
+            code, out, err = rr.main_pr("w03", *extra)
+            self.assertEqual((code, out), (2, ""))
+            self.assertIn("error: not_prunable", err)
+            self.assertIn("next step:", err)
+
+    def test_p9_the_other_commands_keep_their_checks(self):
+        rr = self.env()
+        self.assertEqual(wr._ttl_of("30"), 30)
+        with self.assertRaises(wr.RetentionError):
+            wr._ttl_of("0")
+        with self.assertRaises(wr.RetentionError) as caught:
+            wr._check_id("runtime", "archive")
+        self.assertEqual(caught.exception.code, "invalid_id")
 
 
 if __name__ == "__main__":
