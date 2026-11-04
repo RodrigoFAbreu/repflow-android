@@ -57,6 +57,9 @@ import com.repflow.app.domain.workout.WorkoutSession
 import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.infrastructure.database.RepFlowDatabase
 import com.repflow.app.presentation.RepFlowTheme
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -67,11 +70,12 @@ import org.junit.runner.RunWith
 import java.time.Instant
 
 /**
- * The route's wiring of a failed workout action (A-1), over a real
- * [ActiveWorkoutViewModel] and an in-memory Room database: the app has no fault
- * hook in `app/src/main`, so [FailingWorkoutRepository] forces the failure here.
- * The screen and ViewModel tests each stop at their own edge; only this walk
- * fails when a route line is miswired.
+ * The route's wiring of a failed workout action (A-1) and of `Try again` on the
+ * load-failure state (A-12), over a real [ActiveWorkoutViewModel] and an in-memory
+ * Room database: the app has no fault hook in `app/src/main`, so
+ * [FailingWorkoutRepository] forces the failures here. The screen and ViewModel
+ * tests each stop at their own edge; only these walks fail when a route line is
+ * miswired.
  */
 @RunWith(AndroidJUnit4::class)
 class ActiveWorkoutErrorRouteTest {
@@ -133,6 +137,21 @@ class ActiveWorkoutErrorRouteTest {
         waitForText(string(R.string.workout_focus_log_set))
         composeRule.onNodeWithText(string(R.string.workout_active_set_detail_toggle)).performScrollTo().assertIsDisplayed()
         composeRule.onAllNodes(isSelectable() and isSelected()).assertCountEquals(0)
+    }
+
+    /** A-12: the failed observation has completed, so only the route handing `onRetry` to the ViewModel gets out of this state. */
+    @Test
+    fun tryAgainOnTheLoadFailureStateShowsTheBoardWithTheSession() {
+        startSessionWithOneLoggedSet()
+        workouts.failNextObservation = true
+        render()
+
+        waitForText(string(R.string.workout_active_observation_failed))
+        composeRule.onNodeWithText(string(R.string.workout_active_retry)).performClick()
+
+        waitForText(EXERCISE_NAME)
+        composeRule.onNodeWithText(EXERCISE_NAME).assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.workout_active_observation_failed)).assertDoesNotExist()
     }
 
     private fun assertEntryKept() {
@@ -283,12 +302,27 @@ class ActiveWorkoutErrorRouteTest {
             is DomainResult.Failure -> throw AssertionError("Expected success but was ${result.error}")
         }
 
-    /** The real repository, except that [nextUpdateFailure] fails the next `update` once. */
+    /**
+     * The real repository, except that [nextUpdateFailure] fails the next `update` once, and
+     * [failNextObservation] fails the next `observeActiveSession` subscription once, as a Room `Flow` that throws would.
+     */
     private class FailingWorkoutRepository(
         private val delegate: WorkoutRepository,
     ) : WorkoutRepository by delegate {
         @Volatile
         var nextUpdateFailure: WorkoutPersistenceError? = null
+
+        @Volatile
+        var failNextObservation: Boolean = false
+
+        override fun observeActiveSession(): Flow<WorkoutSession?> =
+            flow {
+                if (failNextObservation) {
+                    failNextObservation = false
+                    error("Simulated observation failure")
+                }
+                emitAll(delegate.observeActiveSession())
+            }
 
         override suspend fun update(session: WorkoutSession): DomainResult<Unit, WorkoutPersistenceError> {
             val failure = nextUpdateFailure ?: return delegate.update(session)

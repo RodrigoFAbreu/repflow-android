@@ -44,7 +44,37 @@ clearing rule, so it isn't expected to fail on the old code.
 | Route passes `onErrorShown = {}` | `ActiveWorkoutErrorRouteTest`, on the second message |
 | Route drops `onSaved` | `ActiveWorkoutErrorRouteTest`, on the entry clearing |
 
-**Not done yet (CP2):** the `Retry` wiring in the route and the `Try again` wording.
+### CP2 — Make `Retry` re-observe and say "Try again" (A-12; R3, R4): complete
+
+- The ViewModel's `content` now sits inside `retryTrigger.flatMapLatest`, the same
+  shape as `ExerciseListViewModel`. `onRetryObservation()` re-subscribes it, so a
+  failed observation can recover. The route wires `onRetry` to it; `onErrorShown`
+  keeps its one job.
+- The five `*_retry` strings read `Try again`. No `>Retry<` value is left in
+  `app/src/main/res`.
+
+**Departure from the plan's file list:** the two new ViewModel tests are in a new
+sibling, `ActiveWorkoutObservationRetryTest.kt`, not `ActiveWorkoutViewModelTest.kt`.
+Adding one there tripped detekt's `LargeClass` again, as in CP1.
+
+**Verified on the final code:**
+
+- `./gradlew spotlessCheck detekt lintDebug`: pass.
+- `testDebugUnitTest --tests "com.repflow.app.presentation.workout.*"`: 94 tests, 0 failures.
+- `connectedDebugAndroidTest` on the AVD (`emulator-5554`), all of
+  `ActiveWorkoutErrorRouteTest` plus the new screen test: 3 tests, 0 failures. The
+  full suite runs once, next, in the item's verification step.
+
+**Red first:** with `onRetryObservation` an empty stub, the route still on
+`onErrorShown` and the strings unchanged, the new ViewModel, screen and route tests all
+failed.
+
+**Mutations checked, then reverted:**
+
+| Temporary break | Caught by |
+|---|---|
+| Route passes `onRetry = viewModel::onErrorShown`, ViewModel fixed | `tryAgainOnTheLoadFailureStateShowsTheBoardWithTheSession`, on the board never appearing |
+| `onRetryObservation` does nothing, in the new test file | Both `ActiveWorkoutObservationRetryTest` tests, timing out |
 
 ## `repflow-redesign-visual-foundation` — complete (accepted 2026-10-03)
 

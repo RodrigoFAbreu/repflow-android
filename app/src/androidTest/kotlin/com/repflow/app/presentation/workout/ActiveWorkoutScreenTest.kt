@@ -1045,6 +1045,41 @@ class ActiveWorkoutScreenTest {
         assertMessageSitsAbove(R.string.workout_rest_skip)
     }
 
+    /** A-12: the literal, because the wording is the requirement (R4) and a resolved resource would pass on any value. */
+    @Test
+    fun theLoadFailureStateOffersTryAgainAndTappingItCallsOnRetry() {
+        var retries = 0
+        composeRule.setContent {
+            RepFlowTheme {
+                ActiveWorkoutScreen(
+                    uiState = ActiveWorkoutUiState(content = ActiveWorkoutContent.ObservationFailed(ActiveWorkoutErrorReason.UNKNOWN)),
+                    dayContext = null,
+                    focusedExerciseId = null,
+                    onFocusExercise = {},
+                    onAddExercise = {},
+                    onCreateExercise = {},
+                    onOpenRecommendation = {},
+                    onRecordSet = { _, _, _, _, _, _, _, _, _ -> },
+                    onUndoLastSet = {},
+                    onEditLastSet = { _, _, _, _, _, _, _, _ -> },
+                    onAddRestTime = {},
+                    onRemoveRestTime = {},
+                    onSkipRestTimer = {},
+                    onCompleteWorkout = {},
+                    onLeaveWorkout = {},
+                    onAbandonWorkout = {},
+                    onRetry = { retries++ },
+                    onErrorShown = {},
+                )
+            }
+        }
+
+        node(R.string.workout_active_observation_failed).assertIsDisplayed()
+        composeRule.onNode(hasClickAction() and hasText("Try again")).performClick()
+
+        composeRule.runOnIdle { assertEquals(1, retries) }
+    }
+
     private fun runningRest() = RestTimerUi(endAt = Instant.now().plusSeconds(90), totalDurationSeconds = 90)
 
     private fun actionFailedNodes() = composeRule.onAllNodesWithText(string(R.string.workout_active_action_failed)).fetchSemanticsNodes()

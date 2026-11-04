@@ -138,7 +138,7 @@ fun ActiveWorkoutRoute(
         onCompleteWorkout = viewModel::onCompleteWorkout,
         onLeaveWorkout = onLeaveWorkout,
         onAbandonWorkout = viewModel::onAbandonWorkout,
-        onRetry = viewModel::onErrorShown,
+        onRetry = viewModel::onRetryObservation,
         onErrorShown = viewModel::onErrorShown,
         finish = finish,
         raiseFinishFromHome = raiseFinishFromHome,

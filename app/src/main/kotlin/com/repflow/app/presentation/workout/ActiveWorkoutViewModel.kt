@@ -50,12 +50,14 @@ import com.repflow.app.presentation.progression.ProgressionRecommendationUi
 import com.repflow.app.presentation.progression.toSummaryUi
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
@@ -82,6 +84,7 @@ import javax.inject.Inject
  * before finishing) and [notificationEnabled] to the route's permission prompt
  * - both `null` until the repository first emits, never a stored default.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @Suppress("LongParameterList", "TooManyFunctions")
 @HiltViewModel
 class ActiveWorkoutViewModel
@@ -112,6 +115,7 @@ class ActiveWorkoutViewModel
         private val _dayContext = MutableStateFlow<WorkoutDayContextUi?>(null)
         val dayContext: StateFlow<WorkoutDayContextUi?> = _dayContext
         private val recommendationRefreshTrigger = MutableStateFlow(0)
+        private val retryTrigger = MutableStateFlow(0)
         private val _finish = MutableStateFlow<WorkoutFinishState>(WorkoutFinishState.Idle)
 
         /** The finish sheet's confirm, from request to the completed session's id (remediation-1 CP9). */
@@ -208,19 +212,21 @@ class ActiveWorkoutViewModel
                 }
 
         private val content =
-            combine(
-                observeActiveWorkoutSession(),
-                planLabels,
-                exerciseDetails,
-                _settings,
-                lastPerformances,
-            ) { session, labels, details, settings, lasts ->
-                toContent(session, session?.trainingPlanVersionId?.let { labels[it]?.planName }, details, settings, lasts)
-            }.onStart { emit(ActiveWorkoutContent.Loading) }
-                .catch { failure ->
-                    if (failure is CancellationException) throw failure
-                    emit(ActiveWorkoutContent.ObservationFailed(ActiveWorkoutErrorReason.UNKNOWN))
-                }
+            retryTrigger.flatMapLatest {
+                combine(
+                    observeActiveWorkoutSession(),
+                    planLabels,
+                    exerciseDetails,
+                    _settings,
+                    lastPerformances,
+                ) { session, labels, details, settings, lasts ->
+                    toContent(session, session?.trainingPlanVersionId?.let { labels[it]?.planName }, details, settings, lasts)
+                }.onStart { emit(ActiveWorkoutContent.Loading) }
+                    .catch { failure ->
+                        if (failure is CancellationException) throw failure
+                        emit(ActiveWorkoutContent.ObservationFailed(ActiveWorkoutErrorReason.UNKNOWN))
+                    }
+            }
 
         private val availableExercises =
             combine(
@@ -446,6 +452,15 @@ class ActiveWorkoutViewModel
 
         fun onErrorShown() {
             error.update { null }
+        }
+
+        /**
+         * `Try again` on the load-failure state: an observation that failed has
+         * completed, so nothing else re-reads the session. Subscribes again,
+         * which shows `Loading` until the read lands.
+         */
+        fun onRetryObservation() {
+            retryTrigger.update { it + 1 }
         }
 
         /**
