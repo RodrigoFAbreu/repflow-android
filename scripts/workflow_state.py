@@ -1810,6 +1810,94 @@ def held_primitives() -> tuple[tuple[str, str], ...]:
     return tuple(_held_primitives)
 
 
+# live-guard-visibility (#91, `D-Lock`): the **holder lock**. The holder of a
+# mutation guard (the checkpoint guard (5), the plan-approval guard (1))
+# keeps a non-blocking `fcntl.flock` on the guard's own inode for the whole
+# window; the kernel drops it when the holder dies. It is a visibility
+# lock, not a lock-order primitive: never waited on, a leaf that takes
+# nothing else. This process's own locks are kept here, `lease_id` to
+# descriptor; a forked child owns none of them (`D-Fork`). Not thread-local,
+# for the same reason `_held_primitives` is not.
+_guard_holder_locks: dict[str, int] = {}
+
+
+def _drop_guard_lock(lease_id: object) -> None:
+    """Close this process's holder lock for `lease_id`, idempotently."""
+    fd = _guard_holder_locks.pop(lease_id, None) if isinstance(lease_id, str) else None
+    if fd is not None:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+
+
+def _forget_inherited_guard_locks() -> None:
+    """`D-Fork`: in a forked child, close every inherited holder-lock
+    descriptor and forget the table. Closing a duplicate descriptor leaves
+    the open file description, and its lock, held by the parent (never
+    `LOCK_UN`, which would release it). Cannot raise."""
+    inherited = list(_guard_holder_locks.values())
+    _guard_holder_locks.clear()
+    for fd in inherited:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+
+
+os.register_at_fork(after_in_child=_forget_inherited_guard_locks)
+
+
+def _lock_guard_inode(fd: int, unavailable: type[Exception], guard: Path) -> None:
+    """Take the holder lock on a freshly staged, still private inode."""
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as exc:
+        raise unavailable(
+            f"cannot take the holder lock on the staged guard for {guard} ({exc}) -- publishing "
+            f"nothing") from exc
+
+
+def _guard_held_by_another_process(guard_file: Path, lease_id: str,
+                                   unavailable: type[Exception] | None = None) -> bool:
+    """`D-Probe`: does another process hold the lock of the guard published
+    at `guard_file`? A lease this process holds is its own (`D-Own`): `False`.
+    An absent guard is `False`. Every other error raises `unavailable`
+    (default `CheckpointOwnershipUnavailableError`), never `False`: an
+    undecidable guard is not evidence that nobody runs. Call it only with the
+    guard bytes already read, under the guard's serialization lock."""
+    unavailable = unavailable or CheckpointOwnershipUnavailableError
+    if lease_id in _guard_holder_locks:
+        return False
+    try:
+        fd = os.open(guard_file, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        raise unavailable(f"cannot probe the holder lock of {guard_file} ({exc})") from exc
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
+        except OSError as exc:
+            raise unavailable(f"cannot probe the holder lock of {guard_file} ({exc})") from exc
+        return False
+    finally:
+        os.close(fd)               # also drops a shared lock taken for the probe
+
+
+def _live_holder_message(subject: str, held: dict, guard_file: Path) -> str:
+    return (
+        f"{subject} (lease {held.get('lease_id')!r}, step {held.get('step')!r}, class "
+        f"{held.get('step_class')!r}) belongs to this session's own owner token, and the process "
+        f"holding the guard's lock is still running -- a second window of the same owner must not "
+        f"open beside it. Wait for that window to finish and retry; if it is certain that process "
+        f"is not doing this work, find it with `fuser {guard_file}` and stop it. A crashed "
+        f"holder holds nothing: its leftover guard is reclaimed by the next entry, with no "
+        f"further step")
+
+
 @contextlib.contextmanager
 def state_lock(repo_root: Path, *, lock_path: Path = STATE_LOCK_PATH):
     """`D1`'s state-writer primitive (item 354(a)): the lock file is
@@ -1945,7 +2033,8 @@ def _assert_technical_review_block_pins_monotonic(previous_state: dict, new_stat
             )
 
 
-def state_transaction(repo_root: Path, mutator, *, path: Path = DEFAULT_STATE_PATH, before_publish=None) -> dict:
+def state_transaction(repo_root: Path, mutator, *, path: Path = DEFAULT_STATE_PATH, before_publish=None,
+                      on_failure=None) -> dict:
     """The single required entry point for every production writer of
     `WORKFLOW_STATE.json` (item 354): holds `state_lock` across the
     **complete** critical section -- re-read `path` from disk, call
@@ -1969,15 +2058,33 @@ def state_transaction(repo_root: Path, mutator, *, path: Path = DEFAULT_STATE_PA
     `_publish_state_file` -- a check added later goes before it. An
     exception from it aborts the transaction with nothing published.
     `ingest_manual_review_verdict` writes its feedback file here, so the
-    file and the state it records are one critical section."""
+    file and the state it records are one critical section.
+
+    `on_failure` (workflow-2.18.1, 39a): an optional no-argument callable
+    run inside the lock when the mutator, the pin check, `before_publish` or
+    the publish raises (any `BaseException`), before the exception
+    propagates -- the undo of a side effect the mutator or hook left outside
+    the state file, so no other writer can interleave between the failure
+    and the undo. The original exception propagates unless `on_failure`
+    raises a `BaseException` that is not an `Exception` (`KeyboardInterrupt`,
+    `SystemExit`), which then replaces it, so an operator interrupt during
+    an undo is never hidden;
+    an `Exception` raised by `on_failure` is suppressed. Never called on
+    success."""
     full_path = repo_root / path
     with state_lock(repo_root):
-        state = _load_json(full_path) or {}
-        new_state = mutator(state)
-        _assert_technical_review_block_pins_monotonic(state, new_state)
-        if before_publish is not None:
-            before_publish(new_state)
-        _publish_state_file(full_path, new_state)
+        try:
+            state = _load_json(full_path) or {}
+            new_state = mutator(state)
+            _assert_technical_review_block_pins_monotonic(state, new_state)
+            if before_publish is not None:
+                before_publish(new_state)
+            _publish_state_file(full_path, new_state)
+        except BaseException:
+            if on_failure is not None:
+                with contextlib.suppress(Exception):
+                    on_failure()
+            raise
     return new_state
 
 
@@ -3558,13 +3665,20 @@ def _publish_plan_approval_guard(repo_root: Path, body: dict, path: Path) -> Non
     fd, tmp_name = tempfile.mkstemp(
         dir=str(full_path.parent), prefix=".plan-approval-guard-", suffix=".tmp",
     )
+    published = False
     try:
-        with os.fdopen(fd, "wb") as handle:
+        with os.fdopen(fd, "wb", closefd=False) as handle:
             handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
+        _lock_guard_inode(fd, PlanApprovalGuardUnavailableError, full_path)   # `D-Lock`
         os.link(tmp_name, full_path)
+        published = True
     finally:
+        if published:
+            _guard_holder_locks[body["lease_id"]] = fd
+        else:
+            os.close(fd)
         Path(tmp_name).unlink(missing_ok=True)
     _note_primitive_acquired("1", body["lease_id"])
 
@@ -3605,10 +3719,17 @@ def acquire_plan_approval_guard(
       the journal's current `owner_token`): the guard was provably left by
       a session whose ownership has already rotated away -- reclaimed with
       no authorization, then acquisition is retried exactly once.
+    - **`role="owner"`, a `step="takeover"` guard carrying the same
+      token** (takeover-fence, #82): refused, with a message of its own;
+      a takeover's guard is not the owner's to reclaim, and a leftover
+      one is cleared by re-running the takeover.
     - **`role="owner"`, same token**: this session's own leftover guard
       from an interrupted earlier step. Reclaimed and retried once; the
       window's first act is `assert_owner`, so a stale belief about
-      ownership is caught immediately regardless.
+      ownership is caught immediately regardless. Unless another process
+      still holds the guard's lock (live-guard-visibility, `D-Reclaim`):
+      then it is refused with `PlanApprovalGuardHeldError`; a crashed
+      holder holds nothing and is reclaimed.
     - **`role="takeover"`, current epoch, `"destructive"`**: refuses
       unconditionally, by anyone, under any authorization.
     - **`role="takeover"`, current epoch, `"ordinary"`**: released only
@@ -3668,8 +3789,30 @@ def _acquire_plan_approval_guard_locked(
     reclaim = False
     if held.get("holder_owner_token") != current_owner_token:
         reclaim = True                     # superseded epoch
+    elif (role == "owner" and held.get("step") == "takeover"
+          and held.get("holder_owner_token") == holder_owner_token):
+        # takeover-fence (#82): see `_acquire_guard_locked` -- a takeover's
+        # guard carries the observed owner token, so it is not this
+        # session's own leftover.
+        raise PlanApprovalGuardHeldError(
+            f"the plan-approval mutation guard (lease {held.get('lease_id')!r}) is a takeover's, "
+            f"and it carries this session's own owner token: a takeover of this transaction is "
+            f"in progress, or was left by one that died before it rotated the journal, so this "
+            f"session must not enter its own window. Let a running takeover finish (this "
+            f"session's next owner assertion then refuses); to clear a leftover one, re-run it: "
+            f"`workflow_state.plan_approval_takeover_evidence`, then "
+            f"`workflow_state.take_over_plan_approval_transaction` with the takeover literal and "
+            f"the guard-release literal "
+            f"{plan_approval_guard_release_authorization_literal(held)!r}")
     elif role == "owner" and held.get("holder_owner_token") == holder_owner_token:
-        reclaim = True                     # this session's own leftover guard
+        # this session's own leftover guard -- unless its holder still runs
+        # (live-guard-visibility, `D-Reclaim`): a crashed holder holds no lock.
+        guard_file = plan_approval_guard_path(repo_root, guard_path)
+        if _guard_held_by_another_process(guard_file, held["lease_id"],
+                                          PlanApprovalGuardUnavailableError):
+            raise PlanApprovalGuardHeldError(_live_holder_message(
+                "the plan-approval mutation guard", held, guard_file))
+        reclaim = True
     elif role == "takeover":
         if held.get("step_class") == DESTRUCTIVE:
             raise PlanApprovalTakeoverRefusedError(
@@ -3723,6 +3866,7 @@ def _release_plan_approval_guard_locked(repo_root: Path, lease_id: str, path: Pa
     if held is None or held.get("lease_id") != lease_id:
         return
     full_path.unlink(missing_ok=True)
+    _drop_guard_lock(lease_id)
     _note_primitive_released("1", lease_id)
 
 
@@ -3733,6 +3877,7 @@ def release_plan_approval_guard(
         with _plan_approval_guard_lock(repo_root):
             _release_plan_approval_guard_locked(repo_root, lease.get("lease_id"), path)
     finally:
+        _drop_guard_lock(lease.get("lease_id"))
         _note_primitive_released("1", lease.get("lease_id"))
 
 
@@ -5991,14 +6136,19 @@ def _build_claim_record(repo_root: Path, work_item_id: str, checkpoint_id: str, 
     return record
 
 
-def _stage_claim_payload(path: Path, record: dict, *, allow_unreadable_target: bool = False) -> Path:
+def _stage_claim_payload(path: Path, record: dict, *, allow_unreadable_target: bool = False,
+                         keep_open: bool = False) -> Path | tuple[Path, int]:
     """Stage the payload in the claims directory. The claims **directory**
     must always be a real directory -- that assertion is never relaxed.
     `allow_unreadable_target` relaxes the assertion on the final *name*
     only, for the two authorized operations that exist to replace an
     undecidable record (`OPUS-R83-002`): safe because staging happens at
     a fresh temp name and publication is `os.rename` onto the final one,
-    which replaces the link, never follows it, never writes through it."""
+    which replaces the link, never follows it, never writes through it.
+
+    The descriptor `mkstemp` returned is closed here, except for the one
+    caller that passes `keep_open` (the guard's publisher, which locks it,
+    `D-Lock`): that caller gets `(path, fd)` and owns the descriptor."""
     payload = json.dumps(record, indent=2, sort_keys=True) + "\n"
     _assert_not_symlink(path.parent, "claims directory")
     if not allow_unreadable_target:
@@ -6006,15 +6156,22 @@ def _stage_claim_payload(path: Path, record: dict, *, allow_unreadable_target: b
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=".claim-", suffix=".tmp")
-        with os.fdopen(fd, "w") as handle:
-            handle.write(payload)
-            handle.flush()
-            os.fsync(handle.fileno())
+        try:
+            with os.fdopen(fd, "w", closefd=False) as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+        except BaseException:
+            os.close(fd)
+            raise
     except OSError as exc:
         raise CheckpointOwnershipUnavailableError(
             f"cannot stage a claim next to {path} ({exc}) -- refusing to start a checkpoint "
             f"whose claim cannot be made discoverable to this repository's other worktrees"
         ) from exc
+    if keep_open:
+        return Path(tmp_name), fd
+    os.close(fd)
     return Path(tmp_name)
 
 
@@ -6035,17 +6192,29 @@ def _publish_claim_replacing(path: Path, record: dict, *, allow_unreadable_targe
         ) from exc
 
 
-def _publish_claim_exclusive(path: Path, record: dict) -> None:
+def _publish_claim_exclusive(path: Path, record: dict, *, lock_lease_id: str | None = None) -> None:
     """Atomic in **both** senses -- complete content, and create-if-absent.
     Write the whole payload to a temp file in the same directory, then
     `os.link` it into place: the link either creates the final name with
     fully-written content, or fails `EEXIST` because somebody else won.
     There is no window in which a reader can observe a partially-written
     claim, so a crash can never leave a record that fails closed for
-    everybody."""
-    tmp = _stage_claim_payload(path, record)
+    everybody.
+
+    `lock_lease_id` is the one opt-in only `_publish_guard` passes
+    (`D-Lock`): the staged inode is locked (`LOCK_EX | LOCK_NB`) before the
+    link and the descriptor is kept in `_guard_holder_locks` under that
+    lease. The claim's own publication passes nothing and stays lockless."""
+    if lock_lease_id is None:
+        tmp, fd = _stage_claim_payload(path, record), None
+    else:
+        tmp, fd = _stage_claim_payload(path, record, keep_open=True)
+    published = False
     try:
+        if fd is not None:
+            _lock_guard_inode(fd, CheckpointOwnershipUnavailableError, path)
         os.link(tmp, path)
+        published = True
     except FileExistsError:
         raise
     except OSError as exc:
@@ -6054,6 +6223,11 @@ def _publish_claim_exclusive(path: Path, record: dict) -> None:
             f"cannot be made discoverable to this repository's other worktrees"
         ) from exc
     finally:
+        if fd is not None:
+            if published:
+                _guard_holder_locks[lock_lease_id] = fd
+            else:
+                os.close(fd)
         tmp.unlink(missing_ok=True)
 
 
@@ -6176,6 +6350,289 @@ def release_checkpoint(repo_root: Path, work_item_id: str, checkpoint_id: str, *
             f"completion is unaffected; the claim is released on the next invocation from "
             f"this worktree once the completion is durable"
         ) from exc
+
+
+def _checkpoint_entry_at(repo_root: Path, commit: str, work_item_id: str, checkpoint_id: str,
+                         *, required: bool) -> dict | None:
+    """`checkpoints[checkpoint_id]` of the `WORKFLOW_STATE.json` committed at
+    `commit`, or `None` when that state does not record it. A state that is
+    absent at `commit` is an absent entry unless `required`; a torn one is
+    never an absent entry (`CheckpointOwnershipStateMismatchError`)."""
+    shown = subprocess.run(
+        ["git", "show", f"{commit}:{DEFAULT_STATE_PATH.as_posix()}"], cwd=repo_root,
+        capture_output=True)
+    if shown.returncode != 0:
+        if required:
+            raise CheckpointOwnershipStateMismatchError(
+                f"the {DEFAULT_STATE_PATH.as_posix()} committed at {commit} cannot be read -- "
+                f"refusing to decide what {checkpoint_id!r}'s start would be restored to")
+        return None
+    try:
+        state = json.loads(shown.stdout)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise CheckpointOwnershipStateMismatchError(
+            f"the {DEFAULT_STATE_PATH.as_posix()} committed at {commit} is not valid JSON "
+            f"({exc}) -- refusing to decide what {checkpoint_id!r}'s start would be restored to"
+        ) from exc
+    item = (state.get("work_items") or {}).get(work_item_id) if isinstance(state, dict) else None
+    entries = item.get("checkpoints") if isinstance(item, dict) else None
+    entry = entries.get(checkpoint_id) if isinstance(entries, dict) else None
+    return copy.deepcopy(entry) if isinstance(entry, dict) else None
+
+
+def _classify_checkpoint_start(repo_root: Path, work_item_id: str, checkpoint_id: str,
+                               state: dict | None = None) -> tuple[str, dict | None, dict | None, dict]:
+    """What `release_checkpoint_start` would release, from fresh reads:
+    `(kind, working_entry, baseline, claim)`. `baseline` is `B`, the entry the
+    state committed at `HEAD` records (absent, or the `NEEDS_REVALIDATION` entry
+    of a demoted checkpoint); `kind` is `"entry"` for a working `IN_PROGRESS`
+    entry and `"baseline"` for a working entry equal to `B`. Refuses, writing
+    nothing, every other case (`D-Refusals`)."""
+    if state is None:
+        state = _load_json(repo_root / DEFAULT_STATE_PATH) or {}
+    item = (state.get("work_items") or {}).get(work_item_id)
+    if not isinstance(item, dict):
+        raise CheckpointNotInProgressLocallyError(
+            f"{work_item_id!r} has no entry in this worktree's {DEFAULT_STATE_PATH.as_posix()} -- "
+            f"there is no checkpoint start to release")
+    entries = item.get("checkpoints")
+    working = entries.get(checkpoint_id) if isinstance(entries, dict) else None
+    if not isinstance(working, dict):
+        working = None
+    status = working.get("status") if working is not None else None
+    claim = resolve_claim(repo_root, work_item_id)
+    if claim is None:
+        if status == "IN_PROGRESS":
+            raise CheckpointOwnershipStateMismatchError(
+                f"{work_item_id!r} checkpoint {checkpoint_id!r} is IN_PROGRESS here but nothing "
+                f"claims it, so nothing fences it -- step 1c adopts it only when "
+                f"current_checkpoint_id names it; with that pointer absent or naming another "
+                f"checkpoint it is not adopted, and the entry is not releasable until state "
+                f"and claim agree; refusing to release")
+        raise CheckpointNotInProgressLocallyError(
+            f"{work_item_id!r} holds no claim and {checkpoint_id!r} is not IN_PROGRESS here -- "
+            f"there is nothing to release")
+    if not claim_is_this_worktree(repo_root, claim):
+        raise CheckpointOwnedByOtherWorktreeError(
+            f"{work_item_id!r}'s claim is held by worktree {claim.get('worktree_root')!r}; a start "
+            f"is released only from the worktree that holds it -- to take another worktree's "
+            f"claim use the explicit takeover, never this function")
+    if claim.get("checkpoint_id") != checkpoint_id:
+        raise CheckpointOwnershipStateMismatchError(
+            f"{work_item_id!r}'s claim is for checkpoint {claim.get('checkpoint_id')!r}, not "
+            f"{checkpoint_id!r} -- refusing to release")
+    baseline = _checkpoint_entry_at(repo_root, "HEAD", work_item_id, checkpoint_id, required=True)
+    if baseline is not None and baseline.get("status") != "NEEDS_REVALIDATION":
+        raise CheckpointOwnershipStateMismatchError(
+            f"the state committed at HEAD records {work_item_id!r} checkpoint {checkpoint_id!r} as "
+            f"{baseline.get('status')!r}: it is committed past a start, so there is no uncommitted "
+            f"start to release. If it is COMPLETE, step 1c releases this worktree's claim")
+    if status == "IN_PROGRESS":
+        return "entry", working, baseline, claim
+    if working == baseline:
+        return "baseline", working, baseline, claim
+    raise CheckpointNotInProgressLocallyError(
+        f"{work_item_id!r} checkpoint {checkpoint_id!r} is {status!r} in this worktree, not "
+        f"IN_PROGRESS -- there is no start to release. If a completion is committed, step 1c "
+        f"releases the claim; if it is an uncommitted one (an owner died in 1f-commit after "
+        f"persisting it and before committing), resume step 1f in the owner's worktree")
+
+
+def _assert_no_commit_past_start(repo_root: Path, work_item_id: str, checkpoint_id: str,
+                                 start_commit: object, baseline: dict | None) -> None:
+    """The commit rule: `start_commit` resolves and is an ancestor of `HEAD`, and
+    no commit in `start_commit..HEAD` carries this work item's
+    `Workflow-Checkpoint: <checkpoint_id>` trailer or commits a state that
+    records the checkpoint other than as `baseline` does. An unrelated commit
+    (a merge into the branch) records it exactly as `baseline` does."""
+    resolved = None
+    if isinstance(start_commit, str) and start_commit:
+        found = subprocess.run(["git", "rev-parse", "--verify", "--quiet", f"{start_commit}^{{commit}}"],
+                               cwd=repo_root, capture_output=True, text=True)
+        resolved = found.stdout.strip() if found.returncode == 0 else None
+    if not resolved or not _is_ancestor(repo_root, resolved, "HEAD"):
+        raise CheckpointOwnershipStateMismatchError(
+            f"{work_item_id!r} checkpoint {checkpoint_id!r}'s start_commit {start_commit!r} does not "
+            f"resolve to an ancestor of HEAD -- refusing to decide whether a commit followed the start")
+    for commit in _run(["git", "rev-list", f"{resolved}..HEAD"], cwd=repo_root).split():
+        trailers = _commit_trailers(repo_root, commit)
+        if (trailers.get("Workflow-Work-Item") == work_item_id
+                and trailers.get("Workflow-Checkpoint") == checkpoint_id):
+            raise CheckpointOwnershipStateMismatchError(
+                f"commit {commit} carries the Workflow-Checkpoint: {checkpoint_id} trailer since "
+                f"{checkpoint_id!r}'s start -- the checkpoint was completed, so its start is not "
+                f"uncommitted")
+        if _checkpoint_entry_at(repo_root, commit, work_item_id, checkpoint_id, required=False) != baseline:
+            raise CheckpointOwnershipStateMismatchError(
+                f"commit {commit} records {checkpoint_id!r} other than as HEAD's baseline does -- "
+                f"the start is committed, so it is not an uncommitted start to release")
+
+
+def release_checkpoint_start(repo_root: Path, work_item_id: str, checkpoint_id: str, *,
+                             now: str, confirmed_claim_ref: str | None = None) -> None:
+    """Release an **uncommitted** checkpoint start -- the `IN_PROGRESS` state
+    entry and the claim that go with it -- as one continuous window, so that an
+    amendment is no longer wedged by a start its own plan forbids completing
+    (#55). Nothing calls it yet.
+
+    **I1.** A start is removed (entry first, claim second) only inside one
+    window in which this process holds the work item's lifecycle lock (9) and a
+    live `release-start` guard, after proving under that guard that no owner
+    window is running and no commit followed the start, so that any interruption
+    leaves the start whole or half removed (entry gone, claim kept) under a
+    guard whose holder is gone, and calling the function again finishes the
+    release or refuses.
+
+    Success leaves the entry as the state committed at `HEAD` records it (absent
+    for a checkpoint `HEAD` never recorded; the `NEEDS_REVALIDATION` entry of a
+    demoted one), no claim and no guard; a live owner holding the old token then
+    passes `acquire_guard` and fails `assert_claim_owner`, so its body never
+    runs. A window running when the release began is never overtaken. Nothing is
+    committed, staged or fabricated; every refusal is an existing class and
+    changes nothing. An interruption does not fence the owner between it and the
+    next call (`D-Residual`): the dead guard is reclaimable by the owner.
+
+    `confirmed_claim_ref` (checkpoint-start-command, `D-Engine-Keyword`): when
+    given, the claim classified under (9) must carry that reference (the first
+    `CLAIM_REF_LENGTH` characters of its `owner_token`), or the call refuses
+    with `CheckpointOwnershipStateMismatchError` before the probe and the
+    guard; `None` leaves the behaviour above unchanged."""
+    with lifecycle_lock(repo_root, work_item_id):
+        _, _, _, claim = _classify_checkpoint_start(repo_root, work_item_id, checkpoint_id)
+        if confirmed_claim_ref is not None and claim_reference(claim) != confirmed_claim_ref:
+            raise CheckpointOwnershipStateMismatchError(
+                f"{work_item_id!r}'s claim for {checkpoint_id!r} changed since you confirmed "
+                f"{confirmed_claim_ref!r} (it is now {claim_reference(claim)!r}) -- refusing to "
+                f"release a start you were not shown: run the command again")
+        if guard_holder_is_running(repo_root, work_item_id):
+            raise CheckpointOwnershipUnavailableError(
+                f"a guarded window of {work_item_id!r} is still running in another process -- "
+                f"refusing to release {checkpoint_id!r}'s start beside it; let it end, then call again")
+        owner_token = claim["owner_token"]
+        with owner_mutation(repo_root, work_item_id, owner_token, checkpoint_id=checkpoint_id,
+                            step="release-start", step_class=DESTRUCTIVE, now=now):
+            kind = _classify_checkpoint_start(repo_root, work_item_id, checkpoint_id)[0]
+            if kind == "entry":
+                def restore(state: dict) -> dict:
+                    kind_now, entry, base, _ = _classify_checkpoint_start(
+                        repo_root, work_item_id, checkpoint_id, state)
+                    if kind_now != "entry":
+                        raise CheckpointNotInProgressLocallyError(
+                            f"{work_item_id!r} checkpoint {checkpoint_id!r} is no longer IN_PROGRESS")
+                    _assert_no_commit_past_start(
+                        repo_root, work_item_id, checkpoint_id, entry.get("start_commit"), base)
+                    new_state = copy.deepcopy(state)
+                    item = new_state["work_items"][work_item_id]
+                    if base is None:
+                        item["checkpoints"].pop(checkpoint_id, None)
+                    else:
+                        item["checkpoints"][checkpoint_id] = copy.deepcopy(base)
+                    if item.get("current_checkpoint_id") == checkpoint_id:
+                        item["current_checkpoint_id"] = None
+                    item["state_revision"] = item.get("state_revision", 1) + 1
+                    item["last_transition"] = now
+                    return new_state
+
+                state_transaction(repo_root, restore)
+            current = resolve_claim(repo_root, work_item_id)
+            held = read_guard(repo_root, work_item_id)
+            if (current is None or current.get("owner_token") != owner_token
+                    or held is None or held.get("lease_id") not in _guard_holder_locks):
+                raise CheckpointOwnershipUnavailableError(
+                    f"{work_item_id!r}'s claim or guard changed after {checkpoint_id!r}'s entry was "
+                    f"restored -- this call unlinked nothing, and the entry now equals HEAD's: call "
+                    f"again to finish or be refused")
+            try:
+                claim_path(repo_root, work_item_id).unlink(missing_ok=True)
+            except OSError as exc:
+                raise CheckpointOwnershipUnavailableError(
+                    f"cannot remove {work_item_id!r}'s claim ({exc}) -- the entry now equals HEAD's "
+                    f"and the claim was not unlinked: calling again finishes the release") from exc
+
+
+#: How many leading characters of a claim's `owner_token` identify the claim a
+#: person was shown (`D-Literal`).
+CLAIM_REF_LENGTH = 12
+
+
+def claim_reference(claim: dict) -> str:
+    """The reference of a claim: the first `CLAIM_REF_LENGTH` characters of its
+    `owner_token`. A re-created claim (a release and a new start, an adoption,
+    a takeover) mints a new token, so it carries a different reference."""
+    return str(claim["owner_token"])[:CLAIM_REF_LENGTH]
+
+
+def checkpoint_start_release_confirmation(work_item_id: str, checkpoint_id: str,
+                                          claim_ref: str) -> str:
+    """The one sentence `/release-checkpoint-start` asks a person for
+    (`D-Literal`). It names the work item, the checkpoint and the claim that
+    was shown, and attests that the owner session is stopped and stays stopped
+    until the release has completed."""
+    return (f"Release checkpoint start {checkpoint_id} of {work_item_id} held under claim "
+            f"{claim_ref}; its owner session is stopped and stays stopped until this release "
+            f"has completed.")
+
+
+def validate_checkpoint_start_release_confirmation(
+        text: str, *, work_item_id: str, checkpoint_id: str, claim_ref: str) -> None:
+    """Whitespace-normalised and case-insensitive, like
+    `validate_user_only_confirmation`: the sentence must occur in `text` with an
+    id-alphabet boundary before it. Raises `UserConfirmationRejectedError`,
+    printing the sentence expected."""
+    sentence = checkpoint_start_release_confirmation(work_item_id, checkpoint_id, claim_ref)
+    if (not isinstance(text, str)
+            or not re.search(rf"(?<![{_ID_ALPHABET}]){re.escape(sentence)}",
+                             " ".join(text.split()), re.IGNORECASE)):
+        raise UserConfirmationRejectedError(
+            f"user_confirmation is not the release sentence for {checkpoint_id!r} of "
+            f"{work_item_id!r} under claim {claim_ref!r}. Expected, in full: {sentence}")
+
+
+def observe_checkpoint_start_release(repo_root: Path, work_item_id: str, checkpoint_id: str) -> dict:
+    """What `/release-checkpoint-start` shows before it asks for anything
+    (`D-Functions`). Read-only: it takes no lock of its own and writes nothing.
+    Returns `kind` (`entry`, `baseline`, or the terminal `released`), the
+    observed `claim` (`None` for `released`) with its `claim_ref`, the `guard`
+    body (or `None`) and whether its holder is `running`. The engine's
+    classification refusals pass through unchanged."""
+    state = _load_json(repo_root / DEFAULT_STATE_PATH) or {}
+    item = (state.get("work_items") or {}).get(work_item_id)
+    entries = item.get("checkpoints") if isinstance(item, dict) else None
+    if isinstance(entries, dict) and resolve_claim(repo_root, work_item_id) is None:
+        working = entries.get(checkpoint_id)
+        working = working if isinstance(working, dict) else None
+        if working is None or working.get("status") != "IN_PROGRESS":
+            baseline = _checkpoint_entry_at(repo_root, "HEAD", work_item_id, checkpoint_id,
+                                            required=True)
+            if (working == baseline
+                    and (baseline is None or baseline.get("status") == "NEEDS_REVALIDATION")):
+                return {"kind": "released", "claim": None, "claim_ref": None,
+                        "guard": read_guard(repo_root, work_item_id),
+                        "running": guard_holder_is_running(repo_root, work_item_id)}
+    kind, _, _, claim = _classify_checkpoint_start(repo_root, work_item_id, checkpoint_id, state)
+    return {"kind": kind, "claim": claim, "claim_ref": claim_reference(claim),
+            "guard": read_guard(repo_root, work_item_id),
+            "running": guard_holder_is_running(repo_root, work_item_id)}
+
+
+def release_checkpoint_start_confirmed(repo_root: Path, work_item_id: str, checkpoint_id: str, *,
+                                       user_confirmation: str, now: str) -> dict:
+    """`/release-checkpoint-start`'s writer (`D-Functions`): observe, validate
+    the literal against the observed claim reference, then release with that
+    reference as `confirmed_claim_ref`, so the engine refuses a claim that
+    changed in between. Returns the observation it acted on. For kind
+    `released` it validates nothing, calls nothing and writes nothing. Refusal
+    order: the classification refusals, `UserConfirmationRejectedError`, then
+    the engine's own."""
+    observed = observe_checkpoint_start_release(repo_root, work_item_id, checkpoint_id)
+    if observed["kind"] == "released":
+        return observed
+    validate_checkpoint_start_release_confirmation(
+        user_confirmation, work_item_id=work_item_id, checkpoint_id=checkpoint_id,
+        claim_ref=observed["claim_ref"])
+    release_checkpoint_start(repo_root, work_item_id, checkpoint_id, now=now,
+                             confirmed_claim_ref=observed["claim_ref"])
+    return observed
 
 
 # ---------------------------------------------------------------------------
@@ -6301,7 +6758,8 @@ def read_guard(repo_root: Path, work_item_id: str) -> dict | None:
 
 
 def _publish_guard(repo_root: Path, work_item_id: str, body: dict) -> None:
-    _publish_claim_exclusive(guard_path(repo_root, work_item_id), body)
+    _publish_claim_exclusive(guard_path(repo_root, work_item_id), body,
+                             lock_lease_id=body["lease_id"])
     _note_primitive_acquired("5", body["lease_id"])
 
 
@@ -6330,10 +6788,20 @@ def acquire_guard(repo_root: Path, work_item_id: str, *, holder_owner_token: str
       this same guard. Reclaimed with no authorization, then acquisition
       is retried exactly **once**. Deliberately not narrowed to a
       worktree, so no post-takeover recovery is stranded.
+    - **`role="owner"`, a `step="takeover"` guard carrying the caller's
+      own token and worktree** (takeover-fence, #82): refused, with a
+      message of its own. A takeover run from the owner's worktree
+      publishes exactly that shape, and it is not the owner's to
+      reclaim; a leftover one is cleared by re-running the takeover.
     - **`role="owner"`, same token *and* same worktree**: the caller's
       own leftover guard from an interrupted earlier step. Reclaimed and
       retried once; the window's first act is `assert_claim_owner`, so a
       stale belief about ownership is caught immediately regardless.
+      **Unless another process still holds the guard's lock**
+      (live-guard-visibility, `D-Reclaim`): then it is refused, because a
+      second window of the same owner must not open beside a running one;
+      a crashed holder holds nothing and is reclaimed. A lock this process
+      holds itself is its own leftover (`D-Own`).
       `holder_worktree_git_dir` is a required conjunct (`OPUS-R82-002`):
       the token is world-readable coordination data any worktree can
       read out of the claim, so token equality alone would let a
@@ -6402,9 +6870,30 @@ def _acquire_guard_locked(repo_root: Path, work_item_id: str, *, body: dict,
         # construction only when its token happens to differ from
         # `current`, which is vacuously false when both are `None`).
         reclaim = True
+    elif (role == "owner" and held.get("step") == "takeover"
+          and held.get("holder_owner_token") == holder_owner_token
+          and held.get("holder_worktree_git_dir") == _worktree_git_dir(repo_root)):
+        # takeover-fence (#82): a takeover publishes its guard carrying the
+        # observed owner token, from the worktree that runs it -- so it is
+        # indistinguishable from this session's own leftover by token and
+        # worktree alone. It is not this session's to reclaim.
+        raise CheckpointOwnershipUnavailableError(
+            f"{work_item_id!r}'s mutation guard (lease {held.get('lease_id')!r}) is a takeover's, "
+            f"and it carries this session's own owner token: a takeover of this claim is in "
+            f"progress, or was left by one that died before it rotated the claim, so this "
+            f"session must not enter its own window. Let a running takeover finish (this "
+            f"session's next ownership check then refuses); to clear a leftover one, re-run it: "
+            f"`workflow_state.takeover_evidence`, then `workflow_state.take_over_claim` with the "
+            f"takeover literal and the guard-release literal "
+            f"{guard_release_authorization_literal(held)!r}")
     elif (role == "owner" and held.get("holder_owner_token") == holder_owner_token
           and held.get("holder_worktree_git_dir") == _worktree_git_dir(repo_root)):
-        reclaim = True                     # this worktree's own leftover guard
+        # this worktree's own leftover guard -- unless its holder still runs
+        # (live-guard-visibility, `D-Reclaim`): a crashed holder holds no lock.
+        if _guard_held_by_another_process(guard_path(repo_root, work_item_id), held["lease_id"]):
+            raise CheckpointOwnershipUnavailableError(_live_holder_message(
+                f"{work_item_id!r}'s mutation guard", held, guard_path(repo_root, work_item_id)))
+        reclaim = True
     elif role == "owner" and held.get("holder_owner_token") == holder_owner_token:
         # `OPUS-R82-002`: same token, different worktree. The token
         # proves the epoch, never the holder.
@@ -6485,6 +6974,7 @@ def _release_guard_path_locked(repo_root: Path, work_item_id: str, lease_id: str
     if held.get("lease_id") != lease_id:
         return
     path.unlink(missing_ok=True)
+    _drop_guard_lock(lease_id)
     _note_primitive_released("5", lease_id)
 
 
@@ -6568,7 +7058,31 @@ def release_guard(repo_root: Path, work_item_id: str, lease: dict) -> None:
     try:
         _release_guard_path(repo_root, work_item_id, lease.get("lease_id"))
     finally:
+        _drop_guard_lock(lease.get("lease_id"))
         _note_primitive_released("5", lease.get("lease_id"))
+
+
+def guard_holder_is_running(repo_root: Path, work_item_id: str) -> bool:
+    """Is a guarded window of `work_item_id` running in another process now?
+
+    - `True`: another process holds the lock of the guard now published. A
+      `fork`ed child of the holder is another process too (`D-Fork`).
+    - `False`: no guard is published, or its holder holds no lock -- it
+      crashed, or the guard was published by a release before 2.18.6, which
+      keeps none. A guard this process itself holds is not another
+      process's, so the caller's own window answers `False`.
+    - An undecidable guard raises `CheckpointOwnershipUnavailableError`,
+      never `False`.
+
+    Not a proof about time outside a window: between two windows no guard
+    exists. Takes `guard_mutation_lock` (6) as a leaf, writes nothing, and
+    must not be called holding the checkpoint guard it asks about."""
+    with guard_mutation_lock(repo_root, work_item_id):
+        held = read_guard(repo_root, work_item_id)
+        if held is None:
+            return False
+        return _guard_held_by_another_process(guard_path(repo_root, work_item_id),
+                                              held["lease_id"])
 
 
 def assert_claim_owner(repo_root: Path, work_item_id: str, owner_token: str) -> dict:
@@ -10333,9 +10847,61 @@ def _implementation_stage_default(
     }
 
 
+class BacklogScriptUnavailableError(Exception):
+    """`generate_artifacts_declarations(repo_root=...)` could not import
+    `workflow_backlog`: the code is `declaration_invalid`, the D-Classify
+    refusal. A repository that declared a backlog but lacks the script must not
+    silently lose its classification."""
+
+    code = "declaration_invalid"
+
+
+_BACKLOG_PATHS_JUSTIFICATION = (
+    "the repository's declared backlog file or its generated roadmap page -- repository "
+    "territory that acceptance edits (workflow-2.17.0 D-Classify), never this item's own "
+    "deliverable"
+)
+_BACKLOG_ITEM_PAGES_JUSTIFICATION = (
+    "the declared backlog's item pages (`detail` is always under this prefix) -- repository "
+    "territory a consumer edits, never this item's own deliverable (workflow-2.17.0 D-Classify)"
+)
+
+
+def _classify_declared_backlog(declarations: dict, repo_root) -> dict:
+    """workflow-2.17.0 (`backlog-file`, D-Classify): when `repo_root` declares
+    a valid backlog, refuse a declared path the declaration protects
+    (`declaration_conflict`), then classify the declared `file` and `roadmap`
+    and `docs/items/` as excluded at both stages (`setdefault`, so no entry
+    already present changes). Undeclared or invalid: `declarations`
+    unchanged."""
+    try:
+        import workflow_backlog
+    except ImportError as exc:
+        raise BacklogScriptUnavailableError(
+            "declaration_invalid: scripts/workflow_backlog.py cannot be imported "
+            f"({exc}); restore the script or remove the `backlog` key"
+        ) from exc
+    paths = workflow_backlog.declared_paths(repo_root)
+    if not paths:
+        return declarations
+    conflicts = workflow_backlog.protected_conflicts(
+        [*paths, workflow_backlog.REPRESENTATIVE_ITEM_PAGE], declarations,
+    )
+    if conflicts:
+        raise workflow_backlog._conflict_error(conflicts)
+    for stage in ("plan_stage", "implementation_stage"):
+        half = declarations[stage]
+        for path in paths:
+            half["excluded_paths"].setdefault(path, _BACKLOG_PATHS_JUSTIFICATION)
+        half["excluded_prefixes"].setdefault(
+            workflow_backlog.DETAIL_PREFIX, _BACKLOG_ITEM_PAGES_JUSTIFICATION,
+        )
+    return declarations
+
+
 def generate_artifacts_declarations(
     work_item_id: str, plan_path: str, registry_path: str, mapping_path: str,
-    *, work_item_type: str,
+    *, work_item_type: str, repo_root=None,
 ) -> dict:
     """The default `<work_item_id>-artifacts.json` template
     (`D-Fingerprint-Generalization`, `OPUS-R25-004`): the item's own three
@@ -10373,7 +10939,13 @@ def generate_artifacts_declarations(
     with. They are excluded here, by exact path, as another work item's
     plan-stage content -- unless this item's own `plan_path`/
     `registry_path`/`mapping_path` names one of them, in which case
-    `classify_path`'s protected-first ordering keeps it protected."""
+    `classify_path`'s protected-first ordering keeps it protected.
+
+    **`repo_root`** (workflow-2.17.0, `backlog-file`, D-Classify): optional. When
+    given and the repository declares a valid backlog, the declared backlog
+    file, roadmap page and `docs/items/` are classified as excluded at both
+    stages, after a `declaration_conflict` check; omitted (every existing
+    caller) or undeclared, the result is byte-for-byte what it was."""
     validate_work_item_id(work_item_id)
     validate_work_item_type(work_item_type)
     own_artifacts_path = str(fingerprint.artifacts_path_for_work_item(work_item_id).as_posix())
@@ -10440,7 +11012,7 @@ def generate_artifacts_declarations(
             "plan-stage design content for this item (salvage audit I8)",
         )
 
-    return {
+    declarations = {
         "schema_version": 2,
         "work_item_id": work_item_id,
         "plan_stage": {
@@ -10452,6 +11024,9 @@ def generate_artifacts_declarations(
             work_item_type, own_artifacts_path, plan_path, registry_path, mapping_path,
         ),
     }
+    if repo_root is not None:
+        declarations = _classify_declared_backlog(declarations, repo_root)
+    return declarations
 
 
 # ---------------------------------------------------------------------------
@@ -10501,6 +11076,7 @@ def default_work_item(
         "plan_review_stages": None,
         "functional_acceptance_status": None,
         "blocking_decisions": [],
+        "review_round_counts": initial_review_round_counts(governing_workflow_version),
         "state_revision": 1,
         "last_transition": last_transition,
     }
@@ -14226,6 +14802,30 @@ def apply_technical_approval(state: dict, work_item_id: str, record: dict, now: 
 _AMENDMENT_REQUEST_ALLOWED_PHASES = frozenset({"IMPLEMENTING", "SELF_REVIEWING_IMPLEMENTATION"})
 
 
+def _release_start_next_step(
+    work_item_id: str, checkpoint_id: object, *, entry_may_be_unclaimed: bool = False,
+) -> str:
+    """The next step the amendment refusals name (`D-Amendment-Message`). It is
+    the step for a start that was never committed, not for every case, and the
+    release has two refusals the raise sites cannot see: an `IN_PROGRESS` entry
+    with no claim, and a claim held by another worktree. The `IN_PROGRESS` raise
+    site does not read the claim, so it passes `entry_may_be_unclaimed` to state
+    both facts under the condition each holds."""
+    step = (f"If the checkpoint's own approved plan forbids completing it and its start was "
+            f"never committed, stop its owner session and run the user-only "
+            f"/release-checkpoint-start {work_item_id} {checkpoint_id} from the worktree that "
+            f"holds the claim")
+    if entry_may_be_unclaimed:
+        step += (f". The release refuses an IN_PROGRESS entry that nothing claims; "
+                 f"/milestone-implement {work_item_id} (step 1c) adopts such an entry only when "
+                 f"current_checkpoint_id names it, so with that pointer absent or naming another "
+                 f"checkpoint, adoption is not offered and the entry is not releasable until "
+                 f"state and claim agree. Run from the worktree that holds the work item's "
+                 f"claim: if that claim is for another checkpoint, the release of this one "
+                 f"refuses with the claim's checkpoint named; release that checkpoint instead")
+    return step
+
+
 def request_plan_amendment(
     state: dict, work_item_id: str, reason: str, *, repo_root: Path, now: str,
 ) -> dict:
@@ -14325,14 +14925,18 @@ def request_plan_amendment(
     # shared filesystem checkpoint claim is outstanding for this work item.
     # See `AmendmentCheckpointActiveError`'s own docstring for why both
     # halves are checked (they are two different synchronization domains).
-    if any(
-        entry.get("status") == "IN_PROGRESS"
-        for entry in work_item.get("checkpoints", {}).values()
-    ):
+    in_progress_ids = [
+        cid for cid, entry in work_item.get("checkpoints", {}).items()
+        if entry.get("status") == "IN_PROGRESS"
+    ]
+    if in_progress_ids:
+        current_id = work_item.get("current_checkpoint_id")
+        named_id = current_id if current_id in in_progress_ids else in_progress_ids[0]
         raise AmendmentCheckpointActiveError(
             f"{work_item_id!r} has a checkpoint IN_PROGRESS "
-            f"({work_item.get('current_checkpoint_id')!r}) -- /request-plan-amendment "
-            f"refuses while implementation is live"
+            f"({named_id!r}) -- /request-plan-amendment "
+            f"refuses while implementation is live. "
+            f"{_release_start_next_step(work_item_id, named_id, entry_may_be_unclaimed=True)}"
         )
     outstanding_claim = resolve_claim(repo_root, work_item_id)
     if outstanding_claim is not None:
@@ -14341,7 +14945,8 @@ def request_plan_amendment(
             f"(checkpoint {outstanding_claim.get('checkpoint_id')!r}, worktree "
             f"{outstanding_claim.get('worktree_root')!r}) -- /request-plan-amendment "
             f"refuses while a checkpoint start is in flight, even though "
-            f"WORKFLOW_STATE.json may not show it IN_PROGRESS yet"
+            f"WORKFLOW_STATE.json may not show it IN_PROGRESS yet. "
+            f"{_release_start_next_step(work_item_id, outstanding_claim.get('checkpoint_id'))}"
         )
 
     # IMPL2-R1: refuse by name, before anything is superseded, if the
@@ -14709,6 +15314,10 @@ ORDINARY_BUNDLE_GENERATION_RECORD_FIELDS = frozenset({
     # recorded Optional findings sit uncommitted until its next commit,
     # exactly as its `gate_evidence` does.
     "optional_findings",
+    # workflow-2.15.0 CP1 (`D-Counter`, `review-round-counts`): this item's own
+    # per-role review-round counts sit uncommitted until its next commit,
+    # exactly as its `optional_findings` do.
+    "review_round_counts",
 })
 
 RECOVERED_BUNDLE_GENERATION_RECORD_FIELDS = frozenset({
@@ -14728,6 +15337,8 @@ RECOVERED_BUNDLE_GENERATION_RECORD_FIELDS = frozenset({
     "reopenings",
     # workflow-2.14.0 CP1 (`D-Ledger`): as in the ordinary set above.
     "optional_findings",
+    # workflow-2.15.0 CP1 (`D-Counter`): as in the ordinary set above.
+    "review_round_counts",
 })
 
 # workflow-2.9.1 (`D-Helper`, step 3): the item fields a committed entry into
@@ -14739,6 +15350,8 @@ REVIEW_STAGE_WRITE_COMMIT_FIELDS = frozenset({
     "implementation_review_stages", "gate_evidence", "reopenings",
     # workflow-2.14.0 CP1 (`D-Ledger`): a REVISE carrying an Optional finding.
     "optional_findings",
+    # workflow-2.15.0 CP1 (`D-Counter`): every recorded verdict counts a round.
+    "review_round_counts",
 })
 
 RECOVERED_BUNDLE_GENERATION_RECORD_LEGAL_SOURCE_PHASES = (
@@ -14939,6 +15552,9 @@ TECHNICAL_APPROVAL_COMMIT_FIELDS = frozenset({
     # workflow-2.14.0 CP1 (`D-Ledger`): an APPROVE that recorded an Optional
     # finding leaves the ledger pending until this commit.
     "optional_findings",
+    # workflow-2.15.0 CP1 (`D-Counter`): an APPROVE leaves its counted round
+    # pending until this commit.
+    "review_round_counts",
 })
 
 
@@ -15080,7 +15696,10 @@ def validate_bundle_generation_record_commit(repo_root: Path, commit: str, work_
             f"{commit}'s own {work_item_id!r} field changes are {sorted(field_diff)}, "
             f"not a non-empty subset of {sorted(RECOVERED_BUNDLE_GENERATION_RECORD_FIELDS)} "
             f"(recovered role) -- reviewed_implementation_head/implementation_revision "
-            f"must never change in a recovered-role commit"
+            f"must never change in a recovered-role commit. Keep this commit's state "
+            f"change to the listed fields and put any other change in its own commit; "
+            f"if the repository was moved back to a release older than the one that "
+            f"wrote this commit, update to that release or later and run the command again"
         )
     # workflow-2.5.0 CP3: a membership test, not a single-valued equality
     # (D-Implementation-Review-Stages "Provenance-interval interaction",
@@ -15846,6 +16465,83 @@ def _record_optional_findings(work_item: dict, verdict_text: str | None, *, verd
     })
 
 
+REVIEW_ROUND_COUNTS_KEY = "review_round_counts"
+_REVIEW_ROUND_COUNTS_STAGES = ("plan", "implementation")
+_REVIEW_ROUND_COUNTS_ROLES = ("local", "external")
+
+
+def initial_review_round_counts(governing_workflow_version: str) -> dict:
+    """`D-Counter`, workflow-2.15.0: the value `default_work_item` writes at
+    creation. A stage records per-role rounds only where the version has that
+    stage's two-stage protocol (plan: `TWO_STAGE_PLAN_REVIEW_VERSIONS`;
+    implementation: `2.2` only); otherwise it is `None`, for the item's whole
+    life -- a count is never started mid-history."""
+    zero = {"local": 0, "external": 0}
+    return {
+        "plan": dict(zero) if governing_workflow_version in TWO_STAGE_PLAN_REVIEW_VERSIONS else None,
+        "implementation": dict(zero) if governing_workflow_version == "2.2" else None,
+    }
+
+
+class InvalidReviewRoundCountsError(Exception):
+    """`work_items[<id>].review_round_counts` is not the shape `D-Counter` fixes."""
+
+
+def _is_count(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _stage_counts_well_formed(value: object) -> bool:
+    return (
+        isinstance(value, dict) and set(value) == set(_REVIEW_ROUND_COUNTS_ROLES)
+        and all(_is_count(value[role]) for role in _REVIEW_ROUND_COUNTS_ROLES)
+    )
+
+
+def review_round_counts_errors(value: object) -> list[str]:
+    """Every shape problem of a `review_round_counts` value (empty when valid):
+    an object with exactly `plan` and `implementation`, each `None` or an
+    object with exactly `local` and `external`, non-negative integers and not
+    booleans. Pure; never checks that a count matches the history."""
+    if not isinstance(value, dict):
+        return [f"review_round_counts must be an object, not {type(value).__name__}"]
+    problems = []
+    if set(value) != set(_REVIEW_ROUND_COUNTS_STAGES):
+        problems.append("review_round_counts must hold exactly plan and implementation")
+    for stage in _REVIEW_ROUND_COUNTS_STAGES:
+        if stage in value and value[stage] is not None and not _stage_counts_well_formed(value[stage]):
+            problems.append(
+                f"review_round_counts[{stage!r}] must be null or hold exactly local and external "
+                f"as non-negative integers")
+    return problems
+
+
+def validate_review_round_counts(state: dict) -> None:
+    """Applies `review_round_counts_errors` to every work item that carries
+    the key. Deliberately **not** called from `validate_state`: a malformed
+    counter must never refuse an operational path (INV-3); only the explicit
+    `verify` operation reports it."""
+    for work_item_id, work_item in (state.get("work_items") or {}).items():
+        if isinstance(work_item, dict) and REVIEW_ROUND_COUNTS_KEY in work_item:
+            problems = review_round_counts_errors(work_item[REVIEW_ROUND_COUNTS_KEY])
+            if problems:
+                raise InvalidReviewRoundCountsError(f"work_items[{work_item_id!r}]: " + "; ".join(problems))
+
+
+def _count_review_round(work_item: dict, stage: str, role: str) -> None:
+    """Counts one recorded verdict (`APPROVE` or `REVISE`) of `role` at `stage`
+    in place (the caller owns a deep copy). Increments an existing, well-formed
+    pair only: an absent key, a `None` stage or any malformed value is left
+    exactly as it was, and this never raises (INV-3)."""
+    counts = work_item.get(REVIEW_ROUND_COUNTS_KEY)
+    if review_round_counts_errors(counts):
+        return
+    pair = counts[stage]
+    if pair is None:
+        return
+    pair[role] += 1
+
+
 class InvalidOptionalFindingsError(Exception):
     """`work_items[<id>].optional_findings` is not the shape `D-Ledger` fixes."""
 
@@ -15974,9 +16670,19 @@ def finding_dispositions_report(repo_root: Path, state: dict, work_item_id: str)
     ]
 
 
+FINDING_LABEL_LIMIT = 240
+
+
 def _finding_label(item: dict) -> str:
+    """The refusal's label for a finding (workflow-2.18.1, 45a): the first
+    line of the stored text, cut to `FINDING_LABEL_LIMIT` characters (239 plus
+    `\u2026` when longer). The ledger, the dispositions skeleton and the
+    `--finding-dispositions` listing keep the whole stored text."""
     ref = item["raised"][0]
-    return f"{item['key']} ({ref['stage']} {ref['role']} round {ref['round']}): {item['text']}"
+    first = item["text"].split("\n", 1)[0]
+    if len(first) > FINDING_LABEL_LIMIT:
+        first = first[:FINDING_LABEL_LIMIT - 1] + "\u2026"
+    return f"{item['key']} ({ref['stage']} {ref['role']} round {ref['round']}): {first}"
 
 
 def assert_finding_dispositions_recorded(repo_root: Path, state: dict, work_item_id: str) -> None:
@@ -16094,6 +16800,7 @@ def record_local_plan_review(
     else:  # BLOCK
         return state
 
+    _count_review_round(work_item, "plan", "local")
     _record_optional_findings(
         work_item, verdict_text, verdict=verdict, stage="plan", role=LOCAL_MODEL_PLAN_REVIEW, round=round,
         review_content_id=review_content_id, now=now)
@@ -16222,6 +16929,7 @@ def record_manual_plan_review(
     else:  # BLOCK
         return state
 
+    _count_review_round(work_item, "plan", "external")
     _record_optional_findings(
         work_item, verdict_text, verdict=verdict, stage="plan", role=MANUAL_EXTERNAL_PLAN_REVIEW, round=round,
         review_content_id=current_review_content_id, now=now)
@@ -17423,6 +18131,7 @@ def record_local_implementation_review(
     else:  # BLOCK
         return state
 
+    _count_review_round(work_item, "implementation", "local")
     _record_optional_findings(
         work_item, verdict_text, verdict=verdict, stage="implementation", role=LOCAL_MODEL_IMPLEMENTATION_REVIEW, round=round,
         review_content_id=review_content_id, now=now)
@@ -17541,6 +18250,7 @@ def record_manual_implementation_review(
     else:  # BLOCK
         return state
 
+    _count_review_round(work_item, "implementation", "external")
     _record_optional_findings(
         work_item, verdict_text, verdict=verdict, stage="implementation", role=MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW, round=round,
         review_content_id=current_review_content_id, now=now)
@@ -17916,13 +18626,12 @@ def _ingest_two_stage_manual_verdict(repo_root: Path, work_item_id: str, *, stag
         outcome["feedback_written"] = _store_manual_verdict(
             repo_root, work_item_id, verdict_text, state=outcome.pop("_state"))
 
-    try:
-        state_transaction(repo_root, mutator, before_publish=before_publish)
-    except BaseException:
+    def undo_baseline() -> None:
         if baseline["revision"] is not None:
             fingerprint.remove_stage_baseline(
                 repo_root, work_item_id, _STAGE_BASELINE_ROLES[stage], only_state_revision=baseline["revision"])
-        raise
+
+    state_transaction(repo_root, mutator, before_publish=before_publish, on_failure=undo_baseline)
     return outcome
 
 

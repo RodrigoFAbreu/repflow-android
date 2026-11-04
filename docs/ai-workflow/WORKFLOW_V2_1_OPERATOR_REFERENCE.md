@@ -31,11 +31,21 @@ Where they disagree, see [Known discrepancies](#known-discrepancies).
   mirrors it at the technical-approval gate — see the `/review-implementation`,
   `/record-manual-implementation-review`, and `AWAITING_LOCAL_IMPLEMENTATION_REVIEW`/
   `AWAITING_MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW` sections below.
-- **User-only commands** (`/approve-review`, `/accept-milestone`) carry
+- **User-only commands** (`/approve-review`, `/accept-milestone`,
+  `/adopt-gate-policy`, `/archive-finished-item`, `/prune-archives`,
+  `/release-checkpoint-start`, `/request-plan-amendment`, `/resume-implementation`, `/retire-legacy-work-item`) carry
   `disable-model-invocation: true`.
-  Claude cannot run them, and they refuse to write anything unless *your
-  current-turn message* contains literal confirmation text naming the exact
-  work item and stage. They also do not appear in Claude's skill list.
+  The control each of them carries itself, under every harness, is the
+  literal-confirmation check: they refuse to write anything unless *your
+  current-turn message* contains literal confirmation text naming what the
+  command acts on (for seven of them the exact work item, with a stage,
+  checkpoint or keyword where the command needs one; for `/prune-archives`
+  the exact archives; for `/adopt-gate-policy` the policy digest; each command file states its own). The flag is an
+  additional layer where the harness enforces it; it does not replace the
+  check. The agent must never run them;
+  where the harness enforces the flag they cannot be launched for it and do
+  not appear in its command list. To run the commands from
+  another harness, see `docs/ai-workflow/COMMAND_FILES.md`.
 - **Every command stops.** None of them chain into the next command, even
   when the next step is obvious.
 
@@ -94,7 +104,7 @@ They are not interchangeable and neither one approves the plan.
 
 | Step | Who | Command | Records |
 |---|---|---|---|
-| 1. Local model review | Claude, ideally a fresh session | `/review-plan` | Writes `REVIEW_FEEDBACK.md` itself; on `APPROVE` records the `LOCAL_MODEL_PLAN_REVIEW` ledger stage |
+| 1. Local model review | The agent, ideally a fresh session | `/review-plan` | Writes `REVIEW_FEEDBACK.md` itself; on `APPROVE` records the `LOCAL_MODEL_PLAN_REVIEW` ledger stage |
 | 2. Manual external review | **You** — upload the bundle to an external reviewer, paste its verdict into `REVIEW_FEEDBACK.md` | `/record-manual-plan-review` | Ingests and binds the verdict you already pasted; on `APPROVE` records the `MANUAL_EXTERNAL_PLAN_REVIEW` ledger stage |
 | 3. Approval | **You**, or the Workflow where the gate is automatic (`/satisfy-gate plan`, `GATE_POLICY.md`) | `/approve-review plan` | The only approval gate; requires **both** ledger stages recorded against the *current* `review_content_id` |
 
@@ -243,7 +253,7 @@ mode.
 
 ## Command reference
 
-`.claude/commands/` holds 16 files today, and all 16 are sectioned below
+`.claude/commands/` holds 25 files today, and all 25 are sectioned below
 — including `/review-implementation` and `/review-functional`
 (`workflow-v2-3`) and `/request-plan-amendment` (`workflow-2.4.0`),
 previously undocumented here. `[work-item-id]` defaults
@@ -258,8 +268,8 @@ What is actually guaranteed about that inventory, precisely:
 set of `### /<name>` sections in this document and the set of
 `.claude/commands/*.md` stems on disk and asserts the two are **equal** —
 that part is derived, so a command added or removed without a section here
-fails. The number 16 itself is *not* derived: it is a hardcoded tripwire
-in that same test (`assertEqual(len(on_disk), 16)`) whose job is to make a
+fails. The number 25 itself is *not* derived: it is a hardcoded tripwire
+in that same test (`assertEqual(len(on_disk), 25)`) whose job is to make a
 change in the roster size a deliberate, reviewed edit. So the set equality
 is mechanical; the count in this paragraph and in the test is a
 hand-maintained pair that must be updated together. If they disagree, the
@@ -270,7 +280,9 @@ test fails and is authoritative about which one moved.
   existing work item — including a remediation child, which is never the
   active item.
 - **Arguments**: none → derive the milestone from
-  `docs/ACTIVE_MILESTONE.md`/`docs/ROADMAP.md`. One argument → a
+  `docs/ACTIVE_MILESTONE.md`/`docs/ROADMAP.md`, or, when `WORKFLOW_CONFIG.json`
+  declares a `backlog` (workflow-2.17.0), the next ready item of that file
+  (`python3 scripts/workflow_backlog.py next`; the id forms never read it). One argument → a
   `work_items` key selects that work item, anything else is a base SHA
   (so the old `/milestone-plan <base-sha>` form is unchanged). Two →
   `<work-item-id> <base-sha>`. Nothing is guessed; the id selects an
@@ -474,7 +486,10 @@ test fails and is authoritative about which one moved.
   first included.
 - **Refuses**: the wrong phase
   (`WrongPhaseForAmendmentRequestError`); a checkpoint still `IN_PROGRESS`
-  or an outstanding checkpoint claim (`AmendmentCheckpointActiveError`,
+  or an outstanding checkpoint claim (`AmendmentCheckpointActiveError`; for a
+  start that was never committed, its message names the user-only
+  `/release-checkpoint-start <work-item-id> <checkpoint-id>`, run from the
+  worktree that holds the claim,
   XMODEL-R4-B1, checked *before* superseding anything and *authoritatively*
   inside `request_plan_amendment` itself, not only this command's own
   preflight read -- closing the race in which a checkpoint claim is
@@ -936,6 +951,44 @@ committed"); if a round was refused with "must always transition phase", see
 - **Refuses**: a missing or wrong confirmation; an unknown id; any phase other
   than `LEGACY_READY`; the active item; unfinished children.
 
+### `/archive-finished-item <work-item-id>` — user-only
+- **When**: a finished work item's untracked `.ai-review/<id>/` folder is to be packed into
+  the archive store and removed (`docs/RETENTION.md`, roadmap row 27e; Workflow 2.23.0).
+- **Expects**: exactly one id in `$ARGUMENTS` (the id comes from `$ARGUMENTS` only,
+  never from the active item), and, after the
+  preview, your current-turn message carrying the sentence `Archive and remove the review
+  folder of <id>.` with the id as an exact token (`m-1` never authorizes `m-10`).
+- **Does**: previews `workflow_retention.py archive <id>` and `remove <id>` (dry runs that
+  write nothing), prints the sentence and stops. Only on the sentence it runs `archive <id>
+  --apply`, then `remove <id> --apply`; with an archive already present it runs `remove`
+  only. It packs, verifies and deletes nothing itself.
+- **Writes**: no tracked file and no state. The engines write the archive and its index
+  line in the archive store, and `remove` takes the untracked `.ai-review/<id>/` folder
+  away.
+- **Next**: nothing. The retention report lists the item as archived with no folder.
+- **Refuses**: a missing or wrong sentence; several or no ids; any engine refusal, whose
+  code and next step it reports, without retrying and without running `remove` after an
+  `archive` that did not succeed. One item per run.
+
+### `/prune-archives <work-item-id>...` — user-only
+- **When**: archives in the archive store are past the time to live and are to be deleted
+  for good (`docs/RETENTION.md`, roadmap row 27g; Workflow 2.25.0).
+- **Expects**: one or more distinct ids in `$ARGUMENTS`, each the work item id of an
+  archive (its name without `.tar.zst`; never a file name or path, never the active item),
+  and, after the preview, your current-turn message carrying the sentence `Prune the
+  archives <n1>, <n2>.` naming exactly those archives (`m-1` never authorizes `m-10`;
+  the final full stop is required).
+- **Does**: previews `workflow_retention.py prune <names>` (a dry run that writes nothing),
+  prints the sentence and stops. Only on the sentence it runs `prune <names> --apply`,
+  with the same names. It deletes nothing itself.
+- **Writes**: no tracked file and no state. The engine deletes the named archive files in
+  the archive store; the index keeps its lines.
+- **Next**: nothing. The retention report no longer lists the pruned archives.
+- **Refuses**: a missing or wrong sentence; no id, a repeated id or a malformed one; any
+  engine refusal, whose code and next step it reports (with the engine's `removed:` and
+  `not removed:` lists at the apply), without retrying. The engine alone decides which
+  archive is prunable.
+
 ### `/resume-implementation <work-item-id>` — user-only
 - **When**: a `2.1`/`2.2` item sits at `AWAITING_FUNCTIONAL_REVIEW` with a registry
   checkpoint still outstanding (`next-action` row 38c, `registry_incomplete`;
@@ -963,12 +1016,54 @@ committed"); if a round was refused with "must always transition phase", see
   `AWAITING_FUNCTIONAL_REVIEW`; a `1` item; a missing or not `CURRENT` plan
   approval; a terminal registry; no technical approval to stale.
 
+### `/release-checkpoint-start <work-item-id> <checkpoint-id>` — user-only
+- **When**: `/request-plan-amendment` refused with `AmendmentCheckpointActiveError`
+  because a checkpoint start (its `IN_PROGRESS` entry and its claim) exists that
+  was never committed and that the approved plan forbids completing. Run it from
+  the worktree that holds the claim. It is not a `next-action` action: the
+  protocol cannot see a checkpoint whose own plan forbids completing it.
+- **Expects**: both ids in `$ARGUMENTS` (never the active item) and your
+  current-turn answer carrying the one sentence the command prints, which names
+  the checkpoint, the work item and the claim it showed you (`claim_ref`, the first
+  12 characters of the claim's `owner_token`) and attests that the owner session
+  is stopped and stays stopped until the release has completed. The match is
+  case-insensitive. The owner session is any session other than the one running
+  the command that started, resumed or may resume the checkpoint, in this worktree
+  or another; the session running the command counts as stopped only while it runs
+  nothing else for the work item.
+- **Does**: `workflow_state.observe_checkpoint_start_release` shows the claim, the
+  kind of start (`entry`, `baseline` or `released`), the guard and the probe result;
+  `workflow_state.release_checkpoint_start_confirmed` then validates the sentence and
+  calls `release_checkpoint_start` with the claim reference, which the engine
+  re-checks under its own lock. It restores the entry to `HEAD`'s state and removes
+  the claim, in that order. A merge into the branch after the start does not block
+  it; a commit that carries the checkpoint's trailer does.
+- **Writes**: the working-tree `WORKFLOW_STATE.json` and the claim only. It commits
+  nothing.
+- **The attestation is a stated precondition, not a check**: the disk cannot show an
+  owner session that is alive and idle. An interrupted release must be finished by
+  running the command again, and no session may resume the checkpoint, from any
+  worktree, until it has reported success. When the claim is already gone and the
+  entry equals `HEAD`'s the command reports the start already released, asks for
+  nothing and writes nothing, and the obligation ends.
+- **Next**: `/request-plan-amendment <id>` or `/milestone-implement <id>`.
+- **Refuses**: a missing or wrong sentence (nothing changes); a guarded window that
+  is running; a claim that changed since it was shown
+  (`CheckpointOwnershipStateMismatchError`); a claim held by another worktree
+  (`CheckpointOwnedByOtherWorktreeError`); an entry with no claim; a commit that
+  carries the checkpoint's trailer or records it other than as `HEAD` does; a
+  `COMPLETE` checkpoint, which names two next steps: a committed completion
+  (`/milestone-implement` step 1c releases the claim) and an uncommitted one
+  (resume step 1f in the owner's worktree).
+
 ### `/prepare-review <base-sha> <stage> [work-item-id]`
 - **When**: a one-off review of work that is not part of a tracked milestone
   checkpoint.
-- **Expects**: nothing — no phase requirement. One of the two commands
-  unconditionally declaring `state_writer: false`; the other is the
-  report-only review command `/review-functional` (writes nothing at all).
+- **Expects**: nothing — no phase requirement. One of the four commands
+  unconditionally declaring `state_writer: false`; the others are the
+  report-only review command `/review-functional` (writes nothing at all) and
+  `/archive-finished-item` and `/prune-archives` (write no state; their only
+  effects are retention engine calls).
   `/review-implementation` (`workflow-2.5.0`) is no longer among them: its
   frontmatter now declares `state_writer: true`, because for a `"2.2"` item
   at `AWAITING_LOCAL_IMPLEMENTATION_REVIEW` it is the authoritative
@@ -996,7 +1091,7 @@ committed"); if a round was refused with "must always transition phase", see
   file says it is "retired — deleted — only at this work item's own
   `MILESTONE_COMPLETE`". That condition is now met — `workflow-v2-1-core`
   is `MILESTONE_COMPLETE` — but the file has not been deleted, so the
-  command is still on disk and still in this reference's roster of 16.
+  command is still on disk and still in this reference's roster of 25.
   Retiring it is a scoped act of its own (the way
   `/accept-scoped-remediation`'s retirement was); until then, treat it as
   live-but-unreachable: its target is terminal, so every invocation refuses
