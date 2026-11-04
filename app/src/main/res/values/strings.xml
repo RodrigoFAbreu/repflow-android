@@ -137,6 +137,7 @@
     <string name="workout_active_set_count">%1$d sets</string>
     <string name="workout_active_observation_failed">Couldn\'t load the workout.</string>
     <string name="workout_active_retry">Retry</string>
+    <string name="workout_active_action_failed">Couldn\'t complete that. Try again.</string>
     <string name="workout_active_set_row_weight_reps">Set %1$d: %2$s kg x %3$d</string>
     <string name="workout_active_set_row_reps">Set %1$d: %2$d reps</string>
     <string name="workout_active_set_row_duration">Set %1$d: %2$ds</string>

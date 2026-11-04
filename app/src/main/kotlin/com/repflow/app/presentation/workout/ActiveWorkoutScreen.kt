@@ -19,6 +19,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -98,6 +100,12 @@ import com.repflow.app.presentation.progression.reasonAfterDash
  * yet - is treated as on for a tap, and Home's `Finish it` waits for the real
  * value before deciding. [keepScreenAwake] keeps the screen on while the
  * board or focus mode shows ([KeepScreenOn]), and lets it go when they leave.
+ *
+ * **A failed action shows one generic message** (`uiState.errorMessage`, A-1).
+ * [onErrorShown] clears the field once the message has gone, so the same
+ * failure can show again. The state lives here, above both modes, so a message
+ * carries across a switch between them; each mode draws the host on its scroll
+ * area's bottom edge, which keeps it clear of the rest strip and `Log set`.
  */
 @Suppress("LongParameterList")
 @Composable
@@ -109,7 +117,7 @@ fun ActiveWorkoutScreen(
     onAddExercise: (ExercisePickerItem) -> Unit,
     onCreateExercise: () -> Unit,
     onOpenRecommendation: (ExerciseId) -> Unit,
-    onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
+    onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?, () -> Unit) -> Unit,
     onUndoLastSet: (WorkoutExerciseId) -> Unit,
     onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
     onAddRestTime: () -> Unit,
@@ -119,6 +127,7 @@ fun ActiveWorkoutScreen(
     onLeaveWorkout: () -> Unit,
     onAbandonWorkout: (WorkoutSessionId) -> Unit,
     onRetry: () -> Unit,
+    onErrorShown: () -> Unit,
     modifier: Modifier = Modifier,
     finish: WorkoutFinishState = WorkoutFinishState.Idle,
     raiseFinishFromHome: Boolean = false,
@@ -128,6 +137,14 @@ fun ActiveWorkoutScreen(
 ) {
     LaunchedEffect(finish) {
         if (finish is WorkoutFinishState.Finished) onWorkoutFinished(finish.sessionId)
+    }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val errorText = uiState.errorMessage?.let { stringResource(R.string.workout_active_action_failed) }
+    LaunchedEffect(uiState.errorMessage) {
+        if (errorText != null) {
+            snackbarHostState.showSnackbar(errorText, duration = SnackbarDuration.Short)
+            onErrorShown()
+        }
     }
     Box(modifier = modifier.fillMaxSize()) {
         when (val content = uiState.content) {
@@ -167,6 +184,7 @@ fun ActiveWorkoutScreen(
                     onAbandonWorkout = onAbandonWorkout,
                     raiseFinishFromHome = raiseFinishFromHome,
                     confirmBeforeFinishing = confirmBeforeFinishing,
+                    snackbarHostState = snackbarHostState,
                 )
             }
 
@@ -254,7 +272,7 @@ private fun WorkoutMode(
     onAddExercise: (ExercisePickerItem) -> Unit,
     onCreateExercise: () -> Unit,
     onOpenRecommendation: (ExerciseId) -> Unit,
-    onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
+    onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?, () -> Unit) -> Unit,
     onUndoLastSet: (WorkoutExerciseId) -> Unit,
     onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
     restStrip: @Composable () -> Unit,
@@ -263,6 +281,7 @@ private fun WorkoutMode(
     onAbandonWorkout: (WorkoutSessionId) -> Unit,
     raiseFinishFromHome: Boolean,
     confirmBeforeFinishing: Boolean?,
+    snackbarHostState: SnackbarHostState,
 ) {
     var overlay by rememberSaveable { mutableStateOf(initialOverlay(raiseFinishFromHome, confirmBeforeFinishing)) }
     HomeFinishRequestEffect(
@@ -311,6 +330,7 @@ private fun WorkoutMode(
             onUndoLastSet = onUndoLastSet,
             onEditLastSet = onEditLastSet,
             restStrip = restStrip,
+            snackbarHostState = snackbarHostState,
         )
     } else {
         WorkoutBoard(
@@ -321,6 +341,7 @@ private fun WorkoutMode(
             onExerciseClick = { id -> onFocusExercise(id) },
             onAddExerciseClick = { overlay = WorkoutOverlay.EXERCISE_PICKER },
             restStrip = restStrip,
+            snackbarHostState = snackbarHostState,
         )
     }
 

@@ -66,7 +66,7 @@ class SetEntryStateTest {
         entry.technique = 4
         entry.isWarmup = true
 
-        entry.clearAfterSet()
+        entry.clearAfterSet(entry.submittedDetail())
 
         assertEquals(BigDecimal("60"), entry.load)
         assertEquals(BigDecimal("5"), entry.reps)
@@ -76,6 +76,90 @@ class SetEntryStateTest {
         assertNull(entry.technique)
         assertFalse(entry.isWarmup)
         assertTrue(entry.touched)
+    }
+
+    private fun entryWithAllDetail() =
+        SetEntryState().apply {
+            rpe = 7
+            pain = 1
+            technique = 4
+            isWarmup = true
+        }
+
+    @Test
+    fun `an RPE changed after the snapshot stays and the other fields still clear`() {
+        val entry = entryWithAllDetail()
+        val submitted = entry.submittedDetail()
+
+        entry.rpe = 8
+        entry.clearAfterSet(submitted)
+
+        assertEquals(8, entry.rpe)
+        assertNull(entry.pain)
+        assertNull(entry.technique)
+        assertFalse(entry.isWarmup)
+    }
+
+    @Test
+    fun `a pain changed after the snapshot stays and the other fields still clear`() {
+        val entry = entryWithAllDetail()
+        val submitted = entry.submittedDetail()
+
+        entry.pain = 2
+        entry.clearAfterSet(submitted)
+
+        assertNull(entry.rpe)
+        assertEquals(2, entry.pain)
+        assertNull(entry.technique)
+        assertFalse(entry.isWarmup)
+    }
+
+    @Test
+    fun `a technique changed after the snapshot stays and the other fields still clear`() {
+        val entry = entryWithAllDetail()
+        val submitted = entry.submittedDetail()
+
+        entry.technique = 5
+        entry.clearAfterSet(submitted)
+
+        assertNull(entry.rpe)
+        assertNull(entry.pain)
+        assertEquals(5, entry.technique)
+        assertFalse(entry.isWarmup)
+    }
+
+    @Test
+    fun `fields empty in the snapshot and set afterwards stay, and so does a warm-up flag switched on afterwards`() {
+        val entry = SetEntryState()
+        val submitted = entry.submittedDetail()
+
+        entry.rpe = 7
+        entry.pain = 1
+        entry.technique = 4
+        entry.isWarmup = true
+        entry.clearAfterSet(submitted)
+
+        assertEquals(7, entry.rpe)
+        assertEquals(1, entry.pain)
+        assertEquals(4, entry.technique)
+        assertTrue(entry.isWarmup)
+    }
+
+    @Test
+    fun `fields cleared or switched off after the snapshot stay that way`() {
+        val entry = entryWithAllDetail()
+        val submitted = entry.submittedDetail()
+
+        entry.rpe = null
+        entry.pain = null
+        entry.technique = null
+        entry.isWarmup = false
+        entry.clearAfterSet(submitted)
+
+        assertNull(entry.rpe)
+        assertNull(entry.pain)
+        assertNull(entry.technique)
+        assertFalse(entry.isWarmup)
     }
 
     @Test

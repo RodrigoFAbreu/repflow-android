@@ -1,5 +1,51 @@
 # Active Milestone
 
+## `fix-workout-errors` — implementing (plan revision 3)
+
+Plan: `docs/milestones/fix-workout-errors-execution.md`. State:
+`docs/ai-workflow/WORKFLOW_STATE.json` is the ground truth.
+
+### CP1 — Show a failed action and clear the entry only on success (A-1; R1, R2): complete
+
+- A failed workout action now shows `Couldn't complete that. Try again.`, a short
+  snackbar with no action, in the design's `ExerciseListSnackbar` card. The field
+  clears through the new `onErrorShown`, so the same failure can show again.
+- `ActiveWorkoutScreen` holds the `SnackbarHostState`. `WorkoutFocus` and
+  `WorkoutBoard` each draw the host on their scroll area's bottom edge, so it can't
+  cover the rest strip or `Log set`.
+- `Log set` takes a `SubmittedDetail` snapshot at the tap, and `onRecordSet`'s new
+  `onSaved` clears the entry only after a successful save. Each of RPE, pain,
+  technique and the warm-up flag clears only if it still holds what was submitted.
+
+**Departure from the plan's file list:** the five new ViewModel tests are in a new
+sibling, `ActiveWorkoutActionErrorTest.kt`, not `ActiveWorkoutViewModelTest.kt`.
+Adding them there tripped detekt's `LargeClass`, and splitting is how the package has
+handled this before (`ActiveWorkoutRestPrecedenceTest`, `ActiveWorkoutSeedTest`).
+
+**Verified on the final code:**
+
+- `./gradlew spotlessCheck detekt lintDebug`: pass.
+- `testDebugUnitTest --tests "com.repflow.app.presentation.workout.*"`: 92 tests, 0 failures.
+- `connectedDebugAndroidTest`, package `presentation.workout`, on the AVD
+  (`emulator-5554`): 108 tests, 0 failures. The full suite runs once, after CP2.
+
+**Red first:** with the new signatures threaded through and today's behaviour kept, the
+new entry and `onSaved` unit tests failed, and on the AVD so did the message, position,
+failed-save, deferred-success and route tests. `aSuccessfulSaveClears…` also failed then,
+because of a bug in the test itself (an ambiguous `8`), now fixed; it covers the existing
+clearing rule, so it isn't expected to fail on the old code.
+
+**Mutations checked on the AVD, then reverted:**
+
+| Temporary break | Caught by |
+|---|---|
+| Host in the root `Box` | All three position tests, on the overlap |
+| Snapshot taken when the callback runs | `aValueChangedDuringTheSaveSurvivesItAndTheRestClears` |
+| Route passes `onErrorShown = {}` | `ActiveWorkoutErrorRouteTest`, on the second message |
+| Route drops `onSaved` | `ActiveWorkoutErrorRouteTest`, on the entry clearing |
+
+**Not done yet (CP2):** the `Retry` wiring in the route and the `Try again` wording.
+
 ## `repflow-redesign-visual-foundation` — complete (accepted 2026-10-03)
 
 The user accepted the milestone after functional-review round 3 (PASS: C2, B7,

@@ -23,6 +23,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -65,6 +67,7 @@ import com.repflow.app.presentation.designsystem.components.repFlowAccentOutline
 import com.repflow.app.presentation.designsystem.components.repFlowSelectedPillColors
 import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
 import com.repflow.app.presentation.designsystem.repFlowSecondaryTextColor
+import com.repflow.app.presentation.exercise.list.ExerciseListSnackbar
 import com.repflow.app.presentation.home.elapsedLabel
 import com.repflow.app.presentation.progression.ProgressionRecommendationUi
 import java.math.BigDecimal
@@ -95,10 +98,11 @@ internal fun WorkoutFocus(
     onFinishClick: () -> Unit,
     onNextExercise: () -> Unit,
     onOpenRecommendation: (ExerciseId) -> Unit,
-    onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
+    onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?, () -> Unit) -> Unit,
     onUndoLastSet: (WorkoutExerciseId) -> Unit,
     onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
     restStrip: @Composable () -> Unit,
+    snackbarHostState: SnackbarHostState,
 ) {
     // [entry] is held above focus mode (GF-1), already seeded when first created, so a reopened exercise
     // keeps what was typed and never flashes empty steppers.
@@ -113,69 +117,74 @@ internal fun WorkoutFocus(
 
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         FocusTopBar(startedAt = content.startedAt, onBackToBoard = onBackToBoard, onFinishClick = onFinishClick)
-        Column(
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(
-                        start = RepFlowSpacing.screenPadding,
-                        end = RepFlowSpacing.screenPadding,
-                        top = 4.dp,
-                        bottom = RepFlowSpacing.gapLg,
-                    ),
-            verticalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapLg),
-        ) {
-            FocusHeader(name = exercise.name, header = header)
-            exercise.instructions?.let { TechniqueNotes(exerciseKey = exercise.id.value, instructions = it) }
-            FocusSetList(exercise = exercise, onCorrectLast = { correcting = true })
-            LastSetLine(exercise = exercise, onUndo = { onUndoLastSet(exercise.id) })
-            LastTimeLine(exercise = exercise)
-            val exerciseId = exercise.exerciseId
-            if (recommendation != null && exerciseId != null) {
-                SuggestionStrip(
-                    exerciseName = exercise.name,
-                    recommendation = recommendation,
-                    onWhyClick = { onOpenRecommendation(exerciseId) },
+        // The message sits on the scroll area's bottom edge, so it can't cover the rest strip or `Log set` below.
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(
+                            start = RepFlowSpacing.screenPadding,
+                            end = RepFlowSpacing.screenPadding,
+                            top = 4.dp,
+                            bottom = RepFlowSpacing.gapLg,
+                        ),
+                verticalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapLg),
+            ) {
+                FocusHeader(name = exercise.name, header = header)
+                exercise.instructions?.let { TechniqueNotes(exerciseKey = exercise.id.value, instructions = it) }
+                FocusSetList(exercise = exercise, onCorrectLast = { correcting = true })
+                LastSetLine(exercise = exercise, onUndo = { onUndoLastSet(exercise.id) })
+                LastTimeLine(exercise = exercise)
+                val exerciseId = exercise.exerciseId
+                if (recommendation != null && exerciseId != null) {
+                    SuggestionStrip(
+                        exerciseName = exercise.name,
+                        recommendation = recommendation,
+                        onWhyClick = { onOpenRecommendation(exerciseId) },
+                    )
+                }
+                EntrySteppers(
+                    trackingType = exercise.trackingType,
+                    load = entry.load,
+                    onLoadChange = entry::enterLoad,
+                    reps = entry.reps,
+                    onRepsChange = entry::enterReps,
+                    seconds = entry.seconds,
+                    onSecondsChange = entry::enterSeconds,
+                    loadStep = exercise.loadStep(),
+                    repRange = exercise.plannedTarget?.repRange,
+                    durationRange = exercise.plannedTarget?.durationRangeSeconds,
+                )
+                when (content.extraSetFields) {
+                    ExtraSetFields.COLLAPSED -> {
+                        SetDetailSection(entry = entry, expanded = detailExpanded, onExpandedChange = { detailExpanded = it })
+                    }
+
+                    ExtraSetFields.ALWAYS_SHOWN -> {
+                        SetDetailSection(entry = entry, expanded = true, onExpandedChange = {}, showHeader = false)
+                    }
+
+                    ExtraSetFields.OFF -> {
+                        Unit
+                    }
+                }
+                TypeNote(exercise.trackingType)
+                WarmupChipRow(
+                    isWarmup = entry.isWarmup,
+                    onWarmupChange = { entry.isWarmup = it },
+                    restSeconds = exercise.restSecondsAfterSet(content.appDefaultRestSeconds),
                 )
             }
-            EntrySteppers(
-                trackingType = exercise.trackingType,
-                load = entry.load,
-                onLoadChange = entry::enterLoad,
-                reps = entry.reps,
-                onRepsChange = entry::enterReps,
-                seconds = entry.seconds,
-                onSecondsChange = entry::enterSeconds,
-                loadStep = exercise.loadStep(),
-                repRange = exercise.plannedTarget?.repRange,
-                durationRange = exercise.plannedTarget?.durationRangeSeconds,
-            )
-            when (content.extraSetFields) {
-                ExtraSetFields.COLLAPSED -> {
-                    SetDetailSection(entry = entry, expanded = detailExpanded, onExpandedChange = { detailExpanded = it })
-                }
-
-                ExtraSetFields.ALWAYS_SHOWN -> {
-                    SetDetailSection(entry = entry, expanded = true, onExpandedChange = {}, showHeader = false)
-                }
-
-                ExtraSetFields.OFF -> {
-                    Unit
-                }
-            }
-            TypeNote(exercise.trackingType)
-            WarmupChipRow(
-                isWarmup = entry.isWarmup,
-                onWarmupChange = { entry.isWarmup = it },
-                restSeconds = exercise.restSecondsAfterSet(content.appDefaultRestSeconds),
-            )
+            SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter)) { ExerciseListSnackbar(it) }
         }
         restStrip()
         FocusBottomBar(
             isWarmup = entry.isWarmup,
             onLogSet = {
+                // Taken at the tap: the entry stays editable during the save, and only what this set saved may clear.
+                val submitted = entry.submittedDetail()
                 onRecordSet(
                     exercise.id,
                     entry.load?.toDouble(),
@@ -186,10 +195,11 @@ internal fun WorkoutFocus(
                     entry.isWarmup,
                     entry.pain.takeIf { extraFieldsOn },
                     entry.technique.takeIf { extraFieldsOn },
-                )
-                // Weight, reps and seconds stay for the next set (CP9, replacing `D60`);
-                // the rest clears.
-                entry.clearAfterSet()
+                ) {
+                    // Weight, reps and seconds stay for the next set (CP9, replacing `D60`);
+                    // the rest clears, and only once the save has succeeded.
+                    entry.clearAfterSet(submitted)
+                }
             },
             canLog = entry.canLog(exercise.trackingType),
             onNext = onNextExercise,

@@ -307,6 +307,11 @@ class ActiveWorkoutViewModel
             }
         }
 
+        /**
+         * Records a set. [onSaved] runs once, on the main dispatcher, only after
+         * the save has succeeded; a failed save reports the error instead, which
+         * leaves the screen's entry as typed.
+         */
         @Suppress("LongParameterList")
         fun onRecordSet(
             exerciseId: WorkoutExerciseId,
@@ -317,10 +322,11 @@ class ActiveWorkoutViewModel
             isWarmup: Boolean = false,
             pain: Int? = null,
             techniqueQuality: Int? = null,
+            onSaved: () -> Unit = {},
         ) {
             val sessionId = activeSessionId() ?: return
             val exerciseUi = activeExercise(exerciseId)
-            launchAction {
+            launchAction(onSuccess = onSaved) {
                 val result =
                     recordWorkoutSet(
                         RecordWorkoutSetCommand(
@@ -472,10 +478,13 @@ class ActiveWorkoutViewModel
 
         private fun activeSessionId(): WorkoutSessionId? = (uiState.value.content as? ActiveWorkoutContent.Active)?.sessionId
 
-        private fun launchAction(action: suspend () -> DomainResult<*, WorkoutOperationError>) {
+        private fun launchAction(
+            onSuccess: () -> Unit = {},
+            action: suspend () -> DomainResult<*, WorkoutOperationError>,
+        ) {
             viewModelScope.launch {
                 when (val result = action()) {
-                    is DomainResult.Success -> Unit
+                    is DomainResult.Success -> onSuccess()
                     is DomainResult.Failure -> error.update { result.error.toReason() }
                 }
             }

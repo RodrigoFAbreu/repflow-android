@@ -9,6 +9,11 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelectable
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -46,6 +51,8 @@ class ActiveWorkoutSetEntryTest {
     private var exercises by mutableStateOf<List<ActiveExerciseUi>>(emptyList())
     private var focusedId by mutableStateOf<WorkoutExerciseId?>(null)
     private val recordedLoads = mutableListOf<Double?>()
+    private var saveOutcome = SaveOutcome.SUCCEEDS
+    private var heldOnSaved: (() -> Unit)? = null
 
     private val lastTime = LastPerformance(load = 80.0, reps = 8, durationSeconds = null, date = Instant.parse("2026-05-05T08:00:00Z"))
     private val lastTimeSeed = SetEntrySeed(load = BigDecimal("80"), reps = BigDecimal("8"))
@@ -93,29 +100,42 @@ class ActiveWorkoutSetEntryTest {
                 onAddExercise = {},
                 onCreateExercise = {},
                 onOpenRecommendation = {},
-                onRecordSet = { id, load, reps, seconds, rpe, warmup, pain, technique ->
+                onRecordSet = { id, load, reps, seconds, rpe, warmup, pain, technique, onSaved ->
                     recordedLoads += load
-                    exercises =
-                        exercises.map { item ->
-                            if (item.id != id) {
-                                item
-                            } else {
-                                val sets =
-                                    item.sets +
-                                        ActiveSetUi(
-                                            id = WorkoutSetId("set-${item.sets.size + 1}"),
-                                            setNumber = item.sets.size + 1,
-                                            load = load,
-                                            reps = reps,
-                                            durationSeconds = seconds,
-                                            rpe = rpe,
-                                            isWarmup = warmup,
-                                            pain = pain,
-                                            techniqueQuality = technique,
-                                        )
-                                item.copy(sets = sets, seed = entrySeedOf(item.trackingType, sets, item.lastPerformance))
-                            }
+                    when (saveOutcome) {
+                        SaveOutcome.FAILS -> {
+                            Unit
                         }
+
+                        SaveOutcome.HELD -> {
+                            heldOnSaved = onSaved
+                        }
+
+                        SaveOutcome.SUCCEEDS -> {
+                            exercises =
+                                exercises.map { item ->
+                                    if (item.id != id) {
+                                        item
+                                    } else {
+                                        val sets =
+                                            item.sets +
+                                                ActiveSetUi(
+                                                    id = WorkoutSetId("set-${item.sets.size + 1}"),
+                                                    setNumber = item.sets.size + 1,
+                                                    load = load,
+                                                    reps = reps,
+                                                    durationSeconds = seconds,
+                                                    rpe = rpe,
+                                                    isWarmup = warmup,
+                                                    pain = pain,
+                                                    techniqueQuality = technique,
+                                                )
+                                        item.copy(sets = sets, seed = entrySeedOf(item.trackingType, sets, item.lastPerformance))
+                                    }
+                                }
+                            onSaved()
+                        }
+                    }
                 },
                 onUndoLastSet = {},
                 onEditLastSet = { _, _, _, _, _, _, _, _ -> },
@@ -126,6 +146,7 @@ class ActiveWorkoutSetEntryTest {
                 onLeaveWorkout = {},
                 onAbandonWorkout = {},
                 onRetry = {},
+                onErrorShown = {},
             )
         }
     }
@@ -390,5 +411,96 @@ class ActiveWorkoutSetEntryTest {
         composeRule.runOnIdle { focusedId = WorkoutExerciseId("e1") }
         composeRule.runOnIdle { focusedId = WorkoutExerciseId("e2") }
         composeRule.onNodeWithText("82.5").performScrollTo().assertIsDisplayed()
+    }
+
+    /** A-1: a save that fails leaves the entry exactly as typed, so `Log set` can be pressed again. */
+    @Test
+    fun aFailedSaveKeepsEveryDetailValue() {
+        saveOutcome = SaveOutcome.FAILS
+        start(exercise(last = lastTime, seed = lastTimeSeed))
+        enterAllDetail()
+
+        composeRule.onNodeWithText(text(R.string.workout_focus_log_warmup)).performClick()
+
+        assertRpeSelected("7")
+        assertPainSelected("2")
+        assertTechniqueSelected("3")
+        composeRule.onNodeWithText(text(R.string.workout_focus_log_warmup)).assertIsDisplayed()
+    }
+
+    /** A-1: the existing rule, now reached through `onSaved`: the detail clears, and weight and reps stay. */
+    @Test
+    fun aSuccessfulSaveClearsTheDetailAndKeepsWeightAndReps() {
+        start(exercise(last = lastTime, seed = lastTimeSeed))
+        enterAllDetail()
+
+        composeRule.onNodeWithText(text(R.string.workout_focus_log_warmup)).performClick()
+
+        assertNoneSelected()
+        composeRule.onNodeWithText(text(R.string.workout_focus_log_set)).assertIsDisplayed()
+        // The open RPE row also holds an 8, so the reps stepper is the one that isn't selectable.
+        composeRule.onNodeWithText("80").performScrollTo().assertIsDisplayed()
+        composeRule.onNode(hasText("8") and !isSelectable()).performScrollTo().assertIsDisplayed()
+    }
+
+    /**
+     * A-1: the entry stays editable while the save suspends. What changed since the tap is not what that set
+     * saved, so it stays. Fails with an unconditional clear, and with a snapshot taken when the callback runs.
+     */
+    @Test
+    fun aValueChangedDuringTheSaveSurvivesItAndTheRestClears() {
+        saveOutcome = SaveOutcome.HELD
+        start(exercise(last = lastTime, seed = lastTimeSeed))
+        composeRule.onNodeWithText(text(R.string.workout_active_set_detail_toggle)).performScrollTo().performClick()
+        selectRpe("7")
+        composeRule.onNodeWithText(text(R.string.workout_active_warmup_label)).performScrollTo().performClick()
+
+        composeRule.onNodeWithText(text(R.string.workout_focus_log_warmup)).performClick()
+        // Nothing is cleared while the save is still running.
+        assertRpeSelected("7")
+        composeRule.onNodeWithText(text(R.string.workout_focus_log_warmup)).assertIsDisplayed()
+        selectRpe("8")
+        composeRule.runOnIdle { checkNotNull(heldOnSaved).invoke() }
+
+        assertRpeSelected("8")
+        composeRule.onNodeWithText(text(R.string.workout_focus_log_set)).assertIsDisplayed()
+    }
+
+    private fun enterAllDetail() {
+        composeRule.onNodeWithText(text(R.string.workout_active_set_detail_toggle)).performScrollTo().performClick()
+        selectRpe("7")
+        // Pain and technique share 0-5 with RPE's first line, so each is the row's own node by index.
+        composeRule.onAllNodes(hasText("2") and isSelectable())[PAIN_ROW].performScrollTo().performClick()
+        composeRule.onAllNodes(hasText("3") and isSelectable())[TECHNIQUE_ROW].performScrollTo().performClick()
+        composeRule.onNodeWithText(text(R.string.workout_active_warmup_label)).performScrollTo().performClick()
+    }
+
+    private fun selectRpe(value: String) {
+        composeRule.onNode(hasText(value) and isSelectable()).performScrollTo().performClick()
+    }
+
+    private fun assertRpeSelected(value: String) {
+        composeRule.onNode(hasText(value) and isSelectable()).performScrollTo().assertIsSelected()
+    }
+
+    private fun assertPainSelected(value: String) {
+        composeRule.onAllNodes(hasText(value) and isSelectable())[PAIN_ROW].performScrollTo().assertIsSelected()
+    }
+
+    private fun assertTechniqueSelected(value: String) {
+        composeRule.onAllNodes(hasText(value) and isSelectable())[TECHNIQUE_ROW].performScrollTo().assertIsSelected()
+    }
+
+    private fun assertNoneSelected() {
+        composeRule.onNode(hasText("7") and isSelectable()).performScrollTo().assertIsNotSelected()
+        composeRule.onAllNodes(isSelectable() and isSelected()).assertCountEquals(0)
+    }
+
+    private enum class SaveOutcome { SUCCEEDS, FAILS, HELD }
+
+    private companion object {
+        /** Among the nodes with one number on 0-5: RPE's first line, then pain, then technique. */
+        const val PAIN_ROW = 1
+        const val TECHNIQUE_ROW = 2
     }
 }

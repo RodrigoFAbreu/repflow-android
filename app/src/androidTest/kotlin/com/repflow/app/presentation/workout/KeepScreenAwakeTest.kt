@@ -65,7 +65,7 @@ class KeepScreenAwakeTest {
                         onAddExercise = {},
                         onCreateExercise = {},
                         onOpenRecommendation = {},
-                        onRecordSet = { _, _, _, _, _, _, _, _ -> },
+                        onRecordSet = { _, _, _, _, _, _, _, _, _ -> },
                         onUndoLastSet = {},
                         onEditLastSet = { _, _, _, _, _, _, _, _ -> },
                         onAddRestTime = {},
@@ -75,6 +75,7 @@ class KeepScreenAwakeTest {
                         onLeaveWorkout = {},
                         onAbandonWorkout = {},
                         onRetry = {},
+                        onErrorShown = {},
                         keepScreenAwake = keepScreenAwake,
                     )
                 }
