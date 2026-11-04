@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_work_item_id": null,
+  "active_work_item_id": "fix-workout-errors",
   "work_items": {
     "workflow-v2-1-core": {
       "work_item_type": "process",
@@ -6048,6 +6048,306 @@
       "blocking_decisions": [],
       "state_revision": 50,
       "last_transition": "2026-10-03T19:58:50Z"
+    },
+    "fix-workout-errors": {
+      "work_item_type": "product",
+      "work_item_kind": "product",
+      "work_item_id": "fix-workout-errors",
+      "parent_work_item_id": null,
+      "plan_path": "docs/milestones/fix-workout-errors-execution.md",
+      "registry_path": "docs/ai-workflow/registry/fix-workout-errors-registry.json",
+      "mapping_path": "docs/ai-workflow/requirements/fix-workout-errors-mapping.json",
+      "governing_workflow_version": "2.2",
+      "phase": "IMPLEMENTING",
+      "plan_revision": 3,
+      "implementation_revision": null,
+      "functional_review_round": null,
+      "base_commit": "408bc4e1a8abb5e7592fd2d8bb41b06eb882a3a2",
+      "reviewed_implementation_head": null,
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": null,
+      "checkpoints": {},
+      "current_bundle_id": "b2e075bd23131f6a94a5cc767fccdb1795639a43355b5faf682047c0c3a7e6c8",
+      "plan_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "b2e075bd23131f6a94a5cc767fccdb1795639a43355b5faf682047c0c3a7e6c8",
+        "approved_review_content_id": "07d88d62af6c506e1b7832d36eadfa73e58bd3bb5fc687cd0293d86b0a5d4d11",
+        "review_content_manifest": [
+          {
+            "path": "docs/ai-workflow/registry/fix-workout-errors-registry.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "95d09f6cd3aa9ab45730a8aae73e71120a49f3ed"
+          },
+          {
+            "path": "docs/ai-workflow/requirements/fix-workout-errors-mapping.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9113f476e958f5ae47854d2c5e4371a1d392349e"
+          },
+          {
+            "path": "docs/milestones/fix-workout-errors-execution.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "14906bcfba2bf8dc1ffd5eeb115b4a1d6353e976"
+          }
+        ],
+        "reviewed_content_commit": null,
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-04T21:23:14Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "07d88d62af6c506e1b7832d36eadfa73e58bd3bb5fc687cd0293d86b0a5d4d11",
+            "ledger": {
+              "local": {
+                "bundle_id": "b2e075bd23131f6a94a5cc767fccdb1795639a43355b5faf682047c0c3a7e6c8",
+                "verdict": "APPROVE",
+                "round": 3,
+                "verdict_sha256": "56a42ac27b39e1022ea7705deab710fc4ea5d97b25c46d0347c0ba6baf24bb5c",
+                "ledger_entry_sha256": "207c0842e13806b6bdafdb578340cc12f0513a600e9fe130d8e30a42c7c89a6d",
+                "run_ref": "session:local .ai-review/fix-workout-errors/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "b2e075bd23131f6a94a5cc767fccdb1795639a43355b5faf682047c0c3a7e6c8",
+                "verdict": "APPROVE",
+                "round": 3,
+                "verdict_sha256": "6035c207f01ad1f5c9723b425614617c37cb20d1a17a451d363155ea58b95870",
+                "ledger_entry_sha256": "f8d7e86eb320140ba573e188fe978d96c6646492a602df681998e793ec3fc6e2",
+                "run_ref": "codex:20261104T211853Z-0fc6ae5b",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-04T21:23:14Z",
+          "workflow_release": "2.25.5"
+        }
+      },
+      "technical_approval": null,
+      "technical_review_block_pins": [],
+      "plan_review_stages": {
+        "review_content_id": "07d88d62af6c506e1b7832d36eadfa73e58bd3bb5fc687cd0293d86b0a5d4d11",
+        "LOCAL_MODEL_PLAN_REVIEW": {
+          "bundle_id": "b2e075bd23131f6a94a5cc767fccdb1795639a43355b5faf682047c0c3a7e6c8",
+          "verdict": "APPROVE",
+          "round": 3,
+          "completed_at": "2026-11-04T21:18:29Z",
+          "verdict_sha256": "56a42ac27b39e1022ea7705deab710fc4ea5d97b25c46d0347c0ba6baf24bb5c",
+          "run_ref": "session:local .ai-review/fix-workout-errors/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_PLAN_REVIEW": {
+          "bundle_id": "b2e075bd23131f6a94a5cc767fccdb1795639a43355b5faf682047c0c3a7e6c8",
+          "verdict": "APPROVE",
+          "round": 3,
+          "completed_at": "2026-11-04T21:20:27Z",
+          "verdict_sha256": "6035c207f01ad1f5c9723b425614617c37cb20d1a17a451d363155ea58b95870",
+          "run_ref": "codex:20261104T211853Z-0fc6ae5b",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
+      },
+      "functional_acceptance_status": null,
+      "blocking_decisions": [],
+      "review_round_counts": {
+        "plan": {
+          "local": 3,
+          "external": 2
+        },
+        "implementation": {
+          "local": 0,
+          "external": 0
+        }
+      },
+      "state_revision": 14,
+      "last_transition": "2026-11-04T21:23:14Z",
+      "feedback_layout": "scoped",
+      "plan_review_binding": {
+        "status": "BOUND",
+        "at": "2026-11-04T21:08:03Z",
+        "consumed": {
+          "review_content_id": "84dc41f0d18763a48304ff96f1060b4b4836f37bfe1a24860d2c9562ae8c34d9",
+          "plan_revision": 2,
+          "legacy": false
+        },
+        "published": {
+          "review_content_id": "07d88d62af6c506e1b7832d36eadfa73e58bd3bb5fc687cd0293d86b0a5d4d11",
+          "plan_revision": 3
+        },
+        "bound": {
+          "review_content_id": "07d88d62af6c506e1b7832d36eadfa73e58bd3bb5fc687cd0293d86b0a5d4d11",
+          "bundle_id": "b2e075bd23131f6a94a5cc767fccdb1795639a43355b5faf682047c0c3a7e6c8",
+          "plan_revision": 3
+        }
+      },
+      "consumed_plan_review_content_ids": [
+        "6131fe0e4bfdc2a5f62fcbbaec29badb7a692e8b58435ed032483ed86515ce0d",
+        "84dc41f0d18763a48304ff96f1060b4b4836f37bfe1a24860d2c9562ae8c34d9"
+      ],
+      "optional_findings": {
+        "F-8a61a20ba2ee": {
+          "digest": "8a61a20ba2eeb29c6c7ec61de40098fd359b971b76dbdb68562c89b515e15cbb",
+          "text": "**O-1: Name the snackbar's look.** A bare `SnackbarHost` draws the stock `Snackbar` in inverse colours. The design's card is `ExerciseListSnackbar` (`ExerciseListScreen.kt:206`), which `BackupScreen.kt:97` already reuses, and `ROLE_AUDIT.md:127` records stock snackbars as the exception. Reusing it fits the plan's \"everything else reuses what exists\".",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "6131fe0e4bfdc2a5f62fcbbaec29badb7a692e8b58435ed032483ed86515ce0d",
+              "verdict": "REVISE",
+              "at": "2026-11-04T20:42:57Z"
+            }
+          ]
+        },
+        "F-8a0909e77d32": {
+          "digest": "8a0909e77d323cf9cd3c15a3e571decfdfeaacfed49c0cdf4de8b4857d98b046",
+          "text": "**O-2: List the two other test files in CP1's `**Files:**`.** `KeepScreenAwakeTest.kt:68` and `ActiveWorkoutPreferencesTest.kt:83` (both in `app/src/androidTest/kotlin/com/repflow/app/presentation/workout/`) have eight-argument `onRecordSet` lambdas that must change. The prose covers them and the `app/` prefix classifies them, but the declaration is incomplete without them.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "6131fe0e4bfdc2a5f62fcbbaec29badb7a692e8b58435ed032483ed86515ce0d",
+              "verdict": "REVISE",
+              "at": "2026-11-04T20:42:57Z"
+            }
+          ]
+        },
+        "F-255144ab241c": {
+          "digest": "255144ab241c3842066739b86882a6150e45021a3e570737d85e1569323fbfb1",
+          "text": "**O-3: Say how `ActiveWorkoutErrorRouteTest` deals with the rest prompts.** This is the first route test that logs a set: `ActiveWorkoutLeaveRouteTest` and `ProgressionRecommendationRouteTest` never tap `Log set`. Its last step, a successful save, starts a real rest, because `restTimerAutoStart` and `restTimerNotification` default to true (`AppSettings.kt:50`, `:52`). The route then runs `RestAlarmEffect`, `RestTimerPermissionPromptEffect` and `ExactAlarmPrompt` for real (`ActiveWorkoutRoute.kt:85-115`). On the API 36 AVD, `SCHEDULE_EXACT_ALARM` isn't allowed by default, so the exact-alarm dialog can open over the screen the test is asserting on, and the `POST_NOTIFICATIONS` request can open too if the permission isn't already granted. Turning auto-start off through `LocalSettingsRepository.update` in the test's setup avoids all three, and the ViewModel test can still cover a save followed by a rest. This comes from reading the code and wasn't run on a device. It would show up on the first device run, so it needn't hold approval.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "84dc41f0d18763a48304ff96f1060b4b4836f37bfe1a24860d2c9562ae8c34d9",
+              "verdict": "APPROVE",
+              "at": "2026-11-04T21:01:39Z"
+            },
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 3,
+              "review_content_id": "07d88d62af6c506e1b7832d36eadfa73e58bd3bb5fc687cd0293d86b0a5d4d11",
+              "verdict": "APPROVE",
+              "at": "2026-11-04T21:18:29Z"
+            }
+          ]
+        },
+        "F-929fb8504c13": {
+          "digest": "929fb8504c13a2a3767b07bcff20f636c734c8af7a77c1036eaac80ad8c510ca",
+          "text": "**O-4: Dismiss the message when a later action succeeds.** `launchAction`'s success path leaves `error` alone (`ActiveWorkoutViewModel.kt:478`), and `onErrorShown` runs only when `showSnackbar` returns. After a failed `Log set` and a quick successful retry, the new set and the cleared entry sit under \"Couldn't complete that. Try again.\" for up to about 4 seconds, with `Log set` still enabled and the numbers still in place, so someone who believes the message logs a duplicate. Clearing `error` in the success path changes the effect's key, which cancels `showSnackbar` and dismisses the card, and the route test's last step could assert that. It's rare, since a retry has to succeed within those seconds, and `Undo last` recovers from it.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "84dc41f0d18763a48304ff96f1060b4b4836f37bfe1a24860d2c9562ae8c34d9",
+              "verdict": "APPROVE",
+              "at": "2026-11-04T21:01:39Z"
+            },
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 3,
+              "review_content_id": "07d88d62af6c506e1b7832d36eadfa73e58bd3bb5fc687cd0293d86b0a5d4d11",
+              "verdict": "APPROVE",
+              "at": "2026-11-04T21:18:29Z"
+            }
+          ]
+        },
+        "F-be08826a7dd4": {
+          "digest": "be08826a7dd4df53dfdeb6de36b49abc3d23cfd035a867263cbee5198a365e67",
+          "text": "**O-5: Add the remaining cited files if the bundle is regenerated.** Round 1's I-4 is resolved, but the plan also cites `HomeScreen.kt`, `AdjustRestTimer.kt`, `ActiveWorkoutSetEntryTest.kt`, `KeepScreenAwakeTest.kt`, `ActiveWorkoutPreferencesTest.kt`, `ActiveWorkoutViewModelTest.kt` and `InMemoryWorkoutRepository.kt`, none of which are in `files/`. A reviewer who sees only the bundle can't check those citations. All of them hold against the repository.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "84dc41f0d18763a48304ff96f1060b4b4836f37bfe1a24860d2c9562ae8c34d9",
+              "verdict": "APPROVE",
+              "at": "2026-11-04T21:01:39Z"
+            }
+          ]
+        },
+        "F-4eef135c7222": {
+          "digest": "4eef135c722268913f20d9a63d0cd98e06833dce7db3a2b41cffed98cf2e554e",
+          "text": "**O-6: Test that a value hidden by `Off` still clears.** The design is right: `submittedDetail()` reads the entry's own fields, so `extraFieldsOn` can't reach the snapshot. Nothing pins it, though. The new tests all run with the extra fields on, and `ActiveWorkoutPreferencesTest.offDrawsNeitherTheDisclosureNorTheRowsAndSubmitsNoExtraFieldEnteredEarlier` (`:126`) stops at the submitted values, with a fake (`:83`) that the plan leaves ignoring `onSaved`. That test already switches the mode at runtime (`:136`), so a sibling could call `onSaved`, switch back to `Collapsed` and assert that the disclosure shows no RPE.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 3,
+              "review_content_id": "07d88d62af6c506e1b7832d36eadfa73e58bd3bb5fc687cd0293d86b0a5d4d11",
+              "verdict": "APPROVE",
+              "at": "2026-11-04T21:18:29Z"
+            }
+          ]
+        },
+        "F-846417177aa7": {
+          "digest": "846417177aa7f9902493b51793ca8be34049187d2a4d9ffa6f3fd27c92b7defc",
+          "text": "**O-7: Say in `docs/UX_FLOWS.md` that the clear follows the save.** `docs/UX_FLOWS.md:116-118` says that RPE, pain, technique and the warm-up mark clear \"after `Log set`\". After this item that holds only for a saved set, and the file doesn't mention the failed-action message. It's protected at the implementation stage (`fix-workout-errors-artifacts.json`), so changing it means naming it in CP1's `**Files:**`.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 3,
+              "review_content_id": "07d88d62af6c506e1b7832d36eadfa73e58bd3bb5fc687cd0293d86b0a5d4d11",
+              "verdict": "APPROVE",
+              "at": "2026-11-04T21:18:29Z"
+            }
+          ]
+        },
+        "F-bdd5de24256d": {
+          "digest": "bdd5de24256d8cb1a8902d0cc0f478059e0bc281b90b0467b30d38a6505aa676",
+          "text": "**O-8: Add a failed read to the known limits.** The scope note says the failure \"already arrives as `WorkoutOperationError`\". That holds for writes: `LocalWorkoutRepository.update` translates SQLite errors (`:94-103`). `findById` doesn't (`:49`), `launchAction` has no catch, and `viewModelScope` has no exception handler, so a SQLite error on `RecordWorkoutSet`'s first line would crash the app rather than show the message. The app behaves this way today, and the fix belongs in the repository, so the design needn't change. A line under \"Known limits\" stops R1 being read as covering it. This comes from reading the code and wasn't run.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 3,
+              "review_content_id": "07d88d62af6c506e1b7832d36eadfa73e58bd3bb5fc687cd0293d86b0a5d4d11",
+              "verdict": "APPROVE",
+              "at": "2026-11-04T21:18:29Z"
+            }
+          ]
+        }
+      }
     }
   },
   "gate_policy_adoption": {

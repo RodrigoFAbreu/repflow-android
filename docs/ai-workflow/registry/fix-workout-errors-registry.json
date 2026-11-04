@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "work_item_id": "fix-workout-errors",
+  "plan_revision": 3,
+  "checkpoints": [
+    {
+      "id": "CP1",
+      "name": "Show a failed action and clear the entry only on success (A-1)",
+      "depends_on": [],
+      "complexity": 2,
+      "session_target": "1"
+    },
+    {
+      "id": "CP2",
+      "name": "Make Retry re-observe and say Try again (A-12)",
+      "depends_on": [
+        "CP1"
+      ],
+      "complexity": 2,
+      "session_target": "1"
+    }
+  ]
+}

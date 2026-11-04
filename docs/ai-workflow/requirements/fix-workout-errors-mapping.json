@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "work_item_id": "fix-workout-errors",
+  "requirements": {
+    "R1": {
+      "description": "A failed workout action shows a generic error snackbar and can show again",
+      "checkpoint_ids": [
+        "CP1"
+      ]
+    },
+    "R2": {
+      "description": "Log set clears the extra fields only after a successful save, and leaves any changed since the tap",
+      "checkpoint_ids": [
+        "CP1"
+      ]
+    },
+    "R3": {
+      "description": "Retry on the workout load failure re-observes the session",
+      "checkpoint_ids": [
+        "CP2"
+      ]
+    },
+    "R4": {
+      "description": "The five retry strings read Try again",
+      "checkpoint_ids": [
+        "CP2"
+      ]
+    }
+  }
+}
