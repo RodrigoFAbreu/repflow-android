@@ -92,7 +92,7 @@ items:
   # 1. Don't lose data, don't hide failures
   - id: fix-workout-errors
     title: "A failed workout action shows a message, entry clears only on success, and `Retry` works"
-    status: next
+    status: done
     order: 18
     size: 1
     detail: docs/items/fix-workout-errors.md

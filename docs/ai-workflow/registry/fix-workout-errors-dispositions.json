@@ -1,0 +1,40 @@
+{
+  "dispositions": {
+    "F-255144ab241c": {
+      "disposition": "fixed"
+    },
+    "F-4eef135c7222": {
+      "disposition": "dropped",
+      "reason": "The snapshot reads the entry's own fields, so the Off setting can't reach it; the reviewer called the design right. A test would only pin code with no branch on that setting."
+    },
+    "F-846417177aa7": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/blob/main/docs/items/docs-refresh.md"
+    },
+    "F-8a0909e77d32": {
+      "disposition": "dropped",
+      "reason": "Plan bookkeeping: both test files changed as needed, and the app/ prefix classified them. Nothing left to do."
+    },
+    "F-8a61a20ba2ee": {
+      "disposition": "fixed"
+    },
+    "F-929fb8504c13": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/26"
+    },
+    "F-9b8f57b8955b": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/26"
+    },
+    "F-bdd5de24256d": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/26"
+    },
+    "F-be08826a7dd4": {
+      "disposition": "dropped",
+      "reason": "Review bundle bookkeeping for a finished plan: the reviewer confirmed all the citations hold against the repository."
+    }
+  },
+  "schema_version": 1,
+  "work_item_id": "fix-workout-errors"
+}
