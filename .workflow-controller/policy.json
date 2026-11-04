@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "trunk": {"branch": "main", "remote": "origin"},
+  "forge": {"kind": "github", "repository": "RodrigoFAbreu/repflow-android"},
+  "milestone_branches": {
+    "enabled": true,
+    "branch_format": "milestone/{work_item_id}",
+    "pull_request": {"draft": true, "ready_requires_green_checks": true, "merge_method": "squash",
+                     "auto_merge": true, "release_workflow": "main.yml"}
+  },
+  "release": {
+    "enabled": true,
+    "trigger": "conventional_commit",
+    "change_types": {"feat": "minor", "fix": "patch", "perf": "patch", "refactor": "patch",
+                     "revert": "patch", "build": "patch", "style": "patch",
+                     "docs": "none", "chore": "none", "ci": "none", "test": "none"},
+    "version_scheme": "semver",
+    "tag_format": "v{version}",
+    "build": {"kind": "command", "argv": ["sh", "tools/release_build.sh"]},
+    "verify": {"kind": "command", "argv": ["python3", "tools/verify_apk.py", "{artifact}"]},
+    "artifacts": {"paths": ["dist/repflow-{version}.apk"], "checksums": "SHA256SUMS"},
+    "publication": {"kind": "github_release", "title": "RepFlow {tag}", "notes": "RepFlow {tag}"}
+  }
+}

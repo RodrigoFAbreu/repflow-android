@@ -15,8 +15,13 @@ android {
         applicationId = "com.repflow.app"
         minSdk = 28
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1"
+        // A release build takes its version from the tag it is built for: tools/release_build.sh sets
+        // RELEASE_VERSION. The code only ever grows with the version, so a release installs over an older one.
+        val releaseVersion = providers.environmentVariable("RELEASE_VERSION").orNull
+        versionCode = releaseVersion?.split('.')?.map(String::toInt)?.let { (major, minor, patch) ->
+            major * 1_000_000 + minor * 1_000 + patch
+        } ?: 1
+        versionName = releaseVersion ?: "0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

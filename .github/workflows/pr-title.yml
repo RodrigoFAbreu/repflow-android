@@ -1,0 +1,30 @@
+# The title becomes the squash commit's subject, whose type decides the release.
+name: PR title
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  title:
+    name: PR title
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TITLE: ${{ github.event.pull_request.title }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check the title
+        run: |
+          gh release download v1.27.8 -R RodrigoFAbreu/workflow-controller -D "$RUNNER_TEMP/wc"
+          (cd "$RUNNER_TEMP/wc" && sha256sum -c SHA256SUMS)
+          pip install "$RUNNER_TEMP"/wc/*.whl
+          python3 tools/release.py check-title "$TITLE"
