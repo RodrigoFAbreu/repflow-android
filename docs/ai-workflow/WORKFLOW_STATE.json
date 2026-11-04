@@ -6051,26 +6051,21 @@
     }
   },
   "gate_policy_adoption": {
-    "sha256": "346a9af34091da97cb1529cd14c62215c1c1c23462b28d2fecb2bbb7d453d2a3",
-    "adopted_at": "2026-10-17T14:55:54Z",
-    "confirmation": "I confirm adopting gate_policy 346a9af34091",
+    "sha256": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+    "adopted_at": "2026-11-04T19:09:35Z",
+    "confirmation": "I confirm adopting gate_policy 1b76de4f95ab",
     "policy": {
       "schema_version": 1,
-      "human_approval": true,
-      "gates": {
-        "plan_approval": {
-          "human": false
-        },
-        "technical_approval": {
-          "human": false
-        }
-      }
+      "human_approval": false
     },
     "history": [
       "f5b32ba65d146f425c17b3a194c684acf6c08bc9fd2c373c2465c45d4f433b2c",
+      "346a9af34091da97cb1529cd14c62215c1c1c23462b28d2fecb2bbb7d453d2a3",
       "346a9af34091da97cb1529cd14c62215c1c1c23462b28d2fecb2bbb7d453d2a3"
     ],
-    "lowered": []
+    "lowered": [
+      "acceptance.human"
+    ]
   },
   "gate_policy_floor": {
     "policy": {
@@ -6087,7 +6082,7 @@
         ]
       },
       "acceptance": {
-        "human": true,
+        "human": false,
         "require_ci": true,
         "required_flows": [],
         "requires_pr_approved": false
@@ -6100,10 +6095,10 @@
         ]
       }
     },
-    "digest": "d02c6040120a4e4e4683a14030a611080c46d74f38e63521afb94ed5414dd68c",
-    "recorded_at": "2026-10-17T14:55:54Z",
+    "digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+    "recorded_at": "2026-11-04T19:09:35Z",
     "observed": [
-      "346a9af34091da97cb1529cd14c62215c1c1c23462b28d2fecb2bbb7d453d2a3"
+      "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa"
     ]
   }
 }
