@@ -1,0 +1,117 @@
+# Builds the app and instrumented-test APKs on GitHub so that no Gradle runs on
+# the development machine (it is short on memory). Start it on any branch:
+#   gh workflow run android-build.yml --ref <branch>
+# then download the artifact and test the APKs on the local emulator with adb:
+#   gh run download <run-id> --name repflow-apks-<sha> --dir <empty-dir>
+# A pull request that changes this file also runs it, so a change to it is
+# checked before it merges (workflow_dispatch only sees the default branch's copy).
+name: Android build
+
+on:
+  workflow_dispatch:
+    inputs:
+      checks:
+        description: Also run Spotless, Detekt, Android Lint and the JVM unit tests
+        type: boolean
+        default: true
+  pull_request:
+    paths:
+      - .github/workflows/android-build.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-build:
+    runs-on: ubuntu-latest
+    env:
+      RUN_CHECKS: ${{ github.event_name != 'workflow_dispatch' || inputs.checks }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Formatting (Spotless)
+        id: spotless
+        if: env.RUN_CHECKS == 'true'
+        continue-on-error: true
+        run: ./gradlew spotlessCheck
+
+      # Nobody can run spotlessApply locally, so hand back its result as a patch.
+      - name: Produce the formatting patch
+        if: steps.spotless.outcome == 'failure'
+        run: |
+          ./gradlew spotlessApply
+          git diff > spotless.patch
+
+      - name: Upload the formatting patch
+        if: steps.spotless.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: spotless-patch-${{ github.sha }}
+          path: spotless.patch
+          retention-days: 7
+
+      - name: Static analysis (Detekt)
+        id: detekt
+        if: env.RUN_CHECKS == 'true'
+        continue-on-error: true
+        run: ./gradlew detekt
+
+      - name: Android Lint
+        id: lint
+        if: env.RUN_CHECKS == 'true'
+        continue-on-error: true
+        run: ./gradlew lintDebug
+
+      - name: Unit tests
+        id: unit
+        if: env.RUN_CHECKS == 'true'
+        continue-on-error: true
+        run: ./gradlew testDebugUnitTest
+
+      - name: Assemble the app and instrumented-test APKs
+        run: ./gradlew assembleDebug assembleDebugAndroidTest
+
+      - name: Upload the APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: repflow-apks-${{ github.sha }}
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/androidTest/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload the reports
+        if: always() && env.RUN_CHECKS == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: repflow-reports-${{ github.sha }}
+          path: |
+            app/build/reports/
+            app/build/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # The checks keep going after a failure so that one run reports all of them
+      # and still produces APKs; this step is what makes the run fail.
+      - name: Fail if a check failed
+        if: >-
+          steps.spotless.outcome == 'failure' || steps.detekt.outcome == 'failure' ||
+          steps.lint.outcome == 'failure' || steps.unit.outcome == 'failure'
+        run: |
+          echo "spotless=${{ steps.spotless.outcome }} detekt=${{ steps.detekt.outcome }} lint=${{ steps.lint.outcome }} unit=${{ steps.unit.outcome }}"
+          exit 1
