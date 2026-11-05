@@ -10144,7 +10144,7 @@
       "registry_path": "docs/ai-workflow/registry/fix-workout-actions-in-order-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/fix-workout-actions-in-order-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+      "phase": "AWAITING_FUNCTIONAL_REVIEW",
       "plan_revision": 2,
       "implementation_revision": 1,
       "functional_review_round": null,
@@ -10249,7 +10249,102 @@
           "workflow_release": "2.25.5"
         }
       },
-      "technical_approval": null,
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "427361c39a08de053767b5fd5ba0a318fd2834b98962906bc336e738d301c8c8",
+        "approved_review_content_id": "d20664971584aafbad18e25362bc81b7927db60829ee543c05abff4e0a8cb7b8",
+        "review_content_manifest": [
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "beabf8452aa2d7d5b6b44e1af196d1e2449ca3cf"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/workout/InMemoryWorkoutRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5947780f3254ba0563e3bdb58cdd1530dee6e0c2"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutActionOrderTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "922574a4263d16a60e328b96e6d82c7baea84b82"
+          },
+          {
+            "path": "docs/ai-workflow/registry/fix-workout-actions-in-order-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8e8b712f6554205cbac5beccc8e77ea4e9268aba"
+          }
+        ],
+        "reviewed_content_commit": "98bc58bc03381733eb7bbfa4e01e4d09b1044918",
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-05T17:43:06+00:00",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "d20664971584aafbad18e25362bc81b7927db60829ee543c05abff4e0a8cb7b8",
+            "ledger": {
+              "local": {
+                "bundle_id": "427361c39a08de053767b5fd5ba0a318fd2834b98962906bc336e738d301c8c8",
+                "verdict": "APPROVE",
+                "round": 1,
+                "verdict_sha256": "15e176e6f72e22edfb60bccab12f6e08bd921b404be22eb037686d119e6ffb05",
+                "ledger_entry_sha256": "5bc97b8541742fbfb60c27d09a0c43ec9668709a7b39c2a5831e20621c0a3549",
+                "run_ref": "session:local .ai-review/fix-workout-actions-in-order/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "427361c39a08de053767b5fd5ba0a318fd2834b98962906bc336e738d301c8c8",
+                "verdict": "APPROVE",
+                "round": 1,
+                "verdict_sha256": "958a6208e98c3b61d070e40bbd6f54e850ab6377f5794ed60abc267d4c928741",
+                "ledger_entry_sha256": "d6bb789e65d61b0161a4ef859a3d7741c926a3b7fc2923a1fcf7b653e51a7049",
+                "run_ref": "codex:20261105T173910Z-c5a70fb4",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-05T17:43:06+00:00",
+          "workflow_release": "2.25.5"
+        }
+      },
       "technical_review_block_pins": [],
       "plan_review_stages": {
         "review_content_id": "9849dbcf485998ab6215c1ea75c879b3dc318c09004c924d3fefdccda9c2e41d",
@@ -10280,12 +10375,12 @@
           "external": 1
         },
         "implementation": {
-          "local": 0,
-          "external": 0
+          "local": 1,
+          "external": 1
         }
       },
-      "state_revision": 12,
-      "last_transition": "2026-11-05T16:35:28.171693+00:00",
+      "state_revision": 15,
+      "last_transition": "2026-11-05T17:43:06+00:00",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -10406,6 +10501,69 @@
               "at": "2026-11-05T16:05:24Z"
             }
           ]
+        },
+        "F-6ef4b25c55a8": {
+          "digest": "6ef4b25c55a8bdd0032fdd41aa62f53c6f6c6561d0704d64a2852219dc7318c0",
+          "text": "**R1-O1. An edit saved while a set waits overwrites that set, and the set it was meant for stays uncorrected.** Starting from `[5]`, log 8 during a restore. The correction sheet still shows the 5, because the 8 hasn't landed. Save 6. Both report success and the result is `[5, 6]`: the 8 is gone and the 5 wasn't corrected. `WorkoutFocus.kt:213` chooses the set when the sheet is drawn, and `EditLastWorkoutSet.kt:38` chooses it again when it runs. This isn't a regression, since the base code ends with `[6]` and loses the 8 as well, but it is one more way a set logged during a restore is lost, and the limitations don't list it. It needs the sheet opened and saved inside the restore, so it should be rare. Passing the set's id in `EditLastWorkoutSetCommand` would close it. That belongs on issue #34 as a follow-up, not in this size-1 item. Undo chooses its set the same way, but there the result is what the user asked for: the set just logged is removed.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "d20664971584aafbad18e25362bc81b7927db60829ee543c05abff4e0a8cb7b8",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T17:38:34Z"
+            }
+          ]
+        },
+        "F-d841df2d27f8": {
+          "digest": "d841df2d27f8eb6ee8a5dae58a313515b5c9e0d48b68f32e982181a52231e5b7",
+          "text": "**R1-O2. A set logged after Finish, while the finish waits, is refused, and the user may not see why.** Starting from `[5]`, confirm Finish during a restore, then log 8. The workout ends as `[5]`, COMPLETED, with `errorMessage` set to `VALIDATION_FAILED` and `finish` set to `Finished`, so the route is already leaving for the done screen. I didn't look at whether the message appears before it leaves. This is much better than the base code, where the same presses end as `[5, 8]`, back in ACTIVE, with the done screen opened for a workout that is still running. No change is needed here. The board stays usable while a finish waits, so the Restoring screen in `safety-copy-polish` is the natural place to narrow this.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "d20664971584aafbad18e25362bc81b7927db60829ee543c05abff4e0a8cb7b8",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T17:38:34Z"
+            }
+          ]
+        },
+        "F-bf4625b74fbb": {
+          "digest": "bf4625b74fbb723346eb2b8262aa8c951e9c53e798f8ba8cac9578502e85892b",
+          "text": "**R1-O3. The note on issue #34 still has to be posted.** The plan's wrap-up asks for it and `gh` was refused in the implementing session. It was refused for this review too (`gh issue view 34 --comments`), so I can't say whether anyone has posted it since. Post it before acceptance, or record why not. The text in `TEST_RESULTS.md` could gain two things: the limitation is now measured as well as read (two waiting sets, then leaving, ends `[]`, the same on the base code), and R1-O1 belongs beside it.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "d20664971584aafbad18e25362bc81b7927db60829ee543c05abff4e0a8cb7b8",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T17:38:34Z"
+            }
+          ]
+        }
+      },
+      "implementation_review_stages": {
+        "review_content_id": "d20664971584aafbad18e25362bc81b7927db60829ee543c05abff4e0a8cb7b8",
+        "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "427361c39a08de053767b5fd5ba0a318fd2834b98962906bc336e738d301c8c8",
+          "verdict": "APPROVE",
+          "round": 1,
+          "completed_at": "2026-11-05T17:38:34Z",
+          "verdict_sha256": "15e176e6f72e22edfb60bccab12f6e08bd921b404be22eb037686d119e6ffb05",
+          "run_ref": "session:local .ai-review/fix-workout-actions-in-order/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "427361c39a08de053767b5fd5ba0a318fd2834b98962906bc336e738d301c8c8",
+          "verdict": "APPROVE",
+          "round": 1,
+          "completed_at": "2026-11-05T17:41:19Z",
+          "verdict_sha256": "958a6208e98c3b61d070e40bbd6f54e850ab6377f5794ed60abc267d4c928741",
+          "run_ref": "codex:20261105T173910Z-c5a70fb4",
+          "reviewer_model": "openai/gpt-6.1-sol"
         }
       }
     }
