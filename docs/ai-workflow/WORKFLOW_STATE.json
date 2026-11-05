@@ -10788,12 +10788,12 @@
       "registry_path": "docs/ai-workflow/registry/safety-copy-polish-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/safety-copy-polish-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "APPLYING_REVIEW_FEEDBACK",
+      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
       "plan_revision": 3,
-      "implementation_revision": 1,
+      "implementation_revision": 2,
       "functional_review_round": null,
       "base_commit": "df7d2197068e1c743d5f57a30d665b1c661cffe9",
-      "reviewed_implementation_head": "b7f1f102b2350a5b50c3474e7ec74212825d6b79",
+      "reviewed_implementation_head": "4843670f00cc1c78fb3fda4eb2776d2213d50fc1",
       "current_checkpoint_id": null,
       "last_completed_checkpoint_id": "CP2",
       "checkpoints": {
@@ -10932,8 +10932,8 @@
           "external": 1
         }
       },
-      "state_revision": 19,
-      "last_transition": "2026-11-05T22:02:49Z",
+      "state_revision": 20,
+      "last_transition": "2026-11-05T22:42:16Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
