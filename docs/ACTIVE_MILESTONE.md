@@ -1,6 +1,12 @@
 # Active Milestone
 
-## `fix-workout-actions-in-order`
+## `fix-workout-actions-in-order` — complete (accepted by policy 2026-11-05)
+
+Workout actions now run one after another, so a set logged during a restore can't be lost. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/fix-workout-actions-in-order-execution.md` and the Optional findings at `docs/milestones/completed/fix-workout-actions-in-order-findings.md`.
+
+**Next action:** `safety-copy-polish`, Safety copy: a Restoring screen, and the Erase and Backup wording says what really happens. Ready for `/milestone-plan`.
+
+The sections below are this milestone's historical record.
 
 Workout actions run one after another, so a set logged during a restore can't be lost. Plan: `docs/milestones/fix-workout-actions-in-order-execution.md`.
 

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_work_item_id": "fix-workout-actions-in-order",
+  "active_work_item_id": null,
   "work_items": {
     "workflow-v2-1-core": {
       "work_item_type": "process",
@@ -10144,7 +10144,7 @@
       "registry_path": "docs/ai-workflow/registry/fix-workout-actions-in-order-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/fix-workout-actions-in-order-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_FUNCTIONAL_REVIEW",
+      "phase": "MILESTONE_COMPLETE",
       "plan_revision": 2,
       "implementation_revision": 1,
       "functional_review_round": null,
@@ -10379,8 +10379,8 @@
           "external": 1
         }
       },
-      "state_revision": 15,
-      "last_transition": "2026-11-05T17:43:06+00:00",
+      "state_revision": 16,
+      "last_transition": "2026-11-05T18:03:39Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -10565,6 +10565,218 @@
           "run_ref": "codex:20261105T173910Z-c5a70fb4",
           "reviewer_model": "openai/gpt-6.1-sol"
         }
+      },
+      "gate_evidence": {
+        "functional": {
+          "flow-1": {
+            "flow_id": "flow-1",
+            "status": "passed",
+            "head": "0240aa3d5de6673d01d03aa911cfe24c46c5925b",
+            "ran_at": "2026-11-05T17:50:49Z",
+            "summary": {
+              "text": "8 sets via rapid bursts, order kept, DB count matched taps",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/fix-workout-actions-in-order"
+            },
+            "log_digest": "8e75ae3dcae8f935f28e7ec992cfc4c6eebe7244b25f9a0225ba6a8ef1704125",
+            "run_ref": "functional-actions-in-order subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "d20664971584aafbad18e25362bc81b7927db60829ee543c05abff4e0a8cb7b8",
+            "recorded_at": "2026-11-05T17:50:49Z"
+          },
+          "flow-2": {
+            "flow_id": "flow-2",
+            "status": "passed",
+            "head": "0240aa3d5de6673d01d03aa911cfe24c46c5925b",
+            "ran_at": "2026-11-05T17:50:49Z",
+            "summary": {
+              "text": "set then Finish: 12 sets saved, session COMPLETED",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/fix-workout-actions-in-order"
+            },
+            "log_digest": "6de0dcc734847d49b2ddc6728f3d0abb05fe76c2524f9df3598770371a2fdb88",
+            "run_ref": "functional-actions-in-order subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "d20664971584aafbad18e25362bc81b7927db60829ee543c05abff4e0a8cb7b8",
+            "recorded_at": "2026-11-05T17:50:49Z"
+          },
+          "flow-3": {
+            "flow_id": "flow-3",
+            "status": "passed",
+            "head": "0240aa3d5de6673d01d03aa911cfe24c46c5925b",
+            "ran_at": "2026-11-05T17:50:49Z",
+            "summary": {
+              "text": "set then Abandon: ABANDONED, no error, not in History",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/fix-workout-actions-in-order"
+            },
+            "log_digest": "6a90a8dc7dc994c24574ea12d9f7b89c2002d4ed64df5ced8a5519f4bb7a5230",
+            "run_ref": "functional-actions-in-order subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "d20664971584aafbad18e25362bc81b7927db60829ee543c05abff4e0a8cb7b8",
+            "recorded_at": "2026-11-05T17:50:50Z"
+          },
+          "flow-4": {
+            "flow_id": "flow-4",
+            "status": "passed",
+            "head": "0240aa3d5de6673d01d03aa911cfe24c46c5925b",
+            "ran_at": "2026-11-05T17:50:49Z",
+            "summary": {
+              "text": "edit 11->12 then Undo last removes set; no error",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/fix-workout-actions-in-order"
+            },
+            "log_digest": "5e373ed716e58fa17f2a852a3c9e09c89ac4821dd6dbee26c1d0d974f5885fc5",
+            "run_ref": "functional-actions-in-order subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "d20664971584aafbad18e25362bc81b7927db60829ee543c05abff4e0a8cb7b8",
+            "recorded_at": "2026-11-05T17:50:50Z"
+          },
+          "flow-5": {
+            "flow_id": "flow-5",
+            "status": "passed",
+            "head": "0240aa3d5de6673d01d03aa911cfe24c46c5925b",
+            "ran_at": "2026-11-05T17:50:49Z",
+            "summary": {
+              "text": "+15 +15 -15 then skip, timer state matches, set kept",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/fix-workout-actions-in-order"
+            },
+            "log_digest": "9cf39a3fadac42bd6c3980f17d01ac5f181d49290636bf69fe49387eadd133b7",
+            "run_ref": "functional-actions-in-order subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "d20664971584aafbad18e25362bc81b7927db60829ee543c05abff4e0a8cb7b8",
+            "recorded_at": "2026-11-05T17:50:50Z"
+          }
+        },
+        "pr": {
+          "pr": {
+            "number": 36,
+            "url": "https://github.com/RodrigoFAbreu/repflow-android/pull/36"
+          },
+          "state": "open",
+          "head": "0240aa3d5de6673d01d03aa911cfe24c46c5925b",
+          "review_decision": null,
+          "reviewed_head": null,
+          "checks": {
+            "state": "success",
+            "failing": []
+          },
+          "review_id": null,
+          "findings": null,
+          "identity_at_head": "d20664971584aafbad18e25362bc81b7927db60829ee543c05abff4e0a8cb7b8",
+          "observed_at": "2026-11-05T18:03:39Z",
+          "ingest_seq": 1,
+          "repository": "RodrigoFAbreu/repflow-android",
+          "queried_commit": "98bc58bc03381733eb7bbfa4e01e4d09b1044918",
+          "provenance": {
+            "source": "workflow_gh",
+            "fetched_by": {
+              "name": "workflow-gh",
+              "version": "pr-list-v1"
+            },
+            "fetched_at": "2026-11-05T18:03:39Z",
+            "raw_sha256": "bf1c256cac6e7cff146052412851ef97fac7d04f6ea2399a06be3a60f9245bb6",
+            "run_ref": "repflow-orchestrator, by hand after no_progress_repeated",
+            "gh_path": "/usr/bin/gh",
+            "gh_sha256": "9e824061111fe5f5b6a5d5690909ba37abafca4a4ca830bdf83246d3c94afd21"
+          },
+          "fact_id": "c7675949719e6fa35ba962d08ca8831f457369470ee0a01ec3ca94e34c5eb3c5"
+        },
+        "pr_reported": null,
+        "pr_keys": {
+          "reopened_for": [],
+          "applied": [],
+          "ingest_seq": 1
+        }
+      },
+      "acceptance_satisfaction": {
+        "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "policy_source": "adopted",
+        "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+        "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+        "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "requirements": [
+          {
+            "id": "checkpoints_complete",
+            "met": true,
+            "detail": "every checkpoint of the item's own registry is COMPLETE"
+          },
+          {
+            "id": "technical_approval_current",
+            "met": true,
+            "detail": "the technical approval is CURRENT for the content now"
+          },
+          {
+            "id": "functional_flows_passed",
+            "met": true,
+            "detail": "flows ['flow-1', 'flow-2', 'flow-3', 'flow-4', 'flow-5'] passed at the approved content"
+          },
+          {
+            "id": "pr_fact_current",
+            "met": true,
+            "detail": "workflow_gh fact for PR #36 at 0240aa3d5de6673d01d03aa911cfe24c46c5925b is current"
+          },
+          {
+            "id": "no_standing_pr_objection",
+            "met": true,
+            "detail": "no CHANGES_REQUESTED decision and no failed check"
+          },
+          {
+            "id": "ci_green",
+            "met": true,
+            "detail": "checks are 'success'"
+          }
+        ],
+        "inputs": {
+          "anchor_commit": "98bc58bc03381733eb7bbfa4e01e4d09b1044918",
+          "anchor_identity": "d20664971584aafbad18e25362bc81b7927db60829ee543c05abff4e0a8cb7b8",
+          "technical_approval": {
+            "basis": "POLICY_SATISFIED",
+            "approved_review_content_id": "d20664971584aafbad18e25362bc81b7927db60829ee543c05abff4e0a8cb7b8",
+            "recorded_at": "2026-11-05T17:43:06+00:00"
+          },
+          "functional": {
+            "flow-1": {
+              "evidence_id": "91d69bf7be5eb6872127161ef9b1644a2f07d4e61121a967f9e2059a3dd0d83a",
+              "log_digest": "8e75ae3dcae8f935f28e7ec992cfc4c6eebe7244b25f9a0225ba6a8ef1704125",
+              "run_ref": "functional-actions-in-order subagent, 2026-11-05"
+            },
+            "flow-2": {
+              "evidence_id": "10d81352fba5a7d47ad3823bcc586fa64ff515a0bfe41f51e4f14ff978d979a7",
+              "log_digest": "6de0dcc734847d49b2ddc6728f3d0abb05fe76c2524f9df3598770371a2fdb88",
+              "run_ref": "functional-actions-in-order subagent, 2026-11-05"
+            },
+            "flow-3": {
+              "evidence_id": "e1737977932a8c0c4aed4a57f640e669a176a4c72faff90770d4cdf131b42db7",
+              "log_digest": "6a90a8dc7dc994c24574ea12d9f7b89c2002d4ed64df5ced8a5519f4bb7a5230",
+              "run_ref": "functional-actions-in-order subagent, 2026-11-05"
+            },
+            "flow-4": {
+              "evidence_id": "741ecebc558a2a55a0ba129558b4a4606060f2c27b4c4bd1616a1fdfb353c54d",
+              "log_digest": "5e373ed716e58fa17f2a852a3c9e09c89ac4821dd6dbee26c1d0d974f5885fc5",
+              "run_ref": "functional-actions-in-order subagent, 2026-11-05"
+            },
+            "flow-5": {
+              "evidence_id": "f25d5199b8fa183313e5a6e80f757925e25d0a5f99f320b33c4066db97df0cfc",
+              "log_digest": "9cf39a3fadac42bd6c3980f17d01ac5f181d49290636bf69fe49387eadd133b7",
+              "run_ref": "functional-actions-in-order subagent, 2026-11-05"
+            }
+          },
+          "pr": {
+            "fact_id": "c7675949719e6fa35ba962d08ca8831f457369470ee0a01ec3ca94e34c5eb3c5",
+            "head": "0240aa3d5de6673d01d03aa911cfe24c46c5925b",
+            "provenance": "workflow_gh",
+            "raw_sha256": "bf1c256cac6e7cff146052412851ef97fac7d04f6ea2399a06be3a60f9245bb6"
+          }
+        },
+        "trust": {
+          "review_verdicts": "orchestrator",
+          "functional_evidence": "orchestrator",
+          "pr_fact": "workflow_gh"
+        },
+        "evaluated_at": "2026-11-05T18:03:39Z",
+        "workflow_release": "2.25.5"
       }
     }
   },
