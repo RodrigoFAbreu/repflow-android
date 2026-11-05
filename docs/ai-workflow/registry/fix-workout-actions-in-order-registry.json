@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "work_item_id": "fix-workout-actions-in-order",
+  "plan_revision": 2,
+  "checkpoints": [
+    {
+      "id": "CP1",
+      "name": "Run workout actions one after another (R1, R2)",
+      "depends_on": [],
+      "complexity": 1,
+      "session_target": "1"
+    }
+  ]
+}

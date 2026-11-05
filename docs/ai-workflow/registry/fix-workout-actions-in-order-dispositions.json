@@ -1,0 +1,44 @@
+{
+  "dispositions": {
+    "F-1a746f10aa3e": {
+      "disposition": "dropped",
+      "reason": "Only the plan's usability wording; behaviour is unchanged from a single action and the plan is finished."
+    },
+    "F-33cadaf65deb": {
+      "disposition": "fixed"
+    },
+    "F-3978f82c053e": {
+      "disposition": "dropped",
+      "reason": "A double press during a restore logging two sets is what the item asks for and Undo corrects it; safety-copy-polish's Restoring screen may narrow it."
+    },
+    "F-4ad6c883ffc2": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/34#issuecomment-6665059629"
+    },
+    "F-530853378b03": {
+      "disposition": "dropped",
+      "reason": "Plan self-review wording on rest-timer writes; the code takes the lock correctly and no user effect."
+    },
+    "F-5f04c4266166": {
+      "disposition": "dropped",
+      "reason": "Plan sentence about other editors of a running workout; the scope decision holds and no user effect."
+    },
+    "F-6ef4b25c55a8": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/34#issuecomment-6665059629"
+    },
+    "F-b92a3a88427a": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/34#issuecomment-6665059629"
+    },
+    "F-bf4625b74fbb": {
+      "disposition": "fixed"
+    },
+    "F-d841df2d27f8": {
+      "disposition": "dropped",
+      "reason": "Refusing a set logged after Finish is far better than before and may only lack a message; safety-copy-polish's Restoring screen is the place to narrow it."
+    }
+  },
+  "schema_version": 1,
+  "work_item_id": "fix-workout-actions-in-order"
+}

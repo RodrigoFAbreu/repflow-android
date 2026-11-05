@@ -64,6 +64,8 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.math.BigDecimal
 import javax.inject.Inject
 
@@ -113,6 +115,16 @@ class ActiveWorkoutViewModel
         private val workoutRepository: WorkoutRepository,
     ) : ViewModel() {
         private val error = MutableStateFlow<ActiveWorkoutErrorReason?>(null)
+
+        /**
+         * Runs the actions this screen starts one after another, in the order they
+         * were pressed. Each use case reads the whole session and writes it back, so
+         * while a restore holds writes back two overlapping actions would both read
+         * the old session, and the second write would undo the first. It covers the
+         * handling of the result too, so an earlier failure can't overwrite a later
+         * success.
+         */
+        private val actionLock = Mutex()
         private val _dayContext = MutableStateFlow<WorkoutDayContextUi?>(null)
         val dayContext: StateFlow<WorkoutDayContextUi?> = _dayContext
         private val recommendationRefreshTrigger = MutableStateFlow(0)
@@ -430,17 +442,19 @@ class ActiveWorkoutViewModel
             if (_finish.value != WorkoutFinishState.Idle) return
             _finish.value = WorkoutFinishState.InFlight
             viewModelScope.launch {
-                when (val result = guardedRead { completeWorkoutSession(sessionId) }) {
-                    is DomainResult.Success -> {
-                        error.update { null }
-                        restNotificationCanceller.cancel()
-                        refreshLastPerformances()
-                        _finish.value = WorkoutFinishState.Finished(sessionId)
-                    }
+                actionLock.withLock {
+                    when (val result = guardedRead { completeWorkoutSession(sessionId) }) {
+                        is DomainResult.Success -> {
+                            error.update { null }
+                            restNotificationCanceller.cancel()
+                            refreshLastPerformances()
+                            _finish.value = WorkoutFinishState.Finished(sessionId)
+                        }
 
-                    is DomainResult.Failure -> {
-                        _finish.value = WorkoutFinishState.Idle
-                        error.update { result.error.toReason() }
+                        is DomainResult.Failure -> {
+                            _finish.value = WorkoutFinishState.Idle
+                            error.update { result.error.toReason() }
+                        }
                     }
                 }
             }
@@ -448,14 +462,16 @@ class ActiveWorkoutViewModel
 
         fun onAbandonWorkout(sessionId: WorkoutSessionId) {
             viewModelScope.launch {
-                when (val result = guardedRead { abandonWorkoutSession(sessionId) }) {
-                    is DomainResult.Success -> {
-                        error.update { null }
-                        restNotificationCanceller.cancel()
-                    }
+                actionLock.withLock {
+                    when (val result = guardedRead { abandonWorkoutSession(sessionId) }) {
+                        is DomainResult.Success -> {
+                            error.update { null }
+                            restNotificationCanceller.cancel()
+                        }
 
-                    is DomainResult.Failure -> {
-                        error.update { result.error.toReason() }
+                        is DomainResult.Failure -> {
+                            error.update { result.error.toReason() }
+                        }
                     }
                 }
             }
@@ -513,14 +529,16 @@ class ActiveWorkoutViewModel
             action: suspend () -> DomainResult<*, WorkoutOperationError>,
         ) {
             viewModelScope.launch {
-                when (val result = guardedRead(action)) {
-                    is DomainResult.Success -> {
-                        error.update { null }
-                        onSuccess()
-                    }
+                actionLock.withLock {
+                    when (val result = guardedRead(action)) {
+                        is DomainResult.Success -> {
+                            error.update { null }
+                            onSuccess()
+                        }
 
-                    is DomainResult.Failure -> {
-                        error.update { result.error.toReason() }
+                        is DomainResult.Failure -> {
+                            error.update { result.error.toReason() }
+                        }
                     }
                 }
             }

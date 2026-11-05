@@ -1,5 +1,48 @@
 # Active Milestone
 
+## `fix-workout-actions-in-order` — complete (accepted by policy 2026-11-05)
+
+Workout actions now run one after another, so a set logged during a restore can't be lost. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/fix-workout-actions-in-order-execution.md` and the Optional findings at `docs/milestones/completed/fix-workout-actions-in-order-findings.md`.
+
+**Next action:** `safety-copy-polish`, Safety copy: a Restoring screen, and the Erase and Backup wording says what really happens. Ready for `/milestone-plan`.
+
+The sections below are this milestone's historical record.
+
+Workout actions run one after another, so a set logged during a restore can't be lost. Plan: `docs/milestones/fix-workout-actions-in-order-execution.md`.
+
+- **CP1, complete.** Workout actions now run one after another, in the order they were pressed. One `Mutex`, `actionLock`, in `ActiveWorkoutViewModel` covers `launchAction`, `onCompleteWorkout` and `onAbandonWorkout`, around the use case and the handling of its result. So during a restore a set followed by another set, Finish or Abandon keeps every effect, and an earlier failure can't overwrite a later success. No schema change and no new dependency. Verified: `ActiveWorkoutActionOrderTest` (4 tests pass), the `presentation/workout` JVM package and `LayerBoundaryTest` (113 tests pass), `spotlessCheck`, `detekt`. Before the fix the four new tests failed as the plan measured: `expected:<[8, 9]> but was:<[9]>`, `expected:<1> but was:<0>` twice, and `expected null, but was:<PERSISTENCE_UNAVAILABLE>`. Mutations: removing the lock from `launchAction` fails all four, from `onCompleteWorkout` the Finish test, and from `onAbandonWorkout` the Abandon test, as in the plan's table. One assertion beyond the plan: the Finish test also checks that there is no error. The full runs and the note on issue #34 are still to come, in the wrap-up.
+
+**Next action:** perform the functional review below, write findings to `.ai-review/fix-workout-actions-in-order/feedback/FUNCTIONAL_REVIEW.md`, or run `/accept-milestone` if testing is clean.
+
+### Functional review checklist
+
+Automated verification: the code has not changed since CP1 (`98bc58b`); later commits are workflow records only. CP1's targeted runs are listed above (`ActiveWorkoutActionOrderTest`, the `presentation/workout` JVM package, `LayerBoundaryTest`, `spotlessCheck`, `detekt`). The full JVM, `lintDebug` and `connectedDebugAndroidTest` runs are not recorded yet; they belong to the wrap-up.
+
+**Setup.** Use the AVD (`start-avd.sh`, 3 GB cap), not the phone. Install with `./gradlew installDebug`. No feature flags, no network needed.
+
+**Honest scope note.** The bug is a race: two workout actions overlapping while a restore holds writes. A restore of a small file ends in milliseconds, so it cannot be produced reliably from the UI. It is proven by the four `ActiveWorkoutActionOrderTest` cases and the mutation table above. The flows below are regression checks that normal workout actions still run, in press order, with nothing visibly changed.
+
+**Test data.** Two exercises (e.g. Bench Press, Squat) and one finished workout, so seeds and history exist. For F6, a backup file exported from this data.
+
+**F1 - Sets log in press order (R1).** Start a workout, add Bench Press, log three sets with different reps (e.g. 8, 9, 10), tapping `Log set` as fast as you can. Expected: three sets, in that order, with those reps; no error banner.
+
+**F2 - A set then Finish keeps the set (R1).** Log a set and tap Finish straight away. Expected: the workout completes and History shows it with that set.
+
+**F3 - A set then Abandon (R1).** Start a workout, log a set, then abandon at once. Expected: no error, back on Home, the workout is not in History.
+
+**F4 - Edit, delete and Undo in a row (R1, R2).** Log a set, edit its reps, delete it, tap Undo. Expected: the final state matches the last action pressed; no error banner appears or lingers.
+
+**F5 - Rest timer controls (R1).** Log a set so the rest timer starts, then tap add time, remove time and skip in quick succession. Expected: the timer ends in the state of the last tap; no error; the saved set stays.
+
+**F6 - Actions during a restore (R1), best effort.** On the Backup screen start restoring the file; as soon as you confirm, go back to the workout and log two sets. Expected: both sets are kept if the restored data still holds that workout. Timing is tight; if the restore ends first, note it and move on.
+
+**Known limitations / out of scope.**
+- The race cannot be triggered reliably from the UI, so the fix is covered by the automated tests (F6 is best effort).
+- Home's resume-card abandon is not under this lock (it doesn't normally overlap).
+- A double press during a restore now logs two identical sets (R1 asks for it; Undo corrects it).
+- A set still waiting when the user leaves the workout is lost with no message, as before. It goes on issue #34 at wrap-up.
+- Other items on issue #34 are not part of this item.
+
 ## `restore-safety-snapshot` — complete (accepted by policy 2026-11-05)
 
 RepFlow now keeps a safety copy of your data before a restore, and you can restore that copy from the Backup screen. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/restore-safety-snapshot-execution.md` and the Optional findings at `docs/milestones/completed/restore-safety-snapshot-findings.md`.

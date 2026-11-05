@@ -124,7 +124,7 @@ items:
     detail: docs/items/restore-safety-snapshot.md
   - id: fix-workout-actions-in-order
     title: "Workout actions run one after another, so a set logged during a restore can't be lost"
-    status: next
+    status: done
     order: 23
     size: 1
     detail: docs/items/fix-workout-actions-in-order.md

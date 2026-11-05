@@ -26,7 +26,7 @@
 | 20 | [Restoring a damaged backup file shows an error instead of closing the app](items/fix-restore-damaged-file.md) `fix-restore-damaged-file` | Done | 1 | - |
 | 21 | [Workout errors: no stale message after a retry, no crash on a failed read, and Try again restores the picker](items/fix-workout-error-followups.md) `fix-workout-error-followups` | Done | 2 | - |
 | 22 | [One automatic snapshot before a restore, restorable from Backup](items/restore-safety-snapshot.md) `restore-safety-snapshot` | Done | 2 | fix-backup-all-workouts, design-3-redraws |
-| 23 | [Workout actions run one after another, so a set logged during a restore can't be lost](items/fix-workout-actions-in-order.md) `fix-workout-actions-in-order` | Next | 1 | - |
+| 23 | [Workout actions run one after another, so a set logged during a restore can't be lost](items/fix-workout-actions-in-order.md) `fix-workout-actions-in-order` | Done | 1 | - |
 | 24 | [Safety copy: a Restoring screen, and the Erase and Backup wording says what really happens](items/safety-copy-polish.md) `safety-copy-polish` | Next | 1 | - |
 | 25 | [A reminder on Home when the last backup is old](items/backup-reminder.md) `backup-reminder` | Next | 1 | restore-safety-snapshot |
 | 26 | [An exercise you didn't train keeps its real suggestion](items/suggest-keep-untouched.md) `suggest-keep-untouched` | Next | 1 | - |
