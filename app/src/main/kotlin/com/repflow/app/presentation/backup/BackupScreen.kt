@@ -131,7 +131,7 @@ fun BackupScreen(
                 modifier = Modifier.padding(top = 20.dp, bottom = 8.dp),
             )
             CsvRow(enabled = !uiState.isBusy, onClick = actions.onExportCsv)
-            RestoreCard(enabled = !uiState.isBusy, onRestoreClick = actions.onRestoreBackup)
+            RestoreCard(enabled = !uiState.isBusy, hasTrainingData = uiState.hasTrainingData, onRestoreClick = actions.onRestoreBackup)
             uiState.preRestoreSnapshotAt?.let { takenAt ->
                 SafetyCopyCard(takenAt = takenAt, zone = zone, enabled = !uiState.isBusy, onRestoreClick = actions.onRestoreSnapshot)
             }
@@ -271,10 +271,14 @@ private fun CsvRow(
     }
 }
 
-/** The `Replaces everything` card: the destructive ring, what restoring does, and `Restore from a backup`. */
+/**
+ * The `Replaces everything` card: the destructive ring, what restoring does, and `Restore from a backup`.
+ * A phone with no training data gets no copy, so its note doesn't promise one.
+ */
 @Composable
 private fun RestoreCard(
     enabled: Boolean,
+    hasTrainingData: Boolean,
     onRestoreClick: () -> Unit,
 ) {
     val destructive = MaterialTheme.colorScheme.error
@@ -287,7 +291,7 @@ private fun RestoreCard(
                 .padding(14.dp),
     ) {
         Text(
-            text = stringResource(R.string.backup_restore_note),
+            text = stringResource(if (hasTrainingData) R.string.backup_restore_note else R.string.backup_restore_note_no_data),
             style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, lineHeight = NoteLineHeight),
             color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
         )

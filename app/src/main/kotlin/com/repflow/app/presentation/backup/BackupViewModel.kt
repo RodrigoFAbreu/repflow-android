@@ -78,10 +78,7 @@ class BackupViewModel
                     _uiState.update { it.copy(statusMessage = message) }
                 }
             }
-            viewModelScope.launch {
-                val takenAt = preRestoreCopyLock.withLock { preRestoreSnapshotStore.takenAt() }
-                _uiState.update { it.copy(isBusy = false, preRestoreSnapshotAt = takenAt) }
-            }
+            viewModelScope.launch { refreshCopyAndTrainingData() }
             viewModelScope.launch {
                 settingsRepository
                     .observe()
@@ -225,7 +222,7 @@ class BackupViewModel
             }
         }
 
-        /** Not knowing counts as having data, so the confirmation's copy paragraphs are never silently dropped. */
+        /** Not knowing counts as having data, so the note and the confirmation never silently drop the copy's wording. */
         private suspend fun readHasTrainingData(): Boolean =
             flow { emit(trainingDataRepository.hasTrainingData()) }
                 .catch { failure ->
@@ -282,10 +279,15 @@ class BackupViewModel
                         // an Erase and would keep it up for no reason.
                         restoreInProgress.end()
                     }
-                    val takenAt = preRestoreCopyLock.withLock { preRestoreSnapshotStore.takenAt() }
-                    _uiState.update { it.copy(isBusy = false, preRestoreSnapshotAt = takenAt) }
+                    refreshCopyAndTrainingData()
                 }
             }
+        }
+
+        /** What the card and the note show, read together when the screen opens and after a restore, which ends the busy state. */
+        private suspend fun refreshCopyAndTrainingData() {
+            val (takenAt, hasData) = preRestoreCopyLock.withLock { preRestoreSnapshotStore.takenAt() to readHasTrainingData() }
+            _uiState.update { it.copy(isBusy = false, preRestoreSnapshotAt = takenAt, hasTrainingData = hasData) }
         }
 
         /** The message is on its way to the screen, so a back press during its snackbar doesn't show it again at the next visit. */

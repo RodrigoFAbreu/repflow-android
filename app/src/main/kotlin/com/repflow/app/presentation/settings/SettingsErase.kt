@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -89,9 +91,9 @@ internal fun EraseCard(
 
 /**
  * The typed confirmation in front of `Erase all data` (remediation-1 CP14 item
- * 5): it says what goes - a running workout included - and what stays - the
- * settings, and backup files already exported - and the destructive action is
- * enabled only once the confirmation word has been typed.
+ * 5): it says what goes - a running workout and any safety copy included - and
+ * what stays - the settings, and backup files already exported - and the
+ * destructive action is enabled only once the confirmation word has been typed.
  */
 @Composable
 internal fun EraseAllDataDialog(
@@ -104,7 +106,12 @@ internal fun EraseAllDataDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_erase_confirm_title)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapLg)) {
+            // 40j's rule: the text scrolls at large font and the buttons stay. The body is measured first, so
+            // without the scroll it could leave the field no height, and the word could never be typed.
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapLg),
+            ) {
                 Text(stringResource(R.string.settings_erase_confirm_body))
                 OutlinedTextField(
                     value = typed,

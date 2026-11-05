@@ -296,6 +296,71 @@ class BackupViewModelSafetyCopyTest {
         }
 
     @Test
+    fun `the start-up read shows an empty phone as empty and a phone with data as having it`() =
+        runTest {
+            trainingData.hasTrainingData = false
+            val empty = buildViewModel()
+            assertFalse(empty.uiState.value.hasTrainingData)
+            assertFalse(empty.uiState.value.isBusy)
+
+            trainingData.hasTrainingData = true
+            val withData = buildViewModel()
+            assertTrue(withData.uiState.value.hasTrainingData)
+            assertFalse(withData.uiState.value.isBusy)
+        }
+
+    @Test
+    fun `a restore of a file onto an empty phone turns the flag true when it ends`() =
+        runTest {
+            trainingData.hasTrainingData = false
+            val model = buildViewModel(restore = gatedRestore)
+            model.restoreAFile()
+            assertFalse("The file hasn't landed yet", model.uiState.value.hasTrainingData)
+
+            trainingData.hasTrainingData = true
+            gated.open(DomainResult.Success(Unit))
+
+            assertTrue(model.uiState.value.hasTrainingData)
+            assertFalse(model.uiState.value.isBusy)
+        }
+
+    @Test
+    fun `a failed read leaves the flag true at start-up and after a restore`() =
+        runTest {
+            trainingData.readFailure = IllegalStateException("database unreadable")
+            val atStart = buildViewModel()
+            assertTrue(atStart.uiState.value.hasTrainingData)
+            assertFalse(atStart.uiState.value.isBusy)
+
+            trainingData.readFailure = null
+            trainingData.hasTrainingData = false
+            val model = buildViewModel(restore = gatedRestore)
+            model.restoreAFile()
+            assertFalse(model.uiState.value.hasTrainingData)
+            trainingData.readFailure = IllegalStateException("database unreadable")
+            gated.open(DomainResult.Success(Unit))
+
+            assertTrue(model.uiState.value.hasTrainingData)
+            assertFalse(model.uiState.value.isBusy)
+        }
+
+    @Test
+    fun `a screen reopened during a restore reads the flag only when that restore ends`() =
+        runTest {
+            trainingData.hasTrainingData = false
+            heldRestoreWithItsScreenGone()
+            val readsSoFar = trainingData.hasTrainingDataReads
+
+            val reopened = buildViewModel(restore = gatedRestore)
+            assertEquals("The read must wait for the lock", readsSoFar, trainingData.hasTrainingDataReads)
+
+            gated.open(DomainResult.Failure(BackupRestoreError.Unavailable))
+
+            assertFalse("The restore failed, so the phone is still empty", reopened.uiState.value.hasTrainingData)
+            assertFalse(reopened.uiState.value.isBusy)
+        }
+
+    @Test
     fun `a restore from a file and a restore of the copy each leave lastBackupAt unchanged`() =
         runTest {
             val recorded = Instant.parse("2026-09-30T21:04:00Z")

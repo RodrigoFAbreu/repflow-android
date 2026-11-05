@@ -374,6 +374,23 @@ class BackupScreenTest {
     }
 
     @Test
+    fun aPhoneWithTrainingDataGetsTheNoteAboutTheCopy() {
+        render(BackupUiState(isLastBackupLoaded = true, now = now, hasTrainingData = true))
+
+        composeRule.onNodeWithText(RESTORE_NOTE).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(RESTORE_NOTE_NO_DATA).assertDoesNotExist()
+    }
+
+    @Test
+    fun aPhoneWithNoTrainingDataGetsANoteThatPromisesNoCopy() {
+        render(BackupUiState(isLastBackupLoaded = true, now = now, hasTrainingData = false))
+
+        composeRule.onNodeWithText(RESTORE_NOTE_NO_DATA).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(RESTORE_NOTE).assertDoesNotExist()
+        composeRule.onNodeWithText("RepFlow keeps a copy", substring = true).assertDoesNotExist()
+    }
+
+    @Test
     fun withNoCopyThereIsNoCard() {
         render(BackupUiState(isLastBackupLoaded = true, now = now))
 
@@ -502,6 +519,11 @@ class BackupScreenTest {
         const val RESTORE_NOTE =
             "Restoring replaces all data on this phone with the file's contents. Your settings stay. RepFlow keeps a copy " +
                 "of your current data first, and you can restore that copy from this screen. Export a backup first."
+
+        // Written for this item from board 40f ("no data to protect"): the design draws the note once.
+        const val RESTORE_NOTE_NO_DATA =
+            "Restoring replaces all data on this phone with the file's contents. Your settings stay. This phone has no " +
+                "data to keep, so RepFlow makes no copy first."
         const val RUNNING_WORKOUT = "A workout is running on this phone. Restoring deletes it, with every set you've logged."
         const val FILE_TITLE = "Restore this backup?"
         const val FILE_BODY =
