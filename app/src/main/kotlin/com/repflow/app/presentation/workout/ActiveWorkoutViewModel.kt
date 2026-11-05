@@ -125,9 +125,10 @@ class ActiveWorkoutViewModel
         /**
          * Each exercise's last performance (CP9, Q8), read once when the ViewModel
          * is created and again when a workout completes - the only moment history
-         * gains a session - and not subscribed to history, so logging a set never
-         * re-reads and re-maps it. Empty until the read lands (the seed is applied
-         * to an untouched entry whenever it arrives) and when it fails.
+         * gains a session - or on `Try again`, and not subscribed to history, so
+         * logging a set never re-reads and re-maps it. Empty until the read lands
+         * (the seed is applied to an untouched entry whenever it arrives) and when
+         * it fails.
          */
         private val lastPerformances = MutableStateFlow<Map<ExerciseId, LastPerformance>>(emptyMap())
 
@@ -230,15 +231,17 @@ class ActiveWorkoutViewModel
             }
 
         private val availableExercises =
-            combine(
-                observeExercises(ExerciseStatusFilter.ACTIVE, ""),
-                recommendationRefreshTrigger,
-            ) { exercises, _ -> exercises }
-                .map { exercises -> exercises.map { exercise -> toPickerItem(exercise, latestRecommendationUi(exercise.id)) } }
-                .catch { failure ->
-                    if (failure is CancellationException) throw failure
-                    emit(emptyList())
-                }
+            retryTrigger.flatMapLatest {
+                combine(
+                    observeExercises(ExerciseStatusFilter.ACTIVE, ""),
+                    recommendationRefreshTrigger,
+                ) { exercises, _ -> exercises }
+                    .map { exercises -> exercises.map { exercise -> toPickerItem(exercise, latestRecommendationUi(exercise.id)) } }
+                    .catch { failure ->
+                        if (failure is CancellationException) throw failure
+                        emit(emptyList())
+                    }
+            }
 
         private val availablePlans =
             trainingPlanOverviewsFlow.map { overviews ->
@@ -429,6 +432,7 @@ class ActiveWorkoutViewModel
             viewModelScope.launch {
                 when (val result = guardedRead { completeWorkoutSession(sessionId) }) {
                     is DomainResult.Success -> {
+                        error.update { null }
                         restNotificationCanceller.cancel()
                         refreshLastPerformances()
                         _finish.value = WorkoutFinishState.Finished(sessionId)
@@ -445,8 +449,14 @@ class ActiveWorkoutViewModel
         fun onAbandonWorkout(sessionId: WorkoutSessionId) {
             viewModelScope.launch {
                 when (val result = guardedRead { abandonWorkoutSession(sessionId) }) {
-                    is DomainResult.Success -> restNotificationCanceller.cancel()
-                    is DomainResult.Failure -> error.update { result.error.toReason() }
+                    is DomainResult.Success -> {
+                        error.update { null }
+                        restNotificationCanceller.cancel()
+                    }
+
+                    is DomainResult.Failure -> {
+                        error.update { result.error.toReason() }
+                    }
                 }
             }
         }
@@ -458,10 +468,13 @@ class ActiveWorkoutViewModel
         /**
          * `Try again` on the load-failure state: an observation that failed has
          * completed, so nothing else re-reads the session. Subscribes again,
-         * which shows `Loading` until the read lands.
+         * which shows `Loading` until the read lands. The exercise picker and the
+         * last-session seeds are read again too: a failure leaves them empty, and
+         * nothing else reads them again.
          */
         fun onRetryObservation() {
             retryTrigger.update { it + 1 }
+            refreshLastPerformances()
         }
 
         /**
@@ -494,14 +507,21 @@ class ActiveWorkoutViewModel
 
         private fun activeSessionId(): WorkoutSessionId? = (uiState.value.content as? ActiveWorkoutContent.Active)?.sessionId
 
+        /** A success clears any earlier failure's message, which would otherwise still be up after a retry that worked. */
         private fun launchAction(
             onSuccess: () -> Unit = {},
             action: suspend () -> DomainResult<*, WorkoutOperationError>,
         ) {
             viewModelScope.launch {
                 when (val result = guardedRead(action)) {
-                    is DomainResult.Success -> onSuccess()
-                    is DomainResult.Failure -> error.update { result.error.toReason() }
+                    is DomainResult.Success -> {
+                        error.update { null }
+                        onSuccess()
+                    }
+
+                    is DomainResult.Failure -> {
+                        error.update { result.error.toReason() }
+                    }
                 }
             }
         }

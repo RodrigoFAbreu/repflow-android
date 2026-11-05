@@ -1011,6 +1011,20 @@ class ActiveWorkoutScreenTest {
         node(R.string.workout_active_action_failed).assertIsDisplayed()
     }
 
+    /** A retry that worked clears the field while the message is still up: it goes then, without waiting out its time. */
+    @Test
+    fun clearingTheFieldTakesDownTheShowingMessage() {
+        var shown = 0
+        val error = mutableStateOf<ActiveWorkoutErrorReason?>(ActiveWorkoutErrorReason.PERSISTENCE_UNAVAILABLE)
+        setContent(exercise(ExerciseTrackingType.WEIGHT_AND_REPS), errorMessage = error, onErrorShown = { shown++ })
+        node(R.string.workout_active_action_failed).assertIsDisplayed()
+
+        composeRule.runOnIdle { error.value = null }
+
+        node(R.string.workout_active_action_failed).assertDoesNotExist()
+        composeRule.runOnIdle { assertEquals(0, shown) }
+    }
+
     @Test
     fun inFocusModeTheMessageSitsAboveLogSetWithNoRestStrip() {
         setContent(

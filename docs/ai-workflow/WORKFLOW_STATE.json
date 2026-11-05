@@ -8206,18 +8206,22 @@
       "registry_path": "docs/ai-workflow/registry/fix-workout-error-followups-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/fix-workout-error-followups-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "IMPLEMENTING",
+      "phase": "SELF_REVIEWING_IMPLEMENTATION",
       "plan_revision": 1,
       "implementation_revision": null,
       "functional_review_round": null,
       "base_commit": "0ce635925d97dff123e892a3eb9fa93b1e7586f7",
       "reviewed_implementation_head": null,
       "current_checkpoint_id": null,
-      "last_completed_checkpoint_id": "CP1",
+      "last_completed_checkpoint_id": "CP2",
       "checkpoints": {
         "CP1": {
           "status": "COMPLETE",
           "start_commit": "a799c5d81b61925297912d010dc6d0aace30ba7d"
+        },
+        "CP2": {
+          "status": "COMPLETE",
+          "start_commit": "e68d469dc217f85539c6ec8602709585192cf2c7"
         }
       },
       "current_bundle_id": "2c31e579123dceeda030c8aba2ffb346947664e326bc4ce6882a707fb2dff563",
@@ -8346,8 +8350,8 @@
           "external": 0
         }
       },
-      "state_revision": 8,
-      "last_transition": "2026-11-05T07:24:16Z",
+      "state_revision": 10,
+      "last_transition": "2026-11-05T07:33:38Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",

@@ -292,6 +292,77 @@ class ActiveWorkoutActionErrorTest {
             }
         }
 
+    /**
+     * Someone who reads the message and presses again must not still be looking
+     * at it once the press worked, or they log the set twice. Nothing here calls
+     * `onErrorShown`: the success is what clears the field.
+     */
+    @Test
+    fun `a successful action clears the error and a new failure shows again`() =
+        runTest {
+            seedExercise()
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                val withExercise = startWorkoutWithTheExercise()
+                workoutRepository.nextUpdateFailure = WorkoutPersistenceError.Unavailable
+                viewModel.onRecordSet(withExercise.id, 60.0, 8)
+                assertEquals(ActiveWorkoutErrorReason.PERSISTENCE_UNAVAILABLE, awaitActionError())
+
+                viewModel.onRecordSet(withExercise.id, 60.0, 8)
+                advanceUntilIdle()
+
+                // Also drains the queue, so the scan below can't stop on a state from before the clear.
+                assertNull(expectMostRecentItem().errorMessage)
+
+                workoutRepository.nextUpdateFailure = WorkoutPersistenceError.Unavailable
+                viewModel.onRecordSet(withExercise.id, 60.0, 8)
+                assertEquals(ActiveWorkoutErrorReason.PERSISTENCE_UNAVAILABLE, awaitActionError())
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `a successful finish clears the error`() =
+        runTest {
+            seedExercise()
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                startWorkoutWithTheExercise()
+                val sessionId = requireNotNull(workoutRepository.findActiveSession()).id
+                workoutRepository.nextUpdateFailure = WorkoutPersistenceError.Unavailable
+                viewModel.onCompleteWorkout(sessionId)
+                assertEquals(ActiveWorkoutErrorReason.PERSISTENCE_UNAVAILABLE, awaitActionError())
+
+                viewModel.onCompleteWorkout(sessionId)
+                advanceUntilIdle()
+
+                assertEquals(WorkoutFinishState.Finished(sessionId), viewModel.finish.value)
+                assertNull(viewModel.uiState.value.errorMessage)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `a successful abandon clears the error`() =
+        runTest {
+            seedExercise()
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                startWorkoutWithTheExercise()
+                val sessionId = requireNotNull(workoutRepository.findActiveSession()).id
+                workoutRepository.nextUpdateFailure = WorkoutPersistenceError.Unavailable
+                viewModel.onAbandonWorkout(sessionId)
+                assertEquals(ActiveWorkoutErrorReason.PERSISTENCE_UNAVAILABLE, awaitActionError())
+
+                viewModel.onAbandonWorkout(sessionId)
+                advanceUntilIdle()
+
+                assertNull(workoutRepository.findActiveSession())
+                assertNull(viewModel.uiState.value.errorMessage)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
     /** Scans forward rather than assuming an emission count per step (see `ActiveWorkoutViewModelTest`). */
     private suspend fun ReceiveTurbine<ActiveWorkoutUiState>.startWorkoutWithTheExercise(): ActiveExerciseUi {
         var state = awaitItem()
