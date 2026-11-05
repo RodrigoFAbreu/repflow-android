@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "work_item_id": "restore-safety-snapshot",
+  "requirements": {
+    "R1": {
+      "description": "A confirmed restore of a valid file saves the new copy beside the old one, restores, then replaces the old copy; if the copy cannot be built or saved the restore does not happen; an invalid file or a failed restore leaves the old copy byte-identical; leaving the screen does not abandon it; restores never overlap, so the copy holds the data immediately before the last restore, apart from a write another screen makes during it; with no training data no copy is made and any old copy stays",
+      "checkpoint_ids": [
+        "CP1"
+      ]
+    },
+    "R2": {
+      "description": "Backup screen shows the safety-copy card only when a copy exists, through the confirmation; neither restore changes Last backup; a screen reopened during a restore keeps its buttons disabled until that restore ends and then shows the card as it now stands; the outcome of a restore shows on the Backup screen even if the screen that confirmed it has gone, when that restore ends if Backup is open and otherwise at the next visit, once; an outcome equal to the one on screen merges into that snackbar and the next equal outcome still shows",
+      "checkpoint_ids": [
+        "CP2"
+      ]
+    },
+    "R3": {
+      "description": "Erase all data deletes the copy first and waits for a running restore, so a completed erase leaves neither training data nor a copy; the copy is private to the app",
+      "checkpoint_ids": [
+        "CP1"
+      ]
+    },
+    "R4": {
+      "description": "Restore note and confirmation no longer say a restore can't be undone; they are the drawn text and buttons, with the copy paragraphs left out when the phone has no training data",
+      "checkpoint_ids": [
+        "CP2"
+      ]
+    }
+  }
+}
