@@ -10144,12 +10144,12 @@
       "registry_path": "docs/ai-workflow/registry/fix-workout-actions-in-order-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/fix-workout-actions-in-order-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "SELF_REVIEWING_IMPLEMENTATION",
+      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
       "plan_revision": 2,
-      "implementation_revision": null,
+      "implementation_revision": 1,
       "functional_review_round": null,
       "base_commit": "f4e4c6e6aa2b31ef8d783e0c2ee01e6cc3088022",
-      "reviewed_implementation_head": null,
+      "reviewed_implementation_head": "98bc58bc03381733eb7bbfa4e01e4d09b1044918",
       "current_checkpoint_id": null,
       "last_completed_checkpoint_id": "CP1",
       "checkpoints": {
@@ -10284,8 +10284,8 @@
           "external": 0
         }
       },
-      "state_revision": 11,
-      "last_transition": "2026-11-05T16:14:18+00:00",
+      "state_revision": 12,
+      "last_transition": "2026-11-05T16:35:28.171693+00:00",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
