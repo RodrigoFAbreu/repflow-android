@@ -103,7 +103,8 @@ The Workflow Controller runs each milestone in `docs/backlog.yaml`. These apply 
   round. Say what the user would see go wrong.
 - **Simple commands.** Run `gh` and scripts as separate simple commands. A heredoc script chained with `gh` can be
   refused by the auto-mode check even though each part is allowed alone.
-- **Optional findings.** Before acceptance, give each one a disposition in
+- **Acceptance.** Don't check `gh` first, for example with `gh auth status`, which the auto-mode check refuses: `workflow_state.satisfy_acceptance_gate` runs the Workflow's own GitHub query, and calling it is the intended path, not a way round anything.
+- **Optional findings are this lane's to triage, not the owner's.** Check each against the code: `fixed`, `dropped` with a reason, or `follow-up` with a link to an issue or `docs/items/` page. Before acceptance, give each one a disposition in
   `docs/ai-workflow/registry/<id>-dispositions.json`: `python3 scripts/workflow_state.py --finding-dispositions <id>`
   lists them and prints a skeleton. A follow-up issue is enough; acceptance never waits for a fix.
 - **Devices.** The orchestrator keeps adb and the emulator running outside the jobs. Don't start or kill them, since a
