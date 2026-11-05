@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_work_item_id": null,
+  "active_work_item_id": "fix-workout-actions-in-order",
   "work_items": {
     "workflow-v2-1-core": {
       "work_item_type": "process",
@@ -10133,6 +10133,275 @@
         },
         "evaluated_at": "2026-11-05T14:47:45Z",
         "workflow_release": "2.25.5"
+      }
+    },
+    "fix-workout-actions-in-order": {
+      "work_item_type": "product",
+      "work_item_kind": "product",
+      "work_item_id": "fix-workout-actions-in-order",
+      "parent_work_item_id": null,
+      "plan_path": "docs/milestones/fix-workout-actions-in-order-execution.md",
+      "registry_path": "docs/ai-workflow/registry/fix-workout-actions-in-order-registry.json",
+      "mapping_path": "docs/ai-workflow/requirements/fix-workout-actions-in-order-mapping.json",
+      "governing_workflow_version": "2.2",
+      "phase": "IMPLEMENTING",
+      "plan_revision": 2,
+      "implementation_revision": null,
+      "functional_review_round": null,
+      "base_commit": "f4e4c6e6aa2b31ef8d783e0c2ee01e6cc3088022",
+      "reviewed_implementation_head": null,
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": null,
+      "checkpoints": {},
+      "current_bundle_id": "43714f0fab4b5440661f3010eeea33f43c7dd26d36c884a772322dcf12cc9d4a",
+      "plan_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "43714f0fab4b5440661f3010eeea33f43c7dd26d36c884a772322dcf12cc9d4a",
+        "approved_review_content_id": "9849dbcf485998ab6215c1ea75c879b3dc318c09004c924d3fefdccda9c2e41d",
+        "review_content_manifest": [
+          {
+            "path": "docs/ai-workflow/registry/fix-workout-actions-in-order-registry.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "aa50f49377ac49722441b99b967c27e428053e28"
+          },
+          {
+            "path": "docs/ai-workflow/requirements/fix-workout-actions-in-order-mapping.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "87cf64220665ed1adc29621ceb98598055b94153"
+          },
+          {
+            "path": "docs/milestones/fix-workout-actions-in-order-execution.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "94ec8e1179c446401ea2bed18270b3f8d325bc52"
+          }
+        ],
+        "reviewed_content_commit": null,
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-05T16:07:56+00:00",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "9849dbcf485998ab6215c1ea75c879b3dc318c09004c924d3fefdccda9c2e41d",
+            "ledger": {
+              "local": {
+                "bundle_id": "43714f0fab4b5440661f3010eeea33f43c7dd26d36c884a772322dcf12cc9d4a",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "095a5c278d848ed15705ff0e4d4643ee641ba752e6b9a367fdaaf0e8cae4a286",
+                "ledger_entry_sha256": "328612116d5d342269881aff9b152449e5f6ca2f48bec4b146e53de91f0a32a0",
+                "run_ref": "session:local .ai-review/fix-workout-actions-in-order/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "43714f0fab4b5440661f3010eeea33f43c7dd26d36c884a772322dcf12cc9d4a",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "68f71c67e09182734f169eacb7e63fca0583759083c814555fd02ad63f6cdeae",
+                "ledger_entry_sha256": "f5905b039e05ad630fc6dc84b14e15a16f76d5ad22b42c1bc111015a53d1bb77",
+                "run_ref": "codex:20261105T160336Z-d960fa5f",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-05T16:07:56+00:00",
+          "workflow_release": "2.25.5"
+        }
+      },
+      "technical_approval": null,
+      "technical_review_block_pins": [],
+      "plan_review_stages": {
+        "review_content_id": "9849dbcf485998ab6215c1ea75c879b3dc318c09004c924d3fefdccda9c2e41d",
+        "LOCAL_MODEL_PLAN_REVIEW": {
+          "bundle_id": "43714f0fab4b5440661f3010eeea33f43c7dd26d36c884a772322dcf12cc9d4a",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-05T16:01:56Z",
+          "verdict_sha256": "095a5c278d848ed15705ff0e4d4643ee641ba752e6b9a367fdaaf0e8cae4a286",
+          "run_ref": "session:local .ai-review/fix-workout-actions-in-order/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_PLAN_REVIEW": {
+          "bundle_id": "43714f0fab4b5440661f3010eeea33f43c7dd26d36c884a772322dcf12cc9d4a",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-05T16:05:24Z",
+          "verdict_sha256": "68f71c67e09182734f169eacb7e63fca0583759083c814555fd02ad63f6cdeae",
+          "run_ref": "codex:20261105T160336Z-d960fa5f",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
+      },
+      "functional_acceptance_status": null,
+      "blocking_decisions": [],
+      "review_round_counts": {
+        "plan": {
+          "local": 2,
+          "external": 1
+        },
+        "implementation": {
+          "local": 0,
+          "external": 0
+        }
+      },
+      "state_revision": 9,
+      "last_transition": "2026-11-05T16:07:56+00:00",
+      "feedback_layout": "scoped",
+      "plan_review_binding": {
+        "status": "BOUND",
+        "at": "2026-11-05T15:49:49Z",
+        "consumed": {
+          "review_content_id": "6e4953504f8c950eaae519eb13194b67446c92243a6ebc3d093e67ed62a9ccad",
+          "plan_revision": 1,
+          "legacy": false
+        },
+        "published": {
+          "review_content_id": "9849dbcf485998ab6215c1ea75c879b3dc318c09004c924d3fefdccda9c2e41d",
+          "plan_revision": 2
+        },
+        "bound": {
+          "review_content_id": "9849dbcf485998ab6215c1ea75c879b3dc318c09004c924d3fefdccda9c2e41d",
+          "bundle_id": "43714f0fab4b5440661f3010eeea33f43c7dd26d36c884a772322dcf12cc9d4a",
+          "plan_revision": 2
+        }
+      },
+      "consumed_plan_review_content_ids": [
+        "6e4953504f8c950eaae519eb13194b67446c92243a6ebc3d093e67ed62a9ccad"
+      ],
+      "optional_findings": {
+        "F-5f04c4266166": {
+          "digest": "5f04c4266166bb6e79902c0ef7279f6e80037220d970c061bc4994bfec320525",
+          "text": "**O1. \"No other screen edits a running workout\" isn't true.** `HomeViewModel.onAbandonWorkout` (`HomeViewModel.kt:191`) does, from the resume card, and it won't take this lock. The scope decision still holds: leaving the workout pops its entry (`RepFlowNavigationActions.kt:17`), which clears the ViewModel, so the two don't normally overlap. Only the sentence in Goal and scope and the self-review's \"the only writer\" need correcting.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "6e4953504f8c950eaae519eb13194b67446c92243a6ebc3d093e67ed62a9ccad",
+              "verdict": "REVISE",
+              "at": "2026-11-05T15:43:29Z"
+            }
+          ]
+        },
+        "F-530853378b03": {
+          "digest": "530853378b030687ed13991ec34b080cb5282880975f276b9b58bc5f269877dd",
+          "text": "**O2. There are no rest-timer writes outside `launchAction`.** The out-of-scope clause and the self-review say there are. `RestTimerExpiryHandler` only reads. Every rest-timer write runs through `launchAction` (`ActiveWorkoutViewModel.kt:372-385`) or inside `onRecordSet`'s action (`:365`), so they all take the lock, and that is what makes the auto-started timer safe. The self-review's \"do not take it and never did\" should say the opposite.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "6e4953504f8c950eaae519eb13194b67446c92243a6ebc3d093e67ed62a9ccad",
+              "verdict": "REVISE",
+              "at": "2026-11-05T15:43:29Z"
+            }
+          ]
+        },
+        "F-1a746f10aa3e": {
+          "digest": "1a746f10aa3ecd0b948de74ffa0204a2c9109df34f0012cf895a589e94167afe",
+          "text": "**O3. \"Sees every tap take effect\" overstates it.** By reading, not run: restoring a file without this workout makes both actions report an error, which is correct but isn't the tap taking effect. With a file that holds it, the first write replaces the restored tree with the pre-restore one plus the set, because `update` rewrites the whole tree. Both are today's behaviour for a single action and aren't changed by this plan, so they only need the usability note reworded.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "6e4953504f8c950eaae519eb13194b67446c92243a6ebc3d093e67ed62a9ccad",
+              "verdict": "REVISE",
+              "at": "2026-11-05T15:43:29Z"
+            }
+          ]
+        },
+        "F-3978f82c053e": {
+          "digest": "3978f82c053e937c1b9d7c599543561ef731c863192300f9d885bb4aa258c049",
+          "text": "**O4. A double press during a restore now logs two identical sets.** On the base code the second overwrote the first, so a double press ended as one set. The entry stays filled and `canLog` stays true until the save lands (`WorkoutFocus.kt:185-204`), and nothing on screen changes while the write waits. This is what R1 asks for and Undo corrects it, so no change is needed. `safety-copy-polish`'s Restoring screen, next in the backlog, may narrow the window.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "6e4953504f8c950eaae519eb13194b67446c92243a6ebc3d093e67ed62a9ccad",
+              "verdict": "REVISE",
+              "at": "2026-11-05T15:43:29Z"
+            }
+          ]
+        },
+        "F-4ad6c883ffc2": {
+          "digest": "4ad6c883ffc2c14095ce0feb0ffbc706f27f6e37d6e7bad59a53aff6c2ad0ee2",
+          "text": "**O5. A set still waiting when the user leaves the workout is lost with no message.** By reading, not run: leaving pops the entry, which cancels `viewModelScope` and the waiting action, so nothing is saved and no error shows. It's the same on the base code, so it isn't a regression, but the item's title says a set logged during a restore can't be lost. It looks like a follow-up issue rather than part of this size-1 item.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "6e4953504f8c950eaae519eb13194b67446c92243a6ebc3d093e67ed62a9ccad",
+              "verdict": "REVISE",
+              "at": "2026-11-05T15:43:29Z"
+            }
+          ]
+        },
+        "F-b92a3a88427a": {
+          "digest": "b92a3a88427a455982d0f6c74f70ec8b56cd7a960703add468e4b919db62e625",
+          "text": "**O6. When a failed action is followed by a queued success, the failure is never reported, and test 5 asserts exactly that.** The first action fails and sets the message, and the next one succeeds and clears it within the time of one write (`ActiveWorkoutViewModel.kt:515-526`), which also takes down the snackbar (`ActiveWorkoutScreen.kt:143-148`). What the user would see: they log two sets, or a set and Finish, one isn't saved, and nothing says so. Measured: a failed set then Finish ends `COMPLETED` with 0 sets and no error, on the base code and with the lock, so that order isn't a regression, and `fix-workout-error-followups` R1 asks for the clear. The one change is the order test 5 pins, which on the base code left a message up. It needs a failure that clears itself between two writes, such as a full disk or an I/O error. By reading, a workout missing from the restored file fails both actions, so the message stays. No change is needed for this item, but it sits against \"don't hide failures\", so it looks like a follow-up on issue #34.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "9849dbcf485998ab6215c1ea75c879b3dc318c09004c924d3fefdccda9c2e41d",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T16:01:56Z"
+            }
+          ]
+        },
+        "F-33cadaf65deb": {
+          "digest": "33cadaf65deb23433488968db8a1ae5302b7f47079cded16d76a0f89bb4ffa80",
+          "text": "In CP1 tests 2–4, explicitly drain the test scheduler before releasing `holdWrites`. This makes the intended overlap reproducible with `StandardTestDispatcher`; releasing the gate before either action reaches `update` would let the unlocked baseline pass.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "MANUAL_EXTERNAL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "9849dbcf485998ab6215c1ea75c879b3dc318c09004c924d3fefdccda9c2e41d",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T16:05:24Z"
+            }
+          ]
+        }
       }
     }
   },

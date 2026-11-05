@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "work_item_id": "fix-workout-actions-in-order",
+  "requirements": {
+    "R1": {
+      "description": "Workout actions started from the workout screen run one after another in the order they were started, so two actions queued during a restore both keep their effect: a set then another set, and a set then Finish",
+      "checkpoint_ids": [
+        "CP1"
+      ]
+    },
+    "R2": {
+      "description": "Ordering also holds for the error message: a failed earlier action cannot overwrite a later success's cleared state",
+      "checkpoint_ids": [
+        "CP1"
+      ]
+    }
+  }
+}
