@@ -20,6 +20,12 @@ import com.repflow.app.domain.common.DomainResult
  */
 interface TrainingDataRepository {
     /**
+     * Whether any training data exists at all. The `settings` row does not count, so a fresh install
+     * has none. A read failure throws, for the caller to report.
+     */
+    suspend fun hasTrainingData(): Boolean
+
+    /**
      * Deletes every training-data row in one transaction - all or nothing. Called
      * inside an enclosing transaction it joins that one, so the enclosing
      * transaction's rollback undoes it too.

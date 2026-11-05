@@ -3,6 +3,7 @@ package com.repflow.app.presentation.progression
 import androidx.activity.ComponentActivity
 import androidx.annotation.StringRes
 import androidx.compose.runtime.remember
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescriptionExactly
 import androidx.compose.ui.test.hasText
@@ -26,6 +27,7 @@ import com.repflow.app.application.common.IdentifierGenerator
 import com.repflow.app.application.exercise.GetExercise
 import com.repflow.app.application.exercise.ObserveExercises
 import com.repflow.app.application.progression.ComputeProgressionRecommendation
+import com.repflow.app.application.progression.ProgressionRecommendationRepository
 import com.repflow.app.application.progression.RecordManualOverride
 import com.repflow.app.application.recovery.GetWorkoutDayContext
 import com.repflow.app.application.recovery.ObserveReadiness
@@ -69,6 +71,7 @@ import com.repflow.app.presentation.workout.RestNotificationCanceller
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -168,6 +171,39 @@ class ProgressionRecommendationRouteTest {
         assertEquals(ProgressionResult.ReduceLoad, stored.manualOverride?.result)
     }
 
+    /**
+     * As during a restore: the override reads its row, the row goes, and the update finds nothing to
+     * change. The real DAO and the real screen, so the user is told the choice wasn't saved.
+     */
+    @Test
+    fun anOverrideWhoseRecommendationHasGoneShowsTheSaveFailureMessage() {
+        val read = runBlocking { checkNotNull(recommendations.findLatestForExercise(exerciseId)) }
+        val goesAfterTheRead =
+            object : ProgressionRecommendationRepository by recommendations {
+                override suspend fun findLatestForExercise(exerciseId: ExerciseId): ProgressionRecommendation {
+                    database.trainingDataDao().deleteProgressionRecommendations()
+                    return read
+                }
+            }
+        composeRule.setContent {
+            RepFlowTheme {
+                ProgressionRecommendationRoute(
+                    onBack = {},
+                    viewModel = recommendationViewModel(exerciseId.value, overridesThrough = goesAfterTheRead),
+                )
+            }
+        }
+        waitForText(string(R.string.progression_pick_another))
+
+        composeRule.onNodeWithText(string(R.string.progression_pick_another)).performClick()
+        composeRule.onNodeWithText(string(R.string.progression_result_reduce_load)).performClick()
+
+        waitForText(string(R.string.progression_save_failed))
+        composeRule.onNodeWithText(string(R.string.progression_save_failed)).assertIsDisplayed()
+        composeRule.onAllNodes(hasText(string(R.string.progression_overridden_title))).assertCountEquals(0)
+        assertNull(runBlocking { recommendations.findLatestForExercise(exerciseId) })
+    }
+
     @Test
     fun theWorkoutPickersWhyReachesTheRecommendationScreen() {
         runBlocking { success(StartWorkoutSession(workoutRepository(), clock, ids)(StartWorkoutSessionCommand(null))) }
@@ -257,12 +293,15 @@ class ProgressionRecommendationRouteTest {
         }
     }
 
-    private fun recommendationViewModel(argument: String): ProgressionRecommendationViewModel =
+    private fun recommendationViewModel(
+        argument: String,
+        overridesThrough: ProgressionRecommendationRepository = recommendations,
+    ): ProgressionRecommendationViewModel =
         ProgressionRecommendationViewModel(
             savedStateHandle = SavedStateHandle(mapOf(RepFlowDestinations.PROGRESSION_EXERCISE_ARG to argument)),
             repository = recommendations,
             getExercise = GetExercise(LocalExerciseRepository(database.exerciseDao())),
-            recordManualOverride = RecordManualOverride(recommendations, clock),
+            recordManualOverride = RecordManualOverride(overridesThrough, clock),
             observeReadiness = ObserveReadiness(LocalRecoveryRepository(database.recoveryEntryDao())),
             clock = clock,
         )

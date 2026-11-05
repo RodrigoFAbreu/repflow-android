@@ -59,15 +59,23 @@ class LocalWorkoutRepository
         @Suppress("ReturnCount")
         override suspend fun insert(session: WorkoutSession): DomainResult<Unit, WorkoutPersistenceError> {
             try {
-                if (sessionDao.findActive() != null) {
-                    return DomainResult.Failure(WorkoutPersistenceError.ActiveSessionAlreadyExists)
+                // Inside the transaction: this write may have waited for a restore, and what that restore
+                // left can hold a running workout that a read before the wait could not see.
+                val inserted =
+                    database.withTransaction {
+                        val noneActive = sessionDao.findActive() == null
+                        if (noneActive) {
+                            sessionDao.insert(WorkoutEntityMapper.toSessionEntity(session))
+                            exerciseDao.insertAll(WorkoutEntityMapper.toExerciseEntities(session))
+                            setDao.insertAll(WorkoutEntityMapper.toSetEntities(session))
+                        }
+                        noneActive
+                    }
+                return if (inserted) {
+                    DomainResult.Success(Unit)
+                } else {
+                    DomainResult.Failure(WorkoutPersistenceError.ActiveSessionAlreadyExists)
                 }
-                database.withTransaction {
-                    sessionDao.insert(WorkoutEntityMapper.toSessionEntity(session))
-                    exerciseDao.insertAll(WorkoutEntityMapper.toExerciseEntities(session))
-                    setDao.insertAll(WorkoutEntityMapper.toSetEntities(session))
-                }
-                return DomainResult.Success(Unit)
             } catch (e: SQLiteConstraintException) {
                 return DomainResult.Failure(translateConstraintViolation(e))
             } catch (expected: SQLiteFullException) {

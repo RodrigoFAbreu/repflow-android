@@ -5,7 +5,8 @@ import androidx.room.Query
 
 /**
  * Deletes for every training-data table - the ten entity types the backup
- * snapshot carries - and for nothing else (remediation-1 CP14). Children
+ * snapshot carries - and for nothing else (remediation-1 CP14), and the one
+ * question of whether any of them holds a row. Children
  * before parents, so no foreign key is ever left pointing at a deleted row
  * part-way through: sets, then workout exercises, then sessions (which
  * reference plan versions), then planned exercises, plan versions and plans,
@@ -17,7 +18,24 @@ import androidx.room.Query
  * whole sequence in one transaction.
  */
 @Dao
+@Suppress("TooManyFunctions") // One delete per training-data table, by design, plus the one question over all of them.
 interface TrainingDataDao {
+    @Query(
+        """
+        SELECT EXISTS(SELECT 1 FROM workout_sets)
+            OR EXISTS(SELECT 1 FROM workout_exercises)
+            OR EXISTS(SELECT 1 FROM workout_sessions)
+            OR EXISTS(SELECT 1 FROM planned_exercises)
+            OR EXISTS(SELECT 1 FROM training_plan_versions)
+            OR EXISTS(SELECT 1 FROM training_plans)
+            OR EXISTS(SELECT 1 FROM exercises)
+            OR EXISTS(SELECT 1 FROM recovery_entries)
+            OR EXISTS(SELECT 1 FROM futsal_sessions)
+            OR EXISTS(SELECT 1 FROM progression_recommendations)
+        """,
+    )
+    suspend fun hasAnyRow(): Boolean
+
     @Query("DELETE FROM workout_sets")
     suspend fun deleteWorkoutSets()
 

@@ -1,0 +1,100 @@
+{
+  "dispositions": {
+    "F-09994efe61d1": {
+      "disposition": "fixed"
+    },
+    "F-141c78ba49dc": {
+      "disposition": "fixed"
+    },
+    "F-263844a35041": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/34"
+    },
+    "F-28a9853f05f7": {
+      "disposition": "fixed"
+    },
+    "F-37667ee47a47": {
+      "disposition": "dropped",
+      "reason": "Plan-stage test wording on a finished plan; the implementation and its tests passed review."
+    },
+    "F-387f39cc12d6": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/34"
+    },
+    "F-4410c3c4be7c": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/34"
+    },
+    "F-5849ea49bf37": {
+      "disposition": "fixed"
+    },
+    "F-5a500674f97f": {
+      "disposition": "fixed"
+    },
+    "F-5b0a5458f8e1": {
+      "disposition": "dropped",
+      "reason": "Plan bookkeeping on a finished plan; the tests compile and pass."
+    },
+    "F-5c42bf7ab221": {
+      "disposition": "fixed"
+    },
+    "F-6108fbb0435b": {
+      "disposition": "fixed"
+    },
+    "F-6f82cda37904": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/34"
+    },
+    "F-746031c6eb9c": {
+      "disposition": "dropped",
+      "reason": "Accepted corner recorded in the plan; no data is lost and the order protects privacy."
+    },
+    "F-750b5e820b44": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/34"
+    },
+    "F-766afb591e60": {
+      "disposition": "dropped",
+      "reason": "Wording of a known limitation only; harmless, no code change."
+    },
+    "F-7b7372072aa8": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/34"
+    },
+    "F-a0592c58fa9f": {
+      "disposition": "fixed"
+    },
+    "F-a681a83ee77a": {
+      "disposition": "fixed"
+    },
+    "F-ab5e503b8371": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/34"
+    },
+    "F-b1c15aafbc8e": {
+      "disposition": "fixed"
+    },
+    "F-b6843a870f45": {
+      "disposition": "dropped",
+      "reason": "Plan bookkeeping on a finished plan; the wrap-up already names the test."
+    },
+    "F-cd893e4ffc91": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/34"
+    },
+    "F-ddb81260b6cc": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/34"
+    },
+    "F-f06bd3b76017": {
+      "disposition": "dropped",
+      "reason": "A design alternative for the owner, not a defect; the shipped design is correct."
+    },
+    "F-fbba9a8faf8c": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/34"
+    }
+  },
+  "schema_version": 1,
+  "work_item_id": "restore-safety-snapshot"
+}

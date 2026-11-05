@@ -26,12 +26,19 @@ class InMemoryProgressionRecommendationRepository : ProgressionRecommendationRep
         return DomainResult.Success(Unit)
     }
 
+    @Suppress("ReturnCount")
     override suspend fun update(recommendation: ProgressionRecommendation): DomainResult<Unit, ProgressionPersistenceError> {
         nextUpdateFailure?.let {
             nextUpdateFailure = null
             return DomainResult.Failure(it)
         }
+        if (recommendation.id !in recommendations) return DomainResult.Failure(ProgressionPersistenceError.Unavailable)
         recommendations[recommendation.id] = recommendation
         return DomainResult.Success(Unit)
+    }
+
+    /** The row goes while the use case holds what it read, as a restore can do. */
+    fun removeAll() {
+        recommendations.clear()
     }
 }

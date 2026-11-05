@@ -36,4 +36,8 @@ class InMemoryBackupRepository : BackupRepository {
         lastReplacedWith = snapshot
         return DomainResult.Success(Unit)
     }
+
+    override suspend fun inRestoreTransaction(
+        block: suspend () -> DomainResult<Unit, BackupRestoreError>,
+    ): DomainResult<Unit, BackupRestoreError> = block()
 }

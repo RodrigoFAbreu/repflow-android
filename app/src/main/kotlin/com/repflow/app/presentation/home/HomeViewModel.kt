@@ -81,6 +81,7 @@ class HomeViewModel
         private val historyRetry = MutableStateFlow(0)
         private val error = MutableStateFlow<HomeErrorReason?>(null)
         private val openWorkout = MutableStateFlow(false)
+        private var startInFlight = false
 
         /** [today], plus the midnight wait that advances it, for as long as this flow is collected. */
         private val date: Flow<LocalDate> =
@@ -155,19 +156,28 @@ class HomeViewModel
          * `null`, through the same use cases the workout screen calls, and asks
          * the route to open the workout once the start succeeds. A version that
          * is no longer an active plan's latest surfaces as an error rather than
-         * falling back to an empty session.
+         * falling back to an empty session. A second tap while one start is in
+         * flight is ignored, so it can never report the first start's own session
+         * as "already running". A start can wait for a whole restore with nothing
+         * on screen, which invites that tap.
          */
         fun onStartWorkout(planVersionId: TrainingPlanVersionId?) {
+            if (startInFlight) return
+            startInFlight = true
             viewModelScope.launch {
-                val result =
-                    if (planVersionId == null) {
-                        startWorkoutSession(StartWorkoutSessionCommand(trainingPlanVersionId = null))
-                    } else {
-                        startFromPlan(planVersionId)
+                try {
+                    val result =
+                        if (planVersionId == null) {
+                            startWorkoutSession(StartWorkoutSessionCommand(trainingPlanVersionId = null))
+                        } else {
+                            startFromPlan(planVersionId)
+                        }
+                    when (result) {
+                        is DomainResult.Success -> openWorkout.value = true
+                        is DomainResult.Failure -> error.value = result.error.toStartReason()
                     }
-                when (result) {
-                    is DomainResult.Success -> openWorkout.value = true
-                    is DomainResult.Failure -> error.value = result.error.toStartReason()
+                } finally {
+                    startInFlight = false
                 }
             }
         }

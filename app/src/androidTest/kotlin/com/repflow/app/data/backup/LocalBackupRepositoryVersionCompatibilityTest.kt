@@ -4,6 +4,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.application.backup.BackupRestoreError
+import com.repflow.app.application.backup.PreRestoreCopy
 import com.repflow.app.application.backup.RestoreBackup
 import com.repflow.app.domain.backup.BackupSnapshot
 import com.repflow.app.domain.backup.BackupValidationError
@@ -39,7 +40,7 @@ class LocalBackupRepositoryVersionCompatibilityTest {
                 .inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), RepFlowDatabase::class.java)
                 .build()
         repository = LocalBackupRepository(database, LocalTrainingDataRepository(database))
-        restoreBackup = RestoreBackup(repository)
+        restoreBackup = RestoreBackup(repository, PreRestoreCopy { restore -> restore() })
     }
 
     @After

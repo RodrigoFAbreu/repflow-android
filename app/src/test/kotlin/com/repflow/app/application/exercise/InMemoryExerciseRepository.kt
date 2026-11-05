@@ -38,6 +38,11 @@ class InMemoryExerciseRepository : ExerciseRepository {
         state.value = state.value + (exercise.id to exercise)
     }
 
+    /** Replaces every exercise, as a restore does. */
+    fun replaceAllWith(exercises: List<Exercise>) {
+        state.value = exercises.associateBy { it.id }
+    }
+
     override fun observe(criteria: ExerciseQueryCriteria): Flow<List<Exercise>> =
         flow {
             if (observeFailureOnNextSubscription) {

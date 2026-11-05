@@ -60,15 +60,17 @@ import java.time.format.DateTimeFormatter
  * remediation-1-remediation-1 CP8), reached from Settings' `Backup and
  * restore`: the hero (`Last backup <when>` over the date and time, or `No
  * backup yet` before the first), `Export backup now`, `Export for other tools`
- * with `Workout history as CSV`, and the `Replaces everything` card with
- * `Restore from a backup`.
+ * with `Workout history as CSV`, the `Replaces everything` card with `Restore
+ * from a backup`, and below it, only when a copy exists, the safety copy card
+ * (`40k`).
  *
- * Restore still goes through the system file picker and the existing
- * destructive confirmation ([BackupRestoreConfirmDialog]) - the only restore
- * path. Registered deviations from the design (Q5): no recent-files list, no
- * `Share`, no safety-snapshot row, no file metadata, no `Undo` toast and no
- * restore file sheet with a preview; a successful restore keeps today's
- * `Backup restored` snackbar.
+ * Restore goes through the system file picker or that card, then the destructive
+ * confirmation ([BackupRestoreConfirmDialog]) - the only restore path. Registered
+ * deviations from the design (Q5): no recent-files list, no `Share`, no file
+ * metadata, no `Undo` toast and no restore file sheet with a preview; a
+ * successful restore keeps today's `Backup restored` snackbar. The frame around
+ * the restore card stays as it was, and `40g`'s inline invalid-file message and
+ * `Restoring…` card are not drawn.
  */
 @Composable
 fun BackupScreen(
@@ -83,12 +85,17 @@ fun BackupScreen(
         message = uiState.statusMessage,
         snackbarHostState = snackbarHostState,
         onExportSaved = { exportSaved = true },
+        onShowing = actions.onStatusShowing,
         onShown = actions.onStatusShown,
     )
 
     if (uiState.pendingRestoreJson != null) {
         BackupRestoreConfirmDialog(
             hasRunningWorkout = uiState.hasRunningWorkout,
+            preRestoreSnapshotAt = uiState.preRestoreSnapshotAt,
+            pendingRestoreSnapshotAt = uiState.pendingRestoreSnapshotAt,
+            hasTrainingData = uiState.hasTrainingData,
+            zone = zone,
             onConfirm = actions.onRestoreConfirmed,
             onCancel = actions.onRestoreCancelled,
         )
@@ -124,6 +131,9 @@ fun BackupScreen(
             )
             CsvRow(enabled = !uiState.isBusy, onClick = actions.onExportCsv)
             RestoreCard(enabled = !uiState.isBusy, onRestoreClick = actions.onRestoreBackup)
+            uiState.preRestoreSnapshotAt?.let { takenAt ->
+                SafetyCopyCard(takenAt = takenAt, zone = zone, enabled = !uiState.isBusy, onRestoreClick = actions.onRestoreSnapshot)
+            }
         }
     }
 }
@@ -134,6 +144,7 @@ private fun BackupMessages(
     message: BackupStatusMessage?,
     snackbarHostState: SnackbarHostState,
     onExportSaved: () -> Unit,
+    onShowing: () -> Unit,
     onShown: () -> Unit,
 ) {
     val restoreSucceeded = stringResource(R.string.backup_message_restore_succeeded)
@@ -142,6 +153,7 @@ private fun BackupMessages(
     val operationFailed = stringResource(R.string.backup_message_operation_failed)
     LaunchedEffect(message) {
         val current = message ?: return@LaunchedEffect
+        onShowing()
         val text =
             when (current) {
                 BackupStatusMessage.ExportSucceeded -> null
@@ -297,6 +309,37 @@ private fun RestoreCard(
     }
 }
 
+/** The safety copy (`40k`): its own card below the restore card, holding the data the last restore replaced. */
+@Composable
+private fun SafetyCopyCard(
+    takenAt: Instant,
+    zone: ZoneId,
+    enabled: Boolean,
+    onRestoreClick: () -> Unit,
+) {
+    val local = takenAt.atZone(zone)
+    RepFlowCard(modifier = Modifier.padding(top = RepFlowSpacing.gapMd).fillMaxWidth()) {
+        RepFlowSectionLabel(text = stringResource(R.string.backup_safety_copy_label))
+        Text(
+            text = stringResource(R.string.backup_safety_copy_title, local.format(DateFormatter), local.format(TimeFormatter)),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+        Text(
+            text = stringResource(R.string.backup_safety_copy_meta),
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = MetaFontSize),
+            color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        BackupOutlinedButton(
+            text = stringResource(R.string.backup_safety_copy_action),
+            onClick = onRestoreClick,
+            enabled = enabled,
+            modifier = Modifier.padding(top = RepFlowSpacing.gapMd).fillMaxWidth(),
+        )
+    }
+}
+
 /** `Saved` beside the hero once an export is written, announced politely when it appears. */
 @Composable
 private fun SavedMark() {
@@ -326,5 +369,5 @@ private val NoteFontSize = 12.sp
 private val NoteLineHeight = 18.sp
 private const val RESTORE_CARD_RING_ALPHA = 0.35f
 private const val RESTORE_BUTTON_RING_ALPHA = 0.7f
-private val DateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM")
-private val TimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+internal val DateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM")
+internal val TimeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")

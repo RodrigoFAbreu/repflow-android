@@ -54,4 +54,25 @@ class RecordManualOverrideTest {
             assertEquals(ProgressionOperationError.NotFound, failure)
             assertNull(repository.findLatestForExercise(ExerciseId("exercise-missing")))
         }
+
+    @Test
+    fun `fails when the recommendation goes between its read and its update`() =
+        runTest {
+            val read = seedRecommendation()
+            val goesAfterTheRead =
+                object : ProgressionRecommendationRepository by repository {
+                    override suspend fun findLatestForExercise(exerciseId: ExerciseId): ProgressionRecommendation {
+                        repository.removeAll()
+                        return read
+                    }
+                }
+
+            val result = RecordManualOverride(goesAfterTheRead, clock)(ExerciseId("exercise-1"), ProgressionResult.MaintainLoad)
+
+            assertEquals(
+                DomainResult.Failure(ProgressionOperationError.PersistenceFailed(ProgressionPersistenceError.Unavailable)),
+                result,
+            )
+            assertEquals(emptyList<ProgressionRecommendation>(), repository.findAll())
+        }
 }

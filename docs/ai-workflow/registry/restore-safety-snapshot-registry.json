@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "work_item_id": "restore-safety-snapshot",
+  "plan_revision": 5,
+  "checkpoints": [
+    {
+      "id": "CP1",
+      "name": "Save a copy before a restore, and delete it on Erase (R1, R3)",
+      "depends_on": [],
+      "complexity": 3,
+      "session_target": "1"
+    },
+    {
+      "id": "CP2",
+      "name": "Offer the copy on the Backup screen and fix the text (R2, R4)",
+      "depends_on": [
+        "CP1"
+      ],
+      "complexity": 3,
+      "session_target": "1"
+    }
+  ]
+}

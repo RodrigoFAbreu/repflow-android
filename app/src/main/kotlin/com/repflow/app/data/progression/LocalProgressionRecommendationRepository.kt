@@ -34,16 +34,30 @@ class LocalProgressionRecommendationRepository
         override suspend fun findAll(): List<ProgressionRecommendation> = dao.findAll().map(::toDomainOrThrow)
 
         override suspend fun insert(recommendation: ProgressionRecommendation): DomainResult<Unit, ProgressionPersistenceError> =
-            runCatchingPersistence { dao.insert(ProgressionRecommendationMapper.toEntity(recommendation)) }
+            runCatchingPersistence {
+                dao.insert(ProgressionRecommendationMapper.toEntity(recommendation))
+                DomainResult.Success(Unit)
+            }
 
+        /**
+         * An update that changes no row is a failure: the row can go between the caller's read and this
+         * write, because a restore makes the write wait while the read still sees the old data.
+         */
         override suspend fun update(recommendation: ProgressionRecommendation): DomainResult<Unit, ProgressionPersistenceError> =
-            runCatchingPersistence { dao.update(ProgressionRecommendationMapper.toEntity(recommendation)) }
+            runCatchingPersistence {
+                if (dao.update(ProgressionRecommendationMapper.toEntity(recommendation)) == 0) {
+                    DomainResult.Failure(ProgressionPersistenceError.Unavailable)
+                } else {
+                    DomainResult.Success(Unit)
+                }
+            }
 
         @Suppress("ReturnCount")
-        private inline fun runCatchingPersistence(block: () -> Unit): DomainResult<Unit, ProgressionPersistenceError> {
+        private inline fun runCatchingPersistence(
+            block: () -> DomainResult<Unit, ProgressionPersistenceError>,
+        ): DomainResult<Unit, ProgressionPersistenceError> {
             try {
-                block()
-                return DomainResult.Success(Unit)
+                return block()
             } catch (expected: SQLiteFullException) {
                 return DomainResult.Failure(ProgressionPersistenceError.Unavailable)
             } catch (expected: SQLiteDiskIOException) {

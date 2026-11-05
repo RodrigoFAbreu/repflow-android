@@ -27,6 +27,8 @@ class LocalTrainingDataRepository
     constructor(
         private val database: RepFlowDatabase,
     ) : TrainingDataRepository {
+        override suspend fun hasTrainingData(): Boolean = database.trainingDataDao().hasAnyRow()
+
         override suspend fun clearTrainingData(): DomainResult<Unit, TrainingDataError> =
             try {
                 database.withTransaction {

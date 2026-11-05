@@ -4,14 +4,25 @@ import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,13 +31,21 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.repflow.app.R
+import com.repflow.app.presentation.designsystem.RepFlowColor
 import com.repflow.app.presentation.designsystem.RepFlowSpacing
+import com.repflow.app.presentation.designsystem.repFlowSecondaryTextColor
 import java.io.BufferedReader
 import java.io.IOException
 import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
+import java.time.Instant
+import java.time.ZoneId
 
 /**
  * The three backup actions, wired to their SAF (Storage Access Framework)
@@ -89,56 +108,167 @@ fun rememberBackupFileActions(viewModel: BackupViewModel): BackupFileActions {
 }
 
 /**
- * The existing destructive confirmation in front of a restore: the safe
- * action and the destructive one, nothing replaced until the latter. It
- * warns first when [hasRunningWorkout], because a restore deletes that workout.
+ * The destructive confirmation in front of a restore (`40j`), of a file or, when
+ * [pendingRestoreSnapshotAt] is non-null, of the safety copy: the safe action and
+ * the destructive one, nothing replaced until the latter. It warns first when
+ * [hasRunningWorkout], because a restore deletes that workout.
+ *
+ * Both buttons share `confirmButton`'s slot, in a layout this code controls, so
+ * their order does not depend on how Material wraps its own row.
  */
 @Composable
 fun BackupRestoreConfirmDialog(
     hasRunningWorkout: Boolean,
+    preRestoreSnapshotAt: Instant?,
+    pendingRestoreSnapshotAt: Instant?,
+    hasTrainingData: Boolean,
+    zone: ZoneId,
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text(stringResource(R.string.backup_restore_confirm_title)) },
-        text = { BackupRestoreConfirmText(hasRunningWorkout) },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text(
-                    text = stringResource(R.string.backup_restore_confirm_action),
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
+        title = {
+            Text(
+                text =
+                    stringResource(
+                        if (pendingRestoreSnapshotAt != null) {
+                            R.string.backup_safety_copy_confirm_title
+                        } else {
+                            R.string.backup_restore_confirm_title
+                        },
+                    ),
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, lineHeight = 24.sp),
+            )
         },
-        dismissButton = {
-            TextButton(onClick = onCancel) {
-                Text(stringResource(R.string.backup_restore_cancel_action))
-            }
+        text = {
+            BackupRestoreConfirmText(
+                hasRunningWorkout = hasRunningWorkout,
+                preRestoreSnapshotAt = preRestoreSnapshotAt,
+                pendingRestoreSnapshotAt = pendingRestoreSnapshotAt,
+                hasTrainingData = hasTrainingData,
+                zone = zone,
+            )
         },
+        confirmButton = { BackupRestoreConfirmButtons(onConfirm = onConfirm, onCancel = onCancel) },
+        textContentColor = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
     )
 }
 
 /**
+ * `Cancel` on the left, or, at a large font, stacked with the destructive action on top (`40j`). In the row
+ * they stay one height if a narrow phone wraps the longer label.
+ */
+@Composable
+private fun BackupRestoreConfirmButtons(
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val confirmLabel = stringResource(R.string.backup_restore_confirm_action)
+    val cancelLabel = stringResource(R.string.backup_restore_cancel_action)
+    if (LocalDensity.current.fontScale > STACK_ACTIONS_FONT_SCALE) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapSm),
+        ) {
+            BackupOutlinedButton(confirmLabel, onConfirm, Modifier.fillMaxWidth(), destructive = true)
+            BackupOutlinedButton(cancelLabel, onCancel, Modifier.fillMaxWidth())
+        }
+    } else {
+        Row(
+            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+            horizontalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapSm),
+        ) {
+            BackupOutlinedButton(cancelLabel, onCancel, Modifier.weight(1f).fillMaxHeight())
+            BackupOutlinedButton(confirmLabel, onConfirm, Modifier.weight(1f).fillMaxHeight(), destructive = true)
+        }
+    }
+}
+
+/**
+ * The outlined button `40j` and `40k` draw: at least 48dp, in a neutral colour or the destructive one,
+ * and never filled.
+ */
+@Composable
+internal fun BackupOutlinedButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    destructive: Boolean = false,
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, if (destructive) colorScheme.error else RepFlowColor.hairline),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = if (destructive) colorScheme.error else colorScheme.onSurface),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+        modifier = modifier.heightIn(min = 48.dp),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.5.sp),
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/**
  * The confirmation's text. It scrolls so it never clips at a large font size,
- * and the warning comes first so it shows without scrolling at any size.
+ * and the warning comes first so it shows without scrolling at any size. With
+ * no training data no copy is made and none is replaced, so only the first
+ * paragraph of each variant shows.
  */
 @Composable
 fun BackupRestoreConfirmText(
     hasRunningWorkout: Boolean,
+    preRestoreSnapshotAt: Instant?,
+    pendingRestoreSnapshotAt: Instant?,
+    hasTrainingData: Boolean,
+    zone: ZoneId,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier.verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapMd),
-    ) {
-        if (hasRunningWorkout) {
-            Text(stringResource(R.string.backup_restore_confirm_running_workout))
+    ProvideTextStyle(MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 21.sp)) {
+        Column(
+            modifier = modifier.verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapMd),
+        ) {
+            if (hasRunningWorkout) {
+                Text(stringResource(R.string.backup_restore_confirm_running_workout))
+            }
+            if (pendingRestoreSnapshotAt != null) {
+                val takenAt = pendingRestoreSnapshotAt.atZone(zone)
+                Text(
+                    stringResource(
+                        R.string.backup_safety_copy_confirm_body,
+                        takenAt.format(DateFormatter),
+                        takenAt.format(TimeFormatter),
+                    ),
+                )
+                if (hasTrainingData) Text(stringResource(R.string.backup_safety_copy_confirm_keeps_copy))
+            } else {
+                Text(stringResource(R.string.backup_restore_confirm_body))
+                if (hasTrainingData) {
+                    Text(stringResource(R.string.backup_restore_confirm_keeps_copy))
+                    if (preRestoreSnapshotAt != null) {
+                        val takenAt = preRestoreSnapshotAt.atZone(zone)
+                        Text(
+                            stringResource(
+                                R.string.backup_restore_confirm_replaces_copy,
+                                takenAt.format(DateFormatter),
+                                takenAt.format(TimeFormatter),
+                            ),
+                        )
+                    }
+                }
+            }
         }
-        Text(stringResource(R.string.backup_restore_confirm_body))
     }
 }
 
+private const val STACK_ACTIONS_FONT_SCALE = 1.1f
 private const val BACKUP_FILE_NAME = "repflow-backup.json"
 private const val CSV_FILE_NAME = "repflow-history.csv"
 

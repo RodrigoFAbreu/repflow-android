@@ -8929,6 +8929,1211 @@
         "evaluated_at": "2026-11-05T08:31:25Z",
         "workflow_release": "2.25.5"
       }
+    },
+    "restore-safety-snapshot": {
+      "work_item_type": "product",
+      "work_item_kind": "product",
+      "work_item_id": "restore-safety-snapshot",
+      "parent_work_item_id": null,
+      "plan_path": "docs/milestones/restore-safety-snapshot-execution.md",
+      "registry_path": "docs/ai-workflow/registry/restore-safety-snapshot-registry.json",
+      "mapping_path": "docs/ai-workflow/requirements/restore-safety-snapshot-mapping.json",
+      "governing_workflow_version": "2.2",
+      "phase": "MILESTONE_COMPLETE",
+      "plan_revision": 5,
+      "implementation_revision": 3,
+      "functional_review_round": null,
+      "base_commit": "255cd7a1be74652235e713ed547ded5d0d408e9f",
+      "reviewed_implementation_head": "aa3a7b0d37af55607ade99f5d2fcd098903f7603",
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": "CP2",
+      "checkpoints": {
+        "CP1": {
+          "status": "COMPLETE",
+          "start_commit": "d7028e8addfd0da4582433be6b1b5f0e9264c1f8"
+        },
+        "CP2": {
+          "status": "COMPLETE",
+          "start_commit": "a7150c7914e22882b96879ecf8e99b5735fb89cb"
+        }
+      },
+      "current_bundle_id": "d4c5adbbc90241c88f2a8a410d144aa3ec4dad03d08bd55373616428907db6b4",
+      "plan_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "d4c5adbbc90241c88f2a8a410d144aa3ec4dad03d08bd55373616428907db6b4",
+        "approved_review_content_id": "2cce4dd3ecffe99d37b10bcdfaa0ae9805cbc85f1b7cb373d7f6d00a20dbcbc3",
+        "review_content_manifest": [
+          {
+            "path": "docs/ai-workflow/registry/restore-safety-snapshot-registry.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "c163e84d8f1796be389fcac85890f0912722eee5"
+          },
+          {
+            "path": "docs/ai-workflow/requirements/restore-safety-snapshot-mapping.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b8bbec405e6e09a39ca21620fa04f9eaa4e9523a"
+          },
+          {
+            "path": "docs/milestones/restore-safety-snapshot-execution.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a4fe91c11d7113d6e6027ed6ddaac3ef6d78ec13"
+          }
+        ],
+        "reviewed_content_commit": null,
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-05T10:47:09Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "2cce4dd3ecffe99d37b10bcdfaa0ae9805cbc85f1b7cb373d7f6d00a20dbcbc3",
+            "ledger": {
+              "local": {
+                "bundle_id": "d4c5adbbc90241c88f2a8a410d144aa3ec4dad03d08bd55373616428907db6b4",
+                "verdict": "APPROVE",
+                "round": 5,
+                "verdict_sha256": "8f5074256a42f62659d3d5fa432f968fd89dc3c04eeec690db413ba628379466",
+                "ledger_entry_sha256": "13d02ce10096fddb5ae05361f6f509ab5220138925d8dd5455412649093177e1",
+                "run_ref": "session:local .ai-review/restore-safety-snapshot/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "d4c5adbbc90241c88f2a8a410d144aa3ec4dad03d08bd55373616428907db6b4",
+                "verdict": "APPROVE",
+                "round": 5,
+                "verdict_sha256": "626ad7b58065beb9926716edfb3cbc281e99c7d2a47806cb70771817d367f509",
+                "ledger_entry_sha256": "e94b550aa08138f20cfa71fe3b4d15ce0ea7f9280ce465bd998a4eec7ecbbac7",
+                "run_ref": "codex:20261105T103940Z-6c4e242d",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-05T10:47:09Z",
+          "workflow_release": "2.25.5"
+        }
+      },
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "631b6b4df63792143f45061f8639ec4425115b5ef28544767c16dc308fe2b0e1",
+        "approved_review_content_id": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+        "review_content_manifest": [
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/backup/FilePreRestoreSnapshotStoreTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f32836818e840b66bf078484b425a8abcc46730a"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/backup/LocalBackupRepositoryAtomicityTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7f7971a7d3fba8776596e7e1dc5a05128286d903"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/backup/LocalBackupRepositoryDamagedFileTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8f9a35fe2c6c49b7a321a7c4c6578162e5d0d08a"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/backup/LocalBackupRepositoryVersionCompatibilityTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "043e563cdb7115c7126ef2cbcb3c21de15d29b19"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/backup/LocalTrainingDataRepositoryTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9018d8a0d64eb2524ac7fc3fe6e6482b44686ab3"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/backup/PreRestoreSnapshotRoundTripTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0ac5cacb021b01e193474f282c00c8fcad27472f"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/settings/SettingsPersistenceTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "23e029de899cadc9e44473b65929ef3d4e3200da"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/backup/BackupRouteSafCancellationTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5e125925854ed6596fc60408171255af9b048c4f"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/backup/BackupRouteUnreadableRestoreFileTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "fe163a920d79a001bd4cf2b914b47f30c95f0c3b"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/backup/BackupScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9e7d2818d0ca39b4a0be4f0c984800b46ba917c6"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/progression/ProgressionRecommendationRouteTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f929fcb6033deeb52b004ecbc23fcd9b069f3ce1"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/backup/BackupRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "50045a451a0f9d5cd1fce872a8a2ff21da77e35e"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/backup/EraseAllData.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "804a9e2d514c79782ff57939018fcce17059ed11"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/backup/PreRestoreCopy.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b1d14e661b4db3b60c569c97a96413faf1a58522"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/backup/PreRestoreCopyLock.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f384483d828218128b116576baa70b4e7b547b81"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/backup/PreRestoreSnapshotStore.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6e57efabf42178df3534abccd72ed66cf4f34317"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/backup/RestoreBackup.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9b9c38f501b648fae332cb4cbc2ee2bff594fd9a"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/backup/TrainingDataRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5e1c82ccdfac897be64cbf3001fd58eee5343c58"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/backup/FilePreRestoreSnapshotStore.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6c2c8bb6713a8e8d8115d788ad039a09559d1e8e"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/backup/LocalBackupRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a9edd8b833571a43aa19602f3410901ff9ec42b5"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/backup/LocalTrainingDataRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5253cf5e6d696375e229cca876845d1f70445b36"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/progression/LocalProgressionRecommendationRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2a926ab7c9b0b1f1d423972acaee0b17d3e169c3"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/workout/LocalWorkoutRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "c7591554031837287f0338fe9a98ef0b49839d2a"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/database/TrainingDataDao.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d192b00f26ada3dd6f56950787c5b69f5bdc9f06"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/database/progression/ProgressionRecommendationDao.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b1ae060987d4ecbad13551ed52d2586a517a1d70"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/di/RepositoryModule.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "39bb35b00aec55078cc4a20a72fa5e5c3bd80779"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupFileActions.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "88c78044df8df2140dc94cb72daa246f11cbbfff"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupRoute.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8183560caf0350d6d3f5b74d940be97b20b5d876"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3e062e0c09c30c911aa88ba3ccf3032fdef9da69"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupScreenActions.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "fe90c3f3db119868bd1363433e1d582a4b3bc298"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupUiState.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f43852848718a453e510a422fe77eef0c365498d"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a3bcbadc0cbfc2dd4f2d17f23537e8498752de22"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/RestoreOutcomeSlot.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b016f67109c0c0722ba4fc465043b63290643aca"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "066488a18f4fcabe6be78a442612ce81f7e224fc"
+          },
+          {
+            "path": "app/src/main/res/values/strings.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "66c29d3ffcfe0cdabbb487fc69d1073dfeaa286e"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/backup/EraseAllDataTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3679b0461e41684f97eb743ced573cfa294c309a"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/backup/InMemoryBackupRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b0cb85522117822feec063aed2fa989eff866282"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/backup/InMemoryPreRestoreSnapshotStore.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a3efd330178fbc4ab9a1e866acb3dbe6ec00b2ad"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/backup/InMemoryTrainingDataRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d80244628833054e9f9d539ef79eae3cebdb275b"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/backup/PreRestoreCopyLockTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "4ea4a52c40c48066ca65c25baad99f6216ad3b0b"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/backup/RestoreBackupTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "99ac5c5b6cf8e5edd3e54dd92f9a19fc25284641"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/backup/SavePreRestoreCopyTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ff0a0a453a124bcfcfd9639f3cab59198232fc5c"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/exercise/InMemoryExerciseRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8b1c6cad5fb9551813f557dec187474f5707d535"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/progression/InMemoryProgressionRecommendationRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "e474199396204e78bf71fefbbb93c67f68632a3e"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/progression/RecordManualOverrideTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "13fe02665f4ef3a057d6da6d385da8b3778716c1"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/backup/BackupViewModelSafetyCopyTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8a1cbd6e76ccee972be0a3d99a9c26ec88654846"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/backup/BackupViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "91784fc08ae538f78259b34b2e50ef63b8dda98f"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/backup/RestoreOutcomeSlotTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "65739298c1cd6b47a42f70cbd93531018e0c4685"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/home/HomeViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0a4d5a125567328681efb1e7ea9e933819092014"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/settings/SettingsViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2f3dac7b4efadb9ce866056d8adfaa33bfd5a6ba"
+          },
+          {
+            "path": "docs/UX_FLOWS.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "577d4b041e13a19dd1b8b78977759e50dc266cf8"
+          },
+          {
+            "path": "docs/ai-workflow/registry/restore-safety-snapshot-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0413d4b59937def932ee6e54f0e49bf3995f4193"
+          }
+        ],
+        "reviewed_content_commit": "aa3a7b0d37af55607ade99f5d2fcd098903f7603",
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-05T14:27:19Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+            "ledger": {
+              "local": {
+                "bundle_id": "631b6b4df63792143f45061f8639ec4425115b5ef28544767c16dc308fe2b0e1",
+                "verdict": "APPROVE",
+                "round": 3,
+                "verdict_sha256": "f2b8b8042103032751160dc3c5151c762fa48361340caf15433d7a0bbf8c3109",
+                "ledger_entry_sha256": "6f313bac02f15a5776b8a17924e62240603c3ca62c077f8c3c136095f5a2c24f",
+                "run_ref": "session:local .ai-review/restore-safety-snapshot/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "631b6b4df63792143f45061f8639ec4425115b5ef28544767c16dc308fe2b0e1",
+                "verdict": "APPROVE",
+                "round": 3,
+                "verdict_sha256": "bdc1aa95fb75ff1d18336ca5f3066f64e4ffe8e2940a2c01bdb4677a9b9da787",
+                "ledger_entry_sha256": "5ddd4a4ac743d53494305d992d18828a3f530cb78e20c8bcfc4bc685f2be4383",
+                "run_ref": "codex:20261105T142337Z-d5689aee",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-05T14:27:19Z",
+          "workflow_release": "2.25.5"
+        }
+      },
+      "technical_review_block_pins": [],
+      "plan_review_stages": {
+        "review_content_id": "2cce4dd3ecffe99d37b10bcdfaa0ae9805cbc85f1b7cb373d7f6d00a20dbcbc3",
+        "LOCAL_MODEL_PLAN_REVIEW": {
+          "bundle_id": "d4c5adbbc90241c88f2a8a410d144aa3ec4dad03d08bd55373616428907db6b4",
+          "verdict": "APPROVE",
+          "round": 5,
+          "completed_at": "2026-11-05T10:39:20Z",
+          "verdict_sha256": "8f5074256a42f62659d3d5fa432f968fd89dc3c04eeec690db413ba628379466",
+          "run_ref": "session:local .ai-review/restore-safety-snapshot/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_PLAN_REVIEW": {
+          "bundle_id": "d4c5adbbc90241c88f2a8a410d144aa3ec4dad03d08bd55373616428907db6b4",
+          "verdict": "APPROVE",
+          "round": 5,
+          "completed_at": "2026-11-05T10:41:29Z",
+          "verdict_sha256": "626ad7b58065beb9926716edfb3cbc281e99c7d2a47806cb70771817d367f509",
+          "run_ref": "codex:20261105T103940Z-6c4e242d",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
+      },
+      "functional_acceptance_status": null,
+      "blocking_decisions": [],
+      "review_round_counts": {
+        "plan": {
+          "local": 5,
+          "external": 3
+        },
+        "implementation": {
+          "local": 3,
+          "external": 3
+        }
+      },
+      "state_revision": 35,
+      "last_transition": "2026-11-05T14:47:45Z",
+      "feedback_layout": "scoped",
+      "plan_review_binding": {
+        "status": "BOUND",
+        "at": "2026-11-05T10:24:34Z",
+        "consumed": {
+          "review_content_id": "1792f29112551e225a253c907f7a9455c9e262c23da5344aed65cce47c0b842e",
+          "plan_revision": 4,
+          "legacy": false
+        },
+        "published": {
+          "review_content_id": "2cce4dd3ecffe99d37b10bcdfaa0ae9805cbc85f1b7cb373d7f6d00a20dbcbc3",
+          "plan_revision": 5
+        },
+        "bound": {
+          "review_content_id": "2cce4dd3ecffe99d37b10bcdfaa0ae9805cbc85f1b7cb373d7f6d00a20dbcbc3",
+          "bundle_id": "d4c5adbbc90241c88f2a8a410d144aa3ec4dad03d08bd55373616428907db6b4",
+          "plan_revision": 5
+        }
+      },
+      "consumed_plan_review_content_ids": [
+        "1792f29112551e225a253c907f7a9455c9e262c23da5344aed65cce47c0b842e",
+        "2f731f6d74860e9a3366ac23930ca7fe91a15338bed1e3a1a521ed18d44a5cb8",
+        "9c8cb920545844f7d80ce3c36979b04e45f1e06dc6a4a10a7caf55b7c95ad644",
+        "a6a03e09ce5676f82bde5948ce9dd39e809ec62e424df39e607fdf6facc7815c"
+      ],
+      "optional_findings": {
+        "F-5b0a5458f8e1": {
+          "digest": "5b0a5458f8e1afe5c1e57bf76292a200c7b35d302af4059539ac398c1e5dcb5d",
+          "text": "**O1. CP1's Files paragraph is missing two tests.** `SettingsViewModelTest.kt:35` builds `EraseAllData(trainingData)` and is not declared anywhere. `BackupViewModelTest.kt:67` is named in CP1's prose but declared only in CP2. Without both, the JVM tests do not compile at the end of CP1.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "a6a03e09ce5676f82bde5948ce9dd39e809ec62e424df39e607fdf6facc7815c",
+              "verdict": "REVISE",
+              "at": "2026-11-05T09:07:03Z"
+            }
+          ]
+        },
+        "F-5c42bf7ab221": {
+          "digest": "5c42bf7ab221bf6fc53000bfa790e5fdefa8f9fdbcb7c91908c8a6d602300e4e",
+          "text": "**O2. The catch is wider than it needs to be.** Wrapping all of `restoreBackup(json)` in `flow { ... }.catch { ... }` also catches parse and `replaceAll` failures, which makes the rule at `LocalBackupRepository.kt:53-57` (\"anything else thrown on this path is a program bug and should crash\") untrue, and CLAUDE.md asks for no broad catch around suspend work. Catching only around the copy build inside `SavePreRestoreCopy` (`LayerBoundaryTest` allows coroutines in application) returns `Unavailable` through the existing path and leaves `onRestoreConfirmed` alone. It also puts all of R1 in CP1, which is where the mapping file has it; today the catch is in CP2.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "a6a03e09ce5676f82bde5948ce9dd39e809ec62e424df39e607fdf6facc7815c",
+              "verdict": "REVISE",
+              "at": "2026-11-05T09:07:03Z"
+            }
+          ]
+        },
+        "F-263844a35041": {
+          "digest": "263844a35041e0bba73b6b44c22faf2dc992c9212b46f15924d40e348ea07a6e",
+          "text": "**O3. A damaged row now blocks restore as well as export, and the plan should say so.** `findAllForBackup` throws `WorkoutMappingException` on one unreadable session (`LocalWorkoutRepository.kt:57,125`). At the base commit a restore never reads the current data (`RestoreBackup.kt:18-22`), so it is how a user replaces damaged data. After this item the user sees \"Couldn't complete the operation. Try again.\" every time, and the only way out is Erase all data and then restore. 40j's \"If the copy can't be saved, nothing is replaced\" supports stopping, so I am not asking for different behavior: record it as an accepted corner and add a note to issue #29. I could not read #29 itself (`gh issue view` was denied in this session); its description here comes from `docs/ACTIVE_MILESTONE.md:79`.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "a6a03e09ce5676f82bde5948ce9dd39e809ec62e424df39e607fdf6facc7815c",
+              "verdict": "REVISE",
+              "at": "2026-11-05T09:07:03Z"
+            }
+          ]
+        },
+        "F-a0592c58fa9f": {
+          "digest": "a0592c58fa9f204a68c2af657bbe5552aea2b0ae536436fd95d2c15900596bea",
+          "text": "**O4. `init` reads the whole copy just to get its time.** `load()` returns the text and the time, so every visit to the Backup screen reads the user's whole history into memory. A separate `takenAt()` on the port avoids it.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "a6a03e09ce5676f82bde5948ce9dd39e809ec62e424df39e607fdf6facc7815c",
+              "verdict": "REVISE",
+              "at": "2026-11-05T09:07:03Z"
+            }
+          ]
+        },
+        "F-746031c6eb9c": {
+          "digest": "746031c6eb9cbe88203790c3764e3f59e98a70639e65392625dcb4615eaba871",
+          "text": "**O5. The Erase failure message can become untrue.** If the copy is deleted and `clearTrainingData` then fails, the user sees \"Couldn't erase. Nothing was changed.\" (`strings.xml:672`) with the copy gone. The plan's order is still the right one for privacy, so record this as an accepted corner.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "a6a03e09ce5676f82bde5948ce9dd39e809ec62e424df39e607fdf6facc7815c",
+              "verdict": "REVISE",
+              "at": "2026-11-05T09:07:03Z"
+            }
+          ]
+        },
+        "F-b6843a870f45": {
+          "digest": "b6843a870f45de5dc005fdd0c9280e9a8f189981e3e2bc0900bcb3438e666956",
+          "text": "**O6. Name `SettingsPersistenceTest` in the wrap-up.** CP1 edits it and it sits under `data/settings`, so \"the backup instrumented tests\" does not obviously include it.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "a6a03e09ce5676f82bde5948ce9dd39e809ec62e424df39e607fdf6facc7815c",
+              "verdict": "REVISE",
+              "at": "2026-11-05T09:07:03Z"
+            }
+          ]
+        },
+        "F-750b5e820b44": {
+          "digest": "750b5e820b44e1bebc084bf6fd9eeba2f242f7627bb81b6f26e301bb62a564f4",
+          "text": "**O7. The process-death corner can be narrowed without a schema change.** If the app is killed during the restore's transaction, the new file holds the unchanged data and wins at the next load. When that restore was of the copy itself, the user's real history (the old copy) stops being offered, and the next restore deletes it. The plan says telling the two cases apart needs a marker inside the transaction, but there is a cheaper test: before honouring a leftover, compare it with a fresh `ExportBackup()`. Identical text means the data is still what the leftover holds, so the leftover can be discarded and the old copy stays. Different text, or a read that fails, keeps the plan's rule. `BackupJsonMapper` writes no timestamp and the two `findAll` queries I checked are ordered, so a false mismatch should be rare, and it only falls back to the plan's behavior. It costs one whole-history read, only when a leftover exists, plus its tests. I accept the plan as written, because the window is one transaction and round 1 asked for this rule, so weigh this as a follow-up.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "9c8cb920545844f7d80ce3c36979b04e45f1e06dc6a4a10a7caf55b7c95ad644",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T09:30:07Z"
+            }
+          ]
+        },
+        "F-cd893e4ffc91": {
+          "digest": "cd893e4ffc915318ccba5b3275fd5a4eb7024b93b93b1fd5cfa8d568b91c0276",
+          "text": "**O8. 40g's `Restoring…` state has no owner.** Registering it as a deviation is fine for this item, but no page under `docs/items/` and nothing in `docs/backlog.yaml` mentions it, so nothing brings it back later. It matters slightly more after this item: a restore takes longer because it exports and writes first, and the state's \"Keep RepFlow open. This takes a moment.\" is the one thing that would stop a user closing the app inside the O7 window. A follow-up issue or item page is enough.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "9c8cb920545844f7d80ce3c36979b04e45f1e06dc6a4a10a7caf55b7c95ad644",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T09:30:07Z"
+            }
+          ]
+        },
+        "F-28a9853f05f7": {
+          "digest": "28a9853f05f73ed8f4cb570e8b5c651e2eea3944f27391329be0d8d57cc86199",
+          "text": "**O9. The failing-move test may not reach the move it is there to prove.** CP1's fixture is a non-empty directory at the new file's path, with a previous copy present. If `saveNew` treats anything at that path as a leftover, it tries to promote the directory first, that move fails, and the test passes without ever running the temp-to-new move. That is the move whose silent failure would let a restore go ahead with no copy (round 1's I3). A leftover check that accepts only a regular file (`Files.isRegularFile`, in `saveNew`, `load` and `takenAt`) reaches the right move. It also stops `load` treating the directory as an unreadable winner, which the test's \"previous copy readable\" assertion would otherwise trip over.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "9c8cb920545844f7d80ce3c36979b04e45f1e06dc6a4a10a7caf55b7c95ad644",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T09:30:07Z"
+            }
+          ]
+        },
+        "F-5849ea49bf37": {
+          "digest": "5849ea49bf379469ebce6f4e2962523f042fc5d86048aa8d331ca6475bc89c0e",
+          "text": "**O10. The failed-read test should start from `false`.** `hasTrainingData` defaults to `true`, so \"a failed read leaves it `true`\" passes from a fresh state even if the code simply skips the update. On a phone where an earlier read said `false` (pick a file, then cancel), a later failed read would keep the stale `false` and the dialog would drop the copy paragraphs, which the plan says must never happen silently. Have the test read `false` first.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "9c8cb920545844f7d80ce3c36979b04e45f1e06dc6a4a10a7caf55b7c95ad644",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T09:30:07Z"
+            }
+          ]
+        },
+        "F-5a500674f97f": {
+          "digest": "5a500674f97fef11199f23920c7cf5f381b6ab0b1d62e46e57c27fe547e0fe58",
+          "text": "**O11. The dialog's buttons are equal width on the board.** `dlgBtns` gives each one `flex:1` in the row and the full width when stacked. The plan quotes their order and outline but not their widths, and the external reviewer cannot see the board. One clause in CP2 would stop them being left content-sized.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "9c8cb920545844f7d80ce3c36979b04e45f1e06dc6a4a10a7caf55b7c95ad644",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T09:30:07Z"
+            }
+          ]
+        },
+        "F-7b7372072aa8": {
+          "digest": "7b7372072aa824fd30fca743a319e58e0961f37413af7f7cb485819224d5e16b",
+          "text": "**O12. The plan sets a location and a retention count while `TECHNICAL_DECISIONS.md` keeps them open.** The row \"Backup file location and retention count\" stays `Open`, and the plan says no open row is decided here. That holds for exported files, whose location the user picks, but owner decision 5(b) and this plan do set the copy's location (`filesDir`) and count (one). A one-line note on that row at wrap-up would stop a later reader reopening it. Bookkeeping only.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "9c8cb920545844f7d80ce3c36979b04e45f1e06dc6a4a10a7caf55b7c95ad644",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T09:30:07Z"
+            }
+          ]
+        },
+        "F-a681a83ee77a": {
+          "digest": "a681a83ee77a3932bf95ff61826c31324861fa3e28b7542b75da33045918e9c7",
+          "text": "**O13. `BackupViewModelTest` will go over detekt's `LargeClass` limit.** The plan adds about 20 tests and a gated `BackupRepository` to this 458-line file. `ActiveWorkoutViewModelTest.kt`, at 755 lines, is already over the limit, and the last milestone moved its new tests to other files for that reason. `maxIssues: 0` makes this fail the build, so declare a second test file in CP1's Files now, for example `BackupViewModelSafetyCopyTest.kt`. `TooManyFunctions` should also fire on `BackupViewModel` and `TrainingDataDao`, which each go from 10 functions to 11 (the default threshold, from memory). Other ViewModels already suppress that rule.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 3,
+              "review_content_id": "2f731f6d74860e9a3366ac23930ca7fe91a15338bed1e3a1a521ed18d44a5cb8",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T09:54:19Z"
+            }
+          ]
+        },
+        "F-fbba9a8faf8c": {
+          "digest": "fbba9a8faf8c2841ec248caeed81f1559b830109dfd9f91b1ee67dc43f7bc992",
+          "text": "**O14. The way out of a damaged row also deletes the safety copy.** The accepted corner says the way out is `Erase all data`, then restore, and the wrap-up repeats that to issue #29. With a damaged row, restoring the copy is blocked too, and `Erase all data` deletes it. A user whose only good data is the copy cannot reach it, and only an exported file survives. 40j and 40e ask for both behaviors, so I am not asking for a change: say this in the corner and in the issue note.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 3,
+              "review_content_id": "2f731f6d74860e9a3366ac23930ca7fe91a15338bed1e3a1a521ed18d44a5cb8",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T09:54:19Z"
+            }
+          ]
+        },
+        "F-6f82cda37904": {
+          "digest": "6f82cda379044eade7d81547a7f33f31fb71da6f8bd0a06f56cec39a46814426",
+          "text": "**O15. The copy is never checked before the data it holds is replaced.** `SavePreRestoreCopy` saves `ExportBackup`'s text and goes straight to `restore()`. If that text could not be parsed, the user would find out only when restoring the copy, after the data it came from is gone, and would see \"That file isn't a valid RepFlow backup.\" Both directions use the same mappers, so I expect this to be rare. I did not find a value that fails, though I did not check every field. One `parseSnapshot(json)` before `saveNew`, returning `Unavailable` on failure, would close the gap at the cost of one more whole-history parse. A manual export has the same gap, but an export deletes nothing.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 3,
+              "review_content_id": "2f731f6d74860e9a3366ac23930ca7fe91a15338bed1e3a1a521ed18d44a5cb8",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T09:54:19Z"
+            }
+          ]
+        },
+        "F-37667ee47a47": {
+          "digest": "37667ee47a47f1f86fb013b3163ec993ccc2696aee545a30f308e4a08b826105",
+          "text": "**O16. CP2 leaves one CP1 test able to pass without testing anything.** CP1's \"other order\" test confirms a restore while the erase is suspended. After CP2, `onRestoreFilePicked` takes the lock, so a file picked during the erase is not staged yet. `onRestoreConfirmed` then returns at its null check (`BackupViewModel.kt:170`), and \"writes no copy\" holds only because no restore ran. CP2 names only the overlap test as changing. Stage the file before the erase starts, and assert that the restore ran.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 3,
+              "review_content_id": "2f731f6d74860e9a3366ac23930ca7fe91a15338bed1e3a1a521ed18d44a5cb8",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T09:54:19Z"
+            }
+          ]
+        },
+        "F-b1c15aafbc8e": {
+          "digest": "b1c15aafbc8ea7a66d0380cae6a4f4be4e3cfb632b77fdb871df63a98c186d01",
+          "text": "**O17. The two route tests click right after the screen opens.** `init` now keeps the buttons disabled until `takenAt()` returns from the IO dispatcher, and Compose's test idling does not wait for that. `BackupRouteUnreadableRestoreFileTest` clicks `Restore from a backup` straight after navigating and would fail if the click landed in that window. `BackupRouteSafCancellationTest` would pass without exporting anything. The window is short, so expect an occasional flake, not a steady failure. Add a `waitUntil` on the button being enabled to both tests, and add them to CP2's Files.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 3,
+              "review_content_id": "2f731f6d74860e9a3366ac23930ca7fe91a15338bed1e3a1a521ed18d44a5cb8",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T09:54:19Z"
+            }
+          ]
+        },
+        "F-09994efe61d1": {
+          "digest": "09994efe61d19fe3e727d133ed7838a08117cd453cb65eb7367f2eaefedf26f4",
+          "text": "**O18. Other screens can write while a surviving restore runs, and the plan does not list this as a corner.** At the base commit, leaving Backup cancels the restore. Now it finishes, so a user who goes back to Home and starts a workout during those seconds can lose it. If the write lands after `ExportBackup`'s read and before the commit, it is in neither the restored data nor the copy, which R1's \"the copy always holds the data immediately before the last restore\" does not allow for. The running-workout warning cannot have covered it, because the workout did not exist when the user confirmed, and the outcome shows only on Backup. The window is short and I am not asking for a guard: record it under \"Accepted corners\".",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 4,
+              "review_content_id": "1792f29112551e225a253c907f7a9455c9e262c23da5344aed65cce47c0b842e",
+              "verdict": "REVISE",
+              "at": "2026-11-05T10:17:33Z"
+            }
+          ]
+        },
+        "F-387f39cc12d6": {
+          "digest": "387f39cc12d678de16712c88ada625acf2583a937a993f249cdcd01fca9110df",
+          "text": "**O19. A merged outcome can still get stuck in the slot, by one narrow path.** The second `consume` runs in `onStatusMessageShown`, which does not run if another message replaces the snackbar first. Export success, CSV success, a failed export write and a failed file read all write `statusMessage` directly, without the slot. The path:\n  1. A restore fails and its snackbar shows. The slot is empty.\n  2. The user retries during that snackbar and it ends the same way. The slot holds the outcome, which merges into the snackbar.\n  3. Still during that snackbar, one of those direct writes lands with a different message. The key changes, so the first effect is cancelled and its `onStatusShown` never runs. The new message's `consume` calls name the new message and leave the slot alone.\n  4. The next equal restore outcome changes nothing and shows nothing, as in R4-I1. The next visit shows the stuck message, and the slot is then back to normal.\n\n  I am not asking for this before approval. Step 3 normally needs a trip through the system file picker inside what is left of a snackbar of about 4 seconds, straight after a retry. If the lane takes it, the smallest fix I can see is one private hel",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 5,
+              "review_content_id": "2cce4dd3ecffe99d37b10bcdfaa0ae9805cbc85f1b7cb373d7f6d00a20dbcbc3",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T10:39:20Z"
+            }
+          ]
+        },
+        "F-f06bd3b76017": {
+          "digest": "f06bd3b76017622e806eb7868548d6f98a56cb54c4f6d86d5581f23046591268",
+          "text": "**O20. A simpler design exists, if the owner wants to reopen this: don't let the user leave during a restore.** This is not a defect, and the plan as written is correct. The lock, the slot, both `consume` calls, `init`'s busy state, the two route-test waits and the accepted corner where a new workout can be lost all exist because a back press can now leave a restore running. Ignoring back while a restore runs (a `BackHandler` and the top-bar arrow) removes that case, and also removes that corner. 40g's \"Keep RepFlow open. This takes a moment.\" already asks the user to stay. `NonCancellable` stays as the backstop for the activity being finished, and that rare overlap would become an accepted corner. The costs are one more plan revision and review round, and a screen that ignores back for as long as a restore takes. It also would not meet round 2's external acceptance criterion as written (shared ownership with Erase), so the external reviewer would have to agree. I would not hold the plan for this. It bears on the item's \"one new mechanism at most\" rule, so it is the owner's call.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 5,
+              "review_content_id": "2cce4dd3ecffe99d37b10bcdfaa0ae9805cbc85f1b7cb373d7f6d00a20dbcbc3",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T10:39:20Z"
+            }
+          ]
+        },
+        "F-141c78ba49dc": {
+          "digest": "141c78ba49dcbf0c589c1544a968c8e25bfbbffe7ec179515b818f58a99599b5",
+          "text": "**R1-O1. A failed save leaves the partial copy behind.** `saveNew` (`FilePreRestoreSnapshotStore.kt:46-56`) doesn't delete the temp file when the write or the move fails. If the phone runs out of space, the partial `.tmp` keeps what little space was left until the next save or an erase, and the next workout write needs that space. Deleting the temp file in the failure path fixes it. `FilePreRestoreSnapshotStoreTest.kt:167` reads the temp file to prove that the move was what failed, so that test would need another way to prove it. The file is private and `clear()` deletes it, so nothing leaks.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "5034ef2a96dce9b03dc2a2f3d1e829a2263c9bc2afaa7f3677c5230ff4cb04bc",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T12:37:45Z"
+            }
+          ]
+        },
+        "F-6108fbb0435b": {
+          "digest": "6108fbb0435b7773a1169f7c748b9a18f6c1fd4441140d12a42ab9a2e9c6d465",
+          "text": "**R1-O2. The double-tap corner costs more than the self-review says.** `IMPLEMENTATION_SUMMARY.md` says the dialog can open again and \"the user can cancel\". Confirming it instead loses data. With data D and copy C, the first confirm saves D and restores C. The second load, queued ahead of that restore on the lock, then stages C again (`BackupViewModel.kt:192-213`). A second confirm saves C, restores C and promotes C, so D is gone. The reopened dialog also still shows the old copy's time. It needs a load slow enough for the user to read and confirm between the two loads, so it takes a very large copy, and it isn't blocking. The cause is that nothing marks a load as running: the same gap lets `Export backup now` start during a load. Ignoring a tap on the card while a load is running closes the double-tap path.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "5034ef2a96dce9b03dc2a2f3d1e829a2263c9bc2afaa7f3677c5230ff4cb04bc",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T12:37:45Z"
+            }
+          ]
+        },
+        "F-ddb81260b6cc": {
+          "digest": "ddb81260b6cc7d33d8c4fa40ea927736be68ad46de90b83c90adfb1b672cc658",
+          "text": "**R1-O3. The note on issue #29 still has to be posted.** The plan's wrap-up asks for it, and `gh` was refused in the implementing session, so the text exists only in `TEST_RESULTS.md`. Post it before acceptance, or record why not. This review did not post it, because this stage writes only the verdict and the state.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "5034ef2a96dce9b03dc2a2f3d1e829a2263c9bc2afaa7f3677c5230ff4cb04bc",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T12:37:45Z"
+            }
+          ]
+        },
+        "F-ab5e503b8371": {
+          "digest": "ab5e503b83714c0d11f0c750bdab9283d1d35703b06115cda52c6044ba9e2472",
+          "text": "**R2-O1. A second tap on Home's start during a restore reports \"A workout is already running.\"** `HomeViewModel.onStartWorkout` (`HomeViewModel.kt:160`) has no guard for a start in flight, and the card stays enabled (`HomeStartCard.kt:156`). Before this round the window was one short write. Now a start can wait for a whole restore with nothing on screen, which invites a second tap. The first start succeeds and opens the workout. The second is refused by the check inside `insert`, so Home shows that message about the user's own workout. No data is affected. `TrainingPlanListViewModel.onStartClicked` (`TrainingPlanListViewModel.kt:131`) already ignores a second tap for this exact reason, and the same guard fits here. `ActiveWorkoutViewModel.onStartWorkout` (`ActiveWorkoutViewModel.kt:281`) has the same gap. Found by reading, not run.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 2,
+              "review_content_id": "27ddd94498c8ef78e2e7bd1766732eab41ee8916af47eade5a126c3b43c5399c",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T13:34:56Z"
+            }
+          ]
+        },
+        "F-766afb591e60": {
+          "digest": "766afb591e6032176eaa937a643d5c1a29893790e0307a248cd46afa46a2556c",
+          "text": "**R2-O2. \"Writes wait during a restore, and reads don't\" isn't always true.** `REVIEW_REQUEST.md:81` and `IMPLEMENTATION_SUMMARY.md:38` say it, and `PreRestoreSnapshotRoundTripTest.kt:65-66` says a read waiting for a restore is something \"no phone does\". A `Flow` on a table nothing is observing needs the writer to install Room's triggers, so it emits nothing until the commit. In a probe with a restore held, 10 such flows collected on Main emitted nothing for 1 s, and a plain `findAll` started after them also didn't finish in 2 s, most likely because they had filled Room's query pool. All of them finished right after the commit, with the restored data, and Main stayed free. So a screen opened during a restore can sit on its loading state until the restore ends. That is harmless, and it prevents some stale reads, but the known limitation should say so. On a low-RAM phone Room's automatic journal mode is TRUNCATE, with one connection, so every read waits there (by Room's documented behavior, not run). The wording needs correcting. No code change is needed.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 2,
+              "review_content_id": "27ddd94498c8ef78e2e7bd1766732eab41ee8916af47eade5a126c3b43c5399c",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T13:34:56Z"
+            }
+          ]
+        },
+        "F-4410c3c4be7c": {
+          "digest": "4410c3c4be7c3fefbea262d4c030828b66ccfe56980c6adc67f0707f55403f1c",
+          "text": "**R3-O1. Two workout actions queued during a restore can lose the first, and both report success.** This answers the request's own question, \"Can an action the user saw succeed still have saved nothing?\" `ActiveWorkoutViewModel.launchAction` (`ActiveWorkoutViewModel.kt:511-527`) doesn't serialize actions. Each use case reads the session, and `LocalWorkoutRepository.update` (`LocalWorkoutRepository.kt:93-101`) then rewrites its whole exercise and set tree. During a restore of a file that holds the same running workout, both reads see the old data, both writes wait, and the second replaces the first. The row count is 1 each time, so this gets past the check round 2 added. What the user would see: they log a set, then log another or tap Finish, and both report success. When the restore ends the first set is gone, and it isn't in the copy either. Probe on the AVD, with a real WAL database and a restore held after its copy, in a throwaway copy of the repo that isn't part of the bundle: two sets ended with `loads=[110.0]` and `copyLoads=[]`, and a set then a finish ended with `status=COMPLETED sets=0`. The control, with no restore and the second tap 100 ms later, kept both sets. So `PreR",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 3,
+              "review_content_id": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T14:23:00Z"
+            }
+          ]
+        }
+      },
+      "implementation_review_stages": {
+        "review_content_id": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+        "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "631b6b4df63792143f45061f8639ec4425115b5ef28544767c16dc308fe2b0e1",
+          "verdict": "APPROVE",
+          "round": 3,
+          "completed_at": "2026-11-05T14:23:00Z",
+          "verdict_sha256": "f2b8b8042103032751160dc3c5151c762fa48361340caf15433d7a0bbf8c3109",
+          "run_ref": "session:local .ai-review/restore-safety-snapshot/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "631b6b4df63792143f45061f8639ec4425115b5ef28544767c16dc308fe2b0e1",
+          "verdict": "APPROVE",
+          "round": 3,
+          "completed_at": "2026-11-05T14:26:07Z",
+          "verdict_sha256": "bdc1aa95fb75ff1d18336ca5f3066f64e4ffe8e2940a2c01bdb4677a9b9da787",
+          "run_ref": "codex:20261105T142337Z-d5689aee",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
+      },
+      "gate_evidence": {
+        "functional": {
+          "flow-1": {
+            "flow_id": "flow-1",
+            "status": "passed",
+            "head": "3c5e6652e372a58cc5bf2dd1346379fa7f4259fb",
+            "ran_at": "2026-11-05T14:38:28Z",
+            "summary": {
+              "text": "dialog text/buttons right; copy file byte-identical to pre-restore data; card shown",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/restore-safety-snapshot"
+            },
+            "log_digest": "c12f538af3e962fce0b2f897c1a3b311ad7678f214601158f211eb4bb40a4238",
+            "run_ref": "functional-restore-snapshot subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+            "recorded_at": "2026-11-05T14:38:28Z"
+          },
+          "flow-2": {
+            "flow_id": "flow-2",
+            "status": "passed",
+            "head": "3c5e6652e372a58cc5bf2dd1346379fa7f4259fb",
+            "ran_at": "2026-11-05T14:38:28Z",
+            "summary": {
+              "text": "restoring copy gives data hashes identical to original A; swap back identical to B",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/restore-safety-snapshot"
+            },
+            "log_digest": "1c7cfc1cf196b339780d5523f5f6710e7373542c01fbbf7b7e357cea2a77cb51",
+            "run_ref": "functional-restore-snapshot subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+            "recorded_at": "2026-11-05T14:38:28Z"
+          },
+          "flow-3": {
+            "flow_id": "flow-3",
+            "status": "passed",
+            "head": "3c5e6652e372a58cc5bf2dd1346379fa7f4259fb",
+            "ran_at": "2026-11-05T14:38:28Z",
+            "summary": {
+              "text": "dialog adds \"replaces the safety copy from 5 Nov, 14:33\"; copy replaced, data == B",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/restore-safety-snapshot"
+            },
+            "log_digest": "e90b8553f15c0d1e8f92b5e5c8901b81cd5db212abf1f7819e3ba321a2c2e444",
+            "run_ref": "functional-restore-snapshot subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+            "recorded_at": "2026-11-05T14:38:28Z"
+          },
+          "flow-4": {
+            "flow_id": "flow-4",
+            "status": "passed",
+            "head": "3c5e6652e372a58cc5bf2dd1346379fa7f4259fb",
+            "ran_at": "2026-11-05T14:38:28Z",
+            "summary": {
+              "text": "bad file: invalid message, DB hashes and copy md5 unchanged",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/restore-safety-snapshot"
+            },
+            "log_digest": "df3b06d6298d385f6898699e95b026d70630f66e3b8a0084dabea38861be1ab4",
+            "run_ref": "functional-restore-snapshot subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+            "recorded_at": "2026-11-05T14:38:28Z"
+          },
+          "flow-5": {
+            "flow_id": "flow-5",
+            "status": "passed",
+            "head": "3c5e6652e372a58cc5bf2dd1346379fa7f4259fb",
+            "ran_at": "2026-11-05T14:38:28Z",
+            "summary": {
+              "text": "empty phone: no paragraphs, no card, no file; Erase deletes copy, stays gone after relaunch",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/restore-safety-snapshot"
+            },
+            "log_digest": "3d3719b3251df64755bbac4aac6ebc42525d77a96bb245bd947fad92b7086ea6",
+            "run_ref": "functional-restore-snapshot subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+            "recorded_at": "2026-11-05T14:38:28Z"
+          },
+          "flow-6": {
+            "flow_id": "flow-6",
+            "status": "passed",
+            "head": "3c5e6652e372a58cc5bf2dd1346379fa7f4259fb",
+            "ran_at": "2026-11-05T14:38:28Z",
+            "summary": {
+              "text": "left screen mid-restore: restore completed, outcome shown once on reopen; could not prove it was still in flight",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/restore-safety-snapshot"
+            },
+            "log_digest": "873062e75fafaf3d014c742c537b17f6fe6919765ea16c9c9cfd2f2b42a4886e",
+            "run_ref": "functional-restore-snapshot subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+            "recorded_at": "2026-11-05T14:38:28Z"
+          },
+          "flow-7": {
+            "flow_id": "flow-7",
+            "status": "passed",
+            "head": "3c5e6652e372a58cc5bf2dd1346379fa7f4259fb",
+            "ran_at": "2026-11-05T14:38:28Z",
+            "summary": {
+              "text": "1.0 one line; 2.0 stacked, destructive on top, scrolls, light and dark",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/restore-safety-snapshot"
+            },
+            "log_digest": "83fefde9f01f96651e7341995dab3f53c66ca6c0491d4b1cee5c1903aa280b4a",
+            "run_ref": "functional-restore-snapshot subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+            "recorded_at": "2026-11-05T14:38:28Z"
+          }
+        },
+        "pr": {
+          "pr": {
+            "number": 33,
+            "url": "https://github.com/RodrigoFAbreu/repflow-android/pull/33"
+          },
+          "state": "open",
+          "head": "3c5e6652e372a58cc5bf2dd1346379fa7f4259fb",
+          "review_decision": null,
+          "reviewed_head": null,
+          "checks": {
+            "state": "success",
+            "failing": []
+          },
+          "review_id": null,
+          "findings": null,
+          "identity_at_head": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+          "observed_at": "2026-11-05T14:47:45Z",
+          "ingest_seq": 1,
+          "repository": "RodrigoFAbreu/repflow-android",
+          "queried_commit": "aa3a7b0d37af55607ade99f5d2fcd098903f7603",
+          "provenance": {
+            "source": "workflow_gh",
+            "fetched_by": {
+              "name": "workflow-gh",
+              "version": "pr-list-v1"
+            },
+            "fetched_at": "2026-11-05T14:47:45Z",
+            "raw_sha256": "fc38e02ccc06424e2dfd75fa65e47c89293677daa1f44c453538b395be5f002f",
+            "run_ref": "repflow-orchestrator, by hand after no_progress_repeated",
+            "gh_path": "/usr/bin/gh",
+            "gh_sha256": "9e824061111fe5f5b6a5d5690909ba37abafca4a4ca830bdf83246d3c94afd21"
+          },
+          "fact_id": "27b167e76af63777b8a61168bfad635711b7f700585e0959d0cd82c6cb3e4bdc"
+        },
+        "pr_reported": null,
+        "pr_keys": {
+          "reopened_for": [],
+          "applied": [],
+          "ingest_seq": 1
+        }
+      },
+      "acceptance_satisfaction": {
+        "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "policy_source": "adopted",
+        "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+        "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+        "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "requirements": [
+          {
+            "id": "checkpoints_complete",
+            "met": true,
+            "detail": "every checkpoint of the item's own registry is COMPLETE"
+          },
+          {
+            "id": "technical_approval_current",
+            "met": true,
+            "detail": "the technical approval is CURRENT for the content now"
+          },
+          {
+            "id": "functional_flows_passed",
+            "met": true,
+            "detail": "flows ['flow-1', 'flow-2', 'flow-3', 'flow-4', 'flow-5', 'flow-6', 'flow-7'] passed at the approved content"
+          },
+          {
+            "id": "pr_fact_current",
+            "met": true,
+            "detail": "workflow_gh fact for PR #33 at 3c5e6652e372a58cc5bf2dd1346379fa7f4259fb is current"
+          },
+          {
+            "id": "no_standing_pr_objection",
+            "met": true,
+            "detail": "no CHANGES_REQUESTED decision and no failed check"
+          },
+          {
+            "id": "ci_green",
+            "met": true,
+            "detail": "checks are 'success'"
+          }
+        ],
+        "inputs": {
+          "anchor_commit": "aa3a7b0d37af55607ade99f5d2fcd098903f7603",
+          "anchor_identity": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+          "technical_approval": {
+            "basis": "POLICY_SATISFIED",
+            "approved_review_content_id": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+            "recorded_at": "2026-11-05T14:27:19Z"
+          },
+          "functional": {
+            "flow-1": {
+              "evidence_id": "e4ed93c1f8d17baa49f1fdbcadd1c63bd9ab41e8eb4e10f854e459254475df18",
+              "log_digest": "c12f538af3e962fce0b2f897c1a3b311ad7678f214601158f211eb4bb40a4238",
+              "run_ref": "functional-restore-snapshot subagent, 2026-11-05"
+            },
+            "flow-2": {
+              "evidence_id": "41e90a0fd4fc7dde6ce1c582b84cfc9f6e44ce09be87f90c9339cfa1c3d4a453",
+              "log_digest": "1c7cfc1cf196b339780d5523f5f6710e7373542c01fbbf7b7e357cea2a77cb51",
+              "run_ref": "functional-restore-snapshot subagent, 2026-11-05"
+            },
+            "flow-3": {
+              "evidence_id": "e7e1cdfc6a3b8aa50eff292b2ae8f5d93fcfd88b9ac292571839d8312af1b6e8",
+              "log_digest": "e90b8553f15c0d1e8f92b5e5c8901b81cd5db212abf1f7819e3ba321a2c2e444",
+              "run_ref": "functional-restore-snapshot subagent, 2026-11-05"
+            },
+            "flow-4": {
+              "evidence_id": "d790c2d01e3ad6094cd73c1026ec64e765add4793b15dcac5931fa9ee0d2fd27",
+              "log_digest": "df3b06d6298d385f6898699e95b026d70630f66e3b8a0084dabea38861be1ab4",
+              "run_ref": "functional-restore-snapshot subagent, 2026-11-05"
+            },
+            "flow-5": {
+              "evidence_id": "62fba0f0d9cddfc8cf94375b5139691f69ba89d37e08ea3cf59abdb1d844fafd",
+              "log_digest": "3d3719b3251df64755bbac4aac6ebc42525d77a96bb245bd947fad92b7086ea6",
+              "run_ref": "functional-restore-snapshot subagent, 2026-11-05"
+            },
+            "flow-6": {
+              "evidence_id": "b94496c6e5b2d208744a30f1246e335bcee9839c6148d154c5e0ac6edd5af004",
+              "log_digest": "873062e75fafaf3d014c742c537b17f6fe6919765ea16c9c9cfd2f2b42a4886e",
+              "run_ref": "functional-restore-snapshot subagent, 2026-11-05"
+            },
+            "flow-7": {
+              "evidence_id": "ec477ce8b4944f9de28cfbdb0abc5175a5ebfff04a65d51779cef2b15cb44f50",
+              "log_digest": "83fefde9f01f96651e7341995dab3f53c66ca6c0491d4b1cee5c1903aa280b4a",
+              "run_ref": "functional-restore-snapshot subagent, 2026-11-05"
+            }
+          },
+          "pr": {
+            "fact_id": "27b167e76af63777b8a61168bfad635711b7f700585e0959d0cd82c6cb3e4bdc",
+            "head": "3c5e6652e372a58cc5bf2dd1346379fa7f4259fb",
+            "provenance": "workflow_gh",
+            "raw_sha256": "fc38e02ccc06424e2dfd75fa65e47c89293677daa1f44c453538b395be5f002f"
+          }
+        },
+        "trust": {
+          "review_verdicts": "orchestrator",
+          "functional_evidence": "orchestrator",
+          "pr_fact": "workflow_gh"
+        },
+        "evaluated_at": "2026-11-05T14:47:45Z",
+        "workflow_release": "2.25.5"
+      }
     }
   },
   "gate_policy_adoption": {

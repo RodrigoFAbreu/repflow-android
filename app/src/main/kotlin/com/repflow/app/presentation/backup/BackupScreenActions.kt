@@ -6,8 +6,10 @@ class BackupScreenActions(
     val onBack: () -> Unit,
     val onExportBackup: () -> Unit,
     val onRestoreBackup: () -> Unit,
+    val onRestoreSnapshot: () -> Unit,
     val onExportCsv: () -> Unit,
     val onRestoreConfirmed: () -> Unit,
     val onRestoreCancelled: () -> Unit,
+    val onStatusShowing: () -> Unit,
     val onStatusShown: () -> Unit,
 )
