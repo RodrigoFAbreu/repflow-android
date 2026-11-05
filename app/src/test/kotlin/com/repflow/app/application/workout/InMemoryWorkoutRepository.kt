@@ -34,6 +34,9 @@ class InMemoryWorkoutRepository : WorkoutRepository {
                 .sortedByDescending { it.endedAt }
         }
 
+    override suspend fun findAllForBackup(): List<WorkoutSession> =
+        sessions.value.values.sortedWith(compareBy({ it.startedAt }, { it.id.value }))
+
     @Suppress("ReturnCount")
     override suspend fun insert(session: WorkoutSession): DomainResult<Unit, WorkoutPersistenceError> {
         nextInsertFailure?.let {

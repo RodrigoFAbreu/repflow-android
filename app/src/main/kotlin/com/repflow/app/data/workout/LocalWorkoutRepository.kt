@@ -51,6 +51,8 @@ class LocalWorkoutRepository
         override fun observeCompletedSessions(includeInvalidated: Boolean): Flow<List<WorkoutSession>> =
             sessionDao.observeCompleted(includeInvalidated).map { entities -> entities.map { toSessionOrThrow(it) } }
 
+        override suspend fun findAllForBackup(): List<WorkoutSession> = sessionDao.findAll().map { toSessionOrThrow(it) }
+
         @Suppress("ReturnCount")
         override suspend fun insert(session: WorkoutSession): DomainResult<Unit, WorkoutPersistenceError> {
             try {
