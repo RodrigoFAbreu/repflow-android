@@ -10,6 +10,8 @@ One milestone and one squash-merged pull request, releasable alone: the plan's p
 
 ## Owner decisions
 
+**Decided by the owner, 2026-11-05, and these replace anything below that differs:** the reminder shows at 21 or more days since the last backup. Someone who has never backed up gets it from 21 days after their first finished workout. **A "Backup reminder" switch in Settings, under "Your data", turns it off; it's on by default (board 40e).** That needs a stored setting, which goes through the settings store, and through backups if settings are backed up; check. Boards 10n and 10o are the design.
+
 The owner approved this backlog on 2026-11-04 with every recommendation below taken as decided.
 
 **5. Safety before a restore, and a backup reminder?** [N-4; reopens your earlier decision Q5]

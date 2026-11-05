@@ -122,10 +122,22 @@ items:
     size: 2
     depends_on: [fix-backup-all-workouts, design-3-redraws]
     detail: docs/items/restore-safety-snapshot.md
+  - id: fix-workout-actions-in-order
+    title: "Workout actions run one after another, so a set logged during a restore can't be lost"
+    status: next
+    order: 23
+    size: 1
+    detail: docs/items/fix-workout-actions-in-order.md
+  - id: safety-copy-polish
+    title: "Safety copy: a Restoring screen, and the Erase and Backup wording says what really happens"
+    status: next
+    order: 24
+    size: 1
+    detail: docs/items/safety-copy-polish.md
   - id: backup-reminder
     title: "A reminder on Home when the last backup is old"
     status: next
-    order: 23
+    order: 25
     size: 1
     depends_on: [restore-safety-snapshot]
     detail: docs/items/backup-reminder.md
@@ -133,44 +145,44 @@ items:
   - id: suggest-keep-untouched
     title: "An exercise you didn't train keeps its real suggestion"
     status: next
-    order: 24
+    order: 26
     size: 1
     detail: docs/items/suggest-keep-untouched.md
   - id: suggest-no-rpe
     title: "Top of the range with no RPE gives Maintain with the reason shown, and the `NaN` text goes"
     status: next
-    order: 25
+    order: 27
     size: 1
     detail: docs/items/suggest-no-rpe.md
   - id: suggest-load-only
     title: "No suggestion for timed, reps-only and single-set work"
     status: next
-    order: 26
+    order: 28
     size: 1
     detail: docs/items/suggest-load-only.md
   - id: suggest-today-checkin
     title: "Only today's check-in can hold back suggestions"
     status: next
-    order: 27
+    order: 29
     size: 1
     detail: docs/items/suggest-today-checkin.md
   - id: futsal-not-hold
     title: "Futsal becomes a note; only pain or heavy legs hold back, with a true 24 h window"
     status: next
-    order: 28
+    order: 30
     size: 1
     depends_on: [design-1-wrong-claims]
     detail: docs/items/futsal-not-hold.md
   - id: futsal-fix-entry
     title: "A futsal session can be removed, and a morning entry defaults to yesterday"
     status: next
-    order: 29
+    order: 31
     size: 2
     detail: docs/items/futsal-fix-entry.md
   - id: suggest-empty-state
     title: "The 'not enough data' screen matches the design, with `Keep the same load`"
     status: next
-    order: 30
+    order: 32
     size: 1
     depends_on: [suggest-load-only, design-1-wrong-claims]
     detail: docs/items/suggest-empty-state.md
@@ -178,221 +190,221 @@ items:
   - id: home-next-plan
     title: "Home offers the next plan in your list, not the one you just did"
     status: next
-    order: 31
+    order: 33
     size: 1
     detail: docs/items/home-next-plan.md
   - id: rest-notification-tap
     title: "Tapping the rest notification opens the workout, with the right icon and text"
     status: next
-    order: 32
+    order: 34
     size: 1
     detail: docs/items/rest-notification-tap.md
   - id: rest-notification-foreground
     title: "No heads-up notification with the app open, and a stale one clears"
     status: next
-    order: 33
+    order: 35
     size: 1
     depends_on: [rest-notification-tap]
     detail: docs/items/rest-notification-foreground.md
   - id: timed-entry-mmss
     title: "Timed sets use m:ss everywhere, and the shared number pad opens on the current value"
     status: next
-    order: 34
+    order: 36
     size: 2
     detail: docs/items/timed-entry-mmss.md
   - id: fixed-target-text
     title: "Fixed targets read `8 reps` and `5:00`, not `8-8` and `300-300s`"
     status: next
-    order: 35
+    order: 37
     size: 1
     detail: docs/items/fixed-target-text.md
   - id: first-set-seed
     title: "A fixed target seeds the first set, and the first `+` starts at the bottom of the range"
     status: next
-    order: 36
+    order: 38
     size: 1
     depends_on: [design-2-rules]
     detail: docs/items/first-set-seed.md
   - id: focus-entry-first
     title: "Focus mode puts entry above the set list, and adds a previous-exercise button"
     status: next
-    order: 37
+    order: 39
     size: 1
     detail: docs/items/focus-entry-first.md
   - id: focus-just-logged
     title: "Focus mode gets the 'Just logged' bar with Undo, the new row format, and the RPE panel closing after `Log set`"
     status: next
-    order: 38
+    order: 40
     size: 2
     depends_on: [focus-entry-first, design-2-rules]
     detail: docs/items/focus-just-logged.md
   - id: finish-empty-workout
     title: "Finishing with nothing logged asks first, instead of saving an empty workout"
     status: next
-    order: 39
+    order: 41
     size: 1
     detail: docs/items/finish-empty-workout.md
   - id: overnight-workout
     title: "After 4 h a workout shows its start time, and Finish ends at the last set"
     status: next
-    order: 40
+    order: 42
     size: 1
     depends_on: [finish-empty-workout]
     detail: docs/items/overnight-workout.md
   - id: stepper-hold-repeat
     title: "Hold a stepper to repeat"
     status: next
-    order: 41
+    order: 43
     size: 1
     detail: docs/items/stepper-hold-repeat.md
   - id: fix-plan-editor-bugs
     title: "Plan editor: a new exercise joins the plan, archived exercises keep their name, and an unchanged save adds no version"
     status: next
-    order: 42
+    order: 44
     size: 2
     detail: docs/items/fix-plan-editor-bugs.md
   # 4. Match the approved design
   - id: theme-text-levels
     title: "Text levels and control colours match the spec, including the light-theme pill"
     status: next
-    order: 43
+    order: 45
     size: 1
     detail: docs/items/theme-text-levels.md
   - id: home-cards
     title: "Home header and cards as drawn"
     status: next
-    order: 44
+    order: 46
     size: 2
     depends_on: [home-next-plan]
     detail: docs/items/home-cards.md
   - id: readiness-sheet
     title: "Readiness sheet as drawn, with one scale order"
     status: next
-    order: 45
+    order: 47
     size: 1
     detail: docs/items/readiness-sheet.md
   - id: plans-list
     title: "Plans list: one list, Archived section, `last run`, Duplicate"
     status: next
-    order: 46
+    order: 48
     size: 2
     detail: docs/items/plans-list.md
   - id: plan-editor-rows
     title: "Plan editor rows: drag handle, menu, rest format and presets"
     status: next
-    order: 47
+    order: 49
     size: 2
     detail: docs/items/plan-editor-rows.md
   - id: workout-board-rows
     title: "Workout board rows: `Last time` and logged summaries"
     status: next
-    order: 48
+    order: 50
     size: 1
     depends_on: [design-3-redraws]
     detail: docs/items/workout-board-rows.md
   - id: done-and-stat-tiles
     title: "Done screen tiles as drawn, and stat values no longer cut off at large font"
     status: next
-    order: 49
+    order: 51
     size: 1
     detail: docs/items/done-and-stat-tiles.md
   - id: dialogs-and-sheets
     title: "Leave, Finish, Abandon and Discard: wording and button style; drop `Irreversible`"
     status: next
-    order: 50
+    order: 52
     size: 1
     detail: docs/items/dialogs-and-sheets.md
   - id: library-polish
     title: "Exercise library title and create label, and no `Create` on an exact match"
     status: next
-    order: 51
+    order: 53
     size: 1
     detail: docs/items/library-polish.md
   - id: history-polish
     title: "History: `Clear filters`, row and detail differences, exercise filter search"
     status: next
-    order: 52
+    order: 54
     size: 1
     detail: docs/items/history-polish.md
   - id: progress-recovery-polish
     title: "Progress timed units, and tappable Recovery history rows"
     status: next
-    order: 53
+    order: 55
     size: 1
     detail: docs/items/progress-recovery-polish.md
   - id: settings-alert-rows
     title: "Settings says when alerts are limited, with a way back after `Not now`"
     status: next
-    order: 54
+    order: 56
     size: 1
     depends_on: [design-3-redraws]
     detail: docs/items/settings-alert-rows.md
   - id: recovery-chart-scrub
     title: "Recovery chart picks a day by dragging"
     status: next
-    order: 55
+    order: 57
     size: 1
     detail: docs/items/recovery-chart-scrub.md
   - id: loading-placeholders
     title: "Placeholder shapes instead of spinners"
     status: next
-    order: 56
+    order: 58
     size: 2
     depends_on: [design-2-rules]
     detail: docs/items/loading-placeholders.md
   - id: small-polish
     title: "Rest strip spacing, Home `Log` flicker, Progress check marks, small visual leftovers"
     status: next
-    order: 57
+    order: 59
     size: 1
     detail: docs/items/small-polish.md
   - id: copy-pass
     title: "Remaining copy differences"
     status: next
-    order: 58
+    order: 60
     size: 1
     detail: docs/items/copy-pass.md
   # 5. Clean-up from your decisions
   - id: tracking-type-warning
     title: "Warn when changing the tracking type of an exercise in a plan or with history"
     status: next
-    order: 59
+    order: 61
     size: 1
     detail: docs/items/tracking-type-warning.md
   - id: remove-optional-switch
     title: "Remove the unused `Optional` switch from the plan editor"
     status: next
-    order: 60
+    order: 62
     size: 1
     detail: docs/items/remove-optional-switch.md
   - id: docs-refresh
     title: "Bring the product docs up to date, including the pages-win rule"
     status: next
-    order: 61
+    order: 63
     size: 1
     detail: docs/items/docs-refresh.md
   # Ideas: kept, not scheduled
   - id: workout-remove-exercise
     title: "Remove an exercise added by mistake from a running workout (needs a small board)"
     status: idea
-    order: 62
+    order: 64
     size: 1
     detail: docs/items/workout-remove-exercise.md
   - id: exercise-notes
     title: "Per-exercise and per-session notes"
     status: idea
-    order: 63
+    order: 65
     size: 2
     detail: docs/items/exercise-notes.md
   - id: suggest-reps-time
     title: "`Add reps` and `Add time` suggestions, if you want progression on foot and mobility work"
     status: idea
-    order: 64
+    order: 66
     size: 3
     detail: docs/items/suggest-reps-time.md
   - id: accessibility-audit
     title: "Accessibility pass, including the rest-end announcement"
     status: idea
-    order: 65
+    order: 67
     size: 2
     detail: docs/items/accessibility-audit.md
