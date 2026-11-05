@@ -6823,7 +6823,7 @@
       "registry_path": "docs/ai-workflow/registry/fix-backup-all-workouts-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/fix-backup-all-workouts-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+      "phase": "APPLYING_REVIEW_FEEDBACK",
       "plan_revision": 2,
       "implementation_revision": 1,
       "functional_review_round": null,
@@ -6963,12 +6963,12 @@
           "external": 1
         },
         "implementation": {
-          "local": 0,
-          "external": 0
+          "local": 1,
+          "external": 1
         }
       },
-      "state_revision": 14,
-      "last_transition": "2026-11-05T01:37:23Z",
+      "state_revision": 16,
+      "last_transition": "2026-11-05T01:58:41Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -7131,7 +7131,48 @@
               "at": "2026-11-05T01:08:43Z"
             }
           ]
+        },
+        "F-2c1816443918": {
+          "digest": "2c1816443918a06904833c6aa3913f08d4615f618b9882fb4c9fca74eda0a660",
+          "text": "**O-1: A damaged rest-timer value in a backup file crashes the restore instead of reporting an invalid file.** `RestTimer` requires `totalDurationSeconds > 0` (`RestTimer.kt:23`), and `WorkoutEntityMapper.toRestTimer` builds one with no guard during `parseSnapshot`. `BackupJsonMapper.parse` catches only `JSONException` (`BackupJsonMapper.kt:87`), and neither `RestoreBackup` nor `BackupViewModel.onRestoreConfirmed` (`BackupViewModel.kt:173`) handles anything else, so the `IllegalArgumentException` ends the process. The mapper's KDoc says a corrupt file never crashes the restore flow (`BackupJsonMapper.kt:47-49`). A blank id fails the same way through `WorkoutSessionId`'s `require`. No data is lost, because parsing comes before the clear. This change didn't create the path, and only a damaged or hand-edited file reaches it, but real files used to hold no value in these keys and now a running workout's rest timer fills them. It belongs in a follow-up item, not this one. I read this path and did not run it.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "4926e80196d9203d077cc113f0a764e8d789318da708e6a45dc7076a3b6bef54",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T01:56:02Z"
+            }
+          ]
+        },
+        "F-b036e685d2cc": {
+          "digest": "b036e685d2cc07b48ae169f9bc041a989116bcf9bc08d732f89cf311a36f2d41",
+          "text": "**O1 — The large-font assertion proves only partial visibility.** `BackupScreenTest.kt:181` uses `assertIsDisplayed` inside a 100 dp box, which can pass with the destructive part of the warning below the viewport. Strengthen coverage using the real dialog at font scale 2.0 and verify the deletion warning is readable.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "4926e80196d9203d077cc113f0a764e8d789318da708e6a45dc7076a3b6bef54",
+              "verdict": "REVISE",
+              "at": "2026-11-05T01:58:41Z"
+            }
+          ]
         }
+      },
+      "implementation_review_stages": {
+        "review_content_id": "4926e80196d9203d077cc113f0a764e8d789318da708e6a45dc7076a3b6bef54",
+        "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "daa61fc90d8d18690dd3a90940a5e7267c38434accb0ddd0260545c387c677d4",
+          "verdict": "APPROVE",
+          "round": 1,
+          "completed_at": "2026-11-05T01:56:02Z",
+          "verdict_sha256": "68311c0f93f82f7cbabbb19271eb38995e6cd1e76ad5a680a96b2fc4ceaebe12",
+          "run_ref": "session:local .ai-review/fix-backup-all-workouts/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": null
       }
     }
   },
