@@ -19,6 +19,8 @@ import com.repflow.app.application.workout.InMemoryWorkoutRepository
 import com.repflow.app.application.workout.ObserveActiveWorkoutSession
 import com.repflow.app.application.workout.StartWorkoutSession
 import com.repflow.app.application.workout.StartWorkoutSessionFromPlan
+import com.repflow.app.application.workout.WorkoutPersistenceError
+import com.repflow.app.application.workout.WorkoutRepository
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.exercise.Exercise
 import com.repflow.app.domain.exercise.ExerciseId
@@ -39,6 +41,7 @@ import com.repflow.app.domain.workout.WorkoutSession
 import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.domain.workout.WorkoutSessionStatus
 import com.repflow.app.presentation.workout.RecordingRestNotificationCanceller
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestCoroutineScheduler
@@ -73,6 +76,7 @@ class HomeViewModelTest {
 
     private val recoveryRepository = InMemoryRecoveryRepository()
     private val workoutRepository = InMemoryWorkoutRepository()
+    private var startsWriteTo: WorkoutRepository = workoutRepository
     private val restNotificationCanceller = RecordingRestNotificationCanceller()
     private val exerciseRepository = InMemoryExerciseRepository()
     private val trainingPlanRepository = InMemoryTrainingPlanRepository()
@@ -171,6 +175,52 @@ class HomeViewModelTest {
 
                 viewModel.onWorkoutOpened()
                 assertTrue(!awaitItem().openWorkout)
+            }
+        }
+
+    /** A start can wait for a whole restore with nothing on screen, which invites this tap. */
+    @Test
+    fun `a second tap while a start waits is ignored, so the user's own workout is not reported as already running`() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            startsWriteTo =
+                object : WorkoutRepository by workoutRepository {
+                    override suspend fun insert(session: WorkoutSession): DomainResult<Unit, WorkoutPersistenceError> {
+                        gate.await()
+                        return workoutRepository.insert(session)
+                    }
+                }
+            val viewModel = viewModel(startAt(day.atTime(10, 0)))
+
+            viewModel.uiState.test {
+                awaitUntil { it.start != HomeStartCard.Loading }
+
+                viewModel.onStartWorkout(null)
+                viewModel.onStartWorkout(null)
+                gate.complete(Unit)
+
+                val started = awaitUntil { it.openWorkout }
+                assertNull(started.error)
+                cancelAndIgnoreRemainingEvents()
+            }
+            assertNull(viewModel.uiState.value.error)
+        }
+
+    @Test
+    fun `a start that failed can be tried again`() =
+        runTest {
+            workoutRepository.nextInsertFailure = WorkoutPersistenceError.Unavailable
+            val viewModel = viewModel(startAt(day.atTime(10, 0)))
+
+            viewModel.uiState.test {
+                awaitUntil { it.start != HomeStartCard.Loading }
+
+                viewModel.onStartWorkout(null)
+                assertEquals(HomeErrorReason.UNKNOWN, awaitUntil { it.error != null }.error)
+
+                viewModel.onStartWorkout(null)
+                awaitUntil { it.openWorkout }
+                cancelAndIgnoreRemainingEvents()
             }
         }
 
@@ -298,8 +348,8 @@ class HomeViewModelTest {
             observeTrainingPlans = ObserveTrainingPlans(trainingPlanRepository),
             observeTrainingPlanVersionLabels = ObserveTrainingPlanVersionLabels(trainingPlanRepository),
             observeRecentTraining = ObserveRecentTraining(workoutRepository),
-            startWorkoutSession = StartWorkoutSession(workoutRepository, clock, ids),
-            startWorkoutSessionFromPlan = StartWorkoutSessionFromPlan(workoutRepository, GetExercise(exerciseRepository), clock, ids),
+            startWorkoutSession = StartWorkoutSession(startsWriteTo, clock, ids),
+            startWorkoutSessionFromPlan = StartWorkoutSessionFromPlan(startsWriteTo, GetExercise(exerciseRepository), clock, ids),
             abandonWorkoutSession = AbandonWorkoutSession(workoutRepository, clock),
             restNotificationCanceller = restNotificationCanceller,
         )
