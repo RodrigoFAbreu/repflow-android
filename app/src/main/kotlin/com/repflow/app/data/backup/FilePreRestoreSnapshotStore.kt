@@ -51,6 +51,7 @@ class FilePreRestoreSnapshotStore(
                 Files.move(tempFile, newFile, StandardCopyOption.ATOMIC_MOVE)
                 DomainResult.Success(Unit)
             } catch (expected: IOException) {
+                deleteTempFile()
                 DomainResult.Failure(BackupRestoreError.Unavailable)
             }
         }
@@ -113,6 +114,15 @@ class FilePreRestoreSnapshotStore(
 
     private fun moveNewOverOld() {
         if (Files.isRegularFile(newFile)) Files.move(newFile, oldFile, StandardCopyOption.ATOMIC_MOVE)
+    }
+
+    /** On a full disk, a partial file would keep the space the next workout write needs. */
+    private fun deleteTempFile() {
+        try {
+            Files.deleteIfExists(tempFile)
+        } catch (expected: IOException) {
+            // The next save or an erase replaces or deletes it.
+        }
     }
 
     /**

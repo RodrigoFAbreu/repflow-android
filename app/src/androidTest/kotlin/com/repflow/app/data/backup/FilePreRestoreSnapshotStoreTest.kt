@@ -164,7 +164,7 @@ class FilePreRestoreSnapshotStoreTest {
             assertEquals(DomainResult.Failure(BackupRestoreError.Unavailable), store.saveNew("never moved"))
 
             assertEquals(TEXT, store.load()?.json)
-            assertEquals("the write must have happened, so this was the move failing", "never moved", tempFile.readText())
+            assertFalse("a partial file must not keep the space it took", tempFile.exists())
         }
 
     @Test
