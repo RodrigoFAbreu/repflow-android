@@ -10,6 +10,10 @@ One milestone and one squash-merged pull request, releasable alone: the plan's p
 
 - **Tapping the rest notification does nothing** [A-8, D-24, D-15; design item 12] · S. Evidence: no `setContentIntent` in the app; `RestTimerExpiryHandler.kt` also uses a system icon. Open the workout on tap, and align the icon and text with the design's notification board (20l).
 
+## Not during a restore
+
+The Restoring screen blocks the whole app so no set can wait behind a restore. Today no notification can open the app, so nothing gets past it. This item adds the first way in: a tap during a restore must not reach the workout until the restore ends. Test it.
+
 ## Rules
 
 The plan's header must carry exactly one line of this form, with nothing after the closing backtick: ``Pull request title: `fix: what changed` ``. See `AGENTS.md`, "Running under the Controller".

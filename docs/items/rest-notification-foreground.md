@@ -21,6 +21,10 @@ The owner approved this backlog on 2026-11-04 with every recommendation below ta
 - *Options:* (a) buzz and strip in front, notification sound in background; (b) add an in-app sound with a switch.
 - *Recommendation:* **(a).** Both agree. Fix the two boards.
 
+## Keep the watch alert
+
+The owner's Galaxy Watch 6 can show phone notifications. Whatever this item changes, a rest ending while the phone is locked or in a pocket must still post the notification, so the watch buzzes. Only skip the heads-up when the app is really on screen.
+
 ## Rules
 
 The plan's header must carry exactly one line of this form, with nothing after the closing backtick: ``Pull request title: `fix: what changed` ``. See `AGENTS.md`, "Running under the Controller".
