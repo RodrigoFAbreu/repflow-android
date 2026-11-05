@@ -10788,7 +10788,7 @@
       "registry_path": "docs/ai-workflow/registry/safety-copy-polish-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/safety-copy-polish-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+      "phase": "AWAITING_FUNCTIONAL_REVIEW",
       "plan_revision": 3,
       "implementation_revision": 2,
       "functional_review_round": null,
@@ -10897,7 +10897,198 @@
           "workflow_release": "2.25.5"
         }
       },
-      "technical_approval": null,
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "a603d03cf2b97bc262b11d77734ba0f37859cb57cc59817f322dac4954ffff94",
+        "approved_review_content_id": "aad59dec5253fee73cb19ef8086e653302aeb1859ff2e5a5e910eee7d5d4318a",
+        "review_content_manifest": [
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/backup/BackupScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "de7d9cf573249bc4f8318d78655a778374f47d8d"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/backup/RestoringOverlayActivityTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0a496f10cc61b67e4679092d5b2a4d6c36a8716d"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/backup/RestoringOverlayTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "e2dd8d688a4785f8d01f5e46659695efe38fc3b1"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/settings/SettingsScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f2204564635207ab04aac4bb78f9523f93279e9e"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/MainActivity.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "95b552334864f21a40629fa04d82c753fe05df00"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "44e6c91f8331be2685afd2d3f1cb2cf11d2f2fc4"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupUiState.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "788563364b830b1b6200e92263e2185e941588e0"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f270664cc0e00550d8e138a6c603242138b27bf4"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/RestoreInProgress.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "456d88824a7d681db770d1263e9675c5588170e2"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/RestoringOverlay.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8e3a9663b3bd9fce28b9b3d53201b4904cf6fdb1"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/RepFlowColor.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ca2ca2f01f77b6d868b529416bbaed3a5ae1feff"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/settings/SettingsErase.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7efbf165343494e8e22dbe3d5fd150024c8e9c12"
+          },
+          {
+            "path": "app/src/main/res/values/strings.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "29853028a313593a55596dff3ab6b686f9b514c4"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/backup/BackupViewModelRestoringTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "4e500fcc9aa8c1765c63ca72ec2c6fce0e0c9f2c"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/backup/BackupViewModelSafetyCopyTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "74df3fab9ce13cdc685a05450e0da992556db1c1"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/backup/BackupViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8577c3c4e759fbdf3a79f0b62fa82f4786bc6159"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/backup/RestoreInProgressTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "df475a0681f1a7ad7568133f5126d74b6c6c01e5"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowPrimitivesTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2eda3b8ad663773eae19e42060da0971ad1385c2"
+          },
+          {
+            "path": "docs/UX_FLOWS.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d0a97284140e064f9ee94326e8ca0f23a2b09469"
+          },
+          {
+            "path": "docs/ai-workflow/registry/safety-copy-polish-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2a91b7e7551687f12240183cbf5393ba53ba274b"
+          }
+        ],
+        "reviewed_content_commit": "4843670f00cc1c78fb3fda4eb2776d2213d50fc1",
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-05T23:16:15Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "aad59dec5253fee73cb19ef8086e653302aeb1859ff2e5a5e910eee7d5d4318a",
+            "ledger": {
+              "local": {
+                "bundle_id": "a603d03cf2b97bc262b11d77734ba0f37859cb57cc59817f322dac4954ffff94",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "d493b210db38e63c14565f2d3f0f22fc4a25d66bdfeba32bbaeaaea56327e51e",
+                "ledger_entry_sha256": "34767790968d5d1f64447d1a2c0574e0b98e2da1c3fed95a1443cbb733d43bd2",
+                "run_ref": "session:local .ai-review/safety-copy-polish/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "a603d03cf2b97bc262b11d77734ba0f37859cb57cc59817f322dac4954ffff94",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "6a1512ede4d801f29e2abb21cece7a32abbf3dfabfc120073d291af9774733ab",
+                "ledger_entry_sha256": "f694db28f3366fa9bc171c0c06625799db09282efc2485fd01874dae6b01bb1a",
+                "run_ref": "codex:20261105T231240Z-b468fa69",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-05T23:16:15Z",
+          "workflow_release": "2.25.5"
+        }
+      },
       "technical_review_block_pins": [],
       "plan_review_stages": {
         "review_content_id": "8b124569a1fed6705ee11da429cdab508be330913892e8523abe82f85188f890",
@@ -10928,12 +11119,12 @@
           "external": 1
         },
         "implementation": {
-          "local": 1,
-          "external": 1
+          "local": 2,
+          "external": 2
         }
       },
-      "state_revision": 20,
-      "last_transition": "2026-11-05T22:42:16Z",
+      "state_revision": 23,
+      "last_transition": "2026-11-05T23:16:15Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -11153,20 +11344,70 @@
               "at": "2026-11-05T21:59:39Z"
             }
           ]
+        },
+        "F-1d207998fcec": {
+          "digest": "1d207998fcec069b1883dd685fe88db435419296349070d7890983b4c6c9be14",
+          "text": "**O4. No test sends a whole back gesture.** Every Back in the new tests goes through `onBackPressedDispatcher.onBackPressed()`, which runs only `onBackCompleted`, and `SwallowBack` overrides only that (`RestoringOverlay.kt:124-127`). A real swipe also runs `onBackStarted`, `onBackProgressed` and sometimes `onBackCancelled`, which are the library's defaults. In navigationevent 1.0.0 they do nothing, read from the bytecode, but `onBackCompleted`'s default throws, so a later version that made another one throw would crash on a real swipe and on nothing the suite runs. The AVD's real-key runs miss it too: it is in 3-button mode, and `input keyevent` sends no start or cancel. Nothing is wrong today: this review's throwaway probes passed through the dispatcher and with real swipes (see \"Verification\"). Two short tests in `RestoringOverlayActivityTest` using `dispatchOnBackStarted`, then `onBackPressed` or `dispatchOnBackCancelled`, would hold it through an upgrade.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 2,
+              "review_content_id": "aad59dec5253fee73cb19ef8086e653302aeb1859ff2e5a5e910eee7d5d4318a",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T23:12:02Z"
+            }
+          ]
+        },
+        "F-f1494b7da7d1": {
+          "digest": "f1494b7da7d1b00d7a552dda088ead50e6b469350b8c7b62330b131e89b473ec",
+          "text": "**O5. The Erase outline deferred from round 1 has no home.** O2 was left for `theme-text-levels` because \"that item already changes this outline\". `docs/items/theme-text-levels.md:15` changes only the outline's colour, and says nothing about the missing bottom edge or the two-line label, so that item can finish with the edge still missing. Add a line to that item, or to another one, when the Optional findings are triaged.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 2,
+              "review_content_id": "aad59dec5253fee73cb19ef8086e653302aeb1859ff2e5a5e910eee7d5d4318a",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T23:12:02Z"
+            }
+          ]
+        },
+        "F-ae569a79393f": {
+          "digest": "ae569a79393f5dd9cb4829497e2bc23546682de87a533ab88f4b419aee568133",
+          "text": "**O6. `PreRestoreCopy.kt:24-25` still gives a reason this item removed.** It says the transaction exists because \"a restore can outlive its screen and the user can go and write something while it runs\". From the UI, the user no longer can. The transaction is still right, because a write queued before the confirmation can land during it, so only the words need to change. The self-review's search looked for the \"keeps running after the user leaves\" wording, so it didn't find this. The plan says no `application` change, so this can wait for the next item that touches the file.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 2,
+              "review_content_id": "aad59dec5253fee73cb19ef8086e653302aeb1859ff2e5a5e910eee7d5d4318a",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T23:12:02Z"
+            }
+          ]
         }
       },
       "implementation_review_stages": {
-        "review_content_id": "e8b705bbdfecee92055f5399ad839ba9719562c476c871124f367b7e0fa78401",
+        "review_content_id": "aad59dec5253fee73cb19ef8086e653302aeb1859ff2e5a5e910eee7d5d4318a",
         "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
-          "bundle_id": "f137ab35fd558eea943bffa5402601bf363708209fe5b32cabf7ea9f71cec388",
+          "bundle_id": "a603d03cf2b97bc262b11d77734ba0f37859cb57cc59817f322dac4954ffff94",
           "verdict": "APPROVE",
-          "round": 1,
-          "completed_at": "2026-11-05T21:59:39Z",
-          "verdict_sha256": "4648679048be61f7186fb1d5ffcf7b7de9694b5101b8eff409a11814dc78f522",
+          "round": 2,
+          "completed_at": "2026-11-05T23:12:02Z",
+          "verdict_sha256": "d493b210db38e63c14565f2d3f0f22fc4a25d66bdfeba32bbaeaaea56327e51e",
           "run_ref": "session:local .ai-review/safety-copy-polish/feedback/REVIEW_FEEDBACK.md",
           "reviewer_model": "anthropic/claude-opus-5-5"
         },
-        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": null
+        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "a603d03cf2b97bc262b11d77734ba0f37859cb57cc59817f322dac4954ffff94",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-05T23:15:01Z",
+          "verdict_sha256": "6a1512ede4d801f29e2abb21cece7a32abbf3dfabfc120073d291af9774733ab",
+          "run_ref": "codex:20261105T231240Z-b468fa69",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
       }
     }
   },
