@@ -8939,12 +8939,12 @@
       "registry_path": "docs/ai-workflow/registry/restore-safety-snapshot-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/restore-safety-snapshot-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "APPLYING_REVIEW_FEEDBACK",
+      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
       "plan_revision": 5,
-      "implementation_revision": 1,
+      "implementation_revision": 2,
       "functional_review_round": null,
       "base_commit": "255cd7a1be74652235e713ed547ded5d0d408e9f",
-      "reviewed_implementation_head": "0546ce61ebbb7045a3077e80f2433890ea8dac1a",
+      "reviewed_implementation_head": "f56394cca45c58819557ab4a70e157fcbb3b17d6",
       "current_checkpoint_id": null,
       "last_completed_checkpoint_id": "CP2",
       "checkpoints": {
@@ -9083,8 +9083,8 @@
           "external": 1
         }
       },
-      "state_revision": 27,
-      "last_transition": "2026-11-05T12:42:25Z",
+      "state_revision": 28,
+      "last_transition": "2026-11-05T13:12:34Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
