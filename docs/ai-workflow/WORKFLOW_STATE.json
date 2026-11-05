@@ -8939,7 +8939,7 @@
       "registry_path": "docs/ai-workflow/registry/restore-safety-snapshot-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/restore-safety-snapshot-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+      "phase": "APPLYING_REVIEW_FEEDBACK",
       "plan_revision": 5,
       "implementation_revision": 2,
       "functional_review_round": null,
@@ -9079,12 +9079,12 @@
           "external": 3
         },
         "implementation": {
-          "local": 1,
-          "external": 1
+          "local": 2,
+          "external": 2
         }
       },
-      "state_revision": 28,
-      "last_transition": "2026-11-05T13:12:34Z",
+      "state_revision": 30,
+      "last_transition": "2026-11-05T13:40:17Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -9432,16 +9432,44 @@
               "at": "2026-11-05T12:37:45Z"
             }
           ]
+        },
+        "F-ab5e503b8371": {
+          "digest": "ab5e503b83714c0d11f0c750bdab9283d1d35703b06115cda52c6044ba9e2472",
+          "text": "**R2-O1. A second tap on Home's start during a restore reports \"A workout is already running.\"** `HomeViewModel.onStartWorkout` (`HomeViewModel.kt:160`) has no guard for a start in flight, and the card stays enabled (`HomeStartCard.kt:156`). Before this round the window was one short write. Now a start can wait for a whole restore with nothing on screen, which invites a second tap. The first start succeeds and opens the workout. The second is refused by the check inside `insert`, so Home shows that message about the user's own workout. No data is affected. `TrainingPlanListViewModel.onStartClicked` (`TrainingPlanListViewModel.kt:131`) already ignores a second tap for this exact reason, and the same guard fits here. `ActiveWorkoutViewModel.onStartWorkout` (`ActiveWorkoutViewModel.kt:281`) has the same gap. Found by reading, not run.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 2,
+              "review_content_id": "27ddd94498c8ef78e2e7bd1766732eab41ee8916af47eade5a126c3b43c5399c",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T13:34:56Z"
+            }
+          ]
+        },
+        "F-766afb591e60": {
+          "digest": "766afb591e6032176eaa937a643d5c1a29893790e0307a248cd46afa46a2556c",
+          "text": "**R2-O2. \"Writes wait during a restore, and reads don't\" isn't always true.** `REVIEW_REQUEST.md:81` and `IMPLEMENTATION_SUMMARY.md:38` say it, and `PreRestoreSnapshotRoundTripTest.kt:65-66` says a read waiting for a restore is something \"no phone does\". A `Flow` on a table nothing is observing needs the writer to install Room's triggers, so it emits nothing until the commit. In a probe with a restore held, 10 such flows collected on Main emitted nothing for 1 s, and a plain `findAll` started after them also didn't finish in 2 s, most likely because they had filled Room's query pool. All of them finished right after the commit, with the restored data, and Main stayed free. So a screen opened during a restore can sit on its loading state until the restore ends. That is harmless, and it prevents some stale reads, but the known limitation should say so. On a low-RAM phone Room's automatic journal mode is TRUNCATE, with one connection, so every read waits there (by Room's documented behavior, not run). The wording needs correcting. No code change is needed.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 2,
+              "review_content_id": "27ddd94498c8ef78e2e7bd1766732eab41ee8916af47eade5a126c3b43c5399c",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T13:34:56Z"
+            }
+          ]
         }
       },
       "implementation_review_stages": {
-        "review_content_id": "5034ef2a96dce9b03dc2a2f3d1e829a2263c9bc2afaa7f3677c5230ff4cb04bc",
+        "review_content_id": "27ddd94498c8ef78e2e7bd1766732eab41ee8916af47eade5a126c3b43c5399c",
         "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
-          "bundle_id": "29d1fa0fca6bfd1d4b36fd525063cd4ca4b480c86fd43419eae6292a1d99c7c0",
+          "bundle_id": "88f9d086e1b37f14471a1d1e87d878065aeea0c33294b9f56accaab3242a39f9",
           "verdict": "APPROVE",
-          "round": 1,
-          "completed_at": "2026-11-05T12:37:45Z",
-          "verdict_sha256": "8ccc7652889c102bdc0c7d7e8e7bcf309b31ab45e3839b8210f790eace4c857f",
+          "round": 2,
+          "completed_at": "2026-11-05T13:34:56Z",
+          "verdict_sha256": "1f3a351d890b7dcac5659a8689cbbbd3d8cdb031145a30ce45442a7081a9ad88",
           "run_ref": "session:local .ai-review/restore-safety-snapshot/feedback/REVIEW_FEEDBACK.md",
           "reviewer_model": "anthropic/claude-opus-5-5"
         },
