@@ -90,3 +90,23 @@ considering a milestone done.
 Budgets: a pull request's CI stays under 20 minutes and a push to `main` under 25. A run over budget gets
 a warning from `tools/ci_time_budget.sh`; find the cause, since more shards alone isn't a fix. Every `feat:`
 or `fix:` merge publishes a GitHub Release with the APK, so pull request titles must be conventional commits.
+
+## Running under the Controller
+
+The Workflow Controller runs each milestone in `docs/backlog.yaml`. These apply to every job:
+
+- **Plan header.** A plan carries exactly one header line of exactly this form, with nothing after the closing
+  backtick: ``Pull request title: `fix: what changed` ``. Use `fix:` for a correction and `feat:` for something new.
+  The title becomes the squash commit's subject and decides the release. Any other form declares no title.
+- **Review severity.** Blocking or Important means wrong code or a missed requirement. Citations, file lists,
+  wording of the plan and similar bookkeeping are Optional, and an Optional finding is never a reason for another
+  round. Say what the user would see go wrong.
+- **Simple commands.** Run `gh` and scripts as separate simple commands. A heredoc script chained with `gh` can be
+  refused by the auto-mode check even though each part is allowed alone.
+- **Optional findings.** Before acceptance, give each one a disposition in
+  `docs/ai-workflow/registry/<id>-dispositions.json`: `python3 scripts/workflow_state.py --finding-dispositions <id>`
+  lists them and prints a skeleton. A follow-up issue is enough; acceptance never waits for a fix.
+- **Devices.** The orchestrator keeps adb and the emulator running outside the jobs. Don't start or kill them, since a
+  process a job starts can hold that job open. Instrumented tests run only on `emulator-5554`, because
+  `connectedDebugAndroidTest` uninstalls the app afterwards and would wipe a phone's data.
+
