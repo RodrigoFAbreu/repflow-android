@@ -34,9 +34,9 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.repflow.app.R
 import com.repflow.app.presentation.designsystem.RepFlowColor
+import com.repflow.app.presentation.designsystem.RepFlowSpacing
 import com.repflow.app.presentation.designsystem.components.RepFlowCard
 import com.repflow.app.presentation.designsystem.repFlowSecondaryTextColor
 
@@ -93,11 +93,11 @@ private fun RestoringOverlay() {
                         }
                     }
                 }.safeDrawingPadding()
-                .padding(16.dp),
+                .padding(RepFlowSpacing.screenPadding),
         contentAlignment = Alignment.Center,
     ) {
         RepFlowCard(modifier = Modifier.fillMaxWidth()) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapLg)) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(22.dp).clearAndSetSemantics {},
                     strokeWidth = 3.dp,
@@ -106,11 +106,11 @@ private fun RestoringOverlay() {
                 Column(modifier = Modifier.weight(1f).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
                     Text(
                         text = stringResource(R.string.backup_restoring_title),
-                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, fontWeight = FontWeight.Medium),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                     )
                     Text(
                         text = stringResource(R.string.backup_restoring_body),
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
+                        style = MaterialTheme.typography.bodySmall,
                         color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
                     )
                 }
