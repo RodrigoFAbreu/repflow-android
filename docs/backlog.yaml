@@ -111,7 +111,7 @@ items:
     detail: docs/items/fix-restore-damaged-file.md
   - id: fix-workout-error-followups
     title: "Workout errors: no stale message after a retry, no crash on a failed read, and Try again restores the picker"
-    status: next
+    status: done
     order: 21
     size: 2
     detail: docs/items/fix-workout-error-followups.md

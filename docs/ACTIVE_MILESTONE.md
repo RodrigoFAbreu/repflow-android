@@ -1,6 +1,12 @@
 # Active Milestone
 
-## `fix-workout-error-followups` — in progress
+## `fix-workout-error-followups` — complete (accepted by policy 2026-11-05)
+
+A successful retry clears a stale workout error, a failed read shows a message instead of closing the app, and Try again restores the exercise picker. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/fix-workout-error-followups-execution.md` and the Optional findings at `docs/milestones/completed/fix-workout-error-followups-findings.md`.
+
+**Next action:** `restore-safety-snapshot`, One automatic snapshot before a restore, restorable from Backup. Ready for `/milestone-plan`.
+
+The sections below are this milestone's historical record.
 
 Workout errors: no stale message after a retry, no crash on a failed read, and Try again restores the picker. Plan: `docs/milestones/fix-workout-error-followups-execution.md`.
 
