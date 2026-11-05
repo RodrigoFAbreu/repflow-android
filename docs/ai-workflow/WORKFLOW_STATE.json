@@ -6823,12 +6823,12 @@
       "registry_path": "docs/ai-workflow/registry/fix-backup-all-workouts-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/fix-backup-all-workouts-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "APPLYING_REVIEW_FEEDBACK",
+      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
       "plan_revision": 2,
-      "implementation_revision": 1,
+      "implementation_revision": 2,
       "functional_review_round": null,
       "base_commit": "b31d9f2337117e02f4cb6b5d1cd13c37aa8b9672",
-      "reviewed_implementation_head": "fd0884b8ca5227da7feb6283f04bc1380fba95bd",
+      "reviewed_implementation_head": "802ad7c66536bb1b1567ca80e30aaeb6dd3df35f",
       "current_checkpoint_id": null,
       "last_completed_checkpoint_id": "CP2",
       "checkpoints": {
@@ -6967,8 +6967,8 @@
           "external": 1
         }
       },
-      "state_revision": 16,
-      "last_transition": "2026-11-05T01:58:41Z",
+      "state_revision": 17,
+      "last_transition": "2026-11-05T02:15:24Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
