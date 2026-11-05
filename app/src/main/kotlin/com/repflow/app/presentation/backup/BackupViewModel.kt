@@ -188,20 +188,31 @@ class BackupViewModel
          * The user tapped `Restore the safety copy`: its text goes through the same confirmation and
          * the same restore as a file. A copy that has gone shows the failure, and the card follows what
          * is really there.
+         *
+         * Busy until the copy is loaded, and a tap during that is ignored. A second load queued on the lock
+         * could otherwise stage the copy again after the user had confirmed the first, and confirming that
+         * would replace the copy with itself, losing the data the first restore had just saved.
          */
         fun onRestoreSnapshotRequested() {
+            if (_uiState.value.isBusy) return
+            _uiState.update { it.copy(isBusy = true) }
             viewModelScope.launch {
                 preRestoreCopyLock.withLock {
                     val copy = preRestoreSnapshotStore.load()
                     if (copy == null) {
                         val takenAt = preRestoreSnapshotStore.takenAt()
                         _uiState.update {
-                            it.copy(statusMessage = BackupStatusMessage.OperationFailed, preRestoreSnapshotAt = takenAt)
+                            it.copy(
+                                isBusy = false,
+                                statusMessage = BackupStatusMessage.OperationFailed,
+                                preRestoreSnapshotAt = takenAt,
+                            )
                         }
                     } else {
                         val hasData = readHasTrainingData()
                         _uiState.update {
                             it.copy(
+                                isBusy = false,
                                 pendingRestoreJson = copy.json,
                                 pendingRestoreSnapshotAt = copy.takenAt,
                                 hasTrainingData = hasData,

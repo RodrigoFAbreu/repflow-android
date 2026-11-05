@@ -31,6 +31,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -173,6 +174,27 @@ class BackupViewModelSafetyCopyTest {
         }
 
     @Test
+    fun `a second tap on the card while the copy loads is ignored, and every button waits for the load`() =
+        runTest {
+            val old = holdOldCopy()
+            val model = buildViewModel()
+            val release = CompletableDeferred<Unit>()
+            val holder = launch(UnconfinedTestDispatcher(testScheduler)) { copyLock.withLock { release.await() } }
+
+            model.onRestoreSnapshotRequested()
+            assertTrue(model.uiState.value.isBusy)
+            model.onRestoreSnapshotRequested()
+
+            release.complete(Unit)
+            holder.join()
+            testScheduler.advanceUntilIdle()
+
+            assertEquals(1, snapshotStore.calls.count { it == "load" })
+            assertEquals(old.json, model.uiState.value.pendingRestoreJson)
+            assertFalse(model.uiState.value.isBusy)
+        }
+
+    @Test
     fun `cancelling the copy's confirmation clears its time along with its text`() =
         runTest {
             holdOldCopy()
@@ -246,6 +268,7 @@ class BackupViewModelSafetyCopyTest {
             assertEquals(BackupStatusMessage.OperationFailed, model.uiState.value.statusMessage)
             assertNull(model.uiState.value.pendingRestoreJson)
             assertNull(model.uiState.value.preRestoreSnapshotAt)
+            assertFalse(model.uiState.value.isBusy)
         }
 
     @Test
