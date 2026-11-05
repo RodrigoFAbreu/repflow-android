@@ -175,6 +175,9 @@ object RepFlowColor {
      * page, not a surface, so one value serves both themes.
      */
     val sheetScrim = Color(0x990F111C)
+
+    /** The scrim behind a centred dialog (`40j`), `rgba(5,6,12,.62)`, here behind the Restoring screen. */
+    val restoringScrim = Color(0x9E05060C)
 }
 
 /**

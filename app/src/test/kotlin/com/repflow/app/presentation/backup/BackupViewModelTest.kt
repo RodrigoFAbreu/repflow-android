@@ -122,6 +122,7 @@ class BackupViewModelTest {
         copyLock,
         trainingData,
         restoreOutcomeSlot,
+        RestoreInProgress(),
         clock,
     )
 

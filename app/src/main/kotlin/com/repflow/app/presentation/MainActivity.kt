@@ -12,6 +12,8 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.repflow.app.application.settings.SettingsRepository
 import com.repflow.app.application.settings.ThemeMode
+import com.repflow.app.presentation.backup.RestoreInProgress
+import com.repflow.app.presentation.backup.RestoringOverlayHost
 import com.repflow.app.presentation.navigation.RepFlowNavHost
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CancellationException
@@ -25,6 +27,9 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
     @Inject
     lateinit var settingsRepository: SettingsRepository
+
+    @Inject
+    lateinit var restoreInProgress: RestoreInProgress
 
     private val themeModes by lazy {
         settingsRepository
@@ -52,8 +57,9 @@ class MainActivity : ComponentActivity() {
                 )
                 onDispose { }
             }
+            val restoring by restoreInProgress.active.collectAsStateWithLifecycle()
             RepFlowTheme(themeMode = themeMode) {
-                RepFlowNavHost()
+                RestoringOverlayHost(active = restoring) { RepFlowNavHost() }
             }
         }
     }

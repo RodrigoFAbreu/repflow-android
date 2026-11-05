@@ -369,6 +369,17 @@ class RepFlowPrimitivesTest {
     }
 
     @Test
+    fun theRestoringScrimIsTheDesignsOwnValue() {
+        // rgba(5,6,12,.62)
+        with(RepFlowColor.restoringScrim) {
+            assertEquals(5, (red * 255).roundToInt())
+            assertEquals(6, (green * 255).roundToInt())
+            assertEquals(12, (blue * 255).roundToInt())
+            assertEquals(0.62f, alpha, 0.01f)
+        }
+    }
+
+    @Test
     fun theKeypadCarriesTheDesignsKeyGeometry() {
         assertEquals(56.dp, RepFlowKeypadDefaults.keyMinHeight)
         assertEquals(CornerSize(10.dp), RepFlowKeypadDefaults.keyShape.topStart)

@@ -106,6 +106,7 @@ class BackupViewModelSafetyCopyTest {
             copyLock,
             trainingData,
             outcomeSlot,
+            RestoreInProgress(),
             FixedClock(Instant.parse("2026-10-03T12:00:00Z")),
         )
 

@@ -69,8 +69,9 @@ import java.time.format.DateTimeFormatter
  * deviations from the design (Q5): no recent-files list, no `Share`, no file
  * metadata, no `Undo` toast and no restore file sheet with a preview; a
  * successful restore keeps today's `Backup restored` snackbar. The frame around
- * the restore card stays as it was, and `40g`'s inline invalid-file message and
- * `Restoring…` card are not drawn.
+ * the restore card stays as it was, and `40g`'s inline invalid-file message stays
+ * not drawn. Its `Restoring…` card is now [RestoringOverlayHost]'s, centred over
+ * the whole app.
  */
 @Composable
 fun BackupScreen(
