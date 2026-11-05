@@ -69,7 +69,8 @@ import java.util.UUID
  * a copy here is a file an ordinary restore can read, and a failed restore really rolls back.
  *
  * The database is a real file in the app's real journal mode. An in-memory one has a single connection,
- * so a read made during a restore would wait for it, which no phone does.
+ * so every read made during a restore would wait for it. A phone in WAL lets a plain read through, and
+ * that read seeing the old data is what these tests depend on.
  */
 @RunWith(AndroidJUnit4::class)
 class PreRestoreSnapshotRoundTripTest {
