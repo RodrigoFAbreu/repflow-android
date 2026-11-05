@@ -25,7 +25,7 @@
     <string name="exercise_list_meta_no_plan">not in any plan</string>
     <string name="exercise_list_empty_no_archived">No archived exercises.</string>
     <string name="exercise_list_observation_failed">Couldn\'t load exercises.</string>
-    <string name="exercise_list_retry">Retry</string>
+    <string name="exercise_list_retry">Try again</string>
     <string name="exercise_list_row_menu_content_description">More options</string>
     <string name="exercise_list_row_menu_edit">Edit</string>
     <string name="exercise_list_row_menu_archive">Archive</string>
@@ -75,7 +75,7 @@
     <string name="training_plan_list_add_content_description">New plan</string>
     <string name="training_plan_list_empty">No active plans. Restore one, or create a plan.</string>
     <string name="training_plan_list_observation_failed">Couldn\'t load training plans.</string>
-    <string name="training_plan_list_retry">Retry</string>
+    <string name="training_plan_list_retry">Try again</string>
     <string name="training_plan_list_filter_active">Active</string>
     <string name="training_plan_list_filter_archived">Archived</string>
     <string name="training_plan_list_empty_no_archived">Nothing archived.</string>
@@ -131,12 +131,13 @@
     <string name="progression_readiness_value">%1$d · %2$s</string>
     <string name="progression_not_found">No suggestion for this exercise yet. One appears after you finish a workout that includes it.</string>
     <string name="progression_load_failed">Couldn\'t load this suggestion.</string>
-    <string name="progression_retry">Retry</string>
+    <string name="progression_retry">Try again</string>
     <string name="progression_save_failed">Couldn\'t save your choice. Try again.</string>
     <string name="workout_active_exercise_count">%1$d exercises</string>
     <string name="workout_active_set_count">%1$d sets</string>
     <string name="workout_active_observation_failed">Couldn\'t load the workout.</string>
-    <string name="workout_active_retry">Retry</string>
+    <string name="workout_active_retry">Try again</string>
+    <string name="workout_active_action_failed">Couldn\'t complete that. Try again.</string>
     <string name="workout_active_set_row_weight_reps">Set %1$d: %2$s kg x %3$d</string>
     <string name="workout_active_set_row_reps">Set %1$d: %2$d reps</string>
     <string name="workout_active_set_row_duration">Set %1$d: %2$ds</string>
@@ -448,7 +449,7 @@
     <string name="home_no_load_increases">No load increases</string>
     <string name="home_history_error_title">Couldn\'t load your history</string>
     <string name="home_history_error_message">Your workouts are safe on this device. Try again.</string>
-    <string name="home_history_retry">Retry</string>
+    <string name="home_history_retry">Try again</string>
     <string name="home_error_already_active">A workout is already running.</string>
     <string name="home_error_plan_not_found">That plan is no longer available.</string>
     <string name="home_error_unknown">Something went wrong. Try again.</string>

@@ -21,7 +21,7 @@
 | 15 | [Fill in missing rules: pending set rows, fixed targets, first \`+\` on a timed set, context line with no check-in, archived exercises, notification text, loading shapes](items/design-2-rules.md) `design-2-rules` | Idea | 1 | design-1-wrong-claims |
 | 16 | [Redraw only what's needed: full Settings, the workout board's lost Add exercise, permission rows and sheets, filter-empty and chart-empty states, the before-restore snapshot board](items/design-3-redraws.md) `design-3-redraws` | Idea | 2 | design-1-wrong-claims |
 | 17 | [Make the spec sheet the single source: move rules out of the archive, add the board map, fix contrast and faint outlines, run the colour-blind check, archive old boards](items/design-4-spec.md) `design-4-spec` | Idea | 1 | design-2-rules |
-| 18 | [A failed workout action shows a message, entry clears only on success, and \`Retry\` works](items/fix-workout-errors.md) `fix-workout-errors` | Next | 1 | - |
+| 18 | [A failed workout action shows a message, entry clears only on success, and \`Retry\` works](items/fix-workout-errors.md) `fix-workout-errors` | Done | 1 | - |
 | 19 | [Backups include running and abandoned workouts, and restore warns about a running workout](items/fix-backup-all-workouts.md) `fix-backup-all-workouts` | Next | 2 | design-1-wrong-claims |
 | 20 | [One automatic snapshot before a restore, restorable from Backup](items/restore-safety-snapshot.md) `restore-safety-snapshot` | Next | 2 | fix-backup-all-workouts, design-3-redraws |
 | 21 | [A reminder on Home when the last backup is old](items/backup-reminder.md) `backup-reminder` | Next | 1 | restore-safety-snapshot |

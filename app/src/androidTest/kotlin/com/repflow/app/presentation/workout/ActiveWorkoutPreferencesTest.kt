@@ -80,7 +80,7 @@ class ActiveWorkoutPreferencesTest {
                     onAddExercise = {},
                     onCreateExercise = {},
                     onOpenRecommendation = {},
-                    onRecordSet = { _, _, _, _, rpe, _, pain, technique -> onRecordExtras(rpe, pain, technique) },
+                    onRecordSet = { _, _, _, _, rpe, _, pain, technique, _ -> onRecordExtras(rpe, pain, technique) },
                     onUndoLastSet = {},
                     onEditLastSet = { _, _, _, _, _, _, _, _ -> },
                     onAddRestTime = {},
@@ -90,6 +90,7 @@ class ActiveWorkoutPreferencesTest {
                     onLeaveWorkout = {},
                     onAbandonWorkout = {},
                     onRetry = {},
+                    onErrorShown = {},
                 )
             }
         }

@@ -5,6 +5,7 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -77,7 +78,8 @@ class ActiveWorkoutScreenTest {
      */
     private fun setContent(
         exercise: ActiveExerciseUi,
-        onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit = { _, _, _, _, _, _, _, _ -> },
+        onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?, () -> Unit) -> Unit =
+            { _, _, _, _, _, _, _, _, _ -> },
         availableExercises: List<ExercisePickerItem> = emptyList(),
         onOpenRecommendation: (ExerciseId) -> Unit = {},
         openFirstExercise: Boolean = true,
@@ -85,6 +87,9 @@ class ActiveWorkoutScreenTest {
         onFocusExercise: (WorkoutExerciseId?) -> Unit = {},
         onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit = { _, _, _, _, _, _, _, _ -> },
         onCompleteWorkout: (WorkoutSessionId) -> Unit = {},
+        errorMessage: State<ActiveWorkoutErrorReason?> = mutableStateOf(null),
+        onErrorShown: () -> Unit = {},
+        restTimer: RestTimerUi? = null,
     ) {
         composeRule.setContent {
             RepFlowTheme {
@@ -96,8 +101,10 @@ class ActiveWorkoutScreenTest {
                                     sessionId = WorkoutSessionId("session-1"),
                                     startedAt = Instant.parse("2026-01-01T00:00:00Z"),
                                     exercises = exercises,
+                                    restTimer = restTimer,
                                 ),
                             availableExercises = availableExercises,
+                            errorMessage = errorMessage.value,
                         ),
                     dayContext = null,
                     focusedExerciseId = if (openFirstExercise) exercises.firstOrNull()?.id else null,
@@ -115,6 +122,7 @@ class ActiveWorkoutScreenTest {
                     onLeaveWorkout = {},
                     onAbandonWorkout = {},
                     onRetry = {},
+                    onErrorShown = onErrorShown,
                 )
             }
         }
@@ -355,7 +363,7 @@ class ActiveWorkoutScreenTest {
                 ExerciseTrackingType.WEIGHT_AND_REPS,
                 seed = SetEntrySeed(load = java.math.BigDecimal("80"), reps = java.math.BigDecimal("8")),
             ),
-            onRecordSet = { _, _, _, _, rpe, _, pain, _ ->
+            onRecordSet = { _, _, _, _, rpe, _, pain, _, _ ->
                 recordedRpe = rpe
                 recordedPain = pain
             },
@@ -414,11 +422,12 @@ class ActiveWorkoutScreenTest {
         var recordedRpe: Double? = null
         setContent(
             exercise(ExerciseTrackingType.WEIGHT_AND_REPS),
-            onRecordSet = { _, load, reps, _, rpe, warmup, _, _ ->
+            onRecordSet = { _, load, reps, _, rpe, warmup, _, _, onSaved ->
                 recordedLoad = load
                 recordedReps = reps
                 recordedRpe = rpe
                 recordedWarmup = warmup
+                onSaved()
             },
         )
 
@@ -962,6 +971,131 @@ class ActiveWorkoutScreenTest {
 
         composeRule.onNodeWithText("kg · 2.5 steps").assertIsDisplayed()
     }
+
+    /** A failed action shows the generic message and reports it shown, so the ViewModel clears the field (A-1). */
+    @Test
+    fun aFailedActionShowsTheMessageAndReportsItShown() {
+        var shown = 0
+        val error = mutableStateOf<ActiveWorkoutErrorReason?>(ActiveWorkoutErrorReason.PERSISTENCE_UNAVAILABLE)
+        setContent(exercise(ExerciseTrackingType.WEIGHT_AND_REPS), errorMessage = error, onErrorShown = { shown++ })
+
+        node(R.string.workout_active_action_failed).assertIsDisplayed()
+
+        composeRule.waitUntil(SNACKBAR_WAIT_MILLIS) { shown == 1 }
+    }
+
+    @Test
+    fun noErrorShowsNoMessage() {
+        var shown = 0
+        setContent(exercise(ExerciseTrackingType.WEIGHT_AND_REPS), onErrorShown = { shown++ })
+
+        node(R.string.workout_active_action_failed).assertDoesNotExist()
+        composeRule.runOnIdle { assertEquals(0, shown) }
+    }
+
+    /** Clearing the field is what lets an identical failure re-trigger the message. */
+    @Test
+    fun theSameFailureShowsTheMessageAgainAfterItWasCleared() {
+        val error = mutableStateOf<ActiveWorkoutErrorReason?>(ActiveWorkoutErrorReason.PERSISTENCE_UNAVAILABLE)
+        setContent(
+            exercise(ExerciseTrackingType.WEIGHT_AND_REPS),
+            errorMessage = error,
+            onErrorShown = { error.value = null },
+        )
+        node(R.string.workout_active_action_failed).assertIsDisplayed()
+        composeRule.waitUntil(SNACKBAR_WAIT_MILLIS) { error.value == null }
+        composeRule.waitUntil(SNACKBAR_WAIT_MILLIS) { actionFailedNodes().isEmpty() }
+
+        composeRule.runOnIdle { error.value = ActiveWorkoutErrorReason.PERSISTENCE_UNAVAILABLE }
+
+        node(R.string.workout_active_action_failed).assertIsDisplayed()
+    }
+
+    @Test
+    fun inFocusModeTheMessageSitsAboveLogSetWithNoRestStrip() {
+        setContent(
+            exercise(ExerciseTrackingType.WEIGHT_AND_REPS),
+            errorMessage = mutableStateOf(ActiveWorkoutErrorReason.PERSISTENCE_UNAVAILABLE),
+        )
+
+        assertMessageSitsAbove(R.string.workout_focus_log_set)
+    }
+
+    @Test
+    fun inFocusModeTheMessageSitsAboveTheRestStripAndLogSet() {
+        setContent(
+            exercise(ExerciseTrackingType.WEIGHT_AND_REPS),
+            errorMessage = mutableStateOf(ActiveWorkoutErrorReason.PERSISTENCE_UNAVAILABLE),
+            restTimer = runningRest(),
+        )
+
+        assertMessageSitsAbove(R.string.workout_focus_log_set)
+        assertMessageSitsAbove(R.string.workout_rest_skip)
+    }
+
+    @Test
+    fun onTheBoardTheMessageSitsAboveTheRestStrip() {
+        setContent(
+            exercise(ExerciseTrackingType.WEIGHT_AND_REPS),
+            openFirstExercise = false,
+            errorMessage = mutableStateOf(ActiveWorkoutErrorReason.PERSISTENCE_UNAVAILABLE),
+            restTimer = runningRest(),
+        )
+
+        assertMessageSitsAbove(R.string.workout_rest_skip)
+    }
+
+    /** A-12: the literal, because the wording is the requirement (R4) and a resolved resource would pass on any value. */
+    @Test
+    fun theLoadFailureStateOffersTryAgainAndTappingItCallsOnRetry() {
+        var retries = 0
+        composeRule.setContent {
+            RepFlowTheme {
+                ActiveWorkoutScreen(
+                    uiState = ActiveWorkoutUiState(content = ActiveWorkoutContent.ObservationFailed(ActiveWorkoutErrorReason.UNKNOWN)),
+                    dayContext = null,
+                    focusedExerciseId = null,
+                    onFocusExercise = {},
+                    onAddExercise = {},
+                    onCreateExercise = {},
+                    onOpenRecommendation = {},
+                    onRecordSet = { _, _, _, _, _, _, _, _, _ -> },
+                    onUndoLastSet = {},
+                    onEditLastSet = { _, _, _, _, _, _, _, _ -> },
+                    onAddRestTime = {},
+                    onRemoveRestTime = {},
+                    onSkipRestTimer = {},
+                    onCompleteWorkout = {},
+                    onLeaveWorkout = {},
+                    onAbandonWorkout = {},
+                    onRetry = { retries++ },
+                    onErrorShown = {},
+                )
+            }
+        }
+
+        node(R.string.workout_active_observation_failed).assertIsDisplayed()
+        composeRule.onNode(hasClickAction() and hasText("Try again")).performClick()
+
+        composeRule.runOnIdle { assertEquals(1, retries) }
+    }
+
+    private fun runningRest() = RestTimerUi(endAt = Instant.now().plusSeconds(90), totalDurationSeconds = 90)
+
+    private fun actionFailedNodes() = composeRule.onAllNodesWithText(string(R.string.workout_active_action_failed)).fetchSemanticsNodes()
+
+    /**
+     * Compares the whole snackbar, not only its words: the Material host marks the item it draws with a
+     * dismiss action, which nothing else on these surfaces carries while no sheet is open.
+     */
+    private fun assertMessageSitsAbove(
+        @StringRes label: Int,
+    ) {
+        node(R.string.workout_active_action_failed).assertIsDisplayed()
+        val message = composeRule.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.Dismiss)).getUnclippedBoundsInRoot()
+        val control = composeRule.onNode(hasClickAction() and hasText(string(label))).getUnclippedBoundsInRoot()
+        assertTrue("message $message overlaps ${string(label)} $control", message.bottom <= control.top)
+    }
 }
 
 private val REST_STRIP_LABELS =
@@ -971,5 +1105,6 @@ private val REST_STRIP_LABELS =
         R.string.workout_rest_skip,
     )
 
+private const val SNACKBAR_WAIT_MILLIS = 10_000L
 private const val LARGE_FONT_SCALE_MEDIUM = 1.3f
 private const val LARGE_FONT_SCALE_MAX = 2.0f

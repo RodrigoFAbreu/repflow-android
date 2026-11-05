@@ -1,5 +1,131 @@
 # Active Milestone
 
+## `fix-workout-errors` — complete (accepted by policy 2026-11-04)
+
+A failed workout action now shows a message, an entry clears only after a successful save, and Try again really re-reads the workout. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/fix-workout-errors-execution.md` and the Optional findings at `docs/milestones/completed/fix-workout-errors-findings.md`.
+
+**Next action:** `fix-backup-all-workouts`, Backups include running and abandoned workouts, and restore warns about a running workout. Ready for `/milestone-plan`.
+
+The sections below are this milestone's historical record.
+
+Plan: `docs/milestones/fix-workout-errors-execution.md`. State:
+`docs/ai-workflow/WORKFLOW_STATE.json` is the ground truth.
+
+### CP1 — Show a failed action and clear the entry only on success (A-1; R1, R2): complete
+
+- A failed workout action now shows `Couldn't complete that. Try again.`, a short
+  snackbar with no action, in the design's `ExerciseListSnackbar` card. The field
+  clears through the new `onErrorShown`, so the same failure can show again.
+- `ActiveWorkoutScreen` holds the `SnackbarHostState`. `WorkoutFocus` and
+  `WorkoutBoard` each draw the host on their scroll area's bottom edge, so it can't
+  cover the rest strip or `Log set`.
+- `Log set` takes a `SubmittedDetail` snapshot at the tap, and `onRecordSet`'s new
+  `onSaved` clears the entry only after a successful save. Each of RPE, pain,
+  technique and the warm-up flag clears only if it still holds what was submitted.
+
+**Departure from the plan's file list:** the five new ViewModel tests are in a new
+sibling, `ActiveWorkoutActionErrorTest.kt`, not `ActiveWorkoutViewModelTest.kt`.
+Adding them there tripped detekt's `LargeClass`, and splitting is how the package has
+handled this before (`ActiveWorkoutRestPrecedenceTest`, `ActiveWorkoutSeedTest`).
+
+**Verified on the final code:**
+
+- `./gradlew spotlessCheck detekt lintDebug`: pass.
+- `testDebugUnitTest --tests "com.repflow.app.presentation.workout.*"`: 92 tests, 0 failures.
+- `connectedDebugAndroidTest`, package `presentation.workout`, on the AVD
+  (`emulator-5554`): 108 tests, 0 failures. The full suite runs once, after CP2.
+
+**Red first:** with the new signatures threaded through and today's behaviour kept, the
+new entry and `onSaved` unit tests failed, and on the AVD so did the message, position,
+failed-save, deferred-success and route tests. `aSuccessfulSaveClears…` also failed then,
+because of a bug in the test itself (an ambiguous `8`), now fixed; it covers the existing
+clearing rule, so it isn't expected to fail on the old code.
+
+**Mutations checked on the AVD, then reverted:**
+
+| Temporary break | Caught by |
+|---|---|
+| Host in the root `Box` | All three position tests, on the overlap |
+| Snapshot taken when the callback runs | `aValueChangedDuringTheSaveSurvivesItAndTheRestClears` |
+| Route passes `onErrorShown = {}` | `ActiveWorkoutErrorRouteTest`, on the second message |
+| Route drops `onSaved` | `ActiveWorkoutErrorRouteTest`, on the entry clearing |
+
+### CP2 — Make `Retry` re-observe and say "Try again" (A-12; R3, R4): complete
+
+- The ViewModel's `content` now sits inside `retryTrigger.flatMapLatest`, the same
+  shape as `ExerciseListViewModel`. `onRetryObservation()` re-subscribes it, so a
+  failed observation can recover. The route wires `onRetry` to it; `onErrorShown`
+  keeps its one job.
+- The five `*_retry` strings read `Try again`. No `>Retry<` value is left in
+  `app/src/main/res`.
+
+**Departure from the plan's file list:** the two new ViewModel tests are in a new
+sibling, `ActiveWorkoutObservationRetryTest.kt`, not `ActiveWorkoutViewModelTest.kt`.
+Adding one there tripped detekt's `LargeClass` again, as in CP1.
+
+**Verified on the final code:**
+
+- `./gradlew spotlessCheck detekt lintDebug`: pass.
+- `testDebugUnitTest --tests "com.repflow.app.presentation.workout.*"`: 94 tests, 0 failures.
+- `connectedDebugAndroidTest` on the AVD (`emulator-5554`), all of
+  `ActiveWorkoutErrorRouteTest` plus the new screen test: 3 tests, 0 failures. The
+  full suite runs once, next, in the item's verification step.
+
+**Red first:** with `onRetryObservation` an empty stub, the route still on
+`onErrorShown` and the strings unchanged, the new ViewModel, screen and route tests all
+failed.
+
+**Mutations checked, then reverted:**
+
+| Temporary break | Caught by |
+|---|---|
+| Route passes `onRetry = viewModel::onErrorShown`, ViewModel fixed | `tryAgainOnTheLoadFailureStateShowsTheBoardWithTheSession`, on the board never appearing |
+| `onRetryObservation` does nothing, in the new test file | Both `ActiveWorkoutObservationRetryTest` tests, timing out |
+
+### Functional review checklist (implementation revision 1)
+
+**Scope under test:** R1-R4 of `docs/milestones/fix-workout-errors-execution.md`. The
+app has no fault hook in `app/src/main`, so a failed save or a failed read **cannot be
+forced by hand**; R1, R3 and the failure half of R2 are covered only by the automated
+tests listed under "Automated evidence". The manual flows below check that the
+success paths and the wording did not regress. Sandbox-friendly flows (no network, no
+`gh`, read-only clone) are marked **[offline]**.
+
+**Setup**
+
+1. On `milestone/fix-workout-errors`: `./gradlew assembleDebug`, install on the AVD
+   (`start-avd.sh`, within the memory caps) or a phone (ask before using the phone).
+2. Test data: any exercise with a plan, so a workout can start. Seed at least one
+   exercise with sets; no feature flag needed.
+
+**Flows**
+
+| # | Flow | Expected |
+|---|---|---|
+| F1 | Start a workout, enter RPE 8, pain, a technique note and the warm-up flag, tap `Log set`. | The set is saved and RPE, pain, technique and warm-up clear, as before this item. No error snackbar. |
+| F2 | After F1, change RPE right after tapping `Log set` on a second set (edit within a moment of the tap). | The set saves; the freshly typed RPE is not wiped by a late clear. (Timing-sensitive; the unit test `aValueChangedDuringTheSaveSurvivesItAndTheRestClears` is the authoritative check.) |
+| F3 | During a rest, tap `+15s`, `-15s`, `Skip rest`; also undo a set, edit a set, add an exercise. | Each works as before. No `Couldn't complete that. Try again.` snackbar appears on success. |
+| F4 | Finish a workout; start another and abandon it. | Both complete normally. No error snackbar. |
+| F5 | In Focus mode and in Board mode, scroll the workout area to the bottom. | The rest strip and `Log set` are fully visible; nothing new overlaps them. |
+| F6 **[offline]** | `grep -rn ">Retry<" app/src/main/res` | No output. The five `*_retry` strings read `Try again`: `grep -rn "Try again" app/src/main/res/values/strings.xml`. |
+| F7 **[offline]** | Read `ActiveWorkoutRoute.kt`: `onRetry` is wired to `viewModel::onRetryObservation`, not `onErrorShown`. | Confirmed by reading the file. |
+
+**Automated evidence (the only coverage for the failure paths)**
+
+- Unit: `./gradlew testDebugUnitTest --tests "com.repflow.app.presentation.workout.*"`
+  (`ActiveWorkoutActionErrorTest`, `ActiveWorkoutObservationRetryTest`, `SetEntryStateTest`).
+- Instrumented (AVD): `ActiveWorkoutErrorRouteTest` (message, position, failed-save,
+  route wiring, `Try again` recovering the board), `ActiveWorkoutScreenTest`,
+  `ActiveWorkoutSetEntryTest`.
+- Gates: `./gradlew spotlessCheck detekt lintDebug`.
+
+**Known limitations / out of scope**
+
+- The message is deliberately generic (no per-reason text) and a failed action is not
+  retried automatically.
+- No other screen's error handling changed; no Room, domain, navigation or schema change.
+- A forced-failure manual check does not exist; that is by design, not a gap to fail.
+
 ## `repflow-redesign-visual-foundation` — complete (accepted 2026-10-03)
 
 The user accepted the milestone after functional-review round 3 (PASS: C2, B7,

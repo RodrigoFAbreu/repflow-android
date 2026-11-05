@@ -81,13 +81,27 @@ import java.math.BigDecimal
  */
 
 /**
+ * RPE, pain, technique and the warm-up flag as they stood when `Log set` was
+ * tapped: what [SetEntryState.clearAfterSet] may clear once that save succeeds.
+ */
+internal data class SubmittedDetail(
+    val rpe: Int?,
+    val pain: Int?,
+    val technique: Int?,
+    val isWarmup: Boolean,
+)
+
+/**
  * What the user has dialled in for the next set. Held by focus mode rather
  * than by any one control, so the bottom bar's `Log set` reads it and the
  * disclosure can collapse without dropping anything; saved across a rotation.
  *
- * [clearAfterSet] runs after every logged set (CP9, replacing `D60`): weight,
- * reps and seconds **stay** - the next set is usually the same numbers - while
- * RPE, pain, technique and the warm-up flag clear (`8d`'s rule).
+ * [clearAfterSet] runs once a logged set has saved (CP9, replacing `D60`):
+ * weight, reps and seconds **stay** - the next set is usually the same numbers -
+ * while RPE, pain, technique and the warm-up flag clear (`8d`'s rule). A failed
+ * save clears nothing, so the set can be logged again. The entry stays editable
+ * while the save runs, so each of those four clears only if it still holds what
+ * was submitted ([submittedDetail]): a value changed since the tap was not saved.
  *
  * [touched] is "the user has typed or stepped a value": until then the entry is
  * *untouched* and takes the seed ([applySeed]); once set it never takes one
@@ -152,11 +166,13 @@ internal class SetEntryState {
             ExerciseTrackingType.WEIGHT_AND_REPS -> load != null && (reps?.signum() ?: 0) > 0
         }
 
-    fun clearAfterSet() {
-        rpe = null
-        pain = null
-        technique = null
-        isWarmup = false
+    fun submittedDetail(): SubmittedDetail = SubmittedDetail(rpe, pain, technique, isWarmup)
+
+    fun clearAfterSet(submitted: SubmittedDetail) {
+        if (rpe == submitted.rpe) rpe = null
+        if (pain == submitted.pain) pain = null
+        if (technique == submitted.technique) technique = null
+        if (isWarmup == submitted.isWarmup) isWarmup = false
     }
 
     /** The plain, bundle-safe form [Saver] and [FocusEntries.Saver] persist. */

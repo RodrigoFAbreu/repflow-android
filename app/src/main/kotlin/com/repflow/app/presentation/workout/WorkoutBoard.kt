@@ -21,6 +21,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,6 +55,7 @@ import com.repflow.app.presentation.designsystem.components.RepFlowStatusChip
 import com.repflow.app.presentation.designsystem.components.RepFlowTagTone
 import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
 import com.repflow.app.presentation.designsystem.repFlowSecondaryTextColor
+import com.repflow.app.presentation.exercise.list.ExerciseListSnackbar
 import com.repflow.app.presentation.home.elapsedLabel
 import kotlinx.coroutines.delay
 import java.time.Instant
@@ -78,6 +81,7 @@ internal fun WorkoutBoard(
     onExerciseClick: (WorkoutExerciseId) -> Unit,
     onAddExerciseClick: () -> Unit,
     restStrip: @Composable () -> Unit,
+    snackbarHostState: SnackbarHostState,
 ) {
     val rows = remember(content.exercises) { boardRows(content.exercises) }
     val progress = remember(content.exercises) { boardProgress(content.exercises) }
@@ -89,33 +93,37 @@ internal fun WorkoutBoard(
             onFinishClick = onFinishClick,
         )
         BoardHeader(progress = progress, dayContext = dayContext)
-        LazyColumn(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            contentPadding =
-                PaddingValues(
-                    start = RepFlowSpacing.screenPadding,
-                    end = RepFlowSpacing.screenPadding,
-                    bottom = RepFlowSpacing.gapSm,
-                ),
-        ) {
-            if (rows.isEmpty()) {
-                item(key = "empty") { EmptyBoard() }
+        // The message sits on the list's bottom edge, so it can't cover the rest strip below.
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding =
+                    PaddingValues(
+                        start = RepFlowSpacing.screenPadding,
+                        end = RepFlowSpacing.screenPadding,
+                        bottom = RepFlowSpacing.gapSm,
+                    ),
+            ) {
+                if (rows.isEmpty()) {
+                    item(key = "empty") { EmptyBoard() }
+                }
+                items(items = rows, key = { it.id.value }) { row ->
+                    BoardRow(row = row, onClick = { onExerciseClick(row.id) })
+                }
+                item(key = "add") {
+                    RepFlowAccentOutlineButton(
+                        text = stringResource(R.string.workout_active_add_exercise),
+                        onClick = onAddExerciseClick,
+                        leadingIcon = RepFlowIcons.plus,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(top = AddExerciseTopMargin)
+                                .heightIn(min = AddExerciseMinHeight),
+                    )
+                }
             }
-            items(items = rows, key = { it.id.value }) { row ->
-                BoardRow(row = row, onClick = { onExerciseClick(row.id) })
-            }
-            item(key = "add") {
-                RepFlowAccentOutlineButton(
-                    text = stringResource(R.string.workout_active_add_exercise),
-                    onClick = onAddExerciseClick,
-                    leadingIcon = RepFlowIcons.plus,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(top = AddExerciseTopMargin)
-                            .heightIn(min = AddExerciseMinHeight),
-                )
-            }
+            SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter)) { ExerciseListSnackbar(it) }
         }
         restStrip()
     }
