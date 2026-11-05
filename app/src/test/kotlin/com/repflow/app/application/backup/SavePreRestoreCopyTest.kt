@@ -49,7 +49,7 @@ class SavePreRestoreCopyTest {
             backupRepository = backupRepository,
         )
 
-    private val copy = SavePreRestoreCopy(trainingData, exportBackup(), store, lock)
+    private val copy = SavePreRestoreCopy(trainingData, exportBackup(), backupRepository, store, lock)
 
     private val succeed: suspend () -> DomainResult<Unit, BackupRestoreError> = { DomainResult.Success(Unit) }
     private val fail: suspend () -> DomainResult<Unit, BackupRestoreError> = { DomainResult.Failure(BackupRestoreError.Unavailable) }
@@ -92,6 +92,58 @@ class SavePreRestoreCopyTest {
                 (backupRepository.parseSnapshot(exportBackup()()) as DomainResult.Success).value,
                 (backupRepository.parseSnapshot(checkNotNull(savedAtRestore)) as DomainResult.Success).value,
             )
+        }
+
+    @Test
+    fun `the read, the save and the restore are one transaction, and the promote comes after its commit`() =
+        runTest {
+            holdExercise("Squat")
+            val transaction = RecordingTransaction()
+
+            copyThrough(transaction).aroundRestore {
+                store.calls += "restore"
+                DomainResult.Success(Unit)
+            }
+
+            assertEquals(0, transaction.readsBeforeItBegan)
+            assertEquals(1, trainingData.hasTrainingDataReads)
+            assertEquals(listOf("begin", "saveNew", "restore", "commit", "promoteNew"), store.calls)
+        }
+
+    @Test
+    fun `a returned Failure discards the new copy after the transaction has ended`() =
+        runTest {
+            holdExercise("Squat")
+
+            copyThrough(RecordingTransaction()).aroundRestore(fail)
+
+            assertEquals(listOf("begin", "saveNew", "commit", "discardNew"), store.calls)
+        }
+
+    @Test
+    fun `a commit that fails returns Unavailable, discards the new copy and leaves the old one byte-identical`() =
+        runTest {
+            store.old = oldCopy
+            holdExercise("Squat")
+
+            val result = copyThrough(RecordingTransaction(commitFails = true)).aroundRestore(succeed)
+
+            assertEquals(DomainResult.Failure(BackupRestoreError.Unavailable), result)
+            assertEquals(listOf("begin", "saveNew", "commit", "discardNew"), store.calls)
+            assertNull(store.new)
+            assertEquals(oldCopy, store.old)
+        }
+
+    @Test
+    fun `a restore with no training data still runs in the transaction, and a leftover new copy stays`() =
+        runTest {
+            trainingData.hasTrainingData = false
+            store.new = oldCopy
+
+            copyThrough(RecordingTransaction()).aroundRestore(succeed)
+
+            assertEquals(listOf("begin", "commit"), store.calls)
+            assertEquals(oldCopy, store.new)
         }
 
     @Test
@@ -150,6 +202,7 @@ class SavePreRestoreCopyTest {
 
             assertEquals(DomainResult.Failure(BackupRestoreError.Unavailable), result)
             assertFalse(restored)
+            assertEquals("A leftover new copy is not discarded", listOf("saveNew"), store.calls)
         }
 
     @Test
@@ -254,6 +307,26 @@ class SavePreRestoreCopyTest {
             assertTrue("The second restore ran", firstHolds.secondRestored())
         }
 
+    private fun copyThrough(transaction: BackupRepository) = SavePreRestoreCopy(trainingData, exportBackup(), transaction, store, lock)
+
+    /** Puts the transaction's two ends in the store's list of calls, and can make its commit fail. */
+    private inner class RecordingTransaction(
+        private val commitFails: Boolean = false,
+    ) : BackupRepository by backupRepository {
+        var readsBeforeItBegan = -1
+            private set
+
+        override suspend fun inRestoreTransaction(
+            block: suspend () -> DomainResult<Unit, BackupRestoreError>,
+        ): DomainResult<Unit, BackupRestoreError> {
+            readsBeforeItBegan = trainingData.hasTrainingDataReads
+            store.calls += "begin"
+            val outcome = block()
+            store.calls += "commit"
+            return if (commitFails) DomainResult.Failure(BackupRestoreError.Unavailable) else outcome
+        }
+    }
+
     private fun damagedRowCopy(failure: Throwable) =
         SavePreRestoreCopy(
             trainingData,
@@ -262,6 +335,7 @@ class SavePreRestoreCopyTest {
                     override suspend fun findAllForBackup(): List<WorkoutSession> = throw failure
                 },
             ),
+            backupRepository,
             store,
             lock,
         )

@@ -13,7 +13,7 @@ import javax.inject.Singleton
  *
  * Whoever comes second waits (first come, first served) and then reads what the first left. It is not
  * re-entrant and does not need to be: nothing inside it takes it again, and it is never taken inside a
- * Room transaction, so it cannot deadlock with one.
+ * Room transaction, so it cannot deadlock with one. A restore takes it first and its transaction second.
  *
  * `@Singleton` is what makes this work: two instances would compile and pass any test that builds its
  * own, which is why `PreRestoreCopyLockTest` asserts the annotation.

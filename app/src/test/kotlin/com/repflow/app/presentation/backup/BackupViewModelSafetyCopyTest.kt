@@ -75,7 +75,7 @@ class BackupViewModelSafetyCopyTest {
     private val snapshotStore = InMemoryPreRestoreSnapshotStore(now = NEW_COPY_AT)
     private val copyLock = PreRestoreCopyLock()
     private val outcomeSlot = RestoreOutcomeSlot()
-    private val preRestoreCopy = SavePreRestoreCopy(trainingData, exportBackup, snapshotStore, copyLock)
+    private val preRestoreCopy = SavePreRestoreCopy(trainingData, exportBackup, backupRepository, snapshotStore, copyLock)
     private val restoreBackup = RestoreBackup(backupRepository, preRestoreCopy)
     private val gated = GatedBackupRepository()
     private val gatedRestore = RestoreBackup(gated, preRestoreCopy)

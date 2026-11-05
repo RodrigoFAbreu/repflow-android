@@ -99,6 +99,19 @@ class LocalBackupRepository
             }
         }
 
+        /**
+         * [block] catches its own failures, so what reaches the catch is the transaction's: a `BEGIN` or a
+         * `COMMIT` that failed, or the rollback after a storage failure that SQLite had already rolled back.
+         */
+        override suspend fun inRestoreTransaction(
+            block: suspend () -> DomainResult<Unit, BackupRestoreError>,
+        ): DomainResult<Unit, BackupRestoreError> =
+            try {
+                database.withTransaction { block() }
+            } catch (expected: SQLiteException) {
+                DomainResult.Failure(BackupRestoreError.Unavailable)
+            }
+
         private fun toEntitySnapshot(snapshot: BackupSnapshot): BackupEntitySnapshot {
             val workoutExercises = mutableListOf<WorkoutExerciseEntity>()
             val workoutSets = mutableListOf<WorkoutSetEntity>()

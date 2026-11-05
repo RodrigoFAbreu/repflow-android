@@ -82,7 +82,7 @@ class BackupViewModelTest {
     private val trainingData = InMemoryTrainingDataRepository()
     private val snapshotStore = InMemoryPreRestoreSnapshotStore()
     private val copyLock = PreRestoreCopyLock()
-    private val preRestoreCopy = SavePreRestoreCopy(trainingData, exportBackup, snapshotStore, copyLock)
+    private val preRestoreCopy = SavePreRestoreCopy(trainingData, exportBackup, backupRepository, snapshotStore, copyLock)
     private val eraseAllData = EraseAllData(trainingData, snapshotStore, copyLock)
     private val restoreBackup = RestoreBackup(backupRepository, preRestoreCopy)
     private val exportWorkoutHistoryCsv =

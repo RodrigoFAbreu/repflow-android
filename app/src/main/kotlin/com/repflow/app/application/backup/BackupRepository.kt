@@ -25,4 +25,15 @@ interface BackupRepository {
      * they are (remediation-1 CP14).
      */
     suspend fun replaceAll(snapshot: BackupSnapshot): DomainResult<Unit, BackupRestoreError>
+
+    /**
+     * Runs [block] in one write transaction, which a [replaceAll] inside it joins. SQLite has one writer,
+     * so every other write in the app, through any repository, waits until this returns. A write has
+     * therefore either finished before [block] began, so [block] reads it, or it lands after the commit,
+     * on top of the restored data. None can land between a read in [block] and the replace.
+     *
+     * A failed [replaceAll] inside [block] rolls the whole transaction back. So does a commit that fails,
+     * which returns [BackupRestoreError.Unavailable].
+     */
+    suspend fun inRestoreTransaction(block: suspend () -> DomainResult<Unit, BackupRestoreError>): DomainResult<Unit, BackupRestoreError>
 }

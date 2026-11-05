@@ -1,8 +1,10 @@
 package com.repflow.app.data.backup
 
+import android.database.sqlite.SQLiteFullException
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.repflow.app.application.backup.BackupRestoreError
 import com.repflow.app.domain.backup.BackupSnapshot
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.exercise.Exercise
@@ -196,6 +198,63 @@ class LocalBackupRepositoryAtomicityTest {
                 database.exerciseDao().findAll().map { it.id },
             )
         }
+
+    /** A `Success` from the enclosing block must not commit what a failed `replaceAll` inside it had begun. */
+    @Test
+    fun inRestoreTransaction_rollsBackAReplaceAllThatFailsInsideIt() =
+        runBlocking {
+            val existing = exercise("existing-1", "Squat")
+            repository.replaceAll(snapshotOf(existing))
+            val failing = snapshotOf(exercise("dup"), exercise("dup"))
+
+            val result = repository.inRestoreTransaction { repository.replaceAll(failing) }
+
+            assertEquals(DomainResult.Failure(BackupRestoreError.Unavailable), result)
+            assertEquals(listOf("existing-1"), database.exerciseDao().findAll().map { it.id })
+        }
+
+    /** What a `COMMIT` that fails looks like from here: it reports `Unavailable`, and nothing in the transaction stays. */
+    @Test
+    fun inRestoreTransaction_rollsBackAndReturnsUnavailableOnAStorageFailure() =
+        runBlocking {
+            val existing = exercise("existing-1", "Squat")
+            repository.replaceAll(snapshotOf(existing))
+            val other = snapshotOf(exercise("other", "Bench"))
+
+            val result: DomainResult<Unit, BackupRestoreError> =
+                repository.inRestoreTransaction {
+                    repository.replaceAll(other)
+                    throw SQLiteFullException("disk full at commit")
+                }
+
+            assertEquals(DomainResult.Failure(BackupRestoreError.Unavailable), result)
+            assertEquals(listOf("existing-1"), database.exerciseDao().findAll().map { it.id })
+        }
+
+    @Test
+    fun inRestoreTransaction_commitsAReplaceAllThatSucceeds() =
+        runBlocking {
+            repository.replaceAll(snapshotOf(exercise("existing-1", "Squat")))
+            val other = snapshotOf(exercise("other", "Bench"))
+
+            val result = repository.inRestoreTransaction { repository.replaceAll(other) }
+
+            assertEquals(DomainResult.Success(Unit), result)
+            assertEquals(listOf("other"), database.exerciseDao().findAll().map { it.id })
+        }
+
+    private fun snapshotOf(vararg exercises: Exercise): BackupSnapshot =
+        (
+            BackupSnapshot.create(
+                schemaVersion = BackupSnapshot.CURRENT_SCHEMA_VERSION,
+                exercises = exercises.toList(),
+                trainingPlans = emptyList(),
+                workoutSessions = emptyList(),
+                recoveryEntries = emptyList(),
+                futsalSessions = emptyList(),
+                progressionRecommendations = emptyList(),
+            ) as DomainResult.Success
+        ).value
 
     /**
      * Distinct from the primary-key conflict above (Milestone 8, CP14): two
