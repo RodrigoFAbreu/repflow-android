@@ -117,7 +117,7 @@ items:
     detail: docs/items/fix-workout-error-followups.md
   - id: restore-safety-snapshot
     title: "One automatic snapshot before a restore, restorable from Backup"
-    status: next
+    status: done
     order: 22
     size: 2
     depends_on: [fix-backup-all-workouts, design-3-redraws]

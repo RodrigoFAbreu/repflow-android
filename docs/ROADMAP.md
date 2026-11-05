@@ -25,7 +25,7 @@
 | 19 | [Backups include running and abandoned workouts, and restore warns about a running workout](items/fix-backup-all-workouts.md) `fix-backup-all-workouts` | Done | 2 | design-1-wrong-claims |
 | 20 | [Restoring a damaged backup file shows an error instead of closing the app](items/fix-restore-damaged-file.md) `fix-restore-damaged-file` | Done | 1 | - |
 | 21 | [Workout errors: no stale message after a retry, no crash on a failed read, and Try again restores the picker](items/fix-workout-error-followups.md) `fix-workout-error-followups` | Done | 2 | - |
-| 22 | [One automatic snapshot before a restore, restorable from Backup](items/restore-safety-snapshot.md) `restore-safety-snapshot` | Next | 2 | fix-backup-all-workouts, design-3-redraws |
+| 22 | [One automatic snapshot before a restore, restorable from Backup](items/restore-safety-snapshot.md) `restore-safety-snapshot` | Done | 2 | fix-backup-all-workouts, design-3-redraws |
 | 23 | [A reminder on Home when the last backup is old](items/backup-reminder.md) `backup-reminder` | Next | 1 | restore-safety-snapshot |
 | 24 | [An exercise you didn't train keeps its real suggestion](items/suggest-keep-untouched.md) `suggest-keep-untouched` | Next | 1 | - |
 | 25 | [Top of the range with no RPE gives Maintain with the reason shown, and the \`NaN\` text goes](items/suggest-no-rpe.md) `suggest-no-rpe` | Next | 1 | - |

@@ -1,6 +1,12 @@
 # Active Milestone
 
-## `restore-safety-snapshot` — in progress
+## `restore-safety-snapshot` — complete (accepted by policy 2026-11-05)
+
+RepFlow now keeps a safety copy of your data before a restore, and you can restore that copy from the Backup screen. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/restore-safety-snapshot-execution.md` and the Optional findings at `docs/milestones/completed/restore-safety-snapshot-findings.md`.
+
+**Next action:** `backup-reminder`, A reminder on Home when the last backup is old. Ready for `/milestone-plan`.
+
+The sections below are this milestone's historical record.
 
 Keep a copy of the user's data before a restore, and offer it on the Backup screen. Plan: `docs/milestones/restore-safety-snapshot-execution.md`.
 

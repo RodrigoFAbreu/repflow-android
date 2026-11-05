@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_work_item_id": "restore-safety-snapshot",
+  "active_work_item_id": null,
   "work_items": {
     "workflow-v2-1-core": {
       "work_item_type": "process",
@@ -8939,7 +8939,7 @@
       "registry_path": "docs/ai-workflow/registry/restore-safety-snapshot-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/restore-safety-snapshot-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_FUNCTIONAL_REVIEW",
+      "phase": "MILESTONE_COMPLETE",
       "plan_revision": 5,
       "implementation_revision": 3,
       "functional_review_round": null,
@@ -9466,8 +9466,8 @@
           "external": 3
         }
       },
-      "state_revision": 34,
-      "last_transition": "2026-11-05T14:27:19Z",
+      "state_revision": 35,
+      "last_transition": "2026-11-05T14:47:45Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -9879,6 +9879,260 @@
           "run_ref": "codex:20261105T142337Z-d5689aee",
           "reviewer_model": "openai/gpt-6.1-sol"
         }
+      },
+      "gate_evidence": {
+        "functional": {
+          "flow-1": {
+            "flow_id": "flow-1",
+            "status": "passed",
+            "head": "3c5e6652e372a58cc5bf2dd1346379fa7f4259fb",
+            "ran_at": "2026-11-05T14:38:28Z",
+            "summary": {
+              "text": "dialog text/buttons right; copy file byte-identical to pre-restore data; card shown",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/restore-safety-snapshot"
+            },
+            "log_digest": "c12f538af3e962fce0b2f897c1a3b311ad7678f214601158f211eb4bb40a4238",
+            "run_ref": "functional-restore-snapshot subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+            "recorded_at": "2026-11-05T14:38:28Z"
+          },
+          "flow-2": {
+            "flow_id": "flow-2",
+            "status": "passed",
+            "head": "3c5e6652e372a58cc5bf2dd1346379fa7f4259fb",
+            "ran_at": "2026-11-05T14:38:28Z",
+            "summary": {
+              "text": "restoring copy gives data hashes identical to original A; swap back identical to B",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/restore-safety-snapshot"
+            },
+            "log_digest": "1c7cfc1cf196b339780d5523f5f6710e7373542c01fbbf7b7e357cea2a77cb51",
+            "run_ref": "functional-restore-snapshot subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+            "recorded_at": "2026-11-05T14:38:28Z"
+          },
+          "flow-3": {
+            "flow_id": "flow-3",
+            "status": "passed",
+            "head": "3c5e6652e372a58cc5bf2dd1346379fa7f4259fb",
+            "ran_at": "2026-11-05T14:38:28Z",
+            "summary": {
+              "text": "dialog adds \"replaces the safety copy from 5 Nov, 14:33\"; copy replaced, data == B",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/restore-safety-snapshot"
+            },
+            "log_digest": "e90b8553f15c0d1e8f92b5e5c8901b81cd5db212abf1f7819e3ba321a2c2e444",
+            "run_ref": "functional-restore-snapshot subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+            "recorded_at": "2026-11-05T14:38:28Z"
+          },
+          "flow-4": {
+            "flow_id": "flow-4",
+            "status": "passed",
+            "head": "3c5e6652e372a58cc5bf2dd1346379fa7f4259fb",
+            "ran_at": "2026-11-05T14:38:28Z",
+            "summary": {
+              "text": "bad file: invalid message, DB hashes and copy md5 unchanged",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/restore-safety-snapshot"
+            },
+            "log_digest": "df3b06d6298d385f6898699e95b026d70630f66e3b8a0084dabea38861be1ab4",
+            "run_ref": "functional-restore-snapshot subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+            "recorded_at": "2026-11-05T14:38:28Z"
+          },
+          "flow-5": {
+            "flow_id": "flow-5",
+            "status": "passed",
+            "head": "3c5e6652e372a58cc5bf2dd1346379fa7f4259fb",
+            "ran_at": "2026-11-05T14:38:28Z",
+            "summary": {
+              "text": "empty phone: no paragraphs, no card, no file; Erase deletes copy, stays gone after relaunch",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/restore-safety-snapshot"
+            },
+            "log_digest": "3d3719b3251df64755bbac4aac6ebc42525d77a96bb245bd947fad92b7086ea6",
+            "run_ref": "functional-restore-snapshot subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+            "recorded_at": "2026-11-05T14:38:28Z"
+          },
+          "flow-6": {
+            "flow_id": "flow-6",
+            "status": "passed",
+            "head": "3c5e6652e372a58cc5bf2dd1346379fa7f4259fb",
+            "ran_at": "2026-11-05T14:38:28Z",
+            "summary": {
+              "text": "left screen mid-restore: restore completed, outcome shown once on reopen; could not prove it was still in flight",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/restore-safety-snapshot"
+            },
+            "log_digest": "873062e75fafaf3d014c742c537b17f6fe6919765ea16c9c9cfd2f2b42a4886e",
+            "run_ref": "functional-restore-snapshot subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+            "recorded_at": "2026-11-05T14:38:28Z"
+          },
+          "flow-7": {
+            "flow_id": "flow-7",
+            "status": "passed",
+            "head": "3c5e6652e372a58cc5bf2dd1346379fa7f4259fb",
+            "ran_at": "2026-11-05T14:38:28Z",
+            "summary": {
+              "text": "1.0 one line; 2.0 stacked, destructive on top, scrolls, light and dark",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/restore-safety-snapshot"
+            },
+            "log_digest": "83fefde9f01f96651e7341995dab3f53c66ca6c0491d4b1cee5c1903aa280b4a",
+            "run_ref": "functional-restore-snapshot subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+            "recorded_at": "2026-11-05T14:38:28Z"
+          }
+        },
+        "pr": {
+          "pr": {
+            "number": 33,
+            "url": "https://github.com/RodrigoFAbreu/repflow-android/pull/33"
+          },
+          "state": "open",
+          "head": "3c5e6652e372a58cc5bf2dd1346379fa7f4259fb",
+          "review_decision": null,
+          "reviewed_head": null,
+          "checks": {
+            "state": "success",
+            "failing": []
+          },
+          "review_id": null,
+          "findings": null,
+          "identity_at_head": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+          "observed_at": "2026-11-05T14:47:45Z",
+          "ingest_seq": 1,
+          "repository": "RodrigoFAbreu/repflow-android",
+          "queried_commit": "aa3a7b0d37af55607ade99f5d2fcd098903f7603",
+          "provenance": {
+            "source": "workflow_gh",
+            "fetched_by": {
+              "name": "workflow-gh",
+              "version": "pr-list-v1"
+            },
+            "fetched_at": "2026-11-05T14:47:45Z",
+            "raw_sha256": "fc38e02ccc06424e2dfd75fa65e47c89293677daa1f44c453538b395be5f002f",
+            "run_ref": "repflow-orchestrator, by hand after no_progress_repeated",
+            "gh_path": "/usr/bin/gh",
+            "gh_sha256": "9e824061111fe5f5b6a5d5690909ba37abafca4a4ca830bdf83246d3c94afd21"
+          },
+          "fact_id": "27b167e76af63777b8a61168bfad635711b7f700585e0959d0cd82c6cb3e4bdc"
+        },
+        "pr_reported": null,
+        "pr_keys": {
+          "reopened_for": [],
+          "applied": [],
+          "ingest_seq": 1
+        }
+      },
+      "acceptance_satisfaction": {
+        "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "policy_source": "adopted",
+        "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+        "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+        "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "requirements": [
+          {
+            "id": "checkpoints_complete",
+            "met": true,
+            "detail": "every checkpoint of the item's own registry is COMPLETE"
+          },
+          {
+            "id": "technical_approval_current",
+            "met": true,
+            "detail": "the technical approval is CURRENT for the content now"
+          },
+          {
+            "id": "functional_flows_passed",
+            "met": true,
+            "detail": "flows ['flow-1', 'flow-2', 'flow-3', 'flow-4', 'flow-5', 'flow-6', 'flow-7'] passed at the approved content"
+          },
+          {
+            "id": "pr_fact_current",
+            "met": true,
+            "detail": "workflow_gh fact for PR #33 at 3c5e6652e372a58cc5bf2dd1346379fa7f4259fb is current"
+          },
+          {
+            "id": "no_standing_pr_objection",
+            "met": true,
+            "detail": "no CHANGES_REQUESTED decision and no failed check"
+          },
+          {
+            "id": "ci_green",
+            "met": true,
+            "detail": "checks are 'success'"
+          }
+        ],
+        "inputs": {
+          "anchor_commit": "aa3a7b0d37af55607ade99f5d2fcd098903f7603",
+          "anchor_identity": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+          "technical_approval": {
+            "basis": "POLICY_SATISFIED",
+            "approved_review_content_id": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+            "recorded_at": "2026-11-05T14:27:19Z"
+          },
+          "functional": {
+            "flow-1": {
+              "evidence_id": "e4ed93c1f8d17baa49f1fdbcadd1c63bd9ab41e8eb4e10f854e459254475df18",
+              "log_digest": "c12f538af3e962fce0b2f897c1a3b311ad7678f214601158f211eb4bb40a4238",
+              "run_ref": "functional-restore-snapshot subagent, 2026-11-05"
+            },
+            "flow-2": {
+              "evidence_id": "41e90a0fd4fc7dde6ce1c582b84cfc9f6e44ce09be87f90c9339cfa1c3d4a453",
+              "log_digest": "1c7cfc1cf196b339780d5523f5f6710e7373542c01fbbf7b7e357cea2a77cb51",
+              "run_ref": "functional-restore-snapshot subagent, 2026-11-05"
+            },
+            "flow-3": {
+              "evidence_id": "e7e1cdfc6a3b8aa50eff292b2ae8f5d93fcfd88b9ac292571839d8312af1b6e8",
+              "log_digest": "e90b8553f15c0d1e8f92b5e5c8901b81cd5db212abf1f7819e3ba321a2c2e444",
+              "run_ref": "functional-restore-snapshot subagent, 2026-11-05"
+            },
+            "flow-4": {
+              "evidence_id": "d790c2d01e3ad6094cd73c1026ec64e765add4793b15dcac5931fa9ee0d2fd27",
+              "log_digest": "df3b06d6298d385f6898699e95b026d70630f66e3b8a0084dabea38861be1ab4",
+              "run_ref": "functional-restore-snapshot subagent, 2026-11-05"
+            },
+            "flow-5": {
+              "evidence_id": "62fba0f0d9cddfc8cf94375b5139691f69ba89d37e08ea3cf59abdb1d844fafd",
+              "log_digest": "3d3719b3251df64755bbac4aac6ebc42525d77a96bb245bd947fad92b7086ea6",
+              "run_ref": "functional-restore-snapshot subagent, 2026-11-05"
+            },
+            "flow-6": {
+              "evidence_id": "b94496c6e5b2d208744a30f1246e335bcee9839c6148d154c5e0ac6edd5af004",
+              "log_digest": "873062e75fafaf3d014c742c537b17f6fe6919765ea16c9c9cfd2f2b42a4886e",
+              "run_ref": "functional-restore-snapshot subagent, 2026-11-05"
+            },
+            "flow-7": {
+              "evidence_id": "ec477ce8b4944f9de28cfbdb0abc5175a5ebfff04a65d51779cef2b15cb44f50",
+              "log_digest": "83fefde9f01f96651e7341995dab3f53c66ca6c0491d4b1cee5c1903aa280b4a",
+              "run_ref": "functional-restore-snapshot subagent, 2026-11-05"
+            }
+          },
+          "pr": {
+            "fact_id": "27b167e76af63777b8a61168bfad635711b7f700585e0959d0cd82c6cb3e4bdc",
+            "head": "3c5e6652e372a58cc5bf2dd1346379fa7f4259fb",
+            "provenance": "workflow_gh",
+            "raw_sha256": "fc38e02ccc06424e2dfd75fa65e47c89293677daa1f44c453538b395be5f002f"
+          }
+        },
+        "trust": {
+          "review_verdicts": "orchestrator",
+          "functional_evidence": "orchestrator",
+          "pr_fact": "workflow_gh"
+        },
+        "evaluated_at": "2026-11-05T14:47:45Z",
+        "workflow_release": "2.25.5"
       }
     }
   },
