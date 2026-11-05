@@ -7585,12 +7585,12 @@
       "registry_path": "docs/ai-workflow/registry/fix-restore-damaged-file-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/fix-restore-damaged-file-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "SELF_REVIEWING_IMPLEMENTATION",
+      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
       "plan_revision": 2,
-      "implementation_revision": null,
+      "implementation_revision": 1,
       "functional_review_round": null,
       "base_commit": "132aa9a0965ff948fbf027dd4bcadc27945b1835",
-      "reviewed_implementation_head": null,
+      "reviewed_implementation_head": "2185f8e7835709f2cc0d51b61fdce68af35753da",
       "current_checkpoint_id": null,
       "last_completed_checkpoint_id": "CP1",
       "checkpoints": {
@@ -7725,8 +7725,8 @@
           "external": 0
         }
       },
-      "state_revision": 12,
-      "last_transition": "2026-11-05T05:26:03Z",
+      "state_revision": 13,
+      "last_transition": "2026-11-05T05:40:30Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
