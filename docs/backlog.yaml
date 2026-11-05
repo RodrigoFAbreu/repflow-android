@@ -130,7 +130,7 @@ items:
     detail: docs/items/fix-workout-actions-in-order.md
   - id: safety-copy-polish
     title: "Safety copy: a Restoring screen, and the Erase and Backup wording says what really happens"
-    status: next
+    status: done
     order: 24
     size: 1
     detail: docs/items/safety-copy-polish.md

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_work_item_id": "safety-copy-polish",
+  "active_work_item_id": null,
   "work_items": {
     "workflow-v2-1-core": {
       "work_item_type": "process",
@@ -10788,7 +10788,7 @@
       "registry_path": "docs/ai-workflow/registry/safety-copy-polish-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/safety-copy-polish-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_FUNCTIONAL_REVIEW",
+      "phase": "MILESTONE_COMPLETE",
       "plan_revision": 3,
       "implementation_revision": 2,
       "functional_review_round": null,
@@ -11123,8 +11123,8 @@
           "external": 2
         }
       },
-      "state_revision": 23,
-      "last_transition": "2026-11-05T23:16:15Z",
+      "state_revision": 24,
+      "last_transition": "2026-11-05T23:35:40Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -11408,6 +11408,260 @@
           "run_ref": "codex:20261105T231240Z-b468fa69",
           "reviewer_model": "openai/gpt-6.1-sol"
         }
+      },
+      "gate_evidence": {
+        "functional": {
+          "flow-1": {
+            "flow_id": "flow-1",
+            "status": "passed",
+            "head": "b7efd512a24b06322f82d8cef5956f28924fa4b3",
+            "ran_at": "2026-11-05T23:28:52Z",
+            "summary": {
+              "text": "Overlay card seen on 14.7 MB restore; taps and Back did nothing; ended on Backup with 'Backup restored' (f1-big-8). Small-file flash not catchable",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/safety-copy-polish"
+            },
+            "log_digest": "93f6f443e2325b07f2321668cae26b20c72f26c8ba1cdece7362d19ee5b5566d",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "aad59dec5253fee73cb19ef8086e653302aeb1859ff2e5a5e910eee7d5d4318a",
+            "recorded_at": "2026-11-05T23:28:52Z"
+          },
+          "flow-2": {
+            "flow_id": "flow-2",
+            "status": "passed",
+            "head": "b7efd512a24b06322f82d8cef5956f28924fa4b3",
+            "ran_at": "2026-11-05T23:28:52Z",
+            "summary": {
+              "text": "Rotation + 3 Back and Home/return + Back during restore stayed on Backup with overlay; later Back left normally. Real keys, not swipes; notification path not run",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/safety-copy-polish"
+            },
+            "log_digest": "8aedd97bacebee761044aa85d9e24785dc40f670db1549111f7c217580b9f04b",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "aad59dec5253fee73cb19ef8086e653302aeb1859ff2e5a5e910eee7d5d4318a",
+            "recorded_at": "2026-11-05T23:28:52Z"
+          },
+          "flow-3": {
+            "flow_id": "flow-3",
+            "status": "passed",
+            "head": "b7efd512a24b06322f82d8cef5956f28924fa4b3",
+            "ran_at": "2026-11-05T23:28:52Z",
+            "summary": {
+              "text": "Light/dark at 1.0 and 2.0 nothing clipped; landscape card clears nav bar",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/safety-copy-polish"
+            },
+            "log_digest": "85a296684facfc67bb21029fc3ad48fb9f112ac7d5eb8a4ac749ef58c3989cec",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "aad59dec5253fee73cb19ef8086e653302aeb1859ff2e5a5e910eee7d5d4318a",
+            "recorded_at": "2026-11-05T23:28:52Z"
+          },
+          "flow-4": {
+            "flow_id": "flow-4",
+            "status": "passed",
+            "head": "b7efd512a24b06322f82d8cef5956f28924fa4b3",
+            "ran_at": "2026-11-05T23:28:52Z",
+            "summary": {
+              "text": "Erase text includes the safety copy sentence, others unchanged",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/safety-copy-polish"
+            },
+            "log_digest": "9d2c60687b0ce91f5a503c7a514393ac54602af1f4ad4cc8ae7b84bc47915550",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "aad59dec5253fee73cb19ef8086e653302aeb1859ff2e5a5e910eee7d5d4318a",
+            "recorded_at": "2026-11-05T23:28:52Z"
+          },
+          "flow-5": {
+            "flow_id": "flow-5",
+            "status": "passed",
+            "head": "b7efd512a24b06322f82d8cef5956f28924fa4b3",
+            "ran_at": "2026-11-05T23:28:52Z",
+            "summary": {
+              "text": "Scroll works at 1.8 and 2.0, Erase enabled after typing; keyboard covers buttons (known)",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/safety-copy-polish"
+            },
+            "log_digest": "9ef74227b813b2054eb601c0c3072a897ce5ee50400ce1285aec926927c40c67",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "aad59dec5253fee73cb19ef8086e653302aeb1859ff2e5a5e910eee7d5d4318a",
+            "recorded_at": "2026-11-05T23:28:53Z"
+          },
+          "flow-6": {
+            "flow_id": "flow-6",
+            "status": "passed",
+            "head": "b7efd512a24b06322f82d8cef5956f28924fa4b3",
+            "ran_at": "2026-11-05T23:28:52Z",
+            "summary": {
+              "text": "Empty phone shows 'no data to keep, so RepFlow makes no copy first'",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/safety-copy-polish"
+            },
+            "log_digest": "1966c8417f280a608b7a8cdcf4c81ec8ab50ad71839ad14409e0d2aaca1b923f",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "aad59dec5253fee73cb19ef8086e653302aeb1859ff2e5a5e910eee7d5d4318a",
+            "recorded_at": "2026-11-05T23:28:53Z"
+          },
+          "flow-7": {
+            "flow_id": "flow-7",
+            "status": "passed",
+            "head": "b7efd512a24b06322f82d8cef5956f28924fa4b3",
+            "ran_at": "2026-11-05T23:28:52Z",
+            "summary": {
+              "text": "After restore onto empty phone note switches to copy text; manual add-exercise step not run separately",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/safety-copy-polish"
+            },
+            "log_digest": "431a31cde1055ce1e02fc0ebf0503be036a6b9e5baf888c81ead342100a0a6b8",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "aad59dec5253fee73cb19ef8086e653302aeb1859ff2e5a5e910eee7d5d4318a",
+            "recorded_at": "2026-11-05T23:28:53Z"
+          }
+        },
+        "pr": {
+          "pr": {
+            "number": 38,
+            "url": "https://github.com/RodrigoFAbreu/repflow-android/pull/38"
+          },
+          "state": "open",
+          "head": "b7efd512a24b06322f82d8cef5956f28924fa4b3",
+          "review_decision": null,
+          "reviewed_head": null,
+          "checks": {
+            "state": "success",
+            "failing": []
+          },
+          "review_id": null,
+          "findings": null,
+          "identity_at_head": "aad59dec5253fee73cb19ef8086e653302aeb1859ff2e5a5e910eee7d5d4318a",
+          "observed_at": "2026-11-05T23:35:40Z",
+          "ingest_seq": 1,
+          "repository": "RodrigoFAbreu/repflow-android",
+          "queried_commit": "4843670f00cc1c78fb3fda4eb2776d2213d50fc1",
+          "provenance": {
+            "source": "workflow_gh",
+            "fetched_by": {
+              "name": "workflow-gh",
+              "version": "pr-list-v1"
+            },
+            "fetched_at": "2026-11-05T23:35:40Z",
+            "raw_sha256": "a31b3c63d8ba9389dff087d36d2602765c4c8d9324256c372a4f2f120a9f6396",
+            "run_ref": "repflow-orchestrator, by hand after no_progress_repeated",
+            "gh_path": "/usr/bin/gh",
+            "gh_sha256": "9e824061111fe5f5b6a5d5690909ba37abafca4a4ca830bdf83246d3c94afd21"
+          },
+          "fact_id": "f10b2775b321540776d79b2ba86f61c3e91adaf8c0be319ff6d7577ae19dd0b6"
+        },
+        "pr_reported": null,
+        "pr_keys": {
+          "reopened_for": [],
+          "applied": [],
+          "ingest_seq": 1
+        }
+      },
+      "acceptance_satisfaction": {
+        "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "policy_source": "adopted",
+        "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+        "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+        "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "requirements": [
+          {
+            "id": "checkpoints_complete",
+            "met": true,
+            "detail": "every checkpoint of the item's own registry is COMPLETE"
+          },
+          {
+            "id": "technical_approval_current",
+            "met": true,
+            "detail": "the technical approval is CURRENT for the content now"
+          },
+          {
+            "id": "functional_flows_passed",
+            "met": true,
+            "detail": "flows ['flow-1', 'flow-2', 'flow-3', 'flow-4', 'flow-5', 'flow-6', 'flow-7'] passed at the approved content"
+          },
+          {
+            "id": "pr_fact_current",
+            "met": true,
+            "detail": "workflow_gh fact for PR #38 at b7efd512a24b06322f82d8cef5956f28924fa4b3 is current"
+          },
+          {
+            "id": "no_standing_pr_objection",
+            "met": true,
+            "detail": "no CHANGES_REQUESTED decision and no failed check"
+          },
+          {
+            "id": "ci_green",
+            "met": true,
+            "detail": "checks are 'success'"
+          }
+        ],
+        "inputs": {
+          "anchor_commit": "4843670f00cc1c78fb3fda4eb2776d2213d50fc1",
+          "anchor_identity": "aad59dec5253fee73cb19ef8086e653302aeb1859ff2e5a5e910eee7d5d4318a",
+          "technical_approval": {
+            "basis": "POLICY_SATISFIED",
+            "approved_review_content_id": "aad59dec5253fee73cb19ef8086e653302aeb1859ff2e5a5e910eee7d5d4318a",
+            "recorded_at": "2026-11-05T23:16:15Z"
+          },
+          "functional": {
+            "flow-1": {
+              "evidence_id": "01261a26186006dbab297228dcfbd26563338e6ead3e6c677138307e980528d6",
+              "log_digest": "93f6f443e2325b07f2321668cae26b20c72f26c8ba1cdece7362d19ee5b5566d",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-05"
+            },
+            "flow-2": {
+              "evidence_id": "ea3acab99545ec83609eae9aa15881ab5fecb7d3871c003b073f0f009210de6b",
+              "log_digest": "8aedd97bacebee761044aa85d9e24785dc40f670db1549111f7c217580b9f04b",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-05"
+            },
+            "flow-3": {
+              "evidence_id": "70448eb26d864f47c50b6f8a653c00a085cd18c7e0a6de250a37efd7f02c64f1",
+              "log_digest": "85a296684facfc67bb21029fc3ad48fb9f112ac7d5eb8a4ac749ef58c3989cec",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-05"
+            },
+            "flow-4": {
+              "evidence_id": "8beef9fe698e5a49446ccd65255a271339e384fce9c40decdb5f7e4864113321",
+              "log_digest": "9d2c60687b0ce91f5a503c7a514393ac54602af1f4ad4cc8ae7b84bc47915550",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-05"
+            },
+            "flow-5": {
+              "evidence_id": "1660d420dfdbb39faf71e5026d2ad6cc80630bf04cc7cab3e893b0310287c18b",
+              "log_digest": "9ef74227b813b2054eb601c0c3072a897ce5ee50400ce1285aec926927c40c67",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-05"
+            },
+            "flow-6": {
+              "evidence_id": "7d4c90d568f8b007fde90f6d5c024f86ce25b8986594316bfaf646809c927103",
+              "log_digest": "1966c8417f280a608b7a8cdcf4c81ec8ab50ad71839ad14409e0d2aaca1b923f",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-05"
+            },
+            "flow-7": {
+              "evidence_id": "60eb49af091d170b78041e1e26f3c1e9c680be360f5f2e477e36132b67cc1383",
+              "log_digest": "431a31cde1055ce1e02fc0ebf0503be036a6b9e5baf888c81ead342100a0a6b8",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-05"
+            }
+          },
+          "pr": {
+            "fact_id": "f10b2775b321540776d79b2ba86f61c3e91adaf8c0be319ff6d7577ae19dd0b6",
+            "head": "b7efd512a24b06322f82d8cef5956f28924fa4b3",
+            "provenance": "workflow_gh",
+            "raw_sha256": "a31b3c63d8ba9389dff087d36d2602765c4c8d9324256c372a4f2f120a9f6396"
+          }
+        },
+        "trust": {
+          "review_verdicts": "orchestrator",
+          "functional_evidence": "orchestrator",
+          "pr_fact": "workflow_gh"
+        },
+        "evaluated_at": "2026-11-05T23:35:40Z",
+        "workflow_release": "2.25.5"
       }
     }
   },

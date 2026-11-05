@@ -1,6 +1,12 @@
 # Active Milestone
 
-## `safety-copy-polish`
+## `safety-copy-polish` — complete (accepted by policy 2026-11-05)
+
+A Restoring screen blocks the app during a restore, and the Erase and Backup wording says what really happens. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/safety-copy-polish-execution.md` and the Optional findings at `docs/milestones/completed/safety-copy-polish-findings.md`.
+
+**Next action:** `backup-reminder`, A reminder on Home when the last backup is old. Ready for `/milestone-plan`.
+
+The sections below are this milestone's historical record.
 
 A Restoring screen blocks the whole app during a restore, and the Erase and Backup wording says what really happens. Plan: `docs/milestones/safety-copy-polish-execution.md`.
 
