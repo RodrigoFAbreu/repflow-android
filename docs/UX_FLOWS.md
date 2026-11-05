@@ -41,7 +41,10 @@ The bottom navigation carries four top-level destinations, in this order:
   exercises and plans with `Restore`, and `Backup and restore`, a dedicated
   screen with `Export backup now` (the hero shows `Last backup <when>`),
   `Workout history as CSV` and `Restore from a backup`; both open from
-  Settings only and show no bottom navigation.
+  Settings only and show no bottom navigation. Below `Restore from a backup`,
+  a card offers `Restore the safety copy`, the data the last restore replaced,
+  once such a copy exists. A confirmed restore keeps running after the user
+  leaves the screen, and its outcome shows at the next visit to Backup.
 - **Recovery entry** opens from Home's recovery card (`Log`); recovery and
   futsal history open from the entry screen.
 - **Workout mode replaces the navigation.** The workout board, focus mode

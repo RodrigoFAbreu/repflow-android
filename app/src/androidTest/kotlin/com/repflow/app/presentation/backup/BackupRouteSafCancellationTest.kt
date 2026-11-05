@@ -5,6 +5,7 @@ import android.app.Instrumentation
 import android.content.Intent
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -61,6 +62,11 @@ class BackupRouteSafCancellationTest {
             .onNodeWithText(composeRule.activity.getString(R.string.settings_backup_row))
             .performScrollTo()
             .performClick()
+        // The buttons wait until the screen has read the safety copy on the IO dispatcher,
+        // which Compose's test idling doesn't wait for, and a click before that does nothing.
+        composeRule.waitUntil(BUTTON_WAIT_MILLIS) {
+            composeRule.onAllNodes(exportButtonMatcher().and(isEnabled())).fetchSemanticsNodes().isNotEmpty()
+        }
         exportButton().performScrollTo().performClick()
         composeRule.waitForIdle()
 
@@ -71,9 +77,13 @@ class BackupRouteSafCancellationTest {
     }
 
     /** The hero's export button: `Export your first backup` on a fresh install, `Export backup now` once one exists. */
-    private fun exportButton() =
-        composeRule.onNode(
-            hasText(composeRule.activity.getString(R.string.backup_export_first_action))
-                .or(hasText(composeRule.activity.getString(R.string.backup_export_action))),
-        )
+    private fun exportButton() = composeRule.onNode(exportButtonMatcher())
+
+    private fun exportButtonMatcher() =
+        hasText(composeRule.activity.getString(R.string.backup_export_first_action))
+            .or(hasText(composeRule.activity.getString(R.string.backup_export_action)))
+
+    private companion object {
+        const val BUTTON_WAIT_MILLIS = 5_000L
+    }
 }

@@ -9,6 +9,11 @@ import java.time.Instant
  * [isLastBackupLoaded]), read against [now]. [hasRunningWorkout] is `true` when a
  * workout is running, or when that isn't known - before the first read, or after a
  * failed one: the restore confirmation warns.
+ *
+ * [preRestoreSnapshotAt] is when the safety copy on offer was taken (`null`: none, so no card).
+ * [pendingRestoreSnapshotAt] is non-null when the restore awaiting confirmation is that copy, and gives
+ * its time. [hasTrainingData] is read each time a restore is staged, and is `true` when that isn't known:
+ * the confirmation's copy paragraphs are never silently dropped.
  */
 data class BackupUiState(
     val isBusy: Boolean = false,
@@ -18,6 +23,9 @@ data class BackupUiState(
     val isLastBackupLoaded: Boolean = false,
     val now: Instant = Instant.EPOCH,
     val hasRunningWorkout: Boolean = true,
+    val preRestoreSnapshotAt: Instant? = null,
+    val pendingRestoreSnapshotAt: Instant? = null,
+    val hasTrainingData: Boolean = true,
 )
 
 sealed interface BackupStatusMessage {

@@ -8939,18 +8939,22 @@
       "registry_path": "docs/ai-workflow/registry/restore-safety-snapshot-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/restore-safety-snapshot-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "IMPLEMENTING",
+      "phase": "SELF_REVIEWING_IMPLEMENTATION",
       "plan_revision": 5,
       "implementation_revision": null,
       "functional_review_round": null,
       "base_commit": "255cd7a1be74652235e713ed547ded5d0d408e9f",
       "reviewed_implementation_head": null,
       "current_checkpoint_id": null,
-      "last_completed_checkpoint_id": "CP1",
+      "last_completed_checkpoint_id": "CP2",
       "checkpoints": {
         "CP1": {
           "status": "COMPLETE",
           "start_commit": "d7028e8addfd0da4582433be6b1b5f0e9264c1f8"
+        },
+        "CP2": {
+          "status": "COMPLETE",
+          "start_commit": "a7150c7914e22882b96879ecf8e99b5735fb89cb"
         }
       },
       "current_bundle_id": "d4c5adbbc90241c88f2a8a410d144aa3ec4dad03d08bd55373616428907db6b4",
@@ -9079,8 +9083,8 @@
           "external": 0
         }
       },
-      "state_revision": 22,
-      "last_transition": "2026-11-05T11:32:53Z",
+      "state_revision": 24,
+      "last_transition": "2026-11-05T12:07:48Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",

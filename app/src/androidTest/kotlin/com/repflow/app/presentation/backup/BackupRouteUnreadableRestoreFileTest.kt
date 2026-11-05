@@ -5,6 +5,8 @@ import android.app.Instrumentation
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -62,8 +64,14 @@ class BackupRouteUnreadableRestoreFileTest {
             .onNodeWithText(composeRule.activity.getString(R.string.settings_backup_row))
             .performScrollTo()
             .performClick()
+        // The buttons wait until the screen has read the safety copy on the IO dispatcher,
+        // which Compose's test idling doesn't wait for, and a click before that does nothing.
+        val restoreAction = composeRule.activity.getString(R.string.backup_restore_action)
+        composeRule.waitUntil(BUTTON_WAIT_MILLIS) {
+            composeRule.onAllNodes(hasText(restoreAction).and(isEnabled())).fetchSemanticsNodes().isNotEmpty()
+        }
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.backup_restore_action))
+            .onNodeWithText(restoreAction)
             .performScrollTo()
             .performClick()
         composeRule.waitForIdle()
@@ -74,5 +82,9 @@ class BackupRouteUnreadableRestoreFileTest {
         composeRule
             .onNodeWithText(composeRule.activity.getString(R.string.backup_restore_confirm_title))
             .assertDoesNotExist()
+    }
+
+    private companion object {
+        const val BUTTON_WAIT_MILLIS = 5_000L
     }
 }

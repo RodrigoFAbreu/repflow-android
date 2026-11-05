@@ -23,9 +23,11 @@ fun BackupRoute(
                 onBack = onBack,
                 onExportBackup = fileActions.onExportBackup,
                 onRestoreBackup = fileActions.onRestoreBackup,
+                onRestoreSnapshot = viewModel::onRestoreSnapshotRequested,
                 onExportCsv = fileActions.onExportCsv,
                 onRestoreConfirmed = viewModel::onRestoreConfirmed,
                 onRestoreCancelled = viewModel::onRestoreCancelled,
+                onStatusShowing = viewModel::onStatusMessageShowing,
                 onStatusShown = viewModel::onStatusMessageShown,
             ),
     )

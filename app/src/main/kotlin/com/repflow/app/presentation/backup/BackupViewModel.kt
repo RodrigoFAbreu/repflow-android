@@ -5,7 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.repflow.app.application.backup.BackupRestoreError
 import com.repflow.app.application.backup.ExportBackup
 import com.repflow.app.application.backup.ExportWorkoutHistoryCsv
+import com.repflow.app.application.backup.PreRestoreCopyLock
+import com.repflow.app.application.backup.PreRestoreSnapshotStore
 import com.repflow.app.application.backup.RestoreBackup
+import com.repflow.app.application.backup.TrainingDataRepository
 import com.repflow.app.application.common.Clock
 import com.repflow.app.application.settings.SettingsRepository
 import com.repflow.app.application.workout.WorkoutRepository
@@ -18,6 +21,8 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -37,7 +42,14 @@ import javax.inject.Inject
  * `Uri`, `ContentResolver` or any Android I/O type directly. It also watches
  * whether a workout is running, because a restore deletes it and the
  * confirmation has to say so.
+ *
+ * A confirmed restore outlives this ViewModel, so every read of the safety copy
+ * or of [TrainingDataRepository.hasTrainingData] takes [PreRestoreCopyLock]:
+ * otherwise a reopened screen could stage a new copy that the running restore
+ * then discards. The state starts busy until the first such read has the lock,
+ * and a restore's outcome reaches the screen through [RestoreOutcomeSlot].
  */
+@Suppress("TooManyFunctions") // One action per screen event, the two status callbacks included.
 @HiltViewModel
 class BackupViewModel
     @Suppress("LongParameterList")
@@ -49,12 +61,25 @@ class BackupViewModel
         private val restNotificationCanceller: RestNotificationCanceller,
         private val settingsRepository: SettingsRepository,
         private val workoutRepository: WorkoutRepository,
+        private val preRestoreSnapshotStore: PreRestoreSnapshotStore,
+        private val preRestoreCopyLock: PreRestoreCopyLock,
+        private val trainingDataRepository: TrainingDataRepository,
+        private val restoreOutcomeSlot: RestoreOutcomeSlot,
         private val clock: Clock,
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow(BackupUiState(now = clock.now()))
+        private val _uiState = MutableStateFlow(BackupUiState(isBusy = true, now = clock.now()))
         val uiState = _uiState.asStateFlow()
 
         init {
+            viewModelScope.launch {
+                restoreOutcomeSlot.outcome.filterNotNull().collect { message ->
+                    _uiState.update { it.copy(statusMessage = message) }
+                }
+            }
+            viewModelScope.launch {
+                val takenAt = preRestoreCopyLock.withLock { preRestoreSnapshotStore.takenAt() }
+                _uiState.update { it.copy(isBusy = false, preRestoreSnapshotAt = takenAt) }
+            }
             viewModelScope.launch {
                 settingsRepository
                     .observe()
@@ -146,10 +171,54 @@ class BackupViewModel
             _uiState.update { it.copy(isBusy = false, statusMessage = BackupStatusMessage.OperationFailed) }
         }
 
-        /** The route reads the picked file's text and calls this to ask for restore confirmation. */
+        /**
+         * The route reads the picked file's text and calls this to ask for restore confirmation. The
+         * text and the flag are set together, so the dialog never shows the wrong variant.
+         */
         fun onRestoreFilePicked(json: String) {
-            _uiState.update { it.copy(pendingRestoreJson = json) }
+            viewModelScope.launch {
+                val hasData = preRestoreCopyLock.withLock { readHasTrainingData() }
+                _uiState.update {
+                    it.copy(pendingRestoreJson = json, pendingRestoreSnapshotAt = null, hasTrainingData = hasData)
+                }
+            }
         }
+
+        /**
+         * The user tapped `Restore the safety copy`: its text goes through the same confirmation and
+         * the same restore as a file. A copy that has gone shows the failure, and the card follows what
+         * is really there.
+         */
+        fun onRestoreSnapshotRequested() {
+            viewModelScope.launch {
+                preRestoreCopyLock.withLock {
+                    val copy = preRestoreSnapshotStore.load()
+                    if (copy == null) {
+                        val takenAt = preRestoreSnapshotStore.takenAt()
+                        _uiState.update {
+                            it.copy(statusMessage = BackupStatusMessage.OperationFailed, preRestoreSnapshotAt = takenAt)
+                        }
+                    } else {
+                        val hasData = readHasTrainingData()
+                        _uiState.update {
+                            it.copy(
+                                pendingRestoreJson = copy.json,
+                                pendingRestoreSnapshotAt = copy.takenAt,
+                                hasTrainingData = hasData,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        /** Not knowing counts as having data, so the confirmation's copy paragraphs are never silently dropped. */
+        private suspend fun readHasTrainingData(): Boolean =
+            flow { emit(trainingDataRepository.hasTrainingData()) }
+                .catch { failure ->
+                    if (failure is CancellationException) throw failure
+                    emit(true)
+                }.first()
 
         /**
          * The route couldn't read the picked restore file - a revoked/unreadable
@@ -163,38 +232,54 @@ class BackupViewModel
         }
 
         fun onRestoreCancelled() {
-            _uiState.update { it.copy(pendingRestoreJson = null) }
+            _uiState.update { it.copy(pendingRestoreJson = null, pendingRestoreSnapshotAt = null) }
         }
 
         fun onRestoreConfirmed() {
             val json = _uiState.value.pendingRestoreJson ?: return
-            _uiState.update { it.copy(isBusy = true, pendingRestoreJson = null) }
+            _uiState.update { it.copy(isBusy = true, pendingRestoreJson = null, pendingRestoreSnapshotAt = null) }
             // NonCancellable: the user has confirmed, so leaving the Backup route does not abandon the
             // restore. A cancellation that rolled the transaction back would leave a new safety copy
             // holding the unchanged data, and it would win over the old copy.
             // UNDISPATCHED: the same reason as in onExportWriteSucceeded.
             viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
                 withContext(NonCancellable) {
-                    when (val result = restoreBackup(json)) {
-                        is DomainResult.Success -> {
-                            restNotificationCanceller.cancel()
-                            _uiState.update { it.copy(isBusy = false, statusMessage = BackupStatusMessage.RestoreSucceeded) }
-                        }
+                    val message =
+                        when (val result = restoreBackup(json)) {
+                            is DomainResult.Success -> {
+                                restNotificationCanceller.cancel()
+                                BackupStatusMessage.RestoreSucceeded
+                            }
 
-                        is DomainResult.Failure -> {
-                            val message =
+                            is DomainResult.Failure -> {
                                 when (result.error) {
                                     is BackupRestoreError.InvalidBackup -> BackupStatusMessage.InvalidBackup
                                     BackupRestoreError.Unavailable -> BackupStatusMessage.OperationFailed
                                 }
-                            _uiState.update { it.copy(isBusy = false, statusMessage = message) }
+                            }
                         }
-                    }
+                    // Reported whether or not this ViewModel is still alive, and before the read below,
+                    // which can wait for the lock: viewModelScope can still be active with the screen gone.
+                    restoreOutcomeSlot.report(message)
+                    val takenAt = preRestoreCopyLock.withLock { preRestoreSnapshotStore.takenAt() }
+                    _uiState.update { it.copy(isBusy = false, preRestoreSnapshotAt = takenAt) }
                 }
             }
         }
 
+        /** The message is on its way to the screen, so a back press during its snackbar doesn't show it again at the next visit. */
+        fun onStatusMessageShowing() {
+            _uiState.value.statusMessage?.let(restoreOutcomeSlot::consume)
+        }
+
+        /**
+         * The second consume is for an outcome equal to the one on screen: it merged into the snackbar
+         * that just ended, and no effect started to consume it. Left in the slot, the next equal outcome
+         * would change nothing and show nothing, and a later visit would report a restore that ended earlier.
+         */
         fun onStatusMessageShown() {
+            val shown = _uiState.value.statusMessage
             _uiState.update { it.copy(statusMessage = null) }
+            shown?.let(restoreOutcomeSlot::consume)
         }
     }

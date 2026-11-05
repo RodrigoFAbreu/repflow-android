@@ -89,6 +89,7 @@ class BackupViewModelTest {
         ExportWorkoutHistoryCsv(workoutRepository, ObserveTrainingPlanVersionLabels(trainingPlanRepository))
 
     private val restNotificationCanceller = RecordingRestNotificationCanceller()
+    private val restoreOutcomeSlot = RestoreOutcomeSlot()
     private val settingsRepository = InMemorySettingsRepository()
     private val clock = FixedClock(Instant.parse("2026-10-03T12:00:00Z"))
     private lateinit var viewModel: BackupViewModel
@@ -110,7 +111,19 @@ class BackupViewModelTest {
         settings: SettingsRepository = settingsRepository,
         workouts: WorkoutRepository = workoutRepository,
         restore: RestoreBackup = restoreBackup,
-    ) = BackupViewModel(export, restore, exportWorkoutHistoryCsv, restNotificationCanceller, settings, workouts, clock)
+    ) = BackupViewModel(
+        export,
+        restore,
+        exportWorkoutHistoryCsv,
+        restNotificationCanceller,
+        settings,
+        workouts,
+        snapshotStore,
+        copyLock,
+        trainingData,
+        restoreOutcomeSlot,
+        clock,
+    )
 
     @Test
     fun `onExportBackupRequested delivers the serialized snapshot and stays busy until the write completes`() =
@@ -500,11 +513,15 @@ class BackupViewModelTest {
             first.onRestoreConfirmed()
             first.viewModelScope.cancel()
 
+            // Staging waits for the lock too, so nothing is staged for the second to confirm yet.
             second.onRestoreFilePicked(fileHolding("C"))
+            assertNull(second.uiState.value.pendingRestoreJson)
             second.onRestoreConfirmed()
             assertEquals("replaceAll must not be entered again while the first is held", 1, gated.replaceAllCalls)
 
             gated.gate.complete(Unit)
+            assertNotNull(second.uiState.value.pendingRestoreJson)
+            second.onRestoreConfirmed()
 
             assertEquals(2, gated.replaceAllCalls)
             assertEquals(listOf("C"), exerciseNames())
