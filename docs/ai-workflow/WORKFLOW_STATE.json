@@ -8206,7 +8206,7 @@
       "registry_path": "docs/ai-workflow/registry/fix-workout-error-followups-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/fix-workout-error-followups-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+      "phase": "AWAITING_FUNCTIONAL_REVIEW",
       "plan_revision": 1,
       "implementation_revision": 1,
       "functional_review_round": null,
@@ -8315,7 +8315,138 @@
           "workflow_release": "2.25.5"
         }
       },
-      "technical_approval": null,
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "7988e2ea831c2ea0469917115fbbdfd6fb0379ef6b2aefb7652bc124b3e1f664",
+        "approved_review_content_id": "23145d888441a49dfbaec9770a19a8d92c285f6193557c5cee0195fc0a009688",
+        "review_content_manifest": [
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/workout/LocalWorkoutRepositoryReadFailureTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d7c45d99b8c671b71d9fa9c4cb7e1b95fba2f4a9"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "06ffca4e779d38b7a7ff51d19c6c152b4d3707e8"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/workout/WorkoutReadFailedException.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5e4f8a5b7154468bfeea98f2a95a89e98c1d5502"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/workout/WorkoutRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a616e5d061684ea6c447d1c7cf9f70dfdbc25eae"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/workout/LocalWorkoutRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5e469567ef02c46e02e01da0e9f83139b1374254"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7c31cdf52a97470621013c21a5056c7da29d9359"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/workout/InMemoryWorkoutRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5e7874a2a36792c7377de84a653a40adc02798a0"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutActionErrorTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "83a5309eb27ff9d7fdf10df1a7a6315ec9527de4"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutObservationRetryTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "28e5d5fdef325ef922de47c38a96d85319b363ea"
+          },
+          {
+            "path": "docs/ai-workflow/registry/fix-workout-error-followups-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7d1ee4e731a5591e3fdc3ac84a08564ad704f3d4"
+          }
+        ],
+        "reviewed_content_commit": "6613ccc423dd67fbb4a4b547a09fea7e02c7597d",
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-05T08:11:48Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "23145d888441a49dfbaec9770a19a8d92c285f6193557c5cee0195fc0a009688",
+            "ledger": {
+              "local": {
+                "bundle_id": "7988e2ea831c2ea0469917115fbbdfd6fb0379ef6b2aefb7652bc124b3e1f664",
+                "verdict": "APPROVE",
+                "round": 1,
+                "verdict_sha256": "ce0858f8b9153d5379d842bc0b5c9edcf3e73f6ff2c54d5cdbf9dfcfa50de451",
+                "ledger_entry_sha256": "2c4e11bae0d81260c2a4d9668f9f1121fb8d98376cfeaa136c1f7871794a37ba",
+                "run_ref": "session:local .ai-review/fix-workout-error-followups/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "7988e2ea831c2ea0469917115fbbdfd6fb0379ef6b2aefb7652bc124b3e1f664",
+                "verdict": "APPROVE",
+                "round": 1,
+                "verdict_sha256": "562a893c378506bab559b40cf8121e696c0d1b0f14eddd362f1fe4e0d8574fcb",
+                "ledger_entry_sha256": "7b80fd6a29b5f8a85f4e25e9bdd323f49cb9ceefdb6b385b0a3195330539f5d0",
+                "run_ref": "codex:20261105T080726Z-9bd60e9f",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-05T08:11:48Z",
+          "workflow_release": "2.25.5"
+        }
+      },
       "technical_review_block_pins": [],
       "plan_review_stages": {
         "review_content_id": "3a6b353cc3637f62ca2aa9adbdec886e3350767d552bb76871c6953e0e86e81c",
@@ -8346,12 +8477,12 @@
           "external": 1
         },
         "implementation": {
-          "local": 0,
-          "external": 0
+          "local": 1,
+          "external": 1
         }
       },
-      "state_revision": 11,
-      "last_transition": "2026-11-05T07:46:36Z",
+      "state_revision": 14,
+      "last_transition": "2026-11-05T08:11:48Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -8493,6 +8624,97 @@
               "at": "2026-11-05T07:12:32Z"
             }
           ]
+        },
+        "F-903065c8fd34": {
+          "digest": "903065c8fd3470cc7224226e90af3365807938bd3ceb738e28442e17289c0620",
+          "text": "**O1: A failed history read on `Try again` drops seeds that were good.** `refreshLastPerformances`' `.catch` emits an empty map (`ActiveWorkoutViewModel.kt:500-504`), and the screen rebuilds its entries after the failure state, so an exercise with no set logged this session comes back with empty steppers and no last performance until history is next read. It takes a failed session read, then a failed history read on the retry, and nothing saved changes, so the bundle's choice to keep it is reasonable. If it is worth closing, emitting `lastPerformances.value` there is one line.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "23145d888441a49dfbaec9770a19a8d92c285f6193557c5cee0195fc0a009688",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T08:06:56Z"
+            }
+          ]
+        },
+        "F-458265739688": {
+          "digest": "458265739688039cf610db344690b8e50c7a42b2af98c54ce025393c7a58715c",
+          "text": "**O2: No test runs R1's two halves together on the real ViewModel.** The ViewModel tests stop at the field, and `clearingTheFieldTakesDownTheShowingMessage` uses a state holder. Nothing is lost today: the route hands `uiState` straight to the screen (`ActiveWorkoutRoute.kt:72,125`). `ActiveWorkoutErrorRouteTest.aFailedLogSetShowsTheMessageAgainOnASecondFailureAndALaterSaveClearsTheEntry` already makes the successful press while the message is up (line 134), so one more assertion after line 137, that the message no longer exists, would pin the link. The external plan review suggested the same.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "23145d888441a49dfbaec9770a19a8d92c285f6193557c5cee0195fc0a009688",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T08:06:56Z"
+            }
+          ]
+        },
+        "F-57d34fa1feb7": {
+          "digest": "57d34fa1feb74f58076182fc3c346da5e0a04c953045731cd03b4df6ed41a603",
+          "text": "**O3: The list of untranslated reads misses one after a save.** `ComputeProgressionRecommendation.kt:46` calls `getWorkoutDayContext()` after `CompleteWorkoutSession` has saved, and that reads futsal and recovery history. A SQLite failure there closes the app with the workout stored, the same outcome as the listed `findPlannedExercise`, and the `computeRecommendations` KDoc's \"failures here are intentionally swallowed\" holds only for returned failures. It isn't new and it takes a failing disk. A follow-up issue could cover every read after a save, with `settingsRepository.get()` in `onRecordSet`.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "23145d888441a49dfbaec9770a19a8d92c285f6193557c5cee0195fc0a009688",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T08:06:56Z"
+            }
+          ]
+        },
+        "F-ea42cd0f539c": {
+          "digest": "ea42cd0f539c90a26761e17bf4cccedd21f2f903d7bf1870161fc344a06eb457",
+          "text": "**O4: Two comments are out of date now that a success clears the field.** `ActiveWorkoutScreen.kt:105` says `onErrorShown` clears it once the message has gone, and `ActiveWorkoutErrorRouteTest.kt:127` says nothing else clears it. No behaviour depends on them; update them when those files are next touched.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "23145d888441a49dfbaec9770a19a8d92c285f6193557c5cee0195fc0a009688",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T08:06:56Z"
+            }
+          ]
+        },
+        "F-977b1f771311": {
+          "digest": "977b1f771311c542cb08b02dbb571a4ffcf7c15d5ffe8324c14af0cb9f38dfdc",
+          "text": "**O5: `docs/ACTIVE_MILESTONE.md` still reads as before the wrap-up.** Line 9 says the full runs are still to come and line 11 names `/milestone-implement` as the next action, though both are done and `WORKFLOW_STATE.json` has moved on. Someone following the file would be sent back to a finished step. Changing it now would need a new bundle, so it can wait for the next write to that file.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "23145d888441a49dfbaec9770a19a8d92c285f6193557c5cee0195fc0a009688",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T08:06:56Z"
+            }
+          ]
+        }
+      },
+      "implementation_review_stages": {
+        "review_content_id": "23145d888441a49dfbaec9770a19a8d92c285f6193557c5cee0195fc0a009688",
+        "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "7988e2ea831c2ea0469917115fbbdfd6fb0379ef6b2aefb7652bc124b3e1f664",
+          "verdict": "APPROVE",
+          "round": 1,
+          "completed_at": "2026-11-05T08:06:56Z",
+          "verdict_sha256": "ce0858f8b9153d5379d842bc0b5c9edcf3e73f6ff2c54d5cdbf9dfcfa50de451",
+          "run_ref": "session:local .ai-review/fix-workout-error-followups/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "7988e2ea831c2ea0469917115fbbdfd6fb0379ef6b2aefb7652bc124b3e1f664",
+          "verdict": "APPROVE",
+          "round": 1,
+          "completed_at": "2026-11-05T08:10:42Z",
+          "verdict_sha256": "562a893c378506bab559b40cf8121e696c0d1b0f14eddd362f1fe4e0d8574fcb",
+          "run_ref": "codex:20261105T080726Z-9bd60e9f",
+          "reviewer_model": "openai/gpt-6.1-sol"
         }
       }
     }
