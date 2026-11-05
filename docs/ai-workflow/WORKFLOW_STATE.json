@@ -6823,7 +6823,7 @@
       "registry_path": "docs/ai-workflow/registry/fix-backup-all-workouts-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/fix-backup-all-workouts-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+      "phase": "AWAITING_FUNCTIONAL_REVIEW",
       "plan_revision": 2,
       "implementation_revision": 2,
       "functional_review_round": null,
@@ -6932,7 +6932,174 @@
           "workflow_release": "2.25.5"
         }
       },
-      "technical_approval": null,
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "6cfefb2e34daa4345d9166d07ffd7530900237fd8bf7730824bffa52e88e4927",
+        "approved_review_content_id": "28cefccadd373f6404fea245dac74c60830f417b569aa75f70a168064d2795e5",
+        "review_content_manifest": [
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/backup/LocalBackupRepositoryRoundTripTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3160e802f442a9ddf9bccdaea918534e4e87c76e"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/backup/BackupScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "29e50b74925f621cd4d64f8f940acc6eec1789f0"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/backup/ExportBackup.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a6553589eada9b533f2a9b3871d957e7ea2c0874"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/workout/WorkoutRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2d9a69746e0d41fc4c78d4d6b2e632b5686dcde6"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/workout/LocalWorkoutRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "88df603cd78416ea1c7e68b154e62a4c8253a05d"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/database/workout/WorkoutSessionDao.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "551e49cf23f998f3df3a5343cb60f22d3cbf7753"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupFileActions.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8a1f94a75f017a635ad39ad0e93b51a233d462f8"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5d76a75d2675d5e21983d958fd184764176bc4d9"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupUiState.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "78a87782140f5d530318473eeb8e4a04d731a4e8"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "00efdc471783ba6aa27af8b50d794f71274b9e97"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/RestTimerExpiryHandler.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "517a805c53120ac2a2b48827541b03e5150a8be7"
+          },
+          {
+            "path": "app/src/main/res/values/strings.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2f29615d3fcb612766f953b983701fdcfcc33d8a"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/backup/ExportBackupTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "69e92596845646b91e1b2a249114325d9882dd82"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/workout/InMemoryWorkoutRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a07c357c049ac52499d1747db43860d443367b81"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/backup/BackupViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6469a97ae5506a859bae2975bf2fadaf807cf307"
+          },
+          {
+            "path": "docs/ai-workflow/registry/fix-backup-all-workouts-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "c22328e6378304adb7618ca656a0e56df7217841"
+          }
+        ],
+        "reviewed_content_commit": "802ad7c66536bb1b1567ca80e30aaeb6dd3df35f",
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-05T02:36:12Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "28cefccadd373f6404fea245dac74c60830f417b569aa75f70a168064d2795e5",
+            "ledger": {
+              "local": {
+                "bundle_id": "6cfefb2e34daa4345d9166d07ffd7530900237fd8bf7730824bffa52e88e4927",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "ec3590fa3bb573f623d045fa53fb3ed41721c057aa0bd36a6bade3fe75b9ee70",
+                "ledger_entry_sha256": "a2dd352fc19ab714ca07097cb5cfeb2016be87852159c6c8dcf6b78f4197617b",
+                "run_ref": "session:local .ai-review/fix-backup-all-workouts/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "6cfefb2e34daa4345d9166d07ffd7530900237fd8bf7730824bffa52e88e4927",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "e63fb1825380a5aacea9ce2da6efbb660c881f1f8dd2b4246fdd44915d1d5683",
+                "ledger_entry_sha256": "94227ea2e14e87910c6fe8ec10b1f4b5dfe0c08534c9e6c5d7076c55e2fc59b1",
+                "run_ref": "codex:20261105T023318Z-a9a7fd85",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-05T02:36:12Z",
+          "workflow_release": "2.25.5"
+        }
+      },
       "technical_review_block_pins": [],
       "plan_review_stages": {
         "review_content_id": "53b7203fb359b1cb8af93e590818f66580111022399ee8ca9a11b13006d53982",
@@ -6963,12 +7130,12 @@
           "external": 1
         },
         "implementation": {
-          "local": 1,
-          "external": 1
+          "local": 2,
+          "external": 2
         }
       },
-      "state_revision": 17,
-      "last_transition": "2026-11-05T02:15:24Z",
+      "state_revision": 20,
+      "last_transition": "2026-11-05T02:36:12Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -7159,20 +7326,42 @@
               "at": "2026-11-05T01:58:41Z"
             }
           ]
+        },
+        "F-d361f9aeeef0": {
+          "digest": "d361f9aeeef02a999cc8485bb46d88973c456c72c91fb51ff196e02fbfd7927d",
+          "text": "**O-1: The design page says the warning shows \"only\" when a workout is running, but the app now also shows it when that isn't known.** `docs/items/design-3-redraws.md:15` reads \"When a workout is running, and only then\". `hasRunningWorkout` starts `true` (`BackupUiState.kt:20`) and a failed read sets it (`BackupViewModel.kt:78`), so the paragraph also shows before the first read returns and after a failed read, which R4 requires. Nothing goes wrong on screen today. The risk is that a later design or code pass follows that sentence and removes the R4 behaviour. Adding \"or when that can't be told\" to the sentence closes it.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 2,
+              "review_content_id": "28cefccadd373f6404fea245dac74c60830f417b569aa75f70a168064d2795e5",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T02:32:48Z"
+            }
+          ]
         }
       },
       "implementation_review_stages": {
-        "review_content_id": "4926e80196d9203d077cc113f0a764e8d789318da708e6a45dc7076a3b6bef54",
+        "review_content_id": "28cefccadd373f6404fea245dac74c60830f417b569aa75f70a168064d2795e5",
         "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
-          "bundle_id": "daa61fc90d8d18690dd3a90940a5e7267c38434accb0ddd0260545c387c677d4",
+          "bundle_id": "6cfefb2e34daa4345d9166d07ffd7530900237fd8bf7730824bffa52e88e4927",
           "verdict": "APPROVE",
-          "round": 1,
-          "completed_at": "2026-11-05T01:56:02Z",
-          "verdict_sha256": "68311c0f93f82f7cbabbb19271eb38995e6cd1e76ad5a680a96b2fc4ceaebe12",
+          "round": 2,
+          "completed_at": "2026-11-05T02:32:48Z",
+          "verdict_sha256": "ec3590fa3bb573f623d045fa53fb3ed41721c057aa0bd36a6bade3fe75b9ee70",
           "run_ref": "session:local .ai-review/fix-backup-all-workouts/feedback/REVIEW_FEEDBACK.md",
           "reviewer_model": "anthropic/claude-opus-5-5"
         },
-        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": null
+        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "6cfefb2e34daa4345d9166d07ffd7530900237fd8bf7730824bffa52e88e4927",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-05T02:34:49Z",
+          "verdict_sha256": "e63fb1825380a5aacea9ce2da6efbb660c881f1f8dd2b4246fdd44915d1d5683",
+          "run_ref": "codex:20261105T023318Z-a9a7fd85",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
       }
     }
   },
