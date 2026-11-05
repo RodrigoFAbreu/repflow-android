@@ -1,5 +1,11 @@
 # Active Milestone
 
+## `fix-workout-actions-in-order`
+
+Workout actions run one after another, so a set logged during a restore can't be lost. Plan: `docs/milestones/fix-workout-actions-in-order-execution.md`.
+
+- **CP1, complete.** Workout actions now run one after another, in the order they were pressed. One `Mutex`, `actionLock`, in `ActiveWorkoutViewModel` covers `launchAction`, `onCompleteWorkout` and `onAbandonWorkout`, around the use case and the handling of its result. So during a restore a set followed by another set, Finish or Abandon keeps every effect, and an earlier failure can't overwrite a later success. No schema change and no new dependency. Verified: `ActiveWorkoutActionOrderTest` (4 tests pass), the `presentation/workout` JVM package and `LayerBoundaryTest` (113 tests pass), `spotlessCheck`, `detekt`. Before the fix the four new tests failed as the plan measured: `expected:<[8, 9]> but was:<[9]>`, `expected:<1> but was:<0>` twice, and `expected null, but was:<PERSISTENCE_UNAVAILABLE>`. Mutations: removing the lock from `launchAction` fails all four, from `onCompleteWorkout` the Finish test, and from `onAbandonWorkout` the Abandon test, as in the plan's table. One assertion beyond the plan: the Finish test also checks that there is no error. The full runs and the note on issue #34 are still to come, in the wrap-up.
+
 ## `restore-safety-snapshot` — complete (accepted by policy 2026-11-05)
 
 RepFlow now keeps a safety copy of your data before a restore, and you can restore that copy from the Backup screen. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/restore-safety-snapshot-execution.md` and the Optional findings at `docs/milestones/completed/restore-safety-snapshot-findings.md`.
