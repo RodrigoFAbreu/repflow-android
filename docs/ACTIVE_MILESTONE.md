@@ -12,7 +12,36 @@ Keep a copy of the user's data before a restore, and offer it on the Backup scre
 
 - **Implementation review round 2, fixes applied.** The external review found that an override chosen during a surviving restore could report success without saving anything (I2). A plain read still sees the old data, so `RecordManualOverride` read a recommendation the incoming file omits. Its update waited for the commit and then changed no row, and the repository returned `Success`, so the choice was in neither the restored data nor the copy. `ProgressionRecommendationDao.update` now returns the rows changed and the repository turns zero into `Unavailable`, as the exercise, plan and workout repositories already do, so the screen shows `Couldn't save your choice. Try again.` An override on a row the restore kept is still saved on top of it. No other `@Update` has this gap, and the remaining writes are inserts and upserts, which either land or throw. Two Optional findings from the local review are handled as well: a second tap on Home's start while one is in flight is ignored (R2-O1), and what the record says about reads during a restore is corrected (R2-O2): a screen opened during a restore can sit on its loading state until the restore ends, and on a low-RAM phone every read waits. Verified at `e5423c6`: `spotlessCheck`, `detekt`, `lintDebug`, 830 JVM tests and 483 instrumented tests on `emulator-5554`, all passing. Before the fix, `anOverrideOnARecommendationTheRestoreRemovedFailsInsteadOfReportingSuccess` failed on the AVD with `expected:<Failure(error=PersistenceFailed(cause=Unavailable))> but was:<Success(value=kotlin.Unit)>`. Mutations: 4 edits, each caught by a named test. The fixed plan text is unchanged.
 
-**Next action:** run `/review-implementation restore-safety-snapshot`, then the manual external review, on implementation revision 3.
+**Next action:** perform the functional review below, write findings to `.ai-review/restore-safety-snapshot/feedback/FUNCTIONAL_REVIEW.md`, or run `/accept-milestone` if testing is clean.
+
+### Functional review checklist
+
+Automated verification is current: the working tree is clean and no code has changed since the round 2 full runs at `e5423c6` (`spotlessCheck`, `detekt`, `lintDebug`, 830 JVM tests, 483 instrumented tests on `emulator-5554`); later commits are workflow records only.
+
+**Setup.** Use the AVD (`start-avd.sh`, 3 GB cap), not the phone. Install with `./gradlew installDebug`. No feature flags, no network needed. Backup files are written and read through the system file picker, so export to the device's Downloads folder.
+
+**Test data.** State A (the "current" data): two exercises (Bench Press, Squat) and one finished workout. State B (a file to restore): from State A, add a third exercise (Deadlift) and a second finished workout, then Export a backup to Downloads; then delete Deadlift and the second workout so the phone is back to State A-like data. Also keep a garbage file (e.g. a text file renamed `bad.json`) in Downloads, and a fresh install with no data for F5.
+
+**F1 - First restore keeps a copy (R: CP1/CP2).** Backup screen before any restore: no safety-copy card. Pick the State B file, read the confirmation. Expected: the body no longer says "can't be undone"; it has the "RepFlow first keeps a copy of what is on this phone" paragraph and no "replaces the safety copy" paragraph; `Cancel` is on the left, `Replace my data` is outlined in the destructive colour. Confirm. Expected: `Backup restored`; Deadlift and the second workout are back; a card "Safety copy, <date>, <time>" appears below the restore card with `Restore the safety copy`.
+
+**F2 - Restore the safety copy swaps the states (R: CP2).** Tap `Restore the safety copy`. Expected: a confirmation titled "Restore the safety copy?" with the copy's date and time and the "so you can switch back" paragraph. Confirm. Expected: `Backup restored`; the data is State A-like again (no Deadlift, no second workout); the card still shows, now dated just now, and tapping it again swaps back to State B data.
+
+**F3 - Second restore replaces the old copy (R: CP1).** Restore the State B file again while a copy exists. Expected: the confirmation adds "This replaces the safety copy from <date>, <time>."; after confirming, the card shows the new time.
+
+**F4 - A bad file changes nothing (R: CP1).** Pick `bad.json`. Expected: the existing invalid-file message, data unchanged, the card and its date unchanged.
+
+**F5 - No data, no copy (R: CP1).** On a fresh install with no training data, restore the State B file. Expected: its confirmation has no safety-copy paragraphs, the restore succeeds, and no card appears. Then (with data present) Erase all data: the card disappears and stays gone after reopening Backup.
+
+**F6 - Leaving the screen mid-restore (R: CP1/CP2).** Start a restore and press back to Home straight after confirming. Expected: the restore still finishes; reopening Backup shows the `Backup restored` outcome once and the card as it now stands. (Timing on a small file is tight; if it finishes too fast to catch, note it and move on.)
+
+**F7 - Layout (R: CP2).** Open the confirmation in light and dark at font scale 1.0 and 2.0 (Settings > Display). Expected: `Replace my data` on one line at 1.0; above 1.1 the buttons stack with the destructive action on top; nothing clipped.
+
+**Known limitations / out of scope.**
+- Only one copy is kept, and the next restore replaces it; there is no history of copies.
+- The copy stays on the phone (app-private files), is not part of a backup export and is not encrypted.
+- A restore of a file with a running workout refuses a new workout start while it runs (I1); this window is milliseconds and is covered by automated tests only.
+- On a low-RAM phone, reads wait while a restore runs, so a screen opened then can sit on its loading state until it ends (R2-O2).
+- Settings are never part of a restore or of the copy.
 
 ## `fix-workout-error-followups` — complete (accepted by policy 2026-11-05)
 
