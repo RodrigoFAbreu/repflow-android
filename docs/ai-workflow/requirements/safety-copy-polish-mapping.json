@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "work_item_id": "safety-copy-polish",
+  "requirements": {
+    "R1": {
+      "description": "From the moment a restore is confirmed until it ends, whether it succeeds or fails, a Restoring screen covers the whole app and blocks touch, hardware keys, Back, accessibility actions and any way in from a notification, also after the activity is recreated, so no workout action can be started and wait behind the restore",
+      "checkpoint_ids": [
+        "CP1"
+      ]
+    },
+    "R2": {
+      "description": "The Restoring screen shows the design's spinner, 'Restoring\u2026' and 'Keep RepFlow open. This takes a moment.', is announced to screen readers, and always lifts when the restore ends, leaving the outcome message as before",
+      "checkpoint_ids": [
+        "CP1"
+      ]
+    },
+    "R3": {
+      "description": "The Erase all data confirmation says it also deletes the safety copy RepFlow keeps before a restore, and at font scales 1.8 and 2.0 the field can still be reached, the word typed and 'Erase everything' pressed",
+      "checkpoint_ids": [
+        "CP2"
+      ]
+    },
+    "R4": {
+      "description": "The note on the Backup screen no longer says RepFlow keeps a copy first on a phone with no training data, where none is made",
+      "checkpoint_ids": [
+        "CP2"
+      ]
+    }
+  }
+}

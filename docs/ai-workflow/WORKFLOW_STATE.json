@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_work_item_id": null,
+  "active_work_item_id": "safety-copy-polish",
   "work_items": {
     "workflow-v2-1-core": {
       "work_item_type": "process",
@@ -10777,6 +10777,332 @@
         },
         "evaluated_at": "2026-11-05T18:03:39Z",
         "workflow_release": "2.25.5"
+      }
+    },
+    "safety-copy-polish": {
+      "work_item_type": "product",
+      "work_item_kind": "product",
+      "work_item_id": "safety-copy-polish",
+      "parent_work_item_id": null,
+      "plan_path": "docs/milestones/safety-copy-polish-execution.md",
+      "registry_path": "docs/ai-workflow/registry/safety-copy-polish-registry.json",
+      "mapping_path": "docs/ai-workflow/requirements/safety-copy-polish-mapping.json",
+      "governing_workflow_version": "2.2",
+      "phase": "IMPLEMENTING",
+      "plan_revision": 3,
+      "implementation_revision": null,
+      "functional_review_round": null,
+      "base_commit": "df7d2197068e1c743d5f57a30d665b1c661cffe9",
+      "reviewed_implementation_head": null,
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": null,
+      "checkpoints": {},
+      "current_bundle_id": "b9802a64cc3a3e7ffebb7067c7642def55598dae65c90b18b5ed9b891dc0e0bd",
+      "plan_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "b9802a64cc3a3e7ffebb7067c7642def55598dae65c90b18b5ed9b891dc0e0bd",
+        "approved_review_content_id": "8b124569a1fed6705ee11da429cdab508be330913892e8523abe82f85188f890",
+        "review_content_manifest": [
+          {
+            "path": "docs/ai-workflow/registry/safety-copy-polish-registry.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "e7ea2b58dd747a9282ae041f66e9a4f31a5d88ac"
+          },
+          {
+            "path": "docs/ai-workflow/requirements/safety-copy-polish-mapping.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "43179c9178fc31c02a1da4e69ed6ffe91d74ea68"
+          },
+          {
+            "path": "docs/milestones/safety-copy-polish-execution.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f0c528c9ad6000ee8051fe57dbc9f6ef9dde596c"
+          }
+        ],
+        "reviewed_content_commit": null,
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-05T20:28:39Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "8b124569a1fed6705ee11da429cdab508be330913892e8523abe82f85188f890",
+            "ledger": {
+              "local": {
+                "bundle_id": "b9802a64cc3a3e7ffebb7067c7642def55598dae65c90b18b5ed9b891dc0e0bd",
+                "verdict": "APPROVE",
+                "round": 3,
+                "verdict_sha256": "5cba12028b88f2f3ecc15cb9c9779ac5d411be1faca73ce9a49a590b68328576",
+                "ledger_entry_sha256": "69e7910f3f210e0751bc8dd6e046b47220db6eed1c5bdef33bb788b19a255b55",
+                "run_ref": "session:local .ai-review/safety-copy-polish/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "b9802a64cc3a3e7ffebb7067c7642def55598dae65c90b18b5ed9b891dc0e0bd",
+                "verdict": "APPROVE",
+                "round": 3,
+                "verdict_sha256": "552963a5add35a749fadda0e365a26184b8b92eb3b537340b92563fba6ab0ae0",
+                "ledger_entry_sha256": "c3c13e8437aef89e37affb396b87ed52ac4be8fc56db13d6d4370633d84dff5f",
+                "run_ref": "codex:20261105T202429Z-896afc61",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-05T20:28:39Z",
+          "workflow_release": "2.25.5"
+        }
+      },
+      "technical_approval": null,
+      "technical_review_block_pins": [],
+      "plan_review_stages": {
+        "review_content_id": "8b124569a1fed6705ee11da429cdab508be330913892e8523abe82f85188f890",
+        "LOCAL_MODEL_PLAN_REVIEW": {
+          "bundle_id": "b9802a64cc3a3e7ffebb7067c7642def55598dae65c90b18b5ed9b891dc0e0bd",
+          "verdict": "APPROVE",
+          "round": 3,
+          "completed_at": "2026-11-05T20:24:04Z",
+          "verdict_sha256": "5cba12028b88f2f3ecc15cb9c9779ac5d411be1faca73ce9a49a590b68328576",
+          "run_ref": "session:local .ai-review/safety-copy-polish/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_PLAN_REVIEW": {
+          "bundle_id": "b9802a64cc3a3e7ffebb7067c7642def55598dae65c90b18b5ed9b891dc0e0bd",
+          "verdict": "APPROVE",
+          "round": 3,
+          "completed_at": "2026-11-05T20:26:25Z",
+          "verdict_sha256": "552963a5add35a749fadda0e365a26184b8b92eb3b537340b92563fba6ab0ae0",
+          "run_ref": "codex:20261105T202429Z-896afc61",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
+      },
+      "functional_acceptance_status": null,
+      "blocking_decisions": [],
+      "review_round_counts": {
+        "plan": {
+          "local": 3,
+          "external": 1
+        },
+        "implementation": {
+          "local": 0,
+          "external": 0
+        }
+      },
+      "state_revision": 12,
+      "last_transition": "2026-11-05T20:28:39Z",
+      "feedback_layout": "scoped",
+      "plan_review_binding": {
+        "status": "BOUND",
+        "at": "2026-11-05T19:56:56Z",
+        "consumed": {
+          "review_content_id": "d718b0e8deaf39441be4db8dc3ba5cdcac12b3aaac16f5f1874788a9fdcd63db",
+          "plan_revision": 2,
+          "legacy": false
+        },
+        "published": {
+          "review_content_id": "8b124569a1fed6705ee11da429cdab508be330913892e8523abe82f85188f890",
+          "plan_revision": 3
+        },
+        "bound": {
+          "review_content_id": "8b124569a1fed6705ee11da429cdab508be330913892e8523abe82f85188f890",
+          "bundle_id": "b9802a64cc3a3e7ffebb7067c7642def55598dae65c90b18b5ed9b891dc0e0bd",
+          "plan_revision": 3
+        }
+      },
+      "consumed_plan_review_content_ids": [
+        "421423fc5ced0586078abffa14f6e972aeb7985315e5a4ae0a3db4f519ff8025",
+        "d718b0e8deaf39441be4db8dc3ba5cdcac12b3aaac16f5f1874788a9fdcd63db"
+      ],
+      "optional_findings": {
+        "F-778b3faa7575": {
+          "digest": "778b3faa7575a0015350654efafa324b6aacfd071b809962b49e9d10650797a2",
+          "text": "**R1-O1.** CP1's `**Files:**` paragraph leaves out `BackupViewModelSafetyCopyTest.kt`, which CP1's work changes for the new constructor parameter; it is listed only under CP2.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "421423fc5ced0586078abffa14f6e972aeb7985315e5a4ae0a3db4f519ff8025",
+              "verdict": "REVISE",
+              "at": "2026-11-05T19:13:47Z"
+            }
+          ]
+        },
+        "F-4a306b7c3f69": {
+          "digest": "4a306b7c3f69fa27cf263baa7385835be9e5e8c577d074677f95932e11ab75cf",
+          "text": "**R1-O2.** Three texts go stale and are in no checkpoint's work: `BackupScreen.kt:72-73` (the `Restoring…` card is not drawn), `BackupUiState.kt:15-16` (`hasTrainingData` is read when a restore is staged) and `docs/UX_FLOWS.md:46-49` (a restore keeps running after the user leaves, and its outcome shows at the next visit).",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "421423fc5ced0586078abffa14f6e972aeb7985315e5a4ae0a3db4f519ff8025",
+              "verdict": "REVISE",
+              "at": "2026-11-05T19:13:47Z"
+            }
+          ]
+        },
+        "F-dbaab9ba0fd5": {
+          "digest": "dbaab9ba0fd51483506104937e873179d0b71ccd04fde16c21e80210c80fe509",
+          "text": "**R1-O3.** Board 40j's scrim is `rgba(5,6,12,.62)`, not black. `RepFlowColor` holds the sheet scrim as a token and main code has no literal `Color.Black`, so a token beside `sheetScrim` fits better than `Color.Black` at 62%.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "421423fc5ced0586078abffa14f6e972aeb7985315e5a4ae0a3db4f519ff8025",
+              "verdict": "REVISE",
+              "at": "2026-11-05T19:13:47Z"
+            }
+          ]
+        },
+        "F-561ac1e9cc8f": {
+          "digest": "561ac1e9cc8f485578f74483aca22404cb7ce3f5a9a90c599c2094bb0e6d8c68",
+          "text": "**R1-O4.** `parseSnapshot` is a plain `fun` and `onRestoreConfirmed` enters undispatched, so a large file's JSON is parsed on the main thread inside the tap, before the overlay's first frame. The modal confirmation stays up meanwhile, so no action can slip through; the user sees a frozen dialog and then the overlay. This is existing behaviour; CP1's look should expect it, and a follow-up is enough if it is noticeable.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "421423fc5ced0586078abffa14f6e972aeb7985315e5a4ae0a3db4f519ff8025",
+              "verdict": "REVISE",
+              "at": "2026-11-05T19:13:47Z"
+            }
+          ]
+        },
+        "F-d931fc909cf1": {
+          "digest": "d931fc909cf16ee4b40633a695d82551a5a015edc5966e27b28762437259ed8b",
+          "text": "**R1-O5.** `backup_safety_copy_meta` says \"the next restore replaces it\", which is false on an empty phone holding an old copy, because `SavePreRestoreCopy` keeps that copy (reached by restoring an empty file). It is the same kind of error as R4, in a narrow state, and it is the design's own text, so a follow-up is enough.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "421423fc5ced0586078abffa14f6e972aeb7985315e5a4ae0a3db4f519ff8025",
+              "verdict": "REVISE",
+              "at": "2026-11-05T19:13:47Z"
+            }
+          ]
+        },
+        "F-643afb323c42": {
+          "digest": "643afb323c42cf6879c36ee91b3f02c7cb70d7c087d6d16a82d5914530f0f2ba",
+          "text": "**R1-O6.** CP1's look includes a rest-notification tap, but no notification has a content intent yet (`setContentIntent` appears nowhere in `app/src/main`), so the tap opens nothing until `rest-notification-tap` (order 34). The step can show nothing today; the overlay's place in the activity is what covers that item later.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "421423fc5ced0586078abffa14f6e972aeb7985315e5a4ae0a3db4f519ff8025",
+              "verdict": "REVISE",
+              "at": "2026-11-05T19:13:47Z"
+            }
+          ]
+        },
+        "F-828d299d9d1d": {
+          "digest": "828d299d9d1dc4dc80685242f989d66e1cdaa6a92a6a2e813c06db439fe210d4",
+          "text": "**R2-O1.** `RepFlowColor.restoringScrim` has no test holding its value, while `sheetScrim` has `theSheetScrimIsTheDesignsOwnValue` (`RepFlowPrimitivesTest.kt:361`). A mistyped scrim passes every planned test.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "d718b0e8deaf39441be4db8dc3ba5cdcac12b3aaac16f5f1874788a9fdcd63db",
+              "verdict": "REVISE",
+              "at": "2026-11-05T19:51:20Z"
+            }
+          ]
+        },
+        "F-2c3e73d29196": {
+          "digest": "2c3e73d29196acd92f79ef970d0e38cbe1400cafae3631f9fc011a6633971126",
+          "text": "**R2-O2.** CP1's look restores only a large file, and the plan says a small file ends in milliseconds. So a small restore may show the overlay only briefly, and nobody looks at that: how it appears, or what TalkBack says in that time. Not measured. One small-file restore in the look covers it; no code change unless it looks wrong.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "d718b0e8deaf39441be4db8dc3ba5cdcac12b3aaac16f5f1874788a9fdcd63db",
+              "verdict": "REVISE",
+              "at": "2026-11-05T19:51:20Z"
+            }
+          ]
+        },
+        "F-95523d7bfbf1": {
+          "digest": "95523d7bfbf1849f73df4a2122a4180120d53359c0494d6558b67fe1afe7b747",
+          "text": "**R3-O1.** `RestoringOverlayActivityTest` and CP1's look leave out the commonest way back into a running restore: the overlay is up, nothing is recreated, the user presses Home, returns, then presses Back. The test list does this only after `recreate()`, and the look says \"Home, then back from the launcher\" without pressing Back afterwards. If this regressed, a user back from the launcher could press Back and leave the Backup screen during a restore. It holds today: measured with `moveToState(CREATED)` then `RESUMED`, through the dispatcher and with a real Back key, and the control with no flag leaves. One more case in that test class, and \"then Back\" in the look, would hold it.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 3,
+              "review_content_id": "8b124569a1fed6705ee11da429cdab508be330913892e8523abe82f85188f890",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T20:24:04Z"
+            }
+          ]
+        },
+        "F-b969384513dc": {
+          "digest": "b969384513dc35529dd736a6b81d835bfce8a6247013c2f6074ea71805a51a5b",
+          "text": "**R3-O2.** At font 1.8 and 2.0 the Erase dialog opens with no field in view. The user sees text cut mid-line, a greyed `Erase everything` and `Keep my data`, and has to scroll to find where to type. With the keyboard up, both buttons are behind it until it is closed with its check key or Back. The flow finishes and errs on the safe side, so R3 holds and nothing has to change. If CP2's look finds it confusing, the alternative is to scroll only the text and keep the field below it. That was not measured, and test 2's `performScrollTo` would change with it.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 3,
+              "review_content_id": "8b124569a1fed6705ee11da429cdab508be330913892e8523abe82f85188f890",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T20:24:04Z"
+            }
+          ]
+        },
+        "F-03473cad29df": {
+          "digest": "03473cad29df964ecbc0cf57ab561452a4babfda57f1f80b3240ae6310439279",
+          "text": "**R3-O3.** The wrap-up's note on issue #34 has no fallback if `gh` is refused, and `gh issue view 34 --comments` has now been refused in all three rounds. The user would see the item accepted with no note on the issue and no word on why. The wrap-up could say that a refusal is reported as not done, with the note's text in the report.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 3,
+              "review_content_id": "8b124569a1fed6705ee11da429cdab508be330913892e8523abe82f85188f890",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T20:24:04Z"
+            }
+          ]
+        }
       }
     }
   },
