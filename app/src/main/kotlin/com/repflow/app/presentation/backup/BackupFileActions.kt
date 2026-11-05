@@ -4,6 +4,10 @@ import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -14,9 +18,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.repflow.app.R
+import com.repflow.app.presentation.designsystem.RepFlowSpacing
 import java.io.BufferedReader
 import java.io.IOException
 import java.io.InputStreamReader
@@ -84,17 +90,19 @@ fun rememberBackupFileActions(viewModel: BackupViewModel): BackupFileActions {
 
 /**
  * The existing destructive confirmation in front of a restore: the safe
- * action and the destructive one, nothing replaced until the latter.
+ * action and the destructive one, nothing replaced until the latter. It
+ * warns first when [hasRunningWorkout], because a restore deletes that workout.
  */
 @Composable
 fun BackupRestoreConfirmDialog(
+    hasRunningWorkout: Boolean,
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text(stringResource(R.string.backup_restore_confirm_title)) },
-        text = { Text(stringResource(R.string.backup_restore_confirm_body)) },
+        text = { BackupRestoreConfirmText(hasRunningWorkout) },
         confirmButton = {
             TextButton(onClick = onConfirm) {
                 Text(
@@ -109,6 +117,26 @@ fun BackupRestoreConfirmDialog(
             }
         },
     )
+}
+
+/**
+ * The confirmation's text. It scrolls so it never clips at a large font size,
+ * and the warning comes first so it shows without scrolling at any size.
+ */
+@Composable
+fun BackupRestoreConfirmText(
+    hasRunningWorkout: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapMd),
+    ) {
+        if (hasRunningWorkout) {
+            Text(stringResource(R.string.backup_restore_confirm_running_workout))
+        }
+        Text(stringResource(R.string.backup_restore_confirm_body))
+    }
 }
 
 private const val BACKUP_FILE_NAME = "repflow-backup.json"

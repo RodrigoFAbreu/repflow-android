@@ -390,6 +390,7 @@
     <string name="backup_message_operation_failed">Couldn\'t complete the operation. Try again.</string>
     <string name="backup_restore_confirm_title">Restore this backup?</string>
     <string name="backup_restore_confirm_body">Every exercise, plan, workout, recovery entry and recommendation on this device is replaced by the file\'s contents. Your settings stay as they are. This can\'t be undone.</string>
+    <string name="backup_restore_confirm_running_workout">A workout is running on this phone. Restoring deletes it, with every set you\'ve logged.</string>
     <string name="backup_restore_confirm_action">Replace my data</string>
     <string name="backup_restore_cancel_action">Cancel</string>
 

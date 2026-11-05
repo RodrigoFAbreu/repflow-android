@@ -87,7 +87,11 @@ fun BackupScreen(
     )
 
     if (uiState.pendingRestoreJson != null) {
-        BackupRestoreConfirmDialog(onConfirm = actions.onRestoreConfirmed, onCancel = actions.onRestoreCancelled)
+        BackupRestoreConfirmDialog(
+            hasRunningWorkout = uiState.hasRunningWorkout,
+            onConfirm = actions.onRestoreConfirmed,
+            onCancel = actions.onRestoreCancelled,
+        )
     }
 
     RepFlowScreenScaffold(
