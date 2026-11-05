@@ -12,6 +12,8 @@ One milestone and one squash-merged pull request, releasable alone: the plan's p
 
 ## Owner decisions
 
+**Decided by the owner, 2026-11-05:** input fields get a stronger outline: ink at 40% in dark and 55% in light, measuring 3.2:1 or more. Off switches keep their border. Keep the app's own four readiness band colours. Boards 60a and 60e are the design.
+
 The owner approved this backlog on 2026-11-04 with every recommendation below taken as decided.
 
 **7. Who wins on visual values, the pages or the code?** [D-3]
