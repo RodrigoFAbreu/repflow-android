@@ -6,7 +6,33 @@ Restoring a damaged backup file shows an error instead of closing the app. Plan:
 
 - **CP1, complete.** `LocalBackupRepository.parseSnapshot` now turns `IllegalArgumentException` and `DateTimeException` into `BackupValidationError.Malformed`, and an unknown progression key now throws `IllegalArgumentException` instead of `IllegalStateException`. A zero-length rest timer, a blank workout id, a malformed date, or an unknown `result` or `overrideResult` therefore returns `InvalidBackup`, the user sees the existing "That file isn't a valid RepFlow backup." message, and nothing stored changes. The export-side dead end stays on issue #29, unchanged. Verified: `LocalBackupRepositoryDamagedFileTest` on `emulator-5554` (7 tests pass; before the fix the 5 damaged-file tests failed with the exceptions the plan names and the 2 controls passed), `ProgressionRecommendationMapperTest` (4 tests pass; the 2 new ones failed before the fix), the full suites (429 instrumented tests on `emulator-5554` and 757 JVM tests, all passing), `spotlessCheck`, `detekt`, `lintDebug`. One control beyond the plan: the same file with a valid override restores, so the unknown-override failure can only be the key.
 
-**Next action:** `/milestone-implement fix-restore-damaged-file` for the self-review, the final verification and the implementation review bundle.
+**Next action:** perform the functional review below, write findings to `.ai-review/fix-restore-damaged-file/feedback/FUNCTIONAL_REVIEW.md`, or run `/accept-milestone` if testing is clean.
+
+### Functional review checklist
+
+Automated verification is current: the working tree is clean and unchanged in code since the last full run (`spotlessCheck`, `detekt`, `lintDebug`, 757 JVM tests, 429 instrumented tests on `emulator-5554`, all passing).
+
+**Setup.** Use the AVD (`start-avd.sh`, 3 GB cap), not the phone. Install with `./gradlew installDebug`. No feature flags. A damaged file must be made by hand: export a backup (Settings > Backup > `Export backup now`), `adb pull` it, edit one value (below) with a text editor, `adb push` it to Downloads on the AVD, and pick it in Restore. Keep an untouched copy of the exported file for F5.
+
+**Test data.** Fresh install, then: two exercises, one completed workout with 2 sets, one running workout with a rest timer started, one futsal session, and a progression recommendation (finish the workout so one is computed). Note what Home, History and the exercise list show before each restore attempt.
+
+**F1 - Zero-length rest timer (R1).** In the file, set the running session's `restTimerTotalDurationSeconds` to `0`. Restore it. Expected: the app stays open and shows "That file isn't a valid RepFlow backup."; no crash or restart.
+
+**F2 - Blank workout id (R1).** Set a session's `"id"` to `""`. Restore. Expected: same message, no crash.
+
+**F3 - Malformed date (R1).** Set the futsal session's `"entryDate"` to `"not-a-date"`. Restore. Expected: same message, no crash.
+
+**F4 - Unknown progression result (R1).** Set a recommendation's `"result"` to `"INCREASE_LOAD"` (upper case, an unknown key). Then separately set `"overrideResult"` to `"INCREASE_LOAD"` together with `"overrideAt": 2` on a recommendation with a valid `result`. Restore each. Expected: same message each time, no crash.
+
+**F5 - Data untouched after a rejected file (R2).** After each of F1-F4, check Home, History, the exercise list and the running workout (with its rest timer). Expected: exactly what you noted before; nothing deleted, nothing added. Then restore the untouched copy: expected success, so the failures were the damage, not the setup.
+
+**F6 - Existing behaviors unchanged.** Restore a file that is not JSON (e.g. a text file). Expected: the same "isn't a valid RepFlow backup" message. Restore the valid file again: expected success.
+
+**Known limitations / out of scope.**
+- The export-side dead end (one unreadable saved workout makes every export fail) is unchanged and stays on issue #29 (R3).
+- No per-field message: every damaged file shows the one generic message.
+- Only `IllegalArgumentException` and date errors are turned into the message; other exception types on bad text would still crash visibly (accepted in the plan).
+- A damaged value is only reachable by hand-editing a file, so there is no UI path to produce it.
 
 ## `fix-backup-all-workouts` — complete (accepted by policy 2026-11-05)
 
