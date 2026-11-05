@@ -1,0 +1,19 @@
+{
+  "dispositions": {
+    "F-0f6b7eab4a8b": {"disposition": "follow-up", "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/29"},
+    "F-10a248dee81d": {"disposition": "fixed"},
+    "F-13bd62db35c6": {"disposition": "fixed"},
+    "F-226468dd470b": {"disposition": "fixed"},
+    "F-2c1816443918": {"disposition": "follow-up", "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/29"},
+    "F-55b3054019c2": {"disposition": "dropped", "reason": "Only asks for extra unit tests on a boundary the code already gets right (onReady sits after catch, cancellation is rethrown); no effect on a user."},
+    "F-84dfb216e604": {"disposition": "fixed"},
+    "F-b036e685d2cc": {"disposition": "fixed"},
+    "F-b29932c03c07": {"disposition": "fixed"},
+    "F-c53c8c4f63af": {"disposition": "fixed"},
+    "F-d361f9aeeef0": {"disposition": "dropped", "reason": "Wording in the finished design-3-redraws page; the app's R4 behaviour is covered by BackupViewModelTest, so no user is affected."},
+    "F-d6ca48f69bd5": {"disposition": "fixed"},
+    "F-d7d3cf59616a": {"disposition": "dropped", "reason": "Optional code tidy with no change for the user."}
+  },
+  "schema_version": 1,
+  "work_item_id": "fix-backup-all-workouts"
+}

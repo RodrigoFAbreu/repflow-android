@@ -1,6 +1,12 @@
 # Active Milestone
 
-## `fix-backup-all-workouts` — awaiting functional review (implementation revision 2; plan revision 2, technical approval by policy 2026-11-05)
+## `fix-backup-all-workouts` — complete (accepted by policy 2026-11-05)
+
+Backups now include running and abandoned workouts, and restore warns first when a workout is running. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/fix-backup-all-workouts-execution.md` and the Optional findings at `docs/milestones/completed/fix-backup-all-workouts-findings.md`.
+
+**Next action:** `suggest-keep-untouched`, An exercise you didn't train keeps its real suggestion. Ready for `/milestone-plan`.
+
+The sections below are this milestone's historical record.
 
 Backups include running and abandoned workouts, and restore warns about a running workout. Plan: `docs/milestones/fix-backup-all-workouts-execution.md`.
 
