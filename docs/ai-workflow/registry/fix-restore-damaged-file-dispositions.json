@@ -1,0 +1,12 @@
+{
+  "dispositions": {
+    "F-170d8790b61b": {"disposition": "dropped", "reason": "Wording slip in the plan of a finished milestone; the shipped message is the existing one and the functional checklist quotes it correctly."},
+    "F-39aa0fa4c916": {"disposition": "fixed"},
+    "F-3fa339231514": {"disposition": "fixed"},
+    "F-4045a5b91497": {"disposition": "follow-up", "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/29#issuecomment-6651350577"},
+    "F-87c762c9e558": {"disposition": "follow-up", "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/29#issuecomment-6651350577"},
+    "F-c5feee0e9cfa": {"disposition": "follow-up", "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/29#issuecomment-6651350577"}
+  },
+  "schema_version": 1,
+  "work_item_id": "fix-restore-damaged-file"
+}

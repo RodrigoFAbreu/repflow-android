@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "work_item_id": "fix-restore-damaged-file",
+  "requirements": {
+    "R1": {
+      "description": "Restoring a file with a zero-length rest timer, a blank workout id, a malformed date, or an unknown progression result or overrideResult (with overrideAt set) returns InvalidBackup and does not crash",
+      "checkpoint_ids": [
+        "CP1"
+      ]
+    },
+    "R2": {
+      "description": "A rejected damaged file leaves the stored data exactly as it was",
+      "checkpoint_ids": [
+        "CP1"
+      ]
+    },
+    "R3": {
+      "description": "The export-side dead end is not changed here; it stays recorded on issue #29",
+      "checkpoint_ids": [
+        "CP1"
+      ]
+    }
+  }
+}

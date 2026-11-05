@@ -105,7 +105,7 @@ items:
     detail: docs/items/fix-backup-all-workouts.md
   - id: fix-restore-damaged-file
     title: "Restoring a damaged backup file shows an error instead of closing the app"
-    status: next
+    status: done
     order: 20
     size: 1
     detail: docs/items/fix-restore-damaged-file.md

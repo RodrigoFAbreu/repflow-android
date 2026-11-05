@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "work_item_id": "fix-restore-damaged-file",
+  "plan_revision": 2,
+  "checkpoints": [
+    {
+      "id": "CP1",
+      "name": "Turn a damaged backup file into InvalidBackup (R1, R2, R3)",
+      "depends_on": [],
+      "complexity": 1,
+      "session_target": "1"
+    }
+  ]
+}

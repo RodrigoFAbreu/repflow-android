@@ -91,7 +91,10 @@ sealed interface BackupValidationError {
         val schemaVersion: Int,
     ) : BackupValidationError
 
-    /** The backup text is not valid JSON, is missing a required field, or has a field of the wrong shape. */
+    /**
+     * The backup text is not valid JSON, is missing a required field, has a field of the wrong shape,
+     * or holds a value the domain or a mapper rejects.
+     */
     data class Malformed(
         val reason: String,
     ) : BackupValidationError

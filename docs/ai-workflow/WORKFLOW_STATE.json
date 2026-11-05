@@ -7575,6 +7575,627 @@
         "evaluated_at": "2026-11-05T04:05:48Z",
         "workflow_release": "2.25.5"
       }
+    },
+    "fix-restore-damaged-file": {
+      "work_item_type": "product",
+      "work_item_kind": "product",
+      "work_item_id": "fix-restore-damaged-file",
+      "parent_work_item_id": null,
+      "plan_path": "docs/milestones/fix-restore-damaged-file-execution.md",
+      "registry_path": "docs/ai-workflow/registry/fix-restore-damaged-file-registry.json",
+      "mapping_path": "docs/ai-workflow/requirements/fix-restore-damaged-file-mapping.json",
+      "governing_workflow_version": "2.2",
+      "phase": "MILESTONE_COMPLETE",
+      "plan_revision": 2,
+      "implementation_revision": 1,
+      "functional_review_round": null,
+      "base_commit": "132aa9a0965ff948fbf027dd4bcadc27945b1835",
+      "reviewed_implementation_head": "2185f8e7835709f2cc0d51b61fdce68af35753da",
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": "CP1",
+      "checkpoints": {
+        "CP1": {
+          "status": "COMPLETE",
+          "start_commit": "201367cfff2caa736ebe399ce0a3a6a7781b45a3"
+        }
+      },
+      "current_bundle_id": "d5ec5e3f2a5616f74862d319d62448d661413bab6fe9a19e64a562ece4c5c4e8",
+      "plan_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "d5ec5e3f2a5616f74862d319d62448d661413bab6fe9a19e64a562ece4c5c4e8",
+        "approved_review_content_id": "bcfedde3b8e6998dc1e5bf91cdc2db07b9fa80146c434c274c9be000a0ec791b",
+        "review_content_manifest": [
+          {
+            "path": "docs/ai-workflow/registry/fix-restore-damaged-file-registry.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "30e89e002d324cc76eedb63ab336f26c2874f931"
+          },
+          {
+            "path": "docs/ai-workflow/requirements/fix-restore-damaged-file-mapping.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ed0db0bf80170764b78d1674d5ccae7e2c57cf30"
+          },
+          {
+            "path": "docs/milestones/fix-restore-damaged-file-execution.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "1598c4408cb466d4658ad5c6a5cf7da842cd6e65"
+          }
+        ],
+        "reviewed_content_commit": null,
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-05T05:11:37Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "bcfedde3b8e6998dc1e5bf91cdc2db07b9fa80146c434c274c9be000a0ec791b",
+            "ledger": {
+              "local": {
+                "bundle_id": "d5ec5e3f2a5616f74862d319d62448d661413bab6fe9a19e64a562ece4c5c4e8",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "d6baebd875de11d3d6c3e39acf221dfbcfeb9d5dd92411169ab17950b43d470d",
+                "ledger_entry_sha256": "caffe35d192940bb1bf5255e7c135d8ca568240c067edd70953077b5da733302",
+                "run_ref": "session:local .ai-review/fix-restore-damaged-file/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "d5ec5e3f2a5616f74862d319d62448d661413bab6fe9a19e64a562ece4c5c4e8",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "66369b8126ce0aa424fbde01b967c47c69dc6d8e11f7a226abff535bd3af3956",
+                "ledger_entry_sha256": "3a5f14b2b99ec4099a7de4ab3a6599082af8d021a9f76b42b19d364084b0390f",
+                "run_ref": "codex:20261105T050732Z-75ede678",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-05T05:11:37Z",
+          "workflow_release": "2.25.5"
+        }
+      },
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "5fb11e4d9a3bc0c4ea501a5ec5ad2b6f7fe685a4ae8293265c03109b0514192d",
+        "approved_review_content_id": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+        "review_content_manifest": [
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/backup/LocalBackupRepositoryDamagedFileTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f2323028bbb802bf9c66573e1d598f400bcdb231"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/backup/LocalBackupRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "19facc4abc9dfd3b6cbfe14fe84e3bd16fb254d3"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/progression/ProgressionRecommendationMapper.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "defebcde87dc671f6bb000f06fdb00f70831c961"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/domain/backup/BackupSnapshot.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "372f42d5f7a6dddac408188d5c42aa32e740807b"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/data/progression/ProgressionRecommendationMapperTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "72106de88ca26088186180f8158cc32f2328deb9"
+          },
+          {
+            "path": "docs/ai-workflow/registry/fix-restore-damaged-file-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ff679c7774f41806918f67cbb2c58757674e1efc"
+          }
+        ],
+        "reviewed_content_commit": "2185f8e7835709f2cc0d51b61fdce68af35753da",
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-05T06:05:55Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+            "ledger": {
+              "local": {
+                "bundle_id": "5fb11e4d9a3bc0c4ea501a5ec5ad2b6f7fe685a4ae8293265c03109b0514192d",
+                "verdict": "APPROVE",
+                "round": 1,
+                "verdict_sha256": "555f381a3e3d4bf4cab0ea5c7614748d606ce57f0b708c130da9a50f085b2bca",
+                "ledger_entry_sha256": "27f3f1ecd7d0a68a8009906c00898027e8915d1e325520ce257900d3db1fe58f",
+                "run_ref": "session:local .ai-review/fix-restore-damaged-file/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "5fb11e4d9a3bc0c4ea501a5ec5ad2b6f7fe685a4ae8293265c03109b0514192d",
+                "verdict": "APPROVE",
+                "round": 1,
+                "verdict_sha256": "dee103a495374805fe1f3d07d82fd8e877a8c39d2e884814b8ae8816d8a559ee",
+                "ledger_entry_sha256": "a0035052c742dbdd6a52efcb0f9ca8e3773eeba660e53a7eb2f079fb94401d0f",
+                "run_ref": "codex:20261105T060328Z-cbe58667",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-05T06:05:55Z",
+          "workflow_release": "2.25.5"
+        }
+      },
+      "technical_review_block_pins": [],
+      "plan_review_stages": {
+        "review_content_id": "bcfedde3b8e6998dc1e5bf91cdc2db07b9fa80146c434c274c9be000a0ec791b",
+        "LOCAL_MODEL_PLAN_REVIEW": {
+          "bundle_id": "d5ec5e3f2a5616f74862d319d62448d661413bab6fe9a19e64a562ece4c5c4e8",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-05T05:07:09Z",
+          "verdict_sha256": "d6baebd875de11d3d6c3e39acf221dfbcfeb9d5dd92411169ab17950b43d470d",
+          "run_ref": "session:local .ai-review/fix-restore-damaged-file/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_PLAN_REVIEW": {
+          "bundle_id": "d5ec5e3f2a5616f74862d319d62448d661413bab6fe9a19e64a562ece4c5c4e8",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-05T05:09:06Z",
+          "verdict_sha256": "66369b8126ce0aa424fbde01b967c47c69dc6d8e11f7a226abff535bd3af3956",
+          "run_ref": "codex:20261105T050732Z-75ede678",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
+      },
+      "functional_acceptance_status": null,
+      "blocking_decisions": [],
+      "review_round_counts": {
+        "plan": {
+          "local": 2,
+          "external": 1
+        },
+        "implementation": {
+          "local": 1,
+          "external": 1
+        }
+      },
+      "state_revision": 17,
+      "last_transition": "2026-11-05T06:26:01Z",
+      "feedback_layout": "scoped",
+      "plan_review_binding": {
+        "status": "BOUND",
+        "at": "2026-11-05T04:58:15Z",
+        "consumed": {
+          "review_content_id": "38fb77109fa1a2b41e5c5d678e8bb22c9273954099f79e5718f097870bdcffd8",
+          "plan_revision": 1,
+          "legacy": false
+        },
+        "published": {
+          "review_content_id": "bcfedde3b8e6998dc1e5bf91cdc2db07b9fa80146c434c274c9be000a0ec791b",
+          "plan_revision": 2
+        },
+        "bound": {
+          "review_content_id": "bcfedde3b8e6998dc1e5bf91cdc2db07b9fa80146c434c274c9be000a0ec791b",
+          "bundle_id": "d5ec5e3f2a5616f74862d319d62448d661413bab6fe9a19e64a562ece4c5c4e8",
+          "plan_revision": 2
+        }
+      },
+      "consumed_plan_review_content_ids": [
+        "38fb77109fa1a2b41e5c5d678e8bb22c9273954099f79e5718f097870bdcffd8"
+      ],
+      "optional_findings": {
+        "F-170d8790b61b": {
+          "digest": "170d8790b61b024d6601adc4b4d5f82b326c72ed2e501ba74efbeadbf50d4534",
+          "text": "**O1: the plan misquotes the message.** The Goal and the self-review call it \"Invalid backup\", but the user sees \"That file isn't a valid RepFlow backup.\" (`strings.xml:389`). `InvalidBackup` is only the enum name. Use the real text so the functional review checks the right words.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "38fb77109fa1a2b41e5c5d678e8bb22c9273954099f79e5718f097870bdcffd8",
+              "verdict": "REVISE",
+              "at": "2026-11-05T04:52:32Z"
+            }
+          ]
+        },
+        "F-39aa0fa4c916": {
+          "digest": "39aa0fa4c9160d81ff45b1ba95c3a6b71b161224753f26c3975b19eb4a46f1fa",
+          "text": "**O2: the comment instruction doesn't say where the line goes.** CP1 says to update \"the class comment on `parseSnapshot`\" if it claims every problem is reported, says it doesn't, then asks for a line anyway. `parseSnapshot` has no KDoc and the class comment doesn't discuss parsing, so name the place: a KDoc on `parseSnapshot`. Also, `BackupValidationError.Malformed`'s KDoc (`BackupSnapshot.kt:94`) lists only JSON-shape causes and will be incomplete after this change.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "38fb77109fa1a2b41e5c5d678e8bb22c9273954099f79e5718f097870bdcffd8",
+              "verdict": "REVISE",
+              "at": "2026-11-05T04:52:32Z"
+            }
+          ]
+        },
+        "F-3fa339231514": {
+          "digest": "3fa339231514a1073270e38687c0545bbb77751882e8aafa39b29efdc90c1c55",
+          "text": "**O3: the plan doesn't name the full instrumented run.** CP1 limits `connectedDebugAndroidTest` to the new class. `AGENTS.md:87-88` also requires the full suite before a milestone is done, and CI doesn't run instrumented tests (`AGENTS.md:86`). With only one checkpoint, CP1 is the natural place to state the full run on `emulator-5554`.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "38fb77109fa1a2b41e5c5d678e8bb22c9273954099f79e5718f097870bdcffd8",
+              "verdict": "REVISE",
+              "at": "2026-11-05T04:52:32Z"
+            }
+          ]
+        },
+        "F-c5feee0e9cfa": {
+          "digest": "c5feee0e9cfa1b105eeb741cc6a47b738d5c7cc3f3cd25d0bd5a31ef0bd202dd",
+          "text": "**O4: the plan doesn't say what happens to issue #29 at merge.** R3 keeps the export dead end \"recorded on issue #29\", but that issue also reports the crash this item fixes. A pull request body saying `Fixes #29` would close the issue and hide the note with it, and leaving it untouched keeps an open crash report for a fixed crash. One line in CP1 would settle it: no closing keyword, and a comment on the issue after the merge saying the restore half is fixed and the export half remains. I didn't read the issue itself, because `gh issue view` was denied in this session.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "bcfedde3b8e6998dc1e5bf91cdc2db07b9fa80146c434c274c9be000a0ec791b",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T05:07:09Z"
+            }
+          ]
+        },
+        "F-4045a5b91497": {
+          "digest": "4045a5b91497ee4ed90fdab432e52ecb5f45c3c3667906885abe25c1d86a0fa6",
+          "text": "**O1: a quoted infinite load restores successfully, then breaks the app.** A set with `\"load\": \"Infinity\"` or `\"load\": \"1e999\"` passes the parse, because `org.json` turns the text into a number and `WorkoutSet.create` only rejects `load < 0.0` (`WorkoutSet.kt:101`). The restore reports success and replaces the user's data. On the emulator, every later backup export then failed with `JSONException` (\"Forbidden numeric value\"), and when the set was in a finished workout, reading exercise progress threw `NumberFormatException` from `BigDecimal.valueOf`. `ProgressViewModel.kt:48` has no catch on that path, so I expect Progress to close the app, and History makes the same call (`HistoryModel.kt:34`, `:100`). I didn't open either screen. This lasts until the user erases their data or restores another file. An ordinary damaged file won't get here: the number has to be written as quoted text, and the unquoted forms are rejected. This diff didn't cause it and R1 doesn't list it, so it shouldn't hold this item. A follow-up could have `WorkoutSet.create` reject a load that isn't finite.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T06:03:00Z"
+            }
+          ]
+        },
+        "F-87c762c9e558": {
+          "digest": "87c762c9e5581386d44a23ab3ebe56a2dc0fa77ff1287a2b3bd030b5c2f9097c",
+          "text": "**O2: a file with a broken reference gets a message that can't help.** A row pointing at an exercise, plan or plan version the file doesn't contain, or a row that appears twice, passes the parse and fails on insert. `replaceAll` reports that as `Unavailable` (`LocalBackupRepository.kt:97`), so the user sees \"Couldn't complete the operation. Try again.\" Trying again can never work, because the file is what's wrong. This was the outcome for 369 of the 4,661 damaged files I ran, and stored data was unchanged in every one. It isn't a crash, it already worked this way, and R1 doesn't list it. A follow-up could map `SQLiteConstraintException` in `replaceAll` to `InvalidBackup`, since the tables have just been cleared and only the file's rows can break a constraint.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T06:03:00Z"
+            }
+          ]
+        }
+      },
+      "implementation_review_stages": {
+        "review_content_id": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+        "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "5fb11e4d9a3bc0c4ea501a5ec5ad2b6f7fe685a4ae8293265c03109b0514192d",
+          "verdict": "APPROVE",
+          "round": 1,
+          "completed_at": "2026-11-05T06:03:00Z",
+          "verdict_sha256": "555f381a3e3d4bf4cab0ea5c7614748d606ce57f0b708c130da9a50f085b2bca",
+          "run_ref": "session:local .ai-review/fix-restore-damaged-file/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "5fb11e4d9a3bc0c4ea501a5ec5ad2b6f7fe685a4ae8293265c03109b0514192d",
+          "verdict": "APPROVE",
+          "round": 1,
+          "completed_at": "2026-11-05T06:04:49Z",
+          "verdict_sha256": "dee103a495374805fe1f3d07d82fd8e877a8c39d2e884814b8ae8816d8a559ee",
+          "run_ref": "codex:20261105T060328Z-cbe58667",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
+      },
+      "gate_evidence": {
+        "functional": {
+          "flow-1": {
+            "flow_id": "flow-1",
+            "status": "passed",
+            "head": "b994fe7b39c728a11f452a9868022dd5ccbd7c0d",
+            "ran_at": "2026-11-05T06:17:56Z",
+            "summary": {
+              "text": "restTimerTotalDurationSeconds=0 file: toast \"That file isn't a valid RepFlow backup.\", app open, crash log empty",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/fix-restore-damaged-file"
+            },
+            "log_digest": "17a8d8a0ed8584a2fbfbd73185f21450e112f391ae8f16cabbd9a480c775787b",
+            "run_ref": "functional-fix-restore subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+            "recorded_at": "2026-11-05T06:17:56Z"
+          },
+          "flow-2": {
+            "flow_id": "flow-2",
+            "status": "passed",
+            "head": "b994fe7b39c728a11f452a9868022dd5ccbd7c0d",
+            "ran_at": "2026-11-05T06:17:56Z",
+            "summary": {
+              "text": "blank session id: same toast, no crash",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/fix-restore-damaged-file"
+            },
+            "log_digest": "520c98ddfb9aa3438fa9381facb5c928fbcbd516abc08236cad4468329db18f1",
+            "run_ref": "functional-fix-restore subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+            "recorded_at": "2026-11-05T06:17:56Z"
+          },
+          "flow-3": {
+            "flow_id": "flow-3",
+            "status": "passed",
+            "head": "b994fe7b39c728a11f452a9868022dd5ccbd7c0d",
+            "ran_at": "2026-11-05T06:17:56Z",
+            "summary": {
+              "text": "entryDate \"not-a-date\": same toast, no crash",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/fix-restore-damaged-file"
+            },
+            "log_digest": "63d7c0f6241c3de1967ae107a6f14313ecdf81cec26bc96bbbc9d20f16aa1974",
+            "run_ref": "functional-fix-restore subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+            "recorded_at": "2026-11-05T06:17:56Z"
+          },
+          "flow-4": {
+            "flow_id": "flow-4",
+            "status": "passed",
+            "head": "b994fe7b39c728a11f452a9868022dd5ccbd7c0d",
+            "ran_at": "2026-11-05T06:17:56Z",
+            "summary": {
+              "text": "unknown result and unknown overrideResult+overrideAt: same toast each, no crash",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/fix-restore-damaged-file"
+            },
+            "log_digest": "a577fe69be0dd2ce8929d083f842b60339a52b372e683fdceaa3f5686b6f5cec",
+            "run_ref": "functional-fix-restore subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+            "recorded_at": "2026-11-05T06:17:56Z"
+          },
+          "flow-5": {
+            "flow_id": "flow-5",
+            "status": "passed",
+            "head": "b994fe7b39c728a11f452a9868022dd5ccbd7c0d",
+            "ran_at": "2026-11-05T06:17:56Z",
+            "summary": {
+              "text": "after each reject DB row counts and row hashes identical (run-as copy), running workout still there; untouched file restores \"Backup restored\"",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/fix-restore-damaged-file"
+            },
+            "log_digest": "3fef6cc0fcfd1e2615ed26c81d20c8a93513cfb50089f93fbd571574531b68cc",
+            "run_ref": "functional-fix-restore subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+            "recorded_at": "2026-11-05T06:17:56Z"
+          },
+          "flow-6": {
+            "flow_id": "flow-6",
+            "status": "passed",
+            "head": "b994fe7b39c728a11f452a9868022dd5ccbd7c0d",
+            "ran_at": "2026-11-05T06:17:56Z",
+            "summary": {
+              "text": "non-JSON text file: same toast; valid file then restores",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/fix-restore-damaged-file"
+            },
+            "log_digest": "a80b2a405936ce1fd340c20260202fdaa759ad5d8b7deec63ccc9dd918caded2",
+            "run_ref": "functional-fix-restore subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+            "recorded_at": "2026-11-05T06:17:56Z"
+          }
+        },
+        "pr": {
+          "pr": {
+            "number": 31,
+            "url": "https://github.com/RodrigoFAbreu/repflow-android/pull/31"
+          },
+          "state": "open",
+          "head": "b994fe7b39c728a11f452a9868022dd5ccbd7c0d",
+          "review_decision": null,
+          "reviewed_head": null,
+          "checks": {
+            "state": "success",
+            "failing": []
+          },
+          "review_id": null,
+          "findings": null,
+          "identity_at_head": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+          "observed_at": "2026-11-05T06:26:01Z",
+          "ingest_seq": 1,
+          "repository": "RodrigoFAbreu/repflow-android",
+          "queried_commit": "2185f8e7835709f2cc0d51b61fdce68af35753da",
+          "provenance": {
+            "source": "workflow_gh",
+            "fetched_by": {
+              "name": "workflow-gh",
+              "version": "pr-list-v1"
+            },
+            "fetched_at": "2026-11-05T06:26:01Z",
+            "raw_sha256": "fd51c19544344d074cd05823bcb662086097425011238896701e6b3c5b879395",
+            "run_ref": "repflow-orchestrator, by hand after no_progress_repeated",
+            "gh_path": "/usr/bin/gh",
+            "gh_sha256": "9e824061111fe5f5b6a5d5690909ba37abafca4a4ca830bdf83246d3c94afd21"
+          },
+          "fact_id": "cbaa9f246542607283c0e141be4d51af06729939f73a80c1d1fb8313dea537d1"
+        },
+        "pr_reported": null,
+        "pr_keys": {
+          "reopened_for": [],
+          "applied": [],
+          "ingest_seq": 1
+        }
+      },
+      "acceptance_satisfaction": {
+        "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "policy_source": "adopted",
+        "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+        "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+        "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "requirements": [
+          {
+            "id": "checkpoints_complete",
+            "met": true,
+            "detail": "every checkpoint of the item's own registry is COMPLETE"
+          },
+          {
+            "id": "technical_approval_current",
+            "met": true,
+            "detail": "the technical approval is CURRENT for the content now"
+          },
+          {
+            "id": "functional_flows_passed",
+            "met": true,
+            "detail": "flows ['flow-1', 'flow-2', 'flow-3', 'flow-4', 'flow-5', 'flow-6'] passed at the approved content"
+          },
+          {
+            "id": "pr_fact_current",
+            "met": true,
+            "detail": "workflow_gh fact for PR #31 at b994fe7b39c728a11f452a9868022dd5ccbd7c0d is current"
+          },
+          {
+            "id": "no_standing_pr_objection",
+            "met": true,
+            "detail": "no CHANGES_REQUESTED decision and no failed check"
+          },
+          {
+            "id": "ci_green",
+            "met": true,
+            "detail": "checks are 'success'"
+          }
+        ],
+        "inputs": {
+          "anchor_commit": "2185f8e7835709f2cc0d51b61fdce68af35753da",
+          "anchor_identity": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+          "technical_approval": {
+            "basis": "POLICY_SATISFIED",
+            "approved_review_content_id": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+            "recorded_at": "2026-11-05T06:05:55Z"
+          },
+          "functional": {
+            "flow-1": {
+              "evidence_id": "f3c28f8d899671c9d5b0e08b75446258dd5e48ab0a5d35c091b75a0e5ce3c847",
+              "log_digest": "17a8d8a0ed8584a2fbfbd73185f21450e112f391ae8f16cabbd9a480c775787b",
+              "run_ref": "functional-fix-restore subagent, 2026-11-05"
+            },
+            "flow-2": {
+              "evidence_id": "25c0b5c3f15c3b443292daad7b63c98675c93b814af6ba3588846190eaf65709",
+              "log_digest": "520c98ddfb9aa3438fa9381facb5c928fbcbd516abc08236cad4468329db18f1",
+              "run_ref": "functional-fix-restore subagent, 2026-11-05"
+            },
+            "flow-3": {
+              "evidence_id": "3101a8b6b53e0db2fbe72a72ae6f70bec6e542e3d6629572d6164b9bd5ffda39",
+              "log_digest": "63d7c0f6241c3de1967ae107a6f14313ecdf81cec26bc96bbbc9d20f16aa1974",
+              "run_ref": "functional-fix-restore subagent, 2026-11-05"
+            },
+            "flow-4": {
+              "evidence_id": "f22c0881e673177e5890b3ba45f606f70020797edf2c95eb3a30d939381ba3b2",
+              "log_digest": "a577fe69be0dd2ce8929d083f842b60339a52b372e683fdceaa3f5686b6f5cec",
+              "run_ref": "functional-fix-restore subagent, 2026-11-05"
+            },
+            "flow-5": {
+              "evidence_id": "43351da73dfb993c38471e45f428ab8094eceff43bfca33700899f4fc1b80468",
+              "log_digest": "3fef6cc0fcfd1e2615ed26c81d20c8a93513cfb50089f93fbd571574531b68cc",
+              "run_ref": "functional-fix-restore subagent, 2026-11-05"
+            },
+            "flow-6": {
+              "evidence_id": "1c22e7b0eb0f2d904eb4b261231a8b856072ebb6a34521572908e593cb9aacf4",
+              "log_digest": "a80b2a405936ce1fd340c20260202fdaa759ad5d8b7deec63ccc9dd918caded2",
+              "run_ref": "functional-fix-restore subagent, 2026-11-05"
+            }
+          },
+          "pr": {
+            "fact_id": "cbaa9f246542607283c0e141be4d51af06729939f73a80c1d1fb8313dea537d1",
+            "head": "b994fe7b39c728a11f452a9868022dd5ccbd7c0d",
+            "provenance": "workflow_gh",
+            "raw_sha256": "fd51c19544344d074cd05823bcb662086097425011238896701e6b3c5b879395"
+          }
+        },
+        "trust": {
+          "review_verdicts": "orchestrator",
+          "functional_evidence": "orchestrator",
+          "pr_fact": "workflow_gh"
+        },
+        "evaluated_at": "2026-11-05T06:26:01Z",
+        "workflow_release": "2.25.5"
+      }
     }
   },
   "gate_policy_adoption": {
