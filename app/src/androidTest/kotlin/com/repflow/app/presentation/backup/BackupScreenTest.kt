@@ -1,5 +1,7 @@
 package com.repflow.app.presentation.backup
 
+import android.content.res.Configuration
+import android.view.ContextThemeWrapper
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
@@ -9,6 +11,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -167,7 +170,43 @@ class BackupScreenTest {
         assertTheWarningLeadsAndTheBodyScrollsAtFontScale(2f)
     }
 
-    /** The text alone, because it hasn't been checked whether a `LocalDensity` override reaches a dialog's own window. */
+    @Test
+    fun theWholeWarningShowsWithoutScrollingInTheRealDialogAtFontScale2() {
+        renderTheRealDialogAtFontScale(2f)
+
+        val warning = composeRule.onNodeWithText(string(R.string.backup_restore_confirm_running_workout))
+        val node = warning.assertIsDisplayed().fetchSemanticsNode()
+        assertEquals("the font scale must reach the dialog's own window", 2f, node.layoutInfo.density.fontScale, 0.01f)
+        // Clipping shortens a node's bounds but not its size, so equal heights mean no line of the warning is cut off.
+        assertEquals(node.size.height.toFloat(), node.boundsInRoot.height, 1f)
+
+        composeRule
+            .onNodeWithText(string(R.string.backup_restore_confirm_body))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.backup_restore_confirm_action)).assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.backup_restore_cancel_action)).assertIsDisplayed()
+    }
+
+    /** The scale goes on the context the dialog is built from, because a dialog's window takes its density from there. */
+    private fun renderTheRealDialogAtFontScale(fontScale: Float) {
+        composeRule.runOnUiThread {
+            val activity = composeRule.activity
+            val scaled =
+                ContextThemeWrapper(activity, activity.theme).apply {
+                    applyOverrideConfiguration(Configuration(activity.resources.configuration).apply { this.fontScale = fontScale })
+                }
+            activity.setContentView(
+                ComposeView(scaled).apply {
+                    setContent {
+                        RepFlowTheme { BackupRestoreConfirmDialog(hasRunningWorkout = true, onConfirm = {}, onCancel = {}) }
+                    }
+                },
+            )
+        }
+    }
+
+    /** The text alone, in a box short enough that the body has to scroll: on a tall screen the real dialog may not need to. */
     private fun assertTheWarningLeadsAndTheBodyScrollsAtFontScale(fontScale: Float) {
         composeRule.setContent {
             val density = LocalDensity.current
