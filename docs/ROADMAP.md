@@ -23,7 +23,7 @@
 | 17 | [Make the spec sheet the single source: move rules out of the archive, add the board map, fix contrast and faint outlines, run the colour-blind check, archive old boards](items/design-4-spec.md) `design-4-spec` | Done | 1 | design-2-rules |
 | 18 | [A failed workout action shows a message, entry clears only on success, and \`Retry\` works](items/fix-workout-errors.md) `fix-workout-errors` | Done | 1 | - |
 | 19 | [Backups include running and abandoned workouts, and restore warns about a running workout](items/fix-backup-all-workouts.md) `fix-backup-all-workouts` | Done | 2 | design-1-wrong-claims |
-| 20 | [Restoring a damaged backup file shows an error instead of closing the app](items/fix-restore-damaged-file.md) `fix-restore-damaged-file` | Next | 1 | - |
+| 20 | [Restoring a damaged backup file shows an error instead of closing the app](items/fix-restore-damaged-file.md) `fix-restore-damaged-file` | Done | 1 | - |
 | 21 | [Workout errors: no stale message after a retry, no crash on a failed read, and Try again restores the picker](items/fix-workout-error-followups.md) `fix-workout-error-followups` | Next | 2 | - |
 | 22 | [One automatic snapshot before a restore, restorable from Backup](items/restore-safety-snapshot.md) `restore-safety-snapshot` | Next | 2 | fix-backup-all-workouts, design-3-redraws |
 | 23 | [A reminder on Home when the last backup is old](items/backup-reminder.md) `backup-reminder` | Next | 1 | restore-safety-snapshot |

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_work_item_id": "fix-restore-damaged-file",
+  "active_work_item_id": null,
   "work_items": {
     "workflow-v2-1-core": {
       "work_item_type": "process",
@@ -7585,7 +7585,7 @@
       "registry_path": "docs/ai-workflow/registry/fix-restore-damaged-file-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/fix-restore-damaged-file-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_FUNCTIONAL_REVIEW",
+      "phase": "MILESTONE_COMPLETE",
       "plan_revision": 2,
       "implementation_revision": 1,
       "functional_review_round": null,
@@ -7832,8 +7832,8 @@
           "external": 1
         }
       },
-      "state_revision": 16,
-      "last_transition": "2026-11-05T06:05:55Z",
+      "state_revision": 17,
+      "last_transition": "2026-11-05T06:26:01Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -7962,6 +7962,239 @@
           "run_ref": "codex:20261105T060328Z-cbe58667",
           "reviewer_model": "openai/gpt-6.1-sol"
         }
+      },
+      "gate_evidence": {
+        "functional": {
+          "flow-1": {
+            "flow_id": "flow-1",
+            "status": "passed",
+            "head": "b994fe7b39c728a11f452a9868022dd5ccbd7c0d",
+            "ran_at": "2026-11-05T06:17:56Z",
+            "summary": {
+              "text": "restTimerTotalDurationSeconds=0 file: toast \"That file isn't a valid RepFlow backup.\", app open, crash log empty",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/fix-restore-damaged-file"
+            },
+            "log_digest": "17a8d8a0ed8584a2fbfbd73185f21450e112f391ae8f16cabbd9a480c775787b",
+            "run_ref": "functional-fix-restore subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+            "recorded_at": "2026-11-05T06:17:56Z"
+          },
+          "flow-2": {
+            "flow_id": "flow-2",
+            "status": "passed",
+            "head": "b994fe7b39c728a11f452a9868022dd5ccbd7c0d",
+            "ran_at": "2026-11-05T06:17:56Z",
+            "summary": {
+              "text": "blank session id: same toast, no crash",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/fix-restore-damaged-file"
+            },
+            "log_digest": "520c98ddfb9aa3438fa9381facb5c928fbcbd516abc08236cad4468329db18f1",
+            "run_ref": "functional-fix-restore subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+            "recorded_at": "2026-11-05T06:17:56Z"
+          },
+          "flow-3": {
+            "flow_id": "flow-3",
+            "status": "passed",
+            "head": "b994fe7b39c728a11f452a9868022dd5ccbd7c0d",
+            "ran_at": "2026-11-05T06:17:56Z",
+            "summary": {
+              "text": "entryDate \"not-a-date\": same toast, no crash",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/fix-restore-damaged-file"
+            },
+            "log_digest": "63d7c0f6241c3de1967ae107a6f14313ecdf81cec26bc96bbbc9d20f16aa1974",
+            "run_ref": "functional-fix-restore subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+            "recorded_at": "2026-11-05T06:17:56Z"
+          },
+          "flow-4": {
+            "flow_id": "flow-4",
+            "status": "passed",
+            "head": "b994fe7b39c728a11f452a9868022dd5ccbd7c0d",
+            "ran_at": "2026-11-05T06:17:56Z",
+            "summary": {
+              "text": "unknown result and unknown overrideResult+overrideAt: same toast each, no crash",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/fix-restore-damaged-file"
+            },
+            "log_digest": "a577fe69be0dd2ce8929d083f842b60339a52b372e683fdceaa3f5686b6f5cec",
+            "run_ref": "functional-fix-restore subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+            "recorded_at": "2026-11-05T06:17:56Z"
+          },
+          "flow-5": {
+            "flow_id": "flow-5",
+            "status": "passed",
+            "head": "b994fe7b39c728a11f452a9868022dd5ccbd7c0d",
+            "ran_at": "2026-11-05T06:17:56Z",
+            "summary": {
+              "text": "after each reject DB row counts and row hashes identical (run-as copy), running workout still there; untouched file restores \"Backup restored\"",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/fix-restore-damaged-file"
+            },
+            "log_digest": "3fef6cc0fcfd1e2615ed26c81d20c8a93513cfb50089f93fbd571574531b68cc",
+            "run_ref": "functional-fix-restore subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+            "recorded_at": "2026-11-05T06:17:56Z"
+          },
+          "flow-6": {
+            "flow_id": "flow-6",
+            "status": "passed",
+            "head": "b994fe7b39c728a11f452a9868022dd5ccbd7c0d",
+            "ran_at": "2026-11-05T06:17:56Z",
+            "summary": {
+              "text": "non-JSON text file: same toast; valid file then restores",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/fix-restore-damaged-file"
+            },
+            "log_digest": "a80b2a405936ce1fd340c20260202fdaa759ad5d8b7deec63ccc9dd918caded2",
+            "run_ref": "functional-fix-restore subagent, 2026-11-05",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+            "recorded_at": "2026-11-05T06:17:56Z"
+          }
+        },
+        "pr": {
+          "pr": {
+            "number": 31,
+            "url": "https://github.com/RodrigoFAbreu/repflow-android/pull/31"
+          },
+          "state": "open",
+          "head": "b994fe7b39c728a11f452a9868022dd5ccbd7c0d",
+          "review_decision": null,
+          "reviewed_head": null,
+          "checks": {
+            "state": "success",
+            "failing": []
+          },
+          "review_id": null,
+          "findings": null,
+          "identity_at_head": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+          "observed_at": "2026-11-05T06:26:01Z",
+          "ingest_seq": 1,
+          "repository": "RodrigoFAbreu/repflow-android",
+          "queried_commit": "2185f8e7835709f2cc0d51b61fdce68af35753da",
+          "provenance": {
+            "source": "workflow_gh",
+            "fetched_by": {
+              "name": "workflow-gh",
+              "version": "pr-list-v1"
+            },
+            "fetched_at": "2026-11-05T06:26:01Z",
+            "raw_sha256": "fd51c19544344d074cd05823bcb662086097425011238896701e6b3c5b879395",
+            "run_ref": "repflow-orchestrator, by hand after no_progress_repeated",
+            "gh_path": "/usr/bin/gh",
+            "gh_sha256": "9e824061111fe5f5b6a5d5690909ba37abafca4a4ca830bdf83246d3c94afd21"
+          },
+          "fact_id": "cbaa9f246542607283c0e141be4d51af06729939f73a80c1d1fb8313dea537d1"
+        },
+        "pr_reported": null,
+        "pr_keys": {
+          "reopened_for": [],
+          "applied": [],
+          "ingest_seq": 1
+        }
+      },
+      "acceptance_satisfaction": {
+        "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "policy_source": "adopted",
+        "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+        "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+        "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "requirements": [
+          {
+            "id": "checkpoints_complete",
+            "met": true,
+            "detail": "every checkpoint of the item's own registry is COMPLETE"
+          },
+          {
+            "id": "technical_approval_current",
+            "met": true,
+            "detail": "the technical approval is CURRENT for the content now"
+          },
+          {
+            "id": "functional_flows_passed",
+            "met": true,
+            "detail": "flows ['flow-1', 'flow-2', 'flow-3', 'flow-4', 'flow-5', 'flow-6'] passed at the approved content"
+          },
+          {
+            "id": "pr_fact_current",
+            "met": true,
+            "detail": "workflow_gh fact for PR #31 at b994fe7b39c728a11f452a9868022dd5ccbd7c0d is current"
+          },
+          {
+            "id": "no_standing_pr_objection",
+            "met": true,
+            "detail": "no CHANGES_REQUESTED decision and no failed check"
+          },
+          {
+            "id": "ci_green",
+            "met": true,
+            "detail": "checks are 'success'"
+          }
+        ],
+        "inputs": {
+          "anchor_commit": "2185f8e7835709f2cc0d51b61fdce68af35753da",
+          "anchor_identity": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+          "technical_approval": {
+            "basis": "POLICY_SATISFIED",
+            "approved_review_content_id": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+            "recorded_at": "2026-11-05T06:05:55Z"
+          },
+          "functional": {
+            "flow-1": {
+              "evidence_id": "f3c28f8d899671c9d5b0e08b75446258dd5e48ab0a5d35c091b75a0e5ce3c847",
+              "log_digest": "17a8d8a0ed8584a2fbfbd73185f21450e112f391ae8f16cabbd9a480c775787b",
+              "run_ref": "functional-fix-restore subagent, 2026-11-05"
+            },
+            "flow-2": {
+              "evidence_id": "25c0b5c3f15c3b443292daad7b63c98675c93b814af6ba3588846190eaf65709",
+              "log_digest": "520c98ddfb9aa3438fa9381facb5c928fbcbd516abc08236cad4468329db18f1",
+              "run_ref": "functional-fix-restore subagent, 2026-11-05"
+            },
+            "flow-3": {
+              "evidence_id": "3101a8b6b53e0db2fbe72a72ae6f70bec6e542e3d6629572d6164b9bd5ffda39",
+              "log_digest": "63d7c0f6241c3de1967ae107a6f14313ecdf81cec26bc96bbbc9d20f16aa1974",
+              "run_ref": "functional-fix-restore subagent, 2026-11-05"
+            },
+            "flow-4": {
+              "evidence_id": "f22c0881e673177e5890b3ba45f606f70020797edf2c95eb3a30d939381ba3b2",
+              "log_digest": "a577fe69be0dd2ce8929d083f842b60339a52b372e683fdceaa3f5686b6f5cec",
+              "run_ref": "functional-fix-restore subagent, 2026-11-05"
+            },
+            "flow-5": {
+              "evidence_id": "43351da73dfb993c38471e45f428ab8094eceff43bfca33700899f4fc1b80468",
+              "log_digest": "3fef6cc0fcfd1e2615ed26c81d20c8a93513cfb50089f93fbd571574531b68cc",
+              "run_ref": "functional-fix-restore subagent, 2026-11-05"
+            },
+            "flow-6": {
+              "evidence_id": "1c22e7b0eb0f2d904eb4b261231a8b856072ebb6a34521572908e593cb9aacf4",
+              "log_digest": "a80b2a405936ce1fd340c20260202fdaa759ad5d8b7deec63ccc9dd918caded2",
+              "run_ref": "functional-fix-restore subagent, 2026-11-05"
+            }
+          },
+          "pr": {
+            "fact_id": "cbaa9f246542607283c0e141be4d51af06729939f73a80c1d1fb8313dea537d1",
+            "head": "b994fe7b39c728a11f452a9868022dd5ccbd7c0d",
+            "provenance": "workflow_gh",
+            "raw_sha256": "fd51c19544344d074cd05823bcb662086097425011238896701e6b3c5b879395"
+          }
+        },
+        "trust": {
+          "review_verdicts": "orchestrator",
+          "functional_evidence": "orchestrator",
+          "pr_fact": "workflow_gh"
+        },
+        "evaluated_at": "2026-11-05T06:26:01Z",
+        "workflow_release": "2.25.5"
       }
     }
   },

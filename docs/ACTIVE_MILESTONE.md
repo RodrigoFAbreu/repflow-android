@@ -1,6 +1,12 @@
 # Active Milestone
 
-## `fix-restore-damaged-file` — in progress
+## `fix-restore-damaged-file` — complete (accepted by policy 2026-11-05)
+
+Restoring a damaged backup file now shows an error instead of closing the app, and leaves your data untouched. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/fix-restore-damaged-file-execution.md` and the Optional findings at `docs/milestones/completed/fix-restore-damaged-file-findings.md`.
+
+**Next action:** `fix-workout-error-followups`, Workout errors: no stale message after a retry, no crash on a failed read, and Try again restores the picker. Ready for `/milestone-plan`.
+
+The sections below are this milestone's historical record.
 
 Restoring a damaged backup file shows an error instead of closing the app. Plan: `docs/milestones/fix-restore-damaged-file-execution.md`.
 
