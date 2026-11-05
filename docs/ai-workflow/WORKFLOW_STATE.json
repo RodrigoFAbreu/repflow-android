@@ -7585,7 +7585,7 @@
       "registry_path": "docs/ai-workflow/registry/fix-restore-damaged-file-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/fix-restore-damaged-file-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+      "phase": "AWAITING_FUNCTIONAL_REVIEW",
       "plan_revision": 2,
       "implementation_revision": 1,
       "functional_review_round": null,
@@ -7690,7 +7690,114 @@
           "workflow_release": "2.25.5"
         }
       },
-      "technical_approval": null,
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "5fb11e4d9a3bc0c4ea501a5ec5ad2b6f7fe685a4ae8293265c03109b0514192d",
+        "approved_review_content_id": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+        "review_content_manifest": [
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/backup/LocalBackupRepositoryDamagedFileTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f2323028bbb802bf9c66573e1d598f400bcdb231"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/backup/LocalBackupRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "19facc4abc9dfd3b6cbfe14fe84e3bd16fb254d3"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/progression/ProgressionRecommendationMapper.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "defebcde87dc671f6bb000f06fdb00f70831c961"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/domain/backup/BackupSnapshot.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "372f42d5f7a6dddac408188d5c42aa32e740807b"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/data/progression/ProgressionRecommendationMapperTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "72106de88ca26088186180f8158cc32f2328deb9"
+          },
+          {
+            "path": "docs/ai-workflow/registry/fix-restore-damaged-file-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ff679c7774f41806918f67cbb2c58757674e1efc"
+          }
+        ],
+        "reviewed_content_commit": "2185f8e7835709f2cc0d51b61fdce68af35753da",
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-05T06:05:55Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+            "ledger": {
+              "local": {
+                "bundle_id": "5fb11e4d9a3bc0c4ea501a5ec5ad2b6f7fe685a4ae8293265c03109b0514192d",
+                "verdict": "APPROVE",
+                "round": 1,
+                "verdict_sha256": "555f381a3e3d4bf4cab0ea5c7614748d606ce57f0b708c130da9a50f085b2bca",
+                "ledger_entry_sha256": "27f3f1ecd7d0a68a8009906c00898027e8915d1e325520ce257900d3db1fe58f",
+                "run_ref": "session:local .ai-review/fix-restore-damaged-file/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "5fb11e4d9a3bc0c4ea501a5ec5ad2b6f7fe685a4ae8293265c03109b0514192d",
+                "verdict": "APPROVE",
+                "round": 1,
+                "verdict_sha256": "dee103a495374805fe1f3d07d82fd8e877a8c39d2e884814b8ae8816d8a559ee",
+                "ledger_entry_sha256": "a0035052c742dbdd6a52efcb0f9ca8e3773eeba660e53a7eb2f079fb94401d0f",
+                "run_ref": "codex:20261105T060328Z-cbe58667",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-05T06:05:55Z",
+          "workflow_release": "2.25.5"
+        }
+      },
       "technical_review_block_pins": [],
       "plan_review_stages": {
         "review_content_id": "bcfedde3b8e6998dc1e5bf91cdc2db07b9fa80146c434c274c9be000a0ec791b",
@@ -7721,12 +7828,12 @@
           "external": 1
         },
         "implementation": {
-          "local": 0,
-          "external": 0
+          "local": 1,
+          "external": 1
         }
       },
-      "state_revision": 13,
-      "last_transition": "2026-11-05T05:40:30Z",
+      "state_revision": 16,
+      "last_transition": "2026-11-05T06:05:55Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -7805,6 +7912,55 @@
               "at": "2026-11-05T05:07:09Z"
             }
           ]
+        },
+        "F-4045a5b91497": {
+          "digest": "4045a5b91497ee4ed90fdab432e52ecb5f45c3c3667906885abe25c1d86a0fa6",
+          "text": "**O1: a quoted infinite load restores successfully, then breaks the app.** A set with `\"load\": \"Infinity\"` or `\"load\": \"1e999\"` passes the parse, because `org.json` turns the text into a number and `WorkoutSet.create` only rejects `load < 0.0` (`WorkoutSet.kt:101`). The restore reports success and replaces the user's data. On the emulator, every later backup export then failed with `JSONException` (\"Forbidden numeric value\"), and when the set was in a finished workout, reading exercise progress threw `NumberFormatException` from `BigDecimal.valueOf`. `ProgressViewModel.kt:48` has no catch on that path, so I expect Progress to close the app, and History makes the same call (`HistoryModel.kt:34`, `:100`). I didn't open either screen. This lasts until the user erases their data or restores another file. An ordinary damaged file won't get here: the number has to be written as quoted text, and the unquoted forms are rejected. This diff didn't cause it and R1 doesn't list it, so it shouldn't hold this item. A follow-up could have `WorkoutSet.create` reject a load that isn't finite.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T06:03:00Z"
+            }
+          ]
+        },
+        "F-87c762c9e558": {
+          "digest": "87c762c9e5581386d44a23ab3ebe56a2dc0fa77ff1287a2b3bd030b5c2f9097c",
+          "text": "**O2: a file with a broken reference gets a message that can't help.** A row pointing at an exercise, plan or plan version the file doesn't contain, or a row that appears twice, passes the parse and fails on insert. `replaceAll` reports that as `Unavailable` (`LocalBackupRepository.kt:97`), so the user sees \"Couldn't complete the operation. Try again.\" Trying again can never work, because the file is what's wrong. This was the outcome for 369 of the 4,661 damaged files I ran, and stored data was unchanged in every one. It isn't a crash, it already worked this way, and R1 doesn't list it. A follow-up could map `SQLiteConstraintException` in `replaceAll` to `InvalidBackup`, since the tables have just been cleared and only the file's rows can break a constraint.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T06:03:00Z"
+            }
+          ]
+        }
+      },
+      "implementation_review_stages": {
+        "review_content_id": "10c4093ab83d744371ed0fae568ee188e5d2d26194aa803ef1758a275b313589",
+        "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "5fb11e4d9a3bc0c4ea501a5ec5ad2b6f7fe685a4ae8293265c03109b0514192d",
+          "verdict": "APPROVE",
+          "round": 1,
+          "completed_at": "2026-11-05T06:03:00Z",
+          "verdict_sha256": "555f381a3e3d4bf4cab0ea5c7614748d606ce57f0b708c130da9a50f085b2bca",
+          "run_ref": "session:local .ai-review/fix-restore-damaged-file/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "5fb11e4d9a3bc0c4ea501a5ec5ad2b6f7fe685a4ae8293265c03109b0514192d",
+          "verdict": "APPROVE",
+          "round": 1,
+          "completed_at": "2026-11-05T06:04:49Z",
+          "verdict_sha256": "dee103a495374805fe1f3d07d82fd8e877a8c39d2e884814b8ae8816d8a559ee",
+          "run_ref": "codex:20261105T060328Z-cbe58667",
+          "reviewer_model": "openai/gpt-6.1-sol"
         }
       }
     }
