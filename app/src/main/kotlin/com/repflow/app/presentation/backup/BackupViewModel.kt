@@ -169,20 +169,26 @@ class BackupViewModel
         fun onRestoreConfirmed() {
             val json = _uiState.value.pendingRestoreJson ?: return
             _uiState.update { it.copy(isBusy = true, pendingRestoreJson = null) }
-            viewModelScope.launch {
-                when (val result = restoreBackup(json)) {
-                    is DomainResult.Success -> {
-                        restNotificationCanceller.cancel()
-                        _uiState.update { it.copy(isBusy = false, statusMessage = BackupStatusMessage.RestoreSucceeded) }
-                    }
+            // NonCancellable: the user has confirmed, so leaving the Backup route does not abandon the
+            // restore. A cancellation that rolled the transaction back would leave a new safety copy
+            // holding the unchanged data, and it would win over the old copy.
+            // UNDISPATCHED: the same reason as in onExportWriteSucceeded.
+            viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                withContext(NonCancellable) {
+                    when (val result = restoreBackup(json)) {
+                        is DomainResult.Success -> {
+                            restNotificationCanceller.cancel()
+                            _uiState.update { it.copy(isBusy = false, statusMessage = BackupStatusMessage.RestoreSucceeded) }
+                        }
 
-                    is DomainResult.Failure -> {
-                        val message =
-                            when (result.error) {
-                                is BackupRestoreError.InvalidBackup -> BackupStatusMessage.InvalidBackup
-                                BackupRestoreError.Unavailable -> BackupStatusMessage.OperationFailed
-                            }
-                        _uiState.update { it.copy(isBusy = false, statusMessage = message) }
+                        is DomainResult.Failure -> {
+                            val message =
+                                when (result.error) {
+                                    is BackupRestoreError.InvalidBackup -> BackupStatusMessage.InvalidBackup
+                                    BackupRestoreError.Unavailable -> BackupStatusMessage.OperationFailed
+                                }
+                            _uiState.update { it.copy(isBusy = false, statusMessage = message) }
+                        }
                     }
                 }
             }

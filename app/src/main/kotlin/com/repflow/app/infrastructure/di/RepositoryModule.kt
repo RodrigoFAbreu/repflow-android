@@ -1,6 +1,9 @@
 package com.repflow.app.infrastructure.di
 
 import com.repflow.app.application.backup.BackupRepository
+import com.repflow.app.application.backup.PreRestoreCopy
+import com.repflow.app.application.backup.PreRestoreSnapshotStore
+import com.repflow.app.application.backup.SavePreRestoreCopy
 import com.repflow.app.application.backup.TrainingDataRepository
 import com.repflow.app.application.exercise.ExerciseRepository
 import com.repflow.app.application.progression.ProgressionRecommendationRepository
@@ -9,6 +12,7 @@ import com.repflow.app.application.recovery.RecoveryRepository
 import com.repflow.app.application.settings.SettingsRepository
 import com.repflow.app.application.trainingplan.TrainingPlanRepository
 import com.repflow.app.application.workout.WorkoutRepository
+import com.repflow.app.data.backup.FilePreRestoreSnapshotStore
 import com.repflow.app.data.backup.LocalBackupRepository
 import com.repflow.app.data.backup.LocalTrainingDataRepository
 import com.repflow.app.data.exercise.LocalExerciseRepository
@@ -27,6 +31,7 @@ import javax.inject.Singleton
 /** Binds application-layer repository contracts to their data-layer implementations. */
 @Module
 @InstallIn(SingletonComponent::class)
+@Suppress("TooManyFunctions") // A flat list of one-line bindings: splitting it would only hide them.
 abstract class RepositoryModule {
     @Binds
     @Singleton
@@ -61,6 +66,14 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindTrainingDataRepository(impl: LocalTrainingDataRepository): TrainingDataRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindPreRestoreSnapshotStore(impl: FilePreRestoreSnapshotStore): PreRestoreSnapshotStore
+
+    @Binds
+    @Singleton
+    abstract fun bindPreRestoreCopy(impl: SavePreRestoreCopy): PreRestoreCopy
 
     @Binds
     @Singleton

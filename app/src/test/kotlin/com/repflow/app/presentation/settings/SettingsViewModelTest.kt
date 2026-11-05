@@ -1,7 +1,9 @@
 package com.repflow.app.presentation.settings
 
 import com.repflow.app.application.backup.EraseAllData
+import com.repflow.app.application.backup.InMemoryPreRestoreSnapshotStore
 import com.repflow.app.application.backup.InMemoryTrainingDataRepository
+import com.repflow.app.application.backup.PreRestoreCopyLock
 import com.repflow.app.application.backup.TrainingDataError
 import com.repflow.app.application.settings.AppSettings
 import com.repflow.app.application.settings.ExtraSetFields
@@ -32,7 +34,12 @@ class SettingsViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        viewModel = SettingsViewModel(settingsRepository, EraseAllData(trainingData), restNotificationCanceller)
+        viewModel =
+            SettingsViewModel(
+                settingsRepository,
+                EraseAllData(trainingData, InMemoryPreRestoreSnapshotStore(), PreRestoreCopyLock()),
+                restNotificationCanceller,
+            )
     }
 
     @After

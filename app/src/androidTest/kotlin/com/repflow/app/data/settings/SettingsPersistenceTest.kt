@@ -1,27 +1,34 @@
 package com.repflow.app.data.settings
 
+import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.application.backup.EraseAllData
+import com.repflow.app.application.backup.PreRestoreCopy
+import com.repflow.app.application.backup.PreRestoreCopyLock
 import com.repflow.app.application.backup.RestoreBackup
 import com.repflow.app.application.settings.AppSettings
 import com.repflow.app.application.settings.ExtraSetFields
 import com.repflow.app.application.settings.ThemeMode
+import com.repflow.app.data.backup.FilePreRestoreSnapshotStore
 import com.repflow.app.data.backup.LocalBackupRepository
 import com.repflow.app.data.backup.LocalTrainingDataRepository
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.infrastructure.database.RepFlowDatabase
 import com.repflow.app.infrastructure.database.SETTINGS_SEED_CALLBACK
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
 import java.time.Instant
 
 /**
@@ -42,6 +49,8 @@ class SettingsPersistenceTest {
     private lateinit var database: RepFlowDatabase
     private lateinit var settings: LocalSettingsRepository
     private lateinit var trainingData: LocalTrainingDataRepository
+    private lateinit var snapshotDirectory: File
+    private lateinit var snapshotStore: FilePreRestoreSnapshotStore
 
     private val customised =
         AppSettings(
@@ -65,11 +74,16 @@ class SettingsPersistenceTest {
                 .build()
         settings = LocalSettingsRepository(database)
         trainingData = LocalTrainingDataRepository(database)
+        snapshotDirectory =
+            File(ApplicationProvider.getApplicationContext<Context>().cacheDir, "settings-persistence-test")
+        snapshotDirectory.mkdirs()
+        snapshotStore = FilePreRestoreSnapshotStore(snapshotDirectory, Dispatchers.IO)
     }
 
     @After
     fun closeDatabase() {
         database.close()
+        snapshotDirectory.deleteRecursively()
     }
 
     @Test
@@ -142,12 +156,16 @@ class SettingsPersistenceTest {
             seedOneRowPerTrainingTable(activeSession = true)
             assertEquals(1, count("workout_sessions WHERE status = 'ACTIVE'"))
 
-            val result = EraseAllData(trainingData)()
+            snapshotStore.saveNew("a safety copy of this data")
+            snapshotStore.promoteNew()
+
+            val result = EraseAllData(trainingData, snapshotStore, PreRestoreCopyLock())()
 
             assertEquals(DomainResult.Success(Unit), result)
             TRAINING_TABLES.forEach { table -> assertEquals("$table must be empty", 0, count(table)) }
             assertEquals(1, count("settings"))
             assertEquals(customised, settings.get())
+            assertNull(snapshotStore.load())
         }
 
     @Test
@@ -155,7 +173,7 @@ class SettingsPersistenceTest {
         runBlocking {
             settings.update { customised }
             seedOneRowPerTrainingTable(activeSession = false, idPrefix = "old-")
-            val restore = RestoreBackup(LocalBackupRepository(database, trainingData))
+            val restore = RestoreBackup(LocalBackupRepository(database, trainingData), PreRestoreCopy { restore -> restore() })
 
             val result = restore(PRE_MILESTONE_BACKUP_JSON)
 

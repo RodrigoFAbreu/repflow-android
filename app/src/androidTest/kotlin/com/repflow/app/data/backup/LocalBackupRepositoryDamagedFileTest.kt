@@ -4,6 +4,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.application.backup.BackupRestoreError
+import com.repflow.app.application.backup.PreRestoreCopy
 import com.repflow.app.application.backup.RestoreBackup
 import com.repflow.app.domain.backup.BackupValidationError
 import com.repflow.app.domain.common.DomainResult
@@ -34,7 +35,11 @@ class LocalBackupRepositoryDamagedFileTest {
             Room
                 .inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), RepFlowDatabase::class.java)
                 .build()
-        restoreBackup = RestoreBackup(LocalBackupRepository(database, LocalTrainingDataRepository(database)))
+        restoreBackup =
+            RestoreBackup(
+                LocalBackupRepository(database, LocalTrainingDataRepository(database)),
+                PreRestoreCopy { restore -> restore() },
+            )
     }
 
     @After
