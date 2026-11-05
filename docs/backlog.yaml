@@ -98,7 +98,7 @@ items:
     detail: docs/items/fix-workout-errors.md
   - id: fix-backup-all-workouts
     title: "Backups include running and abandoned workouts, and restore warns about a running workout"
-    status: next
+    status: done
     order: 19
     size: 2
     depends_on: [design-1-wrong-claims]

@@ -18,7 +18,10 @@ import com.repflow.app.application.settings.SettingsRepository
 import com.repflow.app.application.trainingplan.InMemoryTrainingPlanRepository
 import com.repflow.app.application.trainingplan.ObserveTrainingPlanVersionLabels
 import com.repflow.app.application.workout.InMemoryWorkoutRepository
+import com.repflow.app.application.workout.WorkoutRepository
 import com.repflow.app.domain.common.DomainResult
+import com.repflow.app.domain.workout.WorkoutSession
+import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.presentation.workout.RecordingRestNotificationCanceller
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +36,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -73,14 +77,19 @@ class BackupViewModelTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         // Built after the Main dispatcher is set: the ViewModel starts observing the settings in `init`.
-        viewModel =
-            BackupViewModel(exportBackup, restoreBackup, exportWorkoutHistoryCsv, restNotificationCanceller, settingsRepository, clock)
+        viewModel = buildViewModel()
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
     }
+
+    private fun buildViewModel(
+        export: ExportBackup = exportBackup,
+        settings: SettingsRepository = settingsRepository,
+        workouts: WorkoutRepository = workoutRepository,
+    ) = BackupViewModel(export, restoreBackup, exportWorkoutHistoryCsv, restNotificationCanceller, settings, workouts, clock)
 
     @Test
     fun `onExportBackupRequested delivers the serialized snapshot and stays busy until the write completes`() =
@@ -232,7 +241,7 @@ class BackupViewModelTest {
             val stored = Instant.parse("2026-09-30T21:04:00Z")
             val repository = InMemorySettingsRepository(AppSettings.DEFAULT.copy(lastBackupAt = stored))
 
-            val model = BackupViewModel(exportBackup, restoreBackup, exportWorkoutHistoryCsv, restNotificationCanceller, repository, clock)
+            val model = buildViewModel(settings = repository)
 
             assertEquals(stored, model.uiState.value.lastBackupAt)
             assertEquals(true, model.uiState.value.isLastBackupLoaded)
@@ -271,8 +280,7 @@ class BackupViewModelTest {
                         return settingsRepository.update(transform)
                     }
                 }
-            val model =
-                BackupViewModel(exportBackup, restoreBackup, exportWorkoutHistoryCsv, restNotificationCanceller, suspending, clock)
+            val model = buildViewModel(settings = suspending)
             model.onExportBackupRequested { }
 
             model.onExportWriteSucceeded(BackupExportKind.BACKUP)
@@ -290,8 +298,7 @@ class BackupViewModelTest {
         val dispatcher = StandardTestDispatcher()
         Dispatchers.setMain(dispatcher)
         runTest(dispatcher) {
-            val model =
-                BackupViewModel(exportBackup, restoreBackup, exportWorkoutHistoryCsv, restNotificationCanceller, settingsRepository, clock)
+            val model = buildViewModel()
 
             model.onExportWriteSucceeded(BackupExportKind.BACKUP)
             model.viewModelScope.cancel()
@@ -326,8 +333,7 @@ class BackupViewModelTest {
                     override suspend fun update(transform: (AppSettings) -> AppSettings) = DomainResult.Success(Unit)
                 }
 
-            val failedViewModel =
-                BackupViewModel(exportBackup, restoreBackup, exportWorkoutHistoryCsv, restNotificationCanceller, failing, clock)
+            val failedViewModel = buildViewModel(settings = failing)
 
             assertEquals(true, failedViewModel.uiState.value.isLastBackupLoaded)
             assertNull(failedViewModel.uiState.value.lastBackupAt)
@@ -350,4 +356,103 @@ class BackupViewModelTest {
 
             assertEquals(recorded, settingsRepository.get().lastBackupAt)
         }
+
+    @Test
+    fun `hasRunningWorkout follows the running session`() =
+        runTest {
+            assertFalse(viewModel.uiState.value.hasRunningWorkout)
+
+            val startedAt = Instant.parse("2026-10-03T11:00:00Z")
+            val running = WorkoutSession.start(WorkoutSessionId("running"), null, startedAt)
+            workoutRepository.insert(running)
+            assertTrue(viewModel.uiState.value.hasRunningWorkout)
+
+            workoutRepository.update((running.complete(startedAt.plusSeconds(3600)) as DomainResult.Success).value)
+            assertFalse(viewModel.uiState.value.hasRunningWorkout)
+        }
+
+    @Test
+    fun `a failed read of the running workout still warns, and the restore can still be staged`() =
+        runTest {
+            val model = buildViewModel(workouts = UnreadableWorkoutRepository(workoutRepository))
+
+            assertTrue(model.uiState.value.hasRunningWorkout)
+
+            model.onRestoreFilePicked("{}")
+            assertEquals("{}", model.uiState.value.pendingRestoreJson)
+            assertTrue(model.uiState.value.hasRunningWorkout)
+        }
+
+    @Test
+    fun `a restore staged before the first read of the running workout warns, until no workout is confirmed`() =
+        runTest {
+            val firstRead = CompletableDeferred<WorkoutSession?>()
+            val delayed =
+                object : WorkoutRepository by workoutRepository {
+                    override fun observeActiveSession(): Flow<WorkoutSession?> = flow { emit(firstRead.await()) }
+                }
+            val model = buildViewModel(workouts = delayed)
+
+            model.onRestoreFilePicked("{}")
+            assertEquals("{}", model.uiState.value.pendingRestoreJson)
+            assertTrue(model.uiState.value.hasRunningWorkout)
+
+            firstRead.complete(null)
+            assertEquals("{}", model.uiState.value.pendingRestoreJson)
+            assertFalse(model.uiState.value.hasRunningWorkout)
+        }
+
+    @Test
+    fun `a read that fails after finding no workout warns again`() =
+        runTest {
+            val nextRead = CompletableDeferred<Unit>()
+            val failingLater =
+                object : WorkoutRepository by workoutRepository {
+                    override fun observeActiveSession(): Flow<WorkoutSession?> =
+                        flow {
+                            emit(null)
+                            nextRead.await()
+                            error("session row unreadable")
+                        }
+                }
+            val model = buildViewModel(workouts = failingLater)
+            assertFalse(model.uiState.value.hasRunningWorkout)
+
+            nextRead.complete(Unit)
+
+            assertTrue(model.uiState.value.hasRunningWorkout)
+        }
+
+    @Test
+    fun `an export that can't read a workout reports OperationFailed and opens no file picker`() =
+        runTest {
+            val unreadable = UnreadableWorkoutRepository(workoutRepository)
+            val failingExport =
+                ExportBackup(
+                    exerciseRepository = exerciseRepository,
+                    trainingPlanRepository = trainingPlanRepository,
+                    workoutRepository = unreadable,
+                    recoveryRepository = recoveryRepository,
+                    futsalRepository = futsalRepository,
+                    progressionRepository = progressionRepository,
+                    backupRepository = backupRepository,
+                )
+            val model = buildViewModel(export = failingExport, workouts = unreadable)
+            var delivered: String? = null
+
+            model.onExportBackupRequested { delivered = it }
+
+            assertNull(delivered)
+            assertEquals(false, model.uiState.value.isBusy)
+            assertEquals(BackupStatusMessage.OperationFailed, model.uiState.value.statusMessage)
+        }
+
+    /** One damaged session row, as in production: every read that reaches it throws. */
+    private class UnreadableWorkoutRepository(
+        delegate: WorkoutRepository,
+    ) : WorkoutRepository by delegate {
+        override fun observeActiveSession(): Flow<WorkoutSession?> = flow { throw IllegalStateException("session row unreadable") }
+
+        override suspend fun findAllForBackup(): List<WorkoutSession> = error("session row unreadable")
+    }
 }

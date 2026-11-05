@@ -8,6 +8,7 @@ import com.repflow.app.application.backup.ExportWorkoutHistoryCsv
 import com.repflow.app.application.backup.RestoreBackup
 import com.repflow.app.application.common.Clock
 import com.repflow.app.application.settings.SettingsRepository
+import com.repflow.app.application.workout.WorkoutRepository
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.presentation.workout.RestNotificationCanceller
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,6 +18,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -32,10 +34,13 @@ import javax.inject.Inject
  * [rememberBackupFileActions] hosts the SAF
  * ([androidx.activity.result.contract.ActivityResultContracts]) launchers and
  * passes already-opened text content in/out - this ViewModel never touches
- * `Uri`, `ContentResolver` or any Android I/O type directly.
+ * `Uri`, `ContentResolver` or any Android I/O type directly. It also watches
+ * whether a workout is running, because a restore deletes it and the
+ * confirmation has to say so.
  */
 @HiltViewModel
 class BackupViewModel
+    @Suppress("LongParameterList")
     @Inject
     constructor(
         private val exportBackup: ExportBackup,
@@ -43,6 +48,7 @@ class BackupViewModel
         private val exportWorkoutHistoryCsv: ExportWorkoutHistoryCsv,
         private val restNotificationCanceller: RestNotificationCanceller,
         private val settingsRepository: SettingsRepository,
+        private val workoutRepository: WorkoutRepository,
         private val clock: Clock,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(BackupUiState(now = clock.now()))
@@ -63,6 +69,17 @@ class BackupViewModel
                         }
                     }
             }
+            viewModelScope.launch {
+                workoutRepository
+                    .observeActiveSession()
+                    .catch { failure ->
+                        // Not knowing counts as "may be running": the restore warning is never silently dropped.
+                        if (failure is CancellationException) throw failure
+                        _uiState.update { it.copy(hasRunningWorkout = true) }
+                    }.collect { session ->
+                        _uiState.update { it.copy(hasRunningWorkout = session != null) }
+                    }
+            }
         }
 
         /**
@@ -72,13 +89,18 @@ class BackupViewModel
          * [onExportWriteSucceeded]/[onExportWriteCancelled]/[onExportWriteFailed]),
          * not merely once the text has been generated in memory (Milestone 8,
          * CP14: the previous "succeeded" message here fired even if the user
-         * went on to cancel the file picker).
+         * went on to cancel the file picker). A session that can't be read fails
+         * the whole export with [BackupStatusMessage.OperationFailed]: [onReady]
+         * is never called, so no file picker opens and no partial file is written.
          */
         fun onExportBackupRequested(onReady: (String) -> Unit) {
             _uiState.update { it.copy(isBusy = true) }
             viewModelScope.launch {
-                val json = exportBackup()
-                onReady(json)
+                flow { emit(exportBackup()) }
+                    .catch { failure ->
+                        if (failure is CancellationException) throw failure
+                        _uiState.update { it.copy(isBusy = false, statusMessage = BackupStatusMessage.OperationFailed) }
+                    }.collect { json -> onReady(json) }
             }
         }
 

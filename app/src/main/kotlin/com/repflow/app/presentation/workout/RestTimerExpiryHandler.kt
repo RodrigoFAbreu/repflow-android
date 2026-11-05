@@ -39,6 +39,11 @@ import javax.inject.Inject
  * Only the workout route cancels the alarm, and it is not on screen for those
  * paths (remediation-1 self-review).
  *
+ * Known limit (accepted): a restore can bring back a running session with its
+ * own rest timer. An alarm left over from the replaced workout then finds that
+ * timer and alerts once, for a rest that isn't running (fix-backup-all-workouts
+ * self-review).
+ *
  * Known platform limit (accepted): in vibrate ringer mode Android turns the
  * channel's sound into a fallback vibration, so the phone can buzz with Vibrate
  * off while the notification is on.

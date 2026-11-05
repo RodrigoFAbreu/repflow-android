@@ -1,16 +1,26 @@
 package com.repflow.app.presentation.backup
 
+import android.content.res.Configuration
+import android.view.ContextThemeWrapper
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
 import com.repflow.app.presentation.RepFlowTheme
@@ -133,6 +143,98 @@ class BackupScreenTest {
     }
 
     @Test
+    fun aRunningWorkoutIsWarnedAboutAndTheConfirmationStillWorks() {
+        render(BackupUiState(isLastBackupLoaded = true, pendingRestoreJson = "{}", hasRunningWorkout = true, now = now))
+
+        composeRule.onNodeWithText(string(R.string.backup_restore_confirm_running_workout)).assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.backup_restore_confirm_body)).assertExists()
+        assertTheConfirmationButtonsEachReportOnce()
+    }
+
+    @Test
+    fun withNoRunningWorkoutTheWarningIsLeftOutAndTheConfirmationStillWorks() {
+        render(BackupUiState(isLastBackupLoaded = true, pendingRestoreJson = "{}", hasRunningWorkout = false, now = now))
+
+        composeRule.onNodeWithText(string(R.string.backup_restore_confirm_running_workout)).assertDoesNotExist()
+        composeRule.onNodeWithText(string(R.string.backup_restore_confirm_body)).assertIsDisplayed()
+        assertTheConfirmationButtonsEachReportOnce()
+    }
+
+    @Test
+    fun theWarningShowsWithoutScrollingAndTheBodyCanBeScrolledToAtFontScale1Point3() {
+        assertTheWarningLeadsAndTheBodyScrollsAtFontScale(1.3f)
+    }
+
+    @Test
+    fun theWarningShowsWithoutScrollingAndTheBodyCanBeScrolledToAtFontScale2() {
+        assertTheWarningLeadsAndTheBodyScrollsAtFontScale(2f)
+    }
+
+    @Test
+    fun theWholeWarningShowsWithoutScrollingInTheRealDialogAtFontScale2() {
+        renderTheRealDialogAtFontScale(2f)
+
+        val warning = composeRule.onNodeWithText(string(R.string.backup_restore_confirm_running_workout))
+        val node = warning.assertIsDisplayed().fetchSemanticsNode()
+        assertEquals("the font scale must reach the dialog's own window", 2f, node.layoutInfo.density.fontScale, 0.01f)
+        // Clipping shortens a node's bounds but not its size, so equal heights mean no line of the warning is cut off.
+        assertEquals(node.size.height.toFloat(), node.boundsInRoot.height, 1f)
+
+        composeRule
+            .onNodeWithText(string(R.string.backup_restore_confirm_body))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.backup_restore_confirm_action)).assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.backup_restore_cancel_action)).assertIsDisplayed()
+    }
+
+    /** The scale goes on the context the dialog is built from, because a dialog's window takes its density from there. */
+    private fun renderTheRealDialogAtFontScale(fontScale: Float) {
+        composeRule.runOnUiThread {
+            val activity = composeRule.activity
+            val scaled =
+                ContextThemeWrapper(activity, activity.theme).apply {
+                    applyOverrideConfiguration(Configuration(activity.resources.configuration).apply { this.fontScale = fontScale })
+                }
+            activity.setContentView(
+                ComposeView(scaled).apply {
+                    setContent {
+                        RepFlowTheme { BackupRestoreConfirmDialog(hasRunningWorkout = true, onConfirm = {}, onCancel = {}) }
+                    }
+                },
+            )
+        }
+    }
+
+    /** The text alone, in a box short enough that the body has to scroll: on a tall screen the real dialog may not need to. */
+    private fun assertTheWarningLeadsAndTheBodyScrollsAtFontScale(fontScale: Float) {
+        composeRule.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
+                RepFlowTheme {
+                    Box(Modifier.height(SHORT_BOX_HEIGHT)) { BackupRestoreConfirmText(hasRunningWorkout = true) }
+                }
+            }
+        }
+
+        composeRule.onNodeWithText(string(R.string.backup_restore_confirm_running_workout)).assertIsDisplayed()
+        composeRule
+            .onNodeWithText(string(R.string.backup_restore_confirm_body))
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    private fun assertTheConfirmationButtonsEachReportOnce() {
+        composeRule.onNodeWithText(string(R.string.backup_restore_confirm_action)).performClick()
+        assertEquals(1, confirms)
+        assertEquals(0, cancels)
+
+        composeRule.onNodeWithText(string(R.string.backup_restore_cancel_action)).performClick()
+        assertEquals(1, confirms)
+        assertEquals(1, cancels)
+    }
+
+    @Test
     fun anExportSuccessShowsSavedAndOtherOutcomesAreSnackbars() {
         composeRule.setContent {
             var state by remember {
@@ -170,5 +272,6 @@ class BackupScreenTest {
 
     private companion object {
         const val SNACKBAR_WAIT_MILLIS = 10_000L
+        val SHORT_BOX_HEIGHT = 100.dp
     }
 }

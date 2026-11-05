@@ -12,6 +12,7 @@ Run by the orchestrator, not as a Workflow milestone. It stays `idea` so `/miles
 
 - **The Settings board is only half a screen** [D-9; app item 31] · M. "During a workout", "Your data", Erase and the footer exist only on an archive board (8c), and there's no back arrow. Evidence: 40e, `SettingsScreen.kt`.
 - **The workout board lost `Add exercise` and `Up next`** [D-10] · S. A working feature could be read as removed under "the page wins". Evidence: 20a against `WorkoutBoard.kt:107-118` and old 4a.
+- **The restore confirmation's final text** [A-2, D-43] · S. Draw this in place of design pass 1's always-on sentence. When a workout is running, and only then, this paragraph goes first: "A workout is running on this phone. Restoring deletes it, with every set you've logged." The existing body follows it unchanged: "Every exercise, plan, workout, recovery entry and recommendation on this device is replaced by the file's contents. Your settings stay as they are. This can't be undone." The text scrolls at large font sizes. Evidence: `fix-backup-all-workouts`, `BackupRestoreConfirmText` in `BackupFileActions.kt`.
 
 ## Owner decisions
 
