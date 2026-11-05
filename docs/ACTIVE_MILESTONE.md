@@ -22,6 +22,38 @@ A Restoring screen blocks the whole app during a restore, and the Erase and Back
 
   Optional findings from the local review: O1's test is added (`backStaysOnBackupAfterReturnsFromTheBackgroundWithNoRecreation`) and passed before the fix too, so it holds behavior rather than fixing it. O3's literals are now tokens, each with the same value. O2 (the Erase field's outline at font 2.0) is left for `theme-text-levels`, as the finding suggests: that item already changes this outline, and the word stays readable. Change from the plan, none to the rules: the plan's `key(settled)` block is replaced by the above, and R1 is unchanged. The approved plan text is pinned, so it still shows the old block.
 
+**Next action:** perform the functional review below, write findings to `.ai-review/safety-copy-polish/feedback/FUNCTIONAL_REVIEW.md`, or run `/accept-milestone` if testing is clean.
+
+### Functional review checklist
+
+Automated verification: the production code has not changed since `879671f` (implementation review round 1, I1); later commits are workflow records only. The last full run on that tree is in the round 1 bullet above: `spotlessCheck`, `detekt`, `lintDebug`, 848 JVM tests, 503 instrumented tests on `emulator-5554`, all passing.
+
+**Setup.** Use the AVD (`start-avd.sh`, 3 GB cap), not the phone. Install with `./gradlew installDebug`. No feature flags, no network needed.
+
+**Test data.** A small backup file exported from a phone with a few exercises and one finished workout (Backup > Export). For F1, a large file makes the Restoring screen last long enough to look at (e.g. several thousand exercises; about 5 s at 30,000). Without one, F1 can only be seen as a brief flash.
+
+**F1 - The Restoring screen (R1, R2).** Backup > Restore, pick the large file, confirm. Expected: a dimmed full-screen card with a spinner, `Restoring…` and `Keep RepFlow open. This takes a moment.`; touching anywhere and pressing Back do nothing; when it ends the card lifts and Backup shows `Backup restored`. With the small file the card only flashes under the fading dialog, with no error.
+
+**F2 - Back and rotation during a restore (R1).** Start the large restore, rotate the AVD, press Back. Expected: still on Backup; after the restore ends the `Backup restored` message shows, and a later Back leaves Backup normally. Same after Home then return.
+
+**F3 - Look at font scale and theme (R2).** Open the Restoring screen in light and dark, at font scale 1.0 and 2.0. Expected: nothing clipped; in landscape the card clears the navigation bar.
+
+**F4 - Erase wording (R3).** Settings > Erase all data. Expected: the text includes `Any safety copy RepFlow kept before a restore is deleted too.`, and the other sentences are unchanged.
+
+**F5 - Erase at large font (R3).** Set the system font to 1.8 and then 2.0, open the Erase dialog. Expected: the text scrolls; swipe to reach the field, type the word, press `Erase everything` (it enables). Cancel with `Keep my data`, or erase on the AVD only. Restore font to 1.0 afterwards.
+
+**F6 - Backup note on an empty phone (R4).** With no training data (after an Erase), open Backup. Expected: the note says `This phone has no data to keep, so RepFlow makes no copy first.` and does not promise a copy.
+
+**F7 - Backup note with data (R4).** Add one exercise, reopen Backup. Expected: the note says RepFlow keeps a copy of the current data first. Restore a file onto an empty phone and stay on Backup: after `Backup restored` the note switches to the copy text.
+
+**Known limitations / out of scope.**
+- The confirmation can freeze for about 0.7 s on a very large file, because the JSON is parsed in the tap; a real backup is far smaller.
+- At fonts 1.8 and 2.0 the on-screen keyboard covers both Erase buttons; closing it (the keyboard's ✓ or Back) keeps the word and lets `Erase everything` be pressed. The field's outline is also cut at the bottom once focused; both are left for `theme-text-levels`.
+- Tab with no prior focus can move the highlight to the back arrow under the overlay; nothing can be pressed from there.
+- TalkBack may read the Restoring card twice around the moment it lifts; not proven to be a defect.
+- `backup_safety_copy_meta` saying "the next restore replaces it" is wrong on an empty phone holding an old copy; noted for the issue #34 wrap-up, not changed here.
+- The full wrap-up runs and the note on issue #34 come at acceptance, not now.
+
 ## `fix-workout-actions-in-order` — complete (accepted by policy 2026-11-05)
 
 Workout actions now run one after another, so a set logged during a restore can't be lost. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/fix-workout-actions-in-order-execution.md` and the Optional findings at `docs/milestones/completed/fix-workout-actions-in-order-findings.md`.
