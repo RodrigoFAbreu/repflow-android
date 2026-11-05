@@ -8939,7 +8939,7 @@
       "registry_path": "docs/ai-workflow/registry/restore-safety-snapshot-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/restore-safety-snapshot-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+      "phase": "APPLYING_REVIEW_FEEDBACK",
       "plan_revision": 5,
       "implementation_revision": 1,
       "functional_review_round": null,
@@ -9079,12 +9079,12 @@
           "external": 3
         },
         "implementation": {
-          "local": 0,
-          "external": 0
+          "local": 1,
+          "external": 1
         }
       },
-      "state_revision": 25,
-      "last_transition": "2026-11-05T12:20:59Z",
+      "state_revision": 27,
+      "last_transition": "2026-11-05T12:42:25Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -9390,7 +9390,62 @@
               "at": "2026-11-05T10:39:20Z"
             }
           ]
+        },
+        "F-141c78ba49dc": {
+          "digest": "141c78ba49dcbf0c589c1544a968c8e25bfbbffe7ec179515b818f58a99599b5",
+          "text": "**R1-O1. A failed save leaves the partial copy behind.** `saveNew` (`FilePreRestoreSnapshotStore.kt:46-56`) doesn't delete the temp file when the write or the move fails. If the phone runs out of space, the partial `.tmp` keeps what little space was left until the next save or an erase, and the next workout write needs that space. Deleting the temp file in the failure path fixes it. `FilePreRestoreSnapshotStoreTest.kt:167` reads the temp file to prove that the move was what failed, so that test would need another way to prove it. The file is private and `clear()` deletes it, so nothing leaks.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "5034ef2a96dce9b03dc2a2f3d1e829a2263c9bc2afaa7f3677c5230ff4cb04bc",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T12:37:45Z"
+            }
+          ]
+        },
+        "F-6108fbb0435b": {
+          "digest": "6108fbb0435b7773a1169f7c748b9a18f6c1fd4441140d12a42ab9a2e9c6d465",
+          "text": "**R1-O2. The double-tap corner costs more than the self-review says.** `IMPLEMENTATION_SUMMARY.md` says the dialog can open again and \"the user can cancel\". Confirming it instead loses data. With data D and copy C, the first confirm saves D and restores C. The second load, queued ahead of that restore on the lock, then stages C again (`BackupViewModel.kt:192-213`). A second confirm saves C, restores C and promotes C, so D is gone. The reopened dialog also still shows the old copy's time. It needs a load slow enough for the user to read and confirm between the two loads, so it takes a very large copy, and it isn't blocking. The cause is that nothing marks a load as running: the same gap lets `Export backup now` start during a load. Ignoring a tap on the card while a load is running closes the double-tap path.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "5034ef2a96dce9b03dc2a2f3d1e829a2263c9bc2afaa7f3677c5230ff4cb04bc",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T12:37:45Z"
+            }
+          ]
+        },
+        "F-ddb81260b6cc": {
+          "digest": "ddb81260b6cc7d33d8c4fa40ea927736be68ad46de90b83c90adfb1b672cc658",
+          "text": "**R1-O3. The note on issue #29 still has to be posted.** The plan's wrap-up asks for it, and `gh` was refused in the implementing session, so the text exists only in `TEST_RESULTS.md`. Post it before acceptance, or record why not. This review did not post it, because this stage writes only the verdict and the state.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "5034ef2a96dce9b03dc2a2f3d1e829a2263c9bc2afaa7f3677c5230ff4cb04bc",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T12:37:45Z"
+            }
+          ]
         }
+      },
+      "implementation_review_stages": {
+        "review_content_id": "5034ef2a96dce9b03dc2a2f3d1e829a2263c9bc2afaa7f3677c5230ff4cb04bc",
+        "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "29d1fa0fca6bfd1d4b36fd525063cd4ca4b480c86fd43419eae6292a1d99c7c0",
+          "verdict": "APPROVE",
+          "round": 1,
+          "completed_at": "2026-11-05T12:37:45Z",
+          "verdict_sha256": "8ccc7652889c102bdc0c7d7e8e7bcf309b31ab45e3839b8210f790eace4c857f",
+          "run_ref": "session:local .ai-review/restore-safety-snapshot/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": null
       }
     }
   },
