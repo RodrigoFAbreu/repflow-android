@@ -33,6 +33,7 @@ import com.repflow.app.application.workout.StartWorkoutSessionFromPlan
 import com.repflow.app.application.workout.StartWorkoutSessionFromPlanCommand
 import com.repflow.app.application.workout.UndoLastWorkoutSet
 import com.repflow.app.application.workout.WorkoutOperationError
+import com.repflow.app.application.workout.WorkoutReadFailedException
 import com.repflow.app.application.workout.WorkoutRepository
 import com.repflow.app.application.workout.lastPerformancesOf
 import com.repflow.app.domain.common.DomainResult
@@ -358,7 +359,7 @@ class ActiveWorkoutViewModel
                                 exerciseUi?.defaultRestSeconds,
                                 settings.defaultRestSeconds,
                             )
-                        startRestTimer(sessionId, restSeconds)
+                        startRestTimerAfterSave(sessionId, restSeconds)
                     }
                 }
                 result
@@ -426,7 +427,7 @@ class ActiveWorkoutViewModel
             if (_finish.value != WorkoutFinishState.Idle) return
             _finish.value = WorkoutFinishState.InFlight
             viewModelScope.launch {
-                when (val result = completeWorkoutSession(sessionId)) {
+                when (val result = guardedRead { completeWorkoutSession(sessionId) }) {
                     is DomainResult.Success -> {
                         restNotificationCanceller.cancel()
                         refreshLastPerformances()
@@ -443,7 +444,7 @@ class ActiveWorkoutViewModel
 
         fun onAbandonWorkout(sessionId: WorkoutSessionId) {
             viewModelScope.launch {
-                when (val result = abandonWorkoutSession(sessionId)) {
+                when (val result = guardedRead { abandonWorkoutSession(sessionId) }) {
                     is DomainResult.Success -> restNotificationCanceller.cancel()
                     is DomainResult.Failure -> error.update { result.error.toReason() }
                 }
@@ -498,10 +499,36 @@ class ActiveWorkoutViewModel
             action: suspend () -> DomainResult<*, WorkoutOperationError>,
         ) {
             viewModelScope.launch {
-                when (val result = action()) {
+                when (val result = guardedRead(action)) {
                     is DomainResult.Success -> onSuccess()
                     is DomainResult.Failure -> error.update { result.error.toReason() }
                 }
+            }
+        }
+
+        /** A use case that can't read the workout reports like one that can't write it, instead of closing the app. */
+        private suspend fun guardedRead(
+            call: suspend () -> DomainResult<*, WorkoutOperationError>,
+        ): DomainResult<*, WorkoutOperationError> =
+            try {
+                call()
+            } catch (expected: WorkoutReadFailedException) {
+                DomainResult.Failure(WorkoutOperationError.PersistenceUnavailable)
+            }
+
+        /**
+         * The set is already saved, and the rest timer is a convenience: a failed
+         * read is ignored, as a failed result is, because reporting it would keep
+         * the entry filled and a second press would log the set twice.
+         */
+        private suspend fun startRestTimerAfterSave(
+            sessionId: WorkoutSessionId,
+            restSeconds: Int,
+        ) {
+            try {
+                startRestTimer(sessionId, restSeconds)
+            } catch (expected: WorkoutReadFailedException) {
+                // Nothing to report: see above.
             }
         }
 

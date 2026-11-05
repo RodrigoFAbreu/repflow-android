@@ -1,5 +1,13 @@
 # Active Milestone
 
+## `fix-workout-error-followups` — in progress
+
+Workout errors: no stale message after a retry, no crash on a failed read, and Try again restores the picker. Plan: `docs/milestones/fix-workout-error-followups-execution.md`.
+
+- **CP1, complete.** A SQLite failure while reading a workout for an action now shows the existing "couldn't complete that" message instead of closing the app. `LocalWorkoutRepository.findById` and `findActiveSession` turn `SQLiteException` into the new `WorkoutReadFailedException`, and `ActiveWorkoutViewModel` reports it through `guardedRead` as `PERSISTENCE_UNAVAILABLE`, in `launchAction`, `onCompleteWorkout` and `onAbandonWorkout`. A read failure in the rest timer after a set is saved is ignored, so a saved set is never reported as failed. Read failures on other screens still crash as before (out of scope), and the rest alert's failure sink still catches the new type. Verified: `ActiveWorkoutActionErrorTest` (9 tests pass; the 4 new ones failed before the fix with the exception escaping the ViewModel), `LocalWorkoutRepositoryReadFailureTest` on `emulator-5554` (5 tests pass; before the fix the 3 failure tests saw a raw `SQLiteException`), the workout packages and `LayerBoundaryTest` (137 JVM tests pass), `spotlessCheck`, `detekt`. Mutations: a broad `catch (Exception)` in the repository fails both cancellation tests, and removing the rest timer guard fails its test. Two changes from the plan's test notes, neither to behavior: (1) the instrumented test fails the read by dropping a table, because on Room 2.8 a closed database fails a suspend read with `CancellationException`, not `SQLiteException`, so closing it never reaches the catch; (2) the new ViewModel tests are in `ActiveWorkoutActionErrorTest`, not `ActiveWorkoutViewModelTest`, which is over detekt's `LargeClass` limit. One test beyond the plan: a failure while loading a found session's exercises.
+
+**Next action:** `/milestone-implement fix-workout-error-followups` for CP2.
+
 ## `fix-restore-damaged-file` — complete (accepted by policy 2026-11-05)
 
 Restoring a damaged backup file now shows an error instead of closing the app, and leaves your data untouched. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/fix-restore-damaged-file-execution.md` and the Optional findings at `docs/milestones/completed/fix-restore-damaged-file-findings.md`.

@@ -7,6 +7,7 @@ import android.database.sqlite.SQLiteException
 import android.database.sqlite.SQLiteFullException
 import androidx.room.withTransaction
 import com.repflow.app.application.workout.WorkoutPersistenceError
+import com.repflow.app.application.workout.WorkoutReadFailedException
 import com.repflow.app.application.workout.WorkoutRepository
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.workout.WorkoutSession
@@ -44,9 +45,11 @@ class LocalWorkoutRepository
         override fun observeActiveSession(): Flow<WorkoutSession?> =
             sessionDao.observeActive().map { entity -> entity?.let { toSessionOrThrow(it) } }
 
-        override suspend fun findActiveSession(): WorkoutSession? = sessionDao.findActive()?.let { toSessionOrThrow(it) }
+        override suspend fun findActiveSession(): WorkoutSession? =
+            translatingReadFailure { sessionDao.findActive()?.let { toSessionOrThrow(it) } }
 
-        override suspend fun findById(id: WorkoutSessionId): WorkoutSession? = sessionDao.findById(id.value)?.let { toSessionOrThrow(it) }
+        override suspend fun findById(id: WorkoutSessionId): WorkoutSession? =
+            translatingReadFailure { sessionDao.findById(id.value)?.let { toSessionOrThrow(it) } }
 
         override fun observeCompletedSessions(includeInvalidated: Boolean): Flow<List<WorkoutSession>> =
             sessionDao.observeCompleted(includeInvalidated).map { entities -> entities.map { toSessionOrThrow(it) } }
@@ -105,6 +108,14 @@ class LocalWorkoutRepository
                 return DomainResult.Failure(WorkoutPersistenceError.Unavailable)
             }
         }
+
+        /** [WorkoutMappingException] is not an `SQLiteException`, so a row that can't be mapped still fails visibly. */
+        private inline fun <T> translatingReadFailure(read: () -> T): T =
+            try {
+                read()
+            } catch (failure: SQLiteException) {
+                throw WorkoutReadFailedException(failure)
+            }
 
         private suspend fun toSessionOrThrow(entity: WorkoutSessionEntity): WorkoutSession {
             val exerciseRows = exerciseDao.findAllForSession(entity.id)

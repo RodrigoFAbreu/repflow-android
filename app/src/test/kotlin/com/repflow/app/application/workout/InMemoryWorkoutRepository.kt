@@ -19,13 +19,25 @@ class InMemoryWorkoutRepository : WorkoutRepository {
     var nextInsertFailure: WorkoutPersistenceError? = null
     var nextUpdateFailure: WorkoutPersistenceError? = null
 
+    /**
+     * How many [findById] and [findActiveSession] calls still succeed before
+     * every later one throws [WorkoutReadFailedException]. `null` never fails;
+     * `0` fails the next read.
+     */
+    var readsBeforeFailure: Int? = null
+
     override fun observeActiveSession(): Flow<WorkoutSession?> =
         sessions.map { byId -> byId.values.firstOrNull { it.status == WorkoutSessionStatus.ACTIVE } }
 
-    override suspend fun findActiveSession(): WorkoutSession? =
-        sessions.value.values.firstOrNull { it.status == WorkoutSessionStatus.ACTIVE }
+    override suspend fun findActiveSession(): WorkoutSession? {
+        failReadIfDue()
+        return sessions.value.values.firstOrNull { it.status == WorkoutSessionStatus.ACTIVE }
+    }
 
-    override suspend fun findById(id: WorkoutSessionId): WorkoutSession? = sessions.value[id]
+    override suspend fun findById(id: WorkoutSessionId): WorkoutSession? {
+        failReadIfDue()
+        return sessions.value[id]
+    }
 
     override fun observeCompletedSessions(includeInvalidated: Boolean): Flow<List<WorkoutSession>> =
         sessions.map { byId ->
@@ -61,5 +73,11 @@ class InMemoryWorkoutRepository : WorkoutRepository {
         }
         sessions.value = sessions.value + (session.id to session)
         return DomainResult.Success(Unit)
+    }
+
+    private fun failReadIfDue() {
+        val remaining = readsBeforeFailure ?: return
+        if (remaining == 0) throw WorkoutReadFailedException(IllegalStateException("simulated read failure"))
+        readsBeforeFailure = remaining - 1
     }
 }

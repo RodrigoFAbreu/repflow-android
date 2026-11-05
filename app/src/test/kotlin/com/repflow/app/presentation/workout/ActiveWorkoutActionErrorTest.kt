@@ -52,7 +52,8 @@ import java.time.Instant
  * A-1 (fix-workout-errors): what a failed workout action reports to the screen,
  * and that `onSaved`, which is what clears the screen's entry, runs only after a
  * save has succeeded. The real use cases run over [InMemoryWorkoutRepository],
- * whose `nextUpdateFailure` forces the failed save.
+ * whose `nextUpdateFailure` forces the failed save and `readsBeforeFailure` the
+ * failed read.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ActiveWorkoutActionErrorTest {
@@ -198,6 +199,95 @@ class ActiveWorkoutActionErrorTest {
 
                 assertEquals(ActiveWorkoutErrorReason.PERSISTENCE_UNAVAILABLE, awaitActionError())
                 assertEquals(sessionId, workoutRepository.findActiveSession()?.id)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    /** A failed read of the workout is a failed action, not a closed app. */
+    @Test
+    fun `a failed read on Log set reports the error and does not invoke onSaved`() =
+        runTest {
+            seedExercise()
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            var saved = 0
+            viewModel.uiState.test {
+                val withExercise = startWorkoutWithTheExercise()
+                workoutRepository.readsBeforeFailure = 0
+
+                viewModel.onRecordSet(withExercise.id, 60.0, 8, onSaved = { saved++ })
+
+                assertEquals(ActiveWorkoutErrorReason.PERSISTENCE_UNAVAILABLE, awaitActionError())
+                advanceUntilIdle()
+                assertEquals(0, saved)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `a failed read on finishing reports the error and returns the confirm to idle`() =
+        runTest {
+            seedExercise()
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                startWorkoutWithTheExercise()
+                val sessionId = requireNotNull(workoutRepository.findActiveSession()).id
+                workoutRepository.readsBeforeFailure = 0
+
+                viewModel.onCompleteWorkout(sessionId)
+
+                assertEquals(ActiveWorkoutErrorReason.PERSISTENCE_UNAVAILABLE, awaitActionError())
+                assertEquals(WorkoutFinishState.Idle, viewModel.finish.value)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `a failed read on abandoning reports the error`() =
+        runTest {
+            seedExercise()
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                startWorkoutWithTheExercise()
+                val sessionId = requireNotNull(workoutRepository.findActiveSession()).id
+                workoutRepository.readsBeforeFailure = 0
+
+                viewModel.onAbandonWorkout(sessionId)
+
+                assertEquals(ActiveWorkoutErrorReason.PERSISTENCE_UNAVAILABLE, awaitActionError())
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    /**
+     * The set is saved by the time the rest timer reads the session, so that
+     * read failing must not report the set as failed: the entry would stay
+     * filled and a second press would log it twice.
+     */
+    @Test
+    fun `a failed rest timer read does not report a saved set as failed`() =
+        runTest {
+            seedExercise()
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            var saved = 0
+            viewModel.uiState.test {
+                val withExercise = startWorkoutWithTheExercise()
+                // RecordWorkoutSet's own read succeeds; StartRestTimer's is the one that throws.
+                workoutRepository.readsBeforeFailure = 1
+
+                viewModel.onRecordSet(withExercise.id, 60.0, 8, onSaved = { saved++ })
+                advanceUntilIdle()
+
+                assertEquals(1, saved)
+                assertNull(viewModel.uiState.value.errorMessage)
+                workoutRepository.readsBeforeFailure = null
+                val session = requireNotNull(workoutRepository.findActiveSession())
+                assertEquals(
+                    1,
+                    session.exercises
+                        .single()
+                        .sets.size,
+                )
+                assertNull(session.restTimer)
                 cancelAndIgnoreRemainingEvents()
             }
         }
