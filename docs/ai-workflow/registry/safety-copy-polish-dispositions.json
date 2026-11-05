@@ -1,0 +1,74 @@
+{
+  "dispositions": {
+    "F-03473cad29df": {
+      "disposition": "dropped",
+      "reason": "Only the wrap-up's wording if the issue note is refused, with no effect in the app; a refusal gets reported as not done."
+    },
+    "F-1d207998fcec": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/34",
+      "note": "Nothing breaks today and a real swipe back works, but no test sends a whole back gesture, so a later library upgrade could crash a swipe during a restore unnoticed."
+    },
+    "F-2c3e73d29196": {
+      "disposition": "dropped",
+      "reason": "The small-file restore was looked at in revision 2: the overlay lasts under 100 ms, TalkBack says only Backup restored, and nothing was wrong."
+    },
+    "F-4a306b7c3f69": {
+      "disposition": "fixed"
+    },
+    "F-561ac1e9cc8f": {
+      "disposition": "dropped",
+      "reason": "Only a very large file freezes the confirmation for about 0.7 s while it is read, and a real backup is far smaller, so nobody will see it."
+    },
+    "F-56cdf288fc5f": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/34",
+      "note": "At font size 2.0 the bottom edge of the Erase field's outline is missing, though the word can still be typed and the field works."
+    },
+    "F-643afb323c42": {
+      "disposition": "dropped",
+      "reason": "No notification opens anything yet, so there is nothing to see, and the rest-notification-tap item covers the overlay later."
+    },
+    "F-76a0f2fb3680": {
+      "disposition": "fixed"
+    },
+    "F-778b3faa7575": {
+      "disposition": "dropped",
+      "reason": "A missing file name in the plan's CP1 list, finished and with no effect on the app."
+    },
+    "F-828d299d9d1d": {
+      "disposition": "fixed"
+    },
+    "F-83339f985f92": {
+      "disposition": "fixed"
+    },
+    "F-95523d7bfbf1": {
+      "disposition": "fixed"
+    },
+    "F-ae569a79393f": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/34",
+      "note": "A code comment in PreRestoreCopy still says a restore can outlive its screen and a user can write meanwhile, which is no longer true; the user sees nothing."
+    },
+    "F-b969384513dc": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/34",
+      "note": "At font sizes 1.8 and 2.0 the Erase dialog opens with no field in view, so the user must scroll to find where to type, and with the keyboard up both buttons are hidden until it is closed."
+    },
+    "F-d931fc909cf1": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/34",
+      "note": "The safety copy card says the next restore replaces it, which is wrong on an empty phone holding an old copy, since restoring an empty file keeps that copy."
+    },
+    "F-dbaab9ba0fd5": {
+      "disposition": "fixed"
+    },
+    "F-f1494b7da7d1": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/34",
+      "note": "No item owns the Erase outline's missing bottom edge, because theme-text-levels changes only the outline's colour, so the edge can stay missing."
+    }
+  },
+  "schema_version": 1,
+  "work_item_id": "safety-copy-polish"
+}

@@ -12,8 +12,9 @@ import java.time.Instant
  *
  * [preRestoreSnapshotAt] is when the safety copy on offer was taken (`null`: none, so no card).
  * [pendingRestoreSnapshotAt] is non-null when the restore awaiting confirmation is that copy, and gives
- * its time. [hasTrainingData] is read each time a restore is staged, and is `true` when that isn't known:
- * the confirmation's copy paragraphs are never silently dropped.
+ * its time. [hasTrainingData] is read when the screen opens, each time a restore is staged and after a
+ * restore ends, and is `true` when that isn't known: the note and the confirmation never silently drop
+ * the copy's wording.
  */
 data class BackupUiState(
     val isBusy: Boolean = false,

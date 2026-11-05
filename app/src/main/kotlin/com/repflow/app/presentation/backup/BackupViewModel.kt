@@ -47,7 +47,8 @@ import javax.inject.Inject
  * or of [TrainingDataRepository.hasTrainingData] takes [PreRestoreCopyLock]:
  * otherwise a reopened screen could stage a new copy that the running restore
  * then discards. The state starts busy until the first such read has the lock,
- * and a restore's outcome reaches the screen through [RestoreOutcomeSlot].
+ * and a restore's outcome reaches the screen through [RestoreOutcomeSlot]. While a confirmed restore
+ * runs, [RestoreInProgress] holds the Restoring screen over the whole app.
  */
 @Suppress("TooManyFunctions") // One action per screen event, the two status callbacks included.
 @HiltViewModel
@@ -65,6 +66,7 @@ class BackupViewModel
         private val preRestoreCopyLock: PreRestoreCopyLock,
         private val trainingDataRepository: TrainingDataRepository,
         private val restoreOutcomeSlot: RestoreOutcomeSlot,
+        private val restoreInProgress: RestoreInProgress,
         private val clock: Clock,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(BackupUiState(isBusy = true, now = clock.now()))
@@ -76,10 +78,7 @@ class BackupViewModel
                     _uiState.update { it.copy(statusMessage = message) }
                 }
             }
-            viewModelScope.launch {
-                val takenAt = preRestoreCopyLock.withLock { preRestoreSnapshotStore.takenAt() }
-                _uiState.update { it.copy(isBusy = false, preRestoreSnapshotAt = takenAt) }
-            }
+            viewModelScope.launch { refreshCopyAndTrainingData() }
             viewModelScope.launch {
                 settingsRepository
                     .observe()
@@ -223,7 +222,7 @@ class BackupViewModel
             }
         }
 
-        /** Not knowing counts as having data, so the confirmation's copy paragraphs are never silently dropped. */
+        /** Not knowing counts as having data, so the note and the confirmation never silently drop the copy's wording. */
         private suspend fun readHasTrainingData(): Boolean =
             flow { emit(trainingDataRepository.hasTrainingData()) }
                 .catch { failure ->
@@ -249,33 +248,46 @@ class BackupViewModel
         fun onRestoreConfirmed() {
             val json = _uiState.value.pendingRestoreJson ?: return
             _uiState.update { it.copy(isBusy = true, pendingRestoreJson = null, pendingRestoreSnapshotAt = null) }
+            // Before the launch, in the confirming call itself, so nothing can be pressed from here on.
+            restoreInProgress.begin()
             // NonCancellable: the user has confirmed, so leaving the Backup route does not abandon the
             // restore. A cancellation that rolled the transaction back would leave a new safety copy
             // holding the unchanged data, and it would win over the old copy.
             // UNDISPATCHED: the same reason as in onExportWriteSucceeded.
             viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
                 withContext(NonCancellable) {
-                    val message =
-                        when (val result = restoreBackup(json)) {
-                            is DomainResult.Success -> {
-                                restNotificationCanceller.cancel()
-                                BackupStatusMessage.RestoreSucceeded
-                            }
+                    try {
+                        val message =
+                            when (val result = restoreBackup(json)) {
+                                is DomainResult.Success -> {
+                                    restNotificationCanceller.cancel()
+                                    BackupStatusMessage.RestoreSucceeded
+                                }
 
-                            is DomainResult.Failure -> {
-                                when (result.error) {
-                                    is BackupRestoreError.InvalidBackup -> BackupStatusMessage.InvalidBackup
-                                    BackupRestoreError.Unavailable -> BackupStatusMessage.OperationFailed
+                                is DomainResult.Failure -> {
+                                    when (result.error) {
+                                        is BackupRestoreError.InvalidBackup -> BackupStatusMessage.InvalidBackup
+                                        BackupRestoreError.Unavailable -> BackupStatusMessage.OperationFailed
+                                    }
                                 }
                             }
-                        }
-                    // Reported whether or not this ViewModel is still alive, and before the read below,
-                    // which can wait for the lock: viewModelScope can still be active with the screen gone.
-                    restoreOutcomeSlot.report(message)
-                    val takenAt = preRestoreCopyLock.withLock { preRestoreSnapshotStore.takenAt() }
-                    _uiState.update { it.copy(isBusy = false, preRestoreSnapshotAt = takenAt) }
+                        // Reported whether or not this ViewModel is still alive, and before the read below,
+                        // which can wait for the lock: viewModelScope can still be active with the screen gone.
+                        restoreOutcomeSlot.report(message)
+                    } finally {
+                        // The Restoring screen lifts here, not after the read below, which can queue behind
+                        // an Erase and would keep it up for no reason.
+                        restoreInProgress.end()
+                    }
+                    refreshCopyAndTrainingData()
                 }
             }
+        }
+
+        /** What the card and the note show, read together when the screen opens and after a restore, which ends the busy state. */
+        private suspend fun refreshCopyAndTrainingData() {
+            val (takenAt, hasData) = preRestoreCopyLock.withLock { preRestoreSnapshotStore.takenAt() to readHasTrainingData() }
+            _uiState.update { it.copy(isBusy = false, preRestoreSnapshotAt = takenAt, hasTrainingData = hasData) }
         }
 
         /** The message is on its way to the screen, so a back press during its snackbar doesn't show it again at the next visit. */

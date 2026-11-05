@@ -1,10 +1,13 @@
 package com.repflow.app.presentation.settings
 
+import android.content.res.Configuration
+import android.view.ContextThemeWrapper
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -137,6 +140,7 @@ class SettingsScreenTest {
 
         composeRule.onNodeWithText(string(R.string.settings_erase_action)).performScrollTo().performClick()
         composeRule.onNodeWithText(string(R.string.settings_erase_confirm_title)).assertExists()
+        composeRule.onNodeWithText(ERASE_SAFETY_COPY_SENTENCE, substring = true).assertIsDisplayed()
         composeRule.onNodeWithText(string(R.string.settings_erase_confirm_action)).assertIsNotEnabled()
 
         composeRule
@@ -146,6 +150,53 @@ class SettingsScreenTest {
 
         assertEquals(1, eraseConfirms)
         composeRule.onNodeWithText(string(R.string.settings_erase_confirm_title)).assertDoesNotExist()
+    }
+
+    @Test
+    fun theEraseWordCanBeTypedAndConfirmedInTheRealDialogAtFontScale1Point8() {
+        assertTheEraseCanBeConfirmedInTheRealDialogAtFontScale(1.8f)
+    }
+
+    @Test
+    fun theEraseWordCanBeTypedAndConfirmedInTheRealDialogAtFontScale2() {
+        assertTheEraseCanBeConfirmedInTheRealDialogAtFontScale(2f)
+    }
+
+    private fun assertTheEraseCanBeConfirmedInTheRealDialogAtFontScale(fontScale: Float) {
+        renderTheRealEraseDialogAtFontScale(fontScale)
+
+        val keep = composeRule.onNodeWithText(string(R.string.settings_erase_keep_action)).assertIsDisplayed().fetchSemanticsNode()
+        assertEquals("the font scale must reach the dialog's own window", fontScale, keep.layoutInfo.density.fontScale, 0.01f)
+
+        composeRule
+            .onNodeWithText(string(R.string.settings_erase_confirm_prompt, string(R.string.settings_erase_confirm_word)))
+            .performScrollTo()
+            .performTextInput(string(R.string.settings_erase_confirm_word))
+        composeRule
+            .onNodeWithText(string(R.string.settings_erase_confirm_action))
+            .assertIsDisplayed()
+            .assertIsEnabled()
+            .performClick()
+
+        assertEquals(1, eraseConfirms)
+    }
+
+    /** The scale goes on the context the dialog is built from, because a dialog's window takes its density from there. */
+    private fun renderTheRealEraseDialogAtFontScale(fontScale: Float) {
+        composeRule.runOnUiThread {
+            val activity = composeRule.activity
+            val scaled =
+                ContextThemeWrapper(activity, activity.theme).apply {
+                    applyOverrideConfiguration(Configuration(activity.resources.configuration).apply { this.fontScale = fontScale })
+                }
+            activity.setContentView(
+                ComposeView(scaled).apply {
+                    setContent {
+                        RepFlowTheme { EraseAllDataDialog(onConfirm = { eraseConfirms++ }, onDismiss = {}) }
+                    }
+                },
+            )
+        }
     }
 
     @Test
@@ -389,5 +440,9 @@ class SettingsScreenTest {
 
     private companion object {
         const val SNACKBAR_WAIT_MILLIS = 10_000L
+
+        // Written for this item from board 40k ("Erase all data also deletes the safety copy"), typed out because a
+        // string resource compared with itself proves nothing.
+        const val ERASE_SAFETY_COPY_SENTENCE = "Any safety copy RepFlow kept before a restore is deleted too."
     }
 }
