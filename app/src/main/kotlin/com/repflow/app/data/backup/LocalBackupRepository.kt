@@ -21,6 +21,7 @@ import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.infrastructure.database.RepFlowDatabase
 import com.repflow.app.infrastructure.database.workout.WorkoutExerciseEntity
 import com.repflow.app.infrastructure.database.workout.WorkoutSetEntity
+import java.time.DateTimeException
 import javax.inject.Inject
 
 /**
@@ -48,10 +49,22 @@ class LocalBackupRepository
     ) : BackupRepository {
         override fun serializeSnapshot(snapshot: BackupSnapshot): String = BackupJsonMapper.serialize(toEntitySnapshot(snapshot))
 
+        /**
+         * A backup file is untrusted text, and this is where it becomes domain values, so a value the
+         * domain or a mapper rejects by throwing counts as [BackupValidationError.Malformed]. Only
+         * [IllegalArgumentException] and [DateTimeException] are caught: anything else thrown on this path
+         * is a program bug and should crash.
+         */
         override fun parseSnapshot(json: String): DomainResult<BackupSnapshot, BackupValidationError> =
-            when (val parsed = BackupJsonMapper.parse(json)) {
-                is DomainResult.Failure -> parsed
-                is DomainResult.Success -> toDomainSnapshot(parsed.value)
+            try {
+                when (val parsed = BackupJsonMapper.parse(json)) {
+                    is DomainResult.Failure -> parsed
+                    is DomainResult.Success -> toDomainSnapshot(parsed.value)
+                }
+            } catch (expected: IllegalArgumentException) {
+                DomainResult.Failure(BackupValidationError.Malformed(expected.message ?: "invalid value"))
+            } catch (expected: DateTimeException) {
+                DomainResult.Failure(BackupValidationError.Malformed(expected.message ?: "invalid date"))
             }
 
         @Suppress("ReturnCount", "TooGenericExceptionCaught")

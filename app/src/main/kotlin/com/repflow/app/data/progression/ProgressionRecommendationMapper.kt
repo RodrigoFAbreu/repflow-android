@@ -77,6 +77,6 @@ object ProgressionRecommendationMapper {
             "reduce_load" -> ProgressionResult.ReduceLoad
             "recovery_adjustment" -> ProgressionResult.RecoveryAdjustment
             "wait_for_more_data" -> ProgressionResult.WaitForMoreData
-            else -> error("Unknown ProgressionResult storage key: $this")
+            else -> throw IllegalArgumentException("Unknown ProgressionResult storage key: $this")
         }
 }

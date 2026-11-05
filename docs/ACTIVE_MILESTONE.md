@@ -1,5 +1,13 @@
 # Active Milestone
 
+## `fix-restore-damaged-file` — in progress
+
+Restoring a damaged backup file shows an error instead of closing the app. Plan: `docs/milestones/fix-restore-damaged-file-execution.md`.
+
+- **CP1, complete.** `LocalBackupRepository.parseSnapshot` now turns `IllegalArgumentException` and `DateTimeException` into `BackupValidationError.Malformed`, and an unknown progression key now throws `IllegalArgumentException` instead of `IllegalStateException`. A zero-length rest timer, a blank workout id, a malformed date, or an unknown `result` or `overrideResult` therefore returns `InvalidBackup`, the user sees the existing "That file isn't a valid RepFlow backup." message, and nothing stored changes. The export-side dead end stays on issue #29, unchanged. Verified: `LocalBackupRepositoryDamagedFileTest` on `emulator-5554` (7 tests pass; before the fix the 5 damaged-file tests failed with the exceptions the plan names and the 2 controls passed), `ProgressionRecommendationMapperTest` (4 tests pass; the 2 new ones failed before the fix), the full suites (429 instrumented tests on `emulator-5554` and 757 JVM tests, all passing), `spotlessCheck`, `detekt`, `lintDebug`. One control beyond the plan: the same file with a valid override restores, so the unknown-override failure can only be the key.
+
+**Next action:** `/milestone-implement fix-restore-damaged-file` for the self-review, the final verification and the implementation review bundle.
+
 ## `fix-backup-all-workouts` — complete (accepted by policy 2026-11-05)
 
 Backups now include running and abandoned workouts, and restore warns first when a workout is running. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/fix-backup-all-workouts-execution.md` and the Optional findings at `docs/milestones/completed/fix-backup-all-workouts-findings.md`.
