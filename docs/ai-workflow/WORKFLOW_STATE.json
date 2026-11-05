@@ -8939,7 +8939,7 @@
       "registry_path": "docs/ai-workflow/registry/restore-safety-snapshot-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/restore-safety-snapshot-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+      "phase": "AWAITING_FUNCTIONAL_REVIEW",
       "plan_revision": 5,
       "implementation_revision": 3,
       "functional_review_round": null,
@@ -9048,7 +9048,390 @@
           "workflow_release": "2.25.5"
         }
       },
-      "technical_approval": null,
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "631b6b4df63792143f45061f8639ec4425115b5ef28544767c16dc308fe2b0e1",
+        "approved_review_content_id": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+        "review_content_manifest": [
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/backup/FilePreRestoreSnapshotStoreTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f32836818e840b66bf078484b425a8abcc46730a"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/backup/LocalBackupRepositoryAtomicityTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7f7971a7d3fba8776596e7e1dc5a05128286d903"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/backup/LocalBackupRepositoryDamagedFileTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8f9a35fe2c6c49b7a321a7c4c6578162e5d0d08a"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/backup/LocalBackupRepositoryVersionCompatibilityTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "043e563cdb7115c7126ef2cbcb3c21de15d29b19"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/backup/LocalTrainingDataRepositoryTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9018d8a0d64eb2524ac7fc3fe6e6482b44686ab3"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/backup/PreRestoreSnapshotRoundTripTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0ac5cacb021b01e193474f282c00c8fcad27472f"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/settings/SettingsPersistenceTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "23e029de899cadc9e44473b65929ef3d4e3200da"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/backup/BackupRouteSafCancellationTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5e125925854ed6596fc60408171255af9b048c4f"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/backup/BackupRouteUnreadableRestoreFileTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "fe163a920d79a001bd4cf2b914b47f30c95f0c3b"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/backup/BackupScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9e7d2818d0ca39b4a0be4f0c984800b46ba917c6"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/progression/ProgressionRecommendationRouteTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f929fcb6033deeb52b004ecbc23fcd9b069f3ce1"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/backup/BackupRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "50045a451a0f9d5cd1fce872a8a2ff21da77e35e"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/backup/EraseAllData.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "804a9e2d514c79782ff57939018fcce17059ed11"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/backup/PreRestoreCopy.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b1d14e661b4db3b60c569c97a96413faf1a58522"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/backup/PreRestoreCopyLock.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f384483d828218128b116576baa70b4e7b547b81"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/backup/PreRestoreSnapshotStore.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6e57efabf42178df3534abccd72ed66cf4f34317"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/backup/RestoreBackup.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9b9c38f501b648fae332cb4cbc2ee2bff594fd9a"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/backup/TrainingDataRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5e1c82ccdfac897be64cbf3001fd58eee5343c58"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/backup/FilePreRestoreSnapshotStore.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6c2c8bb6713a8e8d8115d788ad039a09559d1e8e"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/backup/LocalBackupRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a9edd8b833571a43aa19602f3410901ff9ec42b5"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/backup/LocalTrainingDataRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5253cf5e6d696375e229cca876845d1f70445b36"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/progression/LocalProgressionRecommendationRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2a926ab7c9b0b1f1d423972acaee0b17d3e169c3"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/workout/LocalWorkoutRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "c7591554031837287f0338fe9a98ef0b49839d2a"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/database/TrainingDataDao.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d192b00f26ada3dd6f56950787c5b69f5bdc9f06"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/database/progression/ProgressionRecommendationDao.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b1ae060987d4ecbad13551ed52d2586a517a1d70"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/di/RepositoryModule.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "39bb35b00aec55078cc4a20a72fa5e5c3bd80779"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupFileActions.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "88c78044df8df2140dc94cb72daa246f11cbbfff"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupRoute.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8183560caf0350d6d3f5b74d940be97b20b5d876"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3e062e0c09c30c911aa88ba3ccf3032fdef9da69"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupScreenActions.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "fe90c3f3db119868bd1363433e1d582a4b3bc298"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupUiState.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f43852848718a453e510a422fe77eef0c365498d"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/BackupViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a3bcbadc0cbfc2dd4f2d17f23537e8498752de22"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/backup/RestoreOutcomeSlot.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b016f67109c0c0722ba4fc465043b63290643aca"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "066488a18f4fcabe6be78a442612ce81f7e224fc"
+          },
+          {
+            "path": "app/src/main/res/values/strings.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "66c29d3ffcfe0cdabbb487fc69d1073dfeaa286e"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/backup/EraseAllDataTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3679b0461e41684f97eb743ced573cfa294c309a"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/backup/InMemoryBackupRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b0cb85522117822feec063aed2fa989eff866282"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/backup/InMemoryPreRestoreSnapshotStore.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a3efd330178fbc4ab9a1e866acb3dbe6ec00b2ad"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/backup/InMemoryTrainingDataRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d80244628833054e9f9d539ef79eae3cebdb275b"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/backup/PreRestoreCopyLockTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "4ea4a52c40c48066ca65c25baad99f6216ad3b0b"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/backup/RestoreBackupTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "99ac5c5b6cf8e5edd3e54dd92f9a19fc25284641"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/backup/SavePreRestoreCopyTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ff0a0a453a124bcfcfd9639f3cab59198232fc5c"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/exercise/InMemoryExerciseRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8b1c6cad5fb9551813f557dec187474f5707d535"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/progression/InMemoryProgressionRecommendationRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "e474199396204e78bf71fefbbb93c67f68632a3e"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/progression/RecordManualOverrideTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "13fe02665f4ef3a057d6da6d385da8b3778716c1"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/backup/BackupViewModelSafetyCopyTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8a1cbd6e76ccee972be0a3d99a9c26ec88654846"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/backup/BackupViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "91784fc08ae538f78259b34b2e50ef63b8dda98f"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/backup/RestoreOutcomeSlotTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "65739298c1cd6b47a42f70cbd93531018e0c4685"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/home/HomeViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0a4d5a125567328681efb1e7ea9e933819092014"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/settings/SettingsViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2f3dac7b4efadb9ce866056d8adfaa33bfd5a6ba"
+          },
+          {
+            "path": "docs/UX_FLOWS.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "577d4b041e13a19dd1b8b78977759e50dc266cf8"
+          },
+          {
+            "path": "docs/ai-workflow/registry/restore-safety-snapshot-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0413d4b59937def932ee6e54f0e49bf3995f4193"
+          }
+        ],
+        "reviewed_content_commit": "aa3a7b0d37af55607ade99f5d2fcd098903f7603",
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-05T14:27:19Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+            "ledger": {
+              "local": {
+                "bundle_id": "631b6b4df63792143f45061f8639ec4425115b5ef28544767c16dc308fe2b0e1",
+                "verdict": "APPROVE",
+                "round": 3,
+                "verdict_sha256": "f2b8b8042103032751160dc3c5151c762fa48361340caf15433d7a0bbf8c3109",
+                "ledger_entry_sha256": "6f313bac02f15a5776b8a17924e62240603c3ca62c077f8c3c136095f5a2c24f",
+                "run_ref": "session:local .ai-review/restore-safety-snapshot/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "631b6b4df63792143f45061f8639ec4425115b5ef28544767c16dc308fe2b0e1",
+                "verdict": "APPROVE",
+                "round": 3,
+                "verdict_sha256": "bdc1aa95fb75ff1d18336ca5f3066f64e4ffe8e2940a2c01bdb4677a9b9da787",
+                "ledger_entry_sha256": "5ddd4a4ac743d53494305d992d18828a3f530cb78e20c8bcfc4bc685f2be4383",
+                "run_ref": "codex:20261105T142337Z-d5689aee",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-05T14:27:19Z",
+          "workflow_release": "2.25.5"
+        }
+      },
       "technical_review_block_pins": [],
       "plan_review_stages": {
         "review_content_id": "2cce4dd3ecffe99d37b10bcdfaa0ae9805cbc85f1b7cb373d7f6d00a20dbcbc3",
@@ -9079,12 +9462,12 @@
           "external": 3
         },
         "implementation": {
-          "local": 2,
-          "external": 2
+          "local": 3,
+          "external": 3
         }
       },
-      "state_revision": 31,
-      "last_transition": "2026-11-05T13:59:24Z",
+      "state_revision": 34,
+      "last_transition": "2026-11-05T14:27:19Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -9460,20 +9843,42 @@
               "at": "2026-11-05T13:34:56Z"
             }
           ]
+        },
+        "F-4410c3c4be7c": {
+          "digest": "4410c3c4be7c3fefbea262d4c030828b66ccfe56980c6adc67f0707f55403f1c",
+          "text": "**R3-O1. Two workout actions queued during a restore can lose the first, and both report success.** This answers the request's own question, \"Can an action the user saw succeed still have saved nothing?\" `ActiveWorkoutViewModel.launchAction` (`ActiveWorkoutViewModel.kt:511-527`) doesn't serialize actions. Each use case reads the session, and `LocalWorkoutRepository.update` (`LocalWorkoutRepository.kt:93-101`) then rewrites its whole exercise and set tree. During a restore of a file that holds the same running workout, both reads see the old data, both writes wait, and the second replaces the first. The row count is 1 each time, so this gets past the check round 2 added. What the user would see: they log a set, then log another or tap Finish, and both report success. When the restore ends the first set is gone, and it isn't in the copy either. Probe on the AVD, with a real WAL database and a restore held after its copy, in a throwaway copy of the repo that isn't part of the bundle: two sets ended with `loads=[110.0]` and `copyLoads=[]`, and a set then a finish ended with `status=COMPLETED sets=0`. The control, with no restore and the second tap 100 ms later, kept both sets. So `PreR",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 3,
+              "review_content_id": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T14:23:00Z"
+            }
+          ]
         }
       },
       "implementation_review_stages": {
-        "review_content_id": "27ddd94498c8ef78e2e7bd1766732eab41ee8916af47eade5a126c3b43c5399c",
+        "review_content_id": "4f9f02b46c33792511467319afe2d9df03be11fe01c1f8f6ef7bc20a1f274c54",
         "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
-          "bundle_id": "88f9d086e1b37f14471a1d1e87d878065aeea0c33294b9f56accaab3242a39f9",
+          "bundle_id": "631b6b4df63792143f45061f8639ec4425115b5ef28544767c16dc308fe2b0e1",
           "verdict": "APPROVE",
-          "round": 2,
-          "completed_at": "2026-11-05T13:34:56Z",
-          "verdict_sha256": "1f3a351d890b7dcac5659a8689cbbbd3d8cdb031145a30ce45442a7081a9ad88",
+          "round": 3,
+          "completed_at": "2026-11-05T14:23:00Z",
+          "verdict_sha256": "f2b8b8042103032751160dc3c5151c762fa48361340caf15433d7a0bbf8c3109",
           "run_ref": "session:local .ai-review/restore-safety-snapshot/feedback/REVIEW_FEEDBACK.md",
           "reviewer_model": "anthropic/claude-opus-5-5"
         },
-        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": null
+        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "631b6b4df63792143f45061f8639ec4425115b5ef28544767c16dc308fe2b0e1",
+          "verdict": "APPROVE",
+          "round": 3,
+          "completed_at": "2026-11-05T14:26:07Z",
+          "verdict_sha256": "bdc1aa95fb75ff1d18336ca5f3066f64e4ffe8e2940a2c01bdb4677a9b9da787",
+          "run_ref": "codex:20261105T142337Z-d5689aee",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
       }
     }
   },
