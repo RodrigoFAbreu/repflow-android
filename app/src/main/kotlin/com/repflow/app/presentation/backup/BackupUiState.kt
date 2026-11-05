@@ -7,7 +7,8 @@ import java.time.Instant
  * awaiting confirmation, and the hero's `Last backup` - [lastBackupAt] is when
  * a backup export last succeeded on this device (`null`: none yet, once
  * [isLastBackupLoaded]), read against [now]. [hasRunningWorkout] is `true` when a
- * workout is running, or when that can't be read: the restore confirmation warns.
+ * workout is running, or when that isn't known - before the first read, or after a
+ * failed one: the restore confirmation warns.
  */
 data class BackupUiState(
     val isBusy: Boolean = false,
@@ -16,7 +17,7 @@ data class BackupUiState(
     val lastBackupAt: Instant? = null,
     val isLastBackupLoaded: Boolean = false,
     val now: Instant = Instant.EPOCH,
-    val hasRunningWorkout: Boolean = false,
+    val hasRunningWorkout: Boolean = true,
 )
 
 sealed interface BackupStatusMessage {

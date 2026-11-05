@@ -384,6 +384,46 @@ class BackupViewModelTest {
         }
 
     @Test
+    fun `a restore staged before the first read of the running workout warns, until no workout is confirmed`() =
+        runTest {
+            val firstRead = CompletableDeferred<WorkoutSession?>()
+            val delayed =
+                object : WorkoutRepository by workoutRepository {
+                    override fun observeActiveSession(): Flow<WorkoutSession?> = flow { emit(firstRead.await()) }
+                }
+            val model = buildViewModel(workouts = delayed)
+
+            model.onRestoreFilePicked("{}")
+            assertEquals("{}", model.uiState.value.pendingRestoreJson)
+            assertTrue(model.uiState.value.hasRunningWorkout)
+
+            firstRead.complete(null)
+            assertEquals("{}", model.uiState.value.pendingRestoreJson)
+            assertFalse(model.uiState.value.hasRunningWorkout)
+        }
+
+    @Test
+    fun `a read that fails after finding no workout warns again`() =
+        runTest {
+            val nextRead = CompletableDeferred<Unit>()
+            val failingLater =
+                object : WorkoutRepository by workoutRepository {
+                    override fun observeActiveSession(): Flow<WorkoutSession?> =
+                        flow {
+                            emit(null)
+                            nextRead.await()
+                            error("session row unreadable")
+                        }
+                }
+            val model = buildViewModel(workouts = failingLater)
+            assertFalse(model.uiState.value.hasRunningWorkout)
+
+            nextRead.complete(Unit)
+
+            assertTrue(model.uiState.value.hasRunningWorkout)
+        }
+
+    @Test
     fun `an export that can't read a workout reports OperationFailed and opens no file picker`() =
         runTest {
             val unreadable = UnreadableWorkoutRepository(workoutRepository)
