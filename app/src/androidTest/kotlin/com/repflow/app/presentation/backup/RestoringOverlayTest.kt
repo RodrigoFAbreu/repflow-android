@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -46,6 +48,7 @@ class RestoringOverlayTest {
     private var active by mutableStateOf(true)
     private var clicks = 0
     private var backs = 0
+    private var probeRegistration by mutableIntStateOf(0)
     private val focusRequester = FocusRequester()
     private lateinit var inputModeManager: InputModeManager
 
@@ -57,7 +60,7 @@ class RestoringOverlayTest {
             RepFlowTheme {
                 inputModeManager = LocalInputModeManager.current
                 RestoringOverlayHost(active = active) {
-                    BackHandler(true) { backs++ }
+                    key(probeRegistration) { BackHandler(true) { backs++ } }
                     Button(onClick = { clicks++ }, modifier = Modifier.fillMaxSize().focusRequester(focusRequester)) {
                         Text(BUTTON)
                     }
@@ -142,6 +145,21 @@ class RestoringOverlayTest {
         pressBack()
 
         assertEquals(0, backs)
+    }
+
+    /** Whoever registered last must not matter, because a screen can compose a handler at any time. */
+    @Test
+    fun backReachesNothingThroughAHandlerRegisteredAfterTheOverlay() {
+        showHost()
+        composeRule.runOnIdle { probeRegistration++ }
+        composeRule.waitForIdle()
+
+        pressBack()
+        assertEquals(0, backs)
+
+        setFlag(false)
+        pressBack()
+        assertEquals(1, backs)
     }
 
     @Test

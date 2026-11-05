@@ -1,6 +1,5 @@
 package com.repflow.app.presentation.backup
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,13 +14,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -34,6 +27,10 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.navigationevent.NavigationEventDispatcher
+import androidx.navigationevent.NavigationEventHandler
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import com.repflow.app.R
 import com.repflow.app.presentation.designsystem.RepFlowColor
 import com.repflow.app.presentation.designsystem.RepFlowSpacing
@@ -70,16 +67,7 @@ fun RestoringOverlayHost(
 /** `40g`'s `Restoring…` card, centred on the dialog scrim over the whole app. */
 @Composable
 private fun RestoringOverlay() {
-    // The last back handler registered wins. After a recreation this is in the first composition, while
-    // the Scaffold in RepFlowNavHost subcomposes NavHost during measure, so NavHost's handler registers
-    // after this one and Back would leave the Backup screen. So this registers again a frame later. It
-    // exists from the first composition, so a flag rising at runtime leaves no gap.
-    var settled by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        withFrameNanos { }
-        settled = true
-    }
-    key(settled) { BackHandler(true) {} }
+    SwallowBack()
 
     Box(
         modifier =
@@ -116,5 +104,28 @@ private fun RestoringOverlay() {
                 }
             }
         }
+    }
+}
+
+/**
+ * Takes Back for as long as this is composed. Every `BackHandler` in the app, `NavHost`'s included, registers
+ * at the dispatcher's default priority, and the dispatcher offers Back to an enabled handler at the overlay
+ * priority before any of those, whenever they registered. So the order doesn't matter: after a recreation
+ * `NavHost`'s handler registers during measure, after this one, and there is no moment when it is on top.
+ */
+@Composable
+private fun SwallowBack() {
+    val dispatcher =
+        checkNotNull(LocalNavigationEventDispatcherOwner.current) {
+            "RestoringOverlay needs a NavigationEventDispatcherOwner, which any ComponentActivity provides"
+        }.navigationEventDispatcher
+    DisposableEffect(dispatcher) {
+        val handler =
+            object : NavigationEventHandler<NavigationEventInfo>(NavigationEventInfo.None, isBackEnabled = true) {
+                // The default throws.
+                override fun onBackCompleted() = Unit
+            }
+        dispatcher.addHandler(handler, NavigationEventDispatcher.PRIORITY_OVERLAY)
+        onDispose { handler.remove() }
     }
 }
