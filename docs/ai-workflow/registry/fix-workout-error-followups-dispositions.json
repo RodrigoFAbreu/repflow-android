@@ -1,0 +1,59 @@
+{
+  "dispositions": {
+    "F-1170e02d588c": {
+      "disposition": "dropped",
+      "reason": "Wording of a test note in a plan that is now implemented; no effect on a user."
+    },
+    "F-1473ffc09cab": {
+      "disposition": "dropped",
+      "reason": "Plan bookkeeping: the tests landed in ActiveWorkoutActionErrorTest and ActiveWorkoutObservationRetryTest as suggested."
+    },
+    "F-1b2f59923bbb": {
+      "disposition": "dropped",
+      "reason": "Test setup correction already applied: the instrumented test now drops a table to cause a real SQLite failure."
+    },
+    "F-341a0cbba0ef": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/26#issuecomment-6653124118"
+    },
+    "F-458265739688": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/26#issuecomment-6653124118"
+    },
+    "F-4631c01ed653": {
+      "disposition": "fixed"
+    },
+    "F-4f78bff75e93": {
+      "disposition": "fixed"
+    },
+    "F-57d34fa1feb7": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/26#issuecomment-6653124118"
+    },
+    "F-903065c8fd34": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/26#issuecomment-6653124118"
+    },
+    "F-977b1f771311": {
+      "disposition": "dropped",
+      "reason": "Milestone narrative file that is rewritten at acceptance; no effect on a user."
+    },
+    "F-c615e71a0749": {
+      "disposition": "fixed"
+    },
+    "F-e6f608ccf4fa": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/26#issuecomment-6653124118"
+    },
+    "F-e83bde2130d5": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/26#issuecomment-6653124118"
+    },
+    "F-ea42cd0f539c": {
+      "disposition": "dropped",
+      "reason": "Two stale code comments with no behavior effect; fix when those files are next touched."
+    }
+  },
+  "schema_version": 1,
+  "work_item_id": "fix-workout-error-followups"
+}

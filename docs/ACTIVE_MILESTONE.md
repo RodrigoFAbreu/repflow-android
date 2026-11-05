@@ -1,5 +1,46 @@
 # Active Milestone
 
+## `fix-workout-error-followups` — complete (accepted by policy 2026-11-05)
+
+A successful retry clears a stale workout error, a failed read shows a message instead of closing the app, and Try again restores the exercise picker. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/fix-workout-error-followups-execution.md` and the Optional findings at `docs/milestones/completed/fix-workout-error-followups-findings.md`.
+
+**Next action:** `restore-safety-snapshot`, One automatic snapshot before a restore, restorable from Backup. Ready for `/milestone-plan`.
+
+The sections below are this milestone's historical record.
+
+Workout errors: no stale message after a retry, no crash on a failed read, and Try again restores the picker. Plan: `docs/milestones/fix-workout-error-followups-execution.md`.
+
+- **CP1, complete.** A SQLite failure while reading a workout for an action now shows the existing "couldn't complete that" message instead of closing the app. `LocalWorkoutRepository.findById` and `findActiveSession` turn `SQLiteException` into the new `WorkoutReadFailedException`, and `ActiveWorkoutViewModel` reports it through `guardedRead` as `PERSISTENCE_UNAVAILABLE`, in `launchAction`, `onCompleteWorkout` and `onAbandonWorkout`. A read failure in the rest timer after a set is saved is ignored, so a saved set is never reported as failed. Read failures on other screens still crash as before (out of scope), and the rest alert's failure sink still catches the new type. Verified: `ActiveWorkoutActionErrorTest` (9 tests pass; the 4 new ones failed before the fix with the exception escaping the ViewModel), `LocalWorkoutRepositoryReadFailureTest` on `emulator-5554` (5 tests pass; before the fix the 3 failure tests saw a raw `SQLiteException`), the workout packages and `LayerBoundaryTest` (137 JVM tests pass), `spotlessCheck`, `detekt`. Mutations: a broad `catch (Exception)` in the repository fails both cancellation tests, and removing the rest timer guard fails its test. Two changes from the plan's test notes, neither to behavior: (1) the instrumented test fails the read by dropping a table, because on Room 2.8 a closed database fails a suspend read with `CancellationException`, not `SQLiteException`, so closing it never reaches the catch; (2) the new ViewModel tests are in `ActiveWorkoutActionErrorTest`, not `ActiveWorkoutViewModelTest`, which is over detekt's `LargeClass` limit. One test beyond the plan: a failure while loading a found session's exercises.
+
+- **CP2, complete.** A successful action, finish or abandon now clears the error, so the old message goes away as soon as a retry works. `Try again` on the load-failure state also re-reads the exercise picker and the last-session seeds: `availableExercises` is wrapped in `retryTrigger.flatMapLatest` with its `.catch` inside, and `onRetryObservation` calls `refreshLastPerformances()`. Verified: `ActiveWorkoutActionErrorTest` (12 tests pass; the 3 new ones failed before the fix, with the error still set), `ActiveWorkoutObservationRetryTest` (4 tests pass; the 2 new ones failed before the fix, with an empty picker and no seed), the workout packages and `LayerBoundaryTest` (142 JVM tests pass), `ActiveWorkoutScreenTest` and `ActiveWorkoutErrorRouteTest` on `emulator-5554` (46 tests pass), `spotlessCheck`, `detekt`. Mutations: moving the picker's `.catch` outside `flatMapLatest` fails the picker test, and keying the screen's `LaunchedEffect` on `Unit` fails the new screen test. Two changes from the plan's test notes, neither to behavior: (1) the new ViewModel tests are in `ActiveWorkoutActionErrorTest` and `ActiveWorkoutObservationRetryTest`, not `ActiveWorkoutViewModelTest`, which is over detekt's `LargeClass` limit; (2) the picker test's exercise source fails every subscription until the test heals it, because `InMemoryExerciseRepository`'s one-shot failure can be used up by the board's exercise details first. One test beyond the plan: `clearingTheFieldTakesDownTheShowingMessage` in `ActiveWorkoutScreenTest`, which proves the plan's claim that clearing the field takes the showing message down. One corner left as it is: if `Try again` reads the session but its history read fails, seeds from an earlier good read are lost until history is next read. The steppers are empty and nothing saved changes. The full runs are still to come, in the wrap-up.
+
+**Next action:** perform the functional review below, write findings to `.ai-review/fix-workout-error-followups/feedback/FUNCTIONAL_REVIEW.md`, or run `/accept-milestone` if testing is clean.
+
+### Functional review checklist
+
+Automated verification is current: the working tree is clean and no code has changed since implementation revision 1 was bundled and technically approved (CP1 and CP2 results above).
+
+**Setup.** Use the AVD (`start-avd.sh`, 3 GB cap), not the phone. Install with `./gradlew installDebug`. No feature flags, no network needed.
+
+**Test data.** Fresh install with two exercises (e.g. Bench Press, Squat) and one finished workout containing each, so the seeds and history exist.
+
+**Honest scope note.** The two failures this milestone fixes (a SQLite read failure, a failed observation) cannot be produced from the UI. They are proven by the automated tests listed in CP1 and CP2. The flows below are regression checks that the normal paths still behave and that nothing visible changed.
+
+**F1 - Normal workout still works (R1).** Start a workout, add an exercise from the picker, log two sets, complete the workout. Expected: no error message at any point, the picker lists your exercises, the sets save, the workout appears in History.
+
+**F2 - Abandon still works (R1).** Start a workout, log a set, abandon it. Expected: no error message, you return to Home, the workout is not in History.
+
+**F3 - Seeds and picker still load (R2).** Start a second workout with an exercise from F1. Expected: the steppers are pre-filled from the last session, and the picker lists both exercises.
+
+**F4 - No stale message after normal use (R2).** Do several actions in a row (add exercise, log set, edit set, delete set, finish). Expected: no error banner ever appears or lingers.
+
+**F5 - Rest timer after a set (R1).** Log a set so the rest timer starts, let it finish or skip it. Expected: no error, the saved set stays saved.
+
+**Known limitations / out of scope.**
+- Neither failure can be triggered from the UI, so the fixed behavior is covered by automated tests only.
+- Read failures on other screens still crash as before (out of scope, per CP1).
+- If `Try again` reads the session but its history read fails, seeds from an earlier good read are lost until history is next read; the steppers are empty and nothing saved changes (accepted corner, per CP2).
+
 ## `fix-restore-damaged-file` — complete (accepted by policy 2026-11-05)
 
 Restoring a damaged backup file now shows an error instead of closing the app, and leaves your data untouched. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/fix-restore-damaged-file-execution.md` and the Optional findings at `docs/milestones/completed/fix-restore-damaged-file-findings.md`.

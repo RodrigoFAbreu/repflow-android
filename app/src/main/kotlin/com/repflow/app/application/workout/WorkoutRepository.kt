@@ -19,8 +19,10 @@ interface WorkoutRepository {
     /** Emits the current [WorkoutSessionStatus.ACTIVE][com.repflow.app.domain.workout.WorkoutSessionStatus.ACTIVE] session, or `null` if none exists. */
     fun observeActiveSession(): Flow<WorkoutSession?>
 
+    /** @throws WorkoutReadFailedException if the store can't be read. */
     suspend fun findActiveSession(): WorkoutSession?
 
+    /** @throws WorkoutReadFailedException if the store can't be read. */
     suspend fun findById(id: WorkoutSessionId): WorkoutSession?
 
     /**

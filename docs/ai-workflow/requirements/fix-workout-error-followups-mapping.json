@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "work_item_id": "fix-workout-error-followups",
+  "requirements": {
+    "R1": {
+      "description": "After a failed workout action, a later successful action clears the error",
+      "checkpoint_ids": [
+        "CP2"
+      ]
+    },
+    "R2": {
+      "description": "A SQLite failure while reading a workout for an action shows the generic message instead of closing the app",
+      "checkpoint_ids": [
+        "CP1"
+      ]
+    },
+    "R3": {
+      "description": "Try again also re-reads the exercise picker and the last-session seeds",
+      "checkpoint_ids": [
+        "CP2"
+      ]
+    }
+  }
+}
