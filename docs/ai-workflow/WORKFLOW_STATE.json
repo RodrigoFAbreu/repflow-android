@@ -10788,7 +10788,7 @@
       "registry_path": "docs/ai-workflow/registry/safety-copy-polish-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/safety-copy-polish-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+      "phase": "APPLYING_REVIEW_FEEDBACK",
       "plan_revision": 3,
       "implementation_revision": 1,
       "functional_review_round": null,
@@ -10928,12 +10928,12 @@
           "external": 1
         },
         "implementation": {
-          "local": 0,
-          "external": 0
+          "local": 1,
+          "external": 1
         }
       },
-      "state_revision": 17,
-      "last_transition": "2026-11-05T21:30:59Z",
+      "state_revision": 19,
+      "last_transition": "2026-11-05T22:02:49Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -11111,7 +11111,62 @@
               "at": "2026-11-05T20:24:04Z"
             }
           ]
+        },
+        "F-83339f985f92": {
+          "digest": "83339f985f92a68ff18e7deb96f403532a6863f9106e6096564372812fe41743",
+          "text": "**O1. No test holds Back on a return from the background with no recreation.** Pressing Home during a restore and coming back is the likeliest real path, and only CP1's look holds it: every background case in `RestoringOverlayActivityTest` recreates first. A throwaway probe on the real `MainActivity` passed with one and with two returns and no recreation, so nothing is wrong today. A few lines in that class would keep it that way through a later activity-compose or navigation upgrade.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "e8b705bbdfecee92055f5399ad839ba9719562c476c871124f367b7e0fa78401",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T21:59:39Z"
+            }
+          ]
+        },
+        "F-56cdf288fc5f": {
+          "digest": "56cdf288fc5f5ae6bb83e9ef1f293391ff668ea8279e4d97cd95cf454875906d",
+          "text": "**O2. The Erase field's outline has no bottom edge at font 2.0, even scrolled to the end.** Seen on the AVD with the real system font, with the keyboard up and after closing it. The field reports its bottom at y 1719, and the outline stops there with its lower edge missing. That points at the two-line label pushing the outline past the field's height and the scroll clipping the rest, but this comes from reading the bounds: no variant was run. The word stays readable and the field works, so R3 holds. `theme-text-levels` already changes this outline and is the natural place to fix it.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "e8b705bbdfecee92055f5399ad839ba9719562c476c871124f367b7e0fa78401",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T21:59:39Z"
+            }
+          ]
+        },
+        "F-76a0f2fb3680": {
+          "digest": "76a0f2fb36809979287528d645befca112a742876376963b88fbcbf6feec9ff2",
+          "text": "**O3. `RestoringOverlay.kt` uses literals where tokens exist** (`docs/DESIGN_SYSTEM.md`, golden rule 1). `padding(16.dp)` at line 96 is `RepFlowSpacing.screenPadding`, and `spacedBy(12.dp)` at line 100 is `RepFlowSpacing.gapLg`. `fontSize = 15.sp` at line 109 and `fontSize = 12.5.sp` at line 113 restate what `bodyMedium` and `bodySmall` already are. Swapping them changes no pixel.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "e8b705bbdfecee92055f5399ad839ba9719562c476c871124f367b7e0fa78401",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T21:59:39Z"
+            }
+          ]
         }
+      },
+      "implementation_review_stages": {
+        "review_content_id": "e8b705bbdfecee92055f5399ad839ba9719562c476c871124f367b7e0fa78401",
+        "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "f137ab35fd558eea943bffa5402601bf363708209fe5b32cabf7ea9f71cec388",
+          "verdict": "APPROVE",
+          "round": 1,
+          "completed_at": "2026-11-05T21:59:39Z",
+          "verdict_sha256": "4648679048be61f7186fb1d5ffcf7b7de9694b5101b8eff409a11814dc78f522",
+          "run_ref": "session:local .ai-review/safety-copy-polish/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": null
       }
     }
   },
