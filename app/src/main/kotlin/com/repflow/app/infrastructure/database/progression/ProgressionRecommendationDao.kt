@@ -22,6 +22,7 @@ interface ProgressionRecommendationDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(entity: ProgressionRecommendationEntity)
 
+    /** Returns the rows changed, so a caller can tell that the row has gone. */
     @Update
-    suspend fun update(entity: ProgressionRecommendationEntity)
+    suspend fun update(entity: ProgressionRecommendationEntity): Int
 }

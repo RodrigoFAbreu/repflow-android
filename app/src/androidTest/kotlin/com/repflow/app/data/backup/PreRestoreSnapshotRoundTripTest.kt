@@ -12,6 +12,9 @@ import com.repflow.app.application.backup.RestoreBackup
 import com.repflow.app.application.backup.SavePreRestoreCopy
 import com.repflow.app.application.backup.TrainingDataError
 import com.repflow.app.application.backup.TrainingDataRepository
+import com.repflow.app.application.progression.ProgressionOperationError
+import com.repflow.app.application.progression.ProgressionPersistenceError
+import com.repflow.app.application.progression.RecordManualOverride
 import com.repflow.app.application.workout.StartWorkoutSession
 import com.repflow.app.application.workout.StartWorkoutSessionCommand
 import com.repflow.app.application.workout.WorkoutOperationError
@@ -29,6 +32,9 @@ import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseName
 import com.repflow.app.domain.exercise.ExerciseOrigin
 import com.repflow.app.domain.exercise.ExerciseTrackingType
+import com.repflow.app.domain.progression.ProgressionRecommendation
+import com.repflow.app.domain.progression.ProgressionRecommendationId
+import com.repflow.app.domain.progression.ProgressionResult
 import com.repflow.app.domain.workout.WorkoutSession
 import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.domain.workout.WorkoutSessionStatus
@@ -78,7 +84,9 @@ class PreRestoreSnapshotRoundTripTest {
     private lateinit var backup: LocalBackupRepository
     private lateinit var exercises: LocalExerciseRepository
     private lateinit var workouts: LocalWorkoutRepository
+    private lateinit var recommendations: LocalProgressionRecommendationRepository
     private lateinit var startWorkout: StartWorkoutSession
+    private lateinit var recordOverride: RecordManualOverride
     private lateinit var restoreBackup: RestoreBackup
 
     @Before
@@ -98,7 +106,9 @@ class PreRestoreSnapshotRoundTripTest {
                 database.workoutExerciseDao(),
                 database.workoutSetDao(),
             )
+        recommendations = LocalProgressionRecommendationRepository(database.progressionRecommendationDao())
         startWorkout = StartWorkoutSession(workouts, { Instant.now() }, { UUID.randomUUID().toString() })
+        recordOverride = RecordManualOverride(recommendations) { Instant.now() }
         restoreBackup = restoreThrough(backup)
     }
 
@@ -334,6 +344,59 @@ class PreRestoreSnapshotRoundTripTest {
             assertNull(workouts.findById(session.id))
         }
 
+    /**
+     * As the user could: with a restore held and its screen gone, open a recommendation and choose an
+     * override. The read still sees the old data and the update waits, so by the time the update runs the
+     * restore has taken its row away. That choice is in neither the restored data nor the copy, so it can't
+     * report success.
+     */
+    @Test
+    fun anOverrideOnARecommendationTheRestoreRemovedFailsInsteadOfReportingSuccess() =
+        runBlocking<Unit> {
+            seed("A")
+            assertTrue(recommendations.insert(recommendation("A")) is DomainResult.Success)
+            val held = holdRestoreWithItsScreenGone(backup, fileHolding("B"))
+
+            val overriding = async(Dispatchers.Default) { recordOverride(ExerciseId("A"), ProgressionResult.MaintainLoad) }
+            val finishedDuringTheRestore = withTimeoutOrNull(WRITE_WAIT_MILLIS) { overriding.await() }
+            held.gate.complete(Unit)
+
+            assertSucceeded(held.result.await())
+            assertNull("The update waited for the restore", finishedDuringTheRestore)
+            assertEquals(
+                DomainResult.Failure(ProgressionOperationError.PersistenceFailed(ProgressionPersistenceError.Unavailable)),
+                overriding.await(),
+            )
+            assertEquals(emptyList<ProgressionRecommendation>(), recommendations.findAll())
+            assertNull(
+                "The copy holds the recommendation as it was, not the choice",
+                (backup.parseSnapshot(copyText()) as DomainResult.Success)
+                    .value.progressionRecommendations
+                    .single()
+                    .manualOverride,
+            )
+        }
+
+    /** The restored file holds the same recommendation, so the update has its row and the user's newest action wins. */
+    @Test
+    fun anOverrideOnARecommendationTheRestoreKeptIsSavedOnTopOfIt() =
+        runBlocking<Unit> {
+            seed("A")
+            assertTrue(recommendations.insert(recommendation("A")) is DomainResult.Success)
+            val held = holdRestoreWithItsScreenGone(backup, fileHolding("A", recommendations = listOf(recommendation("A"))))
+
+            val overriding = async(Dispatchers.Default) { recordOverride(ExerciseId("A"), ProgressionResult.MaintainLoad) }
+            withTimeoutOrNull(WRITE_WAIT_MILLIS) { overriding.await() }
+            held.gate.complete(Unit)
+
+            assertSucceeded(held.result.await())
+            assertEquals(DomainResult.Success(Unit), overriding.await())
+            assertEquals(
+                ProgressionResult.MaintainLoad,
+                recommendations.findLatestForExercise(ExerciseId("A"))?.manualOverride?.result,
+            )
+        }
+
     private class HeldRestore(
         val gate: CompletableDeferred<Unit>,
         val result: CompletableDeferred<DomainResult<Unit, BackupRestoreError>>,
@@ -370,7 +433,7 @@ class PreRestoreSnapshotRoundTripTest {
                     workoutRepository = workouts,
                     recoveryRepository = LocalRecoveryRepository(database.recoveryEntryDao()),
                     futsalRepository = LocalFutsalRepository(database.futsalSessionDao()),
-                    progressionRepository = LocalProgressionRecommendationRepository(database.progressionRecommendationDao()),
+                    progressionRepository = recommendations,
                     backupRepository = backup,
                 ),
                 repository,
@@ -396,6 +459,7 @@ class PreRestoreSnapshotRoundTripTest {
     private fun fileHolding(
         name: String,
         sessions: List<WorkoutSession> = emptyList(),
+        recommendations: List<ProgressionRecommendation> = emptyList(),
     ): String =
         backup.serializeSnapshot(
             (
@@ -406,10 +470,22 @@ class PreRestoreSnapshotRoundTripTest {
                     workoutSessions = sessions,
                     recoveryEntries = emptyList(),
                     futsalSessions = emptyList(),
-                    progressionRecommendations = emptyList(),
+                    progressionRecommendations = recommendations,
                 ) as DomainResult.Success
             ).value,
         )
+
+    private fun recommendation(exerciseName: String): ProgressionRecommendation =
+        (
+            ProgressionRecommendation.create(
+                id = ProgressionRecommendationId("recommendation-$exerciseName"),
+                exerciseId = ExerciseId(exerciseName),
+                result = ProgressionResult.IncreaseLoad,
+                reasons = listOf("hit the top of the range"),
+                policyVersion = 1,
+                computedAt = Instant.parse("2026-01-01T00:00:00Z"),
+            ) as DomainResult.Success
+        ).value
 
     private fun exercise(name: String): Exercise =
         (
