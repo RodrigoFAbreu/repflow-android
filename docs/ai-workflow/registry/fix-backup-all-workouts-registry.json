@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "work_item_id": "fix-backup-all-workouts",
+  "plan_revision": 2,
+  "checkpoints": [
+    {
+      "id": "CP1",
+      "name": "Export every workout session and prove the round trip (R1, R2)",
+      "depends_on": [],
+      "complexity": 2,
+      "session_target": "1"
+    },
+    {
+      "id": "CP2",
+      "name": "Warn in the restore dialog when a workout is running, and report a failed export (R3, R4, R5)",
+      "depends_on": [
+        "CP1"
+      ],
+      "complexity": 2,
+      "session_target": "1"
+    }
+  ]
+}

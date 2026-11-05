@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "work_item_id": "fix-backup-all-workouts",
+  "requirements": {
+    "R1": {
+      "description": "A backup file contains every workout session: completed, abandoned and running, with exercises and sets",
+      "checkpoint_ids": [
+        "CP1"
+      ]
+    },
+    "R2": {
+      "description": "Restoring running and abandoned sessions brings them back unchanged, the running one active",
+      "checkpoint_ids": [
+        "CP1"
+      ]
+    },
+    "R3": {
+      "description": "The restore confirmation warns that a running workout will be deleted, only when one exists",
+      "checkpoint_ids": [
+        "CP2"
+      ]
+    },
+    "R4": {
+      "description": "If it cannot be told whether a workout is running, the warning is shown",
+      "checkpoint_ids": [
+        "CP2"
+      ]
+    },
+    "R5": {
+      "description": "If a session can't be read, Export backup reports the failure, opens no file picker and doesn't crash",
+      "checkpoint_ids": [
+        "CP2"
+      ]
+    }
+  }
+}
