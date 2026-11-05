@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_work_item_id": null,
+  "active_work_item_id": "fix-restore-damaged-file",
   "work_items": {
     "workflow-v2-1-core": {
       "work_item_type": "process",
@@ -7574,6 +7574,233 @@
         },
         "evaluated_at": "2026-11-05T04:05:48Z",
         "workflow_release": "2.25.5"
+      }
+    },
+    "fix-restore-damaged-file": {
+      "work_item_type": "product",
+      "work_item_kind": "product",
+      "work_item_id": "fix-restore-damaged-file",
+      "parent_work_item_id": null,
+      "plan_path": "docs/milestones/fix-restore-damaged-file-execution.md",
+      "registry_path": "docs/ai-workflow/registry/fix-restore-damaged-file-registry.json",
+      "mapping_path": "docs/ai-workflow/requirements/fix-restore-damaged-file-mapping.json",
+      "governing_workflow_version": "2.2",
+      "phase": "IMPLEMENTING",
+      "plan_revision": 2,
+      "implementation_revision": null,
+      "functional_review_round": null,
+      "base_commit": "132aa9a0965ff948fbf027dd4bcadc27945b1835",
+      "reviewed_implementation_head": null,
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": null,
+      "checkpoints": {},
+      "current_bundle_id": "d5ec5e3f2a5616f74862d319d62448d661413bab6fe9a19e64a562ece4c5c4e8",
+      "plan_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "d5ec5e3f2a5616f74862d319d62448d661413bab6fe9a19e64a562ece4c5c4e8",
+        "approved_review_content_id": "bcfedde3b8e6998dc1e5bf91cdc2db07b9fa80146c434c274c9be000a0ec791b",
+        "review_content_manifest": [
+          {
+            "path": "docs/ai-workflow/registry/fix-restore-damaged-file-registry.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "30e89e002d324cc76eedb63ab336f26c2874f931"
+          },
+          {
+            "path": "docs/ai-workflow/requirements/fix-restore-damaged-file-mapping.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ed0db0bf80170764b78d1674d5ccae7e2c57cf30"
+          },
+          {
+            "path": "docs/milestones/fix-restore-damaged-file-execution.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "1598c4408cb466d4658ad5c6a5cf7da842cd6e65"
+          }
+        ],
+        "reviewed_content_commit": null,
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-05T05:11:37Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "bcfedde3b8e6998dc1e5bf91cdc2db07b9fa80146c434c274c9be000a0ec791b",
+            "ledger": {
+              "local": {
+                "bundle_id": "d5ec5e3f2a5616f74862d319d62448d661413bab6fe9a19e64a562ece4c5c4e8",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "d6baebd875de11d3d6c3e39acf221dfbcfeb9d5dd92411169ab17950b43d470d",
+                "ledger_entry_sha256": "caffe35d192940bb1bf5255e7c135d8ca568240c067edd70953077b5da733302",
+                "run_ref": "session:local .ai-review/fix-restore-damaged-file/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "d5ec5e3f2a5616f74862d319d62448d661413bab6fe9a19e64a562ece4c5c4e8",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "66369b8126ce0aa424fbde01b967c47c69dc6d8e11f7a226abff535bd3af3956",
+                "ledger_entry_sha256": "3a5f14b2b99ec4099a7de4ab3a6599082af8d021a9f76b42b19d364084b0390f",
+                "run_ref": "codex:20261105T050732Z-75ede678",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-05T05:11:37Z",
+          "workflow_release": "2.25.5"
+        }
+      },
+      "technical_approval": null,
+      "technical_review_block_pins": [],
+      "plan_review_stages": {
+        "review_content_id": "bcfedde3b8e6998dc1e5bf91cdc2db07b9fa80146c434c274c9be000a0ec791b",
+        "LOCAL_MODEL_PLAN_REVIEW": {
+          "bundle_id": "d5ec5e3f2a5616f74862d319d62448d661413bab6fe9a19e64a562ece4c5c4e8",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-05T05:07:09Z",
+          "verdict_sha256": "d6baebd875de11d3d6c3e39acf221dfbcfeb9d5dd92411169ab17950b43d470d",
+          "run_ref": "session:local .ai-review/fix-restore-damaged-file/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_PLAN_REVIEW": {
+          "bundle_id": "d5ec5e3f2a5616f74862d319d62448d661413bab6fe9a19e64a562ece4c5c4e8",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-05T05:09:06Z",
+          "verdict_sha256": "66369b8126ce0aa424fbde01b967c47c69dc6d8e11f7a226abff535bd3af3956",
+          "run_ref": "codex:20261105T050732Z-75ede678",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
+      },
+      "functional_acceptance_status": null,
+      "blocking_decisions": [],
+      "review_round_counts": {
+        "plan": {
+          "local": 2,
+          "external": 1
+        },
+        "implementation": {
+          "local": 0,
+          "external": 0
+        }
+      },
+      "state_revision": 10,
+      "last_transition": "2026-11-05T05:11:37Z",
+      "feedback_layout": "scoped",
+      "plan_review_binding": {
+        "status": "BOUND",
+        "at": "2026-11-05T04:58:15Z",
+        "consumed": {
+          "review_content_id": "38fb77109fa1a2b41e5c5d678e8bb22c9273954099f79e5718f097870bdcffd8",
+          "plan_revision": 1,
+          "legacy": false
+        },
+        "published": {
+          "review_content_id": "bcfedde3b8e6998dc1e5bf91cdc2db07b9fa80146c434c274c9be000a0ec791b",
+          "plan_revision": 2
+        },
+        "bound": {
+          "review_content_id": "bcfedde3b8e6998dc1e5bf91cdc2db07b9fa80146c434c274c9be000a0ec791b",
+          "bundle_id": "d5ec5e3f2a5616f74862d319d62448d661413bab6fe9a19e64a562ece4c5c4e8",
+          "plan_revision": 2
+        }
+      },
+      "consumed_plan_review_content_ids": [
+        "38fb77109fa1a2b41e5c5d678e8bb22c9273954099f79e5718f097870bdcffd8"
+      ],
+      "optional_findings": {
+        "F-170d8790b61b": {
+          "digest": "170d8790b61b024d6601adc4b4d5f82b326c72ed2e501ba74efbeadbf50d4534",
+          "text": "**O1: the plan misquotes the message.** The Goal and the self-review call it \"Invalid backup\", but the user sees \"That file isn't a valid RepFlow backup.\" (`strings.xml:389`). `InvalidBackup` is only the enum name. Use the real text so the functional review checks the right words.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "38fb77109fa1a2b41e5c5d678e8bb22c9273954099f79e5718f097870bdcffd8",
+              "verdict": "REVISE",
+              "at": "2026-11-05T04:52:32Z"
+            }
+          ]
+        },
+        "F-39aa0fa4c916": {
+          "digest": "39aa0fa4c9160d81ff45b1ba95c3a6b71b161224753f26c3975b19eb4a46f1fa",
+          "text": "**O2: the comment instruction doesn't say where the line goes.** CP1 says to update \"the class comment on `parseSnapshot`\" if it claims every problem is reported, says it doesn't, then asks for a line anyway. `parseSnapshot` has no KDoc and the class comment doesn't discuss parsing, so name the place: a KDoc on `parseSnapshot`. Also, `BackupValidationError.Malformed`'s KDoc (`BackupSnapshot.kt:94`) lists only JSON-shape causes and will be incomplete after this change.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "38fb77109fa1a2b41e5c5d678e8bb22c9273954099f79e5718f097870bdcffd8",
+              "verdict": "REVISE",
+              "at": "2026-11-05T04:52:32Z"
+            }
+          ]
+        },
+        "F-3fa339231514": {
+          "digest": "3fa339231514a1073270e38687c0545bbb77751882e8aafa39b29efdc90c1c55",
+          "text": "**O3: the plan doesn't name the full instrumented run.** CP1 limits `connectedDebugAndroidTest` to the new class. `AGENTS.md:87-88` also requires the full suite before a milestone is done, and CI doesn't run instrumented tests (`AGENTS.md:86`). With only one checkpoint, CP1 is the natural place to state the full run on `emulator-5554`.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "38fb77109fa1a2b41e5c5d678e8bb22c9273954099f79e5718f097870bdcffd8",
+              "verdict": "REVISE",
+              "at": "2026-11-05T04:52:32Z"
+            }
+          ]
+        },
+        "F-c5feee0e9cfa": {
+          "digest": "c5feee0e9cfa1b105eeb741cc6a47b738d5c7cc3f3cd25d0bd5a31ef0bd202dd",
+          "text": "**O4: the plan doesn't say what happens to issue #29 at merge.** R3 keeps the export dead end \"recorded on issue #29\", but that issue also reports the crash this item fixes. A pull request body saying `Fixes #29` would close the issue and hide the note with it, and leaving it untouched keeps an open crash report for a fixed crash. One line in CP1 would settle it: no closing keyword, and a comment on the issue after the merge saying the restore half is fixed and the export half remains. I didn't read the issue itself, because `gh issue view` was denied in this session.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "bcfedde3b8e6998dc1e5bf91cdc2db07b9fa80146c434c274c9be000a0ec791b",
+              "verdict": "APPROVE",
+              "at": "2026-11-05T05:07:09Z"
+            }
+          ]
+        }
       }
     }
   },
