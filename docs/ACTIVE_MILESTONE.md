@@ -24,6 +24,38 @@ A quiet line on Home when the last backup is old, and a `Backup reminder` switch
 
   Mutations, each caught by the named test after the one survivor below was dealt with: the answer stuck on `true` (the regression), only the first answer read (the regression and the first-data case), a failed read hiding the line (`a failed read of the training data still gives the line`), a swallowed cancellation (`a cancelled read`), `distinctUntilChanged` removed (`observingSaysNothingNewWhenTheAnswerStaysTheSame`), `recovery_entries` left out of the query (both `LocalTrainingDataRepositoryTest` table tests), and the line moved above the card (`theLineComesUnderLastWorkout`). `distinctUntilChanged` survived the first version of its test, because Room coalesced the insert and the clear that followed it, so the test now waits and expects nothing. That wait is 500 ms of real time, so a slow device could let this mutation through, but correct code can't fail it. The `recovery_entries` mutation stayed in place by mistake during the line-move run, and the line-move test still failed for its own reason. Verified on `6084cc9`: `spotlessCheck`, `detekt`, `lintDebug`, 875 JVM tests, and 524 instrumented tests on `emulator-5554` from a clean install, 0 failures. The real app wasn't looked at again in this round.
 
+**Next action:** perform the functional review below, write findings to `.ai-review/backup-reminder/feedback/FUNCTIONAL_REVIEW.md`, or run `/accept-milestone` if testing is clean.
+
+### Functional review checklist
+
+Automated verification: production code last changed in `4272dcd` (implementation review round 1, I1); `6084cc9` added a test only, and later commits are workflow records. The last full run on `6084cc9` is in the round 1 bullet above: `spotlessCheck`, `detekt`, `lintDebug`, 875 JVM tests, 524 instrumented tests on `emulator-5554`, 0 failures.
+
+**Setup.** Use the AVD (`start-avd.sh`, 3 GB cap), not the phone. Install with `./gradlew installDebug` (an install over an older build also exercises the schema 9 to 10 migration). No feature flags, no network. The reminder needs old dates: make data through the app, then with the app stopped age `sessions` times and `last_backup_at` with `sqlite3` (the device date is not changed). Close the app before editing the database.
+
+**Test data.** 1 exercise and 1 finished workout with 1 set. Case table for the aging: (a) no backup, first workout 20 days ago; (b) the same, 21 days; (c) backup 20 days ago; (d) backup 21 days ago; (e) backup 40 days ago.
+
+**F1 - The switch (R1).** Settings > `Your data`. Expected: `Backup reminder` sits right after `Backup and restore`, is on by default, and its meta reads `Shows a note on Home when your last backup is 21 or more days old`. Turn it off, force-stop, relaunch: it still draws off. Turn it on again.
+
+**F2 - When the line shows (R2).** With the switch on, check each case on Home. Expected: just finished with no backup: no line. (a) no line. (b) `No backup yet` under `Last workout`. (c) no line. (d) `Last backup 21 days ago`. (e) `Last backup 40 days ago`, and Backup's hero says the same.
+
+**F3 - The link (R3).** Press `Back up` on the line. Expected: Backup opens with no bottom navigation; the real Back returns to Home with the line still there.
+
+**F4 - A backup clears it (R4).** Export a real backup through the file picker. Expected: `Saved` and `Last backup today` on Backup, and the line is gone on Home.
+
+**F5 - Switch and running workout (R5).** With an old backup, turn the switch off: the line goes. On: it returns. Start a workout and `Leave it running and go Home`: the resume card shows and no line. Abandon that workout: the line returns.
+
+**F6 - Erase (R6, the review fix).** With an old backup, Settings > Erase all data, type `ERASE`, confirm, and come back to Home quickly. Expected: the first-run card and no line, even when you return inside a few seconds. `last_backup_at` is kept. Add one exercise and finish a workout: the line comes back once the dates qualify.
+
+**F7 - Look (R7).** Light and dark at font scale 1.0, then 1.3 and 2.0. Expected: at 1.0 the text and link share a row; above 1.1 the link takes its own line at the start; nothing clipped; the line sits under `Last workout` and clear of the bottom navigation; the link is easy to press. Restore the font to 1.0 afterwards.
+
+**Known limitations / out of scope.**
+- The device date is not changed; ages come from edited database times.
+- At font scale 2.0 the bottom bar's `Progress` label is cut to `Progr…`. It is not part of this item and is not yet on the backlog.
+- `No backup yet` counts from the first finished workout, so a phone with no workout never shows a line.
+- A failed read of the settings or history shows no line; a failed training-data read counts as having data.
+- The real app was not looked at again after the review fix; F6 is the check for it.
+- The full wrap-up runs come at acceptance.
+
 ## `safety-copy-polish` — complete (accepted by policy 2026-11-05)
 
 A Restoring screen blocks the app during a restore, and the Erase and Backup wording says what really happens. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/safety-copy-polish-execution.md` and the Optional findings at `docs/milestones/completed/safety-copy-polish-findings.md`.
