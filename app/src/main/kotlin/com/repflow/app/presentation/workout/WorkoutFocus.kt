@@ -63,6 +63,7 @@ import com.repflow.app.presentation.designsystem.components.RepFlowButtonDefault
 import com.repflow.app.presentation.designsystem.components.RepFlowPrimaryButton
 import com.repflow.app.presentation.designsystem.components.RepFlowSectionLabel
 import com.repflow.app.presentation.designsystem.components.RepFlowStepperMath
+import com.repflow.app.presentation.designsystem.components.formatDuration
 import com.repflow.app.presentation.designsystem.components.repFlowAccentOutlineColors
 import com.repflow.app.presentation.designsystem.components.repFlowSelectedPillColors
 import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
@@ -431,7 +432,7 @@ private fun LastSetLine(
     val body =
         when {
             exercise.trackingType == ExerciseTrackingType.DURATION -> {
-                stringResource(R.string.workout_focus_last_duration, last.durationSeconds ?: 0)
+                stringResource(R.string.workout_focus_last_duration, formatDuration((last.durationSeconds ?: 0).toLong()))
             }
 
             exercise.trackingType == ExerciseTrackingType.WEIGHT_AND_REPS && load != null -> {
@@ -494,7 +495,7 @@ private fun LastTimeLine(exercise: ActiveExerciseUi) {
     val text =
         when {
             exercise.trackingType == ExerciseTrackingType.DURATION && seconds != null -> {
-                stringResource(R.string.workout_focus_last_time_duration, seconds)
+                stringResource(R.string.workout_focus_last_time_duration, formatDuration(seconds.toLong()))
             }
 
             exercise.trackingType == ExerciseTrackingType.WEIGHT_AND_REPS && load != null && reps != null -> {

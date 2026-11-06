@@ -362,7 +362,14 @@ private fun SecondsCard(
     val label = stringResource(R.string.workout_active_duration_label)
     StepperCard(
         label = label,
-        caption = durationRange?.let { stringResource(R.string.workout_focus_seconds_target, it.first, it.last) },
+        caption =
+            durationRange?.let {
+                stringResource(
+                    R.string.workout_focus_seconds_target,
+                    formatDuration(it.first),
+                    formatDuration(it.last),
+                )
+            },
         hint = stringResource(R.string.workout_focus_time_hint, formatDuration(SECONDS_STEP.toLong())),
         modifier = modifier,
     ) {
@@ -638,7 +645,7 @@ internal fun WarmupChipRow(
             text =
                 stringResource(
                     if (isWarmup) R.string.workout_focus_warmup_hint_on else R.string.workout_focus_warmup_hint_off,
-                    restSeconds,
+                    formatDuration(restSeconds.toLong()),
                 ),
             style = MaterialTheme.typography.bodySmall,
             color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),

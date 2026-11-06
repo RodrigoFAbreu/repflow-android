@@ -95,6 +95,17 @@ class WorkoutDoneTest {
         assertEquals(RecapDelta.Seconds(0), recapDelta(BestSet.Seconds(60), BestSet.Seconds(60)))
     }
 
+    /** The clock is the screen's alone (timed-entry-mmss CP3): the model behind it still carries whole seconds. */
+    @Test
+    fun aTimedRecapStillCarriesWholeSeconds() {
+        assertEquals(
+            listOf(RecapGroup.Timed(listOf(90, 75, 60))),
+            recapGroups(ExerciseTrackingType.DURATION, listOf(hold(0, 90), hold(1, 75), hold(2, 60))),
+        )
+        assertEquals(RecapDelta.Seconds(15), recapDelta(BestSet.Seconds(90), BestSet.Seconds(75)))
+        assertEquals(RecapDelta.Seconds(-65), recapDelta(BestSet.Seconds(60), BestSet.Seconds(125)))
+    }
+
     @Test
     fun theDoneScreenListsOnlyTheRecommendationsThisCompletionComputed() =
         runTest {

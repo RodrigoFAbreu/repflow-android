@@ -40,6 +40,7 @@ import com.repflow.app.presentation.designsystem.RepFlowNumericTextStyle
 import com.repflow.app.presentation.designsystem.RepFlowSpacing
 import com.repflow.app.presentation.designsystem.components.RepFlowPrimaryButton
 import com.repflow.app.presentation.designsystem.components.RepFlowSheet
+import com.repflow.app.presentation.designsystem.components.formatDuration
 import com.repflow.app.presentation.designsystem.components.repFlowSelectedPillColors
 import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
 import com.repflow.app.presentation.designsystem.repFlowSecondaryTextColor
@@ -159,8 +160,10 @@ private fun PendingSetRow(
         listOfNotNull(
             stringResource(R.string.workout_focus_set_row_pending, row.setNumber),
             target?.repRange?.let { stringResource(R.string.workout_active_plan_rep_range, it.first, it.last) },
-            target?.durationRangeSeconds?.let { stringResource(R.string.workout_active_plan_duration_range, it.first, it.last) },
-            target?.restSeconds?.let { stringResource(R.string.workout_active_plan_rest, it) },
+            target?.durationRangeSeconds?.let {
+                stringResource(R.string.workout_active_plan_duration_range, formatDuration(it.first), formatDuration(it.last))
+            },
+            target?.restSeconds?.let { stringResource(R.string.workout_active_plan_rest, formatDuration(it.toLong())) },
         )
     val secondary = repFlowSecondaryTextColor(MaterialTheme.colorScheme)
     SetRowFrame(
@@ -238,7 +241,7 @@ private fun loggedSetSummary(
     val primaryText =
         when {
             trackingType == ExerciseTrackingType.DURATION -> {
-                stringResource(R.string.workout_active_set_row_duration, set.setNumber, set.durationSeconds ?: 0)
+                stringResource(R.string.workout_active_set_row_duration, set.setNumber, formatDuration((set.durationSeconds ?: 0).toLong()))
             }
 
             trackingType == ExerciseTrackingType.WEIGHT_AND_REPS && set.load != null -> {

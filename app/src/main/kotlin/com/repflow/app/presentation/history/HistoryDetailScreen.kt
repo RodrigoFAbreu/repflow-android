@@ -53,6 +53,7 @@ import com.repflow.app.presentation.designsystem.components.RepFlowStatRow
 import com.repflow.app.presentation.designsystem.components.RepFlowStatusChip
 import com.repflow.app.presentation.designsystem.components.RepFlowStepperMath
 import com.repflow.app.presentation.designsystem.components.RepFlowTagTone
+import com.repflow.app.presentation.designsystem.components.formatDuration
 import com.repflow.app.presentation.designsystem.components.repFlowAccentOutlineColors
 import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
 import com.repflow.app.presentation.designsystem.repFlowSecondaryTextColor
@@ -375,7 +376,7 @@ private fun SetRow(
     }
 }
 
-/** `70 kg × 10`, `70 kg`, `12 reps`, `45 s`, or `—`. */
+/** `70 kg × 10`, `70 kg`, `12 reps`, `0:45`, or `—`. */
 @Composable
 private fun setValueText(value: HistorySetValue): String =
     when (value) {
@@ -390,7 +391,7 @@ private fun setValueText(value: HistorySetValue): String =
         }
 
         is HistorySetValue.Seconds -> {
-            stringResource(R.string.history_detail_set_duration, value.seconds)
+            formatDuration(value.seconds.toLong())
         }
 
         HistorySetValue.Empty -> {

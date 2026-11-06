@@ -39,6 +39,7 @@ import com.repflow.app.presentation.designsystem.RepFlowColor
 import com.repflow.app.presentation.designsystem.RepFlowShapes
 import com.repflow.app.presentation.designsystem.RepFlowSpacing
 import com.repflow.app.presentation.designsystem.components.RepFlowNeutralOutlineButton
+import com.repflow.app.presentation.designsystem.components.formatDuration
 import com.repflow.app.presentation.designsystem.components.repFlowAccentOutlineColors
 import com.repflow.app.presentation.designsystem.components.repFlowSelectedPillColors
 import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
@@ -47,7 +48,7 @@ import com.repflow.app.presentation.exercise.editor.InlineError
 
 /**
  * One planned exercise (remediation-1 CP11). Collapsed, it is `4a`'s row
- * (`RepFlow.dc.html:905-917`, min-height 64): the name, `3 × 8–12 reps · 90s
+ * (`RepFlow.dc.html:905-917`, min-height 64): the name, `3 × 8–12 reps · 1:30
  * rest` (plus `2a`'s warm-up count and `optional` badge), and a caret. Tapping
  * it expands it in place (`4a`'s `nPlanRowSel`) into [PlannedExerciseTargets];
  * a row with no exercise yet opens the picker sheet instead.
@@ -156,7 +157,7 @@ private fun RowSummary(
     }
 }
 
-/** `4a`'s meta (`:3666`) - `3 × 8–12 reps · 120s rest` - with `2a`'s warm-up count; an invalid row says so instead. */
+/** `4a`'s meta (`:3666`) - `3 × 8–12 reps · 2:00 rest` - with `2a`'s warm-up count; an invalid row says so instead. */
 @Composable
 private fun RowMeta(row: PlannedExerciseRowUiState) {
     if (!row.hasNoErrors) {
@@ -171,8 +172,8 @@ private fun RowMeta(row: PlannedExerciseRowUiState) {
             stringResource(
                 R.string.training_plan_editor_row_meta_duration,
                 sets,
-                row.durationMinText.orMissing(),
-                row.durationMaxText.orMissing(),
+                row.durationMinText.orMissing().asClock(),
+                row.durationMaxText.orMissing().asClock(),
             )
         } else {
             stringResource(R.string.training_plan_editor_row_meta_reps, sets, row.repMinText.orMissing(), row.repMaxText.orMissing())
@@ -184,7 +185,7 @@ private fun RowMeta(row: PlannedExerciseRowUiState) {
                 pluralStringResource(R.plurals.training_plan_editor_row_meta_warmup, it, it)
             },
             row.restSecondsText.trim().takeIf { it.isNotEmpty() }?.let {
-                stringResource(R.string.training_plan_editor_row_meta_rest, it)
+                stringResource(R.string.training_plan_editor_row_meta_rest, it.asClock())
             },
         )
     Text(
@@ -326,6 +327,9 @@ internal fun ChangeExerciseButton(
 }
 
 private fun String.orMissing(): String = trim().ifEmpty { MISSING_VALUE }
+
+/** A plan field's whole seconds as the clock; the missing mark and anything unparsable stay as they are, since a field can hold either. */
+private fun String.asClock(): String = toLongOrNull()?.takeIf { it >= 0 }?.let(::formatDuration) ?: this
 
 private const val MISSING_VALUE = "–"
 private const val META_SEPARATOR = " · "

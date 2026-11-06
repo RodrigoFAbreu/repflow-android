@@ -38,7 +38,7 @@ import java.time.Instant
 /**
  * Stateless Compose coverage for [HistoryDetailScreen] - surfacing every
  * recordable set field (Milestone 8, CP13), on `3b`'s converted rows
- * (remediation-1 CP12): a timed set reads as its seconds, never the old
+ * (remediation-1 CP12): a timed set reads as its clock, never the old
  * `Set 0:  kg x ` template, and an exercise with no sets reads `No sets
  * logged` with no change shown (`D20`).
  */
@@ -205,7 +205,7 @@ class HistoryDetailScreenTest {
         setDetail(summaryOf(sessionWithSet(set, ExerciseTrackingType.DURATION)))
 
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.history_detail_set_duration, 45))
+            .onNodeWithText("0:45")
             .assertIsDisplayed()
     }
 
@@ -237,11 +237,74 @@ class HistoryDetailScreenTest {
         setDetail(summaryOf(sessionWithSet(set, ExerciseTrackingType.DURATION)))
 
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.history_detail_set_duration, 60))
+            .onNodeWithText("1:00")
             .assertIsDisplayed()
         composeRule.onNodeWithText("kg", substring = true).assertDoesNotExist()
         composeRule.onNodeWithText("×", substring = true).assertDoesNotExist()
         composeRule.onNodeWithText(" x ", substring = true).assertDoesNotExist()
+    }
+
+    private fun timedSet(
+        order: Int,
+        seconds: Int,
+    ): WorkoutSet =
+        (
+            WorkoutSet.create(
+                id = WorkoutSetId("set-$order"),
+                order = order,
+                trackingType = ExerciseTrackingType.DURATION,
+                load = null,
+                reps = null,
+                durationSeconds = seconds,
+                rpe = null,
+                isWarmup = false,
+                createdAt = Instant.parse("2026-01-01T00:10:00Z"),
+                updatedAt = Instant.parse("2026-01-01T00:10:00Z"),
+                pain = null,
+                techniqueQuality = null,
+            ) as DomainResult.Success
+        ).value
+
+    /** timed-entry-mmss CP3: under a minute, over a minute, and the long hold that started the item. */
+    @Test
+    fun aTimedSetReadsAsAClock() {
+        val session =
+            sessionWith(
+                exercise("we-1", "Plank", ExerciseTrackingType.DURATION, listOf(timedSet(0, 45), timedSet(1, 90), timedSet(2, 900))),
+            )
+        setDetail(summaryOf(session))
+
+        composeRule.onNodeWithText("0:45").assertIsDisplayed()
+        composeRule.onNodeWithText("1:30").assertIsDisplayed()
+        composeRule.onNodeWithText("15:00").assertIsDisplayed()
+    }
+
+    private fun setTimedDetailWithBests(
+        best: Int,
+        lastTime: Int,
+    ) {
+        val session = sessionWith(exercise("we-1", "Plank", ExerciseTrackingType.DURATION, listOf(timedSet(0, best))))
+        setDetail(
+            WorkoutSummary(
+                session = session,
+                recaps = listOf(ExerciseRecap(session.exercises[0], best = BestSet.Seconds(best), lastTime = BestSet.Seconds(lastTime))),
+                personalBests = emptyList(),
+            ),
+        )
+    }
+
+    @Test
+    fun aLongerHoldThanLastTimeShowsASignedClock() {
+        setTimedDetailWithBests(best = 90, lastTime = 75)
+
+        composeRule.onNodeWithText("+0:15").assertIsDisplayed()
+    }
+
+    @Test
+    fun aShorterHoldThanLastTimeShowsASignedClock() {
+        setTimedDetailWithBests(best = 60, lastTime = 125)
+
+        composeRule.onNodeWithText("−1:05").assertIsDisplayed()
     }
 
     /**

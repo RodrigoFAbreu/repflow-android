@@ -140,14 +140,14 @@
     <string name="workout_active_action_failed">Couldn\'t complete that. Try again.</string>
     <string name="workout_active_set_row_weight_reps">Set %1$d: %2$s kg x %3$d</string>
     <string name="workout_active_set_row_reps">Set %1$d: %2$d reps</string>
-    <string name="workout_active_set_row_duration">Set %1$d: %2$ds</string>
+    <string name="workout_active_set_row_duration">Set %1$d: %2$s</string>
     <string name="workout_active_set_extra_suffix">(extra)</string>
     <string name="workout_active_set_rpe">RPE: %1$s</string>
     <string name="workout_active_set_pain">Pain during set: %1$d/5</string>
     <string name="workout_active_set_technique_quality">Technique quality: %1$d/5</string>
     <string name="workout_active_plan_rep_range">Target: %1$d-%2$d reps</string>
-    <string name="workout_active_plan_duration_range">Target: %1$d-%2$ds</string>
-    <string name="workout_active_plan_rest">Rest: %1$ds</string>
+    <string name="workout_active_plan_duration_range">Target: %1$s-%2$s</string>
+    <string name="workout_active_plan_rest">Rest: %1$s</string>
     <string name="workout_active_load_label">Weight</string>
     <string name="workout_active_reps_label">Reps</string>
     <string name="workout_active_duration_label">Time (m:ss)</string>
@@ -210,12 +210,12 @@
     </plurals>
     <string name="training_plan_editor_exercises_count">%1$s · %2$s</string>
     <string name="training_plan_editor_row_meta_reps">%1$s × %2$s–%3$s reps</string>
-    <string name="training_plan_editor_row_meta_duration">%1$s × %2$s–%3$s s</string>
+    <string name="training_plan_editor_row_meta_duration">%1$s × %2$s–%3$s</string>
     <plurals name="training_plan_editor_row_meta_warmup">
         <item quantity="one">%d warm-up</item>
         <item quantity="other">%d warm-ups</item>
     </plurals>
-    <string name="training_plan_editor_row_meta_rest">%1$ss rest</string>
+    <string name="training_plan_editor_row_meta_rest">%1$s rest</string>
     <string name="training_plan_editor_row_needs_attention">Check this exercise\'s targets.</string>
     <string name="training_plan_editor_row_optional_badge">optional</string>
     <string name="training_plan_editor_row_expand">Show targets</string>
@@ -340,7 +340,6 @@
     <string name="history_detail_set_pain">Pain %1$d/5</string>
     <string name="history_detail_set_technique_quality">Technique %1$d/5</string>
     <string name="history_detail_set_warmup_suffix">warm-up</string>
-    <string name="history_detail_set_duration">%1$d s</string>
     <string name="history_detail_set_rpe">RPE %1$s</string>
     <string name="history_session_invalidate_action">Invalidate workout</string>
     <string name="history_invalidate_dialog_title">Invalidate this workout?</string>
@@ -526,13 +525,13 @@
         <item quantity="one">Last: %1$d rep</item>
         <item quantity="other">Last: %1$d reps</item>
     </plurals>
-    <string name="workout_focus_last_duration">Last: %1$d s</string>
+    <string name="workout_focus_last_duration">Last: %1$s</string>
     <string name="workout_focus_last_time_weight_reps">Last time: %1$s kg × %2$d</string>
     <plurals name="workout_focus_last_time_reps">
         <item quantity="one">Last time: %1$d rep</item>
         <item quantity="other">Last time: %1$d reps</item>
     </plurals>
-    <string name="workout_focus_last_time_duration">Last time: %1$d s</string>
+    <string name="workout_focus_last_time_duration">Last time: %1$s</string>
     <string name="workout_focus_undo_last">Undo last</string>
     <string name="workout_focus_correct_action">Correct this set</string>
     <string name="workout_focus_correct_title">Set %1$d</string>
@@ -541,7 +540,7 @@
     <string name="workout_focus_weight_caption_one">kg · %1$s step</string>
     <string name="workout_focus_weight_caption">kg · %1$s steps</string>
     <string name="workout_focus_reps_target">target %1$d–%2$d</string>
-    <string name="workout_focus_seconds_target">target %1$d–%2$d s</string>
+    <string name="workout_focus_seconds_target">target %1$s–%2$s</string>
     <string name="workout_focus_time_hint">Steps of %1$s. Tap the value to type m:ss.</string>
     <string name="workout_focus_less_weight">Less weight</string>
     <string name="workout_focus_more_weight">More weight</string>
@@ -562,8 +561,8 @@
     <string name="workout_focus_technique_high">clean</string>
     <string name="workout_focus_type_note_duration">Timed hold — no load recorded for this one.</string>
     <string name="workout_focus_type_note_reps">Body-weight exercise — reps only.</string>
-    <string name="workout_focus_warmup_hint_on">Logs outside the set count, %1$ds rest.</string>
-    <string name="workout_focus_warmup_hint_off">Working set — %1$ds rest after it.</string>
+    <string name="workout_focus_warmup_hint_on">Logs outside the set count, %1$s rest.</string>
+    <string name="workout_focus_warmup_hint_off">Working set — %1$s rest after it.</string>
     <string name="workout_focus_log_set">Log set</string>
     <string name="workout_focus_log_warmup">Log warm-up</string>
     <string name="workout_focus_next">Next</string>
@@ -600,7 +599,6 @@
         <item quantity="one">%d rep</item>
         <item quantity="other">%d reps</item>
     </plurals>
-    <string name="workout_done_set_seconds">%1$d s</string>
     <string name="workout_done_versus_label">Versus last time</string>
     <plurals name="workout_done_recap_detail">
         <item quantity="one">%1$d set · %2$s</item>
@@ -608,7 +606,6 @@
     </plurals>
     <string name="workout_done_recap_load_group">%1$s kg × %2$s</string>
     <string name="workout_done_recap_reps_group">%1$s reps</string>
-    <string name="workout_done_recap_seconds_group">%1$s s</string>
     <string name="workout_done_recap_no_sets">no sets recorded</string>
     <plurals name="workout_done_recap_warmups_only">
         <item quantity="one">%d warm-up only</item>
@@ -636,8 +633,8 @@
         <item quantity="other">same load, −%d reps</item>
     </plurals>
     <string name="workout_done_delta_reps_same">same reps</string>
-    <string name="workout_done_delta_seconds_up">+%1$d s</string>
-    <string name="workout_done_delta_seconds_down">−%1$d s</string>
+    <string name="workout_done_delta_seconds_up">+%1$s</string>
+    <string name="workout_done_delta_seconds_down">−%1$s</string>
     <string name="workout_done_delta_seconds_same">same time</string>
     <string name="workout_done_recommendations_label">Suggestions for next time</string>
     <string name="workout_done_saved_line">Saved to History as %1$s → %2$s.</string>

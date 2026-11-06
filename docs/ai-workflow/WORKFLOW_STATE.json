@@ -12629,14 +12629,14 @@
       "registry_path": "docs/ai-workflow/registry/timed-entry-mmss-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/timed-entry-mmss-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "IMPLEMENTING",
+      "phase": "SELF_REVIEWING_IMPLEMENTATION",
       "plan_revision": 2,
       "implementation_revision": null,
       "functional_review_round": null,
       "base_commit": "adec3533d6ffeb70cbc0a6fd070fdeb713b1937b",
       "reviewed_implementation_head": null,
       "current_checkpoint_id": null,
-      "last_completed_checkpoint_id": "CP2",
+      "last_completed_checkpoint_id": "CP3",
       "checkpoints": {
         "CP1": {
           "status": "COMPLETE",
@@ -12645,6 +12645,10 @@
         "CP2": {
           "status": "COMPLETE",
           "start_commit": "3d7e078dde472352a6586fd5c69a20d5d4032716"
+        },
+        "CP3": {
+          "status": "COMPLETE",
+          "start_commit": "e6c4326611ca04ed9b2e8ba5fb2186da9fc05d50"
         }
       },
       "current_bundle_id": "c11c7f8d6f67e5462e1f6eb4e7deb7d30b977602244f14409fd05f6f8271d593",
@@ -12773,8 +12777,8 @@
           "external": 0
         }
       },
-      "state_revision": 13,
-      "last_transition": "2026-11-06T06:00:47Z",
+      "state_revision": 15,
+      "last_transition": "2026-11-06T06:40:01Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",

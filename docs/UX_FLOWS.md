@@ -129,6 +129,8 @@ The user can:
 - Increase or decrease load (a stepper by the exercise's load step, or the
   keypad)
 - Increase or decrease repetitions (or seconds, for a timed exercise)
+- Type a value on the number pad, which opens on the current value, selected.
+  Timed values and rest read and are typed as m:ss, and are stored as seconds
 - Log the next set from the numbers already shown: after `Log set` the
   weight and reps (or seconds) stay and only RPE, pain, technique and the
   warm-up mark clear. A new exercise starts from last session's last working

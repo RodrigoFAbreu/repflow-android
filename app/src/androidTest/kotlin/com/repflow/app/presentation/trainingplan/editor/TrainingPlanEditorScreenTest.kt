@@ -886,6 +886,58 @@ class TrainingPlanEditorScreenTest {
         assertEquals(164f, (plus.right - minus.left).value, 1f)
     }
 
+    // ---- The collapsed row's meta reads as clocks (timed-entry-mmss CP3) ----
+
+    private fun showCollapsedTimedRow(
+        min: String,
+        max: String,
+        rest: String,
+    ) = setContent(
+        TrainingPlanEditorUiState(
+            rows =
+                listOf(
+                    PlannedExerciseRowUiState(
+                        rowId = 1L,
+                        exerciseId = "ex-plank",
+                        exerciseName = "Plank",
+                        trackingType = ExerciseTrackingType.DURATION,
+                        targetSetsText = "3",
+                        durationMinText = min,
+                        durationMaxText = max,
+                        restSecondsText = rest,
+                    ),
+                ),
+        ),
+    )
+
+    @Test
+    fun theRowMetaReadsAsClocksWithARestOverAMinute() {
+        showCollapsedTimedRow(min = "30", max = "60", rest = "90")
+
+        composeRule.onNodeWithText("3 × 0:30–1:00 · 1:30 rest").assertIsDisplayed()
+    }
+
+    @Test
+    fun theRowMetaReadsAsClocksWithARestUnderAMinute() {
+        showCollapsedTimedRow(min = "45", max = "900", rest = "45")
+
+        composeRule.onNodeWithText("3 × 0:45–15:00 · 0:45 rest").assertIsDisplayed()
+    }
+
+    @Test
+    fun aBlankFieldKeepsTheRowMetasPlaceholder() {
+        showCollapsedTimedRow(min = "", max = "60", rest = "")
+
+        composeRule.onNodeWithText("3 × ––1:00").assertIsDisplayed()
+    }
+
+    @Test
+    fun unparsableTextShowsInTheRowMetaAsItWas() {
+        showCollapsedTimedRow(min = "abc", max = "-5", rest = "1.5")
+
+        composeRule.onNodeWithText("3 × abc–-5 · 1.5 rest").assertIsDisplayed()
+    }
+
     private fun pickerOptions() =
         listOf(
             TrainingPlanEditorExerciseOption(
