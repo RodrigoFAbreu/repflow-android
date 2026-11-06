@@ -534,9 +534,12 @@
     <string name="workout_focus_last_time_duration">Last time: %1$s</string>
     <string name="workout_focus_undo_last">Undo last</string>
     <string name="workout_focus_correct_action">Correct this set</string>
-    <string name="workout_focus_correct_title">Set %1$d</string>
-    <string name="workout_focus_correct_subtitle">%1$s · correct what you actually lifted</string>
-    <string name="workout_focus_correct_save">Save the correction</string>
+    <string name="workout_focus_correct_title">Correct this set</string>
+    <string name="workout_focus_correct_subtitle">Set %1$d · %2$s</string>
+    <string name="workout_focus_correct_subtitle_warmup">Warm-up set · %1$s</string>
+    <string name="workout_focus_correct_hint">Optional. Tap a chosen number again to clear it.</string>
+    <string name="workout_focus_correct_cancel">Cancel</string>
+    <string name="workout_focus_correct_save">Save</string>
     <string name="workout_focus_weight_caption_one">kg · %1$s step</string>
     <string name="workout_focus_weight_caption">kg · %1$s steps</string>
     <string name="workout_focus_reps_target">target %1$d–%2$d</string>

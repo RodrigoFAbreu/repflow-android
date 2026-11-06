@@ -142,7 +142,9 @@ The user can:
 - Save the set (`Log set`)
 - Mark a warm-up set
 - Add an extra set beyond the plan's target
-- Undo or correct the most recently logged set
+- Undo the most recently logged set, or correct it: weight and reps or time,
+  and its RPE, pain and technique, which the correction sheet shows whatever
+  `Extra set fields` says
 - Skip or substitute the exercise *(declared intent — no domain backing;
   `IMPROVEMENT_ROADMAP.md` §9.2)*
 
