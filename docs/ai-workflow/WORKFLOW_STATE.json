@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_work_item_id": null,
+  "active_work_item_id": "backup-reminder",
   "work_items": {
     "workflow-v2-1-core": {
       "work_item_type": "process",
@@ -11662,6 +11662,331 @@
         },
         "evaluated_at": "2026-11-05T23:35:40Z",
         "workflow_release": "2.25.5"
+      }
+    },
+    "backup-reminder": {
+      "work_item_type": "product",
+      "work_item_kind": "product",
+      "work_item_id": "backup-reminder",
+      "parent_work_item_id": null,
+      "plan_path": "docs/milestones/backup-reminder-execution.md",
+      "registry_path": "docs/ai-workflow/registry/backup-reminder-registry.json",
+      "mapping_path": "docs/ai-workflow/requirements/backup-reminder-mapping.json",
+      "governing_workflow_version": "2.2",
+      "phase": "IMPLEMENTING",
+      "plan_revision": 2,
+      "implementation_revision": null,
+      "functional_review_round": null,
+      "base_commit": "31561878d68af71c0304925fc9f466d0ef4a8e7a",
+      "reviewed_implementation_head": null,
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": null,
+      "checkpoints": {},
+      "current_bundle_id": "582f933de50f7266431dd4c21f710f99e9832a5ccd6ba4faee0a291a6c371145",
+      "plan_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "582f933de50f7266431dd4c21f710f99e9832a5ccd6ba4faee0a291a6c371145",
+        "approved_review_content_id": "e0270ab6b8fc114e0e5f88b13eb1510bdce2cf0fbdf5f14c92f46af238262cdc",
+        "review_content_manifest": [
+          {
+            "path": "docs/ai-workflow/registry/backup-reminder-registry.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "81acd695c9c1c8c75f5f3ab4dd64170f688fd72c"
+          },
+          {
+            "path": "docs/ai-workflow/requirements/backup-reminder-mapping.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d7cfc3bf2493818de2ca7e742239fee0b83b285d"
+          },
+          {
+            "path": "docs/milestones/backup-reminder-execution.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "81014d74991bff608b851fea1c6f2dc3c9913ad1"
+          }
+        ],
+        "reviewed_content_commit": null,
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-06T00:45:55Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "e0270ab6b8fc114e0e5f88b13eb1510bdce2cf0fbdf5f14c92f46af238262cdc",
+            "ledger": {
+              "local": {
+                "bundle_id": "582f933de50f7266431dd4c21f710f99e9832a5ccd6ba4faee0a291a6c371145",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "be4edf0c8f8bf0701225f81a95bb1c1beb01388b39388bf8578fc2c45a3dcb6b",
+                "ledger_entry_sha256": "59a66713326effc9652b424870e4871d86b1967d25e55b6517a238411a5cc7d4",
+                "run_ref": "session:local .ai-review/backup-reminder/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "582f933de50f7266431dd4c21f710f99e9832a5ccd6ba4faee0a291a6c371145",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "34cb033b41d455d1853a15dc2a3859ef7e3d2f1c2ab7ab274d2b15909bee7fc0",
+                "ledger_entry_sha256": "7bedbd5b6dc2a6645c26fb943122ef0f7314ef8e357f461127e489c2acae3540",
+                "run_ref": "codex:20261106T004203Z-fa079dd4",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-06T00:45:55Z",
+          "workflow_release": "2.25.5"
+        }
+      },
+      "technical_approval": null,
+      "technical_review_block_pins": [],
+      "plan_review_stages": {
+        "review_content_id": "e0270ab6b8fc114e0e5f88b13eb1510bdce2cf0fbdf5f14c92f46af238262cdc",
+        "LOCAL_MODEL_PLAN_REVIEW": {
+          "bundle_id": "582f933de50f7266431dd4c21f710f99e9832a5ccd6ba4faee0a291a6c371145",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-06T00:41:38Z",
+          "verdict_sha256": "be4edf0c8f8bf0701225f81a95bb1c1beb01388b39388bf8578fc2c45a3dcb6b",
+          "run_ref": "session:local .ai-review/backup-reminder/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_PLAN_REVIEW": {
+          "bundle_id": "582f933de50f7266431dd4c21f710f99e9832a5ccd6ba4faee0a291a6c371145",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-06T00:43:36Z",
+          "verdict_sha256": "34cb033b41d455d1853a15dc2a3859ef7e3d2f1c2ab7ab274d2b15909bee7fc0",
+          "run_ref": "codex:20261106T004203Z-fa079dd4",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
+      },
+      "functional_acceptance_status": null,
+      "blocking_decisions": [],
+      "review_round_counts": {
+        "plan": {
+          "local": 2,
+          "external": 1
+        },
+        "implementation": {
+          "local": 0,
+          "external": 0
+        }
+      },
+      "state_revision": 9,
+      "last_transition": "2026-11-06T00:45:55Z",
+      "feedback_layout": "scoped",
+      "plan_review_binding": {
+        "status": "BOUND",
+        "at": "2026-11-06T00:31:46Z",
+        "consumed": {
+          "review_content_id": "ef0191ebd81a0b1f10ea041a4b9392e4b869076f7767dcc8f9b278b949760aed",
+          "plan_revision": 1,
+          "legacy": false
+        },
+        "published": {
+          "review_content_id": "e0270ab6b8fc114e0e5f88b13eb1510bdce2cf0fbdf5f14c92f46af238262cdc",
+          "plan_revision": 2
+        },
+        "bound": {
+          "review_content_id": "e0270ab6b8fc114e0e5f88b13eb1510bdce2cf0fbdf5f14c92f46af238262cdc",
+          "bundle_id": "582f933de50f7266431dd4c21f710f99e9832a5ccd6ba4faee0a291a6c371145",
+          "plan_revision": 2
+        }
+      },
+      "consumed_plan_review_content_ids": [
+        "ef0191ebd81a0b1f10ea041a4b9392e4b869076f7767dcc8f9b278b949760aed"
+      ],
+      "optional_findings": {
+        "F-2f126bbf41ad": {
+          "digest": "2f126bbf41ad43d4bb9539e4e68b3e81134f9f0d87af5bd293f4ad1ef5a5c47a",
+          "text": "**O1. CP2 test 5 cannot pass as written.** It seeds only a stale `lastBackupAt` on the fresh install it asks for, so rule 3 (no training data) returns `null` and Home shows no line. The test also needs a training-data row, and this class has no way to write one: no Hilt test rule, and only `composeRule.activity.settingsRepository` is reachable. The activity starts before the test body and `hasTrainingData` is re-read only when settings, sessions or the day change, so the row must go in before the settings write, or the line never appears. Both must be undone, because the class's KDoc promises \"the next walk finds Home as this one did\" and Erase leaves the settings row, so `lastBackupAt` needs its own reset. The user sees nothing wrong here, since the failure is loud, but this is the only test of the `RepFlowNavHost` wiring, so it should not be dropped when it fails.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "ef0191ebd81a0b1f10ea041a4b9392e4b869076f7767dcc8f9b278b949760aed",
+              "verdict": "REVISE",
+              "at": "2026-11-06T00:26:17Z"
+            }
+          ]
+        },
+        "F-be6374fa4479": {
+          "digest": "be6374fa447946dd8d6d5b77e0baa2eb213521175af819dd4b2f7b9f31ab6032",
+          "text": "**O2. Nothing tests that the line appears on a new day.** The plan names the day as an input, but CP2 test 3 only changes settings and sessions, and no mutation covers it. If the clock were read once, a phone left in the background across day 21 would show no line until something else changed. `HomeViewModelTest` already has what this needs (`VirtualClock.jumpTo`, `onForeground()`, line 141): a backup 20 days old gives `null`, and after a jump past midnight and `onForeground()` it gives `LastBackup(21)`.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "ef0191ebd81a0b1f10ea041a4b9392e4b869076f7767dcc8f9b278b949760aed",
+              "verdict": "REVISE",
+              "at": "2026-11-06T00:26:17Z"
+            }
+          ]
+        },
+        "F-6a4e78dc760a": {
+          "digest": "6a4e78dc760a3d34fd8ec015a66aa00c5dda36cfaeb58a74e7436dc8280cd5d5",
+          "text": "**O3. CP2's `Files:` leaves out three test files that must change.** `HomeRouteLifecycleTest.kt` and `ActiveWorkoutLeaveRouteTest.kt` each construct `HomeViewModel` by named arguments and call `HomeRoute`, so the androidTest source set stops compiling until they get the new arguments. `RepFlowIconsTest.kt` pins `EXPECTED_GLYPHS`, so `bundledIconSetIsTheGlyphSetThePlanEnumerates` fails on `ic_ph_floppy_disk`. The plan's fallback sentence covers only a named file that does not exist.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "ef0191ebd81a0b1f10ea041a4b9392e4b869076f7767dcc8f9b278b949760aed",
+              "verdict": "REVISE",
+              "at": "2026-11-06T00:26:17Z"
+            }
+          ]
+        },
+        "F-207d80fe0e57": {
+          "digest": "207d80fe0e5756edf649f6bbd637856a2467cabe8e49b1f469b3e9c47366bb34",
+          "text": "**O4. Two listed mutations do not do what the plan says.** CP1's \"make the migration's default 0 (test 1 and 2 fail)\": test 2 is `SettingsPersistenceTest`, an in-memory database that never runs a migration, so only test 1 fails; the mutation that test 2 catches is the entity's `defaultValue`. \"Drop the `BACKUP_REMINDER` arm of `withToggle`\": that `when` is an exhaustive expression, so the edit does not compile; use `-> this` instead.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "ef0191ebd81a0b1f10ea041a4b9392e4b869076f7767dcc8f9b278b949760aed",
+              "verdict": "REVISE",
+              "at": "2026-11-06T00:26:17Z"
+            }
+          ]
+        },
+        "F-baf5eefca3dc": {
+          "digest": "baf5eefca3dcbb8a967b49018a44ee088757fbb3642e573b5e8eaddda881a98d",
+          "text": "**O5. CP1 test 2 needs a small change to `SettingsPersistenceTest`.** \"Persists across a reopened database\" cannot run on the file's in-memory database, so it needs a real file, as `theProductionBuilderUpgradesARealVersion8DatabaseToTheNewDefaults` uses. Setting `backupReminder = false` in the file's `customised` value would also extend its existing Erase and restore checks to the new column; today they would hold it only at the default, so a restore that reset the switch would go unseen.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "ef0191ebd81a0b1f10ea041a4b9392e4b869076f7767dcc8f9b278b949760aed",
+              "verdict": "REVISE",
+              "at": "2026-11-06T00:26:17Z"
+            }
+          ]
+        },
+        "F-dff3e89ab793": {
+          "digest": "dff3e89ab7932872477c576ec5d5fdce6d1f3025c093984f4e7ce01aaf1c8576",
+          "text": "**O6. `docs/UX_FLOWS.md` would contradict itself.** Lines 43-44 say Archived and Backup \"both open from Settings only\", which `Back up ›` makes false for Backup, and the plan adds only a paragraph to the Home section. Correct that sentence and list the switch under `Data`. The `RepFlowNavHost` KDoc (lines 42-45) says the same thing.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "ef0191ebd81a0b1f10ea041a4b9392e4b869076f7767dcc8f9b278b949760aed",
+              "verdict": "REVISE",
+              "at": "2026-11-06T00:26:17Z"
+            }
+          ]
+        },
+        "F-f0cf90daf092": {
+          "digest": "f0cf90daf0925c6f0efae278637a8928c4f0dfaf49b39f1ff3deb2e225eb2efe",
+          "text": "**O7. A failed read of the running workout counts as no workout.** `HomeViewModel.activeSession` emits `null` on failure, so the line could show during a workout despite R2's \"never\". This is rare and harmless, because Home then also shows the start card instead of Resume, but the plan's failure rules do not mention it. Add a sentence accepting it.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "ef0191ebd81a0b1f10ea041a4b9392e4b869076f7767dcc8f9b278b949760aed",
+              "verdict": "REVISE",
+              "at": "2026-11-06T00:26:17Z"
+            }
+          ]
+        },
+        "F-cba299039747": {
+          "digest": "cba299039747e8056c19ff3791f149ef08d08add018d807760c16962b0f74049",
+          "text": "**O8. CP2 test 1 has no case for a recent backup with an old first workout.** The listed \"`lastBackupAt` set and a first workout also old\" case uses a stale date, so it also passes on a rule that falls through from a recent backup to the first-workout check. On such a rule, someone who has just exported a backup would see `No backup yet`, which is false, and the line would not go away, against R1. Test 3's fresh-backup case catches this only if it seeds an old finished workout, which the plan does not say. Add one case to test 1: `lastBackupAt` 3 days ago with the first workout 100 days ago gives `null`.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "e0270ab6b8fc114e0e5f88b13eb1510bdce2cf0fbdf5f14c92f46af238262cdc",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T00:41:38Z"
+            }
+          ]
+        },
+        "F-8b36bf665719": {
+          "digest": "8b36bf665719de0f909a6e4886787df0661f7fd4407acf76bf716ca8ff544977",
+          "text": "**O9. CP2 test 3 names no case for a phone with no training data, and none for the re-read.** The mutation list says dropping the training-data condition is caught by tests 1 and 3, but test 3 lists only a failing `hasTrainingData` read, which gives the line either way. A `HomeViewModel` that read the value once when it was built and kept it would pass test 3. Test 5 catches a stale `false` only if no earlier test in the run has left a row, and nothing catches a stale `true`, where the user would see an old date on an emptied phone's first-run Home, which R2 rules out. `InMemoryTrainingDataRepository` already has what this needs: with a stale backup and `hasTrainingData = false` the state is `null`; after setting it to `true` and changing a setting it is `LastBackup`; after setting it back to `false` and a change in the completed sessions it is `null` again.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "e0270ab6b8fc114e0e5f88b13eb1510bdce2cf0fbdf5f14c92f46af238262cdc",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T00:41:38Z"
+            }
+          ]
+        },
+        "F-a2608b977405": {
+          "digest": "a2608b9774051406aded62309a5e121573d4db3239083ee0f1cd91559034bc6f",
+          "text": "**Backup precedence coverage:** CP2 test 1 should explicitly check that a backup three days ago and a first finished workout 100 days ago returns `null`. The listed stale-backup precedence case would also pass an implementation that incorrectly falls through to `NoBackupYet` after a recent backup.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "MANUAL_EXTERNAL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "e0270ab6b8fc114e0e5f88b13eb1510bdce2cf0fbdf5f14c92f46af238262cdc",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T00:43:36Z"
+            }
+          ]
+        },
+        "F-a95eea464686": {
+          "digest": "a95eea4646861c3504d9d5a4874c177c82af0dac696606ec4f170ce7faa156e4",
+          "text": "**Training-data refresh coverage:** Extend CP2 test 3 to change `hasTrainingData` from false to true and back, triggering settings and completed-history emissions respectively. This would catch a ViewModel that caches the initial result despite the plan promising subsequent reads.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "MANUAL_EXTERNAL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "e0270ab6b8fc114e0e5f88b13eb1510bdce2cf0fbdf5f14c92f46af238262cdc",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T00:43:36Z"
+            }
+          ]
+        }
       }
     }
   },
