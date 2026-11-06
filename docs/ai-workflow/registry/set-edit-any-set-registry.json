@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "work_item_id": "set-edit-any-set",
+  "plan_revision": 2,
+  "checkpoints": [
+    {
+      "id": "CP1",
+      "name": "The correction names the set it changes (R2, R3, R4, R5)",
+      "depends_on": [],
+      "complexity": 2,
+      "session_target": "1"
+    },
+    {
+      "id": "CP2",
+      "name": "Every logged row opens the sheet for its set (R1, R2, R4, R5)",
+      "depends_on": [
+        "CP1"
+      ],
+      "complexity": 3,
+      "session_target": "1"
+    }
+  ]
+}

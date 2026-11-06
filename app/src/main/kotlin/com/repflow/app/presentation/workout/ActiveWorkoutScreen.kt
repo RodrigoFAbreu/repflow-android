@@ -47,6 +47,7 @@ import com.repflow.app.R
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSessionId
+import com.repflow.app.domain.workout.WorkoutSetId
 import com.repflow.app.presentation.designsystem.RepFlowColor
 import com.repflow.app.presentation.designsystem.RepFlowNumericTextStyle
 import com.repflow.app.presentation.designsystem.RepFlowShapes
@@ -119,7 +120,7 @@ fun ActiveWorkoutScreen(
     onOpenRecommendation: (ExerciseId) -> Unit,
     onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?, () -> Unit) -> Unit,
     onUndoLastSet: (WorkoutExerciseId) -> Unit,
-    onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
+    onEditSet: (WorkoutExerciseId, WorkoutSetId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
     onAddRestTime: () -> Unit,
     onRemoveRestTime: () -> Unit,
     onSkipRestTimer: () -> Unit,
@@ -173,7 +174,7 @@ fun ActiveWorkoutScreen(
                     onOpenRecommendation = onOpenRecommendation,
                     onRecordSet = onRecordSet,
                     onUndoLastSet = onUndoLastSet,
-                    onEditLastSet = onEditLastSet,
+                    onEditSet = onEditSet,
                     restStrip = {
                         content.restTimer?.let { timer ->
                             RestTimerBar(timer, onAddRestTime, onRemoveRestTime, onSkipRestTimer)
@@ -274,7 +275,7 @@ private fun WorkoutMode(
     onOpenRecommendation: (ExerciseId) -> Unit,
     onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?, () -> Unit) -> Unit,
     onUndoLastSet: (WorkoutExerciseId) -> Unit,
-    onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
+    onEditSet: (WorkoutExerciseId, WorkoutSetId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
     restStrip: @Composable () -> Unit,
     onCompleteWorkout: (WorkoutSessionId) -> Unit,
     onLeaveWorkout: () -> Unit,
@@ -328,7 +329,7 @@ private fun WorkoutMode(
             onOpenRecommendation = onOpenRecommendation,
             onRecordSet = onRecordSet,
             onUndoLastSet = onUndoLastSet,
-            onEditLastSet = onEditLastSet,
+            onEditSet = onEditSet,
             restStrip = restStrip,
             snackbarHostState = snackbarHostState,
         )

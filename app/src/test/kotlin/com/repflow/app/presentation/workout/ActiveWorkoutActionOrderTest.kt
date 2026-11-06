@@ -19,7 +19,7 @@ import com.repflow.app.application.workout.AbandonWorkoutSession
 import com.repflow.app.application.workout.AddWorkoutExercise
 import com.repflow.app.application.workout.AdjustRestTimer
 import com.repflow.app.application.workout.CompleteWorkoutSession
-import com.repflow.app.application.workout.EditLastWorkoutSet
+import com.repflow.app.application.workout.EditWorkoutSet
 import com.repflow.app.application.workout.InMemoryWorkoutRepository
 import com.repflow.app.application.workout.ObserveActiveWorkoutSession
 import com.repflow.app.application.workout.RecordWorkoutSet
@@ -88,7 +88,7 @@ class ActiveWorkoutActionOrderTest {
             addWorkoutExercise = AddWorkoutExercise(workoutRepository, ids),
             recordWorkoutSet = RecordWorkoutSet(workoutRepository, clock, ids),
             undoLastWorkoutSet = UndoLastWorkoutSet(workoutRepository),
-            editLastWorkoutSet = EditLastWorkoutSet(workoutRepository, clock),
+            editWorkoutSet = EditWorkoutSet(workoutRepository, clock),
             startRestTimer = StartRestTimer(workoutRepository, clock),
             adjustRestTimer = AdjustRestTimer(workoutRepository, clock),
             skipRestTimer = SkipRestTimer(workoutRepository),
@@ -193,6 +193,78 @@ class ActiveWorkoutActionOrderTest {
                         .sets.size,
                 )
                 assertNull(viewModel.uiState.value.errorMessage)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `a set then a correction of an earlier set changes the set the correction names`() =
+        runTest {
+            seedExercise()
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                val withExercise = startWorkoutWithTheExercise()
+                val sessionId = requireNotNull(workoutRepository.findActiveSession()).id
+                viewModel.onRecordSet(withExercise.id, 60.0, 8)
+                advanceUntilIdle()
+                val first =
+                    stored(sessionId)
+                        .exercises
+                        .single()
+                        .sets
+                        .single()
+                val hold = holdWrites()
+
+                viewModel.onRecordSet(withExercise.id, 60.0, 9)
+                viewModel.onEditSet(withExercise.id, first.id, 70.0, 5)
+                advanceUntilIdle()
+                hold.complete(Unit)
+                advanceUntilIdle()
+
+                val sets =
+                    stored(sessionId)
+                        .exercises
+                        .single()
+                        .sets
+                assertEquals(listOf(70.0 to 5, 60.0 to 9), sets.map { it.load to it.reps })
+                assertEquals(first.id, sets.first().id)
+                assertNull(viewModel.uiState.value.errorMessage)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `a correction waiting behind the undo of its set changes nothing and reports the failure`() =
+        runTest {
+            seedExercise()
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                val withExercise = startWorkoutWithTheExercise()
+                val sessionId = requireNotNull(workoutRepository.findActiveSession()).id
+                viewModel.onRecordSet(withExercise.id, 60.0, 8)
+                viewModel.onRecordSet(withExercise.id, 60.0, 9)
+                advanceUntilIdle()
+                val (first, second) =
+                    stored(sessionId)
+                        .exercises
+                        .single()
+                        .sets
+                val hold = holdWrites()
+
+                viewModel.onUndoLastSet(withExercise.id)
+                viewModel.onEditSet(withExercise.id, second.id, 70.0, 5)
+                advanceUntilIdle()
+                hold.complete(Unit)
+                advanceUntilIdle()
+
+                assertEquals(
+                    listOf(first),
+                    stored(sessionId)
+                        .exercises
+                        .single()
+                        .sets,
+                )
+                assertEquals(ActiveWorkoutErrorReason.NOT_FOUND, viewModel.uiState.value.errorMessage)
                 cancelAndIgnoreRemainingEvents()
             }
         }

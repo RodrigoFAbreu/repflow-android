@@ -1,0 +1,49 @@
+{
+  "dispositions": {
+    "F-01d7eb9493bd": {
+      "disposition": "fixed"
+    },
+    "F-148866759d00": {
+      "disposition": "fixed"
+    },
+    "F-191440790e1b": {
+      "disposition": "dropped",
+      "reason": "The reviewer's temporary file-backed test and the emulator look both showed the other sets stored as they were, so a user sees correct values and only a permanent test is missing."
+    },
+    "F-1bce57bf2f32": {
+      "disposition": "fixed"
+    },
+    "F-84646f7db3c5": {
+      "disposition": "dropped",
+      "reason": "Two mutation pairings in the plan text still name a test that would not catch that mutant, but another test named in the same pairing does, so a user sees nothing."
+    },
+    "F-95bdfe6f22b0": {
+      "disposition": "dropped",
+      "reason": "The refusal of `gh` was recorded in the milestone file and the note for #34 is carried in the bundle's `TEST_RESULTS.md`, so a user sees nothing."
+    },
+    "F-999fbc50ed5c": {
+      "disposition": "fixed"
+    },
+    "F-d0af9215e9eb": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/47",
+      "note": "Issues #34 and #47 were never read because `gh` was refused, so the note saying this item tightens the wrong-set correction note is still to be posted on #34 by someone `gh` allows; no user sees this."
+    },
+    "F-d5e257390bd5": {
+      "disposition": "fixed"
+    },
+    "F-e2a38534269b": {
+      "disposition": "fixed"
+    },
+    "F-f970f1b5d036": {
+      "disposition": "dropped",
+      "reason": "The same two mutation pairings are only plan wording, and tests 7 and 2 do catch those mutants, so a user sees nothing."
+    },
+    "F-faced7339687": {
+      "disposition": "dropped",
+      "reason": "Test 7 stayed in `ActiveWorkoutViewModelTest` and `detekt` passed, so the class-size limit was not hit and a user sees nothing."
+    }
+  },
+  "schema_version": 1,
+  "work_item_id": "set-edit-any-set"
+}

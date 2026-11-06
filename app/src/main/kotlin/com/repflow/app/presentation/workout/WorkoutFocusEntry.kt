@@ -104,10 +104,11 @@ internal data class SubmittedDetail(
  * while the save runs, so each of those four clears only if it still holds what
  * was submitted ([submittedDetail]): a value changed since the tap was not saved.
  *
- * [touched] is "the user has typed or stepped a value": until then the entry is
- * *untouched* and takes the seed ([applySeed]); once set it never takes one
- * again. Saved state, so a rotation or process death cannot turn a typed entry
- * back into an untouched one; [clearAfterSet] leaves it alone.
+ * [touched] is "these numbers are the user's": they typed or stepped a value, or
+ * saved a correction ([holdNumbers]). Until then the entry is *untouched* and takes
+ * the seed ([applySeed]); once set it never takes one again. Saved state, so a
+ * rotation or process death cannot turn a typed entry back into an untouched one;
+ * [clearAfterSet] leaves it alone.
  */
 @Stable
 internal class SetEntryState {
@@ -151,6 +152,16 @@ internal class SetEntryState {
         load = seed.load
         reps = seed.reps
         seconds = seed.seconds
+    }
+
+    /**
+     * Keeps the numbers as they are from now on, whatever later seeds say. `20n`
+     * has a saved correction leave the steppers alone, and correcting the last
+     * working set moves the seed. It sets [touched] because that is saved: the seed
+     * effect restarts on a trip to the Board and on a restore.
+     */
+    fun holdNumbers() {
+        touched = true
     }
 
     /**

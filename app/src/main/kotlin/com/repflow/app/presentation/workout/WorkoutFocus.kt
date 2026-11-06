@@ -30,6 +30,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -55,6 +56,7 @@ import com.repflow.app.application.settings.ExtraSetFields
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.workout.WorkoutExerciseId
+import com.repflow.app.domain.workout.WorkoutSetId
 import com.repflow.app.presentation.designsystem.RepFlowColor
 import com.repflow.app.presentation.designsystem.RepFlowNumericTextStyle
 import com.repflow.app.presentation.designsystem.RepFlowSpacing
@@ -101,7 +103,7 @@ internal fun WorkoutFocus(
     onOpenRecommendation: (ExerciseId) -> Unit,
     onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?, () -> Unit) -> Unit,
     onUndoLastSet: (WorkoutExerciseId) -> Unit,
-    onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
+    onEditSet: (WorkoutExerciseId, WorkoutSetId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
     restStrip: @Composable () -> Unit,
     snackbarHostState: SnackbarHostState,
 ) {
@@ -112,7 +114,7 @@ internal fun WorkoutFocus(
     // seed even when it equals the previous exercise's, which would not restart a seed-only key.
     LaunchedEffect(entry, exercise.seed) { entry.applySeed(exercise.seed) }
     var detailExpanded by rememberSaveable(exercise.id.value) { mutableStateOf(false) }
-    var correcting by rememberSaveable(exercise.id.value) { mutableStateOf(false) }
+    var correctingSetId by rememberSaveable(exercise.id.value) { mutableStateOf<String?>(null) }
     val header = focusHeader(content.exercises, exercise)
     val extraFieldsOn = content.extraSetFields != ExtraSetFields.OFF
 
@@ -135,7 +137,7 @@ internal fun WorkoutFocus(
             ) {
                 FocusHeader(name = exercise.name, header = header)
                 exercise.instructions?.let { TechniqueNotes(exerciseKey = exercise.id.value, instructions = it) }
-                FocusSetList(exercise = exercise, onCorrectLast = { correcting = true })
+                FocusSetList(exercise = exercise, onCorrect = { correctingSetId = it.value })
                 LastSetLine(exercise = exercise, onUndo = { onUndoLastSet(exercise.id) })
                 LastTimeLine(exercise = exercise)
                 val exerciseId = exercise.exerciseId
@@ -207,26 +209,39 @@ internal fun WorkoutFocus(
         )
     }
 
-    val lastSet = exercise.sets.lastOrNull()
-    if (correcting && lastSet != null) {
-        SetCorrectionSheet(
-            exercise = exercise,
-            set = lastSet,
-            onDismissRequest = { correcting = false },
-            onSave = { load, reps, seconds, rpe, pain, technique ->
-                correcting = false
-                onEditLastSet(
-                    exercise.id,
-                    load?.toDouble(),
-                    reps?.toInt(),
-                    seconds?.toInt(),
-                    rpe,
-                    lastSet.isWarmup,
-                    pain,
-                    technique,
+    val openSetId = correctingSetId
+    if (openSetId != null) {
+        val openSet = exercise.sets.find { it.id.value == openSetId }
+        if (openSet == null) {
+            // Undone, or the workout changed under a restored sheet. Cleared so a stale id can't reopen a sheet later.
+            LaunchedEffect(openSetId) { correctingSetId = null }
+        } else {
+            // Saved values are found by position, so a sheet whose set is gone by the restore would hand its
+            // values to the next sheet opened here, and `Save` would write them. The key gives each set its own.
+            key(openSet.id.value) {
+                SetCorrectionSheet(
+                    exercise = exercise,
+                    set = openSet,
+                    onDismissRequest = { correctingSetId = null },
+                    onSave = { load, reps, seconds, rpe, pain, technique ->
+                        correctingSetId = null
+                        // `20n`: a correction leaves the steppers alone, and correcting the last set moves the seed.
+                        entry.holdNumbers()
+                        onEditSet(
+                            exercise.id,
+                            openSet.id,
+                            load?.toDouble(),
+                            reps?.toInt(),
+                            seconds?.toInt(),
+                            rpe,
+                            openSet.isWarmup,
+                            pain,
+                            technique,
+                        )
+                    },
                 )
-            },
-        )
+            }
+        }
     }
 }
 

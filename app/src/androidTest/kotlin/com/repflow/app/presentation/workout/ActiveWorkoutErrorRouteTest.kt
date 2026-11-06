@@ -28,7 +28,7 @@ import com.repflow.app.application.workout.AddWorkoutExercise
 import com.repflow.app.application.workout.AddWorkoutExerciseCommand
 import com.repflow.app.application.workout.AdjustRestTimer
 import com.repflow.app.application.workout.CompleteWorkoutSession
-import com.repflow.app.application.workout.EditLastWorkoutSet
+import com.repflow.app.application.workout.EditWorkoutSet
 import com.repflow.app.application.workout.ObserveActiveWorkoutSession
 import com.repflow.app.application.workout.RecordWorkoutSet
 import com.repflow.app.application.workout.RecordWorkoutSetCommand
@@ -264,7 +264,7 @@ class ActiveWorkoutErrorRouteTest {
             addWorkoutExercise = AddWorkoutExercise(workouts, ids),
             recordWorkoutSet = RecordWorkoutSet(workouts, clock, ids),
             undoLastWorkoutSet = UndoLastWorkoutSet(workouts),
-            editLastWorkoutSet = EditLastWorkoutSet(workouts, clock),
+            editWorkoutSet = EditWorkoutSet(workouts, clock),
             startRestTimer = StartRestTimer(workouts, clock),
             adjustRestTimer = AdjustRestTimer(workouts, clock),
             skipRestTimer = SkipRestTimer(workouts),

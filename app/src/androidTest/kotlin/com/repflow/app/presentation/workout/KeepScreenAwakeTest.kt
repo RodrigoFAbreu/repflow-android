@@ -67,7 +67,7 @@ class KeepScreenAwakeTest {
                         onOpenRecommendation = {},
                         onRecordSet = { _, _, _, _, _, _, _, _, _ -> },
                         onUndoLastSet = {},
-                        onEditLastSet = { _, _, _, _, _, _, _, _ -> },
+                        onEditSet = { _, _, _, _, _, _, _, _, _ -> },
                         onAddRestTime = {},
                         onRemoveRestTime = {},
                         onSkipRestTimer = {},

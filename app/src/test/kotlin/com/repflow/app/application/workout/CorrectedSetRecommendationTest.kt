@@ -24,14 +24,16 @@ import com.repflow.app.domain.trainingplan.TrainingPlanVersion
 import com.repflow.app.domain.trainingplan.TrainingPlanVersionId
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSessionId
+import com.repflow.app.domain.workout.WorkoutSetId
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.Instant
 
 /**
  * A corrected RPE reaches the suggestion that workout completion stores, because
- * [EditLastWorkoutSet] rewrites the same persisted set [CompleteWorkoutSession] reads.
+ * [EditWorkoutSet] rewrites the same persisted set [CompleteWorkoutSession] reads.
  * The rep range comes from a real planned exercise: without one the policy gives
  * `WaitForMoreData` whatever the RPE. The recovery and futsal fakes stay empty, so no
  * recovery adjustment applies.
@@ -46,7 +48,7 @@ class CorrectedSetRecommendationTest {
     private val startSession = StartWorkoutSession(workoutRepository, FixedClock(now), ids)
     private val addExercise = AddWorkoutExercise(workoutRepository, ids)
     private val recordSet = RecordWorkoutSet(workoutRepository, FixedClock(now), ids)
-    private val editLastSet = EditLastWorkoutSet(workoutRepository, FixedClock(now.plusSeconds(60)))
+    private val editSet = EditWorkoutSet(workoutRepository, FixedClock(now.plusSeconds(60)))
     private val complete =
         CompleteWorkoutSession(
             workoutRepository,
@@ -97,7 +99,10 @@ class CorrectedSetRecommendationTest {
         requireSuccess(trainingPlanRepository.createPlanWithFirstVersion(plan, version))
     }
 
-    private suspend fun logTwoWorkingSetsOf12RepsAtRpe7(): Pair<WorkoutSessionId, WorkoutExerciseId> {
+    private suspend fun logTwoWorkingSetsOf12Reps(
+        firstRpe: Double = 7.0,
+        secondRpe: Double = 7.0,
+    ): Pair<WorkoutSessionId, WorkoutExerciseId> {
         seedPlanWithARepRangeOf8To12()
         val sessionId = requireSuccess(startSession(StartWorkoutSessionCommand(trainingPlanVersionId = versionId)))
         val workoutExerciseId =
@@ -112,7 +117,7 @@ class CorrectedSetRecommendationTest {
                     ),
                 ),
             )
-        repeat(2) {
+        listOf(firstRpe, secondRpe).forEach { rpe ->
             requireSuccess(
                 recordSet(
                     RecordWorkoutSetCommand(
@@ -121,13 +126,42 @@ class CorrectedSetRecommendationTest {
                         load = 60.0,
                         reps = 12,
                         durationSeconds = null,
-                        rpe = 7.0,
+                        rpe = rpe,
                         isWarmup = false,
                     ),
                 ),
             )
         }
         return sessionId to workoutExerciseId
+    }
+
+    private suspend fun loggedSetIds(sessionId: WorkoutSessionId): List<WorkoutSetId> =
+        requireNotNull(workoutRepository.findById(sessionId))
+            .exercises
+            .single()
+            .sets
+            .map { it.id }
+
+    private suspend fun correctRpe(
+        sessionId: WorkoutSessionId,
+        workoutExerciseId: WorkoutExerciseId,
+        setId: WorkoutSetId,
+        rpe: Double,
+    ) {
+        requireSuccess(
+            editSet(
+                EditWorkoutSetCommand(
+                    sessionId = sessionId,
+                    exerciseId = workoutExerciseId,
+                    setId = setId,
+                    load = 60.0,
+                    reps = 12,
+                    durationSeconds = null,
+                    rpe = rpe,
+                    isWarmup = false,
+                ),
+            ),
+        )
     }
 
     private suspend fun completeAndReadTheSuggestion(sessionId: WorkoutSessionId): ProgressionResult? {
@@ -138,7 +172,7 @@ class CorrectedSetRecommendationTest {
     @Test
     fun `with no correction the logged RPE gives an increase`() =
         runTest {
-            val (sessionId, _) = logTwoWorkingSetsOf12RepsAtRpe7()
+            val (sessionId, _) = logTwoWorkingSetsOf12Reps()
 
             assertEquals(ProgressionResult.IncreaseLoad, completeAndReadTheSuggestion(sessionId))
         }
@@ -146,23 +180,31 @@ class CorrectedSetRecommendationTest {
     @Test
     fun `an RPE corrected before completing changes the stored suggestion`() =
         runTest {
-            val (sessionId, workoutExerciseId) = logTwoWorkingSetsOf12RepsAtRpe7()
+            val (sessionId, workoutExerciseId) = logTwoWorkingSetsOf12Reps()
 
-            requireSuccess(
-                editLastSet(
-                    EditLastWorkoutSetCommand(
-                        sessionId = sessionId,
-                        exerciseId = workoutExerciseId,
-                        load = 60.0,
-                        reps = 12,
-                        durationSeconds = null,
-                        rpe = 10.0,
-                        isWarmup = false,
-                    ),
-                ),
-            )
+            correctRpe(sessionId, workoutExerciseId, loggedSetIds(sessionId).last(), rpe = 10.0)
 
             assertEquals(ProgressionResult.MaintainLoad, completeAndReadTheSuggestion(sessionId))
+        }
+
+    /** `ProgressionPolicyV1` averages, so RPE 10 then 7 is 8.5, and only a correction of the first set can move it. */
+    @Test
+    fun `a high RPE logged on the first set holds the suggestion with no correction`() =
+        runTest {
+            val (sessionId, _) = logTwoWorkingSetsOf12Reps(firstRpe = 10.0, secondRpe = 7.0)
+
+            assertEquals(ProgressionResult.MaintainLoad, completeAndReadTheSuggestion(sessionId))
+        }
+
+    @Test
+    fun `an RPE corrected on the first set changes the suggestion, and only on completion`() =
+        runTest {
+            val (sessionId, workoutExerciseId) = logTwoWorkingSetsOf12Reps(firstRpe = 10.0, secondRpe = 7.0)
+
+            correctRpe(sessionId, workoutExerciseId, loggedSetIds(sessionId).first(), rpe = 7.0)
+
+            assertNull(recommendationRepository.findLatestForExercise(exerciseId))
+            assertEquals(ProgressionResult.IncreaseLoad, completeAndReadTheSuggestion(sessionId))
         }
 
     private fun <T> requireSuccess(result: DomainResult<T, *>): T =

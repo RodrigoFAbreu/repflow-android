@@ -46,6 +46,24 @@ class SetEntryStateTest {
     }
 
     @Test
+    fun `holding the numbers changes none of them and a later seed replaces nothing`() {
+        val entry = SetEntryState()
+        entry.applySeed(seed)
+
+        entry.holdNumbers()
+
+        assertEquals(BigDecimal("80"), entry.load)
+        assertEquals(BigDecimal("8"), entry.reps)
+        assertNull(entry.seconds)
+        assertTrue(entry.touched)
+
+        entry.applySeed(SetEntrySeed(load = BigDecimal("90"), reps = BigDecimal("10")))
+
+        assertEquals(BigDecimal("80"), entry.load)
+        assertEquals(BigDecimal("8"), entry.reps)
+    }
+
+    @Test
     fun `a null seed leaves the entry alone`() {
         val entry = SetEntryState()
         entry.applySeed(seed)

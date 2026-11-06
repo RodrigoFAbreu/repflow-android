@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -40,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.repflow.app.R
 import com.repflow.app.domain.exercise.ExerciseTrackingType
+import com.repflow.app.domain.workout.WorkoutSetId
 import com.repflow.app.presentation.designsystem.RepFlowColor
 import com.repflow.app.presentation.designsystem.RepFlowNumericTextStyle
 import com.repflow.app.presentation.designsystem.RepFlowSpacing
@@ -62,14 +64,14 @@ import java.math.BigDecimal
 @Composable
 internal fun FocusSetList(
     exercise: ActiveExerciseUi,
-    onCorrectLast: () -> Unit,
+    onCorrect: (WorkoutSetId) -> Unit,
 ) {
     val rows = exercise.focusSetRows()
     if (rows.isEmpty()) return
     Column {
         rows.forEach { row ->
             when (row) {
-                is FocusSetRow.Logged -> LoggedSetRow(row, exercise.trackingType, onCorrect = onCorrectLast)
+                is FocusSetRow.Logged -> LoggedSetRow(row, exercise.trackingType, onCorrect = { onCorrect(row.set.id) })
                 is FocusSetRow.Pending -> PendingSetRow(row, exercise.plannedTarget)
             }
             HorizontalDivider(
@@ -83,8 +85,9 @@ internal fun FocusSetList(
 /**
  * One logged set: the design's 26dp status disc (a check on accent for a
  * working set, the flame on a hairline for a warm-up), the summary, its
- * RPE/pain/technique line, and - on the most recently recorded set only - the
- * pencil that opens the correction sheet (`D31`).
+ * RPE/pain/technique line, and `20n`'s pencil. The whole row opens the
+ * correction sheet for this set, so it is one target and one screen-reader stop,
+ * and the pencil has no semantics of its own beyond a test tag.
  *
  * The summary line stays one node carrying exactly `primary + warm-up +
  * extra`: `ActiveWorkoutScreenTest` matches that concatenation by exact text,
@@ -109,12 +112,7 @@ private fun LoggedSetRow(
     val selected = repFlowSelectedPillColors(MaterialTheme.colorScheme)
     val secondary = repFlowSecondaryTextColor(MaterialTheme.colorScheme)
     SetRowFrame(
-        modifier =
-            if (row.isLast) {
-                Modifier.clickable(role = Role.Button, onClickLabel = correctLabel, onClick = onCorrect)
-            } else {
-                Modifier
-            },
+        modifier = Modifier.clickable(role = Role.Button, onClickLabel = correctLabel, onClick = onCorrect),
         disc = {
             if (set.isWarmup) {
                 SetDisc(icon = RepFlowIcons.fire, fill = Color.Transparent, ring = RepFlowColor.hairline, tint = secondary)
@@ -122,19 +120,14 @@ private fun LoggedSetRow(
                 SetDisc(icon = RepFlowIcons.checkFat, fill = selected.fill, ring = Color.Transparent, tint = selected.label)
             }
         },
-        trailing =
-            if (row.isLast) {
-                {
-                    Icon(
-                        painter = painterResource(RepFlowIcons.pencilSimple),
-                        contentDescription = null,
-                        tint = secondary,
-                        modifier = Modifier.size(14.dp),
-                    )
-                }
-            } else {
-                null
-            },
+        trailing = {
+            Icon(
+                painter = painterResource(RepFlowIcons.pencilSimple),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(SetRowPencilSize).testTag(SET_ROW_PENCIL_TAG),
+            )
+        },
     ) {
         Text(
             text = loggedSetSummary(set, trackingType, row.isExtra),
@@ -262,11 +255,10 @@ private fun loggedSetSummary(
 }
 
 /**
- * The correction sheet (`20i`), opened by the pencil on the most recently
- * logged set - the only set a correction can reach (`D31`). It corrects what
- * was lifted (weight, reps or seconds) and the set's RPE, pain and technique
- * through the existing `EditLastWorkoutSet`; the warm-up flag is passed back
- * unchanged. There is no `Delete`: removing the last set is `Undo last` (`D66`).
+ * The correction sheet (`20i`), opened from any logged set's row (`20n`). It
+ * corrects what was lifted (weight, reps or seconds) and the set's RPE, pain and
+ * technique through `EditWorkoutSet`; the warm-up flag is passed back unchanged.
+ * There is no `Delete`: removing the last set is `Undo last` (`D66`).
  *
  * The rows show whatever `Extra set fields` says, as `20i` draws them: that
  * setting is about logging, and this sheet is the only way to fix a value it
@@ -287,8 +279,10 @@ internal fun SetCorrectionSheet(
 /**
  * The sheet's content: all of it scrolls, with `Save` at the foot, because at
  * font scales 1.3 and 2.0 it is taller than the screen. It sits outside
- * [SetCorrectionSheet] so tests can mount it under a font scale and a restore,
- * which `ModalBottomSheet`'s own window doesn't allow.
+ * [SetCorrectionSheet] so tests can mount it alone, under a font scale and
+ * `StateRestorationTester`. That tester can't reach these values through the
+ * sheet, whose window keeps them in a registry of its own, saved only when the
+ * activity is; a test of them through the sheet recreates the activity.
  *
  * The set's own RPE is held as a [Double], not as a cell: a set can hold 7.5,
  * which selects no cell and goes back exactly as it was unless a cell is tapped.
@@ -414,8 +408,14 @@ private fun SetCorrectionActions(
 private const val SET_ROW_DIVIDER_ALPHA = 0.08f
 private const val STACK_ACTIONS_FONT_SCALE = 1.1f
 
+/** Lets a test count the pencils, which have no semantics of their own. */
+internal const val SET_ROW_PENCIL_TAG = "workout_set_row_pencil"
+
 private val SetRowMinHeight = 48.dp
 private val SetDiscSize = 26.dp
+
+/** `20n`'s glyph, the size `dp-kit.js`'s `ib` draws. The whole row is the target, so it has no box of its own. */
+private val SetRowPencilSize = 20.dp
 
 /** The summary at 14.5, tabular: a set list whose digits change must not reflow. */
 private val SetRowFontSize = 14.5.sp

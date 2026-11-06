@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "work_item_id": "set-edit-any-set",
+  "requirements": {
+    "R1": {
+      "description": "Every logged set of the exercise in focus shows the pencil and opens the correction sheet for that set, filled with its own values; pending rows don't",
+      "checkpoint_ids": [
+        "CP2"
+      ]
+    },
+    "R2": {
+      "description": "Saving changes only the set that was opened, found by its id; other sets are stored as they were and the set keeps its id, order, createdAt and warm-up flag; a missing set changes nothing and reports the failure",
+      "checkpoint_ids": [
+        "CP1",
+        "CP2"
+      ]
+    },
+    "R3": {
+      "description": "A corrected RPE on an earlier set changes the recommendation workout completion stores, as a logged one does",
+      "checkpoint_ids": [
+        "CP1"
+      ]
+    },
+    "R4": {
+      "description": "The sheet comes back on the same set after a rotation, never opens on another set or with another set's values and closes if its set is gone; Undo last still removes only the most recent set, and apart from the pencil the rows' look is unchanged",
+      "checkpoint_ids": [
+        "CP1",
+        "CP2"
+      ]
+    },
+    "R5": {
+      "description": "Saving a correction leaves the steppers, the rest timer and the suggestion strip as they are",
+      "checkpoint_ids": [
+        "CP1",
+        "CP2"
+      ]
+    }
+  }
+}

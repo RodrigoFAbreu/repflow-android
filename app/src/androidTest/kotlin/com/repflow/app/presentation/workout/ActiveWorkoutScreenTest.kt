@@ -1,23 +1,29 @@
 package com.repflow.app.presentation.workout
 
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
@@ -27,6 +33,7 @@ import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -58,6 +65,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.math.BigDecimal
 import java.time.Instant
 
 /**
@@ -93,7 +101,9 @@ class ActiveWorkoutScreenTest {
         openFirstExercise: Boolean = true,
         exercises: List<ActiveExerciseUi> = listOf(exercise),
         onFocusExercise: (WorkoutExerciseId?) -> Unit = {},
-        onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit = { _, _, _, _, _, _, _, _ -> },
+        onEditSet: (WorkoutExerciseId, WorkoutSetId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit =
+            { _, _, _, _, _, _, _, _, _ -> },
+        onUndoLastSet: (WorkoutExerciseId) -> Unit = {},
         onCompleteWorkout: (WorkoutSessionId) -> Unit = {},
         errorMessage: State<ActiveWorkoutErrorReason?> = mutableStateOf(null),
         onErrorShown: () -> Unit = {},
@@ -123,8 +133,8 @@ class ActiveWorkoutScreenTest {
                     onCreateExercise = {},
                     onOpenRecommendation = onOpenRecommendation,
                     onRecordSet = onRecordSet,
-                    onUndoLastSet = {},
-                    onEditLastSet = onEditLastSet,
+                    onUndoLastSet = onUndoLastSet,
+                    onEditSet = onEditSet,
                     onAddRestTime = {},
                     onRemoveRestTime = {},
                     onSkipRestTimer = {},
@@ -730,19 +740,19 @@ class ActiveWorkoutScreenTest {
     }
 
     /**
-     * The pencil on the most recently logged set opens the correction sheet
-     * (`D31`, `D66`): it corrects what was lifted through `onEditLastSet`, and
-     * what isn't touched goes back unchanged, a half RPE included.
+     * A logged set's row opens the correction sheet (`20n`, `D66`): it corrects
+     * what was lifted through `onEditSet`, and what isn't touched goes back
+     * unchanged, a half RPE included.
      */
     @Test
-    fun correctingTheLastSetKeepsItsOtherFieldsAndReachesOnEditLastSet() {
+    fun correctingASetKeepsItsOtherFieldsAndReachesOnEditSet() {
         var edited: List<Any?>? = null
         setContent(
             exercise(
                 ExerciseTrackingType.WEIGHT_AND_REPS,
                 sets = listOf(set(1, load = 60.0, reps = 8, rpe = 7.5, pain = 1)),
             ),
-            onEditLastSet = { _, load, reps, duration, rpe, isWarmup, pain, technique ->
+            onEditSet = { _, _, load, reps, duration, rpe, isWarmup, pain, technique ->
                 edited = listOf(load, reps, duration, rpe, isWarmup, pain, technique)
             },
         )
@@ -971,7 +981,7 @@ class ActiveWorkoutScreenTest {
     private fun correctATimedSetOf45Seconds(onEdited: (Int?) -> Unit) {
         setContent(
             exercise(ExerciseTrackingType.DURATION, sets = listOf(set(1, durationSeconds = 45))),
-            onEditLastSet = { _, _, _, duration, _, _, _, _ -> onEdited(duration) },
+            onEditSet = { _, _, _, _, duration, _, _, _, _ -> onEdited(duration) },
         )
         composeRule
             .onNode(hasClickAction() and hasText(composeRule.activity.getString(R.string.workout_active_set_row_duration, 1, "0:45")))
@@ -1008,9 +1018,8 @@ class ActiveWorkoutScreenTest {
 
     // ---- The sheet also edits RPE, pain and technique (set-edit-fields CP1) ----
 
-    /** The row with `Set 1:` is the only logged set in these tests, so it is the last one and opens the sheet. */
-    private fun openCorrectionSheet() {
-        composeRule.onNode(hasClickAction() and hasText("Set 1:", substring = true)).performScrollTo().performClick()
+    private fun openCorrectionSheet(setNumber: Int = 1) {
+        composeRule.onNode(hasClickAction() and hasText("Set $setNumber:", substring = true)).performScrollTo().performClick()
         node(R.string.workout_focus_correct_title).assertIsDisplayed()
     }
 
@@ -1024,7 +1033,7 @@ class ActiveWorkoutScreenTest {
         setContent(
             exercise(trackingType, sets = listOf(lastSet)),
             extraSetFields = extraSetFields,
-            onEditLastSet = { _, load, reps, duration, rpe, isWarmup, pain, technique ->
+            onEditSet = { _, _, load, reps, duration, rpe, isWarmup, pain, technique ->
                 onEdited(listOf(load, reps, duration, rpe, isWarmup, pain, technique))
             },
         )
@@ -1125,7 +1134,7 @@ class ActiveWorkoutScreenTest {
     }
 
     @Test
-    fun tappedCellsReachOnEditLastSet() {
+    fun tappedCellsReachOnEditSet() {
         var edited: List<Any?>? = null
         correct(set(1, load = 60.0, reps = 8, rpe = 7.0, pain = 1, technique = 3)) { edited = it }
 
@@ -1305,6 +1314,279 @@ class ActiveWorkoutScreenTest {
         pressSave()
 
         assertEquals(listOf(9.0, 3, 4), saved)
+    }
+
+    // ---- Any logged set can be corrected (set-edit-any-set CP2) ----
+
+    /** The reps are above 10 so a stepper's value can't be taken for a scale cell. */
+    private fun firstSet() = set(1, load = 60.0, reps = 12, rpe = 6.0, pain = 1, technique = 2)
+
+    private fun secondSet() = set(2, load = 62.5, reps = 11, rpe = 9.0, pain = 3, technique = 4)
+
+    private fun thirdSet() = set(3, load = 65.0, reps = 13, rpe = 7.0, pain = 0, technique = 5)
+
+    private fun threeSets(plannedTarget: PlannedTargetUi? = null) =
+        exercise(
+            ExerciseTrackingType.WEIGHT_AND_REPS,
+            sets = listOf(firstSet(), secondSet(), thirdSet()),
+            plannedTarget = plannedTarget,
+        )
+
+    /** Gives [onEdited] `set id, load, reps, seconds, rpe, isWarmup, pain, technique`. */
+    private fun recordingEdits(
+        onEdited: (List<Any?>) -> Unit,
+    ): (WorkoutExerciseId, WorkoutSetId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit =
+        { _, setId, load, reps, seconds, rpe, isWarmup, pain, technique ->
+            onEdited(listOf(setId.value, load, reps, seconds, rpe, isWarmup, pain, technique))
+        }
+
+    /**
+     * Focus mode alone, as the activity's own content, for what changes the exercise under it or restores it.
+     * [exercise] is read in the composition.
+     *
+     * A restore here recreates the activity, as a rotation does. `StateRestorationTester` can't stand in for
+     * it: the sheet's window keeps its values in a registry of its own, saved only when the activity is, so
+     * under the tester they are simply lost.
+     */
+    private fun setFocus(
+        exercise: () -> ActiveExerciseUi,
+        onEdited: (List<Any?>) -> Unit = {},
+    ) {
+        composeRule.activityRule.scenario.onActivity { activity ->
+            activity.setContent {
+                RepFlowTheme {
+                    val current = exercise()
+                    WorkoutFocus(
+                        content =
+                            ActiveWorkoutContent.Active(
+                                sessionId = WorkoutSessionId("session-1"),
+                                startedAt = Instant.parse("2026-01-01T00:00:00Z"),
+                                exercises = listOf(current),
+                            ),
+                        exercise = current,
+                        entry = rememberSaveable(saver = SetEntryState.Saver) { SetEntryState().also { it.applySeed(current.seed) } },
+                        recommendation = null,
+                        onBackToBoard = {},
+                        onFinishClick = {},
+                        onNextExercise = {},
+                        onOpenRecommendation = {},
+                        onRecordSet = { _, _, _, _, _, _, _, _, _ -> },
+                        onUndoLastSet = {},
+                        onEditSet = recordingEdits(onEdited),
+                        restStrip = {},
+                        snackbarHostState = remember { SnackbarHostState() },
+                    )
+                }
+            }
+        }
+        composeRule.waitForIdle()
+    }
+
+    /** Saves the state as it stands, then mounts focus mode again on [exercise] in the new activity. */
+    private fun recreateOnto(
+        exercise: () -> ActiveExerciseUi,
+        onEdited: (List<Any?>) -> Unit = {},
+    ) {
+        composeRule.activityRule.scenario.recreate()
+        setFocus(exercise, onEdited)
+    }
+
+    private fun assertTheSheetIsOn(
+        subtitle: String,
+        load: String,
+        reps: String,
+        rpe: Int,
+        pain: Int,
+        technique: Int,
+    ) {
+        composeRule.onNodeWithText(subtitle).assertIsDisplayed()
+        composeRule.onNodeWithText(load).assertIsDisplayed()
+        composeRule.onNodeWithText(reps).assertIsDisplayed()
+        rpeCell(rpe).assertIsSelected()
+        painCell(pain).assertIsSelected()
+        techniqueCell(technique).assertIsSelected()
+        selectedCells().assertCountEquals(3)
+    }
+
+    private fun hasTheCorrectAction() =
+        SemanticsMatcher("has the click label `Correct this set`") { node ->
+            node.config.getOrNull(SemanticsActions.OnClick)?.label == string(R.string.workout_focus_correct_action)
+        }
+
+    private fun pressMoreWeightOnTheSheet() =
+        composeRule.onAllNodesWithContentDescription(string(R.string.workout_focus_more_weight)).onLast().performClick()
+
+    private fun pressLessWeightOnTheSheet() =
+        composeRule.onAllNodesWithContentDescription(string(R.string.workout_focus_less_weight)).onLast().performClick()
+
+    @Test
+    fun everyLoggedSetHasThePencilAndTheCorrectActionAndAPendingRowHasNeither() {
+        setContent(threeSets(plannedTarget = PlannedTargetUi(targetWarmupSets = null, targetWorkingSets = 4)))
+
+        composeRule.onAllNodesWithTag(SET_ROW_PENCIL_TAG, useUnmergedTree = true).assertCountEquals(3)
+        composeRule.onAllNodesWithTag(SET_ROW_PENCIL_TAG, useUnmergedTree = true)[0].assertWidthIsEqualTo(20.dp)
+        (1..3).forEach { setNumber ->
+            composeRule.onNode(hasText("Set $setNumber:", substring = true)).assert(hasTheCorrectAction())
+        }
+        composeRule.onNode(hasText("Set 4: not logged", substring = true)).assert(!hasClickAction())
+    }
+
+    @Test
+    fun anEarlierRowOpensTheSheetOnItsOwnValuesAndSaveNamesThatSet() {
+        var edited: List<Any?>? = null
+        setContent(threeSets(), onEditSet = recordingEdits { edited = it })
+
+        openCorrectionSheet(1)
+        assertTheSheetIsOn("Set 1 · Bench Press", load = "60", reps = "12", rpe = 6, pain = 1, technique = 2)
+        pressMoreWeightOnTheSheet()
+        pressSave()
+
+        assertEquals(listOf("set-1", 62.5, 12, null, 6.0, false, 1, 2), edited)
+    }
+
+    @Test
+    fun aCancelledSheetLeavesNothingOnTheNextSetsSheet() {
+        setContent(threeSets())
+
+        openCorrectionSheet(2)
+        assertTheSheetIsOn("Set 2 · Bench Press", load = "62.5", reps = "11", rpe = 9, pain = 3, technique = 4)
+        rpeCell(1).performScrollTo().performClick()
+        node(R.string.workout_focus_correct_cancel).performScrollTo().performClick()
+        node(R.string.workout_focus_correct_title).assertDoesNotExist()
+
+        openCorrectionSheet(3)
+
+        assertTheSheetIsOn("Set 3 · Bench Press", load = "65", reps = "13", rpe = 7, pain = 0, technique = 5)
+    }
+
+    @Test
+    fun aWarmUpThatIsNotTheLastSetSaysSoAndKeepsItsFlagAndItsId() {
+        var edited: List<Any?>? = null
+        setContent(
+            exercise(
+                ExerciseTrackingType.WEIGHT_AND_REPS,
+                sets = listOf(set(1, load = 40.0, reps = 12, isWarmup = true), set(2, load = 60.0, reps = 11)),
+            ),
+            onEditSet = recordingEdits { edited = it },
+        )
+
+        openCorrectionSheet(1)
+        composeRule.onNodeWithText("Warm-up set · Bench Press").assertIsDisplayed()
+        pressSave()
+
+        assertEquals(listOf("set-1", 40.0, 12, null, null, true, null, null), edited)
+    }
+
+    @Test
+    fun aRotationBringsTheSheetBackOnTheSameSetWithATappedValue() {
+        var edited: List<Any?>? = null
+        setFocus({ threeSets() })
+        openCorrectionSheet(1)
+        rpeCell(3).performScrollTo().performClick()
+
+        recreateOnto({ threeSets() }, onEdited = { edited = it })
+
+        assertTheSheetIsOn("Set 1 · Bench Press", load = "60", reps = "12", rpe = 3, pain = 1, technique = 2)
+        pressSave()
+
+        assertEquals(listOf("set-1", 60.0, 12, null, 3.0, false, 1, 2), edited)
+    }
+
+    @Test
+    fun theSheetClosesWhenItsSetGoesAndDoesNotComeBackWithIt() {
+        val current = mutableStateOf(threeSets())
+        setFocus({ current.value })
+        openCorrectionSheet(1)
+
+        composeRule.runOnIdle { current.value = threeSets().copy(sets = listOf(secondSet(), thirdSet())) }
+        composeRule.waitForIdle()
+        node(R.string.workout_focus_correct_title).assertDoesNotExist()
+
+        composeRule.runOnIdle { current.value = threeSets() }
+        composeRule.waitForIdle()
+        node(R.string.workout_focus_correct_title).assertDoesNotExist()
+
+        openCorrectionSheet(2)
+        assertTheSheetIsOn("Set 2 · Bench Press", load = "62.5", reps = "11", rpe = 9, pain = 3, technique = 4)
+    }
+
+    @Test
+    fun undoLastStillReportsOnceAndTheLastLineNamesTheMostRecentSet() {
+        var undone = 0
+        var edited: List<Any?>? = null
+        val lastLine = composeRule.activity.getString(R.string.workout_focus_last_weight_reps, "65", 13)
+        setContent(threeSets(), onUndoLastSet = { undone++ }, onEditSet = recordingEdits { edited = it })
+        composeRule.onNodeWithText(lastLine).performScrollTo().assertIsDisplayed()
+
+        node(R.string.workout_focus_undo_last).performScrollTo().performClick()
+
+        composeRule.runOnIdle { assertEquals(1, undone) }
+        assertEquals(null, edited)
+        node(R.string.workout_focus_correct_title).assertDoesNotExist()
+        composeRule.onNodeWithText(lastLine).assertIsDisplayed()
+    }
+
+    /** The row moves and the steppers don't, through the seed the correction changes, a restore, and an undo. */
+    @Test
+    fun aSavedCorrectionHoldsTheSteppers() {
+        val logged =
+            exercise(
+                ExerciseTrackingType.WEIGHT_AND_REPS,
+                sets = listOf(set(1, load = 82.5, reps = 8)),
+                seed = SetEntrySeed(load = BigDecimal("82.5"), reps = BigDecimal("8")),
+            )
+        val current = mutableStateOf(logged)
+        var edited: List<Any?>? = null
+        setFocus({ current.value }, onEdited = { edited = it })
+        composeRule.onNodeWithText("82.5").performScrollTo().assertIsDisplayed()
+
+        openCorrectionSheet(1)
+        pressLessWeightOnTheSheet()
+        pressSave()
+        assertEquals(listOf("set-1", 80.0, 8, null, null, false, null, null), edited)
+        composeRule.runOnIdle {
+            current.value =
+                logged.copy(
+                    sets = listOf(set(1, load = 80.0, reps = 8)),
+                    seed = SetEntrySeed(load = BigDecimal("80"), reps = BigDecimal("8")),
+                )
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.workout_active_set_row_weight_reps, 1, 80.0, 8)).assertExists()
+        composeRule.onNodeWithText("82.5").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("80").assertDoesNotExist()
+
+        recreateOnto({ current.value })
+
+        composeRule.onNodeWithText("82.5").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("80").assertDoesNotExist()
+
+        composeRule.runOnIdle {
+            current.value = logged.copy(sets = emptyList(), seed = SetEntrySeed(load = BigDecimal("75"), reps = BigDecimal("8")))
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("82.5").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("75").assertDoesNotExist()
+    }
+
+    /** A sheet saved on a set that is gone by the restore must not hand its values to the next sheet. */
+    @Test
+    fun restoredValuesDoNotCrossToAnotherSet() {
+        var edited: List<Any?>? = null
+        setFocus({ threeSets() })
+        openCorrectionSheet(1)
+        rpeCell(3).performScrollTo().performClick()
+
+        recreateOnto({ threeSets().copy(sets = listOf(secondSet(), thirdSet())) }, onEdited = { edited = it })
+
+        node(R.string.workout_focus_correct_title).assertDoesNotExist()
+        openCorrectionSheet(2)
+        assertTheSheetIsOn("Set 2 · Bench Press", load = "62.5", reps = "11", rpe = 9, pain = 3, technique = 4)
+        pressSave()
+
+        assertEquals(listOf("set-2", 62.5, 11, null, 9.0, false, 3, 4), edited)
     }
 
     // ---- The finish sheet (remediation-1 CP9) ----
@@ -1637,7 +1919,7 @@ class ActiveWorkoutScreenTest {
                     onOpenRecommendation = {},
                     onRecordSet = { _, _, _, _, _, _, _, _, _ -> },
                     onUndoLastSet = {},
-                    onEditLastSet = { _, _, _, _, _, _, _, _ -> },
+                    onEditSet = { _, _, _, _, _, _, _, _, _ -> },
                     onAddRestTime = {},
                     onRemoveRestTime = {},
                     onSkipRestTimer = {},

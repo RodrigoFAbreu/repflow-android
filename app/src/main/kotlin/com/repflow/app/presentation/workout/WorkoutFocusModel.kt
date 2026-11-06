@@ -17,14 +17,12 @@ import java.math.BigDecimal
 /** One row of focus mode's set list: a logged set, or a planned working set not logged yet. */
 internal sealed interface FocusSetRow {
     /**
-     * A logged set. [isExtra] is the set-classification marker
-     * ([setsWithExtraFlag]); [isLast] marks the one set a correction can reach
-     * - undo and edit stay on the most recently recorded set (`D31`).
+     * A logged set, which opens the correction sheet for itself (`20n`).
+     * [isExtra] is the set-classification marker ([setsWithExtraFlag]).
      */
     data class Logged(
         val set: ActiveSetUi,
         val isExtra: Boolean,
-        val isLast: Boolean,
     ) : FocusSetRow
 
     /**
@@ -67,10 +65,7 @@ internal fun focusHeader(
  * pending rows.
  */
 internal fun ActiveExerciseUi.focusSetRows(): List<FocusSetRow> {
-    val logged =
-        setsWithExtraFlag().mapIndexed { index, (set, isExtra) ->
-            FocusSetRow.Logged(set = set, isExtra = isExtra, isLast = index == sets.lastIndex)
-        }
+    val logged = setsWithExtraFlag().map { (set, isExtra) -> FocusSetRow.Logged(set = set, isExtra = isExtra) }
     val target = plannedTarget?.targetWorkingSets ?: return logged
     val pending = (target - workingSetsDone()).coerceAtLeast(0)
     val lastNumber = sets.maxOfOrNull { it.setNumber } ?: 0

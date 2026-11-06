@@ -142,9 +142,12 @@ The user can:
 - Save the set (`Log set`)
 - Mark a warm-up set
 - Add an extra set beyond the plan's target
-- Undo the most recently logged set, or correct it: weight and reps or time,
-  and its RPE, pain and technique, which the correction sheet shows whatever
-  `Extra set fields` says
+- Undo the most recently logged set
+- Correct any logged set of the running workout from its row: weight and reps
+  or time, and its RPE, pain and technique, which the correction sheet shows
+  whatever `Extra set fields` says. A correction leaves the steppers, the rest
+  and the suggestion alone, and doesn't change which set `Undo last` removes.
+  Sets in past workouts can't be corrected
 - Skip or substitute the exercise *(declared intent — no domain backing;
   `IMPROVEMENT_ROADMAP.md` §9.2)*
 

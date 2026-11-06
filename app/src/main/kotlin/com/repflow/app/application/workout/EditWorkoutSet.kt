@@ -6,12 +6,14 @@ import com.repflow.app.domain.common.getOrElse
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.domain.workout.WorkoutSet
+import com.repflow.app.domain.workout.WorkoutSetId
 import javax.inject.Inject
 
-/** Raw, UI-shaped input for editing the most recently recorded set's values. */
-data class EditLastWorkoutSetCommand(
+/** Raw, UI-shaped input for correcting the set named by [setId]. */
+data class EditWorkoutSetCommand(
     val sessionId: WorkoutSessionId,
     val exerciseId: WorkoutExerciseId,
+    val setId: WorkoutSetId,
     val load: Double?,
     val reps: Int?,
     val durationSeconds: Int?,
@@ -21,34 +23,39 @@ data class EditLastWorkoutSetCommand(
     val techniqueQuality: Int? = null,
 )
 
-/** Edits the most recently recorded set in place (same id and order), the "edit" half of the fast set-entry flow. */
-class EditLastWorkoutSet
+/**
+ * Corrects a logged set in place (same id, order and `createdAt`), the "edit" half of the fast set-entry flow.
+ * A set id that isn't in the exercise is [WorkoutOperationError.NotFound] and nothing is written.
+ */
+class EditWorkoutSet
     @Inject
     constructor(
         private val repository: WorkoutRepository,
         private val clock: Clock,
     ) {
         @Suppress("ReturnCount")
-        suspend operator fun invoke(command: EditLastWorkoutSetCommand): DomainResult<Unit, WorkoutOperationError> {
+        suspend operator fun invoke(command: EditWorkoutSetCommand): DomainResult<Unit, WorkoutOperationError> {
             val session =
                 repository.findById(command.sessionId) ?: return DomainResult.Failure(WorkoutOperationError.NotFound)
             val exercise =
                 session.exercises.firstOrNull { it.id == command.exerciseId }
                     ?: return DomainResult.Failure(WorkoutOperationError.NotFound)
-            val lastSet = exercise.sets.maxByOrNull { it.order } ?: return DomainResult.Failure(WorkoutOperationError.NotFound)
+            val set =
+                exercise.sets.firstOrNull { it.id == command.setId }
+                    ?: return DomainResult.Failure(WorkoutOperationError.NotFound)
 
             val updatedSet: WorkoutSet =
                 WorkoutSet
                     .create(
-                        id = lastSet.id,
-                        order = lastSet.order,
+                        id = set.id,
+                        order = set.order,
                         trackingType = exercise.trackingType,
                         load = command.load,
                         reps = command.reps,
                         durationSeconds = command.durationSeconds,
                         rpe = command.rpe,
                         isWarmup = command.isWarmup,
-                        createdAt = lastSet.createdAt,
+                        createdAt = set.createdAt,
                         updatedAt = clock.now(),
                         pain = command.pain,
                         techniqueQuality = command.techniqueQuality,
