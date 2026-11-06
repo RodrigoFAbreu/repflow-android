@@ -1,8 +1,12 @@
 # Active Milestone
 
-## `set-edit-any-set` — in progress
+## `set-edit-any-set` — complete (accepted by policy 2026-11-06)
 
-Any set in the running workout can be corrected, not just the last one. Plan: `docs/milestones/set-edit-any-set-execution.md`.
+Any set in the running workout can be corrected, not just the last one. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/set-edit-any-set-execution.md` and the Optional findings at `docs/milestones/completed/set-edit-any-set-findings.md`.
+
+**Next action:** `timed-set-clock`, A timed set has a clock: Start counts up, and Stop fills in the time. Ready for `/milestone-plan`.
+
+The sections below are this milestone's historical record.
 
 - **CP1, complete.** A correction now names its set. `EditLastWorkoutSet` is `EditWorkoutSet`, moved with `git mv`, and `EditWorkoutSetCommand` gains `setId`. The use case finds that set in the exercise, and a missing id, or the id of another exercise's set, is `NotFound` with nothing written. The set is rebuilt with its own id, order and `createdAt`, as before. `onEditLastSet` is `onEditSet` through the view model, the route, the screen and `WorkoutFocus`, with the set id as its second parameter, and it still goes through `launchAction`. `WorkoutFocus` still passes the last set's id, so the screen behaves as it did until CP2. No schema change and no new dependency. Verified: `spotlessCheck`, `detekt`, `assembleDebugAndroidTest`, so the instrumented test files in the plan's list compile, 161 JVM tests (the `application.workout` and `presentation.workout` packages, `LayerBoundaryTest`), and 77 instrumented tests on `emulator-5554` (`ActiveWorkoutScreenTest`, with its assertions unchanged). Apart from three renames, the other test files changed only where they name the old identifiers or pass the callback. The full runs are still to come, in the wrap-up.
 
@@ -35,8 +39,6 @@ Any set in the running workout can be corrected, not just the last one. Plan: `d
   **Issues #34 and #47 weren't read, and the note on #34 isn't posted.** `gh issue view` was refused for both, in a longer command and then alone, so the rule on denials stopped it there. By the repository's own record, `safety-copy-polish`'s plan names the correction changing the wrong set among the notes it closes, because its overlay stops anything waiting behind a restore. So this item tightens that note: it now also holds outside a restore, where a correction could still wait behind another action. That rests on the record, not on the issue. The text to post is in the bundle's `TEST_RESULTS.md`.
 
   Known limits. No automated test takes a correction through Room: the JVM tests use the in-memory repositories, and CP2's look read the real database. CP2's seen-and-left items stand, and the plan's known limitations go on the functional review's checklist.
-
-**Next action:** perform the functional review below, write findings to `.ai-review/set-edit-any-set/feedback/FUNCTIONAL_REVIEW.md`, or run `/accept-milestone` if testing is clean.
 
 ### Functional review checklist
 

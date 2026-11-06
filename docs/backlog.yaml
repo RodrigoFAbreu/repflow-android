@@ -163,7 +163,7 @@ items:
     detail: docs/items/set-edit-fields.md
   - id: set-edit-any-set
     title: "Any set in the running workout can be corrected, not just the last one"
-    status: next
+    status: done
     order: 29
     size: 2
     depends_on: [set-edit-fields]
