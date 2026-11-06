@@ -12629,7 +12629,7 @@
       "registry_path": "docs/ai-workflow/registry/timed-entry-mmss-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/timed-entry-mmss-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+      "phase": "APPLYING_REVIEW_FEEDBACK",
       "plan_revision": 2,
       "implementation_revision": 1,
       "functional_review_round": null,
@@ -12773,12 +12773,12 @@
           "external": 1
         },
         "implementation": {
-          "local": 0,
+          "local": 1,
           "external": 0
         }
       },
-      "state_revision": 16,
-      "last_transition": "2026-11-06T07:32:53Z",
+      "state_revision": 17,
+      "last_transition": "2026-11-06T08:12:32Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -12953,6 +12953,34 @@
               "review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
               "verdict": "APPROVE",
               "at": "2026-11-06T04:55:02Z"
+            }
+          ]
+        },
+        "F-d8455af5de6d": {
+          "digest": "d8455af5de6d9cb989aa07959326833325dabcdd7f562703d63a19ac55b57a7b",
+          "text": "**O1: in landscape `Set` is below the fold at font scale 1.0 too, not only at 2.0.** At 2340 × 1080 only the rows `1` to `9` fit. `0`, `00` or `.`, Backspace, `Cancel` and `Set` all need a swipe, so every entry typed in landscape does too. The plan's scroll allows this and the cut-off fourth row hints at it, but the record mentions it only at 2.0. Say so in the record, and consider a denser landscape layout on the follow-up issue.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "396b47112943c7c35aab0c54efa0ff959d3ecccf72153f8dd1a21f92c9fbb719",
+              "verdict": "REVISE",
+              "at": "2026-11-06T08:12:32Z"
+            }
+          ]
+        },
+        "F-fee81971b042": {
+          "digest": "fee81971b0425a79c85f36650f418425006c5d1216183096635ba0a2f441171b",
+          "text": "**O2: put read-only clocks read by a screen reader on the follow-up issue.** The plan's rule stands and this isn't a defect. `Last: 2:00` and `Set 1: 2:00` are lines a TalkBack user relies on during a set, and on this engine `2:00` reads as \"two o'clock\". One line on the follow-up issue keeps that known.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "396b47112943c7c35aab0c54efa0ff959d3ecccf72153f8dd1a21f92c9fbb719",
+              "verdict": "REVISE",
+              "at": "2026-11-06T08:12:32Z"
             }
           ]
         }
