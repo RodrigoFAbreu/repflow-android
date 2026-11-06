@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_work_item_id": null,
+  "active_work_item_id": "set-edit-any-set",
   "work_items": {
     "workflow-v2-1-core": {
       "work_item_type": "process",
@@ -14335,6 +14335,317 @@
         },
         "evaluated_at": "2026-11-06T13:46:14Z",
         "workflow_release": "2.27.0"
+      }
+    },
+    "set-edit-any-set": {
+      "work_item_type": "product",
+      "work_item_kind": "product",
+      "work_item_id": "set-edit-any-set",
+      "parent_work_item_id": null,
+      "plan_path": "docs/milestones/set-edit-any-set-execution.md",
+      "registry_path": "docs/ai-workflow/registry/set-edit-any-set-registry.json",
+      "mapping_path": "docs/ai-workflow/requirements/set-edit-any-set-mapping.json",
+      "governing_workflow_version": "2.2",
+      "phase": "IMPLEMENTING",
+      "plan_revision": 2,
+      "implementation_revision": null,
+      "functional_review_round": null,
+      "base_commit": "ebf6135c77336e62f9bc79e41e123a364df9329f",
+      "reviewed_implementation_head": null,
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": null,
+      "checkpoints": {},
+      "current_bundle_id": "470b2b38041ba4d6e0614f2238bd6ed720b96c35525ccb536691c2e79300464b",
+      "plan_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "470b2b38041ba4d6e0614f2238bd6ed720b96c35525ccb536691c2e79300464b",
+        "approved_review_content_id": "ad1d0a2fa1970c88833ba28548a429a507a09eaad1eaeaa7a5f38eb5da0c1633",
+        "review_content_manifest": [
+          {
+            "path": "docs/ai-workflow/registry/set-edit-any-set-registry.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "bd057fe2c7b5e951709f9fa916d294346453f49f"
+          },
+          {
+            "path": "docs/ai-workflow/requirements/set-edit-any-set-mapping.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "768f299e7a2ec407a0ab90421f4845132003ee04"
+          },
+          {
+            "path": "docs/milestones/set-edit-any-set-execution.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5203938ef72ce71ce523de3984170f98e207ac79"
+          }
+        ],
+        "reviewed_content_commit": null,
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-06T14:54:07Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "ad1d0a2fa1970c88833ba28548a429a507a09eaad1eaeaa7a5f38eb5da0c1633",
+            "ledger": {
+              "local": {
+                "bundle_id": "470b2b38041ba4d6e0614f2238bd6ed720b96c35525ccb536691c2e79300464b",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "8ac842325b4c520226e5204087ab64a13d5982dfae82976d6c8373f4899ede68",
+                "ledger_entry_sha256": "f8cdbe042242c589d1d2333cee281c2f0d038a1eac3764a4117325749b81a203",
+                "run_ref": "session:local .ai-review/set-edit-any-set/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "470b2b38041ba4d6e0614f2238bd6ed720b96c35525ccb536691c2e79300464b",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "5519b41c4de1aaf1b9a971cbd2c341fc0598b80adde4036557b64de5637ccb9c",
+                "ledger_entry_sha256": "91c2d4201a9716cff552f264ef8d4308267e21015875f1f3c849e0ff5410975a",
+                "run_ref": "codex:20261106T144952Z-18816231",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-06T14:54:07Z",
+          "workflow_release": "2.27.0"
+        }
+      },
+      "technical_approval": null,
+      "technical_review_block_pins": [],
+      "plan_review_stages": {
+        "review_content_id": "ad1d0a2fa1970c88833ba28548a429a507a09eaad1eaeaa7a5f38eb5da0c1633",
+        "LOCAL_MODEL_PLAN_REVIEW": {
+          "bundle_id": "470b2b38041ba4d6e0614f2238bd6ed720b96c35525ccb536691c2e79300464b",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-06T14:49:27Z",
+          "verdict_sha256": "8ac842325b4c520226e5204087ab64a13d5982dfae82976d6c8373f4899ede68",
+          "run_ref": "session:local .ai-review/set-edit-any-set/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_PLAN_REVIEW": {
+          "bundle_id": "470b2b38041ba4d6e0614f2238bd6ed720b96c35525ccb536691c2e79300464b",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-06T14:52:15Z",
+          "verdict_sha256": "5519b41c4de1aaf1b9a971cbd2c341fc0598b80adde4036557b64de5637ccb9c",
+          "run_ref": "codex:20261106T144952Z-18816231",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
+      },
+      "functional_acceptance_status": null,
+      "blocking_decisions": [],
+      "review_round_counts": {
+        "plan": {
+          "local": 2,
+          "external": 1
+        },
+        "implementation": {
+          "local": 0,
+          "external": 0
+        }
+      },
+      "state_revision": 9,
+      "last_transition": "2026-11-06T14:54:07Z",
+      "feedback_layout": "scoped",
+      "plan_review_binding": {
+        "status": "BOUND",
+        "at": "2026-11-06T14:36:29Z",
+        "consumed": {
+          "review_content_id": "3dfb5ecfde25b9de8b1b1a66a034d01ec559a6812bb40101eee0df967c2eb378",
+          "plan_revision": 1,
+          "legacy": false
+        },
+        "published": {
+          "review_content_id": "ad1d0a2fa1970c88833ba28548a429a507a09eaad1eaeaa7a5f38eb5da0c1633",
+          "plan_revision": 2
+        },
+        "bound": {
+          "review_content_id": "ad1d0a2fa1970c88833ba28548a429a507a09eaad1eaeaa7a5f38eb5da0c1633",
+          "bundle_id": "470b2b38041ba4d6e0614f2238bd6ed720b96c35525ccb536691c2e79300464b",
+          "plan_revision": 2
+        }
+      },
+      "consumed_plan_review_content_ids": [
+        "3dfb5ecfde25b9de8b1b1a66a034d01ec559a6812bb40101eee0df967c2eb378"
+      ],
+      "optional_findings": {
+        "F-148866759d00": {
+          "digest": "148866759d00576e7668007c64a6a860bf08639fe46540fb9e92ed5b27ec51cd",
+          "text": "O1. `FocusSetRow.Logged.isLast` is dead after CP2. Its only readers are `WorkoutFocusSets.kt:113` and `:126`, and CP2 removes both. The plan's reason for keeping it (\"since nothing else in the model asks for it\") is a reason to remove it, and the new `WorkoutFocusModelTest` assertion would pin a field nothing reads. Both files are already in CP2's list, so removing the field and that assertion is a few lines.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "3dfb5ecfde25b9de8b1b1a66a034d01ec559a6812bb40101eee0df967c2eb378",
+              "verdict": "REVISE",
+              "at": "2026-11-06T14:26:06Z"
+            }
+          ]
+        },
+        "F-e2a38534269b": {
+          "digest": "e2a38534269bdf3eb9565020d1cf31ba4be5847d6a07e2fca82c354ff65dd322",
+          "text": "O2. The plan says flatly that this closes issue #34's note about a correction changing the wrong set, but the item page says \"if `safety-copy-polish` hasn't\", and that item's plan lists the same note as closed in its wrap-up (`docs/milestones/completed/safety-copy-polish-execution.md:321-322`). Its overlay stops anything waiting behind a restore, while a correction can still wait briefly behind another action, so this item still tightens it. The plan could check the issue at wrap-up and say which of the two it is. No test queues a correction either: `ActiveWorkoutActionOrderTest` is already in CP1's list and could hold one queued behind a logged set, though CP1 test 2 already shows the use case follows the id.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "3dfb5ecfde25b9de8b1b1a66a034d01ec559a6812bb40101eee0df967c2eb378",
+              "verdict": "REVISE",
+              "at": "2026-11-06T14:26:06Z"
+            }
+          ]
+        },
+        "F-d5e257390bd5": {
+          "digest": "d5e257390bd5bf26653bcb138c3950fc89b8d731d4bcbfa84a7896d67bb5863b",
+          "text": "O3. `set-edit-any-set-mapping.json` maps R2 to CP1 only, but `Save` passing the opened set's id and its own warm-up flag is CP2's work, held by CP2 tests 2 and 4. Its R4 text also drops \"the other rows' look is unchanged\". Mapping R2 to both checkpoints would make the trail match.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "3dfb5ecfde25b9de8b1b1a66a034d01ec559a6812bb40101eee0df967c2eb378",
+              "verdict": "REVISE",
+              "at": "2026-11-06T14:26:06Z"
+            }
+          ]
+        },
+        "F-1bce57bf2f32": {
+          "digest": "1bce57bf2f32b0816963a424be7b6780176353fde5a40c9bb4120e4e21e8d572",
+          "text": "O4. Old wording stays in the tests after the rename: `ActiveWorkoutScreenTest.kt:733-738` still says the most recently logged set, `D31` and `...ReachesOnEditLastSet`, and `edit replaces the most recently recorded set's values in place` keeps its name. CP1 keeps assertions unchanged, which is right, but these names could go in the same pass, since `20n` retires `D31`.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "3dfb5ecfde25b9de8b1b1a66a034d01ec559a6812bb40101eee0df967c2eb378",
+              "verdict": "REVISE",
+              "at": "2026-11-06T14:26:06Z"
+            }
+          ]
+        },
+        "F-faced7339687": {
+          "digest": "faced7339687c997abe2b49d72df05a35da523bb4121cac6c7e2b522a332d580",
+          "text": "O1. CP1 test 7 probably can't go in `ActiveWorkoutViewModelTest`. That class is at about 595 lines of code, and detekt's default `LargeClass` limit is 600, which `config/detekt/detekt.yml` doesn't change. `set-edit-fields` hit the same limit. The existing edit test reads `.sets.single()` throughout, so logging several sets and checking the rest timer adds more than five lines, and CP1's `Done when` requires `detekt`. `ActiveWorkoutActionOrderTest` is already in CP1's list and has `startWorkoutWithTheExercise()` and `stored()`, so test 7 fits there with no new helper, and the existing edit test only gains the set id.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "ad1d0a2fa1970c88833ba28548a429a507a09eaad1eaeaa7a5f38eb5da0c1633",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T14:49:27Z"
+            }
+          ]
+        },
+        "F-84646f7db3c5": {
+          "digest": "84646f7db3c55306b30c15678c9f52a78edb5dd92fa2fef027e776181f390add",
+          "text": "O2. Two mutation pairings name a test that may not catch the mutant, though the other test named does. For CP2's `the sheet always opened on the last set (2, 3)`, test 3 asserts only the third sheet, and the third set is the last, so it passes. Asserting the second sheet's values as well would catch it. For CP1's `the view model dropping the set id and passing the last set's (7, 9)`, only one set is logged when test 9 calls `onEditSet`, so a mutant that reads the last set at call time still passes the right id. Test 7 catches it either way.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "ad1d0a2fa1970c88833ba28548a429a507a09eaad1eaeaa7a5f38eb5da0c1633",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T14:49:27Z"
+            }
+          ]
+        },
+        "F-01d7eb9493bd": {
+          "digest": "01d7eb9493bdc468d5061ef01a29da9c6c70bfb6c0abd1dbb6028bf9564b5b56",
+          "text": "O3. R2's `reports the failure` is held only at the use case, by CP1 test 4. No test shows a correction's `NotFound` reaching the screen, although `launchAction` is shared and `ActiveWorkoutActionErrorTest` holds that path for `Log set`. The real way in is `Undo last` waiting behind a write, then `Save` on the set it removes. One more test in `ActiveWorkoutActionOrderTest` would run it with no new helper: with writes held, `onUndoLastSet` then `onEditSet` naming that set. The set is gone, the others are as they were, and `errorMessage` is `NOT_FOUND`.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "ad1d0a2fa1970c88833ba28548a429a507a09eaad1eaeaa7a5f38eb5da0c1633",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T14:49:27Z"
+            }
+          ]
+        },
+        "F-95bdfe6f22b0": {
+          "digest": "95bdfe6f22b0f97982e501bc9e28afe50756386b0d4e7fc81d39527542f9aa23",
+          "text": "O4. The wrap-up has no path if `gh` is still refused. It was refused in both earlier sessions, and here for `gh issue view 34` and `gh issue view 47`, run as separate simple commands. If the wrap-up can't read #34 either, the plan could have it say so in the milestone file and carry the note to acceptance, where `timed-entry-mmss` placed its follow-up issue.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "ad1d0a2fa1970c88833ba28548a429a507a09eaad1eaeaa7a5f38eb5da0c1633",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T14:49:27Z"
+            }
+          ]
+        },
+        "F-f970f1b5d036": {
+          "digest": "f970f1b5d036ae0e9cd9fcb28e2a6bf0e8b8f666d6b101a5c2e46f92d3207e24",
+          "text": "O1. Tighten two mutation-to-test pairings. CP1 test 9 cannot detect choosing the last set’s id **at invocation time**, because only one set exists then; test 7 covers that mutation. CP2 test 3 cannot detect always opening the last set, because it asserts only the third sheet’s values; test 2 covers that mutation. Remove those pairings or strengthen the individual tests.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "MANUAL_EXTERNAL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "ad1d0a2fa1970c88833ba28548a429a507a09eaad1eaeaa7a5f38eb5da0c1633",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T14:52:15Z"
+            }
+          ]
+        },
+        "F-999fbc50ed5c": {
+          "digest": "999fbc50ed5c46efbe3ef02ba43cf0253e40698e8483d42c88ec396275d2c5ff",
+          "text": "O2. Consider a view-model test that queues `Undo last` followed by a correction naming the removed set. Assert that the remaining sets stay unchanged and `errorMessage` becomes `NOT_FOUND`. CP1 test 4 covers the use-case failure, but this would directly verify R2’s failure reporting through the queued action path.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "MANUAL_EXTERNAL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "ad1d0a2fa1970c88833ba28548a429a507a09eaad1eaeaa7a5f38eb5da0c1633",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T14:52:15Z"
+            }
+          ]
+        }
       }
     }
   },
