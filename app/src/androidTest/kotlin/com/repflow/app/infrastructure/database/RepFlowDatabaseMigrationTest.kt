@@ -13,7 +13,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Validates every migration ([MIGRATION_1_2] through [MIGRATION_8_9]) against a real older-schema database, using the
+ * Validates every migration ([MIGRATION_1_2] through [MIGRATION_9_10]) against a real older-schema database, using the
  * exported schema JSON files under `app/schemas` (see the `androidTest`
  * `assets.directories` entry in `app/build.gradle.kts`). This is the first
  * real migration test in the project - version 1 never had one, and there
@@ -36,6 +36,17 @@ class RepFlowDatabaseMigrationTest {
         const val SEED_V8_ROW =
             "INSERT INTO settings (id, rest_timer_auto_start, rest_timer_vibrate, rest_timer_notification, " +
                 "keep_screen_awake, confirm_before_finishing) VALUES (1, 1, 1, 1, 1, 1)"
+
+        /** The pinned v9 row with every column away from its default, so a rewritten row is visible. */
+        const val SEED_V9_ROW =
+            "INSERT INTO settings (id, rest_timer_auto_start, rest_timer_vibrate, rest_timer_notification, " +
+                "keep_screen_awake, confirm_before_finishing, theme, default_rest_seconds, extra_set_fields, " +
+                "last_backup_at) VALUES (1, 0, 0, 0, 1, 0, 'DARK', 150, 'OFF', 1700000000000)"
+
+        const val SEED_V9_EXERCISE =
+            "INSERT INTO exercises (id, name, name_key, tracking_type, instructions, default_load_increment_grams, " +
+                "default_rest_seconds, origin, archived_at, created_at, updated_at) VALUES ('exercise-1', " +
+                "'Bench Press', 'bench press', 'WEIGHT_AND_REPS', NULL, NULL, NULL, 'CUSTOM', NULL, 1000, 1000)"
     }
 
     @Test
@@ -413,7 +424,39 @@ class RepFlowDatabaseMigrationTest {
     }
 
     @Test
-    fun fullChainFrom1To9OpensThroughAllMigrations() {
+    fun migrate9To10_turnsTheReminderOnAndChangesNothingElse() {
+        helper.createDatabase(TEST_DB, 9).apply {
+            execSQL(SEED_V9_ROW)
+            execSQL(SEED_V9_EXERCISE)
+            close()
+        }
+
+        val migratedDb = helper.runMigrationsAndValidate(TEST_DB, 10, true, MIGRATION_9_10)
+
+        migratedDb
+            .query(
+                "SELECT rest_timer_auto_start, rest_timer_vibrate, rest_timer_notification, keep_screen_awake, " +
+                    "confirm_before_finishing, theme, default_rest_seconds, extra_set_fields, last_backup_at, " +
+                    "backup_reminder FROM settings",
+            ).use { cursor ->
+                assertEquals(1, cursor.count)
+                cursor.moveToFirst()
+                assertEquals(listOf(0, 0, 0, 1, 0), (0..4).map { cursor.getInt(it) })
+                assertEquals("DARK", cursor.getString(5))
+                assertEquals(150, cursor.getInt(6))
+                assertEquals("OFF", cursor.getString(7))
+                assertEquals(1_700_000_000_000L, cursor.getLong(8))
+                assertEquals(1, cursor.getInt(9))
+            }
+        migratedDb.query("SELECT name FROM exercises WHERE id = 'exercise-1'").use { cursor ->
+            assertEquals(1, cursor.count)
+            cursor.moveToFirst()
+            assertEquals("Bench Press", cursor.getString(0))
+        }
+    }
+
+    @Test
+    fun fullChainFrom1ToTheCurrentVersionOpensThroughAllMigrations() {
         helper.createDatabase(TEST_DB, 1).apply {
             insertV1Exercise(this)
             close()
@@ -439,7 +482,7 @@ class RepFlowDatabaseMigrationTest {
      * The production-registration test: a real version-8 file (with one
      * non-default value) opened through [DatabaseModule.buildRepFlowDatabase]
      * only opens, and reads the new defaults, if the production builder
-     * registers MIGRATION_8_9.
+     * registers MIGRATION_8_9 and MIGRATION_9_10.
      */
     @Test
     fun theProductionBuilderUpgradesARealVersion8DatabaseToTheNewDefaults() {
@@ -457,6 +500,7 @@ class RepFlowDatabaseMigrationTest {
             assertEquals(90, settings.defaultRestSeconds)
             assertEquals(ExtraSetFields.COLLAPSED.name, settings.extraSetFields)
             assertNull(settings.lastBackupAt)
+            assertEquals(true, settings.backupReminder)
             assertEquals(true, settings.keepScreenAwake)
             assertEquals(true, settings.restTimerAutoStart)
             assertEquals(true, settings.restTimerVibrate)

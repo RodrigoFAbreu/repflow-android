@@ -19,13 +19,14 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** One of Settings' five switches (remediation-1 CP14), in the order the screen draws them. */
+/** One of Settings' six switches (remediation-1 CP14, `backup-reminder` CP1), in the order the screen draws them. */
 enum class SettingToggle {
     REST_TIMER_AUTO_START,
     REST_TIMER_VIBRATE,
     REST_TIMER_NOTIFICATION,
     KEEP_SCREEN_AWAKE,
     CONFIRM_BEFORE_FINISHING,
+    BACKUP_REMINDER,
 }
 
 /** Whether [toggle] is on in these settings. */
@@ -36,6 +37,7 @@ fun AppSettings.isOn(toggle: SettingToggle): Boolean =
         SettingToggle.REST_TIMER_NOTIFICATION -> restTimerNotification
         SettingToggle.KEEP_SCREEN_AWAKE -> keepScreenAwake
         SettingToggle.CONFIRM_BEFORE_FINISHING -> confirmBeforeFinishing
+        SettingToggle.BACKUP_REMINDER -> backupReminder
     }
 
 /** These settings with [toggle] set to [on] and every other switch unchanged. */
@@ -49,6 +51,7 @@ fun AppSettings.withToggle(
         SettingToggle.REST_TIMER_NOTIFICATION -> copy(restTimerNotification = on)
         SettingToggle.KEEP_SCREEN_AWAKE -> copy(keepScreenAwake = on)
         SettingToggle.CONFIRM_BEFORE_FINISHING -> copy(confirmBeforeFinishing = on)
+        SettingToggle.BACKUP_REMINDER -> copy(backupReminder = on)
     }
 
 /** A one-off outcome Settings reports in its snackbar. */

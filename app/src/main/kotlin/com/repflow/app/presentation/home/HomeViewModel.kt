@@ -2,10 +2,13 @@ package com.repflow.app.presentation.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.repflow.app.application.backup.TrainingDataRepository
 import com.repflow.app.application.common.Clock
 import com.repflow.app.application.history.ObserveRecentTraining
 import com.repflow.app.application.history.RecentTraining
 import com.repflow.app.application.recovery.ObserveReadiness
+import com.repflow.app.application.settings.AppSettings
+import com.repflow.app.application.settings.SettingsRepository
 import com.repflow.app.application.trainingplan.ObserveTrainingPlanVersionLabels
 import com.repflow.app.application.trainingplan.ObserveTrainingPlans
 import com.repflow.app.application.trainingplan.TrainingPlanOverview
@@ -59,6 +62,14 @@ import javax.inject.Inject
  * `WhileSubscribed` window never restarts the upstream. `StateFlow` drops an
  * equal date, so a same-day return does not resubscribe. The header date is
  * the date the readiness was read for, so the two cannot disagree.
+ *
+ * **The backup line** follows the same [today], so it appears on day 21 with
+ * nothing else changing, and it follows the data itself, because Erase can change
+ * nothing else Home reads. Its inputs fail by saying less: a failed settings or
+ * history read shows no line, and a failed
+ * [TrainingDataRepository.observeHasTrainingData] read counts as having data, as
+ * on the Backup screen. A failed read of the running workout counts as none, as
+ * [activeSession] already does for the whole screen, so the line can show then.
  */
 @Suppress("LongParameterList")
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -76,6 +87,8 @@ class HomeViewModel
         private val startWorkoutSessionFromPlan: StartWorkoutSessionFromPlan,
         private val abandonWorkoutSession: AbandonWorkoutSession,
         private val restNotificationCanceller: RestNotificationCanceller,
+        settingsRepository: SettingsRepository,
+        trainingDataRepository: TrainingDataRepository,
     ) : ViewModel() {
         private val today = MutableStateFlow(currentDate())
         private val historyRetry = MutableStateFlow(0)
@@ -133,9 +146,31 @@ class HomeViewModel
                     }
             }
 
+        private val settings: Flow<AppSettings?> =
+            settingsRepository
+                .observe()
+                .map<AppSettings, AppSettings?> { it }
+                .catch { failure ->
+                    if (failure is CancellationException) throw failure
+                    emit(null)
+                }
+
+        /** Not knowing counts as having data, so a failed read can't hide a line that is due. */
+        private val hasTrainingData: Flow<Boolean> =
+            trainingDataRepository.observeHasTrainingData().catch { failure ->
+                if (failure is CancellationException) throw failure
+                emit(true)
+            }
+
+        /** The history and what the backup line reads. */
+        private val historyAndBackup: Flow<HistoryAndBackup> =
+            combine(settings, recentTraining, today, hasTrainingData) { settings, recent, day, hasData ->
+                HistoryAndBackup(recent, settings, day, hasData)
+            }
+
         private val content: Flow<HomeUiState> =
-            combine(readiness, activeSession, activePlans, versionLabels, recentTraining) { dated, session, plans, labels, recent ->
-                toUiState(dated, session, plans, labels, recent)
+            combine(readiness, activeSession, activePlans, versionLabels, historyAndBackup) { dated, session, plans, labels, history ->
+                toUiState(dated, session, plans, labels, history)
             }
 
         val uiState: StateFlow<HomeUiState> =
@@ -243,13 +278,22 @@ private data class DatedReadiness(
     val readiness: HomeReadiness,
 )
 
+/** The history, or `null` when it can't be read, and the other inputs of the backup line, read together. */
+private data class HistoryAndBackup(
+    val recent: RecentTraining?,
+    val settings: AppSettings?,
+    val today: LocalDate,
+    val hasTrainingData: Boolean,
+)
+
 private fun toUiState(
     dated: DatedReadiness,
     session: WorkoutSession?,
     plans: List<TrainingPlanOverview>,
     labels: Map<TrainingPlanVersionId, TrainingPlanVersionLabel>,
-    recent: RecentTraining?,
+    history: HistoryAndBackup,
 ): HomeUiState {
+    val recent = history.recent
     val options = plans.map(::toPlanOption)
     val lastTrainedPlanId = recent?.lastTrainedPlanVersionId?.let { labels[it]?.planId }
     val startPlan = plans.find { it.plan.id == lastTrainedPlanId } ?: plans.firstOrNull()
@@ -268,6 +312,24 @@ private fun toUiState(
         startOptions = options,
         readiness = dated.readiness,
         lastWorkout = toLastWorkout(recent, labels),
+        backupReminder = toBackupReminder(history, workoutRunning = session != null),
+    )
+}
+
+private fun toBackupReminder(
+    history: HistoryAndBackup,
+    workoutRunning: Boolean,
+): HomeBackupReminder? {
+    val settings = history.settings ?: return null
+    val recent = history.recent ?: return null
+    return backupReminderOf(
+        reminderOn = settings.backupReminder,
+        workoutRunning = workoutRunning,
+        hasTrainingData = history.hasTrainingData,
+        lastBackupAt = settings.lastBackupAt,
+        firstWorkoutEndedAt = recent.firstWorkoutEndedAt,
+        today = history.today,
+        zone = ZoneId.systemDefault(),
     )
 }
 

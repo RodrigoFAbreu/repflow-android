@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "work_item_id": "backup-reminder",
+  "requirements": {
+    "R1": {
+      "description": "Home shows 'Last backup N days ago' with a 'Back up' link when the last backup is 21 or more calendar days old, and 'No backup yet' with the same link when there has never been a backup and the first finished workout ended 21 or more calendar days ago; the line goes away once a backup is exported",
+      "checkpoint_ids": [
+        "CP2"
+      ]
+    },
+    "R2": {
+      "description": "The line never shows while a workout is running, on a phone with no training data, or when the Backup reminder switch is off, and never blocks or covers anything",
+      "checkpoint_ids": [
+        "CP2"
+      ]
+    },
+    "R3": {
+      "description": "Settings, under Your data after Backup and restore, has a Backup reminder switch, on by default including on an upgraded phone, and its value persists",
+      "checkpoint_ids": [
+        "CP1"
+      ]
+    },
+    "R4": {
+      "description": "Back up opens Backup and restore and Back returns to Home; at font scales above 1.1 the link wraps to its own line and nothing is clipped, in light and dark",
+      "checkpoint_ids": [
+        "CP2"
+      ]
+    }
+  }
+}

@@ -463,6 +463,7 @@
     <string name="home_history_error_title">Couldn\'t load your history</string>
     <string name="home_history_error_message">Your workouts are safe on this device. Try again.</string>
     <string name="home_history_retry">Try again</string>
+    <string name="home_backup_note_action">Back up</string>
     <string name="home_error_already_active">A workout is already running.</string>
     <string name="home_error_plan_not_found">That plan is no longer available.</string>
     <string name="home_error_unknown">Something went wrong. Try again.</string>
@@ -698,6 +699,8 @@
     <string name="settings_archived_row">Archived</string>
     <string name="settings_archived_row_meta">Exercises and plans</string>
     <string name="settings_backup_row">Backup and restore</string>
+    <string name="settings_backup_reminder">Backup reminder</string>
+    <string name="settings_backup_reminder_meta">Shows a note on Home when your last backup is 21 or more days old</string>
     <string name="settings_default_rest_sheet_title">Default rest</string>
     <string name="settings_default_rest_sheet_caption">Used when neither the plan nor the exercise sets a rest.</string>
     <string name="settings_default_rest_other">Other</string>

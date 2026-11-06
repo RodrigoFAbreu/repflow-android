@@ -8,6 +8,7 @@ import com.repflow.app.domain.workout.WorkoutSession
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import java.time.Instant
 import javax.inject.Inject
 
 /**
@@ -19,10 +20,14 @@ import javax.inject.Inject
  * @property lastTrainedPlanVersionId the plan version of the most recently
  *   ended valid session that was started from a plan - the start card's "the
  *   plan you last trained" (plan CP5, the fallback for `4a`'s programmed day).
+ * @property firstWorkoutEndedAt when the oldest valid session ended, or `null`
+ *   when none exists: the backup reminder counts from it when there has never
+ *   been a backup.
  */
 data class RecentTraining(
     val lastWorkout: LastWorkoutSummary?,
     val lastTrainedPlanVersionId: TrainingPlanVersionId?,
+    val firstWorkoutEndedAt: Instant?,
 )
 
 /**
@@ -64,11 +69,13 @@ class ObserveRecentTraining
     }
 
 internal fun recentTrainingOf(sessions: List<WorkoutSession>): RecentTraining {
-    val newestFirst = sessions.filter { it.invalidatedAt == null }.sortedByDescending { it.endedAt }
+    val valid = sessions.filter { it.invalidatedAt == null }
+    val newestFirst = valid.sortedByDescending { it.endedAt }
     val last = newestFirst.firstOrNull()
     return RecentTraining(
         lastWorkout = last?.let { LastWorkoutSummary(it, loadIncreasesOf(it, newestFirst.drop(1))) },
         lastTrainedPlanVersionId = newestFirst.firstNotNullOfOrNull { it.trainingPlanVersionId },
+        firstWorkoutEndedAt = valid.mapNotNull { it.endedAt }.minOrNull(),
     )
 }
 

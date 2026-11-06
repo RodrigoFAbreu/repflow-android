@@ -47,6 +47,7 @@ import com.repflow.app.application.workout.StartWorkoutSession
 import com.repflow.app.application.workout.StartWorkoutSessionCommand
 import com.repflow.app.application.workout.StartWorkoutSessionFromPlan
 import com.repflow.app.application.workout.UndoLastWorkoutSet
+import com.repflow.app.data.backup.LocalTrainingDataRepository
 import com.repflow.app.data.exercise.LocalExerciseRepository
 import com.repflow.app.data.progression.LocalProgressionRecommendationRepository
 import com.repflow.app.data.recovery.LocalFutsalRepository
@@ -382,6 +383,7 @@ class ActiveWorkoutLeaveRouteTest {
                             onSettingsClick = {},
                             onLogRecoveryClick = {},
                             onCreatePlanClick = {},
+                            onBackupClick = {},
                             viewModel = homeViewModel,
                         )
                     }
@@ -468,6 +470,8 @@ class ActiveWorkoutLeaveRouteTest {
                 StartWorkoutSessionFromPlan(workouts, GetExercise(LocalExerciseRepository(database.exerciseDao())), clock, ids),
             abandonWorkoutSession = AbandonWorkoutSession(workouts, clock),
             restNotificationCanceller = RestNotificationCanceller { },
+            settingsRepository = LocalSettingsRepository(database),
+            trainingDataRepository = LocalTrainingDataRepository(database),
         )
     }
 

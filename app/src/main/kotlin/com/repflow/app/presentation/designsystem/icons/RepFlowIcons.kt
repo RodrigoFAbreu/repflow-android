@@ -127,6 +127,10 @@ object RepFlowIcons {
     @DrawableRes
     val database: Int = R.drawable.ic_ph_database
 
+    /** Home's quiet backup line (`10n`, `ph-floppy-disk`). `backup-reminder` CP2. */
+    @DrawableRes
+    val floppyDisk: Int = R.drawable.ic_ph_floppy_disk
+
     /** The Backup screen's `Export backup now` button (`8c`, `ph-download-simple`). Remediation-1-remediation-1 CP8. */
     @DrawableRes
     val downloadSimple: Int = R.drawable.ic_ph_download_simple

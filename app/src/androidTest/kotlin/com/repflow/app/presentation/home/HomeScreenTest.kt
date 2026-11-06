@@ -7,16 +7,22 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
+import com.repflow.app.application.settings.ThemeMode
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.domain.recovery.ReadinessScore
 import com.repflow.app.domain.recovery.RecoveryEntry
@@ -26,6 +32,7 @@ import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.presentation.RepFlowTheme
 import com.repflow.app.presentation.assertButtonLabelWhole
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -51,6 +58,7 @@ class HomeScreenTest {
     private var opened = 0
     private var createPlan = 0
     private var logRecovery = 0
+    private var backupOpened = 0
 
     private fun string(id: Int): String = composeRule.activity.getString(id)
 
@@ -58,12 +66,13 @@ class HomeScreenTest {
         state: HomeUiState,
         fontScale: Float? = null,
         width: Dp? = null,
+        themeMode: ThemeMode = ThemeMode.SYSTEM,
     ) {
         composeRule.setContent {
             val base = LocalDensity.current
             val density = if (fontScale == null) base else Density(base.density, fontScale)
             CompositionLocalProvider(LocalDensity provides density) {
-                RepFlowTheme {
+                RepFlowTheme(themeMode) {
                     Box(if (width == null) Modifier else Modifier.width(width)) {
                         HomeScreen(
                             uiState = state,
@@ -75,6 +84,7 @@ class HomeScreenTest {
                             onCreatePlanClick = { createPlan++ },
                             onLogRecoveryClick = { logRecovery++ },
                             onRetryHistory = {},
+                            onBackupClick = { backupOpened++ },
                             onErrorShown = {},
                         )
                     }
@@ -208,6 +218,154 @@ class HomeScreenTest {
         composeRule.waitForIdle()
         listOf(R.string.home_resume, R.string.home_finish_it).forEach { label ->
             composeRule.assertButtonLabelWhole(string(label), "font $fontScale")
+        }
+    }
+
+    @Test
+    fun aStaleBackupShowsItsAgeAndBackUpOpensBackupOnce() {
+        show(HomeUiState(date = today, backupReminder = HomeBackupReminder.LastBackup(21)))
+
+        composeRule.onNodeWithText("Last backup 21 days ago").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.home_backup_note_action)).performScrollTo().performClick()
+
+        assertEquals(1, backupOpened)
+    }
+
+    @Test
+    fun neverHavingBackedUpSaysNoBackupYetWithTheSameLink() {
+        show(HomeUiState(date = today, backupReminder = HomeBackupReminder.NoBackupYet))
+
+        composeRule.onNodeWithText(string(R.string.backup_none_title)).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.home_backup_note_action)).performScrollTo().assertHasClickAction()
+    }
+
+    @Test
+    fun withNoReminderNothingIsDrawn() {
+        show(HomeUiState(date = today, backupReminder = null))
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(string(R.string.home_backup_note_action)).assertDoesNotExist()
+        composeRule.onNodeWithText(string(R.string.backup_none_title)).assertDoesNotExist()
+    }
+
+    @Test
+    fun theStartCardStillStartsWithTheLineThere() {
+        show(HomeUiState(date = today, start = HomeStartCard.Plan(push), backupReminder = HomeBackupReminder.LastBackup(30)))
+
+        composeRule
+            .onNodeWithText(string(R.string.home_start_workout))
+            .assertIsEnabled()
+            .performClick()
+
+        assertEquals(listOf<TrainingPlanVersionId?>(push.versionId), started)
+        assertEquals(0, backupOpened)
+    }
+
+    @Test
+    fun at2xFontTheLinkIsReachableAndInsideTheScreenInLight() = assertLinkReachableAt2xFont(ThemeMode.LIGHT)
+
+    @Test
+    fun at2xFontTheLinkIsReachableAndInsideTheScreenInDark() = assertLinkReachableAt2xFont(ThemeMode.DARK)
+
+    private fun assertLinkReachableAt2xFont(themeMode: ThemeMode) {
+        show(
+            HomeUiState(date = today, start = HomeStartCard.Plan(push), backupReminder = HomeBackupReminder.LastBackup(21)),
+            fontScale = LARGE_FONT_SCALE_MAX,
+            width = 384.dp,
+            themeMode = themeMode,
+        )
+        val link =
+            composeRule
+                .onNodeWithText(string(R.string.home_backup_note_action))
+                .performScrollTo()
+                .assertIsDisplayed()
+                .assertHeightIsAtLeast(44.dp)
+        val bounds = link.fetchSemanticsNode().boundsInRoot
+        val root = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+        assertTrue("The link starts off the screen: $bounds", bounds.left >= root.left)
+        assertTrue("The link ends off the screen: $bounds in $root", bounds.right <= root.right)
+        link.performClick()
+        assertEquals(1, backupOpened)
+    }
+
+    /** `10n`'s `stack()`: a row never reads the font scale, so these all still fit beside the link if nothing else moves it. */
+    @Test
+    fun aboveTheThresholdTheLinkTakesItsOwnLine() {
+        assertLinkPlacement(HomeBackupReminder.LastBackup(21), "Last backup 21 days ago", LARGE_FONT_SCALE_MEDIUM, ownLine = true)
+    }
+
+    @Test
+    fun at2xFontTheLinkTakesItsOwnLine() {
+        assertLinkPlacement(HomeBackupReminder.LastBackup(21), "Last backup 21 days ago", LARGE_FONT_SCALE_MAX, ownLine = true)
+    }
+
+    @Test
+    fun noBackupYetAt1point3xFontTakesItsOwnLine() {
+        assertLinkPlacement(HomeBackupReminder.NoBackupYet, "No backup yet", LARGE_FONT_SCALE_MEDIUM, ownLine = true)
+    }
+
+    @Test
+    fun noBackupYetAt2xFontTakesItsOwnLine() {
+        assertLinkPlacement(HomeBackupReminder.NoBackupYet, "No backup yet", LARGE_FONT_SCALE_MAX, ownLine = true)
+    }
+
+    @Test
+    fun atNormalFontTheLinkSharesTheRow() {
+        assertLinkPlacement(HomeBackupReminder.LastBackup(21), "Last backup 21 days ago", fontScale = 1f, ownLine = false)
+    }
+
+    @Test
+    fun noBackupYetAtNormalFontSharesTheRow() {
+        assertLinkPlacement(HomeBackupReminder.NoBackupYet, "No backup yet", fontScale = 1f, ownLine = false)
+    }
+
+    /** Boards `10n` and `10o` draw the line under `Last workout`, whatever the font scale does to the link. */
+    @Test
+    fun theLineComesUnderLastWorkout() {
+        val ended = Instant.parse("2026-08-10T10:00:00Z")
+        show(
+            HomeUiState(
+                date = today,
+                lastWorkout = HomeLastWorkout.Summary("Legs", ended.minusSeconds(3_600), ended, loadIncreases = 0),
+                backupReminder = HomeBackupReminder.LastBackup(21),
+            ),
+        )
+        val line =
+            composeRule
+                .onNodeWithText("Last backup 21 days ago")
+                .performScrollTo()
+                .fetchSemanticsNode()
+        val card = composeRule.onNodeWithText("Legs").fetchSemanticsNode()
+
+        assertTrue(line.positionInRoot.y >= card.positionInRoot.y + card.size.height)
+    }
+
+    private fun assertLinkPlacement(
+        reminder: HomeBackupReminder,
+        words: String,
+        fontScale: Float,
+        ownLine: Boolean,
+    ) {
+        show(HomeUiState(date = today, backupReminder = reminder), fontScale = fontScale, width = 384.dp)
+        val text =
+            composeRule
+                .onNodeWithText(words)
+                .performScrollTo()
+                .fetchSemanticsNode()
+                .boundsInRoot
+        val link =
+            composeRule
+                .onNodeWithText(string(R.string.home_backup_note_action))
+                .performScrollTo()
+                .assertHeightIsAtLeast(44.dp)
+                .fetchSemanticsNode()
+                .boundsInRoot
+        if (ownLine) {
+            assertTrue("At font $fontScale the link should be under the words: $link, $text", link.top >= text.bottom)
+            assertTrue("At font $fontScale the link should be at the start: $link, $text", link.left < text.left)
+        } else {
+            assertTrue("At font $fontScale the link should share the row: $link, $text", link.top < text.bottom && text.top < link.bottom)
+            assertTrue("At font $fontScale the link should follow the words: $link, $text", link.left >= text.right)
         }
     }
 

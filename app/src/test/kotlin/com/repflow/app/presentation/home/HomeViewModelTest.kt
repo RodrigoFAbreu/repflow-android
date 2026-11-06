@@ -2,6 +2,7 @@ package com.repflow.app.presentation.home
 
 import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.test
+import com.repflow.app.application.backup.InMemoryTrainingDataRepository
 import com.repflow.app.application.common.Clock
 import com.repflow.app.application.exercise.GetExercise
 import com.repflow.app.application.exercise.InMemoryExerciseRepository
@@ -11,6 +12,9 @@ import com.repflow.app.application.recovery.InMemoryRecoveryRepository
 import com.repflow.app.application.recovery.ObserveReadiness
 import com.repflow.app.application.recovery.RecordRecoveryEntry
 import com.repflow.app.application.recovery.RecordRecoveryEntryCommand
+import com.repflow.app.application.settings.AppSettings
+import com.repflow.app.application.settings.InMemorySettingsRepository
+import com.repflow.app.application.settings.SettingsRepository
 import com.repflow.app.application.trainingplan.InMemoryTrainingPlanRepository
 import com.repflow.app.application.trainingplan.ObserveTrainingPlanVersionLabels
 import com.repflow.app.application.trainingplan.ObserveTrainingPlans
@@ -41,9 +45,12 @@ import com.repflow.app.domain.workout.WorkoutSession
 import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.domain.workout.WorkoutSessionStatus
 import com.repflow.app.presentation.workout.RecordingRestNotificationCanceller
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -80,6 +87,9 @@ class HomeViewModelTest {
     private val restNotificationCanceller = RecordingRestNotificationCanceller()
     private val exerciseRepository = InMemoryExerciseRepository()
     private val trainingPlanRepository = InMemoryTrainingPlanRepository()
+    private var settingsRepository: SettingsRepository = InMemorySettingsRepository()
+    private val trainingDataRepository = InMemoryTrainingDataRepository()
+    private var historyReadsFrom: WorkoutRepository = workoutRepository
 
     @After
     fun resetMainDispatcher() {
@@ -316,7 +326,204 @@ class HomeViewModelTest {
             }
         }
 
+    @Test
+    fun `a backup 21 days old gives the line, and a later backup takes it away`() =
+        runTest {
+            val clock = startAt(day.atTime(10, 0))
+            backedUp(daysAgo = 21)
+            val viewModel = viewModel(clock)
+
+            viewModel.uiState.test {
+                assertEquals(HomeBackupReminder.LastBackup(21), awaitUntil { it.backupReminder != null }.backupReminder)
+
+                // What a real export writes, with nothing else changing.
+                settingsRepository.update { it.copy(lastBackupAt = clock.now()) }
+
+                awaitUntil { it.backupReminder == null }
+            }
+        }
+
+    @Test
+    fun `no backup and an old first workout gives No backup yet, and the switch takes it away and brings it back`() =
+        runTest {
+            val clock = startAt(day.atTime(10, 0))
+            completeSessionFrom(TrainingPlanVersionId("old"), endedAt = daysAgo(21))
+            val viewModel = viewModel(clock)
+
+            viewModel.uiState.test {
+                assertEquals(HomeBackupReminder.NoBackupYet, awaitUntil { it.backupReminder != null }.backupReminder)
+
+                settingsRepository.update { it.copy(backupReminder = false) }
+                awaitUntil { it.backupReminder == null }
+
+                settingsRepository.update { it.copy(backupReminder = true) }
+                assertEquals(HomeBackupReminder.NoBackupYet, awaitUntil { it.backupReminder != null }.backupReminder)
+            }
+        }
+
+    @Test
+    fun `a running workout takes the line away until it ends`() =
+        runTest {
+            val clock = startAt(day.atTime(10, 0))
+            backedUp(daysAgo = 30)
+            val viewModel = viewModel(clock)
+
+            viewModel.uiState.test {
+                awaitUntil { it.backupReminder != null }
+
+                viewModel.onStartWorkout(null)
+
+                val running = awaitUntil { it.activeWorkout != null }
+                assertNull(running.backupReminder)
+
+                viewModel.onAbandonWorkout(running.activeWorkout!!.sessionId)
+
+                assertEquals(HomeBackupReminder.LastBackup(30), awaitUntil { it.activeWorkout == null }.backupReminder)
+            }
+        }
+
+    @Test
+    fun `a phone with no training data shows no line, and its first data brings the line with nothing else changing`() =
+        runTest {
+            val clock = startAt(day.atTime(10, 0))
+            backedUp(daysAgo = 30)
+            trainingDataRepository.hasTrainingData = false
+            val viewModel = viewModel(clock)
+
+            viewModel.uiState.test {
+                assertNull(awaitUntil { it.start != HomeStartCard.Loading }.backupReminder)
+
+                trainingDataRepository.hasTrainingData = true
+
+                assertEquals(HomeBackupReminder.LastBackup(30), awaitUntil { it.backupReminder != null }.backupReminder)
+            }
+        }
+
+    /**
+     * With no finished workout, Erase changes neither the settings nor the history, and a return inside the
+     * 5-second `WhileSubscribed` window restarts nothing, so only the data itself can take the line away.
+     */
+    @Test
+    fun `an Erase with no finished workout takes the line away on a same-day return inside the 5-second window`() =
+        runTest {
+            val clock = startAt(day.atTime(10, 0))
+            backedUp(daysAgo = 30)
+            val viewModel = viewModel(clock)
+
+            viewModel.uiState.test {
+                assertEquals(HomeBackupReminder.LastBackup(30), awaitUntil { it.backupReminder != null }.backupReminder)
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            success(trainingDataRepository.clearTrainingData())
+            advanceTimeBy(Duration.ofSeconds(4).toMillis())
+            viewModel.onForeground()
+
+            viewModel.uiState.test {
+                assertNull(awaitItem().backupReminder)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `a failed settings read shows no line, and Home still loads`() =
+        runTest {
+            val clock = startAt(day.atTime(10, 0))
+            settingsRepository =
+                object : SettingsRepository {
+                    override fun observe(): Flow<AppSettings> = flow { throw IllegalStateException("settings row unreadable") }
+
+                    override suspend fun get(): AppSettings = AppSettings.DEFAULT
+
+                    override suspend fun update(transform: (AppSettings) -> AppSettings) = DomainResult.Success(Unit)
+                }
+            completeSessionFrom(TrainingPlanVersionId("old"), endedAt = daysAgo(30))
+            val viewModel = viewModel(clock)
+
+            viewModel.uiState.test {
+                val state = awaitUntil { it.lastWorkout is HomeLastWorkout.Summary }
+                assertNull(state.backupReminder)
+            }
+        }
+
+    @Test
+    fun `a failed history read shows no line, even with an old backup, and Home says so`() =
+        runTest {
+            val clock = startAt(day.atTime(10, 0))
+            backedUp(daysAgo = 30)
+            historyReadsFrom =
+                object : WorkoutRepository by workoutRepository {
+                    override fun observeCompletedSessions(includeInvalidated: Boolean): Flow<List<WorkoutSession>> =
+                        flow { throw IllegalStateException("history unreadable") }
+                }
+            val viewModel = viewModel(clock)
+
+            viewModel.uiState.test {
+                assertNull(awaitUntil { it.lastWorkout == HomeLastWorkout.Failed }.backupReminder)
+            }
+        }
+
+    @Test
+    fun `a failed read of the training data still gives the line`() =
+        runTest {
+            val clock = startAt(day.atTime(10, 0))
+            backedUp(daysAgo = 30)
+            trainingDataRepository.readFailure = IllegalStateException("database unreadable")
+            val viewModel = viewModel(clock)
+
+            viewModel.uiState.test {
+                assertEquals(HomeBackupReminder.LastBackup(30), awaitUntil { it.backupReminder != null }.backupReminder)
+            }
+        }
+
+    /** Swallowing it would count as having data and show the line, as a real failure does. */
+    @Test
+    fun `a cancelled read of the training data is not swallowed`() =
+        runTest {
+            val clock = startAt(day.atTime(10, 0))
+            backedUp(daysAgo = 30)
+            trainingDataRepository.readFailure = CancellationException("the read was cancelled")
+            val viewModel = viewModel(clock)
+
+            viewModel.uiState.test {
+                assertNull(awaitItem().backupReminder)
+                expectNoEvents()
+            }
+        }
+
+    /** Nothing but the day changes, and only through the same [HomeViewModel.onForeground] the readiness card follows. */
+    @Test
+    fun `a backup 20 days old gets the line on the next day, with nothing else changing`() =
+        runTest {
+            val clock = startAt(day.atTime(10, 0))
+            backedUp(daysAgo = 20)
+            val viewModel = viewModel(clock)
+
+            viewModel.uiState.test {
+                assertNull(awaitUntil { it.start != HomeStartCard.Loading }.backupReminder)
+
+                clock.jumpTo(nextDay.atTime(7, 0))
+                viewModel.onForeground()
+
+                assertEquals(
+                    HomeBackupReminder.LastBackup(21),
+                    awaitUntil { it.date == nextDay && it.backupReminder != null }.backupReminder,
+                )
+            }
+        }
+
     // --- fixtures ---------------------------------------------------------------------------
+
+    private fun daysAgo(days: Long): Instant =
+        day
+            .minusDays(days)
+            .atTime(10, 0)
+            .atZone(zone)
+            .toInstant()
+
+    private suspend fun backedUp(daysAgo: Long) {
+        settingsRepository.update { it.copy(lastBackupAt = daysAgo(daysAgo)) }
+    }
 
     /** A [Clock] on the test scheduler's virtual time, plus a wall-clock jump that uptime never sees. */
     private class VirtualClock(
@@ -347,11 +554,13 @@ class HomeViewModelTest {
             observeActiveWorkoutSession = ObserveActiveWorkoutSession(workoutRepository),
             observeTrainingPlans = ObserveTrainingPlans(trainingPlanRepository),
             observeTrainingPlanVersionLabels = ObserveTrainingPlanVersionLabels(trainingPlanRepository),
-            observeRecentTraining = ObserveRecentTraining(workoutRepository),
+            observeRecentTraining = ObserveRecentTraining(historyReadsFrom),
             startWorkoutSession = StartWorkoutSession(startsWriteTo, clock, ids),
             startWorkoutSessionFromPlan = StartWorkoutSessionFromPlan(startsWriteTo, GetExercise(exerciseRepository), clock, ids),
             abandonWorkoutSession = AbandonWorkoutSession(workoutRepository, clock),
             restNotificationCanceller = restNotificationCanceller,
+            settingsRepository = settingsRepository,
+            trainingDataRepository = trainingDataRepository,
         )
     }
 

@@ -55,7 +55,8 @@ import java.util.Locale
  * `1d`'s light theme, empty, error and first-run states (`:2978-3036`) where
  * `4a` is silent. Top to bottom: the header (date, greeting, settings gear),
  * the resume card while a session runs, the start card, the recovery card and
- * the `Last workout` card. The start sheet, the readiness sheet and the abandon
+ * the `Last workout` card, then the quiet backup line (`10n`, `10o`) when the
+ * last backup is old. The start sheet, the readiness sheet and the abandon
  * confirmation open over it.
  *
  * Not drawn, each a deviation-register row: the plan-day line and the start
@@ -88,6 +89,7 @@ fun HomeScreen(
     onCreatePlanClick: () -> Unit,
     onLogRecoveryClick: () -> Unit,
     onRetryHistory: () -> Unit,
+    onBackupClick: () -> Unit,
     onErrorShown: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -138,6 +140,7 @@ fun HomeScreen(
                 onScoreClick = { overlay = HomeOverlay.READINESS_SHEET },
             )
             LastWorkoutCard(lastWorkout = uiState.lastWorkout, today = uiState.date, onRetry = onRetryHistory)
+            uiState.backupReminder?.let { HomeBackupNote(reminder = it, onBackupClick = onBackupClick) }
         }
         SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
     }

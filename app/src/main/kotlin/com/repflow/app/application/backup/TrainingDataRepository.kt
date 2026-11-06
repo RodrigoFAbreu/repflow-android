@@ -1,6 +1,7 @@
 package com.repflow.app.application.backup
 
 import com.repflow.app.domain.common.DomainResult
+import kotlinx.coroutines.flow.Flow
 
 /**
  * The one general-purpose destructive primitive over the user's training data
@@ -24,6 +25,12 @@ interface TrainingDataRepository {
      * has none. A read failure throws, for the caller to report.
      */
     suspend fun hasTrainingData(): Boolean
+
+    /**
+     * [hasTrainingData] as a flow: the answer now, then each change, once the write that made it has
+     * committed. A read failure fails the flow, for the collector to report.
+     */
+    fun observeHasTrainingData(): Flow<Boolean>
 
     /**
      * Deletes every training-data row in one transaction - all or nothing. Called

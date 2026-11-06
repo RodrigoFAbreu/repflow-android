@@ -90,6 +90,28 @@ class ObserveRecentTrainingTest {
     }
 
     @Test
+    fun `the first workout's end is the oldest valid session's, whatever order they arrive in`() {
+        val first = session("first", day = 2)
+        val later = session("later", day = 4)
+
+        assertEquals(first.endedAt, recentTrainingOf(listOf(later, first)).firstWorkoutEndedAt)
+    }
+
+    @Test
+    fun `an invalidated session is not the first workout`() {
+        val invalidated = session("invalidated", day = 1, invalidated = true)
+        val valid = session("valid", day = 3)
+
+        assertEquals(valid.endedAt, recentTrainingOf(listOf(invalidated, valid)).firstWorkoutEndedAt)
+    }
+
+    @Test
+    fun `with only invalidated sessions, or none, there is no first workout`() {
+        assertNull(recentTrainingOf(emptyList()).firstWorkoutEndedAt)
+        assertNull(recentTrainingOf(listOf(session("invalidated", day = 1, invalidated = true))).firstWorkoutEndedAt)
+    }
+
+    @Test
     fun `the flow re-derives when a workout completes`() =
         runTest {
             val repository = InMemoryWorkoutRepository()

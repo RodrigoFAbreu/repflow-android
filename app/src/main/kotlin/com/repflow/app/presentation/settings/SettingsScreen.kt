@@ -50,8 +50,8 @@ import java.time.ZoneId
  *   `Extra set fields` row (opens a sheet);
  * - **Your data** - `Exercise library` (register `D25`), `Archived` (the
  *   Archived screen), `Backup and restore` (the Backup screen, `5d`, CP8) with
- *   its `Last backup <when>` subtitle, then the `Irreversible` card over
- *   `Erase all data`, behind a typed confirmation;
+ *   its `Last backup <when>` subtitle, the `Backup reminder` switch (`40e`), then
+ *   the `Irreversible` card over `Erase all data`, behind a typed confirmation;
  * - the footer.
  *
  * Every switch, the theme and the two value rows render from
@@ -253,6 +253,13 @@ private fun DataGroup(
                 else -> lastBackupTitle(lastBackupLabel(settings.lastBackupAt, now, zone))
             },
         onClick = actions.onBackupClick,
+    )
+    SettingsSwitchRow(
+        R.string.settings_backup_reminder,
+        R.string.settings_backup_reminder_meta,
+        SettingToggle.BACKUP_REMINDER,
+        settings,
+        actions.onToggle,
     )
 }
 

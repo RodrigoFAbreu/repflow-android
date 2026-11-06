@@ -9,8 +9,11 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import com.repflow.app.R
+import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
+import java.time.Duration
+import java.time.Instant
 
 /**
  * End-to-end instrumentation smoke test: boots [MainActivity] through Hilt
@@ -100,6 +103,10 @@ class MainActivityNavHostSmokeTest {
         waitForText(R.string.workout_board_empty_body)
         composeRule.onNodeWithText(string(R.string.workout_board_empty_body)).assertIsDisplayed()
         assertBottomNavAbsent()
+        abandonTheWorkoutThroughItsX()
+    }
+
+    private fun abandonTheWorkoutThroughItsX() {
         clickByDescription(R.string.workout_board_leave_content_description)
         waitForText(R.string.workout_leave_abandon)
         clickByText(R.string.workout_leave_abandon)
@@ -160,6 +167,35 @@ class MainActivityNavHostSmokeTest {
     }
 
     /**
+     * `10n`: Home's `Back up` opens Backup, and Back returns Home. The abandoned workout is the training data
+     * the line needs. It stays behind, as after the workout walk above: Home reads only completed sessions, so
+     * with no backup date there is no line. Erase keeps the settings row, so the date has to be put back by hand.
+     */
+    @Test
+    fun aBackupLineOpensBackupAndBackReturnsHome() {
+        val settings = composeRule.activity.settingsRepository
+        waitForText(R.string.home_empty_workout)
+        clickByText(R.string.home_empty_workout)
+        waitForText(R.string.workout_board_empty_body)
+        abandonTheWorkoutThroughItsX()
+        try {
+            runBlocking { settings.update { it.copy(lastBackupAt = Instant.now().minus(Duration.ofDays(OLD_BACKUP_DAYS))) } }
+            waitForText(R.string.home_backup_note_action)
+            composeRule.onNodeWithText(string(R.string.home_backup_note_action)).performScrollTo().performClick()
+            waitForText(R.string.backup_title)
+            composeRule.onNodeWithText(string(R.string.backup_restore_action)).performScrollTo().assertIsDisplayed()
+            assertBottomNavAbsent()
+
+            clickByDescription(R.string.backup_back_content_description)
+
+            waitForText(R.string.home_greeting)
+            composeRule.onNodeWithText(string(R.string.home_greeting)).assertIsDisplayed()
+        } finally {
+            runBlocking { settings.update { it.copy(lastBackupAt = null) } }
+        }
+    }
+
+    /**
      * Remediation-1-remediation-1 CP7: the Archived screen is reached only from
      * Settings and returns there. Like the other walks this assumes a fresh
      * install, where nothing is archived and one empty state shows.
@@ -193,5 +229,6 @@ class MainActivityNavHostSmokeTest {
 
     private companion object {
         const val WAIT_MILLIS = 5_000L
+        const val OLD_BACKUP_DAYS = 30L
     }
 }

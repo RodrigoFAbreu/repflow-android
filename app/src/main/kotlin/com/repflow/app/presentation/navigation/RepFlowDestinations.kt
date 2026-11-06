@@ -88,7 +88,7 @@ object RepFlowDestinations {
     /** Archived exercises and plans with `Restore`, reached only from Settings (remediation-1-remediation-1 CP7). */
     const val ARCHIVED = "settings/archived"
 
-    /** Backup and restore (`5d`), reached only from Settings (remediation-1-remediation-1 CP8). */
+    /** Backup and restore (`5d`), reached from Settings (remediation-1-remediation-1 CP8) and from Home's backup line. */
     const val BACKUP = "settings/backup"
 
     /**

@@ -11663,6 +11663,962 @@
         "evaluated_at": "2026-11-05T23:35:40Z",
         "workflow_release": "2.25.5"
       }
+    },
+    "backup-reminder": {
+      "work_item_type": "product",
+      "work_item_kind": "product",
+      "work_item_id": "backup-reminder",
+      "parent_work_item_id": null,
+      "plan_path": "docs/milestones/backup-reminder-execution.md",
+      "registry_path": "docs/ai-workflow/registry/backup-reminder-registry.json",
+      "mapping_path": "docs/ai-workflow/requirements/backup-reminder-mapping.json",
+      "governing_workflow_version": "2.2",
+      "phase": "MILESTONE_COMPLETE",
+      "plan_revision": 2,
+      "implementation_revision": 2,
+      "functional_review_round": null,
+      "base_commit": "31561878d68af71c0304925fc9f466d0ef4a8e7a",
+      "reviewed_implementation_head": "593457162f18136e17a3a1795d8bdf48625219a7",
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": "CP2",
+      "checkpoints": {
+        "CP1": {
+          "status": "COMPLETE",
+          "start_commit": "37d7e0e89772eb69ddd2291742fff58aecbadc19"
+        },
+        "CP2": {
+          "status": "COMPLETE",
+          "start_commit": "215bc8b942ff90b2ca82113782a8eb4450739bcd"
+        }
+      },
+      "current_bundle_id": "582f933de50f7266431dd4c21f710f99e9832a5ccd6ba4faee0a291a6c371145",
+      "plan_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "582f933de50f7266431dd4c21f710f99e9832a5ccd6ba4faee0a291a6c371145",
+        "approved_review_content_id": "e0270ab6b8fc114e0e5f88b13eb1510bdce2cf0fbdf5f14c92f46af238262cdc",
+        "review_content_manifest": [
+          {
+            "path": "docs/ai-workflow/registry/backup-reminder-registry.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "81acd695c9c1c8c75f5f3ab4dd64170f688fd72c"
+          },
+          {
+            "path": "docs/ai-workflow/requirements/backup-reminder-mapping.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d7cfc3bf2493818de2ca7e742239fee0b83b285d"
+          },
+          {
+            "path": "docs/milestones/backup-reminder-execution.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "81014d74991bff608b851fea1c6f2dc3c9913ad1"
+          }
+        ],
+        "reviewed_content_commit": null,
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-06T00:45:55Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "e0270ab6b8fc114e0e5f88b13eb1510bdce2cf0fbdf5f14c92f46af238262cdc",
+            "ledger": {
+              "local": {
+                "bundle_id": "582f933de50f7266431dd4c21f710f99e9832a5ccd6ba4faee0a291a6c371145",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "be4edf0c8f8bf0701225f81a95bb1c1beb01388b39388bf8578fc2c45a3dcb6b",
+                "ledger_entry_sha256": "59a66713326effc9652b424870e4871d86b1967d25e55b6517a238411a5cc7d4",
+                "run_ref": "session:local .ai-review/backup-reminder/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "582f933de50f7266431dd4c21f710f99e9832a5ccd6ba4faee0a291a6c371145",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "34cb033b41d455d1853a15dc2a3859ef7e3d2f1c2ab7ab274d2b15909bee7fc0",
+                "ledger_entry_sha256": "7bedbd5b6dc2a6645c26fb943122ef0f7314ef8e357f461127e489c2acae3540",
+                "run_ref": "codex:20261106T004203Z-fa079dd4",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-06T00:45:55Z",
+          "workflow_release": "2.25.5"
+        }
+      },
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "4e5217480bf82bf76c45cb9fd94446da56d0b70d32d87db9589359b1206b4f0f",
+        "approved_review_content_id": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+        "review_content_manifest": [
+          {
+            "path": "app/schemas/com.repflow.app.infrastructure.database.RepFlowDatabase/10.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "c65da201be2a6fa8cd70f02c0fe967895b903f68"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/backup/LocalTrainingDataRepositoryTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "85b1909b026a6ae8629861e279e5346a0d7f90c8"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/settings/SettingsPersistenceTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "bf3b81b278e74d67c5ef86392340b51568d3d9e6"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/infrastructure/database/RepFlowDatabaseMigrationTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7e55503ee6b9db272410bfe44a5af3b80452a2d6"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/MainActivityNavHostSmokeTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "1ce8eea52f203e1f010f2cede57179fa93a9f40e"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/home/HomeRouteLifecycleTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "24dd234a3f26c61aa9f1827fe922c5b21b7ce560"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/home/HomeScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "677b2182e4a3b276ed4031fb6f35d5abc0bbac8a"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/settings/SettingsScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "292b151171e72b7de5b662a557e0b16a484713db"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutLeaveRouteTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "e67c4f0ea528983337167cd03bbe52e8f9fcc1de"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/backup/TrainingDataRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d75efd173cf9761de9da108a9c4e87e814d3c7ee"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/history/ObserveRecentTraining.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9fb63de092f0817e4adbeffc3436cd574d054801"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/settings/AppSettings.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a9b09bb6e82b52f460f645c4a326e5fee2370c96"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/backup/LocalTrainingDataRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "118cd574c78f769bd7222654eec76d549f044ac5"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/settings/LocalSettingsRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f06b42a818cf11785194e796dfb10ac596b24dab"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/database/RepFlowDatabase.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "11d6e999a4ba7333c91408c6964e188dfcb7aff3"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/database/RepFlowMigrations.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b2f5216d593612b57d1b6348eb088ebd99ba8257"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/database/TrainingDataDao.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8e242ac861e6509c299aec38a92dbd9bff584c2d"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/database/settings/SettingsEntity.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "1d649dc1b3a9178ac9884b9383e6c1fef63cdf7a"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/icons/RepFlowIcons.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9e747b91fc308c4fbba30a013d565336b0c51cb1"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeBackupReminder.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "de1dbda37b775ece0178638f08abb28dc9603b58"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeCards.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8cec72f570cbdd979119639c4a7236a081657f32"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeRoute.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5826730ebbd96849fe3547e5a4b012d649dbcdb8"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b8e72ea71e361e2278049f6230bde85a4ecbd347"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeUiState.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a6d4a1a0d4f1b32358d6df5fc85ea2afc9f7ec80"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8a7cb8067b41839b90c93b5eb2cf4573ba45a8d0"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/navigation/RepFlowDestinations.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f4c97cdafb81f92c978bb4fcbc7a2cee71e2bd9f"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/navigation/RepFlowNavHost.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5c1c9298e17d0e1453e80d17cb8f2691af48e83e"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/settings/SettingsScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3ad281259b4bd82c2b1804295b80c42bbcd85a6f"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/settings/SettingsViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "843de6269c6c08e236c2bca5f724e4fb52bfab1c"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_floppy_disk.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a6817a5cea18c5a0e027a64733de6c0a6a12b59d"
+          },
+          {
+            "path": "app/src/main/res/values/strings.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "94c6d73e9e27fce92583279d3171dbe35b08df0f"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/backup/InMemoryTrainingDataRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "876917004aa18b33f582668c9110752a650f284f"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/history/ObserveRecentTrainingTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3b21c42c6992e48a879230b16dc17fbc1ff1338a"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/designsystem/icons/RepFlowIconsTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ade2aca1e8c267c456aaceeb68cd7ed150ddf104"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/home/HomeBackupReminderTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "491370ac9d13600e0157dabfe6cdb972803f9f80"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/home/HomeViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7b042e018c23e131b93d4f0ec5643276b8bddc70"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/settings/SettingsViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0bb43bade75811bfe3f12116f9f5009277f6429c"
+          },
+          {
+            "path": "docs/UX_FLOWS.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8ccdd63e34316b96b85e0c6e53e60ccb018081a5"
+          },
+          {
+            "path": "docs/ai-workflow/registry/backup-reminder-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "53b7d4508f39e4dcb3cb22306d6e2d7ea79b3e86"
+          }
+        ],
+        "reviewed_content_commit": "593457162f18136e17a3a1795d8bdf48625219a7",
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-06T03:31:00Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+            "ledger": {
+              "local": {
+                "bundle_id": "4e5217480bf82bf76c45cb9fd94446da56d0b70d32d87db9589359b1206b4f0f",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "c6a7775dcc6cd0655cf195288e96be2ec7c65db62e5556944b897d6ccdb16319",
+                "ledger_entry_sha256": "8fe0d2bc0098a1191e030452fd25e687d494ed896d42f75783035e1de5fc08d4",
+                "run_ref": "session:local .ai-review/backup-reminder/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "4e5217480bf82bf76c45cb9fd94446da56d0b70d32d87db9589359b1206b4f0f",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "c56099747228d89ff68e2e39348a1ea02929cf05711f6b2886b44df06f94540a",
+                "ledger_entry_sha256": "907ce4c40c6f9aecd24e5bf1468629acd71a30dd203df96e7c834d365cea5859",
+                "run_ref": "codex:20261106T032753Z-34ce3007",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-06T03:31:00Z",
+          "workflow_release": "2.25.5"
+        }
+      },
+      "technical_review_block_pins": [],
+      "plan_review_stages": {
+        "review_content_id": "e0270ab6b8fc114e0e5f88b13eb1510bdce2cf0fbdf5f14c92f46af238262cdc",
+        "LOCAL_MODEL_PLAN_REVIEW": {
+          "bundle_id": "582f933de50f7266431dd4c21f710f99e9832a5ccd6ba4faee0a291a6c371145",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-06T00:41:38Z",
+          "verdict_sha256": "be4edf0c8f8bf0701225f81a95bb1c1beb01388b39388bf8578fc2c45a3dcb6b",
+          "run_ref": "session:local .ai-review/backup-reminder/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_PLAN_REVIEW": {
+          "bundle_id": "582f933de50f7266431dd4c21f710f99e9832a5ccd6ba4faee0a291a6c371145",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-06T00:43:36Z",
+          "verdict_sha256": "34cb033b41d455d1853a15dc2a3859ef7e3d2f1c2ab7ab274d2b15909bee7fc0",
+          "run_ref": "codex:20261106T004203Z-fa079dd4",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
+      },
+      "functional_acceptance_status": null,
+      "blocking_decisions": [],
+      "review_round_counts": {
+        "plan": {
+          "local": 2,
+          "external": 1
+        },
+        "implementation": {
+          "local": 2,
+          "external": 2
+        }
+      },
+      "state_revision": 21,
+      "last_transition": "2026-11-06T03:48:21Z",
+      "feedback_layout": "scoped",
+      "plan_review_binding": {
+        "status": "BOUND",
+        "at": "2026-11-06T00:31:46Z",
+        "consumed": {
+          "review_content_id": "ef0191ebd81a0b1f10ea041a4b9392e4b869076f7767dcc8f9b278b949760aed",
+          "plan_revision": 1,
+          "legacy": false
+        },
+        "published": {
+          "review_content_id": "e0270ab6b8fc114e0e5f88b13eb1510bdce2cf0fbdf5f14c92f46af238262cdc",
+          "plan_revision": 2
+        },
+        "bound": {
+          "review_content_id": "e0270ab6b8fc114e0e5f88b13eb1510bdce2cf0fbdf5f14c92f46af238262cdc",
+          "bundle_id": "582f933de50f7266431dd4c21f710f99e9832a5ccd6ba4faee0a291a6c371145",
+          "plan_revision": 2
+        }
+      },
+      "consumed_plan_review_content_ids": [
+        "ef0191ebd81a0b1f10ea041a4b9392e4b869076f7767dcc8f9b278b949760aed"
+      ],
+      "optional_findings": {
+        "F-2f126bbf41ad": {
+          "digest": "2f126bbf41ad43d4bb9539e4e68b3e81134f9f0d87af5bd293f4ad1ef5a5c47a",
+          "text": "**O1. CP2 test 5 cannot pass as written.** It seeds only a stale `lastBackupAt` on the fresh install it asks for, so rule 3 (no training data) returns `null` and Home shows no line. The test also needs a training-data row, and this class has no way to write one: no Hilt test rule, and only `composeRule.activity.settingsRepository` is reachable. The activity starts before the test body and `hasTrainingData` is re-read only when settings, sessions or the day change, so the row must go in before the settings write, or the line never appears. Both must be undone, because the class's KDoc promises \"the next walk finds Home as this one did\" and Erase leaves the settings row, so `lastBackupAt` needs its own reset. The user sees nothing wrong here, since the failure is loud, but this is the only test of the `RepFlowNavHost` wiring, so it should not be dropped when it fails.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "ef0191ebd81a0b1f10ea041a4b9392e4b869076f7767dcc8f9b278b949760aed",
+              "verdict": "REVISE",
+              "at": "2026-11-06T00:26:17Z"
+            }
+          ]
+        },
+        "F-be6374fa4479": {
+          "digest": "be6374fa447946dd8d6d5b77e0baa2eb213521175af819dd4b2f7b9f31ab6032",
+          "text": "**O2. Nothing tests that the line appears on a new day.** The plan names the day as an input, but CP2 test 3 only changes settings and sessions, and no mutation covers it. If the clock were read once, a phone left in the background across day 21 would show no line until something else changed. `HomeViewModelTest` already has what this needs (`VirtualClock.jumpTo`, `onForeground()`, line 141): a backup 20 days old gives `null`, and after a jump past midnight and `onForeground()` it gives `LastBackup(21)`.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "ef0191ebd81a0b1f10ea041a4b9392e4b869076f7767dcc8f9b278b949760aed",
+              "verdict": "REVISE",
+              "at": "2026-11-06T00:26:17Z"
+            }
+          ]
+        },
+        "F-6a4e78dc760a": {
+          "digest": "6a4e78dc760a3d34fd8ec015a66aa00c5dda36cfaeb58a74e7436dc8280cd5d5",
+          "text": "**O3. CP2's `Files:` leaves out three test files that must change.** `HomeRouteLifecycleTest.kt` and `ActiveWorkoutLeaveRouteTest.kt` each construct `HomeViewModel` by named arguments and call `HomeRoute`, so the androidTest source set stops compiling until they get the new arguments. `RepFlowIconsTest.kt` pins `EXPECTED_GLYPHS`, so `bundledIconSetIsTheGlyphSetThePlanEnumerates` fails on `ic_ph_floppy_disk`. The plan's fallback sentence covers only a named file that does not exist.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "ef0191ebd81a0b1f10ea041a4b9392e4b869076f7767dcc8f9b278b949760aed",
+              "verdict": "REVISE",
+              "at": "2026-11-06T00:26:17Z"
+            }
+          ]
+        },
+        "F-207d80fe0e57": {
+          "digest": "207d80fe0e5756edf649f6bbd637856a2467cabe8e49b1f469b3e9c47366bb34",
+          "text": "**O4. Two listed mutations do not do what the plan says.** CP1's \"make the migration's default 0 (test 1 and 2 fail)\": test 2 is `SettingsPersistenceTest`, an in-memory database that never runs a migration, so only test 1 fails; the mutation that test 2 catches is the entity's `defaultValue`. \"Drop the `BACKUP_REMINDER` arm of `withToggle`\": that `when` is an exhaustive expression, so the edit does not compile; use `-> this` instead.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "ef0191ebd81a0b1f10ea041a4b9392e4b869076f7767dcc8f9b278b949760aed",
+              "verdict": "REVISE",
+              "at": "2026-11-06T00:26:17Z"
+            }
+          ]
+        },
+        "F-baf5eefca3dc": {
+          "digest": "baf5eefca3dcbb8a967b49018a44ee088757fbb3642e573b5e8eaddda881a98d",
+          "text": "**O5. CP1 test 2 needs a small change to `SettingsPersistenceTest`.** \"Persists across a reopened database\" cannot run on the file's in-memory database, so it needs a real file, as `theProductionBuilderUpgradesARealVersion8DatabaseToTheNewDefaults` uses. Setting `backupReminder = false` in the file's `customised` value would also extend its existing Erase and restore checks to the new column; today they would hold it only at the default, so a restore that reset the switch would go unseen.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "ef0191ebd81a0b1f10ea041a4b9392e4b869076f7767dcc8f9b278b949760aed",
+              "verdict": "REVISE",
+              "at": "2026-11-06T00:26:17Z"
+            }
+          ]
+        },
+        "F-dff3e89ab793": {
+          "digest": "dff3e89ab7932872477c576ec5d5fdce6d1f3025c093984f4e7ce01aaf1c8576",
+          "text": "**O6. `docs/UX_FLOWS.md` would contradict itself.** Lines 43-44 say Archived and Backup \"both open from Settings only\", which `Back up ›` makes false for Backup, and the plan adds only a paragraph to the Home section. Correct that sentence and list the switch under `Data`. The `RepFlowNavHost` KDoc (lines 42-45) says the same thing.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "ef0191ebd81a0b1f10ea041a4b9392e4b869076f7767dcc8f9b278b949760aed",
+              "verdict": "REVISE",
+              "at": "2026-11-06T00:26:17Z"
+            }
+          ]
+        },
+        "F-f0cf90daf092": {
+          "digest": "f0cf90daf0925c6f0efae278637a8928c4f0dfaf49b39f1ff3deb2e225eb2efe",
+          "text": "**O7. A failed read of the running workout counts as no workout.** `HomeViewModel.activeSession` emits `null` on failure, so the line could show during a workout despite R2's \"never\". This is rare and harmless, because Home then also shows the start card instead of Resume, but the plan's failure rules do not mention it. Add a sentence accepting it.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "ef0191ebd81a0b1f10ea041a4b9392e4b869076f7767dcc8f9b278b949760aed",
+              "verdict": "REVISE",
+              "at": "2026-11-06T00:26:17Z"
+            }
+          ]
+        },
+        "F-cba299039747": {
+          "digest": "cba299039747e8056c19ff3791f149ef08d08add018d807760c16962b0f74049",
+          "text": "**O8. CP2 test 1 has no case for a recent backup with an old first workout.** The listed \"`lastBackupAt` set and a first workout also old\" case uses a stale date, so it also passes on a rule that falls through from a recent backup to the first-workout check. On such a rule, someone who has just exported a backup would see `No backup yet`, which is false, and the line would not go away, against R1. Test 3's fresh-backup case catches this only if it seeds an old finished workout, which the plan does not say. Add one case to test 1: `lastBackupAt` 3 days ago with the first workout 100 days ago gives `null`.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "e0270ab6b8fc114e0e5f88b13eb1510bdce2cf0fbdf5f14c92f46af238262cdc",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T00:41:38Z"
+            }
+          ]
+        },
+        "F-8b36bf665719": {
+          "digest": "8b36bf665719de0f909a6e4886787df0661f7fd4407acf76bf716ca8ff544977",
+          "text": "**O9. CP2 test 3 names no case for a phone with no training data, and none for the re-read.** The mutation list says dropping the training-data condition is caught by tests 1 and 3, but test 3 lists only a failing `hasTrainingData` read, which gives the line either way. A `HomeViewModel` that read the value once when it was built and kept it would pass test 3. Test 5 catches a stale `false` only if no earlier test in the run has left a row, and nothing catches a stale `true`, where the user would see an old date on an emptied phone's first-run Home, which R2 rules out. `InMemoryTrainingDataRepository` already has what this needs: with a stale backup and `hasTrainingData = false` the state is `null`; after setting it to `true` and changing a setting it is `LastBackup`; after setting it back to `false` and a change in the completed sessions it is `null` again.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "e0270ab6b8fc114e0e5f88b13eb1510bdce2cf0fbdf5f14c92f46af238262cdc",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T00:41:38Z"
+            }
+          ]
+        },
+        "F-a2608b977405": {
+          "digest": "a2608b9774051406aded62309a5e121573d4db3239083ee0f1cd91559034bc6f",
+          "text": "**Backup precedence coverage:** CP2 test 1 should explicitly check that a backup three days ago and a first finished workout 100 days ago returns `null`. The listed stale-backup precedence case would also pass an implementation that incorrectly falls through to `NoBackupYet` after a recent backup.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "MANUAL_EXTERNAL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "e0270ab6b8fc114e0e5f88b13eb1510bdce2cf0fbdf5f14c92f46af238262cdc",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T00:43:36Z"
+            }
+          ]
+        },
+        "F-a95eea464686": {
+          "digest": "a95eea4646861c3504d9d5a4874c177c82af0dac696606ec4f170ce7faa156e4",
+          "text": "**Training-data refresh coverage:** Extend CP2 test 3 to change `hasTrainingData` from false to true and back, triggering settings and completed-history emissions respectively. This would catch a ViewModel that caches the initial result despite the plan promising subsequent reads.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "MANUAL_EXTERNAL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "e0270ab6b8fc114e0e5f88b13eb1510bdce2cf0fbdf5f14c92f46af238262cdc",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T00:43:36Z"
+            }
+          ]
+        },
+        "F-b9869ae8e619": {
+          "digest": "b9869ae8e619cd55473bd5bef4e46ea7e3aeb5aa0c6ad982b528f0fe23521e89",
+          "text": "**O1: the re-read of `hasTrainingData` is only half tested.** `HomeViewModelTest` changes it from false to true through a sessions change, and nothing else. Two mutations, each in a throwaway copy of this commit, passed `HomeViewModelTest`, `HomeBackupReminderTest` and `ObserveRecentTrainingTest`: a read that stays `true` once it has said `true`, and no re-read when only the settings change. The first would show an old date on an erased phone, which is the reason R2 has this rule, and no instrumented test does a real Erase and then looks at Home. Today only the AVD looks hold it, though the code is right: a real Erase on the AVD showed no line. Add one `HomeViewModelTest` case: a line showing, then `hasTrainingData = false` and a settings write, then no line. That one case catches both mutations. The plan review's optional finding asked for this, and it was applied in one direction only. The second mutation may also fail the smoke walk; that wasn't run.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "77362c7a7897bb52d24a4aa73a1fca06f51e1ce0350eaeb831525cf8b9a3fc50",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T02:21:29Z"
+            }
+          ]
+        },
+        "F-9a16a61deac7": {
+          "digest": "9a16a61deac728a98b6c490a7b7720e656cb5fc5a2bbe982ff3852da81bf66be",
+          "text": "**O2: no test holds the line under `Last workout`.** `assertLinkPlacement` compares the link with the words only, so moving `HomeBackupNote` above the card would pass, as the bundle's own known limitations say. `HomeScreen.kt:142-143` has the right order and boards `10n` and `10o` draw the same one. A bounds check in `HomeScreenTest`, with a `Summary` last workout, would hold it.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "77362c7a7897bb52d24a4aa73a1fca06f51e1ce0350eaeb831525cf8b9a3fc50",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T02:21:29Z"
+            }
+          ]
+        },
+        "F-659ab0015dc8": {
+          "digest": "659ab0015dc84b9ef047466700b2f2c8350429971f19d6da3d2a3ca60eb17e19",
+          "text": "**O1. A double tap on `Back up` opens Backup twice, so Back has to be pressed twice.** `RepFlowNavHost` calls `navigate(BACKUP)` from Home with no `launchSingleTop`. On the AVD, two taps sent within about 50 ms left two Backup entries, and the first Back stayed on Backup, where R4 says Back returns Home. This wasn't tried at a person's speed. The gear did the same in a control run, and Settings' own Backup row makes the same call, so this is the app's existing pattern and this item adds one more way in. From reading the code, not run: both Backup ViewModels collect a restore's outcome, so the lower screen could repeat the snackbar after Back; nothing is lost. `launchSingleTop = true` on Home's call would fix this entry. A wider fix belongs in its own item.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 2,
+              "review_content_id": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T03:27:15Z"
+            }
+          ]
+        }
+      },
+      "implementation_review_stages": {
+        "review_content_id": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+        "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "4e5217480bf82bf76c45cb9fd94446da56d0b70d32d87db9589359b1206b4f0f",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-06T03:27:15Z",
+          "verdict_sha256": "c6a7775dcc6cd0655cf195288e96be2ec7c65db62e5556944b897d6ccdb16319",
+          "run_ref": "session:local .ai-review/backup-reminder/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "4e5217480bf82bf76c45cb9fd94446da56d0b70d32d87db9589359b1206b4f0f",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-06T03:30:14Z",
+          "verdict_sha256": "c56099747228d89ff68e2e39348a1ea02929cf05711f6b2886b44df06f94540a",
+          "run_ref": "codex:20261106T032753Z-34ce3007",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
+      },
+      "gate_evidence": {
+        "functional": {
+          "flow-1": {
+            "flow_id": "flow-1",
+            "status": "passed",
+            "head": "f794f34e629e19bbc98d90c149069093a0e6959d",
+            "ran_at": "2026-11-06T03:45:36Z",
+            "summary": {
+              "text": "switch after Backup and restore, on by default, meta correct; off survives force-stop and relaunch, DB backup_reminder=0",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/backup-reminder"
+            },
+            "log_digest": "82c73e94c9b1d3f32f7c43ff21448b4d03c12ae8dafcba9d2462466dfe79878a",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+            "recorded_at": "2026-11-06T03:45:36Z"
+          },
+          "flow-2": {
+            "flow_id": "flow-2",
+            "status": "passed",
+            "head": "f794f34e629e19bbc98d90c149069093a0e6959d",
+            "ran_at": "2026-11-06T03:45:36Z",
+            "summary": {
+              "text": "no line for just-finished, (a) and (c); correct text for (b) No backup yet, (d) 21 days, (e) 40 days; Backup hero matches",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/backup-reminder"
+            },
+            "log_digest": "f2280d225445440cecd51e95a017eb9fbfb5fc6b7e6b83a0fb47d6569c70d9b5",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+            "recorded_at": "2026-11-06T03:45:36Z"
+          },
+          "flow-3": {
+            "flow_id": "flow-3",
+            "status": "passed",
+            "head": "f794f34e629e19bbc98d90c149069093a0e6959d",
+            "ran_at": "2026-11-06T03:45:36Z",
+            "summary": {
+              "text": "Back up opens Backup without bottom nav; Back returns Home with line",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/backup-reminder"
+            },
+            "log_digest": "31b16c5e3b50a65ec1f2c9a767b2c1be109a23a650fdaff80deed85e95d1cb66",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+            "recorded_at": "2026-11-06T03:45:37Z"
+          },
+          "flow-4": {
+            "flow_id": "flow-4",
+            "status": "passed",
+            "head": "f794f34e629e19bbc98d90c149069093a0e6959d",
+            "ran_at": "2026-11-06T03:45:36Z",
+            "summary": {
+              "text": "real export: Saved, Last backup today, line gone",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/backup-reminder"
+            },
+            "log_digest": "6f44ecba159929eff07bd869d466ecb3b4b358ac342ddba6201b3c2311d8d5ed",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+            "recorded_at": "2026-11-06T03:45:37Z"
+          },
+          "flow-5": {
+            "flow_id": "flow-5",
+            "status": "passed",
+            "head": "f794f34e629e19bbc98d90c149069093a0e6959d",
+            "ran_at": "2026-11-06T03:45:36Z",
+            "summary": {
+              "text": "off hides, on restores, running workout hides, abandon restores",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/backup-reminder"
+            },
+            "log_digest": "6a8b27750269768e2ae770b1e3e24a739c5ac6136a697c2844637cee1fb153b9",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+            "recorded_at": "2026-11-06T03:45:37Z"
+          },
+          "flow-6": {
+            "flow_id": "flow-6",
+            "status": "passed",
+            "head": "f794f34e629e19bbc98d90c149069093a0e6959d",
+            "ran_at": "2026-11-06T03:45:36Z",
+            "summary": {
+              "text": "erase with old backup: first-run card, no line even when returning in ~2s; last_backup_at kept; line returns after a new finished workout",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/backup-reminder"
+            },
+            "log_digest": "a2ea77cc95df6d913b64fc0b91ef89c52c6fdd1fd92a5ff7b75ec66ad76cbad8",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+            "recorded_at": "2026-11-06T03:45:37Z"
+          },
+          "flow-7": {
+            "flow_id": "flow-7",
+            "status": "passed",
+            "head": "f794f34e629e19bbc98d90c149069093a0e6959d",
+            "ran_at": "2026-11-06T03:45:36Z",
+            "summary": {
+              "text": "light and dark at 1.0, 1.3, 2.0 as expected; link on own line above 1.1; clear of nav at 2.0",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/backup-reminder"
+            },
+            "log_digest": "9376694fe716d3ba61aaa220683d8a6813b8c6a6dd4f9d6f8c577a90a4c993bd",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+            "recorded_at": "2026-11-06T03:45:37Z"
+          }
+        },
+        "pr": {
+          "pr": {
+            "number": 40,
+            "url": "https://github.com/RodrigoFAbreu/repflow-android/pull/40"
+          },
+          "state": "open",
+          "head": "f794f34e629e19bbc98d90c149069093a0e6959d",
+          "review_decision": null,
+          "reviewed_head": null,
+          "checks": {
+            "state": "success",
+            "failing": []
+          },
+          "review_id": null,
+          "findings": null,
+          "identity_at_head": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+          "observed_at": "2026-11-06T03:48:21Z",
+          "ingest_seq": 1,
+          "repository": "RodrigoFAbreu/repflow-android",
+          "queried_commit": "593457162f18136e17a3a1795d8bdf48625219a7",
+          "provenance": {
+            "source": "workflow_gh",
+            "fetched_by": {
+              "name": "workflow-gh",
+              "version": "pr-list-v1"
+            },
+            "fetched_at": "2026-11-06T03:48:21Z",
+            "raw_sha256": "fb304306f8c2f7c2364dcbda7fdfc33745f2a9ae40f26ea80a6eb452e251564c",
+            "run_ref": "repflow-orchestrator, by hand after no_progress_repeated",
+            "gh_path": "/usr/bin/gh",
+            "gh_sha256": "9e824061111fe5f5b6a5d5690909ba37abafca4a4ca830bdf83246d3c94afd21"
+          },
+          "fact_id": "cc9778ee38b11966e8b5a098029fcf406c624f72eb5506b5a3b75709e56df366"
+        },
+        "pr_reported": null,
+        "pr_keys": {
+          "reopened_for": [],
+          "applied": [],
+          "ingest_seq": 1
+        }
+      },
+      "acceptance_satisfaction": {
+        "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "policy_source": "adopted",
+        "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+        "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+        "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "requirements": [
+          {
+            "id": "checkpoints_complete",
+            "met": true,
+            "detail": "every checkpoint of the item's own registry is COMPLETE"
+          },
+          {
+            "id": "technical_approval_current",
+            "met": true,
+            "detail": "the technical approval is CURRENT for the content now"
+          },
+          {
+            "id": "functional_flows_passed",
+            "met": true,
+            "detail": "flows ['flow-1', 'flow-2', 'flow-3', 'flow-4', 'flow-5', 'flow-6', 'flow-7'] passed at the approved content"
+          },
+          {
+            "id": "pr_fact_current",
+            "met": true,
+            "detail": "workflow_gh fact for PR #40 at f794f34e629e19bbc98d90c149069093a0e6959d is current"
+          },
+          {
+            "id": "no_standing_pr_objection",
+            "met": true,
+            "detail": "no CHANGES_REQUESTED decision and no failed check"
+          },
+          {
+            "id": "ci_green",
+            "met": true,
+            "detail": "checks are 'success'"
+          }
+        ],
+        "inputs": {
+          "anchor_commit": "593457162f18136e17a3a1795d8bdf48625219a7",
+          "anchor_identity": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+          "technical_approval": {
+            "basis": "POLICY_SATISFIED",
+            "approved_review_content_id": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+            "recorded_at": "2026-11-06T03:31:00Z"
+          },
+          "functional": {
+            "flow-1": {
+              "evidence_id": "0e19e7b99824cfcf97063875e89718d1476451bef34bb4074fe21690b31d5528",
+              "log_digest": "82c73e94c9b1d3f32f7c43ff21448b4d03c12ae8dafcba9d2462466dfe79878a",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-2": {
+              "evidence_id": "2a70e6387b63268bce1ec68456c60df55c71f8ecd228c8a70b1920c2e699513d",
+              "log_digest": "f2280d225445440cecd51e95a017eb9fbfb5fc6b7e6b83a0fb47d6569c70d9b5",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-3": {
+              "evidence_id": "5dcc287ca6e6271cd05b5e45b848130dffeb51ee50a0a798ff31afe391e3bc41",
+              "log_digest": "31b16c5e3b50a65ec1f2c9a767b2c1be109a23a650fdaff80deed85e95d1cb66",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-4": {
+              "evidence_id": "cb3292950cde0f768bc1266a584a30c46a36d3da0bc1befa839ba857e746c7c8",
+              "log_digest": "6f44ecba159929eff07bd869d466ecb3b4b358ac342ddba6201b3c2311d8d5ed",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-5": {
+              "evidence_id": "b1a2df4f7d5a84ed6bfb1ddca7a190641a854db3571dd39cd5a5109ac0cb72c6",
+              "log_digest": "6a8b27750269768e2ae770b1e3e24a739c5ac6136a697c2844637cee1fb153b9",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-6": {
+              "evidence_id": "eaa358318aa8fa4d344c1c9923a5f96c0146dccba1a5fc3103e5b11714319ed4",
+              "log_digest": "a2ea77cc95df6d913b64fc0b91ef89c52c6fdd1fd92a5ff7b75ec66ad76cbad8",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-7": {
+              "evidence_id": "cbd21318e27672a93edb1a7d458b1644eaedaf8428cf7d9ccf92b38add6e24d9",
+              "log_digest": "9376694fe716d3ba61aaa220683d8a6813b8c6a6dd4f9d6f8c577a90a4c993bd",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            }
+          },
+          "pr": {
+            "fact_id": "cc9778ee38b11966e8b5a098029fcf406c624f72eb5506b5a3b75709e56df366",
+            "head": "f794f34e629e19bbc98d90c149069093a0e6959d",
+            "provenance": "workflow_gh",
+            "raw_sha256": "fb304306f8c2f7c2364dcbda7fdfc33745f2a9ae40f26ea80a6eb452e251564c"
+          }
+        },
+        "trust": {
+          "review_verdicts": "orchestrator",
+          "functional_evidence": "orchestrator",
+          "pr_fact": "workflow_gh"
+        },
+        "evaluated_at": "2026-11-06T03:48:21Z",
+        "workflow_release": "2.25.5"
+      }
     }
   },
   "gate_policy_adoption": {

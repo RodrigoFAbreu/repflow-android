@@ -41,7 +41,8 @@ import com.repflow.app.infrastructure.database.workout.WorkoutSetEntity
  * with today's defaults, via [MIGRATION_7_8] (remediation-1 CP14); a fresh
  * install seeds the same row through [SETTINGS_SEED_CALLBACK]. Version 9 adds
  * four additive columns to `settings` (`theme`, `default_rest_seconds`,
- * `extra_set_fields`, `last_backup_at`) via [MIGRATION_8_9].
+ * `extra_set_fields`, `last_backup_at`) via [MIGRATION_8_9]. Version 10 adds
+ * `settings.backup_reminder` via [MIGRATION_9_10].
  */
 @Database(
     entities = [
@@ -64,7 +65,7 @@ import com.repflow.app.infrastructure.database.workout.WorkoutSetEntity
 abstract class RepFlowDatabase : RoomDatabase() {
     companion object {
         /** The schema version; `@Database` is binary-retention, so tests read it here. */
-        const val VERSION = 9
+        const val VERSION = 10
     }
 
     abstract fun exerciseDao(): ExerciseDao
