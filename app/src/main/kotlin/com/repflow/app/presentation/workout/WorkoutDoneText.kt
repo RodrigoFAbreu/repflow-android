@@ -6,6 +6,7 @@ import androidx.compose.ui.res.stringResource
 import com.repflow.app.R
 import com.repflow.app.application.history.BestSet
 import com.repflow.app.presentation.designsystem.components.RepFlowStepperMath
+import com.repflow.app.presentation.designsystem.components.formatDuration
 import java.math.BigDecimal
 
 /*
@@ -40,10 +41,10 @@ private fun groupText(group: RecapGroup): String =
     when (group) {
         is RecapGroup.Loaded -> stringResource(R.string.workout_done_recap_load_group, kgText(group.kg), group.reps.joinToString())
         is RecapGroup.Unloaded -> stringResource(R.string.workout_done_recap_reps_group, group.reps.joinToString())
-        is RecapGroup.Timed -> stringResource(R.string.workout_done_recap_seconds_group, group.seconds.joinToString())
+        is RecapGroup.Timed -> group.seconds.joinToString { formatDuration(it.toLong()) }
     }
 
-/** `+2.5 kg`, `same load, +2 reps`, `−1 rep`, `same time`, `first time`, or `—`. */
+/** `+2.5 kg`, `same load, +2 reps`, `−1 rep`, `+0:15`, `same time`, `first time`, or `—`. */
 @Composable
 internal fun deltaText(delta: RecapDelta): String =
     when (delta) {
@@ -82,18 +83,18 @@ private fun repsDeltaText(reps: Int): String =
 @Composable
 private fun secondsDeltaText(seconds: Int): String =
     when {
-        seconds > 0 -> stringResource(R.string.workout_done_delta_seconds_up, seconds)
-        seconds < 0 -> stringResource(R.string.workout_done_delta_seconds_down, -seconds)
+        seconds > 0 -> stringResource(R.string.workout_done_delta_seconds_up, formatDuration(seconds.toLong()))
+        seconds < 0 -> stringResource(R.string.workout_done_delta_seconds_down, formatDuration(-seconds.toLong()))
         else -> stringResource(R.string.workout_done_delta_seconds_same)
     }
 
-/** `82.5 kg × 7`, `12 reps`, `45 s`. */
+/** `82.5 kg × 7`, `12 reps`, `0:45`. */
 @Composable
 internal fun bestSetText(set: BestSet): String =
     when (set) {
         is BestSet.Load -> stringResource(R.string.workout_done_set_load, kgText(BigDecimal.valueOf(set.kg)), set.reps)
         is BestSet.Reps -> pluralStringResource(R.plurals.workout_done_set_reps, set.reps, set.reps)
-        is BestSet.Seconds -> stringResource(R.string.workout_done_set_seconds, set.seconds)
+        is BestSet.Seconds -> formatDuration(set.seconds.toLong())
     }
 
 /** An improvement is drawn in the accent; anything else in the secondary text colour. */

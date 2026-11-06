@@ -45,6 +45,13 @@ class PlanRowSteppingTest {
     }
 
     @Test
+    fun `a confirmed m_ss entry is stored as whole seconds`() {
+        assertEquals("90", PlanRowStepping.typed(BigDecimal(90), PlanRowStepping.durationMin))
+        assertEquals("90", PlanRowStepping.typed(BigDecimal(90), PlanRowStepping.durationMax))
+        assertEquals("90", PlanRowStepping.typed(BigDecimal(90), PlanRowStepping.rest))
+    }
+
+    @Test
     fun `the rest presets are 2a's six`() {
         assertEquals(listOf(60, 75, 90, 120, 150, 180), PlanRowStepping.restPresetSeconds)
     }

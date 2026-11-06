@@ -18,8 +18,10 @@ import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelectable
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -36,6 +38,7 @@ import androidx.compose.ui.unit.height
 import androidx.compose.ui.unit.width
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
+import com.repflow.app.application.workout.LastPerformance
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.workout.WorkoutExerciseId
@@ -43,6 +46,7 @@ import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.domain.workout.WorkoutSetId
 import com.repflow.app.presentation.RepFlowTheme
 import com.repflow.app.presentation.assertButtonLabelWhole
+import com.repflow.app.presentation.designsystem.components.formatDuration
 import com.repflow.app.presentation.progression.ProgressionRecommendationUi
 import com.repflow.app.presentation.progression.ProgressionResultUi
 import org.junit.Assert.assertEquals
@@ -203,7 +207,7 @@ class ActiveWorkoutScreenTest {
         setContent(exercise(ExerciseTrackingType.DURATION, sets = listOf(set(1, durationSeconds = 45))))
 
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.workout_active_set_row_duration, 1, 45))
+            .onNodeWithText(composeRule.activity.getString(R.string.workout_active_set_row_duration, 1, "0:45"))
             .assertIsDisplayed()
     }
 
@@ -235,7 +239,7 @@ class ActiveWorkoutScreenTest {
             listOf(
                 composeRule.activity.getString(R.string.workout_focus_set_row_pending, 1),
                 composeRule.activity.getString(R.string.workout_active_plan_rep_range, 8, 12),
-                composeRule.activity.getString(R.string.workout_active_plan_rest, 60),
+                composeRule.activity.getString(R.string.workout_active_plan_rest, "1:00"),
             ).joinToString(separator = " · ")
         composeRule.onNodeWithText(firstPendingRow).performScrollTo().assertIsDisplayed()
         composeRule
@@ -269,8 +273,12 @@ class ActiveWorkoutScreenTest {
         val rootWidth = composeRule.onRoot().getUnclippedBoundsInRoot().width
         listOf(
             composeRule.activity.getString(R.string.workout_active_plan_rep_range, 100_000_000, 999_999_999),
-            composeRule.activity.getString(R.string.workout_active_plan_duration_range, 100_000_000L, 999_999_999L),
-            composeRule.activity.getString(R.string.workout_active_plan_rest, 999_999_999),
+            composeRule.activity.getString(
+                R.string.workout_active_plan_duration_range,
+                formatDuration(100_000_000L),
+                formatDuration(999_999_999L),
+            ),
+            composeRule.activity.getString(R.string.workout_active_plan_rest, formatDuration(999_999_999L)),
         ).forEach { value ->
             val row = composeRule.onNodeWithText(value, substring = true)
             row.performScrollTo().assertIsDisplayed()
@@ -743,6 +751,250 @@ class ActiveWorkoutScreenTest {
         node(R.string.workout_focus_correct_save).performClick()
 
         assertEquals(listOf(60.0, 9, null, 7.5, false, 1, null), edited)
+    }
+
+    // ---- Timed sets are typed as m:ss (timed-entry-mmss CP2) ----
+
+    private fun pressKeys(vararg keys: String) = keys.forEach { key -> composeRule.onNodeWithText(key).performClick() }
+
+    private fun pressSet() = node(R.string.repflow_keypad_confirm).performClick()
+
+    private fun selectedPadValue(text: String) = composeRule.onNode(hasText(text) and isSelected())
+
+    @Test
+    fun theTimePadTakesMinutesAndSecondsAndTheSetLogsWholeSeconds() {
+        var recorded: Int? = null
+        setContent(
+            exercise(ExerciseTrackingType.DURATION, seed = SetEntrySeed(seconds = java.math.BigDecimal(45))),
+            onRecordSet = { _, _, _, duration, _, _, _, _, onSaved ->
+                recorded = duration
+                onSaved()
+            },
+        )
+
+        composeRule.onNodeWithText("0:45").performScrollTo().performClick()
+        selectedPadValue("0:45").assertIsDisplayed()
+        node(R.string.repflow_keypad_duration_caption).assertIsDisplayed()
+        pressKeys("1", "3", "0")
+        pressSet()
+        composeRule.onNodeWithText("1:30").performScrollTo().assertIsDisplayed()
+        node(R.string.workout_focus_log_set).performClick()
+
+        assertEquals(90, recorded)
+    }
+
+    @Test
+    fun aScreenReaderIsGivenTheTimeStepperAndItsPadInWords() {
+        setContent(exercise(ExerciseTrackingType.DURATION, seed = SetEntrySeed(seconds = java.math.BigDecimal(120))))
+
+        composeRule.onNode(hasText("2:00") and hasClickAction() and hasContentDescription("2 minutes")).performScrollTo().performClick()
+        composeRule.onNode(hasText("2:00") and isSelected() and hasContentDescription("2 minutes")).assertIsDisplayed()
+    }
+
+    @Test
+    fun theTimeStepperStepsOnTheClock() {
+        setContent(exercise(ExerciseTrackingType.DURATION, seed = SetEntrySeed(seconds = java.math.BigDecimal(90))))
+
+        composeRule.onNodeWithText("1:30").performScrollTo().assertIsDisplayed()
+        composeRule
+            .onNodeWithContentDescription(composeRule.activity.getString(R.string.workout_focus_more_seconds))
+            .performClick()
+
+        composeRule.onNodeWithText("1:35").assertIsDisplayed()
+    }
+
+    @Test
+    fun theTimeCardSaysItsUnitAndItsHint() {
+        setContent(exercise(ExerciseTrackingType.DURATION))
+
+        node(R.string.workout_active_duration_label).assertIsDisplayed()
+        assertEquals("Time (m:ss)", composeRule.activity.getString(R.string.workout_active_duration_label))
+        composeRule
+            .onNodeWithText("Steps of 0:05. Tap the value to type m:ss.")
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun theTimeCardsHintSitsBelowItsTargetLine() {
+        setContent(
+            exercise(
+                ExerciseTrackingType.DURATION,
+                plannedTarget =
+                    PlannedTargetUi(
+                        targetWarmupSets = null,
+                        targetWorkingSets = 3,
+                        durationRangeSeconds = 30L..60L,
+                        restSeconds = 60,
+                    ),
+            ),
+        )
+
+        val hint =
+            composeRule
+                .onNodeWithText("Steps of 0:05. Tap the value to type m:ss.")
+                .performScrollTo()
+                .getUnclippedBoundsInRoot()
+        val target = composeRule.onNode(hasText("target ", substring = true)).getUnclippedBoundsInRoot()
+
+        assertTrue("the hint is under the target line", hint.top >= target.bottom)
+    }
+
+    // ---- Timed values read as m:ss (timed-entry-mmss CP3) ----
+
+    @Test
+    fun theTimeCardsTargetReadsAsClocks() {
+        setContent(
+            exercise(
+                ExerciseTrackingType.DURATION,
+                plannedTarget = PlannedTargetUi(targetWarmupSets = null, targetWorkingSets = 3, durationRangeSeconds = 45L..90L),
+            ),
+        )
+
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.workout_focus_seconds_target, "0:45", "1:30"))
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun setRowsReadAsClocksUnderAndOverAMinute() {
+        setContent(exercise(ExerciseTrackingType.DURATION, sets = listOf(set(1, durationSeconds = 45), set(2, durationSeconds = 90))))
+
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.workout_active_set_row_duration, 1, "0:45"))
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.workout_active_set_row_duration, 2, "1:30"))
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    private fun assertLastLineReads(
+        seconds: Int,
+        clock: String,
+    ) {
+        setContent(exercise(ExerciseTrackingType.DURATION, sets = listOf(set(1, durationSeconds = seconds))))
+
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.workout_focus_last_duration, clock), substring = true)
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun theLastLineReadsAsAClockUnderAMinute() = assertLastLineReads(45, "0:45")
+
+    @Test
+    fun theLastLineReadsAsAClockOverAMinute() = assertLastLineReads(90, "1:30")
+
+    private fun assertLastTimeLineReads(
+        seconds: Int,
+        clock: String,
+    ) {
+        setContent(
+            exercise(ExerciseTrackingType.DURATION).copy(
+                lastPerformance =
+                    LastPerformance(load = null, reps = null, durationSeconds = seconds, date = Instant.parse("2026-01-01T00:00:00Z")),
+            ),
+        )
+
+        composeRule
+            .onNodeWithText(composeRule.activity.getString(R.string.workout_focus_last_time_duration, clock), substring = true)
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun theLastTimeLineReadsAsAClockUnderAMinute() = assertLastTimeLineReads(45, "0:45")
+
+    @Test
+    fun theLastTimeLineReadsAsAClockOverAMinute() = assertLastTimeLineReads(90, "1:30")
+
+    private fun assertPendingRowReads(
+        range: LongRange,
+        rest: Int,
+        rangeClocks: Pair<String, String>,
+        restClock: String,
+    ) {
+        setContent(
+            exercise(
+                ExerciseTrackingType.DURATION,
+                plannedTarget =
+                    PlannedTargetUi(targetWarmupSets = null, targetWorkingSets = 1, durationRangeSeconds = range, restSeconds = rest),
+            ),
+        )
+
+        val row =
+            listOf(
+                composeRule.activity.getString(R.string.workout_focus_set_row_pending, 1),
+                composeRule.activity.getString(R.string.workout_active_plan_duration_range, rangeClocks.first, rangeClocks.second),
+                composeRule.activity.getString(R.string.workout_active_plan_rest, restClock),
+            ).joinToString(separator = " · ")
+        composeRule.onNodeWithText(row).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun thePendingRowReadsAsClocksUnderAMinute() = assertPendingRowReads(30L..45L, 45, "0:30" to "0:45", "0:45")
+
+    @Test
+    fun thePendingRowReadsAsClocksOverAMinute() = assertPendingRowReads(90L..900L, 90, "1:30" to "15:00", "1:30")
+
+    @Test
+    fun aWeightPadOpensOnItsValueAndTheFirstKeyReplacesIt() {
+        setContent(
+            exercise(
+                ExerciseTrackingType.WEIGHT_AND_REPS,
+                seed = SetEntrySeed(load = java.math.BigDecimal("82.5"), reps = java.math.BigDecimal("8")),
+            ),
+        )
+
+        composeRule.onNodeWithText("82.5").performScrollTo().performClick()
+        selectedPadValue("82.5").assertIsDisplayed()
+        pressKeys("4")
+        pressSet()
+
+        composeRule.onNodeWithText("4").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("82.5").assertDoesNotExist()
+    }
+
+    private fun correctATimedSetOf45Seconds(onEdited: (Int?) -> Unit) {
+        setContent(
+            exercise(ExerciseTrackingType.DURATION, sets = listOf(set(1, durationSeconds = 45))),
+            onEditLastSet = { _, _, _, duration, _, _, _, _ -> onEdited(duration) },
+        )
+        composeRule
+            .onNode(hasClickAction() and hasText(composeRule.activity.getString(R.string.workout_active_set_row_duration, 1, "0:45")))
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.workout_focus_correct_title, 1)).assertIsDisplayed()
+        composeRule.onNodeWithText("0:45").performClick()
+        selectedPadValue("0:45").assertIsDisplayed()
+    }
+
+    @Test
+    fun correctingATimedSetTakesMinutesAndSeconds() {
+        var edited: Int? = null
+        correctATimedSetOf45Seconds { edited = it }
+
+        pressKeys("1", "3", "0")
+        pressSet()
+        composeRule.onNodeWithText("1:30").assertIsDisplayed()
+        node(R.string.workout_focus_correct_save).performClick()
+
+        assertEquals(90, edited)
+    }
+
+    @Test
+    fun correctingATimedSetWithSetUnchangedKeepsItsSeconds() {
+        var edited: Int? = null
+        correctATimedSetOf45Seconds { edited = it }
+
+        pressSet()
+        node(R.string.workout_focus_correct_save).performClick()
+
+        assertEquals(45, edited)
     }
 
     // ---- The finish sheet (remediation-1 CP9) ----

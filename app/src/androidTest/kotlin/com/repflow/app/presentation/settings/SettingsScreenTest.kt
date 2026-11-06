@@ -16,6 +16,8 @@ import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -363,18 +365,35 @@ class SettingsScreenTest {
 
     @Test
     fun otherOpensTheKeypadAndATypedRestIsSaved() {
-        render(AppSettings.DEFAULT)
-
-        composeRule.onNodeWithText(string(R.string.settings_default_rest_row)).performClick()
-        composeRule.onNodeWithText(string(R.string.settings_default_rest_other)).performClick()
-        composeRule.onNodeWithText(string(R.string.settings_default_rest_keypad_title)).assertIsDisplayed()
+        openOtherOnARestOf2Minutes()
         composeRule.onNodeWithText("1").performClick()
         composeRule.onNodeWithText("3").performClick()
         composeRule.onNodeWithText("5").performClick()
+        composeRule.onNodeWithText("1:35").assertIsDisplayed()
         composeRule.onNodeWithText(string(R.string.repflow_keypad_confirm)).performClick()
 
-        assertEquals(listOf(135), rests)
+        assertEquals(listOf(95), rests)
         composeRule.onNodeWithText(string(R.string.settings_default_rest_sheet_caption)).assertDoesNotExist()
+    }
+
+    @Test
+    fun otherSetUnchangedSavesTheSameRest() {
+        openOtherOnARestOf2Minutes()
+        composeRule.onNodeWithText(string(R.string.repflow_keypad_confirm)).performClick()
+
+        assertEquals(listOf(120), rests)
+    }
+
+    /** `10l`'s pad: titled `Rest`, with the rest it opens on selected and shown as its clock. */
+    private fun openOtherOnARestOf2Minutes() {
+        render(AppSettings.DEFAULT.copy(defaultRestSeconds = 120))
+
+        composeRule.onNodeWithText(string(R.string.settings_default_rest_row)).performClick()
+        composeRule.onNodeWithText(string(R.string.settings_default_rest_other)).performClick()
+        assertEquals("Rest", string(R.string.settings_default_rest_keypad_title))
+        composeRule.onNodeWithText(string(R.string.settings_default_rest_keypad_title)).assertIsDisplayed()
+        composeRule.onNode(hasText("2:00") and isSelected()).assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.repflow_keypad_duration_caption)).assertIsDisplayed()
     }
 
     @Test
@@ -386,6 +405,19 @@ class SettingsScreenTest {
 
         composeRule.onAllNodesWithText("2:15").assertCountEquals(2)
         composeRule.onNodeWithText(string(R.string.settings_default_rest_other)).assertDoesNotExist()
+    }
+
+    @Test
+    fun aCustomRestReopensOnItsClock() {
+        render(AppSettings.DEFAULT.copy(defaultRestSeconds = 135))
+
+        composeRule.onNodeWithText(string(R.string.settings_default_rest_row)).performClick()
+        composeRule.onNode(hasText("2:15") and isSelected()).performClick()
+
+        composeRule.onNodeWithText(string(R.string.settings_default_rest_keypad_title)).assertIsDisplayed()
+        composeRule.onNode(hasText("2:15") and isSelected()).assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.repflow_keypad_confirm)).performClick()
+        assertEquals(listOf(135), rests)
     }
 
     @Test

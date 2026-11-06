@@ -1,18 +1,29 @@
 package com.repflow.app.presentation.trainingplan.editor
 
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotFocused
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelectable
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -23,6 +34,8 @@ import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -648,6 +661,312 @@ class TrainingPlanEditorScreenTest {
         composeRule.onNodeWithText("Plank").performClick()
 
         assertEquals(3L to "ex-plank", selected)
+    }
+
+    // ---- The open row's pads (timed-entry-mmss CP2) ----
+
+    /** What each stepper line reported, in order, as `line=text`. */
+    private val reported = mutableListOf<String>()
+
+    /**
+     * Renders one row and opens it, feeding each reported value back as the
+     * ViewModel does. `Working sets` is 4 and the warm-ups blank, so no key a
+     * test presses shares its text with a stepper's value.
+     */
+    private fun openTimedRow(
+        min: String = "30",
+        max: String = "60",
+        rest: String = "45",
+        fontScale: Float = 1f,
+    ) {
+        var row by mutableStateOf(
+            PlannedExerciseRowUiState(
+                rowId = 1L,
+                exerciseId = "ex-plank",
+                exerciseName = "Plank",
+                trackingType = ExerciseTrackingType.DURATION,
+                targetSetsText = "4",
+                targetWarmupSetsText = "",
+                durationMinText = min,
+                durationMaxText = max,
+                restSecondsText = rest,
+            ),
+        )
+        val actions =
+            noOpRowActions().copy(
+                onTargetSetsChanged = { _, value ->
+                    reported += "sets=$value"
+                    row = row.copy(targetSetsText = value)
+                },
+                onTargetWarmupSetsChanged = { _, value ->
+                    reported += "warmups=$value"
+                    row = row.copy(targetWarmupSetsText = value)
+                },
+                onDurationMinChanged = { _, value ->
+                    reported += "min=$value"
+                    row = row.copy(durationMinText = value)
+                },
+                onDurationMaxChanged = { _, value ->
+                    reported += "max=$value"
+                    row = row.copy(durationMaxText = value)
+                },
+                onRestSecondsChanged = { _, value ->
+                    reported += "rest=$value"
+                    row = row.copy(restSecondsText = value)
+                },
+            )
+        composeRule.setContent {
+            val base = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(base.density, fontScale)) {
+                RepFlowTheme {
+                    TrainingPlanEditorScreen(
+                        uiState = TrainingPlanEditorUiState(rows = listOf(row)),
+                        onNameChanged = {},
+                        onNameFocusLost = {},
+                        rowActions = actions,
+                        onAddRowClicked = {},
+                        onSaveClicked = {},
+                        onBackRequested = {},
+                        onDiscardConfirmed = {},
+                        onDiscardCancelled = {},
+                        onCreateExerciseClick = {},
+                    )
+                }
+            }
+        }
+        composeRule.onNodeWithText("Plank").performClick()
+    }
+
+    /** The stepper's value, not a rest preset that happens to read the same. */
+    private fun lineValue(text: String) = composeRule.onNode(hasText(text) and hasClickAction() and !isSelectable())
+
+    /** The pad's selected value, not a selected rest preset that happens to read the same. */
+    private fun padValueSelected(text: String) = composeRule.onNode(hasText(text) and isSelected() and !hasClickAction())
+
+    private fun pressKeys(vararg keys: String) = keys.forEach { key -> composeRule.onNodeWithText(key).performClick() }
+
+    private fun pressSet() = composeRule.onNodeWithText(composeRule.activity.getString(R.string.repflow_keypad_confirm)).performClick()
+
+    @Test
+    fun aTimedRowsLinesAreLabelledInTime() {
+        openTimedRow()
+
+        composeRule.onNodeWithText("Min time").assertIsDisplayed()
+        composeRule.onNodeWithText("Max time").assertIsDisplayed()
+        composeRule.onNodeWithText("Min seconds").assertDoesNotExist()
+        composeRule.onNodeWithText("Max seconds").assertDoesNotExist()
+    }
+
+    @Test
+    fun aScreenReaderIsGivenTheTimeAndRestLinesInWords() {
+        openTimedRow(min = "30", max = "900", rest = "90")
+
+        composeRule
+            .onNode(
+                hasText("0:30") and hasClickAction() and hasContentDescription("30 seconds"),
+            ).performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onNode(
+                hasText("15:00") and hasClickAction() and hasContentDescription("15 minutes"),
+            ).performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onNode(hasText("1:30") and hasClickAction() and !isSelectable() and hasContentDescription("1 minute 30 seconds"))
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun theOtherLinesOfARowKeepTheirOwnText() {
+        openTimedRow()
+
+        lineValue("4").performScrollTo().assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.ContentDescription))
+    }
+
+    @Test
+    fun minTimeOpensOnItsClockAndTakesMinutesAndSeconds() {
+        openTimedRow()
+
+        lineValue("0:30").performScrollTo().performClick()
+        padValueSelected("0:30").assertIsDisplayed()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.repflow_keypad_duration_caption)).assertIsDisplayed()
+        pressKeys("1", "3", "0")
+        pressSet()
+
+        assertEquals(listOf("min=90"), reported)
+        lineValue("1:30").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun maxTimeOpensOnItsClockAndTakesMinutesAndSeconds() {
+        openTimedRow()
+
+        lineValue("1:00").performScrollTo().performClick()
+        padValueSelected("1:00").assertIsDisplayed()
+        pressKeys("1", "3", "0")
+        pressSet()
+
+        assertEquals(listOf("max=90"), reported)
+        lineValue("1:30").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun setUnchangedOnAPlanTimeReportsTheSameSeconds() {
+        openTimedRow()
+
+        lineValue("0:30").performScrollTo().performClick()
+        pressSet()
+
+        assertEquals(listOf("min=30"), reported)
+        lineValue("0:30").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun aTypedTimeAboveThePlanRangeClampsToItsTop() {
+        openTimedRow()
+
+        lineValue("1:00").performScrollTo().performClick()
+        pressKeys("1", "2", "5", "0", "0")
+        pressSet()
+
+        assertEquals(listOf("max=7200"), reported)
+        lineValue("120:00").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun theRestLineOpensOnItsClockTitledRestAndTakesMinutesAndSeconds() {
+        openTimedRow(rest = "90")
+
+        lineValue("1:30").performScrollTo().performClick()
+        padValueSelected("1:30").assertIsDisplayed()
+        // The line's own label and the pad's title.
+        composeRule.onAllNodesWithText("Rest").assertCountEquals(2)
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.repflow_keypad_duration_caption)).assertIsDisplayed()
+        pressKeys("1", "2", "5")
+        pressSet()
+
+        assertEquals(listOf("rest=85"), reported)
+        lineValue("1:25").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun theRestLineTakes130AsNinetySeconds() {
+        openTimedRow()
+
+        lineValue("0:45").performScrollTo().performClick()
+        pressKeys("1", "3", "0")
+        pressSet()
+
+        assertEquals(listOf("rest=90"), reported)
+    }
+
+    @Test
+    fun workingSetsOpensOnItsValueWithTheWholeNumberPad() {
+        openTimedRow()
+
+        lineValue("4").performScrollTo().performClick()
+        padValueSelected("4").assertIsDisplayed()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.repflow_keypad_whole_numbers_caption)).assertIsDisplayed()
+        pressSet()
+
+        assertEquals(listOf("sets=4"), reported)
+    }
+
+    @Test
+    fun aBlankLineOpensEmpty() {
+        openTimedRow()
+
+        lineValue("–").performScrollTo().performClick()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.repflow_keypad_whole_numbers_caption)).assertIsDisplayed()
+        composeRule.onNode(hasText("0") and isSelected()).assertDoesNotExist()
+        pressSet()
+
+        assertEquals(emptyList<String>(), reported)
+    }
+
+    @Test
+    fun theLongestTimeStaysOnOneLineAtFontScale2() {
+        openTimedRow(max = "7200", fontScale = 2f)
+
+        val results = mutableListOf<TextLayoutResult>()
+        val value = composeRule.onNodeWithText("120:00", useUnmergedTree = true).performScrollTo()
+        value.assertIsDisplayed()
+        value
+            .fetchSemanticsNode()
+            .config[SemanticsActions.GetTextLayoutResult]
+            .action
+            ?.invoke(results)
+        assertEquals(1, results.single().lineCount)
+    }
+
+    @Test
+    fun theLineStepperIsStill164WideAtFontScale1() {
+        openTimedRow()
+
+        // The minus button's left edge to the plus button's right edge, on `Min time`'s line.
+        val minus =
+            composeRule
+                .onNodeWithContentDescription(composeRule.activity.getString(R.string.training_plan_editor_minimum_decrease))
+                .performScrollTo()
+                .getUnclippedBoundsInRoot()
+        val plus =
+            composeRule
+                .onNodeWithContentDescription(composeRule.activity.getString(R.string.training_plan_editor_minimum_increase))
+                .getUnclippedBoundsInRoot()
+        assertEquals(164f, (plus.right - minus.left).value, 1f)
+    }
+
+    // ---- The collapsed row's meta reads as clocks (timed-entry-mmss CP3) ----
+
+    private fun showCollapsedTimedRow(
+        min: String,
+        max: String,
+        rest: String,
+    ) = setContent(
+        TrainingPlanEditorUiState(
+            rows =
+                listOf(
+                    PlannedExerciseRowUiState(
+                        rowId = 1L,
+                        exerciseId = "ex-plank",
+                        exerciseName = "Plank",
+                        trackingType = ExerciseTrackingType.DURATION,
+                        targetSetsText = "3",
+                        durationMinText = min,
+                        durationMaxText = max,
+                        restSecondsText = rest,
+                    ),
+                ),
+        ),
+    )
+
+    @Test
+    fun theRowMetaReadsAsClocksWithARestOverAMinute() {
+        showCollapsedTimedRow(min = "30", max = "60", rest = "90")
+
+        composeRule.onNodeWithText("3 × 0:30–1:00 · 1:30 rest").assertIsDisplayed()
+    }
+
+    @Test
+    fun theRowMetaReadsAsClocksWithARestUnderAMinute() {
+        showCollapsedTimedRow(min = "45", max = "900", rest = "45")
+
+        composeRule.onNodeWithText("3 × 0:45–15:00 · 0:45 rest").assertIsDisplayed()
+    }
+
+    @Test
+    fun aBlankFieldKeepsTheRowMetasPlaceholder() {
+        showCollapsedTimedRow(min = "", max = "60", rest = "")
+
+        composeRule.onNodeWithText("3 × ––1:00").assertIsDisplayed()
+    }
+
+    @Test
+    fun unparsableTextShowsInTheRowMetaAsItWas() {
+        showCollapsedTimedRow(min = "abc", max = "-5", rest = "1.5")
+
+        composeRule.onNodeWithText("3 × abc–-5 · 1.5 rest").assertIsDisplayed()
     }
 
     private fun pickerOptions() =

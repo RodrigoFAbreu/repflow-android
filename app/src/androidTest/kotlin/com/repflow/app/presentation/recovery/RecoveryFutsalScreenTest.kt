@@ -5,6 +5,8 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -48,6 +50,7 @@ class RecoveryFutsalScreenTest {
         onScaleFieldChanged: (RecoveryScaleField, Int) -> Unit = { _, _ -> },
         onFutsalPreviousToggled: (Boolean) -> Unit = {},
         onDurationChanged: (String) -> Unit = {},
+        onSessionRpeChanged: (String) -> Unit = {},
         onSaveEntry: () -> Unit = {},
     ) {
         composeRule.setContent {
@@ -62,7 +65,7 @@ class RecoveryFutsalScreenTest {
                     onFutsalNextToggled = {},
                     onNotesChanged = {},
                     onDurationChanged = onDurationChanged,
-                    onSessionRpeChanged = {},
+                    onSessionRpeChanged = onSessionRpeChanged,
                     onSaveEntry = onSaveEntry,
                     onMessageShown = {},
                 )
@@ -142,6 +145,33 @@ class RecoveryFutsalScreenTest {
             .performClick()
 
         assertEquals("5", duration)
+    }
+
+    private fun pressSetOnAPadOpenOn(value: String) {
+        composeRule.onNodeWithText(value).performScrollTo().performClick()
+        composeRule.onNode(hasText(value) and isSelected()).assertExists()
+        composeRule.onNodeWithText(string(R.string.repflow_keypad_confirm)).performClick()
+        composeRule.waitForIdle()
+    }
+
+    @Test
+    fun theMinutesPadOpensOnItsValueAndSetUnchangedReportsTheSameValue() {
+        var duration: String? = null
+        setScreen(loaded().copy(futsalInPrevious24h = true, durationMinutesInput = "60"), onDurationChanged = { duration = it })
+
+        pressSetOnAPadOpenOn("60")
+
+        assertEquals("60", duration)
+    }
+
+    @Test
+    fun theSessionRpePadOpensOnItsValueAndSetUnchangedReportsTheSameValue() {
+        var sessionRpe: String? = null
+        setScreen(loaded().copy(futsalInPrevious24h = true, sessionRpeInput = "7.0"), onSessionRpeChanged = { sessionRpe = it })
+
+        pressSetOnAPadOpenOn("7")
+
+        assertEquals("7", sessionRpe)
     }
 
     private fun loadedWithAllScales(): RecoveryFutsalUiState =

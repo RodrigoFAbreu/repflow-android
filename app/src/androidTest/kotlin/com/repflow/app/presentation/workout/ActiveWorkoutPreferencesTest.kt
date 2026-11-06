@@ -146,26 +146,46 @@ class ActiveWorkoutPreferencesTest {
         assertEquals(Triple<Double?, Int?, Int?>(null, null, null), recorded)
     }
 
-    private fun hint(seconds: Int) = composeRule.activity.getString(R.string.workout_focus_warmup_hint_off, seconds)
+    private fun hint(clock: String) = composeRule.activity.getString(R.string.workout_focus_warmup_hint_off, clock)
+
+    private fun warmupHint(clock: String) = composeRule.activity.getString(R.string.workout_focus_warmup_hint_on, clock)
 
     @Test
     fun theWarmupHintShowsTheExercisesOwnDefaultRestInAnAdHocWorkout() {
         setContent(appDefaultRestSeconds = 120, exerciseDefaultRestSeconds = 150)
 
-        composeRule.onNodeWithText(hint(150)).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(hint("2:30")).performScrollTo().assertIsDisplayed()
     }
 
     @Test
     fun theWarmupHintShowsTheAppDefaultWhenNeitherThePlanNorTheExerciseSetsARest() {
         setContent(appDefaultRestSeconds = 120)
 
-        composeRule.onNodeWithText(hint(120)).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(hint("2:00")).performScrollTo().assertIsDisplayed()
     }
 
     @Test
     fun theWarmupHintShowsThePlanRowsRestOverBoth() {
         setContent(appDefaultRestSeconds = 120, exerciseDefaultRestSeconds = 150, plannedRestSeconds = 45)
 
-        composeRule.onNodeWithText(hint(45)).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(hint("0:45")).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun theWarmupHintReadsAsAClockUnderAMinuteOnceTheSetIsAWarmup() {
+        setContent(appDefaultRestSeconds = 45)
+
+        node(R.string.workout_active_warmup_label).performScrollTo().performClick()
+
+        composeRule.onNodeWithText(warmupHint("0:45")).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun theWarmupHintReadsAsAClockOverAMinuteOnceTheSetIsAWarmup() {
+        setContent(appDefaultRestSeconds = 90)
+
+        node(R.string.workout_active_warmup_label).performScrollTo().performClick()
+
+        composeRule.onNodeWithText(warmupHint("1:30")).performScrollTo().assertIsDisplayed()
     }
 }

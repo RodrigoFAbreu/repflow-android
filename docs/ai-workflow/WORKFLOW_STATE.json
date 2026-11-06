@@ -12619,6 +12619,892 @@
         "evaluated_at": "2026-11-06T03:48:21Z",
         "workflow_release": "2.25.5"
       }
+    },
+    "timed-entry-mmss": {
+      "work_item_type": "product",
+      "work_item_kind": "product",
+      "work_item_id": "timed-entry-mmss",
+      "parent_work_item_id": null,
+      "plan_path": "docs/milestones/timed-entry-mmss-execution.md",
+      "registry_path": "docs/ai-workflow/registry/timed-entry-mmss-registry.json",
+      "mapping_path": "docs/ai-workflow/requirements/timed-entry-mmss-mapping.json",
+      "governing_workflow_version": "2.2",
+      "phase": "MILESTONE_COMPLETE",
+      "plan_revision": 2,
+      "implementation_revision": 2,
+      "functional_review_round": null,
+      "base_commit": "adec3533d6ffeb70cbc0a6fd070fdeb713b1937b",
+      "reviewed_implementation_head": "410e32c79be33ca54c5723985aca504afa1b771b",
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": "CP3",
+      "checkpoints": {
+        "CP1": {
+          "status": "COMPLETE",
+          "start_commit": "7621a4cf09fee6890ffd4c35819a86c5129072c5"
+        },
+        "CP2": {
+          "status": "COMPLETE",
+          "start_commit": "3d7e078dde472352a6586fd5c69a20d5d4032716"
+        },
+        "CP3": {
+          "status": "COMPLETE",
+          "start_commit": "e6c4326611ca04ed9b2e8ba5fb2186da9fc05d50"
+        }
+      },
+      "current_bundle_id": "c11c7f8d6f67e5462e1f6eb4e7deb7d30b977602244f14409fd05f6f8271d593",
+      "plan_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "c11c7f8d6f67e5462e1f6eb4e7deb7d30b977602244f14409fd05f6f8271d593",
+        "approved_review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
+        "review_content_manifest": [
+          {
+            "path": "docs/ai-workflow/registry/timed-entry-mmss-registry.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "758f421c99ebd944cd657e0901397b6a3bd69bd0"
+          },
+          {
+            "path": "docs/ai-workflow/requirements/timed-entry-mmss-mapping.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "98054ce3a090b954d0058aba7e180cd2f46b86e8"
+          },
+          {
+            "path": "docs/milestones/timed-entry-mmss-execution.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "21c544d020def28e46df3077d4c76d1358bcf185"
+          }
+        ],
+        "reviewed_content_commit": null,
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-06T04:57:16Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
+            "ledger": {
+              "local": {
+                "bundle_id": "c11c7f8d6f67e5462e1f6eb4e7deb7d30b977602244f14409fd05f6f8271d593",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "5ccdb341323a4ccc35ec7d8c55b2906b728693ea29217f84fd4a5213ec283315",
+                "ledger_entry_sha256": "258530c25419c484ee381f54d571045d5ada3526f327fab13a9d0e482414e5f4",
+                "run_ref": "session:local .ai-review/timed-entry-mmss/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "c11c7f8d6f67e5462e1f6eb4e7deb7d30b977602244f14409fd05f6f8271d593",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "aba1fed97638641274416de1757c9d97ed1fb206b0fd14bf49979aca35281b09",
+                "ledger_entry_sha256": "743e96d5b87cebf689e87e4949a9137783628e6fa20747aac82bca67eb7773dd",
+                "run_ref": "codex:20261106T045302Z-d6012113",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-06T04:57:16Z",
+          "workflow_release": "2.25.5"
+        }
+      },
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "ef181c1b53bd6c567a7cfd18841ba8683887edb1454bd87b2b695de480bda147",
+        "approved_review_content_id": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+        "review_content_manifest": [
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowStructuralPrimitivesTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "eecac256e4a527d387758e415a633d2787f3d6c5"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/history/HistoryDetailScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7a966a95c0076ca024f40100ed5ba0e703b62a5b"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/recovery/RecoveryFutsalScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3ddccda8a46fb13c84356b126ef9493fc42012b8"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/settings/SettingsScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d53c2183ec5d778999a3b5a8dd3b330b293f212c"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/trainingplan/editor/TrainingPlanEditorScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2c6d629938b5341d0d540ba5adb78d5efec4640a"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutPreferencesTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "e1f66194ed679813eff20fbed05dd4b1260b1e5a"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "e5768b4cacd496ef0286ccc6bddcca82d3e281ec"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/EntryStepperWidthTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "95f58148974cb10a9a6083e7b6efb90794ba9d80"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/WorkoutDoneScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "220f8dcac5a1bbe29fcead0481c2d52dade778e9"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowDuration.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d4061f04808f36aebc5b9ee9724e1ddafb95a8b5"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowNumericKeypad.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "70a7c745a637a431ea3d45cb4493a61673ac1356"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowStepper.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "fc10813e37636aa785b44b5be0dce9ecf4a19354"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/history/HistoryDetailScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "05ea2f98caa070f6a9ab7114987d72e282b906b7"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/history/HistoryModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "de693432bf10c7d6034c48940567fbececa297d1"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/settings/SettingsChoices.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2bdc7ce033f908ff3b674eb0859c5161a6fa6263"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/trainingplan/editor/TrainingPlanEditorRows.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "1f6902d9b4fd188423650bdb56837700d8896748"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/trainingplan/editor/TrainingPlanEditorTargets.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "c7d2324e4f28387f195add2e6dda1a6261316ebe"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutDoneText.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "fcbbd8f3675aded4ad0a2e9610e3de8af5a2a706"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutFocus.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "bd6aa33892c10faf3fb821a3e5eec8620e938bbc"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutFocusEntry.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "febf465091d8a03017ea2d0b2f54731f97bcb5ae"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutFocusSets.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2994a9d73db94fdd851c6d748cd5ad5dd2fbe63b"
+          },
+          {
+            "path": "app/src/main/res/values/strings.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7682ff11d6b301de2225ed85ada9f5049dd40435"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowDurationTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "15b8622fad16db1024df2aa2da3f68b13faefb7b"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowKeypadInputTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "96bd45c4143b5c37232e26916c9c32c559cf3d58"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowPrimitivesTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ae1c84e297323fe54f0f857f2bd33e20732bf811"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/trainingplan/editor/PlanRowSteppingTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a12a8cd59324aecc6fa401ace6781a76b4112bc8"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/workout/WorkoutDoneTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a8ca1a89c5ddabbfe227dd93474ec0f3570fedea"
+          },
+          {
+            "path": "docs/UX_FLOWS.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6143d28d28d600bb80a501e3dbb48b2f8ecf4ea4"
+          },
+          {
+            "path": "docs/ai-workflow/registry/timed-entry-mmss-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d4debf021cac26841f0a92697a422586937eb154"
+          }
+        ],
+        "reviewed_content_commit": "410e32c79be33ca54c5723985aca504afa1b771b",
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-06T09:53:30Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+            "ledger": {
+              "local": {
+                "bundle_id": "ef181c1b53bd6c567a7cfd18841ba8683887edb1454bd87b2b695de480bda147",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "692cff0693930a9a986c61615c451534db8df737b1e62ab8d5680e5be3ded4bc",
+                "ledger_entry_sha256": "4954813bf2c9848b3224439d7c167078a940e7d00481c8a76d45228f54c4b243",
+                "run_ref": "session:local .ai-review/timed-entry-mmss/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "ef181c1b53bd6c567a7cfd18841ba8683887edb1454bd87b2b695de480bda147",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "26b322324265ae99e7b25639af0768dbf45d877f1623fc20b9d71d246b940cf1",
+                "ledger_entry_sha256": "496216b0dae425dbe402fd1d6e95d0e2eb6360d9a34307913415bc262ff4f32f",
+                "run_ref": "codex:20261106T094908Z-eed59943",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-06T09:53:30Z",
+          "workflow_release": "2.25.5"
+        }
+      },
+      "technical_review_block_pins": [],
+      "plan_review_stages": {
+        "review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
+        "LOCAL_MODEL_PLAN_REVIEW": {
+          "bundle_id": "c11c7f8d6f67e5462e1f6eb4e7deb7d30b977602244f14409fd05f6f8271d593",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-06T04:52:35Z",
+          "verdict_sha256": "5ccdb341323a4ccc35ec7d8c55b2906b728693ea29217f84fd4a5213ec283315",
+          "run_ref": "session:local .ai-review/timed-entry-mmss/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_PLAN_REVIEW": {
+          "bundle_id": "c11c7f8d6f67e5462e1f6eb4e7deb7d30b977602244f14409fd05f6f8271d593",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-06T04:55:02Z",
+          "verdict_sha256": "aba1fed97638641274416de1757c9d97ed1fb206b0fd14bf49979aca35281b09",
+          "run_ref": "codex:20261106T045302Z-d6012113",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
+      },
+      "functional_acceptance_status": null,
+      "blocking_decisions": [],
+      "review_round_counts": {
+        "plan": {
+          "local": 2,
+          "external": 1
+        },
+        "implementation": {
+          "local": 2,
+          "external": 1
+        }
+      },
+      "state_revision": 22,
+      "last_transition": "2026-11-06T10:22:46Z",
+      "feedback_layout": "scoped",
+      "plan_review_binding": {
+        "status": "BOUND",
+        "at": "2026-11-06T04:37:45Z",
+        "consumed": {
+          "review_content_id": "cce993fecc7fea79bf4312210af739d70afe8a4edfd932efd4f2868f744c90f8",
+          "plan_revision": 1,
+          "legacy": false
+        },
+        "published": {
+          "review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
+          "plan_revision": 2
+        },
+        "bound": {
+          "review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
+          "bundle_id": "c11c7f8d6f67e5462e1f6eb4e7deb7d30b977602244f14409fd05f6f8271d593",
+          "plan_revision": 2
+        }
+      },
+      "consumed_plan_review_content_ids": [
+        "cce993fecc7fea79bf4312210af739d70afe8a4edfd932efd4f2868f744c90f8"
+      ],
+      "optional_findings": {
+        "F-93365a581417": {
+          "digest": "93365a581417a4a12cebb9090dac5b58fc9477701b643734da3ebed5817f0b64",
+          "text": "**O1. A stored value can be longer than the five-digit limit.** `WorkoutSet.kt:95` only requires a positive duration, and today's pad accepts 999999 s, which seeds seven digits. R3 says `Set` unchanged confirms the same value, so a seed must not be cut to five. Add that case to `RepFlowKeypadInputTest`, and to `RepFlowDurationTest` for the clock text.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "cce993fecc7fea79bf4312210af739d70afe8a4edfd932efd4f2868f744c90f8",
+              "verdict": "REVISE",
+              "at": "2026-11-06T04:26:44Z"
+            }
+          ]
+        },
+        "F-92543df3b6f5": {
+          "digest": "92543df3b6f5b6760a619a52c5befec7c751eba278bbd21c41e33d731a14feec",
+          "text": "**O2. Name the plan editor's stepper in the font-scale look.** Its value cell is 64 dp (`LineStepperWidth` 164 minus two 44 dp buttons and two 6 dp gaps) at 16 sp. By my estimate, not measured, `120:00` wraps from about 1.3 and `15:00` by 2.0. \"The stepper value still fits\" doesn't say which stepper, and the plan doesn't say what happens if it doesn't fit.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "cce993fecc7fea79bf4312210af739d70afe8a4edfd932efd4f2868f744c90f8",
+              "verdict": "REVISE",
+              "at": "2026-11-06T04:26:44Z"
+            }
+          ]
+        },
+        "F-45301bc24bb3": {
+          "digest": "45301bc24bb3e6252a99d52cef3ce23e4a41ae55494e72feea40af25ee761006",
+          "text": "**O3. Check the TalkBack claim.** The plan says TalkBack reads the clock \"as a time\", which is untested, and `15:00` or `120:00` may not read as a duration. The wrap-up look should include TalkBack, as `safety-copy-polish` did. Two related gaps: nothing announces the selected state unless the line from I3 is built, and the Backspace description `Delete last digit` (`strings.xml:787`) is wrong when it clears a selected value.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "cce993fecc7fea79bf4312210af739d70afe8a4edfd932efd4f2868f744c90f8",
+              "verdict": "REVISE",
+              "at": "2026-11-06T04:26:44Z"
+            }
+          ]
+        },
+        "F-9229036a3e1f": {
+          "digest": "9229036a3e1f83f47e93b9c0e6150ce25dbfca50e9c15b6aa1828a79573dcdb0",
+          "text": "**O4. The pull request title says \"everywhere\", but Progress stays in seconds.** The merge publishes that title as release text. Say what's true, for example \"while logging and in History\".",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "cce993fecc7fea79bf4312210af739d70afe8a4edfd932efd4f2868f744c90f8",
+              "verdict": "REVISE",
+              "at": "2026-11-06T04:26:44Z"
+            }
+          ]
+        },
+        "F-8bd4555e414a": {
+          "digest": "8bd4555e414a9dfd101b004a44221872988abb1ec839582d819a37568c7d7d56",
+          "text": "**O5. `Longest hold` doesn't need a tick rule.** The reason for excluding Progress covers its chart, but `ProgressStatsSection.kt:195` is a plain line showing `900 s`. Either format it here or name it in the follow-up. Leaving all of Progress for one follow-up is acceptable.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "cce993fecc7fea79bf4312210af739d70afe8a4edfd932efd4f2868f744c90f8",
+              "verdict": "REVISE",
+              "at": "2026-11-06T04:26:44Z"
+            }
+          ]
+        },
+        "F-fef72578136f": {
+          "digest": "fef72578136fe8fd85cf7d43a5c85a3cc48fb519af28500b03c2b83048c58e13",
+          "text": "**O1. The plan line's wider stepper can break `Working sets` mid-word on a narrow phone.** At font scale 2.0 the plan's 64 dp × scale makes the stepper 228 dp. After the 16 dp gutters and the 6 dp start padding, the label has 118 dp on the AVD's 384 dp screen and 94 dp on a 360 dp phone. `Working` alone needs 101 to 107 dp, so on 360 dp it would read `Workin` / `g` / `sets`, where today's 158 dp holds it. The value doesn't use the whole cell: `120:00` needs 99 to 113 dp of its 128. These are advance widths from the app's Inter files, not a render, and the lower figures use my memory of Android's non-linear scale table. The wrap-up look runs only at the AVD's width. Add one look at 360 dp wide, and if `Working` breaks, trim the cell.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T04:52:35Z"
+            }
+          ]
+        },
+        "F-16a91855e744": {
+          "digest": "16a91855e74422406d9ad7d39659d12507ce47f80647e4f4a637f01ae0e3e5b2",
+          "text": "**O2. Three small differences from 50h and 10l aren't in the plan's table.** The weight pad stays titled `Weight` (`strings.xml:151`), where 50h and spec 60e say `Weight (kg)`. The keys keep their hairline border (`RepFlowNumericKeypad.kt:210`), where the boards draw none. Backspace stays the `⌫` character, where the boards draw the Phosphor backspace icon. R6 says every difference is declared, so CP1 should either build these or list them in its record. The title is the only one a person is likely to notice.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T04:52:35Z"
+            }
+          ]
+        },
+        "F-fc73760c9063": {
+          "digest": "fc73760c9063c159dc1a74ee0c2d38b600286c1861de4e979ee8444d29683fec",
+          "text": "**O3. Two bookkeeping slips, neither of which changes what gets built.** R1 is mapped to CP3 alone, but CP2 draws the clock on the workout's time stepper and the plan's min and max lines, both named in R1. CP2's tests do hold those sites, so a note in CP2's record is enough. The plan also cites \"spec 60a\" for the `.` rule, the out-of-range rule and \"Rest is m:ss everywhere\". All three are on 60e, the rules moved from the archive boards.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T04:52:35Z"
+            }
+          ]
+        },
+        "F-24da976df3cc": {
+          "digest": "24da976df3ccea462e360cff1e7f13a25241a9f5001686268c272d7af19ccf42",
+          "text": "**O4. The TalkBack look doesn't name the new label.** The wrap-up listens to the pad's value and the stepper's value. `Time (m:ss)` is also new, as the card's label and the pad's title, and a screen reader may spell it out or read it oddly. Add it and the hint to the same listen, and record what was heard.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T04:52:35Z"
+            }
+          ]
+        },
+        "F-3dc5b579201e": {
+          "digest": "3dc5b579201e5eebf2beefb62f95295e7202ddaa2f00b5d10d7735b4e024db15",
+          "text": "**Clarify zero-seed confirmation.** The plan’s CP1 tests say zero seeds to empty, empty confirms nothing, and every seed—including zero—confirms its original seconds (`docs/milestones/timed-entry-mmss-execution.md:193`). Those assertions conflict. Specify that an unchanged zero seed dismisses while preserving zero, or distinguish selected zero from cleared input. This does not threaten a stored positive duration.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "MANUAL_EXTERNAL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T04:55:02Z"
+            }
+          ]
+        },
+        "F-2030c4c9797e": {
+          "digest": "2030c4c9797e3893ed0b33622b3cbcccdd3a0f376bd65a3fdd3f7ad889b30f82",
+          "text": "**Align requirement bookkeeping.** R1 maps only to CP3, although CP2 implements and tests its workout-stepper and plan min/max displays. Including CP2 would make the mapping reflect the planned coverage.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "MANUAL_EXTERNAL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T04:55:02Z"
+            }
+          ]
+        },
+        "F-d8455af5de6d": {
+          "digest": "d8455af5de6d9cb989aa07959326833325dabcdd7f562703d63a19ac55b57a7b",
+          "text": "**O1: in landscape `Set` is below the fold at font scale 1.0 too, not only at 2.0.** At 2340 × 1080 only the rows `1` to `9` fit. `0`, `00` or `.`, Backspace, `Cancel` and `Set` all need a swipe, so every entry typed in landscape does too. The plan's scroll allows this and the cut-off fourth row hints at it, but the record mentions it only at 2.0. Say so in the record, and consider a denser landscape layout on the follow-up issue.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "396b47112943c7c35aab0c54efa0ff959d3ecccf72153f8dd1a21f92c9fbb719",
+              "verdict": "REVISE",
+              "at": "2026-11-06T08:12:32Z"
+            }
+          ]
+        },
+        "F-fee81971b042": {
+          "digest": "fee81971b0425a79c85f36650f418425006c5d1216183096635ba0a2f441171b",
+          "text": "**O2: put read-only clocks read by a screen reader on the follow-up issue.** The plan's rule stands and this isn't a defect. `Last: 2:00` and `Set 1: 2:00` are lines a TalkBack user relies on during a set, and on this engine `2:00` reads as \"two o'clock\". One line on the follow-up issue keeps that known.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "396b47112943c7c35aab0c54efa0ff959d3ecccf72153f8dd1a21f92c9fbb719",
+              "verdict": "REVISE",
+              "at": "2026-11-06T08:12:32Z"
+            }
+          ]
+        }
+      },
+      "implementation_review_stages": {
+        "review_content_id": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+        "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "ef181c1b53bd6c567a7cfd18841ba8683887edb1454bd87b2b695de480bda147",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-06T09:48:30Z",
+          "verdict_sha256": "692cff0693930a9a986c61615c451534db8df737b1e62ab8d5680e5be3ded4bc",
+          "run_ref": "session:local .ai-review/timed-entry-mmss/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "ef181c1b53bd6c567a7cfd18841ba8683887edb1454bd87b2b695de480bda147",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-06T09:52:44Z",
+          "verdict_sha256": "26b322324265ae99e7b25639af0768dbf45d877f1623fc20b9d71d246b940cf1",
+          "run_ref": "codex:20261106T094908Z-eed59943",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
+      },
+      "gate_evidence": {
+        "functional": {
+          "flow-1": {
+            "flow_id": "flow-1",
+            "status": "passed",
+            "head": "53d0e818e0bc64ccb67a7afd13636d47fa6c6a47",
+            "ran_at": "2026-11-06T10:22:21Z",
+            "summary": {
+              "text": "empty pad, 1 3 0 -> 1:30, label and hint right, stored 90; 2 1 5 0 0 -> 215:00 stored 12900",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/timed-entry-mmss"
+            },
+            "log_digest": "df1e7e22ed81e57deed2bb61611a3d5bf22e372a9488d13ea1ae049828f40f24",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+            "recorded_at": "2026-11-06T10:22:21Z"
+          },
+          "flow-2": {
+            "flow_id": "flow-2",
+            "status": "passed",
+            "head": "53d0e818e0bc64ccb67a7afd13636d47fa6c6a47",
+            "ran_at": "2026-11-06T10:22:21Z",
+            "summary": {
+              "text": "pad opens on current value in tinted ring, digit replaces, Backspace clears, Cancel/Set keep it; Bench weight and reps pads right",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/timed-entry-mmss"
+            },
+            "log_digest": "2a786872af2c6e9092bf770f772f52b5df48bcb80a2739665b71863bacf5c350",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+            "recorded_at": "2026-11-06T10:22:21Z"
+          },
+          "flow-3": {
+            "flow_id": "flow-3",
+            "status": "passed",
+            "head": "53d0e818e0bc64ccb67a7afd13636d47fa6c6a47",
+            "ran_at": "2026-11-06T10:22:21Z",
+            "summary": {
+              "text": "plan Min/Max/Rest and Settings Other take m:ss; 120:00 on one line; Settings 1 3 5 stores 95 and says 1:35",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/timed-entry-mmss"
+            },
+            "log_digest": "5d5a076a5cbc8c9743906806fa89d07628f87bbb746e9814823c80f9ad95e841",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+            "recorded_at": "2026-11-06T10:22:21Z"
+          },
+          "flow-4": {
+            "flow_id": "flow-4",
+            "status": "passed",
+            "head": "53d0e818e0bc64ccb67a7afd13636d47fa6c6a47",
+            "ran_at": "2026-11-06T10:22:21Z",
+            "summary": {
+              "text": "all screens checked show clocks; warm-up hint seen; positive delta seen as +214:45 (+0:30 exactly not produced)",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/timed-entry-mmss"
+            },
+            "log_digest": "d770bef2521dda1d9126a1c05b4ea60bac46574d2aa6b8f9948984aab657e317",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+            "recorded_at": "2026-11-06T10:22:21Z"
+          },
+          "flow-5": {
+            "flow_id": "flow-5",
+            "status": "passed",
+            "head": "53d0e818e0bc64ccb67a7afd13636d47fa6c6a47",
+            "ran_at": "2026-11-06T10:22:21Z",
+            "summary": {
+              "text": "DB seconds correct; backup JSON and CSV keep raw seconds; export then restore on the emulator: History still reads 215:00",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/timed-entry-mmss"
+            },
+            "log_digest": "2709713ff242b904ba5c3ade77e69aecacba07bd217fea4ec01125ba34e9076a",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+            "recorded_at": "2026-11-06T10:22:21Z"
+          },
+          "flow-6": {
+            "flow_id": "flow-6",
+            "status": "passed",
+            "head": "53d0e818e0bc64ccb67a7afd13636d47fa6c6a47",
+            "ran_at": "2026-11-06T10:22:21Z",
+            "summary": {
+              "text": "weight pad survives rotation selected, typed 45 kept, Cancel leaves 2.5",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/timed-entry-mmss"
+            },
+            "log_digest": "05f1174dbd5e511285b237698750fc59982ddf0b5870202c6aeb8aff357ec33a",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+            "recorded_at": "2026-11-06T10:22:21Z"
+          },
+          "flow-7": {
+            "flow_id": "flow-7",
+            "status": "passed",
+            "head": "53d0e818e0bc64ccb67a7afd13636d47fa6c6a47",
+            "ran_at": "2026-11-06T10:22:21Z",
+            "summary": {
+              "text": "time pad light/dark at 1.3 and 2.0, plan editor light/dark at 1.3 and 2.0 (15:00 and 120:00 one line), landscape Set works",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/timed-entry-mmss"
+            },
+            "log_digest": "f9b5e5b099e2322ea38c810330f0d3ebc874f4575800630c55911ebf0e2f5789",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+            "recorded_at": "2026-11-06T10:22:21Z"
+          }
+        },
+        "pr": {
+          "pr": {
+            "number": 42,
+            "url": "https://github.com/RodrigoFAbreu/repflow-android/pull/42"
+          },
+          "state": "open",
+          "head": "53d0e818e0bc64ccb67a7afd13636d47fa6c6a47",
+          "review_decision": null,
+          "reviewed_head": null,
+          "checks": {
+            "state": "success",
+            "failing": []
+          },
+          "review_id": null,
+          "findings": null,
+          "identity_at_head": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+          "observed_at": "2026-11-06T10:22:46Z",
+          "ingest_seq": 1,
+          "repository": "RodrigoFAbreu/repflow-android",
+          "queried_commit": "410e32c79be33ca54c5723985aca504afa1b771b",
+          "provenance": {
+            "source": "workflow_gh",
+            "fetched_by": {
+              "name": "workflow-gh",
+              "version": "pr-list-v1"
+            },
+            "fetched_at": "2026-11-06T10:22:46Z",
+            "raw_sha256": "26c0d345d79795256fd2401fcc3b828c5d0d957bb79ae130e8fcff8703920e3c",
+            "run_ref": "repflow-orchestrator, by hand after no_progress_repeated",
+            "gh_path": "/usr/bin/gh",
+            "gh_sha256": "9e824061111fe5f5b6a5d5690909ba37abafca4a4ca830bdf83246d3c94afd21"
+          },
+          "fact_id": "a82d66f56490433241c14672a013f82e25545451e41455dbdee5239efe658ffd"
+        },
+        "pr_reported": null,
+        "pr_keys": {
+          "reopened_for": [],
+          "applied": [],
+          "ingest_seq": 1
+        }
+      },
+      "acceptance_satisfaction": {
+        "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "policy_source": "adopted",
+        "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+        "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+        "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "requirements": [
+          {
+            "id": "checkpoints_complete",
+            "met": true,
+            "detail": "every checkpoint of the item's own registry is COMPLETE"
+          },
+          {
+            "id": "technical_approval_current",
+            "met": true,
+            "detail": "the technical approval is CURRENT for the content now"
+          },
+          {
+            "id": "functional_flows_passed",
+            "met": true,
+            "detail": "flows ['flow-1', 'flow-2', 'flow-3', 'flow-4', 'flow-5', 'flow-6', 'flow-7'] passed at the approved content"
+          },
+          {
+            "id": "pr_fact_current",
+            "met": true,
+            "detail": "workflow_gh fact for PR #42 at 53d0e818e0bc64ccb67a7afd13636d47fa6c6a47 is current"
+          },
+          {
+            "id": "no_standing_pr_objection",
+            "met": true,
+            "detail": "no CHANGES_REQUESTED decision and no failed check"
+          },
+          {
+            "id": "ci_green",
+            "met": true,
+            "detail": "checks are 'success'"
+          }
+        ],
+        "inputs": {
+          "anchor_commit": "410e32c79be33ca54c5723985aca504afa1b771b",
+          "anchor_identity": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+          "technical_approval": {
+            "basis": "POLICY_SATISFIED",
+            "approved_review_content_id": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+            "recorded_at": "2026-11-06T09:53:30Z"
+          },
+          "functional": {
+            "flow-1": {
+              "evidence_id": "6446ece710dea02c1c3cf1b7578d1fd195200a10232341b5bfc58344131db5cb",
+              "log_digest": "df1e7e22ed81e57deed2bb61611a3d5bf22e372a9488d13ea1ae049828f40f24",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-2": {
+              "evidence_id": "2120c0339333396ec1ac50ae37248433a8570b926abd6bfd6fd8637bf7e243a5",
+              "log_digest": "2a786872af2c6e9092bf770f772f52b5df48bcb80a2739665b71863bacf5c350",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-3": {
+              "evidence_id": "7fcceb8437f707138b4cc06a47c3a138517b380b384541dc77c0927f66b2f3c0",
+              "log_digest": "5d5a076a5cbc8c9743906806fa89d07628f87bbb746e9814823c80f9ad95e841",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-4": {
+              "evidence_id": "5269da70b746cd69db4b6933b86a8b3b868858b71ce853fc4c1aa356c9fedd8c",
+              "log_digest": "d770bef2521dda1d9126a1c05b4ea60bac46574d2aa6b8f9948984aab657e317",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-5": {
+              "evidence_id": "c7e9eb710b484f17233f3b793190dd7f882d4dafcd31a5db37c8b6cfe6c1c3fe",
+              "log_digest": "2709713ff242b904ba5c3ade77e69aecacba07bd217fea4ec01125ba34e9076a",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-6": {
+              "evidence_id": "41f58cf01a0723b072058e6144a01db459817af8df51ef201b6a8e21129327b1",
+              "log_digest": "05f1174dbd5e511285b237698750fc59982ddf0b5870202c6aeb8aff357ec33a",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-7": {
+              "evidence_id": "15651c4482ed532b94e084946da89bcb4e1191e43fc0e61afce52bea0f61666b",
+              "log_digest": "f9b5e5b099e2322ea38c810330f0d3ebc874f4575800630c55911ebf0e2f5789",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            }
+          },
+          "pr": {
+            "fact_id": "a82d66f56490433241c14672a013f82e25545451e41455dbdee5239efe658ffd",
+            "head": "53d0e818e0bc64ccb67a7afd13636d47fa6c6a47",
+            "provenance": "workflow_gh",
+            "raw_sha256": "26c0d345d79795256fd2401fcc3b828c5d0d957bb79ae130e8fcff8703920e3c"
+          }
+        },
+        "trust": {
+          "review_verdicts": "orchestrator",
+          "functional_evidence": "orchestrator",
+          "pr_fact": "workflow_gh"
+        },
+        "evaluated_at": "2026-11-06T10:22:46Z",
+        "workflow_release": "2.25.5"
+      }
     }
   },
   "gate_policy_adoption": {

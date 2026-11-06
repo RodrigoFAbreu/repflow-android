@@ -384,7 +384,18 @@ class RepFlowPrimitivesTest {
         assertEquals(56.dp, RepFlowKeypadDefaults.keyMinHeight)
         assertEquals(CornerSize(10.dp), RepFlowKeypadDefaults.keyShape.topStart)
         assertEquals(8.dp, RepFlowKeypadDefaults.keyGap)
-        assertEquals(30.sp, RepFlowKeypadDefaults.valueFontSize)
+        assertEquals(40.sp, RepFlowKeypadDefaults.valueFontSize)
+    }
+
+    @Test
+    fun theKeypadsSelectedValueIsTintedAndRingedInBothThemes() {
+        val dark = RepFlowKeypadDefaults.selectedColors(RepFlowDarkColorScheme)
+        val light = RepFlowKeypadDefaults.selectedColors(RepFlowLightColorScheme)
+        // `50h`'s `selBg`: `rgba(145,132,217,.18)` and `rgba(93,82,148,.14)`.
+        assertEquals(RepFlowDarkColorScheme.primary.copy(alpha = 0.18f), dark.fill)
+        assertEquals(RepFlowLightColorScheme.primary.copy(alpha = 0.14f), light.fill)
+        assertEquals(RepFlowDarkColorScheme.primary, dark.ring)
+        assertEquals(RepFlowLightColorScheme.primary, light.ring)
     }
 
     @Test

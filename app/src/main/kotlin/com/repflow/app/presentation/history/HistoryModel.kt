@@ -79,7 +79,7 @@ internal sealed interface HistorySetValue {
         val reps: Int,
     ) : HistorySetValue
 
-    /** `45 s`. */
+    /** `0:45`. */
     data class Seconds(
         val seconds: Int,
     ) : HistorySetValue
