@@ -150,7 +150,7 @@ items:
   # Owner's requests of 2026-11-05: workout entry
   - id: design-5-workout-entry
     title: "Design: correction sheet with RPE, technique and pain, correcting any set, and the timed-set clock"
-    status: idea
+    status: done
     order: 27
     size: 1
     detail: docs/items/design-5-workout-entry.md
