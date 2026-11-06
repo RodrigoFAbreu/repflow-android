@@ -1,10 +1,13 @@
 package com.repflow.app.data.backup
 
 import androidx.room.Room
+import androidx.room.withTransaction
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.cash.turbine.test
 import com.repflow.app.infrastructure.database.RepFlowDatabase
 import com.repflow.app.infrastructure.database.SETTINGS_SEED_CALLBACK
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -13,6 +16,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * `hasTrainingData` is what decides whether a restore makes a safety copy and whether the dialog
@@ -66,7 +70,47 @@ class LocalTrainingDataRepositoryTest {
             assertFalse(repository.hasTrainingData())
         }
 
+    /** Home's backup line follows this: one subscription sees each table's first row, and Erase, as they commit. */
+    @Test
+    fun observingFollowsARowInEachParentTableInTurn() =
+        runBlocking<Unit> {
+            repository.observeHasTrainingData().test(timeout = TIMEOUT) {
+                assertFalse(awaitItem())
+
+                ONE_ROW_PER_PARENT_TABLE.forEach { (table, insert) ->
+                    database.withTransaction { database.openHelper.writableDatabase.execSQL(insert) }
+                    assertTrue("One row in $table must count", awaitItem())
+
+                    repository.clearTrainingData()
+                    assertFalse("Clearing must take $table's row away", awaitItem())
+                }
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun observingSaysNothingNewWhenTheAnswerStaysTheSame() =
+        runBlocking<Unit> {
+            val (exercises, recovery) =
+                ONE_ROW_PER_PARENT_TABLE.getValue("exercises") to ONE_ROW_PER_PARENT_TABLE.getValue("recovery_entries")
+            repository.observeHasTrainingData().test(timeout = TIMEOUT) {
+                assertFalse(awaitItem())
+                database.withTransaction { database.openHelper.writableDatabase.execSQL(exercises) }
+                assertTrue(awaitItem())
+
+                database.withTransaction { database.openHelper.writableDatabase.execSQL(recovery) }
+                delay(ROOM_RE_QUERY_MILLIS)
+
+                expectNoEvents()
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
     private companion object {
+        val TIMEOUT = 5.seconds
+
+        /** Long enough for Room's re-query to emit a second `true`. A slow device can only make the test pass, never fail. */
+        const val ROOM_RE_QUERY_MILLIS = 500L
         val ONE_ROW_PER_PARENT_TABLE =
             mapOf(
                 "exercises" to

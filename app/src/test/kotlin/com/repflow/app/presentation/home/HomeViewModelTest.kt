@@ -383,7 +383,7 @@ class HomeViewModelTest {
         }
 
     @Test
-    fun `a phone with no training data shows no line, until one of its inputs changes and the read says otherwise`() =
+    fun `a phone with no training data shows no line, and its first data brings the line with nothing else changing`() =
         runTest {
             val clock = startAt(day.atTime(10, 0))
             backedUp(daysAgo = 30)
@@ -392,13 +392,36 @@ class HomeViewModelTest {
 
             viewModel.uiState.test {
                 assertNull(awaitUntil { it.start != HomeStartCard.Loading }.backupReminder)
-                assertEquals(1, trainingDataRepository.hasTrainingDataReads)
 
                 trainingDataRepository.hasTrainingData = true
-                completeSessionFrom(TrainingPlanVersionId("new"), endedAt = clock.now())
 
                 assertEquals(HomeBackupReminder.LastBackup(30), awaitUntil { it.backupReminder != null }.backupReminder)
-                assertEquals(2, trainingDataRepository.hasTrainingDataReads)
+            }
+        }
+
+    /**
+     * With no finished workout, Erase changes neither the settings nor the history, and a return inside the
+     * 5-second `WhileSubscribed` window restarts nothing, so only the data itself can take the line away.
+     */
+    @Test
+    fun `an Erase with no finished workout takes the line away on a same-day return inside the 5-second window`() =
+        runTest {
+            val clock = startAt(day.atTime(10, 0))
+            backedUp(daysAgo = 30)
+            val viewModel = viewModel(clock)
+
+            viewModel.uiState.test {
+                assertEquals(HomeBackupReminder.LastBackup(30), awaitUntil { it.backupReminder != null }.backupReminder)
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            success(trainingDataRepository.clearTrainingData())
+            advanceTimeBy(Duration.ofSeconds(4).toMillis())
+            viewModel.onForeground()
+
+            viewModel.uiState.test {
+                assertNull(awaitItem().backupReminder)
+                cancelAndIgnoreRemainingEvents()
             }
         }
 
@@ -465,7 +488,6 @@ class HomeViewModelTest {
             viewModel.uiState.test {
                 assertNull(awaitItem().backupReminder)
                 expectNoEvents()
-                assertEquals(1, trainingDataRepository.hasTrainingDataReads)
             }
         }
 
@@ -483,7 +505,10 @@ class HomeViewModelTest {
                 clock.jumpTo(nextDay.atTime(7, 0))
                 viewModel.onForeground()
 
-                assertEquals(HomeBackupReminder.LastBackup(21), awaitUntil { it.backupReminder != null }.backupReminder)
+                assertEquals(
+                    HomeBackupReminder.LastBackup(21),
+                    awaitUntil { it.date == nextDay && it.backupReminder != null }.backupReminder,
+                )
             }
         }
 

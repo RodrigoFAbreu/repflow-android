@@ -39,9 +39,7 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -66,10 +64,11 @@ import javax.inject.Inject
  * the date the readiness was read for, so the two cannot disagree.
  *
  * **The backup line** follows the same [today], so it appears on day 21 with
- * nothing else changing. Its inputs fail by saying less: a failed settings or
+ * nothing else changing, and it follows the data itself, because Erase can change
+ * nothing else Home reads. Its inputs fail by saying less: a failed settings or
  * history read shows no line, and a failed
- * [TrainingDataRepository.hasTrainingData] read counts as having data, as on
- * the Backup screen. A failed read of the running workout counts as none, as
+ * [TrainingDataRepository.observeHasTrainingData] read counts as having data, as
+ * on the Backup screen. A failed read of the running workout counts as none, as
  * [activeSession] already does for the whole screen, so the line can show then.
  */
 @Suppress("LongParameterList")
@@ -89,7 +88,7 @@ class HomeViewModel
         private val abandonWorkoutSession: AbandonWorkoutSession,
         private val restNotificationCanceller: RestNotificationCanceller,
         settingsRepository: SettingsRepository,
-        private val trainingDataRepository: TrainingDataRepository,
+        trainingDataRepository: TrainingDataRepository,
     ) : ViewModel() {
         private val today = MutableStateFlow(currentDate())
         private val historyRetry = MutableStateFlow(0)
@@ -156,10 +155,18 @@ class HomeViewModel
                     emit(null)
                 }
 
-        /** The history and what the backup line reads. [readHasTrainingData] has no flow of its own, so it runs when any of the others change. */
+        /** Not knowing counts as having data, so a failed read can't hide a line that is due. */
+        private val hasTrainingData: Flow<Boolean> =
+            trainingDataRepository.observeHasTrainingData().catch { failure ->
+                if (failure is CancellationException) throw failure
+                emit(true)
+            }
+
+        /** The history and what the backup line reads. */
         private val historyAndBackup: Flow<HistoryAndBackup> =
-            combine(settings, recentTraining, today) { settings, recent, day -> Triple(settings, recent, day) }
-                .mapLatest { (settings, recent, day) -> HistoryAndBackup(recent, settings, day, readHasTrainingData()) }
+            combine(settings, recentTraining, today, hasTrainingData) { settings, recent, day, hasData ->
+                HistoryAndBackup(recent, settings, day, hasData)
+            }
 
         private val content: Flow<HomeUiState> =
             combine(readiness, activeSession, activePlans, versionLabels, historyAndBackup) { dated, session, plans, labels, history ->
@@ -244,14 +251,6 @@ class HomeViewModel
                 ),
             )
         }
-
-        /** Not knowing counts as having data, so a failed read can't hide a line that is due. */
-        private suspend fun readHasTrainingData(): Boolean =
-            flow { emit(trainingDataRepository.hasTrainingData()) }
-                .catch { failure ->
-                    if (failure is CancellationException) throw failure
-                    emit(true)
-                }.first()
 
         private fun currentDate(): LocalDate = clock.now().atZone(ZoneId.systemDefault()).toLocalDate()
 

@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.lifecycle.Lifecycle
 import androidx.room.Room
+import androidx.room.withTransaction
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
@@ -33,6 +34,7 @@ import com.repflow.app.data.trainingplan.LocalTrainingPlanRepository
 import com.repflow.app.data.workout.LocalWorkoutRepository
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.infrastructure.database.RepFlowDatabase
+import com.repflow.app.infrastructure.database.SETTINGS_SEED_CALLBACK
 import com.repflow.app.presentation.RepFlowTheme
 import com.repflow.app.presentation.workout.RestNotificationCanceller
 import kotlinx.coroutines.runBlocking
@@ -75,6 +77,7 @@ class HomeRouteLifecycleTest {
         database =
             Room
                 .inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), RepFlowDatabase::class.java)
+                .addCallback(SETTINGS_SEED_CALLBACK)
                 .build()
     }
 
@@ -137,6 +140,47 @@ class HomeRouteLifecycleTest {
         composeRule.onNodeWithText(emptyMessage).assertIsDisplayed()
     }
 
+    /**
+     * Erase with no finished workout changes no setting and no session Home reads, and this return is inside
+     * the `WhileSubscribed` window, so the upstream never restarts. Only Room saying the data has gone can
+     * take the line away (R2), so this runs over the real database, not the JVM test's fake.
+     */
+    @Test
+    fun anEraseInsideTheWindowTakesTheBackupLineAwayOnReturn() {
+        val clock = SettableClock(at(day.atTime(10, 0)))
+        val trainingData = LocalTrainingDataRepository(database)
+        runBlocking {
+            database.withTransaction { database.openHelper.writableDatabase.execSQL(INSERT_EXERCISE) }
+            LocalSettingsRepository(database).update { it.copy(lastBackupAt = at(day.minusDays(30).atTime(10, 0))) }
+        }
+        val viewModel = viewModel(clock, LocalRecoveryRepository(database.recoveryEntryDao()))
+        composeRule.setContent {
+            RepFlowTheme {
+                HomeRoute(
+                    onOpenWorkout = {},
+                    onFinishWorkout = {},
+                    onSettingsClick = {},
+                    onLogRecoveryClick = {},
+                    onCreatePlanClick = {},
+                    onBackupClick = {},
+                    viewModel = viewModel,
+                )
+            }
+        }
+        val backUp = composeRule.activity.getString(R.string.home_backup_note_action)
+        composeRule.waitUntil(TIMEOUT_MILLIS) {
+            composeRule.onAllNodes(hasTextExactly(backUp)).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        composeRule.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
+        runBlocking { assertTrue(trainingData.clearTrainingData() is DomainResult.Success) }
+        composeRule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+
+        composeRule.waitUntil(TIMEOUT_MILLIS) {
+            composeRule.onAllNodes(hasTextExactly(backUp)).fetchSemanticsNodes().isEmpty()
+        }
+    }
+
     private fun at(dateTime: LocalDateTime): Instant = dateTime.atZone(zone).toInstant()
 
     private fun viewModel(
@@ -183,5 +227,9 @@ class HomeRouteLifecycleTest {
 
     private companion object {
         const val TIMEOUT_MILLIS = 5_000L
+        const val INSERT_EXERCISE =
+            "INSERT INTO exercises (id, name, name_key, tracking_type, instructions, default_load_increment_grams, " +
+                "default_rest_seconds, origin, archived_at, created_at, updated_at) VALUES ('ex', 'Squat', 'squat', " +
+                "'WEIGHT_AND_REPS', NULL, NULL, NULL, 'CUSTOM', NULL, 1, 1)"
     }
 }

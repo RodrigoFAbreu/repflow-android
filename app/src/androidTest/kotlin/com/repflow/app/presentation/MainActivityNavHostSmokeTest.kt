@@ -167,10 +167,9 @@ class MainActivityNavHostSmokeTest {
     }
 
     /**
-     * `10n`: Home's `Back up` opens Backup, and Back returns Home. The abandoned workout goes in first,
-     * because `hasTrainingData` is re-read only when the settings, sessions or day change. It stays behind,
-     * as after the workout walk above: Home reads only completed sessions, so with no backup date there is
-     * no line. Erase keeps the settings row, so the date has to be put back by hand.
+     * `10n`: Home's `Back up` opens Backup, and Back returns Home. The abandoned workout is the training data
+     * the line needs. It stays behind, as after the workout walk above: Home reads only completed sessions, so
+     * with no backup date there is no line. Erase keeps the settings row, so the date has to be put back by hand.
      */
     @Test
     fun aBackupLineOpensBackupAndBackReturnsHome() {

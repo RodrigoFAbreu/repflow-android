@@ -9,6 +9,8 @@ import com.repflow.app.application.backup.TrainingDataError
 import com.repflow.app.application.backup.TrainingDataRepository
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.infrastructure.database.RepFlowDatabase
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import javax.inject.Inject
 
 /**
@@ -28,6 +30,8 @@ class LocalTrainingDataRepository
         private val database: RepFlowDatabase,
     ) : TrainingDataRepository {
         override suspend fun hasTrainingData(): Boolean = database.trainingDataDao().hasAnyRow()
+
+        override fun observeHasTrainingData(): Flow<Boolean> = database.trainingDataDao().observeHasAnyRow().distinctUntilChanged()
 
         override suspend fun clearTrainingData(): DomainResult<Unit, TrainingDataError> =
             try {
