@@ -9,7 +9,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -36,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -252,6 +252,11 @@ internal class FocusEntries(
  * instead: at a 360dp phone each half-width card leaves its value 39dp between
  * the two 44dp buttons, and a load such as `102.5` at 24sp needs about 70
  * (`D62`).
+ *
+ * The width decides only where they go, so it's one [Layout]. Choosing a `Row`
+ * or a `Column` by width would give each its own saved state, so a phone that
+ * crosses the width as it rotates would lose an open pad's entry and bring it
+ * back later, out of date.
  */
 @Suppress("LongParameterList")
 @Composable
@@ -268,23 +273,38 @@ internal fun EntrySteppers(
     durationRange: LongRange?,
     modifier: Modifier = Modifier,
 ) {
-    val cards = mutableListOf<@Composable (Modifier) -> Unit>()
-    if (trackingType == ExerciseTrackingType.WEIGHT_AND_REPS) {
-        cards += { cardModifier -> WeightCard(load, onLoadChange, loadStep, cardModifier) }
-    }
-    if (trackingType == ExerciseTrackingType.DURATION) {
-        cards += { cardModifier -> SecondsCard(seconds, onSecondsChange, durationRange, cardModifier) }
-    } else {
-        cards += { cardModifier -> RepsCard(reps, onRepsChange, repRange, cardModifier) }
-    }
-    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        if (cards.size > 1 && maxWidth >= SideBySideMinWidth) {
-            Row(horizontalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapMd)) {
-                cards.forEach { card -> card(Modifier.weight(1f)) }
+    val cardGap = RepFlowSpacing.gapMd
+    Layout(
+        content = {
+            if (trackingType == ExerciseTrackingType.WEIGHT_AND_REPS) {
+                WeightCard(load, onLoadChange, loadStep)
             }
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapMd)) {
-                cards.forEach { card -> card(Modifier.fillMaxWidth()) }
+            if (trackingType == ExerciseTrackingType.DURATION) {
+                SecondsCard(seconds, onSecondsChange, durationRange)
+            } else {
+                RepsCard(reps, onRepsChange, repRange)
+            }
+        },
+        modifier = modifier.fillMaxWidth(),
+    ) { cards, constraints ->
+        val gap = cardGap.roundToPx()
+        val width = constraints.maxWidth
+        val sideBySide = cards.size > 1 && width >= SideBySideMinWidth.roundToPx()
+        val cardWidth = if (sideBySide) (width - gap) / 2 else width
+        val placeables =
+            cards.map { it.measure(constraints.copy(minWidth = cardWidth, maxWidth = cardWidth, minHeight = 0)) }
+        val height =
+            if (sideBySide) {
+                placeables.maxOf { it.height }
+            } else {
+                placeables.sumOf { it.height } + gap * (placeables.size - 1)
+            }
+        layout(width, height) {
+            var x = 0
+            var y = 0
+            placeables.forEach { card ->
+                card.placeRelative(x, y)
+                if (sideBySide) x += cardWidth + gap else y += card.height + gap
             }
         }
     }
@@ -295,7 +315,6 @@ private fun WeightCard(
     load: BigDecimal?,
     onLoadChange: (BigDecimal) -> Unit,
     step: BigDecimal,
-    modifier: Modifier,
 ) {
     val label = stringResource(R.string.workout_active_load_label)
     StepperCard(
@@ -311,7 +330,6 @@ private fun WeightCard(
                 },
                 RepFlowStepperMath.format(step),
             ),
-        modifier = modifier,
     ) {
         RepFlowStepper(
             value = load,
@@ -331,13 +349,11 @@ private fun RepsCard(
     reps: BigDecimal?,
     onRepsChange: (BigDecimal) -> Unit,
     repRange: IntRange?,
-    modifier: Modifier,
 ) {
     val label = stringResource(R.string.workout_active_reps_label)
     StepperCard(
         label = label,
         caption = repRange?.let { stringResource(R.string.workout_focus_reps_target, it.first, it.last) },
-        modifier = modifier,
     ) {
         RepFlowStepper(
             value = reps,
@@ -357,7 +373,6 @@ private fun SecondsCard(
     seconds: BigDecimal?,
     onSecondsChange: (BigDecimal) -> Unit,
     durationRange: LongRange?,
-    modifier: Modifier,
 ) {
     val label = stringResource(R.string.workout_active_duration_label)
     StepperCard(
@@ -371,7 +386,6 @@ private fun SecondsCard(
                 )
             },
         hint = stringResource(R.string.workout_focus_time_hint, formatDuration(SECONDS_STEP.toLong())),
-        modifier = modifier,
     ) {
         RepFlowStepper(
             value = seconds,
@@ -393,12 +407,10 @@ private fun SecondsCard(
 private fun StepperCard(
     label: String,
     caption: String?,
-    modifier: Modifier,
     hint: String? = null,
     stepper: @Composable () -> Unit,
 ) {
     RepFlowCard(
-        modifier = modifier,
         contentPadding = PaddingValues(horizontal = StepperCardHorizontalPadding, vertical = StepperCardVerticalPadding),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapSm)) {
