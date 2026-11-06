@@ -11673,12 +11673,12 @@
       "registry_path": "docs/ai-workflow/registry/backup-reminder-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/backup-reminder-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "SELF_REVIEWING_IMPLEMENTATION",
+      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
       "plan_revision": 2,
-      "implementation_revision": null,
+      "implementation_revision": 1,
       "functional_review_round": null,
       "base_commit": "31561878d68af71c0304925fc9f466d0ef4a8e7a",
-      "reviewed_implementation_head": null,
+      "reviewed_implementation_head": "bb0f21c43480b84d7833b28678abb79ac87362da",
       "current_checkpoint_id": null,
       "last_completed_checkpoint_id": "CP2",
       "checkpoints": {
@@ -11817,8 +11817,8 @@
           "external": 0
         }
       },
-      "state_revision": 13,
-      "last_transition": "2026-11-06T01:33:33Z",
+      "state_revision": 14,
+      "last_transition": "2026-11-06T01:47:48Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
