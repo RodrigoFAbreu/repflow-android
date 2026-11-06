@@ -11673,7 +11673,7 @@
       "registry_path": "docs/ai-workflow/registry/backup-reminder-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/backup-reminder-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+      "phase": "APPLYING_REVIEW_FEEDBACK",
       "plan_revision": 2,
       "implementation_revision": 1,
       "functional_review_round": null,
@@ -11813,12 +11813,12 @@
           "external": 1
         },
         "implementation": {
-          "local": 0,
-          "external": 0
+          "local": 1,
+          "external": 1
         }
       },
-      "state_revision": 14,
-      "last_transition": "2026-11-06T01:47:48Z",
+      "state_revision": 16,
+      "last_transition": "2026-11-06T02:24:52Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -11995,7 +11995,48 @@
               "at": "2026-11-06T00:43:36Z"
             }
           ]
+        },
+        "F-b9869ae8e619": {
+          "digest": "b9869ae8e619cd55473bd5bef4e46ea7e3aeb5aa0c6ad982b528f0fe23521e89",
+          "text": "**O1: the re-read of `hasTrainingData` is only half tested.** `HomeViewModelTest` changes it from false to true through a sessions change, and nothing else. Two mutations, each in a throwaway copy of this commit, passed `HomeViewModelTest`, `HomeBackupReminderTest` and `ObserveRecentTrainingTest`: a read that stays `true` once it has said `true`, and no re-read when only the settings change. The first would show an old date on an erased phone, which is the reason R2 has this rule, and no instrumented test does a real Erase and then looks at Home. Today only the AVD looks hold it, though the code is right: a real Erase on the AVD showed no line. Add one `HomeViewModelTest` case: a line showing, then `hasTrainingData = false` and a settings write, then no line. That one case catches both mutations. The plan review's optional finding asked for this, and it was applied in one direction only. The second mutation may also fail the smoke walk; that wasn't run.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "77362c7a7897bb52d24a4aa73a1fca06f51e1ce0350eaeb831525cf8b9a3fc50",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T02:21:29Z"
+            }
+          ]
+        },
+        "F-9a16a61deac7": {
+          "digest": "9a16a61deac728a98b6c490a7b7720e656cb5fc5a2bbe982ff3852da81bf66be",
+          "text": "**O2: no test holds the line under `Last workout`.** `assertLinkPlacement` compares the link with the words only, so moving `HomeBackupNote` above the card would pass, as the bundle's own known limitations say. `HomeScreen.kt:142-143` has the right order and boards `10n` and `10o` draw the same one. A bounds check in `HomeScreenTest`, with a `Summary` last workout, would hold it.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "77362c7a7897bb52d24a4aa73a1fca06f51e1ce0350eaeb831525cf8b9a3fc50",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T02:21:29Z"
+            }
+          ]
         }
+      },
+      "implementation_review_stages": {
+        "review_content_id": "77362c7a7897bb52d24a4aa73a1fca06f51e1ce0350eaeb831525cf8b9a3fc50",
+        "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "bde107fbfa4556dfda93f36e06851ba07be117ef7610e22c7ca48b8d8312b49a",
+          "verdict": "APPROVE",
+          "round": 1,
+          "completed_at": "2026-11-06T02:21:29Z",
+          "verdict_sha256": "389dc4b255dc52f03e63a665045cf5994cd65d48b45289f92ff722c73d97acc1",
+          "run_ref": "session:local .ai-review/backup-reminder/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": null
       }
     }
   },
