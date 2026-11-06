@@ -15214,7 +15214,7 @@
       "registry_path": "docs/ai-workflow/registry/timed-set-clock-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/timed-set-clock-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+      "phase": "APPLYING_REVIEW_FEEDBACK",
       "plan_revision": 2,
       "implementation_revision": 1,
       "functional_review_round": null,
@@ -15358,12 +15358,12 @@
           "external": 1
         },
         "implementation": {
-          "local": 0,
-          "external": 0
+          "local": 1,
+          "external": 1
         }
       },
-      "state_revision": 16,
-      "last_transition": "2026-11-06T21:28:27Z",
+      "state_revision": 18,
+      "last_transition": "2026-11-06T22:04:28Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -15554,7 +15554,76 @@
               "at": "2026-11-06T18:28:50Z"
             }
           ]
+        },
+        "F-ad94b58185f4": {
+          "digest": "ad94b58185f443c8487ce265c99367fccae399690669e3e98824463abf2ddeee",
+          "text": "**A double tap on the clock's button loses the time, and nothing undoes it.** The bundle says this comes from reading the code and wasn't tried. I tried it, in the real app on the AVD at `4b405dd`. After a 12 s hold, two taps on `Stop` 18 ms apart left a new clock running, `Stopped at` gone, `Log set` dimmed and `0:12` only in the Time box. A slower finger gets there too, because the first tap has then had longer to draw `Start again`. The next `Stop` replaced it at `0:17`, and `Log set` stored 17 in `workout_sets`. Two taps on `Start` 150 ms apart during a rest left `0:00` and `Start`, with no clock running and the rest ended, its stored end `NULL`, so a person going into the hold times nothing. At 11 ms, faster than a frame, the second tap reached the stale `onStart`, which `startClock` ignores, and the clock ran. This matches the known limitations, and the failure shows on screen rather than hiding, so I don't ask for it before approval. The way forward does work against the person, though: `Log set` waits for `Stop`, and `Stop` is what replaces the right number with a plausible wrong one. `20m` accepts a double tap on `Log set` because `Undo last` recovers it in one tap, and th",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "958bb488dafb6fb657c35df694f6e88a3bc818b52818482b28babc4549054315",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T22:01:10Z"
+            }
+          ]
+        },
+        "F-8a81612d01e5": {
+          "digest": "8a81612d01e5aab5df908884bfff159304d764e7a95a190eb7491ee901a1844a",
+          "text": "**The owner's one decision is still unanswered.** The plan puts \"the clock is not stored in the database\" to the owner, and no answer is in the repository or in the lane's notes on the owner's decisions. The default stands and nothing in this diff depends on it. A clock running when the app is swiped away, force-stopped or the phone restarts comes back as `Start` with no message, where the rest timer survives. Ask at acceptance. A column would be a follow-up item.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "958bb488dafb6fb657c35df694f6e88a3bc818b52818482b28babc4549054315",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T22:01:10Z"
+            }
+          ]
+        },
+        "F-7a2703e61872": {
+          "digest": "7a2703e61872bd80d36466bcdb740214515f6284d59086aac975681dd8209bab",
+          "text": "**The on-screen rest notification is already on the backlog, so it needs no new follow-up.** `IMPLEMENTATION_SUMMARY.md` and `docs/ACTIVE_MILESTONE.md` say `RestTimerExpiryHandler`'s missing foreground check isn't on the backlog and needs a follow-up at acceptance. `docs/backlog.yaml:243` has `rest-notification-foreground` at `status: next`, from before this item's base, and its page names this defect and the old notification that doesn't clear, which is CP3's seen-and-left item 4 as well. Don't file a duplicate. Its page says \"Needs device check\", and CP3's walk is that check, so it's worth noting there.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "958bb488dafb6fb657c35df694f6e88a3bc818b52818482b28babc4549054315",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T22:01:10Z"
+            }
+          ]
+        },
+        "F-dca56f016c0f": {
+          "digest": "dca56f016c0f5f580733f4ec49e66d8c62439a026f32054ace3b89ae1dc611a6",
+          "text": "**O1 — The exact-target test can pass without checking the boundary.** [ActiveWorkoutScreenTest.kt:2158](/home/rodrigo/.local/state/workflow-controller-repflow/reviews/20261106T220147Z-16920518/tree/app/src/androidTest/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutScreenTest.kt:2158) uses real time without asserting that the readout is exactly 60 seconds. A delayed composition can therefore pass with an incorrect `>` comparison. A controlled readout time would make this coverage reliable.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "958bb488dafb6fb657c35df694f6e88a3bc818b52818482b28babc4549054315",
+              "verdict": "REVISE",
+              "at": "2026-11-06T22:04:28Z"
+            }
+          ]
         }
+      },
+      "implementation_review_stages": {
+        "review_content_id": "958bb488dafb6fb657c35df694f6e88a3bc818b52818482b28babc4549054315",
+        "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "de4f0d78c9bc07bf3d3cdf55b70fd60a515b367e3cd652836f390f3d4676d174",
+          "verdict": "APPROVE",
+          "round": 1,
+          "completed_at": "2026-11-06T22:01:10Z",
+          "verdict_sha256": "8be300c7636aac831f307a9f2cb76ebc931df0cedd5b64528054a0bafa94a9f6",
+          "run_ref": "session:local .ai-review/timed-set-clock/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": null
       }
     }
   },
