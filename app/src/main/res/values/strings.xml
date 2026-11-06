@@ -786,6 +786,14 @@
     <string name="repflow_keypad_selected_caption">Selected: type to replace</string>
     <string name="repflow_keypad_whole_numbers_caption">Whole numbers only</string>
     <string name="repflow_keypad_duration_caption">minutes and seconds</string>
+    <plurals name="repflow_duration_spoken_minutes">
+        <item quantity="one">%d minute</item>
+        <item quantity="other">%d minutes</item>
+    </plurals>
+    <plurals name="repflow_duration_spoken_seconds">
+        <item quantity="one">%d second</item>
+        <item quantity="other">%d seconds</item>
+    </plurals>
     <string name="repflow_stepper_type_value">Type a value</string>
     <string name="repflow_scale_end_labels">%1$s → %2$s</string>
 

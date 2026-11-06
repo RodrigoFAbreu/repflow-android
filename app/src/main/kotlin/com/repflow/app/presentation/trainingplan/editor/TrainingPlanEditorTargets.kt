@@ -32,6 +32,7 @@ import com.repflow.app.presentation.designsystem.components.RepFlowStepper
 import com.repflow.app.presentation.designsystem.components.RepFlowStepperDefaults
 import com.repflow.app.presentation.designsystem.components.RepFlowStepperSizing
 import com.repflow.app.presentation.designsystem.components.formatDuration
+import com.repflow.app.presentation.designsystem.components.spokenDuration
 import com.repflow.app.presentation.exercise.editor.InlineError
 
 /**
@@ -150,7 +151,8 @@ private fun RangeLines(
  * first step lands on [PlanStepperSpec.startWhenEmpty]. The value opens the
  * keypad on the line's current value, titled with the line's label; blank or
  * unparsable text opens it empty. With [durationEntry] that keypad is the m:ss
- * pad, and the text stays whole seconds.
+ * pad, the text stays whole seconds, and a screen reader says the value as
+ * [spokenDuration].
  *
  * The value cell grows with the font, so `120:00` stays on one line. The label
  * takes what is left and wraps if it must.
@@ -185,6 +187,7 @@ private fun StepperLine(
             incrementContentDescription = stringResource(descriptions.second),
             sizing = LineStepperSizing,
             onValueClick = { keypadOpen = true },
+            valueContentDescription = if (durationEntry) value?.let { spokenDuration(it.toLong()) } else null,
             modifier = Modifier.width(lineStepperWidth(LocalDensity.current.fontScale)),
         )
     }

@@ -9,6 +9,9 @@ import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
@@ -17,6 +20,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.isSelected
@@ -751,6 +755,33 @@ class TrainingPlanEditorScreenTest {
         composeRule.onNodeWithText("Max time").assertIsDisplayed()
         composeRule.onNodeWithText("Min seconds").assertDoesNotExist()
         composeRule.onNodeWithText("Max seconds").assertDoesNotExist()
+    }
+
+    @Test
+    fun aScreenReaderIsGivenTheTimeAndRestLinesInWords() {
+        openTimedRow(min = "30", max = "900", rest = "90")
+
+        composeRule
+            .onNode(
+                hasText("0:30") and hasClickAction() and hasContentDescription("30 seconds"),
+            ).performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onNode(
+                hasText("15:00") and hasClickAction() and hasContentDescription("15 minutes"),
+            ).performScrollTo()
+            .assertIsDisplayed()
+        composeRule
+            .onNode(hasText("1:30") and hasClickAction() and !isSelectable() and hasContentDescription("1 minute 30 seconds"))
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun theOtherLinesOfARowKeepTheirOwnText() {
+        openTimedRow()
+
+        lineValue("4").performScrollTo().assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.ContentDescription))
     }
 
     @Test

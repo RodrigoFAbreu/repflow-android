@@ -246,7 +246,8 @@ object RepFlowKeypadInput {
  * @param initialValue the value it opens on, selected; null opens empty. On an
  *   m:ss pad this is seconds.
  * @param durationEntry an m:ss pad (`10l`): digits fill from the right like a
- *   clock, the decimal key is `00`, and [onConfirm] receives whole seconds.
+ *   clock, the decimal key is `00`, [onConfirm] receives whole seconds, and a
+ *   screen reader says the value as [spokenDuration].
  * @param onConfirm receives the parsed value; Set on an empty or unparseable
  *   entry dismisses instead, as the prototype's `kpDone` does.
  */
@@ -278,6 +279,7 @@ fun RepFlowNumericKeypad(
             KeypadHeader(
                 title = title,
                 value = RepFlowKeypadInput.display(text, durationEntry),
+                spokenValue = if (durationEntry) spokenKeypadDuration(text) else null,
                 selected = selected,
                 caption =
                     when {
@@ -334,10 +336,16 @@ fun RepFlowNumericKeypad(
 
 private const val KEYS_PER_ROW = 3
 
+/** What an m:ss pad's [text] would store if `Set` were pressed, in words. */
+@Composable
+private fun spokenKeypadDuration(text: String): String =
+    spokenDuration((RepFlowKeypadInput.parse(text, durationEntry = true) ?: BigDecimal.ZERO).toLong())
+
 @Composable
 private fun KeypadHeader(
     title: String,
     value: String,
+    spokenValue: String?,
     selected: Boolean,
     caption: String,
     captionShown: Boolean,
@@ -363,6 +371,7 @@ private fun KeypadHeader(
         )
         KeypadValue(
             value = value,
+            spokenValue = spokenValue,
             selected = selected,
             modifier =
                 Modifier
@@ -389,6 +398,7 @@ private fun KeypadHeader(
 @Composable
 private fun KeypadValue(
     value: String,
+    spokenValue: String?,
     selected: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -420,6 +430,7 @@ private fun KeypadValue(
                     liveRegion = LiveRegionMode.Polite
                     // Only while selected: a false value would read "not selected" with every digit.
                     if (selected) this.selected = true
+                    if (spokenValue != null) contentDescription = spokenValue
                 },
     )
 }

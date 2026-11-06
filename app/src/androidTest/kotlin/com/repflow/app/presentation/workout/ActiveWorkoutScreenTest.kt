@@ -18,6 +18,7 @@ import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.isSelected
@@ -780,6 +781,14 @@ class ActiveWorkoutScreenTest {
         node(R.string.workout_focus_log_set).performClick()
 
         assertEquals(90, recorded)
+    }
+
+    @Test
+    fun aScreenReaderIsGivenTheTimeStepperAndItsPadInWords() {
+        setContent(exercise(ExerciseTrackingType.DURATION, seed = SetEntrySeed(seconds = java.math.BigDecimal(120))))
+
+        composeRule.onNode(hasText("2:00") and hasClickAction() and hasContentDescription("2 minutes")).performScrollTo().performClick()
+        composeRule.onNode(hasText("2:00") and isSelected() and hasContentDescription("2 minutes")).assertIsDisplayed()
     }
 
     @Test

@@ -5,10 +5,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.StateRestorationTester
@@ -254,6 +259,61 @@ class RepFlowStructuralPrimitivesTest {
         pressSet()
         assertEquals(1, changes.size)
         assertEquals(0, BigDecimal(90).compareTo(value()))
+    }
+
+    @Test
+    fun aSpokenDurationSaysMinutesAndSecondsInWords() {
+        val spoken = mutableMapOf<Long, String>()
+        composeRule.setContent {
+            RepFlowTheme {
+                listOf(0L, 1L, 45L, 60L, 61L, 90L, 120L, 900L, 7200L).forEach { spoken[it] = spokenDuration(it) }
+            }
+        }
+        composeRule.waitForIdle()
+        assertEquals(
+            mapOf(
+                0L to "0 seconds",
+                1L to "1 second",
+                45L to "45 seconds",
+                60L to "1 minute",
+                61L to "1 minute 1 second",
+                90L to "1 minute 30 seconds",
+                120L to "2 minutes",
+                900L to "15 minutes",
+                7200L to "120 minutes",
+            ),
+            spoken,
+        )
+    }
+
+    @Test
+    fun aScreenReaderIsGivenTheDurationStepperAndPadInWordsAsTheyChange() {
+        setStepper(BigDecimal(90), allowDecimal = false, durationEntry = true)
+        composeRule.onNode(hasText("1:30") and hasClickAction() and hasContentDescription("1 minute 30 seconds")).assertIsDisplayed()
+        composeRule.onNodeWithText("1:30").performClick()
+        composeRule.onNode(hasText("1:30") and isSelected() and hasContentDescription("1 minute 30 seconds")).assertIsDisplayed()
+        listOf("1", "5", "0", "0").forEach { composeRule.onNodeWithText(it).performClick() }
+        composeRule.onNode(hasText("15:00") and hasContentDescription("15 minutes")).assertIsDisplayed()
+        pressSet()
+        composeRule.onNode(hasText("15:00") and hasClickAction() and hasContentDescription("15 minutes")).assertIsDisplayed()
+    }
+
+    @Test
+    fun theDurationPadSaysWhatSetWouldStore() {
+        setStepper(null, allowDecimal = false, durationEntry = true)
+        composeRule.onNode(hasText("0") and hasClickAction()).performClick()
+        composeRule.onNode(hasText("0:00") and hasContentDescription("0 seconds")).assertIsDisplayed()
+        listOf("9", "5").forEach { composeRule.onNodeWithText(it).performClick() }
+        composeRule.onNode(hasText("0:95") and hasContentDescription("1 minute 35 seconds")).assertIsDisplayed()
+    }
+
+    @Test
+    fun aPlainStepperAndPadKeepTheirOwnText() {
+        val noDescription = SemanticsMatcher.keyNotDefined(SemanticsProperties.ContentDescription)
+        setStepper(BigDecimal("82.5"))
+        composeRule.onNodeWithText("82.5").assert(noDescription)
+        composeRule.onNodeWithText("82.5").performClick()
+        selectedValue("82.5").assert(noDescription)
     }
 
     @Test

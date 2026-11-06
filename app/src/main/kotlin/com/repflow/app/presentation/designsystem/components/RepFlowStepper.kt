@@ -27,6 +27,8 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -108,6 +110,8 @@ object RepFlowStepperDefaults {
  *   it opens [RepFlowNumericKeypad]; when null the value is plain text.
  * @param valueClickLabel what activating the value does, for accessibility
  *   services.
+ * @param valueContentDescription what a screen reader says for the value, when
+ *   [value] alone wouldn't read right (see [spokenDuration]).
  */
 @Composable
 fun RepFlowStepper(
@@ -120,6 +124,7 @@ fun RepFlowStepper(
     sizing: RepFlowStepperSizing = RepFlowStepperDefaults.compact,
     onValueClick: (() -> Unit)? = null,
     valueClickLabel: String = stringResource(R.string.repflow_stepper_type_value),
+    valueContentDescription: String? = null,
 ) {
     Row(
         modifier = modifier,
@@ -159,6 +164,12 @@ fun RepFlowStepper(
                     ),
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center,
+                modifier =
+                    if (valueContentDescription == null) {
+                        Modifier
+                    } else {
+                        Modifier.semantics { contentDescription = valueContentDescription }
+                    },
             )
         }
         StepperButton(
@@ -182,7 +193,8 @@ fun RepFlowStepper(
  * @param allowDecimal whether the keypad offers a working `.` key: true for a
  *   load, false for reps or seconds.
  * @param durationEntry whether the keypad is the m:ss pad; [value] is then whole
- *   seconds, and [format] should show them as a clock.
+ *   seconds, [format] should show them as a clock, and a screen reader says them
+ *   as [spokenDuration].
  */
 @Composable
 fun RepFlowStepper(
@@ -211,6 +223,7 @@ fun RepFlowStepper(
         modifier = modifier,
         sizing = sizing,
         onValueClick = { keypadOpen = true },
+        valueContentDescription = if (durationEntry) value?.let { spokenDuration(it.toLong()) } else null,
     )
     if (keypadOpen) {
         RepFlowNumericKeypad(
