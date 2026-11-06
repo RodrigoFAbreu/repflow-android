@@ -1,0 +1,64 @@
+{
+  "dispositions": {
+    "F-02f76d7c1623": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/47",
+      "note": "A corrected pain value is stored but changes no suggestion, because no suggestion reads a set's pain, logged or corrected; the checklist says so, and whether it should is the owner's decision."
+    },
+    "F-13ce2ddef9ec": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/47",
+      "note": "If a user steps reps down to 0 and taps Save, the sheet closes with `Couldn't complete that. Try again.` and the tapped RPE is lost, so Save should be disabled for a value that cannot be stored or the sheet should stay open."
+    },
+    "F-17765b5bd2e8": {
+      "disposition": "dropped",
+      "reason": "The corrected values were read back from the real database on the emulator and use the same mapper as logging, so a user sees correct values and only an automated test is missing."
+    },
+    "F-2844de99f58b": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/47",
+      "note": "At font scale 2.0 a hard flick on the scrolled correction sheet closes it and drops the unsaved taps, though the stored set is unchanged; the checklist warns about it and `set-edit-any-set` does not cover it."
+    },
+    "F-2d22ec116a77": {
+      "disposition": "dropped",
+      "reason": "The correction sheet now shows the three rows open with no collapsed summary, so a set with RPE 7.5 is never shown as having nothing recorded."
+    },
+    "F-3402f73a8fc3": {
+      "disposition": "fixed"
+    },
+    "F-3dc78ab274dd": {
+      "disposition": "fixed"
+    },
+    "F-658a601ee173": {
+      "disposition": "dropped",
+      "reason": "Only a test at font scale 1.3 for the button stacking is missing; the stacking was seen on the emulator and a user sees the buttons stack correctly."
+    },
+    "F-7235bd3d8699": {
+      "disposition": "dropped",
+      "reason": "Two file header comments still cite the old artboard, so a user sees nothing."
+    },
+    "F-7b2e41c01574": {
+      "disposition": "fixed"
+    },
+    "F-800a4498673c": {
+      "disposition": "fixed"
+    },
+    "F-8dcf7afb0e71": {
+      "disposition": "fixed"
+    },
+    "F-aa7be0e80e45": {
+      "disposition": "fixed"
+    },
+    "F-b18f9a5558e3": {
+      "disposition": "fixed"
+    },
+    "F-c30930af0419": {
+      "disposition": "fixed"
+    },
+    "F-da60b866fc64": {
+      "disposition": "fixed"
+    }
+  },
+  "schema_version": 1,
+  "work_item_id": "set-edit-fields"
+}

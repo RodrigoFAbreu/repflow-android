@@ -213,17 +213,17 @@ internal fun WorkoutFocus(
             exercise = exercise,
             set = lastSet,
             onDismissRequest = { correcting = false },
-            onSave = { load, reps, seconds ->
+            onSave = { load, reps, seconds, rpe, pain, technique ->
                 correcting = false
                 onEditLastSet(
                     exercise.id,
                     load?.toDouble(),
                     reps?.toInt(),
                     seconds?.toInt(),
-                    lastSet.rpe,
+                    rpe,
                     lastSet.isWarmup,
-                    lastSet.pain,
-                    lastSet.techniqueQuality,
+                    pain,
+                    technique,
                 )
             },
         )

@@ -13505,6 +13505,837 @@
         "evaluated_at": "2026-11-06T10:22:46Z",
         "workflow_release": "2.25.5"
       }
+    },
+    "set-edit-fields": {
+      "work_item_type": "product",
+      "work_item_kind": "product",
+      "work_item_id": "set-edit-fields",
+      "parent_work_item_id": null,
+      "plan_path": "docs/milestones/set-edit-fields-execution.md",
+      "registry_path": "docs/ai-workflow/registry/set-edit-fields-registry.json",
+      "mapping_path": "docs/ai-workflow/requirements/set-edit-fields-mapping.json",
+      "governing_workflow_version": "2.2",
+      "phase": "MILESTONE_COMPLETE",
+      "plan_revision": 2,
+      "implementation_revision": 1,
+      "functional_review_round": null,
+      "base_commit": "0d3250b2098bdb6450337ff314823d1c57bc31eb",
+      "reviewed_implementation_head": "4a3e4c1178f23b5601c46d421993c10224bb5973",
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": "CP2",
+      "checkpoints": {
+        "CP1": {
+          "status": "COMPLETE",
+          "start_commit": "a3c7fd764bdeea690fd731da3063b8c2459b6f71"
+        },
+        "CP2": {
+          "status": "COMPLETE",
+          "start_commit": "e9a199ae20eb3b090ea7905b7a5dd38d9c1ededd"
+        }
+      },
+      "current_bundle_id": "1b411c72516675534ad2d28e4a6eeb7d6ecbae280a3038fb6b0b21bd236e69ef",
+      "plan_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "1b411c72516675534ad2d28e4a6eeb7d6ecbae280a3038fb6b0b21bd236e69ef",
+        "approved_review_content_id": "55d524248f91b3af4cebccec12181153a8d6ede26759e5447c997bed2048af6d",
+        "review_content_manifest": [
+          {
+            "path": "docs/ai-workflow/registry/set-edit-fields-registry.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "209d827c2fdda4d2098ebe27f246dc7b14715fac"
+          },
+          {
+            "path": "docs/ai-workflow/requirements/set-edit-fields-mapping.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "43babfd08842e267a2125352c97e2c423b54282d"
+          },
+          {
+            "path": "docs/milestones/set-edit-fields-execution.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5b4eefd897397d4bcbcdd4b3a5b7348e92ddc1b9"
+          }
+        ],
+        "reviewed_content_commit": null,
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-06T11:42:00Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "55d524248f91b3af4cebccec12181153a8d6ede26759e5447c997bed2048af6d",
+            "ledger": {
+              "local": {
+                "bundle_id": "1b411c72516675534ad2d28e4a6eeb7d6ecbae280a3038fb6b0b21bd236e69ef",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "935d8481394b3528dc02dcc92837be8dbdfe99369020d982bdc8d8641e036c5e",
+                "ledger_entry_sha256": "f00cc4c92d027c7ffe8a2aa6e1c1ddebb198dd869728cd398a198abee26d6616",
+                "run_ref": "session:local .ai-review/set-edit-fields/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "1b411c72516675534ad2d28e4a6eeb7d6ecbae280a3038fb6b0b21bd236e69ef",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "38d7f6d643a208bca0180a7463f0f71a8af31c44c669c0df396c80e2e0791180",
+                "ledger_entry_sha256": "8f9f9d29af7272273e4410e5502dc872d1e97d78ce91c0fc8eaf724e0c8ad310",
+                "run_ref": "codex:20261106T113632Z-97d60d44",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-06T11:42:00Z",
+          "workflow_release": "2.27.0"
+        }
+      },
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "df6b00b2117349488f99896d930d7251a1e33aa86ff47526ecf58ea3ee00a4da",
+        "approved_review_content_id": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+        "review_content_manifest": [
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f845a2fd0cb80b5827db7435f7b6fd0a81572bb7"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutFocus.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2cdec4402f99b584ad9fe1be9831e612ed809818"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutFocusEntry.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "531df3cd934ffba1554b279956f279c813b0884d"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutFocusSets.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b29ee25bfa59266acd81e21297f13475e255d075"
+          },
+          {
+            "path": "app/src/main/res/values/strings.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6bfcce9d7c67059e97b6e9e0245504fa653792ad"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/workout/CorrectedSetRecommendationTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "23360ce7ebb68070a4108656254ee44b0b5e7ac8"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/workout/UndoAndEditLastWorkoutSetTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d3fff952a88ee725f997779c4c88b3b457b675a7"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6e2aa6c99cd9e13d80dbed5c841078620a364f0c"
+          },
+          {
+            "path": "docs/UX_FLOWS.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "839a17620fa6869b7b7fb19c2b44717880e49a31"
+          },
+          {
+            "path": "docs/ai-workflow/registry/set-edit-fields-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "83d2fb9edb59d585cae432d52a378782294c9370"
+          }
+        ],
+        "reviewed_content_commit": "4a3e4c1178f23b5601c46d421993c10224bb5973",
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-06T13:23:17Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+            "ledger": {
+              "local": {
+                "bundle_id": "df6b00b2117349488f99896d930d7251a1e33aa86ff47526ecf58ea3ee00a4da",
+                "verdict": "APPROVE",
+                "round": 1,
+                "verdict_sha256": "7c3b34dffa2c60643773042b597dc095d93c99eff18b4013e6529635055f8f77",
+                "ledger_entry_sha256": "0cd0bdb8548d6176cdb6697b2669750231d46c2d16d1eb057803234e086ceeb2",
+                "run_ref": "session:local .ai-review/set-edit-fields/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "df6b00b2117349488f99896d930d7251a1e33aa86ff47526ecf58ea3ee00a4da",
+                "verdict": "APPROVE",
+                "round": 1,
+                "verdict_sha256": "4e47a3d3e66a19bcbe3df1dc73acbbd32d340b41f699821a8f46f69b5284c71f",
+                "ledger_entry_sha256": "24ea5070b6ce8adff3256be7267406d5ab38d5459109b4dc8305dc65d0443904",
+                "run_ref": "codex:20261106T131931Z-99c6c143",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-06T13:23:17Z",
+          "workflow_release": "2.27.0"
+        }
+      },
+      "technical_review_block_pins": [],
+      "plan_review_stages": {
+        "review_content_id": "55d524248f91b3af4cebccec12181153a8d6ede26759e5447c997bed2048af6d",
+        "LOCAL_MODEL_PLAN_REVIEW": {
+          "bundle_id": "1b411c72516675534ad2d28e4a6eeb7d6ecbae280a3038fb6b0b21bd236e69ef",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-06T11:36:08Z",
+          "verdict_sha256": "935d8481394b3528dc02dcc92837be8dbdfe99369020d982bdc8d8641e036c5e",
+          "run_ref": "session:local .ai-review/set-edit-fields/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_PLAN_REVIEW": {
+          "bundle_id": "1b411c72516675534ad2d28e4a6eeb7d6ecbae280a3038fb6b0b21bd236e69ef",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-06T11:38:58Z",
+          "verdict_sha256": "38d7f6d643a208bca0180a7463f0f71a8af31c44c669c0df396c80e2e0791180",
+          "run_ref": "codex:20261106T113632Z-97d60d44",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
+      },
+      "functional_acceptance_status": null,
+      "blocking_decisions": [],
+      "review_round_counts": {
+        "plan": {
+          "local": 2,
+          "external": 1
+        },
+        "implementation": {
+          "local": 1,
+          "external": 1
+        }
+      },
+      "state_revision": 18,
+      "last_transition": "2026-11-06T13:46:14Z",
+      "feedback_layout": "scoped",
+      "plan_review_binding": {
+        "status": "BOUND",
+        "at": "2026-11-06T11:23:24Z",
+        "consumed": {
+          "review_content_id": "6dd1d8f311025769b80100d39cfe4fe05ff50e03c7f4c8a0a4d1e827a58c3349",
+          "plan_revision": 1,
+          "legacy": false
+        },
+        "published": {
+          "review_content_id": "55d524248f91b3af4cebccec12181153a8d6ede26759e5447c997bed2048af6d",
+          "plan_revision": 2
+        },
+        "bound": {
+          "review_content_id": "55d524248f91b3af4cebccec12181153a8d6ede26759e5447c997bed2048af6d",
+          "bundle_id": "1b411c72516675534ad2d28e4a6eeb7d6ecbae280a3038fb6b0b21bd236e69ef",
+          "plan_revision": 2
+        }
+      },
+      "consumed_plan_review_content_ids": [
+        "6dd1d8f311025769b80100d39cfe4fe05ff50e03c7f4c8a0a4d1e827a58c3349"
+      ],
+      "optional_findings": {
+        "F-2d22ec116a77": {
+          "digest": "2d22ec116a7775b47ad7944b94a3552fdaf2b77991bdf079ea60423bb4f00ff6",
+          "text": "O1. With `rpe: Int?` on `SetDetailSection`, a set with RPE 7.5 is left out of the `Collapsed` summary, so a set holding only that value reads `RPE, pain, technique`, as if nothing were recorded. The plan's risk note covers the row and not the summary. This goes away if I1 removes the disclosure on the sheet.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "6dd1d8f311025769b80100d39cfe4fe05ff50e03c7f4c8a0a4d1e827a58c3349",
+              "verdict": "REVISE",
+              "at": "2026-11-06T11:15:26Z"
+            }
+          ]
+        },
+        "F-8dcf7afb0e71": {
+          "digest": "8dcf7afb0e71fbde9f191dfee3eec4f95ca6971bf4fcd9ba5b8e78d46dc10870",
+          "text": "O2. The plan doesn't say the new values are saved state, and no test holds them across a rotation. `correcting` is saved, so the sheet comes back after rotating; a tap kept in plain `remember` would revert with no sign, and `Save` would store the old value. Say `rememberSaveable`, as the sheet's other three fields use, and add a restore test. The last milestone's rotation finding (`timed-entry-mmss`, I1) was on these same steppers.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "6dd1d8f311025769b80100d39cfe4fe05ff50e03c7f4c8a0a4d1e827a58c3349",
+              "verdict": "REVISE",
+              "at": "2026-11-06T11:15:26Z"
+            }
+          ]
+        },
+        "F-3dc78ab274dd": {
+          "digest": "3dc78ab274dd958594874a1ee9af0d39baeaa2a6c1096e2de6ed154b8a35bce9",
+          "text": "O3. CP2 test 1's \"same `createdAt`\" can't fail as written. `UndoAndEditLastWorkoutSetTest` gives `RecordWorkoutSet` and `EditLastWorkoutSet` the same `FixedClock(now)`, so `createdAt = clock.now()` in the edit would pass. Give the edit a later clock.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "6dd1d8f311025769b80100d39cfe4fe05ff50e03c7f4c8a0a4d1e827a58c3349",
+              "verdict": "REVISE",
+              "at": "2026-11-06T11:15:26Z"
+            }
+          ]
+        },
+        "F-02f76d7c1623": {
+          "digest": "02f76d7c16238904ff09d203baf3f3d03f521b8a433193fa5d178f9c633e108e",
+          "text": "O4. The item's Check says a corrected pain value must reach the next suggestion, but no suggestion reads a set's pain. Only History, the set row, the CSV, the backup and the database mapping do, and the policy's pain comes from the recovery check-in (`latestPainWhileWalking`). \"The same as a value entered when logging\" holds only because a logged pain doesn't reach it either. The plan states this and is right not to change the policy here, but the owner may expect otherwise, so say it plainly in the functional review's known limitations.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "6dd1d8f311025769b80100d39cfe4fe05ff50e03c7f4c8a0a4d1e827a58c3349",
+              "verdict": "REVISE",
+              "at": "2026-11-06T11:15:26Z"
+            }
+          ]
+        },
+        "F-b18f9a5558e3": {
+          "digest": "b18f9a5558e315d203fab9a1e07026c211acfb40ece2c8ad9e5b9f6d159087c8",
+          "text": "O5. CP1's list of changes to existing tests leaves out one line that will fail. `correctingATimedSetTakesMinutesAndSeconds` calls `pressKeys(\"1\", \"3\", \"0\")` (`ActiveWorkoutScreenTest.kt:981`), and `pressKeys` (`:758`) uses `onNodeWithText(key)`, which must match exactly one node. The keypad is a second `RepFlowSheet` over the correction sheet, and finders still match nodes in a window underneath: that is why `:749` needs `.onLast()` and why `selectedPadValue` (`:762`) exists. With the rows open, each of those digits also matches a cell in the RPE, pain and technique rows, so the call finds four nodes and the test fails. The fix is `hasText(key) and !isSelectable()` in `pressKeys`, since keypad keys are `clickable` and scale cells are `selectable`. No asserted value changes, but `:778` and `:955` share that helper, so the implementation should say why it changed.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "55d524248f91b3af4cebccec12181153a8d6ede26759e5447c997bed2048af6d",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T11:36:08Z"
+            }
+          ]
+        },
+        "F-3402f73a8fc3": {
+          "digest": "3402f73a8fc35c517dbd19ba94544d7dfe673d63ef11ac9d4ae5540d00d1c9b6",
+          "text": "O6. Clearing RPE isn't tested, and RPE is the one row with conversion code of its own. Test 5 re-taps only the pain cell, so a sheet that ignored a cleared RPE (`onRpeChange = { if (it != null) rpe = it.toDouble() }`) passes every listed test, although R2 says re-tapping clears. Re-tap a whole RPE in test 5 as well, and add that mutation.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "55d524248f91b3af4cebccec12181153a8d6ede26759e5447c997bed2048af6d",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T11:36:08Z"
+            }
+          ]
+        },
+        "F-7b2e41c01574": {
+          "digest": "7b2e41c015748e774a49b92c2038a07b89d064aaedfeef37c0f57f5915269d2c",
+          "text": "O7. \"Each 48 dp\" won't happen by default, and nothing pins it. `RepFlowPrimaryButton` applies its own 56 minimum inside the caller's modifier, so a caller's `heightIn` can't lower it, which also means today's `SheetActionMinHeight = 52.dp` has no effect. `RepFlowNeutralOutlineButton` has a 44 minimum and no parameter for it. So `Save` needs `minHeight = 48.dp` and `Cancel` needs `Modifier.heightIn(min = 48.dp)`; left alone they would sit side by side at 56 and 44. Test 9 could assert both heights.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "55d524248f91b3af4cebccec12181153a8d6ede26759e5447c997bed2048af6d",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T11:36:08Z"
+            }
+          ]
+        },
+        "F-aa7be0e80e45": {
+          "digest": "aa7be0e80e4598ad63fba0bce2338ff66aea6d8ec7d3d731d5ef13ad0cd7b324",
+          "text": "O8. The plan says it departs from `20i` nowhere, but its table doesn't cover the title's size. The board draws 18 (`f(18)` in `corrSheet`), and the sheet uses `SheetTitleFontSize = 19.sp` (`WorkoutFocusSets.kt:329`). The leave sheet also uses 19 (`WorkoutSheets.kt:271`) where the board draws 18. Change it to 18, or keep 19 to match the leave sheet and say so. An AVD comparison may not show a 1 sp difference.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "55d524248f91b3af4cebccec12181153a8d6ede26759e5447c997bed2048af6d",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T11:36:08Z"
+            }
+          ]
+        },
+        "F-800a4498673c": {
+          "digest": "800a4498673c0d9426d8109e4addbea14a0a03b615d3faaaf802c1520c3448ab",
+          "text": "O9. The plan also moves `load`, `reps` and `seconds` into the sheet's own window. Their `rememberSaveable` calls sit outside `RepFlowSheet` today (`WorkoutFocusSets.kt:273-275`), and `SetCorrectionContent` puts them inside it. That should work, since the stepper's `keypadOpen` (`RepFlowStepper.kt:216`) already lives inside this sheet, but test 10 mounts the content without the sheet and can't show it, and the AVD rotation look names only a tapped cell. Step a value in both as well: rotation is what `timed-entry-mmss`'s I1 found on these steppers.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "55d524248f91b3af4cebccec12181153a8d6ede26759e5447c997bed2048af6d",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T11:36:08Z"
+            }
+          ]
+        },
+        "F-c30930af0419": {
+          "digest": "c30930af04193e8eb05534d56aaf06704f0bd744463ed300444d2a6779baf028",
+          "text": "CP1’s existing-test adjustments omit `pressKeys` (`ActiveWorkoutScreenTest.kt:758`). Its text-only matcher becomes ambiguous when the correction sheet adds selectable numeric cells beneath the keypad. Restrict the matcher to keypad buttons, preserving the timed test’s existing expected result.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "MANUAL_EXTERNAL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "55d524248f91b3af4cebccec12181153a8d6ede26759e5447c997bed2048af6d",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T11:38:58Z"
+            }
+          ]
+        },
+        "F-da60b866fc64": {
+          "digest": "da60b866fc64e5179760dfa61caa1718c8a62c7365b2a33025e0c9cd252cda70",
+          "text": "The plan specifies two 48 dp buttons, but the shared components default to 56 dp for `Save` and 44 dp for `Cancel`. Specify `minHeight = 48.dp` for the primary button and a 48 dp minimum modifier for Cancel; optionally assert their default-font heights.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "MANUAL_EXTERNAL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "55d524248f91b3af4cebccec12181153a8d6ede26759e5447c997bed2048af6d",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T11:38:58Z"
+            }
+          ]
+        },
+        "F-13ce2ddef9ec": {
+          "digest": "13ce2ddef9eccc96fdc4f72a42b5b1d113caca933dbd0138eb595f64511fc367",
+          "text": "**A correction that can't be saved loses the taps and doesn't say why.** On the AVD: reps stepped down to 0, RPE changed to 7, `Save`. The sheet closes and the snackbar says `Couldn't complete that. Try again.` The stored set is unchanged, and on reopening the sheet shows the stored values, so the tapped RPE is gone. Trying again can't work, because 0 reps was the cause. The closing comes first at `WorkoutFocus.kt:217`, as it did before this item, but there is now more to lose. Logging avoids this with `SetEntryState.canLog` (`WorkoutFocusEntry.kt:163`). The same rule could disable `Save`, or the sheet could stay open until the save succeeds. Worth a follow-up, not a reason to hold this item: nothing stored is wrong and the failure is shown.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T13:18:47Z"
+            }
+          ]
+        },
+        "F-2844de99f58b": {
+          "digest": "2844de99f58b59fbcaf9bbd683317496d20b406c0cfe604ceb9153690024f7d2",
+          "text": "**A scrolled sheet can be flicked shut, dropping unsaved taps with no warning.** Confirmed on the AVD at font 2.0, from the foot: one 600 px flick in 200 ms left the sheet open, and a second closed it. This is what someone does to go back up and change a value. It needs a sheet taller than the screen, so it doesn't arise at font 1.0 in portrait on the 384 dp AVD. It is `ModalBottomSheet`'s own behaviour, nothing stored changes and the closing is visible, so it fits the plan's \"dismissing saves nothing\". Keep it on the functional checklist for the owner. If they want it to resist, `rememberModalBottomSheetState`'s `confirmValueChange` in `RepFlowSheet` is the likely place, as its own item.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T13:18:47Z"
+            }
+          ]
+        },
+        "F-658a601ee173": {
+          "digest": "658a601ee173f7b0f5d24acf3a9384ca2ccb083eb92b7766b0640f9738193af0",
+          "text": "**The stacking rule is only tested at font 2.0.** R4 says the buttons stack above 1.1, but `atLargeFontSaveCanBeScrolledToAndPressedWithCancelAboveIt` would still pass with the threshold moved to 1.5, and only CP1's look saw 1.3. `LARGE_FONT_SCALE_MEDIUM` is already in the test file, so one more case at 1.3 closes this.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T13:18:47Z"
+            }
+          ]
+        },
+        "F-17765b5bd2e8": {
+          "digest": "17765b5bd2e8dcb6a1c1cb96e276bbfbd54481c3d744f8dbacbd0aa5ee8ad00b",
+          "text": "**No automated test reads a corrected value back through Room.** The declared limit is accurate. By reading, `LocalWorkoutRepository.update` deletes and reinserts the session's rows through `WorkoutEntityMapper`, which carries all three fields both ways, and the AVD run above stored them correctly. A small instrumented test on `update` would keep this from depending on a manual look.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T13:18:47Z"
+            }
+          ]
+        },
+        "F-7235bd3d8699": {
+          "digest": "7235bd3d86990589d42e155e0f94f41098759163c40f27cc1a6406eedf78a49a",
+          "text": "**Two file headers still cite the old artboard for the sheet.** `WorkoutFocusSets.kt:55-59` and `WorkoutFocusEntry.kt:72-76` point to `4a`'s `:1549-1581`, while the sheet's KDoc now correctly says `20i`. `WorkoutFocusEntry.kt` also describes the sheet as one of its own controls, though it lives in `WorkoutFocusSets.kt`.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T13:18:47Z"
+            }
+          ]
+        }
+      },
+      "implementation_review_stages": {
+        "review_content_id": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+        "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "df6b00b2117349488f99896d930d7251a1e33aa86ff47526ecf58ea3ee00a4da",
+          "verdict": "APPROVE",
+          "round": 1,
+          "completed_at": "2026-11-06T13:18:47Z",
+          "verdict_sha256": "7c3b34dffa2c60643773042b597dc095d93c99eff18b4013e6529635055f8f77",
+          "run_ref": "session:local .ai-review/set-edit-fields/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "df6b00b2117349488f99896d930d7251a1e33aa86ff47526ecf58ea3ee00a4da",
+          "verdict": "APPROVE",
+          "round": 1,
+          "completed_at": "2026-11-06T13:21:27Z",
+          "verdict_sha256": "4e47a3d3e66a19bcbe3df1dc73acbbd32d340b41f699821a8f46f69b5284c71f",
+          "run_ref": "codex:20261106T131931Z-99c6c143",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
+      },
+      "gate_evidence": {
+        "functional": {
+          "flow-1": {
+            "flow_id": "flow-1",
+            "status": "passed",
+            "head": "382a35d2428b2ad8c94918fb8a88f7bb32696b54",
+            "ran_at": "2026-11-06T13:45:39Z",
+            "summary": {
+              "text": "Title, subtitle, three open rows, hint, Cancel/Save; warm-up subtitle and flag kept after Save",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/set-edit-fields"
+            },
+            "log_digest": "40397c56336b9ddfb5148b3597c7e33377005789479c0319c1ddb9f81824e7c7",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+            "recorded_at": "2026-11-06T13:45:40Z"
+          },
+          "flow-2": {
+            "flow_id": "flow-2",
+            "status": "passed",
+            "head": "382a35d2428b2ad8c94918fb8a88f7bb32696b54",
+            "ran_at": "2026-11-06T13:45:39Z",
+            "summary": {
+              "text": "7/1/3 chosen when set has them; none chosen when empty; 9/2/4 after save",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/set-edit-fields"
+            },
+            "log_digest": "2d210d61bccfbcd3d6878ec21f703545561bee59d824317af5bfe5a83a260511",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+            "recorded_at": "2026-11-06T13:45:40Z"
+          },
+          "flow-3": {
+            "flow_id": "flow-3",
+            "status": "passed",
+            "head": "382a35d2428b2ad8c94918fb8a88f7bb32696b54",
+            "ran_at": "2026-11-06T13:45:39Z",
+            "summary": {
+              "text": "RPE 9, pain 2, tech 4 saved; DB 9.0/2/4, created_at same, updated_at later, weight/reps/warm-up unchanged",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/set-edit-fields"
+            },
+            "log_digest": "6bdd883b2f5cf96e43a4252c9ae105f89b97137b3e66da3b89314443d6266fd0",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+            "recorded_at": "2026-11-06T13:45:40Z"
+          },
+          "flow-4": {
+            "flow_id": "flow-4",
+            "status": "passed",
+            "head": "382a35d2428b2ad8c94918fb8a88f7bb32696b54",
+            "ran_at": "2026-11-06T13:45:39Z",
+            "summary": {
+              "text": "Clearing pain stores NULL for pain only; clearing all stores three NULLs; Cancel changes nothing in row or DB",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/set-edit-fields"
+            },
+            "log_digest": "97a0be314c9bd74dd59d24913b5621abf98eff298abc3bfca5b1e7366790da73",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+            "recorded_at": "2026-11-06T13:45:40Z"
+          },
+          "flow-5": {
+            "flow_id": "flow-5",
+            "status": "passed",
+            "head": "382a35d2428b2ad8c94918fb8a88f7bb32696b54",
+            "ran_at": "2026-11-06T13:45:39Z",
+            "summary": {
+              "text": "Taps survive landscape and back; Save stores 9.0/2/4",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/set-edit-fields"
+            },
+            "log_digest": "3547d637a1cc933cfc170c0a4bb3fb0b138708bae98c24c56d096a1c944d1ede",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+            "recorded_at": "2026-11-06T13:45:40Z"
+          },
+          "flow-6": {
+            "flow_id": "flow-6",
+            "status": "passed",
+            "head": "382a35d2428b2ad8c94918fb8a88f7bb32696b54",
+            "ran_at": "2026-11-06T13:45:39Z",
+            "summary": {
+              "text": "7.5 shows no cell, kept on untouched Save, tapping 8 stores 8.0",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/set-edit-fields"
+            },
+            "log_digest": "f67cfb63001d03120b327029c922d5b5f10453e080eb10fd42a5b673a691594b",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+            "recorded_at": "2026-11-06T13:45:40Z"
+          },
+          "flow-7": {
+            "flow_id": "flow-7",
+            "status": "passed",
+            "head": "382a35d2428b2ad8c94918fb8a88f7bb32696b54",
+            "ran_at": "2026-11-06T13:45:39Z",
+            "summary": {
+              "text": "Off hides rows when logging, sheet still shows them, 0 and 0 stored",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/set-edit-fields"
+            },
+            "log_digest": "1975e63de30034dc6ef5aea581c8ae6c062b8a9e85f309806a3bc67e1efd6e00",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+            "recorded_at": "2026-11-06T13:45:40Z"
+          },
+          "flow-9": {
+            "flow_id": "flow-9",
+            "status": "passed",
+            "head": "382a35d2428b2ad8c94918fb8a88f7bb32696b54",
+            "ran_at": "2026-11-06T13:45:39Z",
+            "summary": {
+              "text": "Real app: uncorrected gives increase_load, RPE corrected to 10 gives maintain_load in progression_recommendations",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/set-edit-fields"
+            },
+            "log_digest": "2fe52956a40d72046b5ca7fe50595ee5da8abdc69d2b86701dffea977413af64",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+            "recorded_at": "2026-11-06T13:45:40Z"
+          }
+        },
+        "pr": {
+          "pr": {
+            "number": 46,
+            "url": "https://github.com/RodrigoFAbreu/repflow-android/pull/46"
+          },
+          "state": "open",
+          "head": "382a35d2428b2ad8c94918fb8a88f7bb32696b54",
+          "review_decision": null,
+          "reviewed_head": null,
+          "checks": {
+            "state": "success",
+            "failing": []
+          },
+          "review_id": null,
+          "findings": null,
+          "identity_at_head": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+          "observed_at": "2026-11-06T13:46:14Z",
+          "ingest_seq": 1,
+          "repository": "RodrigoFAbreu/repflow-android",
+          "queried_commit": "4a3e4c1178f23b5601c46d421993c10224bb5973",
+          "provenance": {
+            "source": "workflow_gh",
+            "fetched_by": {
+              "name": "workflow-gh",
+              "version": "pr-list-v1"
+            },
+            "fetched_at": "2026-11-06T13:46:14Z",
+            "raw_sha256": "66bd7630fef8db2dd39138315028445abc7f6ba1bf3ced758e42474b80f50793",
+            "run_ref": null,
+            "gh_path": "/usr/bin/gh",
+            "gh_sha256": "9e824061111fe5f5b6a5d5690909ba37abafca4a4ca830bdf83246d3c94afd21"
+          },
+          "fact_id": "423a638fe41421fa34492519c729c60fa8331f38b38ad26c011f89915730deb6"
+        },
+        "pr_reported": null,
+        "pr_keys": {
+          "reopened_for": [],
+          "applied": [],
+          "ingest_seq": 1
+        }
+      },
+      "acceptance_satisfaction": {
+        "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "policy_source": "adopted",
+        "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+        "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+        "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "requirements": [
+          {
+            "id": "checkpoints_complete",
+            "met": true,
+            "detail": "every checkpoint of the item's own registry is COMPLETE"
+          },
+          {
+            "id": "technical_approval_current",
+            "met": true,
+            "detail": "the technical approval is CURRENT for the content now"
+          },
+          {
+            "id": "functional_flows_passed",
+            "met": true,
+            "detail": "flows ['flow-1', 'flow-2', 'flow-3', 'flow-4', 'flow-5', 'flow-6', 'flow-7', 'flow-9'] passed at the approved content"
+          },
+          {
+            "id": "pr_fact_current",
+            "met": true,
+            "detail": "workflow_gh fact for PR #46 at 382a35d2428b2ad8c94918fb8a88f7bb32696b54 is current"
+          },
+          {
+            "id": "no_standing_pr_objection",
+            "met": true,
+            "detail": "no CHANGES_REQUESTED decision and no failed check"
+          },
+          {
+            "id": "ci_green",
+            "met": true,
+            "detail": "checks are 'success'"
+          }
+        ],
+        "inputs": {
+          "anchor_commit": "4a3e4c1178f23b5601c46d421993c10224bb5973",
+          "anchor_identity": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+          "technical_approval": {
+            "basis": "POLICY_SATISFIED",
+            "approved_review_content_id": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+            "recorded_at": "2026-11-06T13:23:17Z"
+          },
+          "functional": {
+            "flow-1": {
+              "evidence_id": "147644263cb153d930aff9b244dcedf389590971f5d880e7e859274ff3f71fd5",
+              "log_digest": "40397c56336b9ddfb5148b3597c7e33377005789479c0319c1ddb9f81824e7c7",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-2": {
+              "evidence_id": "4acbb79f7c4fb147df109ea75bbe24b09bbd4b00e1dfdfa08940ebfb62d400b2",
+              "log_digest": "2d210d61bccfbcd3d6878ec21f703545561bee59d824317af5bfe5a83a260511",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-3": {
+              "evidence_id": "5ca2044bbc7940fd41c2421240a7f19f6b3d947ee642a11acd4689cd771cc812",
+              "log_digest": "6bdd883b2f5cf96e43a4252c9ae105f89b97137b3e66da3b89314443d6266fd0",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-4": {
+              "evidence_id": "5139c6a13f3ec42fe9e13041e445a0622a4816e301aa64e4cf6eb56c48f96a31",
+              "log_digest": "97a0be314c9bd74dd59d24913b5621abf98eff298abc3bfca5b1e7366790da73",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-5": {
+              "evidence_id": "ac67bbea47dc471be433ac89056e4ad2b7ac1745c719d2aa83cf318ca65546c3",
+              "log_digest": "3547d637a1cc933cfc170c0a4bb3fb0b138708bae98c24c56d096a1c944d1ede",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-6": {
+              "evidence_id": "a721f5441ca2a509195ae606704f381e601e548fc41af41dc28f0447e01dcbc0",
+              "log_digest": "f67cfb63001d03120b327029c922d5b5f10453e080eb10fd42a5b673a691594b",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-7": {
+              "evidence_id": "ced10d1ac6cc5fa8211b81968083a10b9473dd0aedee5cd8aea8919e373417e4",
+              "log_digest": "1975e63de30034dc6ef5aea581c8ae6c062b8a9e85f309806a3bc67e1efd6e00",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-9": {
+              "evidence_id": "07dd97fad3ee1d53f670b3789f82afd114128b3b8dc14cd18501a1b06e266a83",
+              "log_digest": "2fe52956a40d72046b5ca7fe50595ee5da8abdc69d2b86701dffea977413af64",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            }
+          },
+          "pr": {
+            "fact_id": "423a638fe41421fa34492519c729c60fa8331f38b38ad26c011f89915730deb6",
+            "head": "382a35d2428b2ad8c94918fb8a88f7bb32696b54",
+            "provenance": "workflow_gh",
+            "raw_sha256": "66bd7630fef8db2dd39138315028445abc7f6ba1bf3ced758e42474b80f50793"
+          }
+        },
+        "trust": {
+          "review_verdicts": "orchestrator",
+          "functional_evidence": "orchestrator",
+          "pr_fact": "workflow_gh"
+        },
+        "evaluated_at": "2026-11-06T13:46:14Z",
+        "workflow_release": "2.27.0"
+      }
     }
   },
   "gate_policy_adoption": {

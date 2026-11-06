@@ -8,11 +8,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -38,6 +43,7 @@ import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.presentation.designsystem.RepFlowColor
 import com.repflow.app.presentation.designsystem.RepFlowNumericTextStyle
 import com.repflow.app.presentation.designsystem.RepFlowSpacing
+import com.repflow.app.presentation.designsystem.components.RepFlowNeutralOutlineButton
 import com.repflow.app.presentation.designsystem.components.RepFlowPrimaryButton
 import com.repflow.app.presentation.designsystem.components.RepFlowSheet
 import com.repflow.app.presentation.designsystem.components.formatDuration
@@ -256,68 +262,157 @@ private fun loggedSetSummary(
 }
 
 /**
- * The correction sheet (`4a` `nSetEditOpen`, `:1549-1581`), opened by the
- * pencil on the most recently logged set - the only set a correction can reach
- * (`D31`). It corrects what was lifted (weight, reps or seconds) through the
- * existing `EditLastWorkoutSet`; the set's RPE, pain, technique and warm-up
- * flag are passed back unchanged. There is no `Delete`: removing the last set
- * is `Undo last` (`D66`).
+ * The correction sheet (`20i`), opened by the pencil on the most recently
+ * logged set - the only set a correction can reach (`D31`). It corrects what
+ * was lifted (weight, reps or seconds) and the set's RPE, pain and technique
+ * through the existing `EditLastWorkoutSet`; the warm-up flag is passed back
+ * unchanged. There is no `Delete`: removing the last set is `Undo last` (`D66`).
+ *
+ * The rows show whatever `Extra set fields` says, as `20i` draws them: that
+ * setting is about logging, and this sheet is the only way to fix a value it
+ * has hidden there.
  */
 @Composable
 internal fun SetCorrectionSheet(
     exercise: ActiveExerciseUi,
     set: ActiveSetUi,
     onDismissRequest: () -> Unit,
-    onSave: (load: BigDecimal?, reps: BigDecimal?, seconds: BigDecimal?) -> Unit,
+    onSave: (load: BigDecimal?, reps: BigDecimal?, seconds: BigDecimal?, rpe: Double?, pain: Int?, technique: Int?) -> Unit,
+) {
+    RepFlowSheet(onDismissRequest = onDismissRequest) {
+        SetCorrectionContent(exercise = exercise, set = set, onCancel = onDismissRequest, onSave = onSave)
+    }
+}
+
+/**
+ * The sheet's content: all of it scrolls, with `Save` at the foot, because at
+ * font scales 1.3 and 2.0 it is taller than the screen. It sits outside
+ * [SetCorrectionSheet] so tests can mount it under a font scale and a restore,
+ * which `ModalBottomSheet`'s own window doesn't allow.
+ *
+ * The set's own RPE is held as a [Double], not as a cell: a set can hold 7.5,
+ * which selects no cell and goes back exactly as it was unless a cell is tapped.
+ */
+@Composable
+internal fun SetCorrectionContent(
+    exercise: ActiveExerciseUi,
+    set: ActiveSetUi,
+    onCancel: () -> Unit,
+    onSave: (load: BigDecimal?, reps: BigDecimal?, seconds: BigDecimal?, rpe: Double?, pain: Int?, technique: Int?) -> Unit,
 ) {
     var load by rememberSaveable(set.id.value) { mutableStateOf(set.load?.let(BigDecimal::valueOf)?.toPlainString()) }
     var reps by rememberSaveable(set.id.value) { mutableStateOf(set.reps?.toString()) }
     var seconds by rememberSaveable(set.id.value) { mutableStateOf(set.durationSeconds?.toString()) }
-    RepFlowSheet(onDismissRequest = onDismissRequest) {
+    var rpe by rememberSaveable(set.id.value) { mutableStateOf(set.rpe) }
+    var pain by rememberSaveable(set.id.value) { mutableStateOf(set.pain) }
+    var technique by rememberSaveable(set.id.value) { mutableStateOf(set.techniqueQuality) }
+    val secondary = repFlowSecondaryTextColor(MaterialTheme.colorScheme)
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = RepFlowSpacing.screenPadding),
+    ) {
+        Text(
+            text = stringResource(R.string.workout_focus_correct_title),
+            style = MaterialTheme.typography.titleMedium.copy(fontSize = SheetTitleFontSize, fontWeight = FontWeight.Medium),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text =
+                if (set.isWarmup) {
+                    stringResource(R.string.workout_focus_correct_subtitle_warmup, exercise.name)
+                } else {
+                    stringResource(R.string.workout_focus_correct_subtitle, set.setNumber, exercise.name)
+                },
+            style = MaterialTheme.typography.bodySmall,
+            color = secondary,
+            modifier = Modifier.padding(top = SheetSubtitleTopPadding),
+        )
+        Spacer(modifier = Modifier.height(RepFlowSpacing.gapMd))
+        EntrySteppers(
+            trackingType = exercise.trackingType,
+            load = load?.toBigDecimal(),
+            onLoadChange = { load = it.toPlainString() },
+            reps = reps?.toBigDecimal(),
+            onRepsChange = { reps = it.toPlainString() },
+            seconds = seconds?.toBigDecimal(),
+            onSecondsChange = { seconds = it.toPlainString() },
+            loadStep = exercise.loadStep(),
+            repRange = null,
+            durationRange = null,
+        )
+        Spacer(modifier = Modifier.height(RepFlowSpacing.gapMd))
+        SetDetailRows(
+            rpe = rpe?.takeIf { it % 1.0 == 0.0 }?.toInt(),
+            pain = pain,
+            technique = technique,
+            onRpeChange = { rpe = it?.toDouble() },
+            onPainChange = { pain = it },
+            onTechniqueChange = { technique = it },
+        )
+        Text(
+            text = stringResource(R.string.workout_focus_correct_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = secondary,
+            modifier = Modifier.padding(top = RepFlowSpacing.gapSm),
+        )
+        Spacer(modifier = Modifier.height(RepFlowSpacing.gapLg))
+        SetCorrectionActions(
+            onCancel = onCancel,
+            onSave = { onSave(load?.toBigDecimal(), reps?.toBigDecimal(), seconds?.toBigDecimal(), rpe, pain, technique) },
+        )
+    }
+}
+
+/** `Cancel` and `Save`, side by side, or stacked with `Cancel` on top above font scale 1.1 so neither label breaks. */
+@Composable
+private fun SetCorrectionActions(
+    onCancel: () -> Unit,
+    onSave: () -> Unit,
+) {
+    val cancelLabel = stringResource(R.string.workout_focus_correct_cancel)
+    val saveLabel = stringResource(R.string.workout_focus_correct_save)
+    if (LocalDensity.current.fontScale > STACK_ACTIONS_FONT_SCALE) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = RepFlowSpacing.screenPadding),
-            verticalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapLg),
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapSm),
         ) {
-            Column {
-                Text(
-                    text =
-                        if (set.isWarmup) {
-                            stringResource(R.string.workout_active_warmup_label)
-                        } else {
-                            stringResource(R.string.workout_focus_correct_title, set.setNumber)
-                        },
-                    style = MaterialTheme.typography.titleMedium.copy(fontSize = SheetTitleFontSize, fontWeight = FontWeight.Medium),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = stringResource(R.string.workout_focus_correct_subtitle, exercise.name),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
-                    modifier = Modifier.padding(top = SheetSubtitleTopPadding),
-                )
-            }
-            EntrySteppers(
-                trackingType = exercise.trackingType,
-                load = load?.toBigDecimal(),
-                onLoadChange = { load = it.toPlainString() },
-                reps = reps?.toBigDecimal(),
-                onRepsChange = { reps = it.toPlainString() },
-                seconds = seconds?.toBigDecimal(),
-                onSecondsChange = { seconds = it.toPlainString() },
-                loadStep = exercise.loadStep(),
-                repRange = null,
-                durationRange = null,
+            RepFlowNeutralOutlineButton(
+                text = cancelLabel,
+                onClick = onCancel,
+                modifier = Modifier.fillMaxWidth().heightIn(min = SheetActionMinHeight),
             )
             RepFlowPrimaryButton(
-                text = stringResource(R.string.workout_focus_correct_save),
-                onClick = { onSave(load?.toBigDecimal(), reps?.toBigDecimal(), seconds?.toBigDecimal()) },
-                modifier = Modifier.fillMaxWidth().heightIn(min = SheetActionMinHeight),
+                text = saveLabel,
+                onClick = onSave,
+                modifier = Modifier.fillMaxWidth(),
+                minHeight = SheetActionMinHeight,
+            )
+        }
+    } else {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapSm),
+        ) {
+            RepFlowNeutralOutlineButton(
+                text = cancelLabel,
+                onClick = onCancel,
+                modifier = Modifier.weight(1f).heightIn(min = SheetActionMinHeight),
+            )
+            RepFlowPrimaryButton(
+                text = saveLabel,
+                onClick = onSave,
+                modifier = Modifier.weight(1f),
+                minHeight = SheetActionMinHeight,
             )
         }
     }
 }
 
 private const val SET_ROW_DIVIDER_ALPHA = 0.08f
+private const val STACK_ACTIONS_FONT_SCALE = 1.1f
 
 private val SetRowMinHeight = 48.dp
 private val SetDiscSize = 26.dp
@@ -326,6 +421,6 @@ private val SetDiscSize = 26.dp
 private val SetRowFontSize = 14.5.sp
 private val SetRowLineHeight = 20.sp
 
-private val SheetTitleFontSize = 19.sp
-private val SheetSubtitleTopPadding = 3.dp
-private val SheetActionMinHeight = 52.dp
+private val SheetTitleFontSize = 18.sp
+private val SheetSubtitleTopPadding = 2.dp
+private val SheetActionMinHeight = 48.dp

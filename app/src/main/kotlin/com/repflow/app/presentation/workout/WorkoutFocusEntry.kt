@@ -526,22 +526,13 @@ internal fun SetDetailSection(
             }
         }
         if (expanded) {
-            RpeScaleRow(selected = entry.rpe, onSelect = { entry.rpe = toggled(entry.rpe, it) })
-            RepFlowScaleRow(
-                options = ZERO_TO_FIVE,
-                selectedIndex = entry.pain,
-                onSelect = { entry.pain = toggled(entry.pain, it) },
-                lowLabel = stringResource(R.string.workout_focus_pain_low),
-                highLabel = stringResource(R.string.workout_focus_pain_high),
-                label = stringResource(R.string.workout_active_pain_label),
-            )
-            RepFlowScaleRow(
-                options = ZERO_TO_FIVE,
-                selectedIndex = entry.technique,
-                onSelect = { entry.technique = toggled(entry.technique, it) },
-                lowLabel = stringResource(R.string.workout_focus_technique_low),
-                highLabel = stringResource(R.string.workout_focus_technique_high),
-                label = stringResource(R.string.workout_active_technique_quality_label),
+            SetDetailRows(
+                rpe = entry.rpe,
+                pain = entry.pain,
+                technique = entry.technique,
+                onRpeChange = { entry.rpe = it },
+                onPainChange = { entry.pain = it },
+                onTechniqueChange = { entry.technique = it },
             )
             Text(
                 text = stringResource(R.string.workout_focus_detail_hint),
@@ -552,11 +543,46 @@ internal fun SetDetailSection(
     }
 }
 
-/** Tapping the chosen cell again clears it, as the prototype's pickers do - every one of these is optional. */
-private fun toggled(
-    current: Int?,
-    picked: Int,
-): Int? = if (current == picked) null else picked
+/**
+ * RPE, pain and technique as scale rows, shared by logging ([SetDetailSection])
+ * and the correction sheet (`20h` and `20i` draw the same rows). Each callback
+ * gets the row's new value, or `null` when the chosen cell was tapped again.
+ */
+@Composable
+internal fun SetDetailRows(
+    rpe: Int?,
+    pain: Int?,
+    technique: Int?,
+    onRpeChange: (Int?) -> Unit,
+    onPainChange: (Int?) -> Unit,
+    onTechniqueChange: (Int?) -> Unit,
+) {
+    // Tapping the chosen cell again clears it, as the prototype's pickers do - every one of these is optional.
+    fun toggled(
+        current: Int?,
+        picked: Int,
+    ): Int? = if (current == picked) null else picked
+
+    Column(verticalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapLg)) {
+        RpeScaleRow(selected = rpe, onSelect = { onRpeChange(toggled(rpe, it)) })
+        RepFlowScaleRow(
+            options = ZERO_TO_FIVE,
+            selectedIndex = pain,
+            onSelect = { onPainChange(toggled(pain, it)) },
+            lowLabel = stringResource(R.string.workout_focus_pain_low),
+            highLabel = stringResource(R.string.workout_focus_pain_high),
+            label = stringResource(R.string.workout_active_pain_label),
+        )
+        RepFlowScaleRow(
+            options = ZERO_TO_FIVE,
+            selectedIndex = technique,
+            onSelect = { onTechniqueChange(toggled(technique, it)) },
+            lowLabel = stringResource(R.string.workout_focus_technique_low),
+            highLabel = stringResource(R.string.workout_focus_technique_high),
+            label = stringResource(R.string.workout_active_technique_quality_label),
+        )
+    }
+}
 
 /**
  * RPE on the domain's whole `0..10` (`D11`), as `6b`'s scale row in two lines

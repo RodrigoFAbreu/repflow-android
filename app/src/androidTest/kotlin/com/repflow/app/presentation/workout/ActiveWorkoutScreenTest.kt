@@ -3,6 +3,7 @@ package com.repflow.app.presentation.workout
 import androidx.activity.ComponentActivity
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.State
@@ -16,12 +17,14 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.isSelected
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -38,6 +41,7 @@ import androidx.compose.ui.unit.height
 import androidx.compose.ui.unit.width
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
+import com.repflow.app.application.settings.ExtraSetFields
 import com.repflow.app.application.workout.LastPerformance
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseTrackingType
@@ -94,6 +98,7 @@ class ActiveWorkoutScreenTest {
         errorMessage: State<ActiveWorkoutErrorReason?> = mutableStateOf(null),
         onErrorShown: () -> Unit = {},
         restTimer: RestTimerUi? = null,
+        extraSetFields: ExtraSetFields = ExtraSetFields.DEFAULT,
     ) {
         composeRule.setContent {
             RepFlowTheme {
@@ -106,6 +111,7 @@ class ActiveWorkoutScreenTest {
                                     startedAt = Instant.parse("2026-01-01T00:00:00Z"),
                                     exercises = exercises,
                                     restTimer = restTimer,
+                                    extraSetFields = extraSetFields,
                                 ),
                             availableExercises = availableExercises,
                             errorMessage = errorMessage.value,
@@ -158,6 +164,7 @@ class ActiveWorkoutScreenTest {
         isWarmup: Boolean = false,
         rpe: Double? = null,
         pain: Int? = null,
+        technique: Int? = null,
     ) = ActiveSetUi(
         id = WorkoutSetId("set-$setNumber"),
         setNumber = setNumber,
@@ -167,6 +174,7 @@ class ActiveWorkoutScreenTest {
         isWarmup = isWarmup,
         rpe = rpe,
         pain = pain,
+        techniqueQuality = technique,
     )
 
     private fun plural(
@@ -723,8 +731,8 @@ class ActiveWorkoutScreenTest {
 
     /**
      * The pencil on the most recently logged set opens the correction sheet
-     * (`D31`, `D66`): it corrects what was lifted through `onEditLastSet` and
-     * hands the set's RPE, pain and warm-up flag back unchanged.
+     * (`D31`, `D66`): it corrects what was lifted through `onEditLastSet`, and
+     * what isn't touched goes back unchanged, a half RPE included.
      */
     @Test
     fun correctingTheLastSetKeepsItsOtherFieldsAndReachesOnEditLastSet() {
@@ -743,19 +751,20 @@ class ActiveWorkoutScreenTest {
             .onNode(hasClickAction() and hasText(composeRule.activity.getString(R.string.workout_active_set_row_weight_reps, 1, 60.0, 8)))
             .performScrollTo()
             .performClick()
-        composeRule.onNodeWithText(composeRule.activity.getString(R.string.workout_focus_correct_title, 1)).assertIsDisplayed()
+        node(R.string.workout_focus_correct_title).assertIsDisplayed()
         composeRule
             .onAllNodesWithContentDescription(composeRule.activity.getString(R.string.workout_focus_more_reps))
             .onLast()
             .performClick()
-        node(R.string.workout_focus_correct_save).performClick()
+        node(R.string.workout_focus_correct_save).performScrollTo().performClick()
 
         assertEquals(listOf(60.0, 9, null, 7.5, false, 1, null), edited)
     }
 
     // ---- Timed sets are typed as m:ss (timed-entry-mmss CP2) ----
 
-    private fun pressKeys(vararg keys: String) = keys.forEach { key -> composeRule.onNodeWithText(key).performClick() }
+    /** Not selectable: the correction sheet's scale cells carry the same digits behind the pad. */
+    private fun pressKeys(vararg keys: String) = keys.forEach { key -> composeRule.onNode(hasText(key) and !isSelectable()).performClick() }
 
     private fun pressSet() = node(R.string.repflow_keypad_confirm).performClick()
 
@@ -968,7 +977,7 @@ class ActiveWorkoutScreenTest {
             .onNode(hasClickAction() and hasText(composeRule.activity.getString(R.string.workout_active_set_row_duration, 1, "0:45")))
             .performScrollTo()
             .performClick()
-        composeRule.onNodeWithText(composeRule.activity.getString(R.string.workout_focus_correct_title, 1)).assertIsDisplayed()
+        node(R.string.workout_focus_correct_title).assertIsDisplayed()
         composeRule.onNodeWithText("0:45").performClick()
         selectedPadValue("0:45").assertIsDisplayed()
     }
@@ -981,7 +990,7 @@ class ActiveWorkoutScreenTest {
         pressKeys("1", "3", "0")
         pressSet()
         composeRule.onNodeWithText("1:30").assertIsDisplayed()
-        node(R.string.workout_focus_correct_save).performClick()
+        node(R.string.workout_focus_correct_save).performScrollTo().performClick()
 
         assertEquals(90, edited)
     }
@@ -992,9 +1001,310 @@ class ActiveWorkoutScreenTest {
         correctATimedSetOf45Seconds { edited = it }
 
         pressSet()
-        node(R.string.workout_focus_correct_save).performClick()
+        node(R.string.workout_focus_correct_save).performScrollTo().performClick()
 
         assertEquals(45, edited)
+    }
+
+    // ---- The sheet also edits RPE, pain and technique (set-edit-fields CP1) ----
+
+    /** The row with `Set 1:` is the only logged set in these tests, so it is the last one and opens the sheet. */
+    private fun openCorrectionSheet() {
+        composeRule.onNode(hasClickAction() and hasText("Set 1:", substring = true)).performScrollTo().performClick()
+        node(R.string.workout_focus_correct_title).assertIsDisplayed()
+    }
+
+    /** Opens the sheet on [lastSet]; [onEdited] gets `load, reps, seconds, rpe, isWarmup, pain, technique`. */
+    private fun correct(
+        lastSet: ActiveSetUi,
+        trackingType: ExerciseTrackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
+        extraSetFields: ExtraSetFields = ExtraSetFields.COLLAPSED,
+        onEdited: (List<Any?>) -> Unit = {},
+    ) {
+        setContent(
+            exercise(trackingType, sets = listOf(lastSet)),
+            extraSetFields = extraSetFields,
+            onEditLastSet = { _, load, reps, duration, rpe, isWarmup, pain, technique ->
+                onEdited(listOf(load, reps, duration, rpe, isWarmup, pain, technique))
+            },
+        )
+        openCorrectionSheet()
+    }
+
+    /** Only RPE goes past 5, and 0 to 5 show in RPE, pain and technique, in that order. */
+    private fun rpeCell(value: Int) = composeRule.onAllNodes(hasText("$value") and isSelectable())[0]
+
+    private fun painCell(value: Int) = composeRule.onAllNodes(hasText("$value") and isSelectable())[1]
+
+    private fun techniqueCell(value: Int) = composeRule.onAllNodes(hasText("$value") and isSelectable())[2]
+
+    private fun selectedCells() = composeRule.onAllNodes(isSelectable() and isSelected())
+
+    private fun pressSave() = node(R.string.workout_focus_correct_save).performScrollTo().performClick()
+
+    private fun assertTheRowsAreOpenAndFilled(
+        extraSetFields: ExtraSetFields,
+        disclosuresOnTheScreenBehind: Int,
+    ) {
+        var edited: List<Any?>? = null
+        correct(set(1, load = 60.0, reps = 8, rpe = 8.0, pain = 1, technique = 4), extraSetFields = extraSetFields) { edited = it }
+
+        node(R.string.workout_active_rpe_label).performScrollTo().assertIsDisplayed()
+        node(R.string.workout_active_pain_label).performScrollTo().assertIsDisplayed()
+        node(R.string.workout_active_technique_quality_label).performScrollTo().assertIsDisplayed()
+        rpeCell(8).assertIsSelected()
+        painCell(1).assertIsSelected()
+        techniqueCell(4).assertIsSelected()
+        selectedCells().assertCountEquals(3)
+        composeRule.onAllNodes(hasStateDescription(R.string.workout_active_set_detail_expanded)).assertCountEquals(0)
+        composeRule
+            .onAllNodes(hasStateDescription(R.string.workout_active_set_detail_collapsed))
+            .assertCountEquals(disclosuresOnTheScreenBehind)
+        pressSave()
+
+        assertEquals(listOf(60.0, 8, null, 8.0, false, 1, 4), edited)
+    }
+
+    /** One disclosure stays on the logging screen behind the sheet, and the sheet adds none. */
+    @Test
+    fun theSheetsRowsAreOpenAndFilledWithExtraSetFieldsCollapsed() = assertTheRowsAreOpenAndFilled(ExtraSetFields.COLLAPSED, 1)
+
+    @Test
+    fun theSheetsRowsAreOpenAndFilledWithExtraSetFieldsOff() = assertTheRowsAreOpenAndFilled(ExtraSetFields.OFF, 0)
+
+    @Test
+    fun aSetWithNoneOfTheThreeSelectsNoCellAndSavesThemEmpty() {
+        var edited: List<Any?>? = null
+        correct(set(1, load = 60.0, reps = 8)) { edited = it }
+
+        node(R.string.workout_active_rpe_label).performScrollTo().assertIsDisplayed()
+        node(R.string.workout_active_pain_label).performScrollTo().assertIsDisplayed()
+        node(R.string.workout_active_technique_quality_label).performScrollTo().assertIsDisplayed()
+        selectedCells().assertCountEquals(0)
+        pressSave()
+
+        assertEquals(listOf(60.0, 8, null, null, false, null, null), edited)
+    }
+
+    @Test
+    fun aTimedSetShowsTheSameRowsBelowItsTimeCard() {
+        var edited: List<Any?>? = null
+        correct(set(1, durationSeconds = 45), trackingType = ExerciseTrackingType.DURATION) { edited = it }
+
+        val timeCard = composeRule.onAllNodesWithText(string(R.string.workout_active_duration_label)).onLast().getUnclippedBoundsInRoot()
+        val rpeRow = node(R.string.workout_active_rpe_label).getUnclippedBoundsInRoot()
+        assertTrue("the rows are under the time card", rpeRow.top >= timeCard.bottom)
+        node(R.string.workout_active_pain_label).performScrollTo().assertIsDisplayed()
+        node(R.string.workout_active_technique_quality_label).performScrollTo().assertIsDisplayed()
+        selectedCells().assertCountEquals(0)
+        pressSave()
+
+        assertEquals(listOf(null, null, 45, null, false, null, null), edited)
+    }
+
+    /** The literals, because the wording is the requirement (R1). */
+    @Test
+    fun theSheetSaysWhichSetItCorrects() {
+        correct(set(1, load = 60.0, reps = 8))
+
+        composeRule.onNodeWithText("Correct this set").assertIsDisplayed()
+        composeRule.onNodeWithText("Set 1 · Bench Press").assertIsDisplayed()
+    }
+
+    @Test
+    fun onAWarmUpTheSheetSaysSoAndKeepsTheFlag() {
+        var edited: List<Any?>? = null
+        correct(set(1, load = 40.0, reps = 10, isWarmup = true)) { edited = it }
+
+        composeRule.onNodeWithText("Correct this set").assertIsDisplayed()
+        composeRule.onNodeWithText("Warm-up set · Bench Press").assertIsDisplayed()
+        composeRule.onNodeWithText("Set 1 · Bench Press").assertDoesNotExist()
+        pressSave()
+
+        assertEquals(listOf(40.0, 10, null, null, true, null, null), edited)
+    }
+
+    @Test
+    fun tappedCellsReachOnEditLastSet() {
+        var edited: List<Any?>? = null
+        correct(set(1, load = 60.0, reps = 8, rpe = 7.0, pain = 1, technique = 3)) { edited = it }
+
+        rpeCell(9).performScrollTo().performClick()
+        painCell(2).performScrollTo().performClick()
+        techniqueCell(4).performScrollTo().performClick()
+        pressSave()
+
+        assertEquals(listOf(60.0, 8, null, 9.0, false, 2, 4), edited)
+    }
+
+    @Test
+    fun tappingTheChosenPainCellClearsItAndLeavesTheOtherTwo() {
+        var edited: List<Any?>? = null
+        correct(set(1, load = 60.0, reps = 8, rpe = 8.0, pain = 1, technique = 4)) { edited = it }
+
+        painCell(1).performScrollTo().performClick()
+        selectedCells().assertCountEquals(2)
+        pressSave()
+
+        assertEquals(listOf(60.0, 8, null, 8.0, false, null, 4), edited)
+    }
+
+    @Test
+    fun tappingTheChosenRpeAndTechniqueCellsClearsThemToo() {
+        var edited: List<Any?>? = null
+        correct(set(1, load = 60.0, reps = 8, rpe = 8.0, pain = 1, technique = 4)) { edited = it }
+
+        rpeCell(8).performScrollTo().performClick()
+        techniqueCell(4).performScrollTo().performClick()
+        selectedCells().assertCountEquals(1)
+        pressSave()
+
+        assertEquals(listOf(60.0, 8, null, null, false, 1, null), edited)
+    }
+
+    @Test
+    fun aHalfRpeSelectsNoCellAndIsSavedAsItWasWhenOnlyTheWeightChanges() {
+        var edited: List<Any?>? = null
+        correct(set(1, load = 60.0, reps = 8, rpe = 7.5)) { edited = it }
+
+        selectedCells().assertCountEquals(0)
+        composeRule
+            .onAllNodesWithContentDescription(composeRule.activity.getString(R.string.workout_focus_more_weight))
+            .onLast()
+            .performClick()
+        pressSave()
+
+        assertEquals(listOf(62.5, 8, null, 7.5, false, null, null), edited)
+    }
+
+    @Test
+    fun tappingACellOnAHalfRpeReplacesItWithThatNumber() {
+        var edited: List<Any?>? = null
+        correct(set(1, load = 60.0, reps = 8, rpe = 7.5)) { edited = it }
+
+        rpeCell(8).performScrollTo().performClick()
+        rpeCell(8).assertIsSelected()
+        pressSave()
+
+        assertEquals(listOf(60.0, 8, null, 8.0, false, null, null), edited)
+    }
+
+    @Test
+    fun cancelSavesNothingAndReopeningShowsTheSetsOwnValues() {
+        var edited: List<Any?>? = null
+        correct(set(1, load = 60.0, reps = 8, rpe = 8.0, pain = 1, technique = 4)) { edited = it }
+
+        rpeCell(9).performScrollTo().performClick()
+        painCell(2).performScrollTo().performClick()
+        techniqueCell(3).performScrollTo().performClick()
+        node(R.string.workout_focus_correct_cancel).performScrollTo().performClick()
+
+        node(R.string.workout_focus_correct_title).assertDoesNotExist()
+        assertEquals(null, edited)
+
+        openCorrectionSheet()
+        rpeCell(8).assertIsSelected()
+        painCell(1).assertIsSelected()
+        techniqueCell(4).assertIsSelected()
+        selectedCells().assertCountEquals(3)
+    }
+
+    @Test
+    fun theSheetShowsItsOwnHintAndNotTheLoggingOne() {
+        correct(set(1, load = 60.0, reps = 8))
+
+        composeRule.onNodeWithText("Optional. Tap a chosen number again to clear it.").performScrollTo().assertIsDisplayed()
+        node(R.string.workout_focus_detail_hint).assertDoesNotExist()
+    }
+
+    @Test
+    fun theLoggingRowsKeepTheirOwnHintAndNotTheSheets() {
+        setContent(exercise(ExerciseTrackingType.WEIGHT_AND_REPS))
+
+        node(R.string.workout_active_set_detail_toggle).performScrollTo().performClick()
+
+        node(R.string.workout_focus_detail_hint).performScrollTo().assertIsDisplayed()
+        node(R.string.workout_focus_correct_hint).assertDoesNotExist()
+    }
+
+    /** A box shorter than the content, so `Save` is out of reach unless the content scrolls. */
+    private fun setCorrectionContentAtFontScale(
+        fontScale: Float,
+        onSaved: () -> Unit = {},
+    ) {
+        composeRule.setContent {
+            RepFlowTheme {
+                val base = LocalDensity.current
+                CompositionLocalProvider(LocalDensity provides Density(base.density, fontScale)) {
+                    Box(modifier = Modifier.height(SHORT_SHEET_HEIGHT.dp)) {
+                        SetCorrectionContent(
+                            exercise = exercise(ExerciseTrackingType.WEIGHT_AND_REPS),
+                            set = set(1, load = 60.0, reps = 8),
+                            onCancel = {},
+                            onSave = { _, _, _, _, _, _ -> onSaved() },
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun atLargeFontSaveCanBeScrolledToAndPressedWithCancelAboveIt() {
+        var saved = 0
+        setCorrectionContentAtFontScale(LARGE_FONT_SCALE_MAX) { saved++ }
+
+        val save = node(R.string.workout_focus_correct_save).performScrollTo().assertIsDisplayed()
+        val cancel = node(R.string.workout_focus_correct_cancel).assertIsDisplayed()
+        val saveBounds = save.getUnclippedBoundsInRoot()
+        val cancelBounds = cancel.getUnclippedBoundsInRoot()
+        assertTrue("$cancelBounds is above $saveBounds", cancelBounds.bottom <= saveBounds.top)
+        assertEquals(cancelBounds.left, saveBounds.left)
+        save.performClick()
+
+        composeRule.runOnIdle { assertEquals(1, saved) }
+    }
+
+    @Test
+    fun atNormalFontCancelAndSaveSitSideBySideEach48DpTall() {
+        setCorrectionContentAtFontScale(1f)
+
+        val save = node(R.string.workout_focus_correct_save).performScrollTo().assertIsDisplayed()
+        val cancel = node(R.string.workout_focus_correct_cancel).assertIsDisplayed()
+        val saveBounds = save.getUnclippedBoundsInRoot()
+        val cancelBounds = cancel.getUnclippedBoundsInRoot()
+        assertTrue("$cancelBounds is left of $saveBounds", cancelBounds.right <= saveBounds.left)
+        assertEquals(cancelBounds.top, saveBounds.top)
+        save.assertHeightIsEqualTo(48.dp)
+        cancel.assertHeightIsEqualTo(48.dp)
+    }
+
+    @Test
+    fun tappedValuesSurviveARestoreAndAreSaved() {
+        var saved: List<Any?>? = null
+        val restoration = StateRestorationTester(composeRule)
+        restoration.setContent {
+            RepFlowTheme {
+                SetCorrectionContent(
+                    exercise = exercise(ExerciseTrackingType.WEIGHT_AND_REPS),
+                    set = set(1, load = 60.0, reps = 8, rpe = 6.0, pain = 1, technique = 2),
+                    onCancel = {},
+                    onSave = { _, _, _, rpe, pain, technique -> saved = listOf(rpe, pain, technique) },
+                )
+            }
+        }
+
+        rpeCell(9).performScrollTo().performClick()
+        painCell(3).performScrollTo().performClick()
+        techniqueCell(4).performScrollTo().performClick()
+        restoration.emulateSavedInstanceStateRestore()
+
+        rpeCell(9).assertIsSelected()
+        painCell(3).assertIsSelected()
+        techniqueCell(4).assertIsSelected()
+        pressSave()
+
+        assertEquals(listOf(9.0, 3, 4), saved)
     }
 
     // ---- The finish sheet (remediation-1 CP9) ----
@@ -1374,3 +1684,4 @@ private val REST_STRIP_LABELS =
 private const val SNACKBAR_WAIT_MILLIS = 10_000L
 private const val LARGE_FONT_SCALE_MEDIUM = 1.3f
 private const val LARGE_FONT_SCALE_MAX = 2.0f
+private const val SHORT_SHEET_HEIGHT = 300

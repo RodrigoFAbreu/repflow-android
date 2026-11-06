@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "work_item_id": "set-edit-fields",
+  "requirements": {
+    "R1": {
+      "description": "The correction sheet reads as board 20i draws it: its title and subtitle, then the steppers and the RPE, pain and technique rows, open whatever Extra set fields says and filled with the set's values",
+      "checkpoint_ids": [
+        "CP1"
+      ]
+    },
+    "R2": {
+      "description": "Save stores changed values, clears a re-tapped cell and returns untouched values exactly as they were; Cancel saves nothing; a tapped value survives a restore",
+      "checkpoint_ids": [
+        "CP1"
+      ]
+    },
+    "R3": {
+      "description": "A corrected RPE, pain or technique value is stored like a logged one and a corrected RPE changes the recommendation workout completion stores",
+      "checkpoint_ids": [
+        "CP2"
+      ]
+    },
+    "R4": {
+      "description": "The sheet's hint and its Cancel and Save follow board 20i and the sheet scrolls at font scale 2.0 and in landscape; the logging screen is unchanged",
+      "checkpoint_ids": [
+        "CP1"
+      ]
+    }
+  }
+}

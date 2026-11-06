@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "work_item_id": "set-edit-fields",
+  "plan_revision": 2,
+  "checkpoints": [
+    {
+      "id": "CP1",
+      "name": "The correction sheet edits RPE, pain and technique (R1, R2, R4)",
+      "depends_on": [],
+      "complexity": 2,
+      "session_target": "1"
+    },
+    {
+      "id": "CP2",
+      "name": "A corrected value is stored and fed to the next suggestion like a logged one (R3)",
+      "depends_on": [
+        "CP1"
+      ],
+      "complexity": 1,
+      "session_target": "1"
+    }
+  ]
+}

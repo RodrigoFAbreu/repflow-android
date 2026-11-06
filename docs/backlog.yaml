@@ -156,7 +156,7 @@ items:
     detail: docs/items/design-5-workout-entry.md
   - id: set-edit-fields
     title: "The set correction sheet also edits RPE, technique and pain"
-    status: next
+    status: done
     order: 28
     size: 1
     depends_on: [design-5-workout-entry]
