@@ -18,7 +18,15 @@ The set correction sheet also edits RPE, technique and pain. Plan: `docs/milesto
 
   Changes from the plan, none to the rules: (1) `seedExerciseWithOneSet` takes optional RPE, pain and technique, so the existing tests keep their seed. (2) The session in `CorrectedSetRecommendationTest` starts from the plan's version, where the plan only asks for `plannedExerciseId`, because that is how a planned workout starts.
 
-**Next action:** the wrap-up and self-review, `/milestone-implement set-edit-fields`.
+- **Wrap-up and self-review: one test extended, no production code changed.** The full diff review found no defect in the checkpoints' code, and `SetDetailSection` draws the same rows at the same spacing it did. It found one gap in the tests. The sheet's tests stop at the `onEditLastSet` lambda and `CorrectedSetRecommendationTest` starts at the use case, so nothing caught `ActiveWorkoutViewModel.onEditLastSet` dropping `pain` or `techniqueQuality`. Only CP1's look in the real app saw them go through.
+
+  The fix, commit `bba7128`: the view model's existing edit test now logs and corrects both values and reads them back, and is renamed to say so. It extends that test because a new test with a helper took `ActiveWorkoutViewModelTest` over detekt's `LargeClass` limit. Mutations: dropping `pain`, then dropping `techniqueQuality`, in that call each failed that one test and no other in the class, one per run, after a control run of the class passed.
+
+  Verified on `bba7128`: `spotlessCheck`, `detekt`, `lintDebug` (0 errors, 22 warnings, 1 hint), and 908 JVM tests, 0 failures. 617 instrumented tests on `emulator-5554`, from a clean install and on the first run, 0 failures. That run came just before the commit, on a working tree with the same content. The real app wasn't looked at again, because production code hasn't changed since CP1's look.
+
+  Known limits. No automated test takes a corrected value through Room: the JVM tests use the in-memory repositories, and `WorkoutEntityMapper` is the path logging also uses. CP1's look stored `9.0`, `2` and `4` in the real database. The four things seen and left under CP1 stand, and only `Techniqu/e` at font scale 2.0 needs the follow-up issue, at acceptance. The functional review's checklist has to carry the plan's known limitations, the flick that closes a scrolled sheet, and that no suggestion reads a set's pain.
+
+**Next action:** the local implementation review, `/review-implementation set-edit-fields`.
 
 ## `timed-entry-mmss` — complete (accepted by policy 2026-11-06)
 
