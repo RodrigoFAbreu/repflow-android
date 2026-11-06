@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_work_item_id": "backup-reminder",
+  "active_work_item_id": null,
   "work_items": {
     "workflow-v2-1-core": {
       "work_item_type": "process",
@@ -11673,7 +11673,7 @@
       "registry_path": "docs/ai-workflow/registry/backup-reminder-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/backup-reminder-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_FUNCTIONAL_REVIEW",
+      "phase": "MILESTONE_COMPLETE",
       "plan_revision": 2,
       "implementation_revision": 2,
       "functional_review_round": null,
@@ -12122,8 +12122,8 @@
           "external": 2
         }
       },
-      "state_revision": 20,
-      "last_transition": "2026-11-06T03:31:00Z",
+      "state_revision": 21,
+      "last_transition": "2026-11-06T03:48:21Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -12364,6 +12364,260 @@
           "run_ref": "codex:20261106T032753Z-34ce3007",
           "reviewer_model": "openai/gpt-6.1-sol"
         }
+      },
+      "gate_evidence": {
+        "functional": {
+          "flow-1": {
+            "flow_id": "flow-1",
+            "status": "passed",
+            "head": "f794f34e629e19bbc98d90c149069093a0e6959d",
+            "ran_at": "2026-11-06T03:45:36Z",
+            "summary": {
+              "text": "switch after Backup and restore, on by default, meta correct; off survives force-stop and relaunch, DB backup_reminder=0",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/backup-reminder"
+            },
+            "log_digest": "82c73e94c9b1d3f32f7c43ff21448b4d03c12ae8dafcba9d2462466dfe79878a",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+            "recorded_at": "2026-11-06T03:45:36Z"
+          },
+          "flow-2": {
+            "flow_id": "flow-2",
+            "status": "passed",
+            "head": "f794f34e629e19bbc98d90c149069093a0e6959d",
+            "ran_at": "2026-11-06T03:45:36Z",
+            "summary": {
+              "text": "no line for just-finished, (a) and (c); correct text for (b) No backup yet, (d) 21 days, (e) 40 days; Backup hero matches",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/backup-reminder"
+            },
+            "log_digest": "f2280d225445440cecd51e95a017eb9fbfb5fc6b7e6b83a0fb47d6569c70d9b5",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+            "recorded_at": "2026-11-06T03:45:36Z"
+          },
+          "flow-3": {
+            "flow_id": "flow-3",
+            "status": "passed",
+            "head": "f794f34e629e19bbc98d90c149069093a0e6959d",
+            "ran_at": "2026-11-06T03:45:36Z",
+            "summary": {
+              "text": "Back up opens Backup without bottom nav; Back returns Home with line",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/backup-reminder"
+            },
+            "log_digest": "31b16c5e3b50a65ec1f2c9a767b2c1be109a23a650fdaff80deed85e95d1cb66",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+            "recorded_at": "2026-11-06T03:45:37Z"
+          },
+          "flow-4": {
+            "flow_id": "flow-4",
+            "status": "passed",
+            "head": "f794f34e629e19bbc98d90c149069093a0e6959d",
+            "ran_at": "2026-11-06T03:45:36Z",
+            "summary": {
+              "text": "real export: Saved, Last backup today, line gone",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/backup-reminder"
+            },
+            "log_digest": "6f44ecba159929eff07bd869d466ecb3b4b358ac342ddba6201b3c2311d8d5ed",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+            "recorded_at": "2026-11-06T03:45:37Z"
+          },
+          "flow-5": {
+            "flow_id": "flow-5",
+            "status": "passed",
+            "head": "f794f34e629e19bbc98d90c149069093a0e6959d",
+            "ran_at": "2026-11-06T03:45:36Z",
+            "summary": {
+              "text": "off hides, on restores, running workout hides, abandon restores",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/backup-reminder"
+            },
+            "log_digest": "6a8b27750269768e2ae770b1e3e24a739c5ac6136a697c2844637cee1fb153b9",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+            "recorded_at": "2026-11-06T03:45:37Z"
+          },
+          "flow-6": {
+            "flow_id": "flow-6",
+            "status": "passed",
+            "head": "f794f34e629e19bbc98d90c149069093a0e6959d",
+            "ran_at": "2026-11-06T03:45:36Z",
+            "summary": {
+              "text": "erase with old backup: first-run card, no line even when returning in ~2s; last_backup_at kept; line returns after a new finished workout",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/backup-reminder"
+            },
+            "log_digest": "a2ea77cc95df6d913b64fc0b91ef89c52c6fdd1fd92a5ff7b75ec66ad76cbad8",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+            "recorded_at": "2026-11-06T03:45:37Z"
+          },
+          "flow-7": {
+            "flow_id": "flow-7",
+            "status": "passed",
+            "head": "f794f34e629e19bbc98d90c149069093a0e6959d",
+            "ran_at": "2026-11-06T03:45:36Z",
+            "summary": {
+              "text": "light and dark at 1.0, 1.3, 2.0 as expected; link on own line above 1.1; clear of nav at 2.0",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/backup-reminder"
+            },
+            "log_digest": "9376694fe716d3ba61aaa220683d8a6813b8c6a6dd4f9d6f8c577a90a4c993bd",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+            "recorded_at": "2026-11-06T03:45:37Z"
+          }
+        },
+        "pr": {
+          "pr": {
+            "number": 40,
+            "url": "https://github.com/RodrigoFAbreu/repflow-android/pull/40"
+          },
+          "state": "open",
+          "head": "f794f34e629e19bbc98d90c149069093a0e6959d",
+          "review_decision": null,
+          "reviewed_head": null,
+          "checks": {
+            "state": "success",
+            "failing": []
+          },
+          "review_id": null,
+          "findings": null,
+          "identity_at_head": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+          "observed_at": "2026-11-06T03:48:21Z",
+          "ingest_seq": 1,
+          "repository": "RodrigoFAbreu/repflow-android",
+          "queried_commit": "593457162f18136e17a3a1795d8bdf48625219a7",
+          "provenance": {
+            "source": "workflow_gh",
+            "fetched_by": {
+              "name": "workflow-gh",
+              "version": "pr-list-v1"
+            },
+            "fetched_at": "2026-11-06T03:48:21Z",
+            "raw_sha256": "fb304306f8c2f7c2364dcbda7fdfc33745f2a9ae40f26ea80a6eb452e251564c",
+            "run_ref": "repflow-orchestrator, by hand after no_progress_repeated",
+            "gh_path": "/usr/bin/gh",
+            "gh_sha256": "9e824061111fe5f5b6a5d5690909ba37abafca4a4ca830bdf83246d3c94afd21"
+          },
+          "fact_id": "cc9778ee38b11966e8b5a098029fcf406c624f72eb5506b5a3b75709e56df366"
+        },
+        "pr_reported": null,
+        "pr_keys": {
+          "reopened_for": [],
+          "applied": [],
+          "ingest_seq": 1
+        }
+      },
+      "acceptance_satisfaction": {
+        "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "policy_source": "adopted",
+        "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+        "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+        "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "requirements": [
+          {
+            "id": "checkpoints_complete",
+            "met": true,
+            "detail": "every checkpoint of the item's own registry is COMPLETE"
+          },
+          {
+            "id": "technical_approval_current",
+            "met": true,
+            "detail": "the technical approval is CURRENT for the content now"
+          },
+          {
+            "id": "functional_flows_passed",
+            "met": true,
+            "detail": "flows ['flow-1', 'flow-2', 'flow-3', 'flow-4', 'flow-5', 'flow-6', 'flow-7'] passed at the approved content"
+          },
+          {
+            "id": "pr_fact_current",
+            "met": true,
+            "detail": "workflow_gh fact for PR #40 at f794f34e629e19bbc98d90c149069093a0e6959d is current"
+          },
+          {
+            "id": "no_standing_pr_objection",
+            "met": true,
+            "detail": "no CHANGES_REQUESTED decision and no failed check"
+          },
+          {
+            "id": "ci_green",
+            "met": true,
+            "detail": "checks are 'success'"
+          }
+        ],
+        "inputs": {
+          "anchor_commit": "593457162f18136e17a3a1795d8bdf48625219a7",
+          "anchor_identity": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+          "technical_approval": {
+            "basis": "POLICY_SATISFIED",
+            "approved_review_content_id": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+            "recorded_at": "2026-11-06T03:31:00Z"
+          },
+          "functional": {
+            "flow-1": {
+              "evidence_id": "0e19e7b99824cfcf97063875e89718d1476451bef34bb4074fe21690b31d5528",
+              "log_digest": "82c73e94c9b1d3f32f7c43ff21448b4d03c12ae8dafcba9d2462466dfe79878a",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-2": {
+              "evidence_id": "2a70e6387b63268bce1ec68456c60df55c71f8ecd228c8a70b1920c2e699513d",
+              "log_digest": "f2280d225445440cecd51e95a017eb9fbfb5fc6b7e6b83a0fb47d6569c70d9b5",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-3": {
+              "evidence_id": "5dcc287ca6e6271cd05b5e45b848130dffeb51ee50a0a798ff31afe391e3bc41",
+              "log_digest": "31b16c5e3b50a65ec1f2c9a767b2c1be109a23a650fdaff80deed85e95d1cb66",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-4": {
+              "evidence_id": "cb3292950cde0f768bc1266a584a30c46a36d3da0bc1befa839ba857e746c7c8",
+              "log_digest": "6f44ecba159929eff07bd869d466ecb3b4b358ac342ddba6201b3c2311d8d5ed",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-5": {
+              "evidence_id": "b1a2df4f7d5a84ed6bfb1ddca7a190641a854db3571dd39cd5a5109ac0cb72c6",
+              "log_digest": "6a8b27750269768e2ae770b1e3e24a739c5ac6136a697c2844637cee1fb153b9",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-6": {
+              "evidence_id": "eaa358318aa8fa4d344c1c9923a5f96c0146dccba1a5fc3103e5b11714319ed4",
+              "log_digest": "a2ea77cc95df6d913b64fc0b91ef89c52c6fdd1fd92a5ff7b75ec66ad76cbad8",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-7": {
+              "evidence_id": "cbd21318e27672a93edb1a7d458b1644eaedaf8428cf7d9ccf92b38add6e24d9",
+              "log_digest": "9376694fe716d3ba61aaa220683d8a6813b8c6a6dd4f9d6f8c577a90a4c993bd",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            }
+          },
+          "pr": {
+            "fact_id": "cc9778ee38b11966e8b5a098029fcf406c624f72eb5506b5a3b75709e56df366",
+            "head": "f794f34e629e19bbc98d90c149069093a0e6959d",
+            "provenance": "workflow_gh",
+            "raw_sha256": "fb304306f8c2f7c2364dcbda7fdfc33745f2a9ae40f26ea80a6eb452e251564c"
+          }
+        },
+        "trust": {
+          "review_verdicts": "orchestrator",
+          "functional_evidence": "orchestrator",
+          "pr_fact": "workflow_gh"
+        },
+        "evaluated_at": "2026-11-06T03:48:21Z",
+        "workflow_release": "2.25.5"
       }
     }
   },

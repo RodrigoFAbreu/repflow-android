@@ -28,7 +28,7 @@
 | 22 | [One automatic snapshot before a restore, restorable from Backup](items/restore-safety-snapshot.md) `restore-safety-snapshot` | Done | 2 | fix-backup-all-workouts, design-3-redraws |
 | 23 | [Workout actions run one after another, so a set logged during a restore can't be lost](items/fix-workout-actions-in-order.md) `fix-workout-actions-in-order` | Done | 1 | - |
 | 24 | [Safety copy: a Restoring screen, and the Erase and Backup wording says what really happens](items/safety-copy-polish.md) `safety-copy-polish` | Done | 1 | - |
-| 25 | [A reminder on Home when the last backup is old](items/backup-reminder.md) `backup-reminder` | Next | 1 | restore-safety-snapshot |
+| 25 | [A reminder on Home when the last backup is old](items/backup-reminder.md) `backup-reminder` | Done | 1 | restore-safety-snapshot |
 | 26 | [Timed sets use m:ss everywhere, and the shared number pad opens on the current value](items/timed-entry-mmss.md) `timed-entry-mmss` | Next | 2 | - |
 | 27 | [Design: correction sheet with RPE, technique and pain, correcting any set, and the timed-set clock](items/design-5-workout-entry.md) `design-5-workout-entry` | Idea | 1 | - |
 | 28 | [The set correction sheet also edits RPE, technique and pain](items/set-edit-fields.md) `set-edit-fields` | Next | 1 | design-5-workout-entry |

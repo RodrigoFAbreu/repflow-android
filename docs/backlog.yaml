@@ -136,7 +136,7 @@ items:
     detail: docs/items/safety-copy-polish.md
   - id: backup-reminder
     title: "A reminder on Home when the last backup is old"
-    status: next
+    status: done
     order: 25
     size: 1
     depends_on: [restore-safety-snapshot]

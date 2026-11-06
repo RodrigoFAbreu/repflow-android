@@ -1,0 +1,51 @@
+{
+  "dispositions": {
+    "F-207d80fe0e57": {
+      "disposition": "fixed"
+    },
+    "F-2f126bbf41ad": {
+      "disposition": "fixed"
+    },
+    "F-659ab0015dc8": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/41",
+      "note": "Tapping Back up twice very fast opens Backup twice so Back must be pressed twice; no queued backlog item fits, and launchSingleTop on the Backup navigate calls would fix it."
+    },
+    "F-6a4e78dc760a": {
+      "disposition": "fixed"
+    },
+    "F-8b36bf665719": {
+      "disposition": "fixed"
+    },
+    "F-9a16a61deac7": {
+      "disposition": "fixed"
+    },
+    "F-a2608b977405": {
+      "disposition": "fixed"
+    },
+    "F-a95eea464686": {
+      "disposition": "fixed"
+    },
+    "F-b9869ae8e619": {
+      "disposition": "fixed"
+    },
+    "F-baf5eefca3dc": {
+      "disposition": "fixed"
+    },
+    "F-be6374fa4479": {
+      "disposition": "fixed"
+    },
+    "F-cba299039747": {
+      "disposition": "fixed"
+    },
+    "F-dff3e89ab793": {
+      "disposition": "fixed"
+    },
+    "F-f0cf90daf092": {
+      "disposition": "dropped",
+      "reason": "During a workout whose read fails the line could show, but Home then also shows the start card, and the plan states this as an accepted limit."
+    }
+  },
+  "schema_version": 1,
+  "work_item_id": "backup-reminder"
+}

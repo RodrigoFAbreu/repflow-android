@@ -1,6 +1,12 @@
 # Active Milestone
 
-## `backup-reminder`
+## `backup-reminder` — complete (accepted by policy 2026-11-06)
+
+Home reminds you when your last backup is old, with a Settings switch to turn it off. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/backup-reminder-execution.md` and the Optional findings at `docs/milestones/completed/backup-reminder-findings.md`.
+
+**Next action:** `timed-entry-mmss`, Timed sets use m:ss everywhere, and the shared number pad opens on the current value. Ready for `/milestone-plan`.
+
+The sections below are this milestone's historical record.
 
 A quiet line on Home when the last backup is old, and a `Backup reminder` switch in Settings that turns it off. Plan: `docs/milestones/backup-reminder-execution.md`.
 
