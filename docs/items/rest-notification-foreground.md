@@ -10,7 +10,7 @@ One milestone and one squash-merged pull request, releasable alone: the plan's p
 
 ## App findings
 
-- **Rest notification appears with the app open, and an old one doesn't clear** [A-9, D-24; decision 6] · S. Evidence: no foreground check in `RestTimerExpiryHandler.kt`; the cancel call runs only on finish, abandon, erase and restore. Needs device check.
+- **Rest notification appears with the app open, and an old one doesn't clear** [A-9, D-24; decision 6] · S. Evidence: no foreground check in `RestTimerExpiryHandler.kt`; the cancel call runs only on finish, abandon, erase and restore. Device check: `timed-set-clock` CP3's walk on the AVD (2026-11-06) saw a rest ending on screen add a notification record, and a `Start` that clears `Rest done` leave a posted notification, as `Skip rest` does.
 
 ## Owner decisions
 
