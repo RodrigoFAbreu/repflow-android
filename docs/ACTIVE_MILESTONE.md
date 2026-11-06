@@ -83,6 +83,38 @@ A timed set has a clock: Start counts up, and Stop fills in the time. Plan: `doc
 
   Known limits this round leaves. (1) A `Start again` during a `Log set` that then fails: the message shows and the new clock runs, and the next `Stop` replaces the time still in the box, so that hold's time is lost. `Log set` is disabled while the clock runs, so it can't be logged first. That was already so, and the fix makes sure the message shows. (2) With a store that can't be read, `Start` now shows the one message even with no rest to end, because it reads the session to find out. The clock still runs. (3) The real-app trial reaches a 10 ms gap with `adb`, so it shows the race is real, not how often a person would hit it. On a slower write the window is wider, and that is what the held tests stand in for.
 
+### Functional review checklist
+
+Automated verification is current: production code last changed in `fe81613` (review round 1, I1) and `30c48ba` (a test); everything after is a workflow or docs record, and the tree hasn't changed since the last full run on `30c48ba`, on a clean tree: `spotlessCheck`, `detekt`, `lintDebug` (0 errors, 22 warnings, 1 hint), `assembleDebug`, `assembleDebugAndroidTest`, 947 JVM tests, 668 instrumented tests on `emulator-5554`, 0 failures.
+
+**Setup.** Use the AVD (`start-avd.sh`, 3 GB cap), not the phone. Fresh install with `./gradlew installDebug`. No feature flags, no network. Font scale is in the AVD's Settings > Display; restore it to 1.0 afterwards and leave the theme light and auto-rotate on. Stop the AVD when done.
+
+**Test data.** Through the app, a plan with a timed exercise `Plank` at a fixed `0:10` and `Side Plank` at a range `0:05–0:15` (short, so nothing waits long), and a weight-and-reps exercise `Bench`. Start a workout from that plan.
+
+**F1 - The card (R1).** Open `Plank`. Expected: a `Clock` card above the Time card reading `0:00`, `Target 0:10` and `Start`. `Side Plank` reads `Target 0:05–0:15`. `Bench` has no clock card. A logged timed set's correction sheet shows no clock.
+
+**F2 - Running (R2).** Tap `Start`. Expected: the time counts up in m:ss, the line reads `Target 0:10 · counting up`, `Stop` is in `Start`'s place and `Log set` is disabled. At 10 s the time turns accent, an accent edge and a check mark appear and the line reads `Target 0:10 reached · still counting`; it keeps counting. On `Side Plank` the change comes at 0:05 with `Passed 0:05 · still counting`.
+
+**F3 - Stop (R3).** Tap `Stop` at about 14 s. Expected: the card keeps `0:14` and `Stopped at 0:14`, `Start again` is offered, the Time card shows 14 with a hint that it was filled in (gone once you change the value), and no set was logged. Step or type another time: it works as before. `Log set` stores the entry's seconds, the clock is back at `0:00` with `Start`, and the Time card keeps its value. A `Stop` under one second leaves the entry as it was and goes back to `Start`.
+
+**F4 - Surviving (R4).** Start, then: lock and unlock; rotate and back; open the Board and return; `Next` to `Side Plank` (its own `Start`) and back; back twice, `Leave it running and go Home`, then `Resume`. Expected: each time the readout matches the time since the tap and never restarts. Optional: `adb shell am kill` after Home, then reopen (still counting). A force stop or swipe from recents loses the clock: `Resume` offers `Start` again, `0:00`, no message.
+
+**F5 - Start ends a rest (R5).** Log a set so a rest is running, then `Start`. Expected: the rest strip goes at once and no `Rest done` or notification arrives at the rest's old end. `Stop` starts no rest; `Log set` does. Also: tap `Log set` and `Start again` in quick succession (the set still saving): the rest that save started must end too.
+
+**F6 - Typing by hand (R6).** On a timed exercise never started, type or step a time and `Log set`: works as before, and no clock state appears.
+
+**F7 - Look and TalkBack (R6).** Before Start, running, past the target and stopped, in light and dark at font 1.0, 1.3 and 2.0: labels whole, nothing clipped, accent only past the target. Compare with Claude Design `20o` and `20p`. Optional TalkBack: `Start`/`Stop` is one button, focus stays on it, the ticking time is not spoken, `Stopped at …` is.
+
+**Known limitations / out of scope.**
+- The clock lives in the activity's saved state, not Room: a force stop, swipe from recents, restart (maybe a crash or app update) loses it, with no message. `Finish`, or `Next ›` on the last exercise once confirmed, drops a running clock without a word. On Android 9 to 11, `Back` from Home also does (from the code, not run).
+- A second tap on `Stop` lands on `Start again`, and a double tap on `Start` lands on `Stop` under a second (card back to `Start`, a running rest ended). A mis-tapped `Start` can't be cancelled, and a later `Stop` replaces the time in the entry.
+- A `Start again` during a `Log set` that then fails shows the message, and the next `Stop` replaces the time still in the box.
+- No buzz, sound or notification at the target (`timed-set-alert`). Pending rows still read `Target: 0:10-0:10` (`fixed-target-text`). A rest ending on screen still posts its notification (`rest-notification-foreground`).
+- One clock per exercise, none on the Board. Setting the device clock back shortens the readout, down to `0:00`.
+- Under TalkBack, `Stop` and `Start again` still move focus (different button), and nothing is announced as the label changes.
+- The owner's one decision to confirm: whether the clock should be stored in the database. None is recorded, so the plan's default stands (no column).
+
+
 ## `set-edit-any-set` — complete (accepted by policy 2026-11-06)
 
 Any set in the running workout can be corrected, not just the last one. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/set-edit-any-set-execution.md` and the Optional findings at `docs/milestones/completed/set-edit-any-set-findings.md`.
