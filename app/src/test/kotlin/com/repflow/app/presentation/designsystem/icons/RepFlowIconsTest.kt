@@ -178,6 +178,8 @@ class RepFlowIconsTest {
                 "ic_ph_shield_warning",
                 "ic_ph_download_simple",
                 "ic_ph_upload_simple",
+                // Home's quiet backup line (backup-reminder CP2, `10n`).
+                "ic_ph_floppy_disk",
             )
     }
 }

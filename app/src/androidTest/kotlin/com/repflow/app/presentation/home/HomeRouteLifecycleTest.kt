@@ -25,8 +25,10 @@ import com.repflow.app.application.workout.AbandonWorkoutSession
 import com.repflow.app.application.workout.ObserveActiveWorkoutSession
 import com.repflow.app.application.workout.StartWorkoutSession
 import com.repflow.app.application.workout.StartWorkoutSessionFromPlan
+import com.repflow.app.data.backup.LocalTrainingDataRepository
 import com.repflow.app.data.exercise.LocalExerciseRepository
 import com.repflow.app.data.recovery.LocalRecoveryRepository
+import com.repflow.app.data.settings.LocalSettingsRepository
 import com.repflow.app.data.trainingplan.LocalTrainingPlanRepository
 import com.repflow.app.data.workout.LocalWorkoutRepository
 import com.repflow.app.domain.common.DomainResult
@@ -112,6 +114,7 @@ class HomeRouteLifecycleTest {
                     onSettingsClick = {},
                     onLogRecoveryClick = {},
                     onCreatePlanClick = {},
+                    onBackupClick = {},
                     viewModel = viewModel,
                 )
             }
@@ -173,6 +176,8 @@ class HomeRouteLifecycleTest {
                 ),
             abandonWorkoutSession = AbandonWorkoutSession(workoutRepository, clock),
             restNotificationCanceller = RestNotificationCanceller { },
+            settingsRepository = LocalSettingsRepository(database),
+            trainingDataRepository = LocalTrainingDataRepository(database),
         )
     }
 

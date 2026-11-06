@@ -43,7 +43,8 @@ private val TOP_LEVEL_ROUTES: Set<String> = RepFlowDestinations.TOP_LEVEL_DESTIN
  * the design reaches them: the workout and recovery entry from Home, Settings
  * from Home, and the exercise library, Archived and Backup from Settings
  * (the exercise editor also from the workout's and the plan editor's picker
- * sheets, and the workout also from a plan card's `Start workout`). Workout mode is left only
+ * sheets, the workout also from a plan card's `Start workout`, and Backup also
+ * from Home's `Back up` link when the last backup is old). Workout mode is left only
  * through its own `X` / `Finish` - system back there opens the leave sheet -
  * and leaving goes Home by [leaveWorkoutForHome]. Finishing ends on the done
  * screen ([openWorkoutDone], remediation-1 CP9), which has no bar either.
@@ -91,6 +92,7 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
                     onSettingsClick = { navController.navigate(RepFlowDestinations.SETTINGS) },
                     onLogRecoveryClick = { navController.navigate(RepFlowDestinations.RECOVERY) },
                     onCreatePlanClick = { navController.navigate(RepFlowDestinations.PLAN_NEW) },
+                    onBackupClick = { navController.navigate(RepFlowDestinations.BACKUP) },
                 )
             }
             composable(RepFlowDestinations.SETTINGS) {

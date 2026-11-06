@@ -40,8 +40,9 @@ The bottom navigation carries four top-level destinations, in this order:
   `Data` holds `Archived exercises and plans`, a screen listing archived
   exercises and plans with `Restore`, and `Backup and restore`, a dedicated
   screen with `Export backup now` (the hero shows `Last backup <when>`),
-  `Workout history as CSV` and `Restore from a backup`; both open from
-  Settings only and show no bottom navigation. Below `Restore from a backup`,
+  `Workout history as CSV` and `Restore from a backup`. Both open from
+  Settings, `Backup and restore` also from Home's backup line, and neither
+  shows the bottom navigation. Below `Restore from a backup`,
   a card offers `Restore the safety copy`, the data the last restore replaced,
   once such a copy exists. A confirmed restore covers the whole app with a
   Restoring screen until it ends, with nothing to press and no way back, and its
@@ -69,6 +70,15 @@ The home screen shows:
    recovery check-in, with `Details` (how the score was set) and `Log`.
 5. Quick access to plans, history and progress (the bottom navigation) and
    settings (the gear).
+6. A quiet backup line at the bottom, when the last backup is 21 or more
+   calendar days old: `Last backup N days ago` and a `Back up` link to `Backup
+   and restore`. With no backup at all it says `No backup yet`, from 21 days
+   after the first finished workout, so a new user isn't nagged. It goes once a
+   backup is exported, and never shows while a workout is running, on a phone
+   with no training data, or with the `Backup reminder` switch off. It's a line,
+   not a card, and blocks nothing. There is no notification. Restoring onto a
+   new phone can show `No backup yet` at once: its old workouts count, and this
+   phone hasn't made a backup.
 
 The active workout action has the strongest visual priority: while a
 workout is running, `Resume` is the screen's one primary action.

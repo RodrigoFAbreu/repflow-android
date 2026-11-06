@@ -30,6 +30,7 @@ fun HomeRoute(
     onSettingsClick: () -> Unit,
     onLogRecoveryClick: () -> Unit,
     onCreatePlanClick: () -> Unit,
+    onBackupClick: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
@@ -52,6 +53,7 @@ fun HomeRoute(
         onCreatePlanClick = onCreatePlanClick,
         onLogRecoveryClick = onLogRecoveryClick,
         onRetryHistory = viewModel::onRetryHistory,
+        onBackupClick = onBackupClick,
         onErrorShown = viewModel::onErrorShown,
         modifier = modifier,
     )

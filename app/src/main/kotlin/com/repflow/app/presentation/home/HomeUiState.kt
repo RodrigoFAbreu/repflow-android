@@ -9,8 +9,9 @@ import java.time.LocalDate
 /**
  * Everything Home draws (remediation-1 CP5), top to bottom: the header's
  * [date], the resume card ([activeWorkout]), the start card ([start]) and its
- * sheet ([startOptions]), the recovery card ([readiness]) and the
- * `Last workout` card ([lastWorkout]).
+ * sheet ([startOptions]), the recovery card ([readiness]), the `Last workout`
+ * card ([lastWorkout]) and the quiet backup line ([backupReminder]), which is
+ * `null` when no line shows.
  *
  * [openWorkout] is a one-shot request to show the workout surface, raised
  * after a start succeeds and cleared by the route once it has navigated.
@@ -22,6 +23,7 @@ data class HomeUiState(
     val startOptions: List<HomePlanOption> = emptyList(),
     val readiness: HomeReadiness = HomeReadiness.Loading,
     val lastWorkout: HomeLastWorkout = HomeLastWorkout.Loading,
+    val backupReminder: HomeBackupReminder? = null,
     val error: HomeErrorReason? = null,
     val openWorkout: Boolean = false,
 )
