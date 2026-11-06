@@ -178,6 +178,10 @@ After saving a set, while Settings' `Start rest timer automatically` is on:
 Returning to the application reconstructs the timer from the stored end
 timestamp.
 
+A timed set's `Start` and `Start again` end a running rest, or a `Rest done`
+still showing: the next set has begun, so the strip goes and its alert is
+cancelled. `Stop` never starts a rest; the next one starts after `Log set`.
+
 ## Interrupted workout
 
 When the application is reopened and an incomplete workout exists, the home
@@ -189,6 +193,16 @@ screen prominently offers:
   and its logged sets stay stored; nothing is deleted
 
 The workout resumes at the correct exercise, set, values and rest state.
+
+Leaving for Home (`Leave it running and go Home`) keeps a timed set's running
+clock, and what was typed but not logged: `Resume` opens the Board, and opening
+the exercise shows the clock still counting from its start time. The clock is
+kept in the activity's saved state, not in the database, so it also survives a
+rotation, locking the phone, switching apps and the system ending the process.
+It doesn't survive what discards saved state: swiping the app away from recents,
+a force stop or a device restart, and it may not survive a crash or an app update.
+The workout itself comes back from the database, and `Start` is offered again with
+no message.
 
 ## Complete workout
 

@@ -3,6 +3,7 @@ package com.repflow.app.presentation.workout
 import androidx.activity.ComponentActivity
 import androidx.annotation.StringRes
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescriptionExactly
 import androidx.compose.ui.test.hasText
@@ -10,6 +11,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.lifecycle.SavedStateHandle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -75,6 +77,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -114,6 +117,10 @@ import java.time.Instant
  * Home's `Finish it` and the board's `Finish`: with `Confirm before
  * finishing` off each completes the session at once and lands on the done
  * screen with no sheet; turned back on, the sheet is restored.
+ *
+ * And the set clock (`timed-set-clock` CP3): a clock left running through `Leave it
+ * running and go Home` and `Resume` is still counting, and stores what it stopped
+ * at. This host holds `FocusEntries` above its `NavHost`, as `RepFlowNavHost` does.
  */
 @RunWith(AndroidJUnit4::class)
 class ActiveWorkoutLeaveRouteTest {
@@ -344,6 +351,85 @@ class ActiveWorkoutLeaveRouteTest {
         assertEquals(WorkoutSessionStatus.ACTIVE, status(sessionId))
     }
 
+    @Test
+    fun aClockLeftRunningIsStillCountingAfterResumeAndStopStoresThatTime() {
+        // A real rest would raise the notification prompt and leave a real alarm behind this test; it isn't what this walks.
+        runBlocking { success(LocalSettingsRepository(database).update { it.copy(restTimerAutoStart = false) }) }
+        val sessionId = startSessionWithPlank()
+        openWorkoutFromHome()
+        openPlank()
+        composeRule.onNodeWithText(string(R.string.workout_focus_clock_start)).performScrollTo().performClick()
+        val before = composeRule.waitForClockReadout(atLeastSeconds = 2)
+
+        pressBack()
+        waitForDescription(R.string.workout_board_leave_content_description)
+        pressBack()
+        waitForText(string(R.string.workout_leave_go_home))
+        composeRule.onNodeWithText(string(R.string.workout_leave_go_home)).performClick()
+        waitForText(string(R.string.home_resume))
+        composeRule.onNodeWithText(string(R.string.home_resume)).performClick()
+        waitForDescription(R.string.workout_board_leave_content_description)
+        openPlank()
+
+        waitForText(string(R.string.workout_focus_clock_stop))
+        assertTrue("The readout must not drop across leaving", composeRule.clockReadoutSeconds() >= before)
+        composeRule.onNodeWithText(string(R.string.workout_focus_clock_stop)).performScrollTo().performClick()
+        val stopped = composeRule.clockReadoutSeconds()
+        composeRule.onNodeWithText(string(R.string.workout_focus_log_set)).performClick()
+
+        composeRule.waitUntil(TIMEOUT_MILLIS) { storedSeconds(sessionId) != null }
+        assertEquals(stopped.toInt(), storedSeconds(sessionId))
+    }
+
+    private fun startSessionWithPlank(): WorkoutSessionId {
+        val sessionId = startSession()
+        runBlocking {
+            val plankId = ExerciseId("exercise-plank")
+            success(LocalExerciseRepository(database.exerciseDao()).insert(exercise(plankId, PLANK, ExerciseTrackingType.DURATION)))
+            success(
+                AddWorkoutExercise(workouts, ids)(
+                    AddWorkoutExerciseCommand(
+                        sessionId = sessionId,
+                        exerciseId = plankId,
+                        exerciseNameSnapshot = PLANK,
+                        trackingType = ExerciseTrackingType.DURATION,
+                        plannedExerciseId = null,
+                    ),
+                ),
+            )
+        }
+        return sessionId
+    }
+
+    private fun openPlank() {
+        waitForText(PLANK)
+        composeRule.onNodeWithText(PLANK).performClick()
+    }
+
+    private fun pressBack() {
+        composeRule.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+    }
+
+    private fun waitForDescription(
+        @StringRes id: Int,
+    ) {
+        val description = string(id)
+        composeRule.waitUntil(TIMEOUT_MILLIS) {
+            composeRule.onAllNodes(hasContentDescriptionExactly(description)).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    private fun storedSeconds(sessionId: WorkoutSessionId): Int? =
+        runBlocking {
+            workouts
+                .findById(sessionId)
+                ?.exercises
+                ?.single()
+                ?.sets
+                ?.singleOrNull()
+                ?.durationSeconds
+        }
+
     private fun setConfirmBeforeFinishing(on: Boolean) {
         runBlocking { success(LocalSettingsRepository(database).update { it.copy(confirmBeforeFinishing = on) }) }
     }
@@ -373,6 +459,7 @@ class ActiveWorkoutLeaveRouteTest {
             RepFlowTheme {
                 val controller = rememberNavController()
                 navController = controller
+                val focusEntries = rememberSaveable(saver = FocusEntries.Saver) { FocusEntries() }
                 NavHost(navController = controller, startDestination = RepFlowDestinations.HOME) {
                     composable(RepFlowDestinations.HOME) {
                         HomeRoute(
@@ -398,6 +485,7 @@ class ActiveWorkoutLeaveRouteTest {
                             ),
                     ) { entry ->
                         ActiveWorkoutRoute(
+                            focusEntries = focusEntries,
                             onOpenRecommendation = {},
                             onCreateExercise = {},
                             onLeaveWorkout = { controller.leaveWorkoutForHome() },
@@ -523,12 +611,16 @@ class ActiveWorkoutLeaveRouteTest {
         )
     }
 
-    private fun exercise(): Exercise =
+    private fun exercise(
+        id: ExerciseId = exerciseId,
+        name: String = "Back Squat",
+        trackingType: ExerciseTrackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
+    ): Exercise =
         success(
             Exercise.create(
-                id = exerciseId,
-                name = success(ExerciseName.create("Back Squat")),
-                trackingType = ExerciseTrackingType.WEIGHT_AND_REPS,
+                id = id,
+                name = success(ExerciseName.create(name)),
+                trackingType = trackingType,
                 instructions = null,
                 defaultLoadIncrement = null,
                 defaultRestDuration = null,
@@ -545,5 +637,6 @@ class ActiveWorkoutLeaveRouteTest {
 
     private companion object {
         const val TIMEOUT_MILLIS = 5_000L
+        const val PLANK = "Plank"
     }
 }

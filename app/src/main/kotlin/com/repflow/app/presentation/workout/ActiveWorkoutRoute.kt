@@ -57,9 +57,14 @@ import java.time.Instant
  * Remediation-1 CP9: [onWorkoutFinished] opens the done screen for the
  * session the finish sheet just completed, and [raiseFinishFromHome] - Home's
  * `Finish it` - opens the surface with the finish sheet already raised.
+ *
+ * [focusEntries] comes from above the `NavHost` and is required, so no host can
+ * forget it: [onLeaveWorkout] removes this destination, and a running set clock has
+ * to be there on `Resume`.
  */
 @Composable
-fun ActiveWorkoutRoute(
+internal fun ActiveWorkoutRoute(
+    focusEntries: FocusEntries,
     onOpenRecommendation: (ExerciseId) -> Unit,
     onCreateExercise: () -> Unit,
     onLeaveWorkout: () -> Unit,
@@ -145,6 +150,7 @@ fun ActiveWorkoutRoute(
         onWorkoutFinished = onWorkoutFinished,
         keepScreenAwake = settings?.keepScreenAwake == true,
         confirmBeforeFinishing = settings?.confirmBeforeFinishing,
+        focusEntries = focusEntries,
     )
 }
 

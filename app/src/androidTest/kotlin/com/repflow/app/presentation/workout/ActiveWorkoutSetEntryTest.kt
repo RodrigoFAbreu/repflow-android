@@ -4,7 +4,9 @@ import androidx.activity.ComponentActivity
 import androidx.annotation.StringRes
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -14,10 +16,12 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.isSelected
+import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -30,6 +34,9 @@ import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.domain.workout.WorkoutSetId
 import com.repflow.app.presentation.RepFlowTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -42,6 +49,10 @@ import java.time.Instant
  * focus and appends each recorded set, recomputing the seed as
  * `ActiveWorkoutViewModel` does - so reopening an exercise can be exercised
  * (the stateless `ActiveWorkoutScreenTest.setContent` cannot).
+ *
+ * `timed-set-clock` CP3 uses the same harness for a running clock across the Board
+ * and a switch of exercise, and for `Start` ending a rest: it can hold a rest, and it
+ * counts `onSkipRestTimer`, which ends the rest as the real use case does.
  */
 @RunWith(AndroidJUnit4::class)
 class ActiveWorkoutSetEntryTest {
@@ -53,6 +64,9 @@ class ActiveWorkoutSetEntryTest {
     private val recordedLoads = mutableListOf<Double?>()
     private var saveOutcome = SaveOutcome.SUCCEEDS
     private var heldOnSaved: (() -> Unit)? = null
+    private var restTimer by mutableStateOf<RestTimerUi?>(null)
+    private var sessionId by mutableStateOf("session-1")
+    private var skipCalls = 0
 
     private val lastTime = LastPerformance(load = 80.0, reps = 8, durationSeconds = null, date = Instant.parse("2026-05-05T08:00:00Z"))
     private val lastTimeSeed = SetEntrySeed(load = BigDecimal("80"), reps = BigDecimal("8"))
@@ -72,6 +86,19 @@ class ActiveWorkoutSetEntryTest {
         seed = seed,
     )
 
+    private fun timedExercise(
+        id: String = "t1",
+        name: String = PLANK,
+    ) = ActiveExerciseUi(
+        id = WorkoutExerciseId(id),
+        name = name,
+        trackingType = ExerciseTrackingType.DURATION,
+        sets = emptyList(),
+        plannedTarget = PlannedTargetUi(targetWarmupSets = null, targetWorkingSets = 3, durationRangeSeconds = 60L..60L),
+        lastPerformance = null,
+        seed = null,
+    )
+
     private fun start(
         vararg initial: ActiveExerciseUi,
         focused: Boolean = true,
@@ -82,16 +109,18 @@ class ActiveWorkoutSetEntryTest {
     }
 
     @androidx.compose.runtime.Composable
-    private fun Screen() {
+    private fun Screen(focusEntries: FocusEntries = rememberSaveable(saver = FocusEntries.Saver) { FocusEntries() }) {
         RepFlowTheme {
             ActiveWorkoutScreen(
+                focusEntries = focusEntries,
                 uiState =
                     ActiveWorkoutUiState(
                         content =
                             ActiveWorkoutContent.Active(
-                                sessionId = WorkoutSessionId("session-1"),
+                                sessionId = WorkoutSessionId(sessionId),
                                 startedAt = Instant.parse("2026-01-01T00:00:00Z"),
                                 exercises = exercises,
+                                restTimer = restTimer,
                             ),
                     ),
                 dayContext = null,
@@ -141,7 +170,10 @@ class ActiveWorkoutSetEntryTest {
                 onEditSet = { _, _, _, _, _, _, _, _, _ -> },
                 onAddRestTime = {},
                 onRemoveRestTime = {},
-                onSkipRestTimer = {},
+                onSkipRestTimer = {
+                    skipCalls++
+                    restTimer = null
+                },
                 onCompleteWorkout = {},
                 onLeaveWorkout = {},
                 onAbandonWorkout = {},
@@ -466,6 +498,128 @@ class ActiveWorkoutSetEntryTest {
         composeRule.onNodeWithText(text(R.string.workout_focus_log_set)).assertIsDisplayed()
     }
 
+    /** CP3's test 1: the clock stays with its exercise, and the other exercise has its own. */
+    @Test
+    fun aRunningClockSurvivesSwitchingExerciseAndStaysWithItsOwn() {
+        start(timedExercise(), timedExercise(id = "t2", name = "Side Plank"))
+        tap(R.string.workout_focus_clock_start)
+        val before = composeRule.waitForClockReadout(atLeastSeconds = 2)
+
+        composeRule.onNodeWithText(text(R.string.workout_focus_next)).performClick()
+        composeRule.runOnIdle { assertEquals(WorkoutExerciseId("t2"), focusedId) }
+        composeRule.onNodeWithText(text(R.string.workout_focus_clock_stop)).assertDoesNotExist()
+        composeRule.onNodeWithText(text(R.string.workout_focus_clock_start)).performScrollTo().assertIsDisplayed()
+
+        goToBoardAndReopen(PLANK)
+
+        composeRule.onNodeWithText(text(R.string.workout_focus_clock_stop)).performScrollTo().assertIsDisplayed()
+        assertTrue("The readout must not drop across a switch", composeRule.clockReadoutSeconds() >= before)
+    }
+
+    /** CP3's test 2. */
+    @Test
+    fun aRunningClockSurvivesATripToTheBoard() {
+        start(timedExercise())
+        tap(R.string.workout_focus_clock_start)
+        val before = composeRule.waitForClockReadout(atLeastSeconds = 2)
+
+        goToBoardAndReopen(PLANK)
+
+        composeRule.onNodeWithText(text(R.string.workout_focus_clock_stop)).performScrollTo().assertIsDisplayed()
+        assertTrue("The readout must not drop across the Board", composeRule.clockReadoutSeconds() >= before)
+    }
+
+    /** CP3's test 3, `20r`: `Start` and `Start again` end a rest, and `Stop` does neither that nor log a set. */
+    @Test
+    fun startAndStartAgainEndARunningRestAndStopDoesNot() {
+        restTimer = runningRest()
+        start(timedExercise())
+        composeRule.onNodeWithText(text(R.string.workout_rest_resting)).assertIsDisplayed()
+
+        tap(R.string.workout_focus_clock_start)
+        composeRule.runOnIdle { assertEquals(1, skipCalls) }
+        composeRule.onNodeWithText(text(R.string.workout_rest_resting)).assertDoesNotExist()
+        composeRule.waitForClockReadout(atLeastSeconds = 1)
+
+        // A rest can run alongside a clock, from a set logged on another exercise. `Stop` leaves it.
+        composeRule.runOnIdle { restTimer = runningRest() }
+        tap(R.string.workout_focus_clock_stop)
+        composeRule.runOnIdle {
+            assertEquals(1, skipCalls)
+            assertTrue("Stop must not log a set", recordedLoads.isEmpty())
+        }
+        composeRule.onNodeWithText(text(R.string.workout_rest_resting)).assertIsDisplayed()
+
+        tap(R.string.workout_focus_clock_start_again)
+        composeRule.runOnIdle { assertEquals(2, skipCalls) }
+        composeRule.onNodeWithText(text(R.string.workout_rest_resting)).assertDoesNotExist()
+    }
+
+    /** CP3's test 3: a skip with no rest would still write the session. */
+    @Test
+    fun startAndStartAgainWithNoRestRunningEndNothing() {
+        start(timedExercise())
+
+        tap(R.string.workout_focus_clock_start)
+        composeRule.waitForClockReadout(atLeastSeconds = 1)
+        tap(R.string.workout_focus_clock_stop)
+        tap(R.string.workout_focus_clock_start_again)
+
+        composeRule.onNodeWithText(text(R.string.workout_focus_clock_stop)).performScrollTo().assertIsDisplayed()
+        composeRule.runOnIdle { assertEquals(0, skipCalls) }
+    }
+
+    /** A case the boards don't draw: the rest is over and the next set has started, so `Rest done` goes too. */
+    @Test
+    fun startClearsARestDoneStillShowing() {
+        restTimer = RestTimerUi(endAt = Instant.now().minusSeconds(5), totalDurationSeconds = REST_SECONDS)
+        start(timedExercise())
+        composeRule.onNodeWithText(text(R.string.workout_rest_done)).assertIsDisplayed()
+
+        tap(R.string.workout_focus_clock_start)
+
+        composeRule.runOnIdle { assertEquals(1, skipCalls) }
+        composeRule.onNodeWithText(text(R.string.workout_rest_done)).assertDoesNotExist()
+    }
+
+    /** The screen really runs [FocusEntries.retainOnly], which `SetEntryStateTest` tests alone, once a new session opens. */
+    @Test
+    fun aNewSessionDropsAnEarlierSessionsEntriesFromTheHolder() {
+        val holder = FocusEntries()
+        exercises = listOf(timedExercise())
+        focusedId = exercises.first().id
+        composeRule.setContent { Screen(holder) }
+        tap(R.string.workout_focus_clock_start)
+        composeRule.runOnIdle { assertNotNull(holder.entryFor("t1", seed = null).clockStartedAtMillis) }
+
+        composeRule.runOnIdle {
+            sessionId = "session-2"
+            exercises = listOf(timedExercise(id = "t2", name = "Side Plank"))
+            focusedId = WorkoutExerciseId("t2")
+        }
+
+        composeRule.runOnIdle { assertNull(holder.entryFor("t1", seed = null).clockStartedAtMillis) }
+    }
+
+    /** A replaced button takes TalkBack's focus with it, and the walk heard it land on an unrelated row after `Start`. */
+    @Test
+    fun startAndStopAreOneNodeSoAScreenReadersFocusStaysOnTheButton() {
+        start(timedExercise())
+        val startNode = composeRule.onNodeWithText(text(R.string.workout_focus_clock_start)).fetchSemanticsNode().id
+
+        tap(R.string.workout_focus_clock_start)
+
+        assertEquals(startNode, composeRule.onNodeWithText(text(R.string.workout_focus_clock_stop)).fetchSemanticsNode().id)
+    }
+
+    private fun runningRest() = RestTimerUi(endAt = Instant.now().plusSeconds(REST_SECONDS.toLong()), totalDurationSeconds = REST_SECONDS)
+
+    private fun tap(
+        @StringRes id: Int,
+    ) {
+        composeRule.onNodeWithText(text(id)).performScrollTo().performClick()
+    }
+
     private fun enterAllDetail() {
         composeRule.onNodeWithText(text(R.string.workout_active_set_detail_toggle)).performScrollTo().performClick()
         selectRpe("7")
@@ -502,5 +656,28 @@ class ActiveWorkoutSetEntryTest {
         /** Among the nodes with one number on 0-5: RPE's first line, then pain, then technique. */
         const val PAIN_ROW = 1
         const val TECHNIQUE_ROW = 2
+        const val PLANK = "Plank"
+        const val REST_SECONDS = 90
     }
 }
+
+/** The clock's readout, which is on the real clock, so what is asserted about it is a bound. */
+internal fun ComposeTestRule.clockReadoutSeconds(): Long {
+    val (minutes, seconds) =
+        onNodeWithTag(TIMED_SET_CLOCK_READOUT_TAG)
+            .fetchSemanticsNode()
+            .config[SemanticsProperties.Text]
+            .single()
+            .text
+            .split(":")
+    return minutes.toLong() * SECONDS_PER_MINUTE + seconds.toLong()
+}
+
+/** Waits on the real clock, with no sleep and no time asserted exactly, and returns what the readout reads. */
+internal fun ComposeTestRule.waitForClockReadout(atLeastSeconds: Long): Long {
+    waitUntil(CLOCK_READOUT_TIMEOUT_MILLIS) { clockReadoutSeconds() >= atLeastSeconds }
+    return clockReadoutSeconds()
+}
+
+private const val SECONDS_PER_MINUTE = 60L
+private const val CLOCK_READOUT_TIMEOUT_MILLIS = 20_000L

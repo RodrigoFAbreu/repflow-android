@@ -107,6 +107,7 @@ internal fun WorkoutFocus(
     restStrip: @Composable () -> Unit,
     snackbarHostState: SnackbarHostState,
     nowMillis: () -> Long = System::currentTimeMillis,
+    onClockStarted: () -> Unit = {},
 ) {
     // [entry] is held above focus mode (GF-1), already seeded when first created, so a reopened exercise
     // keeps what was typed and never flashes empty steppers.
@@ -151,7 +152,12 @@ internal fun WorkoutFocus(
                 }
                 // Its own card, not part of `EntrySteppers`, which the correction sheet also draws (`20i` has no clock).
                 if (exercise.trackingType == ExerciseTrackingType.DURATION) {
-                    TimedSetClockCard(entry = entry, target = exercise.plannedTarget?.durationRangeSeconds, nowMillis = nowMillis)
+                    TimedSetClockCard(
+                        entry = entry,
+                        target = exercise.plannedTarget?.durationRangeSeconds,
+                        nowMillis = nowMillis,
+                        onClockStarted = onClockStarted,
+                    )
                 }
                 EntrySteppers(
                     trackingType = exercise.trackingType,

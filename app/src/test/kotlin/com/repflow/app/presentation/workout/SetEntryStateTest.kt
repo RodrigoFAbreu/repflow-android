@@ -5,6 +5,7 @@ import com.repflow.app.domain.exercise.ExerciseTrackingType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.math.BigDecimal
@@ -529,6 +530,19 @@ class SetEntryStateTest {
         val bench = restored.entryFor("bench", seed = null)
         assertNull(bench.clockStartedAtMillis)
         assertNull(bench.clockStoppedSeconds)
+    }
+
+    @Test
+    fun `retaining keeps a listed exercise's entry with its running clock and drops the others`() {
+        val holder = FocusEntries()
+        val plank = holder.entryFor("plank", seed = null).also { it.startClock(CLOCK_START) }
+        holder.entryFor("earlier-plank", seed = null).startClock(CLOCK_START)
+
+        holder.retainOnly(setOf("plank"))
+
+        assertSame(plank, holder.entryFor("plank", seed = null))
+        assertEquals(CLOCK_START, plank.clockStartedAtMillis)
+        assertNull(holder.entryFor("earlier-plank", seed = null).clockStartedAtMillis)
     }
 
     private companion object {

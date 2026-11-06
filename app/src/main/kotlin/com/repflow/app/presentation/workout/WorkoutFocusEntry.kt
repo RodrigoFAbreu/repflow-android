@@ -293,10 +293,12 @@ internal class SetEntryState {
  * Every exercise's unlogged [SetEntryState], held above focus mode (functional
  * review GF-1). Focus mode leaves composition when the Board shows and
  * re-keys on Next / Previous, so an entry remembered inside it was lost
- * with it; held here, each exercise keeps what was typed or stepped for as long
- * as the workout screen is up, and saved across a rotation. The seed rules are
- * unchanged: [entryFor] seeds an entry only when it is first created, and
- * [SetEntryState.applySeed] still never overwrites a touched one.
+ * with it. `RepFlowNavHost` holds this above the `NavHost`, because leaving for
+ * Home removes the workout's destination and the leave sheet promises a running
+ * clock keeps running: each exercise keeps what was typed, stepped or timed, and
+ * saved across a rotation. The seed rules are unchanged: [entryFor] seeds an entry
+ * only when it is first created, and [SetEntryState.applySeed] still never
+ * overwrites a touched one.
  */
 @Stable
 internal class FocusEntries(
@@ -309,6 +311,11 @@ internal class FocusEntries(
         exerciseId: String,
         seed: SetEntrySeed?,
     ): SetEntryState = entries.getOrPut(exerciseId) { SetEntryState().also { it.applySeed(seed) } }
+
+    /** Drops every entry but [exerciseIds]'s, so a holder that outlives a workout doesn't keep growing. */
+    fun retainOnly(exerciseIds: Set<String>) {
+        entries.keys.retainAll(exerciseIds)
+    }
 
     companion object {
         val Saver: Saver<FocusEntries, Any> =

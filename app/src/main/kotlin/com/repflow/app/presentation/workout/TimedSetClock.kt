@@ -54,12 +54,14 @@ import java.time.Instant
  * user focuses it, as the top bar's elapsed time does.
  *
  * @param nowMillis read at each tap, so a test can hold what `Stop` writes.
+ * @param onClockStarted called on `Start` and `Start again`, never on `Stop`: the next set has begun, so a rest is over.
  */
 @Composable
 internal fun TimedSetClockCard(
     entry: SetEntryState,
     target: LongRange?,
     nowMillis: () -> Long,
+    onClockStarted: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val startedAt = entry.clockStartedAtMillis
@@ -98,7 +100,15 @@ internal fun TimedSetClockCard(
                     spokenText = spokenLine,
                 )
             }
-            ClockButton(running = running, stopped = stopped != null, entry = entry, nowMillis = nowMillis)
+            ClockButton(
+                running = running,
+                stopped = stopped != null,
+                onStart = {
+                    entry.startClock(nowMillis())
+                    onClockStarted()
+                },
+                onStop = { entry.stopClock(nowMillis()) },
+            )
         }
     }
 }
@@ -185,40 +195,32 @@ private fun ClockLine(
     }
 }
 
-/** `Start` and `Stop` in the accent outline at 52 dp, `Start again` in the neutral one at 48, each the card's width. */
+/**
+ * `Start` and `Stop` in the accent outline at 52 dp, `Start again` in the neutral one at 48, each the card's width.
+ *
+ * `Start` and `Stop` are one button whose label changes. A button replaced by another takes a screen reader's focus
+ * with it, and TalkBack then lands on an unrelated line, just as `Stop` is what the user needs next.
+ */
 @Composable
 private fun ClockButton(
     running: Boolean,
     stopped: Boolean,
-    entry: SetEntryState,
-    nowMillis: () -> Long,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
 ) {
-    when {
-        running -> {
-            RepFlowAccentOutlineButton(
-                text = stringResource(R.string.workout_focus_clock_stop),
-                onClick = { entry.stopClock(nowMillis()) },
-                leadingIcon = RepFlowIcons.stopBold,
-                modifier = Modifier.fillMaxWidth().heightIn(min = ClockMainButtonMinHeight),
-            )
-        }
-
-        stopped -> {
-            RepFlowNeutralOutlineButton(
-                text = stringResource(R.string.workout_focus_clock_start_again),
-                onClick = { entry.startClock(nowMillis()) },
-                modifier = Modifier.fillMaxWidth().heightIn(min = ClockStartAgainMinHeight),
-            )
-        }
-
-        else -> {
-            RepFlowAccentOutlineButton(
-                text = stringResource(R.string.workout_focus_clock_start),
-                onClick = { entry.startClock(nowMillis()) },
-                leadingIcon = RepFlowIcons.playBold,
-                modifier = Modifier.fillMaxWidth().heightIn(min = ClockMainButtonMinHeight),
-            )
-        }
+    if (stopped && !running) {
+        RepFlowNeutralOutlineButton(
+            text = stringResource(R.string.workout_focus_clock_start_again),
+            onClick = onStart,
+            modifier = Modifier.fillMaxWidth().heightIn(min = ClockStartAgainMinHeight),
+        )
+    } else {
+        RepFlowAccentOutlineButton(
+            text = stringResource(if (running) R.string.workout_focus_clock_stop else R.string.workout_focus_clock_start),
+            onClick = if (running) onStop else onStart,
+            leadingIcon = if (running) RepFlowIcons.stopBold else RepFlowIcons.playBold,
+            modifier = Modifier.fillMaxWidth().heightIn(min = ClockMainButtonMinHeight),
+        )
     }
 }
 
