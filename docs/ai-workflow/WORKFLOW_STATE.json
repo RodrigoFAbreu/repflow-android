@@ -12629,12 +12629,12 @@
       "registry_path": "docs/ai-workflow/registry/timed-entry-mmss-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/timed-entry-mmss-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "APPLYING_REVIEW_FEEDBACK",
+      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
       "plan_revision": 2,
-      "implementation_revision": 1,
+      "implementation_revision": 2,
       "functional_review_round": null,
       "base_commit": "adec3533d6ffeb70cbc0a6fd070fdeb713b1937b",
-      "reviewed_implementation_head": "fb24da5fe9b5227a87996398ea6abd080ad3beec",
+      "reviewed_implementation_head": "410e32c79be33ca54c5723985aca504afa1b771b",
       "current_checkpoint_id": null,
       "last_completed_checkpoint_id": "CP3",
       "checkpoints": {
@@ -12777,8 +12777,8 @@
           "external": 0
         }
       },
-      "state_revision": 17,
-      "last_transition": "2026-11-06T08:12:32Z",
+      "state_revision": 18,
+      "last_transition": "2026-11-06T09:08:30Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
