@@ -181,6 +181,8 @@ fun RepFlowStepper(
  *
  * @param allowDecimal whether the keypad offers a working `.` key: true for a
  *   load, false for reps or seconds.
+ * @param durationEntry whether the keypad is the m:ss pad; [value] is then whole
+ *   seconds, and [format] should show them as a clock.
  */
 @Composable
 fun RepFlowStepper(
@@ -194,6 +196,7 @@ fun RepFlowStepper(
     minValue: BigDecimal = BigDecimal.ZERO,
     maxValue: BigDecimal? = null,
     allowDecimal: Boolean = true,
+    durationEntry: Boolean = false,
     emptyText: String = "0",
     format: (BigDecimal) -> String = RepFlowStepperMath::format,
     sizing: RepFlowStepperSizing = RepFlowStepperDefaults.compact,
@@ -213,6 +216,8 @@ fun RepFlowStepper(
         RepFlowNumericKeypad(
             title = keypadTitle,
             allowDecimal = allowDecimal,
+            initialValue = value,
+            durationEntry = durationEntry,
             onDismissRequest = { keypadOpen = false },
             onConfirm = { entered ->
                 keypadOpen = false

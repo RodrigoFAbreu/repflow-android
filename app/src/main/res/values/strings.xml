@@ -785,6 +785,10 @@
     <string name="repflow_keypad_cancel">Cancel</string>
     <string name="repflow_keypad_confirm">Set</string>
     <string name="repflow_keypad_backspace_content_description">Delete last digit</string>
+    <string name="repflow_keypad_clear_content_description">Clear value</string>
+    <string name="repflow_keypad_selected_caption">Selected: type to replace</string>
+    <string name="repflow_keypad_whole_numbers_caption">Whole numbers only</string>
+    <string name="repflow_keypad_duration_caption">minutes and seconds</string>
     <string name="repflow_stepper_type_value">Type a value</string>
     <string name="repflow_scale_end_labels">%1$s → %2$s</string>
 
