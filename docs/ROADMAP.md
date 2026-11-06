@@ -31,7 +31,7 @@
 | 25 | [A reminder on Home when the last backup is old](items/backup-reminder.md) `backup-reminder` | Done | 1 | restore-safety-snapshot |
 | 26 | [Timed sets use m:ss everywhere, and the shared number pad opens on the current value](items/timed-entry-mmss.md) `timed-entry-mmss` | Done | 2 | - |
 | 27 | [Design: correction sheet with RPE, technique and pain, correcting any set, and the timed-set clock](items/design-5-workout-entry.md) `design-5-workout-entry` | Done | 1 | - |
-| 28 | [The set correction sheet also edits RPE, technique and pain](items/set-edit-fields.md) `set-edit-fields` | Next | 1 | design-5-workout-entry |
+| 28 | [The set correction sheet also edits RPE, technique and pain](items/set-edit-fields.md) `set-edit-fields` | Done | 1 | design-5-workout-entry |
 | 29 | [Any set in the running workout can be corrected, not just the last one](items/set-edit-any-set.md) `set-edit-any-set` | Next | 2 | set-edit-fields |
 | 30 | [A timed set has a clock: Start counts up, and Stop fills in the time](items/timed-set-clock.md) `timed-set-clock` | Next | 2 | design-5-workout-entry, timed-entry-mmss |
 | 31 | [A timed set alerts you when it reaches its target, even with the phone locked](items/timed-set-alert.md) `timed-set-alert` | Next | 1 | timed-set-clock |

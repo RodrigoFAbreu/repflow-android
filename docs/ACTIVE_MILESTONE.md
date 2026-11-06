@@ -1,6 +1,13 @@
 # Active Milestone
 
-## `set-edit-fields` — in progress
+## `set-edit-fields` — complete (accepted by policy 2026-11-06)
+
+The set correction sheet also edits RPE, technique and pain. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/set-edit-fields-execution.md` and the Optional findings at `docs/milestones/completed/set-edit-fields-findings.md`.
+
+**Next action:** `set-edit-any-set`, Any set in the running workout can be corrected, not just the last one. Ready for `/milestone-plan`.
+
+The sections below are this milestone's historical record.
+
 
 The set correction sheet also edits RPE, technique and pain. Plan: `docs/milestones/set-edit-fields-execution.md`.
 
