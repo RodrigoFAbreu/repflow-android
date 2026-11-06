@@ -1,0 +1,58 @@
+{
+  "dispositions": {
+    "F-16a91855e744": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/43",
+      "note": "The weight pad is still titled `Weight` rather than `Weight (kg)`, keeps a thin key border and shows a text backspace character where the boards draw an icon, so a user sees three small look differences from the design."
+    },
+    "F-2030c4c9797e": {
+      "disposition": "dropped",
+      "reason": "This only concerns which checkpoint the requirement list names, the work for it was done and tested in the second checkpoint, and a user sees nothing."
+    },
+    "F-24da976df3cc": {
+      "disposition": "fixed"
+    },
+    "F-3dc5b579201e": {
+      "disposition": "dropped",
+      "reason": "A stored duration is always above zero, so a zero seed never reaches a user, and a unit test pins that it opens empty and confirms nothing."
+    },
+    "F-45301bc24bb3": {
+      "disposition": "fixed"
+    },
+    "F-8bd4555e414a": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/blob/main/docs/items/progress-recovery-polish.md",
+      "note": "The Progress screen's `Longest hold` line still shows plain seconds such as `900 s` and is covered by the queued Progress timed units item `progress-recovery-polish`."
+    },
+    "F-9229036a3e1f": {
+      "disposition": "fixed"
+    },
+    "F-92543df3b6f5": {
+      "disposition": "fixed"
+    },
+    "F-93365a581417": {
+      "disposition": "fixed"
+    },
+    "F-d8455af5de6d": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/43",
+      "note": "In landscape only keys 1 to 9 fit on screen, so a user must swipe the pad to reach 0, Backspace, Cancel and Set, and a denser landscape layout should be considered."
+    },
+    "F-fc73760c9063": {
+      "disposition": "dropped",
+      "reason": "This is plan bookkeeping (a requirement mapping and a spec page number) and the sites it names were built and tested, so a user sees nothing."
+    },
+    "F-fee81971b042": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/43",
+      "note": "Read-only clocks such as `Last: 2:00` and History's `2:00` are read by TalkBack on the Google voice as a time of day (\"two o'clock\"), where only the stepper and pad have a spoken form."
+    },
+    "F-fef72578136f": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/43",
+      "note": "The plan editor's wider stepper was looked at at font scale 2.0 on the 384 dp emulator only, so on a 360 dp phone at that scale `Working sets` may still break mid-word, which has not been checked."
+    }
+  },
+  "schema_version": 1,
+  "work_item_id": "timed-entry-mmss"
+}

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_work_item_id": "timed-entry-mmss",
+  "active_work_item_id": null,
   "work_items": {
     "workflow-v2-1-core": {
       "work_item_type": "process",
@@ -12629,7 +12629,7 @@
       "registry_path": "docs/ai-workflow/registry/timed-entry-mmss-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/timed-entry-mmss-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_FUNCTIONAL_REVIEW",
+      "phase": "MILESTONE_COMPLETE",
       "plan_revision": 2,
       "implementation_revision": 2,
       "functional_review_round": null,
@@ -13022,8 +13022,8 @@
           "external": 1
         }
       },
-      "state_revision": 21,
-      "last_transition": "2026-11-06T09:53:30Z",
+      "state_revision": 22,
+      "last_transition": "2026-11-06T10:22:46Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -13250,6 +13250,260 @@
           "run_ref": "codex:20261106T094908Z-eed59943",
           "reviewer_model": "openai/gpt-6.1-sol"
         }
+      },
+      "gate_evidence": {
+        "functional": {
+          "flow-1": {
+            "flow_id": "flow-1",
+            "status": "passed",
+            "head": "53d0e818e0bc64ccb67a7afd13636d47fa6c6a47",
+            "ran_at": "2026-11-06T10:22:21Z",
+            "summary": {
+              "text": "empty pad, 1 3 0 -> 1:30, label and hint right, stored 90; 2 1 5 0 0 -> 215:00 stored 12900",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/timed-entry-mmss"
+            },
+            "log_digest": "df1e7e22ed81e57deed2bb61611a3d5bf22e372a9488d13ea1ae049828f40f24",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+            "recorded_at": "2026-11-06T10:22:21Z"
+          },
+          "flow-2": {
+            "flow_id": "flow-2",
+            "status": "passed",
+            "head": "53d0e818e0bc64ccb67a7afd13636d47fa6c6a47",
+            "ran_at": "2026-11-06T10:22:21Z",
+            "summary": {
+              "text": "pad opens on current value in tinted ring, digit replaces, Backspace clears, Cancel/Set keep it; Bench weight and reps pads right",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/timed-entry-mmss"
+            },
+            "log_digest": "2a786872af2c6e9092bf770f772f52b5df48bcb80a2739665b71863bacf5c350",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+            "recorded_at": "2026-11-06T10:22:21Z"
+          },
+          "flow-3": {
+            "flow_id": "flow-3",
+            "status": "passed",
+            "head": "53d0e818e0bc64ccb67a7afd13636d47fa6c6a47",
+            "ran_at": "2026-11-06T10:22:21Z",
+            "summary": {
+              "text": "plan Min/Max/Rest and Settings Other take m:ss; 120:00 on one line; Settings 1 3 5 stores 95 and says 1:35",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/timed-entry-mmss"
+            },
+            "log_digest": "5d5a076a5cbc8c9743906806fa89d07628f87bbb746e9814823c80f9ad95e841",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+            "recorded_at": "2026-11-06T10:22:21Z"
+          },
+          "flow-4": {
+            "flow_id": "flow-4",
+            "status": "passed",
+            "head": "53d0e818e0bc64ccb67a7afd13636d47fa6c6a47",
+            "ran_at": "2026-11-06T10:22:21Z",
+            "summary": {
+              "text": "all screens checked show clocks; warm-up hint seen; positive delta seen as +214:45 (+0:30 exactly not produced)",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/timed-entry-mmss"
+            },
+            "log_digest": "d770bef2521dda1d9126a1c05b4ea60bac46574d2aa6b8f9948984aab657e317",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+            "recorded_at": "2026-11-06T10:22:21Z"
+          },
+          "flow-5": {
+            "flow_id": "flow-5",
+            "status": "passed",
+            "head": "53d0e818e0bc64ccb67a7afd13636d47fa6c6a47",
+            "ran_at": "2026-11-06T10:22:21Z",
+            "summary": {
+              "text": "DB seconds correct; backup JSON and CSV keep raw seconds; export then restore on the emulator: History still reads 215:00",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/timed-entry-mmss"
+            },
+            "log_digest": "2709713ff242b904ba5c3ade77e69aecacba07bd217fea4ec01125ba34e9076a",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+            "recorded_at": "2026-11-06T10:22:21Z"
+          },
+          "flow-6": {
+            "flow_id": "flow-6",
+            "status": "passed",
+            "head": "53d0e818e0bc64ccb67a7afd13636d47fa6c6a47",
+            "ran_at": "2026-11-06T10:22:21Z",
+            "summary": {
+              "text": "weight pad survives rotation selected, typed 45 kept, Cancel leaves 2.5",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/timed-entry-mmss"
+            },
+            "log_digest": "05f1174dbd5e511285b237698750fc59982ddf0b5870202c6aeb8aff357ec33a",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+            "recorded_at": "2026-11-06T10:22:21Z"
+          },
+          "flow-7": {
+            "flow_id": "flow-7",
+            "status": "passed",
+            "head": "53d0e818e0bc64ccb67a7afd13636d47fa6c6a47",
+            "ran_at": "2026-11-06T10:22:21Z",
+            "summary": {
+              "text": "time pad light/dark at 1.3 and 2.0, plan editor light/dark at 1.3 and 2.0 (15:00 and 120:00 one line), landscape Set works",
+              "device": "emulator-5554 (API 36)",
+              "logs": "/home/rodrigo/.local/share/claude-lanes/repflow-lane/functional-evidence/timed-entry-mmss"
+            },
+            "log_digest": "f9b5e5b099e2322ea38c810330f0d3ebc874f4575800630c55911ebf0e2f5789",
+            "run_ref": "repflow-orchestrator: independent tester, 2026-11-06",
+            "reporter": "repflow-orchestrator (independent tester on the local emulator)",
+            "identity": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+            "recorded_at": "2026-11-06T10:22:21Z"
+          }
+        },
+        "pr": {
+          "pr": {
+            "number": 42,
+            "url": "https://github.com/RodrigoFAbreu/repflow-android/pull/42"
+          },
+          "state": "open",
+          "head": "53d0e818e0bc64ccb67a7afd13636d47fa6c6a47",
+          "review_decision": null,
+          "reviewed_head": null,
+          "checks": {
+            "state": "success",
+            "failing": []
+          },
+          "review_id": null,
+          "findings": null,
+          "identity_at_head": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+          "observed_at": "2026-11-06T10:22:46Z",
+          "ingest_seq": 1,
+          "repository": "RodrigoFAbreu/repflow-android",
+          "queried_commit": "410e32c79be33ca54c5723985aca504afa1b771b",
+          "provenance": {
+            "source": "workflow_gh",
+            "fetched_by": {
+              "name": "workflow-gh",
+              "version": "pr-list-v1"
+            },
+            "fetched_at": "2026-11-06T10:22:46Z",
+            "raw_sha256": "26c0d345d79795256fd2401fcc3b828c5d0d957bb79ae130e8fcff8703920e3c",
+            "run_ref": "repflow-orchestrator, by hand after no_progress_repeated",
+            "gh_path": "/usr/bin/gh",
+            "gh_sha256": "9e824061111fe5f5b6a5d5690909ba37abafca4a4ca830bdf83246d3c94afd21"
+          },
+          "fact_id": "a82d66f56490433241c14672a013f82e25545451e41455dbdee5239efe658ffd"
+        },
+        "pr_reported": null,
+        "pr_keys": {
+          "reopened_for": [],
+          "applied": [],
+          "ingest_seq": 1
+        }
+      },
+      "acceptance_satisfaction": {
+        "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "policy_source": "adopted",
+        "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+        "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+        "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "requirements": [
+          {
+            "id": "checkpoints_complete",
+            "met": true,
+            "detail": "every checkpoint of the item's own registry is COMPLETE"
+          },
+          {
+            "id": "technical_approval_current",
+            "met": true,
+            "detail": "the technical approval is CURRENT for the content now"
+          },
+          {
+            "id": "functional_flows_passed",
+            "met": true,
+            "detail": "flows ['flow-1', 'flow-2', 'flow-3', 'flow-4', 'flow-5', 'flow-6', 'flow-7'] passed at the approved content"
+          },
+          {
+            "id": "pr_fact_current",
+            "met": true,
+            "detail": "workflow_gh fact for PR #42 at 53d0e818e0bc64ccb67a7afd13636d47fa6c6a47 is current"
+          },
+          {
+            "id": "no_standing_pr_objection",
+            "met": true,
+            "detail": "no CHANGES_REQUESTED decision and no failed check"
+          },
+          {
+            "id": "ci_green",
+            "met": true,
+            "detail": "checks are 'success'"
+          }
+        ],
+        "inputs": {
+          "anchor_commit": "410e32c79be33ca54c5723985aca504afa1b771b",
+          "anchor_identity": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+          "technical_approval": {
+            "basis": "POLICY_SATISFIED",
+            "approved_review_content_id": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+            "recorded_at": "2026-11-06T09:53:30Z"
+          },
+          "functional": {
+            "flow-1": {
+              "evidence_id": "6446ece710dea02c1c3cf1b7578d1fd195200a10232341b5bfc58344131db5cb",
+              "log_digest": "df1e7e22ed81e57deed2bb61611a3d5bf22e372a9488d13ea1ae049828f40f24",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-2": {
+              "evidence_id": "2120c0339333396ec1ac50ae37248433a8570b926abd6bfd6fd8637bf7e243a5",
+              "log_digest": "2a786872af2c6e9092bf770f772f52b5df48bcb80a2739665b71863bacf5c350",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-3": {
+              "evidence_id": "7fcceb8437f707138b4cc06a47c3a138517b380b384541dc77c0927f66b2f3c0",
+              "log_digest": "5d5a076a5cbc8c9743906806fa89d07628f87bbb746e9814823c80f9ad95e841",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-4": {
+              "evidence_id": "5269da70b746cd69db4b6933b86a8b3b868858b71ce853fc4c1aa356c9fedd8c",
+              "log_digest": "d770bef2521dda1d9126a1c05b4ea60bac46574d2aa6b8f9948984aab657e317",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-5": {
+              "evidence_id": "c7e9eb710b484f17233f3b793190dd7f882d4dafcd31a5db37c8b6cfe6c1c3fe",
+              "log_digest": "2709713ff242b904ba5c3ade77e69aecacba07bd217fea4ec01125ba34e9076a",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-6": {
+              "evidence_id": "41f58cf01a0723b072058e6144a01db459817af8df51ef201b6a8e21129327b1",
+              "log_digest": "05f1174dbd5e511285b237698750fc59982ddf0b5870202c6aeb8aff357ec33a",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            },
+            "flow-7": {
+              "evidence_id": "15651c4482ed532b94e084946da89bcb4e1191e43fc0e61afce52bea0f61666b",
+              "log_digest": "f9b5e5b099e2322ea38c810330f0d3ebc874f4575800630c55911ebf0e2f5789",
+              "run_ref": "repflow-orchestrator: independent tester, 2026-11-06"
+            }
+          },
+          "pr": {
+            "fact_id": "a82d66f56490433241c14672a013f82e25545451e41455dbdee5239efe658ffd",
+            "head": "53d0e818e0bc64ccb67a7afd13636d47fa6c6a47",
+            "provenance": "workflow_gh",
+            "raw_sha256": "26c0d345d79795256fd2401fcc3b828c5d0d957bb79ae130e8fcff8703920e3c"
+          }
+        },
+        "trust": {
+          "review_verdicts": "orchestrator",
+          "functional_evidence": "orchestrator",
+          "pr_fact": "workflow_gh"
+        },
+        "evaluated_at": "2026-11-06T10:22:46Z",
+        "workflow_release": "2.25.5"
       }
     }
   },

@@ -1,6 +1,12 @@
 # Active Milestone
 
-## `timed-entry-mmss`
+## `timed-entry-mmss` — complete (accepted by policy 2026-11-06)
+
+Timed sets and rest use m:ss while logging and in History, and the number pad opens on the current value. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/timed-entry-mmss-execution.md` and the Optional findings at `docs/milestones/completed/timed-entry-mmss-findings.md`.
+
+**Next action:** `suggest-keep-untouched`, An exercise you didn't train keeps its real suggestion. Ready for `/milestone-plan`.
+
+The sections below are this milestone's historical record.
 
 Timed sets and rest use m:ss while logging and in History, and the number pad opens on the current value. Plan: `docs/milestones/timed-entry-mmss-execution.md`.
 
