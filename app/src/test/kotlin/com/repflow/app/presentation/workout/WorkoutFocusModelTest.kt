@@ -59,8 +59,8 @@ class WorkoutFocusModelTest {
 
         assertEquals(
             listOf(
-                FocusSetRow.Logged(warmup, isExtra = false, isLast = false),
-                FocusSetRow.Logged(working, isExtra = false, isLast = true),
+                FocusSetRow.Logged(warmup, isExtra = false),
+                FocusSetRow.Logged(working, isExtra = false),
                 FocusSetRow.Pending(setNumber = 3),
                 FocusSetRow.Pending(setNumber = 4),
             ),

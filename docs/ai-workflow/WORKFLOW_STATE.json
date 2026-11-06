@@ -14346,18 +14346,22 @@
       "registry_path": "docs/ai-workflow/registry/set-edit-any-set-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/set-edit-any-set-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "IMPLEMENTING",
+      "phase": "SELF_REVIEWING_IMPLEMENTATION",
       "plan_revision": 2,
       "implementation_revision": null,
       "functional_review_round": null,
       "base_commit": "ebf6135c77336e62f9bc79e41e123a364df9329f",
       "reviewed_implementation_head": null,
       "current_checkpoint_id": null,
-      "last_completed_checkpoint_id": "CP1",
+      "last_completed_checkpoint_id": "CP2",
       "checkpoints": {
         "CP1": {
           "status": "COMPLETE",
           "start_commit": "2120e7a951c3d8d53227262ae087166356f14558"
+        },
+        "CP2": {
+          "status": "COMPLETE",
+          "start_commit": "94fca53c8b58ebdca5bc2e22a92608a893c46f4d"
         }
       },
       "current_bundle_id": "470b2b38041ba4d6e0614f2238bd6ed720b96c35525ccb536691c2e79300464b",
@@ -14486,8 +14490,8 @@
           "external": 0
         }
       },
-      "state_revision": 11,
-      "last_transition": "2026-11-06T15:05:07Z",
+      "state_revision": 13,
+      "last_transition": "2026-11-06T15:42:02Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
