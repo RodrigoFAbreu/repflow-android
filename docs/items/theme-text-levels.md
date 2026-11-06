@@ -20,6 +20,10 @@ The owner approved this backlog on 2026-11-04 with every recommendation below ta
 - *Today:* `DESIGN_SYSTEM.md:3-5` says code; your handoff says pages.
 - *Recommendation:* **the pages say where it's going, and the code records what's built.** One line changes. Both agree. App item 12 follows.
 
+## Also
+
+At font 2.0 the outline of the Erase dialog's field has no bottom edge. Fix the edge as well as the colour (from `safety-copy-polish`'s review).
+
 ## Rules
 
 The plan's header must carry exactly one line of this form, with nothing after the closing backtick: ``Pull request title: `fix: what changed` ``. See `AGENTS.md`, "Running under the Controller".
