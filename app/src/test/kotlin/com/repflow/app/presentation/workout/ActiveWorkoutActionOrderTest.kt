@@ -233,6 +233,42 @@ class ActiveWorkoutActionOrderTest {
             }
         }
 
+    @Test
+    fun `a correction waiting behind the undo of its set changes nothing and reports the failure`() =
+        runTest {
+            seedExercise()
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                val withExercise = startWorkoutWithTheExercise()
+                val sessionId = requireNotNull(workoutRepository.findActiveSession()).id
+                viewModel.onRecordSet(withExercise.id, 60.0, 8)
+                viewModel.onRecordSet(withExercise.id, 60.0, 9)
+                advanceUntilIdle()
+                val (first, second) =
+                    stored(sessionId)
+                        .exercises
+                        .single()
+                        .sets
+                val hold = holdWrites()
+
+                viewModel.onUndoLastSet(withExercise.id)
+                viewModel.onEditSet(withExercise.id, second.id, 70.0, 5)
+                advanceUntilIdle()
+                hold.complete(Unit)
+                advanceUntilIdle()
+
+                assertEquals(
+                    listOf(first),
+                    stored(sessionId)
+                        .exercises
+                        .single()
+                        .sets,
+                )
+                assertEquals(ActiveWorkoutErrorReason.NOT_FOUND, viewModel.uiState.value.errorMessage)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
     /**
      * Only the first write is held, by clearing the hold once it waits: waiters
      * resume first in, first out, so with both held the failure would land first
