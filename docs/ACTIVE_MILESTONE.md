@@ -36,6 +36,45 @@ Any set in the running workout can be corrected, not just the last one. Plan: `d
 
   Known limits. No automated test takes a correction through Room: the JVM tests use the in-memory repositories, and CP2's look read the real database. CP2's seen-and-left items stand, and the plan's known limitations go on the functional review's checklist.
 
+**Next action:** perform the functional review below, write findings to `.ai-review/set-edit-any-set/feedback/FUNCTIONAL_REVIEW.md`, or run `/accept-milestone` if testing is clean.
+
+### Functional review checklist
+
+Automated verification is current: production code last changed in `2a54a5c` (CP2); `13c0f8a` is a test only, and later commits are workflow records. The last full run on `13c0f8a`, on a clean tree: `spotlessCheck`, `detekt`, `lintDebug` (0 errors), 919 JVM tests, 626 instrumented tests on `emulator-5554`, 0 failures.
+
+**Setup.** Use the AVD (`start-avd.sh`, 3 GB cap), not the phone. Fresh install with `./gradlew installDebug`. No feature flags, no network. Font scale is changed in the AVD's Settings > Display; restore it to 1.0 afterwards, and leave the theme light and auto-rotate on.
+
+**Test data.** An exercise `Bench` made through the app with a `2.5 kg` step. Start a workout and log a warm-up (40 × 12), then three working sets (60, 62.5, 65 × 8). A second workout is needed for F6, where `Bench` opens seeded and untouched.
+
+**F1 - Every logged set has a pencil (R1, R4).** Expected: all four rows (warm-up included) show a pencil, 20 dp and centred, in the row's text colour. A pending row (not yet logged) has no pencil and does nothing when tapped. Rows look otherwise as before.
+
+**F2 - Any row opens its own sheet (R1).** Tap the first working set, then the middle one, then the warm-up. Expected: the sheet is titled `Correct this set` with subtitle `Set 2 · Bench`, `Set 3 · Bench` and `Warm-up set · Bench` respectively, each with that set's own weight, reps and RPE/pain/technique cells chosen. Tapping anywhere on the row opens it, not only the pencil.
+
+**F3 - Save changes only that set (R2).** Correct the first working set to 57.5 with RPE 8, pain 1, technique 4, then `Save`. Expected: that row reads the new values; the other three rows are unchanged. With the app stopped, `sqlite3` on the database shows the new values on that row only, the same `created_at` and a later `updated_at`; the other rows' values and times are as they were.
+
+**F4 - Warm-up stays a warm-up (R2).** Correct the warm-up to 42.5 and `Save`. Expected: it is still a warm-up (`is_warmup = 1`) and the working sets are unchanged.
+
+**F5 - Rotation with a sheet open (R2).** Open the middle set, tap RPE 9 and add a rep, rotate to landscape and back. Expected: the sheet is back on `Set 3 · Bench` with both taps kept, and `Save` stores them on that set only. Cancel changes nothing.
+
+**F6 - The correction leaves the rest alone (R3).** In a workout where `Bench` opens seeded and untouched, `Log set` with nothing touched, then correct that set to a different weight. Expected: the row and `Last:` show the corrected weight; the steppers stay where they were, through a rotation and a trip to the Board; the rest timer keeps counting; the suggestion line doesn't change. `Undo last` removes only the most recent set and the earlier corrections stay.
+
+**F7 - Look (R4).** Light and dark at font 1.0, 1.3 and 2.0: the pencil stays 20 dp and centred, nothing is clipped, long rows wrap. Landscape: the sheet scrolls and `Save` is reachable.
+
+**F8 - Failure is reported, not hidden (R2).** Hard to reach by hand: a correction naming a set that is gone (a correction queued behind its own set's `Undo last`) must show `Couldn't complete that. Try again.` and leave the other sets as they were. Covered by `ActiveWorkoutActionOrderTest`; try only if a quick tap sequence allows it.
+
+**Known limitations / out of scope.**
+- Only the exercise in focus and the running workout: past workouts stay as they were (`set-edit-past-workouts`).
+- `Undo last` removes only the most recent set; no set in the middle can be deleted.
+- A correction doesn't move or reorder a set, and doesn't touch the rest timer.
+- A saved correction holds the exercise's steppers, as `20n` asks. After correcting the last set the steppers keep their value, so the next set logs that unless it is changed, and a later `Undo last` doesn't re-seed them.
+- The whole row is the target, not a 44 dp button of its own.
+- The row numbers a warm-up (`Set 1 ... (warm-up)`, then `Set 2`), where `20n` draws a `W` marker. In light a working set's disc shows almost no fill (shared pill colour, `theme-text-levels`).
+- Dismissing the sheet saves nothing; a hard flick can close a scrolled one. Pain never changes a suggestion. `Save` with a value the domain refuses (0 reps) closes the sheet and shows the error, losing the taps (issue #47).
+- At font scale 2.0 `Technique` breaks mid-word as `Techniqu/e`; it goes on a follow-up issue at acceptance.
+- No automated test takes a correction through Room; CP2's look in the real app did.
+- Issues #34 and #47 weren't read (`gh` refused); the note for #34 is in the bundle's `TEST_RESULTS.md`, to post by acceptance.
+
+
 ## `set-edit-fields` — complete (accepted by policy 2026-11-06)
 
 The set correction sheet also edits RPE, technique and pain. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/set-edit-fields-execution.md` and the Optional findings at `docs/milestones/completed/set-edit-fields-findings.md`.
